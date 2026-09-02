@@ -8,6 +8,7 @@ import (
 )
 
 func TestRunBasicCommands(t *testing.T) {
+	t.Setenv(envDisabled, "1")
 	cases := []struct {
 		name    string
 		args    []string
@@ -17,7 +18,7 @@ func TestRunBasicCommands(t *testing.T) {
 		{name: "no args prints usage", args: nil, wantOut: "Usage:"},
 		{name: "version", args: []string{"version"}, wantOut: "buffy "},
 		{name: "help", args: []string{"help"}, wantOut: "replay"},
-		{name: "serve is scheduled work", args: []string{"serve"}, wantErr: errNotImplemented},
+		{name: "serve honors the kill switch", args: []string{"serve"}, wantErr: errDisabled},
 		{name: "replay needs a path", args: []string{"replay"}, wantErr: errUsage},
 	}
 	for _, tc := range cases {

@@ -1,8 +1,7 @@
 // Command buffy analyzes coding-agent sessions for prompt-cache behavior.
 //
 // replay, blame, and diff work offline on transcripts the agent already
-// wrote. serve (the proxy) is scheduled for a later release; see
-// docs/ROADMAP.md.
+// wrote and on the ledger the proxy records. serve is the proxy.
 package main
 
 import (
@@ -16,12 +15,10 @@ import (
 	"strings"
 
 	"github.com/RedRobotKK/Buffy/internal/analysis"
+	"github.com/RedRobotKK/Buffy/internal/ledger"
 	"github.com/RedRobotKK/Buffy/internal/transcript"
 	"github.com/RedRobotKK/Buffy/internal/version"
 )
-
-// errNotImplemented is returned by subcommands that are scheduled but not yet built.
-var errNotImplemented = errors.New("not implemented yet; see docs/ROADMAP.md")
 
 // errUsage is returned for malformed invocations after usage is printed.
 var errUsage = errors.New("invalid usage")
@@ -55,7 +52,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	case "redact":
 		return runRedact(args[1:], stdout)
 	case "serve":
-		return errNotImplemented
+		return runServe(args[1:], stdout, stderr)
 	default:
 		// The usage text is a courtesy on the error path; the error that
 		// matters is the unknown command.
@@ -79,7 +76,7 @@ func runReport(args []string, stdout, stderr io.Writer, write func(*analysis.Lan
 	}
 	failures := 0
 	for i, f := range files {
-		session, err := transcript.ParseClaudeCodeFile(f)
+		session, err := loadSession(f)
 		if err != nil {
 			failures++
 			// Diagnostics on stderr are best effort; a failure there must
@@ -108,6 +105,15 @@ func runReport(args []string, stdout, stderr io.Writer, write func(*analysis.Lan
 		return fmt.Errorf("no transcript could be analyzed")
 	}
 	return nil
+}
+
+// loadSession parses a transcript or a ledger file, deciding by content:
+// ledger records carry a schema field on every line.
+func loadSession(path string) (*transcript.Session, error) {
+	if ledger.IsLedgerFile(path) {
+		return ledger.ReadFile(path)
+	}
+	return transcript.ParseClaudeCodeFile(path)
 }
 
 // transcriptFiles expands files and directories into transcript paths,
@@ -181,10 +187,11 @@ Usage:
   buffy blame  <transcript|dir>   rank what is eating prompt tokens
   buffy diff   <transcript|dir>   locate and classify every cache break
   buffy redact <transcript>       strip content, keep structure and usage (for bug reports)
-  buffy serve                     local proxy (not implemented yet)
+  buffy serve [flags]             local proxy: byte-for-byte passthrough, records a ledger
   buffy version                   print build information
 
 Transcripts: Claude Code writes them under ~/.claude/projects/<project>/*.jsonl
+Ledger:      buffy serve writes ~/.buffy/ledger/<session>.jsonl (measured tier)
 `)
 	return err
 }
