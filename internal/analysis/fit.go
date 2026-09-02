@@ -96,7 +96,7 @@ func Fit(cal *Calibration) TokenFit {
 		fit.TokensPerByte = sumTokens / sumBytes
 		fit.RelativeError = weightedSpread(samples, fit.TokensPerByte)
 	}
-	if len(cal.Lane.Requests) > 0 {
+	if len(cal.Lane.Requests) > 0 && !cal.PrefixVisible {
 		first := cal.Lane.Requests[0]
 		seen := 0
 		for _, m := range first.Context {

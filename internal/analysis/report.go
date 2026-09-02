@@ -61,6 +61,7 @@ func contextEditPolicies(lane *transcript.Lane) []ContextEditPolicy {
 // AnalyzeLane runs every analysis for one lane.
 func AnalyzeLane(s *transcript.Session, lane *transcript.Lane) *LaneReport {
 	cal := Calibrate(lane)
+	cal.PrefixVisible = s.PrefixVisible
 	fit := Fit(cal)
 	rep := &LaneReport{
 		Session:     s,
@@ -71,6 +72,9 @@ func AnalyzeLane(s *transcript.Session, lane *transcript.Lane) *LaneReport {
 		Blame:       Blame(cal, fit),
 		Errors:      ErrorCosts(cal, fit),
 		Tier:        TierEstimated,
+	}
+	if s.Source == transcript.SourceLedger {
+		rep.Tier = TierMeasured
 	}
 	rep.Policies = append(rep.Policies, AsRun(lane))
 	if cal.Passes() {
@@ -134,7 +138,10 @@ func (r *LaneReport) header(p *printer) {
 	p.printf("\n")
 	p.printf("Assumption: %s\n", AssumptionNote)
 	prefix := "estimated"
-	if r.Fit.UnseenPrefixMeasured {
+	switch {
+	case r.Session.PrefixVisible:
+		prefix = "recorded on the wire"
+	case r.Fit.UnseenPrefixMeasured:
 		prefix = "measured from the first request's cache read"
 	}
 	p.printf("Rules: %s; user-content fit %.3f tokens/byte ±%.0f%% from %d turns; system prefix %s (%s)\n", cachemodel.RulesVersion, r.Fit.TokensPerByte, r.Fit.RelativeError*100, r.Fit.Turns, formatTokens(r.Fit.UnseenPrefixTokens), prefix)
