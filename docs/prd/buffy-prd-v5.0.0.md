@@ -10,7 +10,7 @@ The execution-ready requirements for Buffy, a local tool that shows developers w
 | **Owner** | RedRobotKK (single maintainer) |
 | **Supersedes** | `buffy-prd-v4.0.0.md` (kept as history, not edited) |
 | **Inputs** | `../reviews/PRD-v4-adversarial-review.md`, `../reviews/solution-red-blue-review-2026-09-02.md` |
-| **Decisions recorded** | ADR-0001 through ADR-0004 in `../adr/` |
+| **Decisions recorded** | ADR-0001 through ADR-0005 in `../adr/` |
 
 ---
 
@@ -416,7 +416,7 @@ These are in force now and are described in `../HOUSEKEEPING.md` and `CONTRIBUTI
 
 ## 16. Licensing
 
-The repository currently carries BSL 1.1 converting to Apache 2.0. The reviews and the stated goal (reach, contributors, and attention that leads to employment or funding) both argue for Apache 2.0 from the first public release, with any future commercial tier kept separate. **This is an owner decision and is listed in Section 18.** Whichever is chosen, the README never calls a BSL-licensed project open source.
+Apache License 2.0, decided by the owner on 2026-09-02 and recorded in ADR-0005. Any future commercial tier is a separate work. The README calls the project open source, which is now true.
 
 ## 17. Risks
 
@@ -433,9 +433,9 @@ The repository currently carries BSL 1.1 converting to Apache 2.0. The reviews a
 
 ## 18. Decisions required from the owner
 
-1. License for the first public release (Section 16).
+1. ~~License for the first public release.~~ Decided: Apache 2.0 (ADR-0005).
 2. Approval of the release sequence in Section 14, in particular replay before proxy and masking last.
-3. A real transcript sample for spikes 1 and 2.
+3. ~~A real transcript sample for spikes 1 and 2.~~ One session confirmed both; the 20-session corpus is still needed.
 4. Whether the "looking for work" line appears in the README from day one.
 
 ## 19. Open questions

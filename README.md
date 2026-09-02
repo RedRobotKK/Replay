@@ -8,7 +8,7 @@ It reads the transcripts your agent already writes, reproduces the provider's ca
 
 [![CI](https://github.com/RedRobotKK/Buffy/actions/workflows/ci.yml/badge.svg)](https://github.com/RedRobotKK/Buffy/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/RedRobotKK/Buffy)](https://goreportcard.com/report/github.com/RedRobotKK/Buffy)
-[![License: BSL 1.1](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 ## Why
 
@@ -87,4 +87,4 @@ Read [`CONTRIBUTING.md`](CONTRIBUTING.md) first. Bugs and features go through th
 
 ## License
 
-Source-available under the [Business Source License 1.1](LICENSE). Each version converts to Apache 2.0 three years after its release. Buffy is not OSI open source until that conversion; see the license text for what you may do before then.
+Open source under the [Apache License 2.0](LICENSE). See [`NOTICE`](NOTICE) for attribution. The decision is recorded in [ADR-0005](docs/adr/0005-apache-2-license.md).
