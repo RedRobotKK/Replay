@@ -1,0 +1,8 @@
+# Markdown style for all docs. Keep rules few and defensible.
+default: true
+MD013: false        # line length: prose wraps in editors, not in source
+MD033: false        # inline HTML: needed for badges and details blocks
+MD041: false        # first line heading: some docs open with front matter or badges
+MD024:
+  siblings_only: true
+MD060: false        # table pipe spacing: cosmetic, and fights hand-edited tables

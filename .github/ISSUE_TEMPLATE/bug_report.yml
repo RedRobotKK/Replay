@@ -1,0 +1,56 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly
+labels: ["type: bug", "status: triage"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for the report. Precise steps and versions make bugs fixable fast.
+  - type: input
+    id: version
+    attributes:
+      label: Buffy version
+      description: Output of `buffy version`
+      placeholder: "0.1.0 (abc1234, built 2026-09-02T00:00:00Z)"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: "macOS 15.6 arm64 / Ubuntu 24.04 / Windows 11 (WSL2)"
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: Agent or client in front of Buffy
+      placeholder: "Claude Code 2.1.x / Aider 0.9x / custom"
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start buffy with ...
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior, logs, and errors
+      description: Redact API keys and any secret before pasting.
+      render: shell
+  - type: checkboxes
+    id: secrets
+    attributes:
+      label: Redaction
+      options:
+        - label: I have removed API keys, tokens, and private data from this report
+          required: true
