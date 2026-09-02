@@ -4,7 +4,7 @@
 
 It reads the transcripts your agent already writes, reproduces the provider's caching turn by turn, and only then scores alternatives. Later, as a local proxy, it applies the better layout live using only mechanisms the provider itself sanctions, and keeps improving from your own history. Everything runs on your machine. No API calls are spent on analysis. Nothing leaves.
 
-> **Status: v0.1 in development.** `replay`, `blame`, `diff`, and `redact` work offline on Claude Code transcripts and have been calibrated against one real session so far; the 20-session corpus the roadmap requires is still pending. Nothing proxies traffic yet. Follow [`docs/ROADMAP.md`](docs/ROADMAP.md).
+> **Status: v0.1 and v0.2 in development, no release tagged yet.** `replay`, `blame`, `diff`, and `redact` work offline on Claude Code transcripts and have been calibrated against one real session so far; the 20-session corpus the roadmap requires is still pending. `serve` is a byte-for-byte passthrough proxy that records a derived-data ledger; it has been exercised against a fake provider, not yet against the real one. Follow [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 [![CI](https://github.com/RedRobotKK/Buffy/actions/workflows/ci.yml/badge.svg)](https://github.com/RedRobotKK/Buffy/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/RedRobotKK/Buffy)](https://goreportcard.com/report/github.com/RedRobotKK/Buffy)
@@ -27,7 +27,7 @@ Buffy addresses each one locally, without changing how the agent works.
 | `buffy replay` | Reproduces your sessions' caching, prints how well it matched the provider's own numbers, then scores alternative layouts in tokens saved |
 | `buffy blame` | Ranks which files, tool descriptions, and instructions are eating your prompt tokens across all sessions |
 | `buffy diff` | Points at the exact turn where the cached prefix diverged and classifies the cause |
-| `buffy serve` | Local proxy: byte-for-byte passthrough, measured numbers, safe policy application, spend and loop guards |
+| `buffy serve` | Local proxy: byte-for-byte passthrough that records what the provider charged, so the three commands above run on measured data (policies and guards come later) |
 
 Every number is labeled *estimated* (from transcripts) or *measured* (from the wire), with the calibration that justifies it. Release sequence, gates, and what is deliberately deferred: [`docs/ROADMAP.md`](docs/ROADMAP.md). Full requirements: [`docs/prd/buffy-prd-v5.0.0.md`](docs/prd/buffy-prd-v5.0.0.md).
 
@@ -61,6 +61,27 @@ Rules: anthropic-2026-09-01; user-content fit 0.469 tokens/byte ±64% from 34 tu
 ```
 
 The calibration line is the point: Buffy first proves it can reproduce what the provider charged, and only then says anything about alternatives. Every figure is labeled estimated or measured. Here the 1-hour TTL the client chose reproduces as-run to the token, the 5-minute TTL would have cost 35% more across four idle gaps, and context editing would have cost more, not less, for this session shape. How it works: [`docs/architecture/replay-engine.md`](docs/architecture/replay-engine.md).
+
+### Measured numbers with the proxy
+
+Transcripts do not contain the system prompt, tool definitions, or cache markers, so figures from them are labeled estimated. The proxy sees all of it:
+
+```sh
+./bin/buffy serve                                  # listens on 127.0.0.1:4000
+export ANTHROPIC_BASE_URL=http://127.0.0.1:4000    # in the shell that runs your agent
+./bin/buffy replay ~/.buffy/ledger/                # same commands, measured tier
+```
+
+What the proxy does and does not do:
+
+- Forwards every request and response byte for byte, including streaming, cache markers, and the `anthropic-beta` and `anthropic-version` headers. It never rewrites a body or removes a header.
+- Forwards your credential and never stores or logs it. A Claude subscription stays the active credential when no API key is set, as the client's gateway documentation describes.
+- Writes one ledger file per session with block kinds, sizes, labels, timings, and usage. No message text, ever. Ledger files live under `~/.buffy/ledger` with owner-only permissions.
+- Binds loopback only, refuses browser-originated requests, and accepts an optional shared token (`--token` or `BUFFY_TOKEN`, sent as `x-buffy-token`).
+- Fails open: if anything inside Buffy's own bookkeeping fails, the bytes still flow. If the provider is unreachable you get a 502 that says how to bypass Buffy.
+- Off switch: `BUFFY_DISABLED=1` refuses to start; unsetting `ANTHROPIC_BASE_URL` bypasses it entirely.
+
+One client caveat from the gateway docs: with a non-first-party base URL, Claude Code disables MCP tool search unless `ENABLE_TOOL_SEARCH=true` is set. Buffy forwards `tool_reference` blocks unchanged, so setting it is safe. Details: [`docs/architecture/proxy-protocol.md`](docs/architecture/proxy-protocol.md).
 
 ## Development
 

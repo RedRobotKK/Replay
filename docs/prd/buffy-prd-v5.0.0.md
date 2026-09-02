@@ -210,10 +210,10 @@ Each requirement has an identifier and an acceptance test. A requirement without
 
 | ID | Requirement | Acceptance |
 |----|-------------|------------|
-| PX-1 | Loopback TCP listener with a header token. Exposes `/v1/messages*` including `count_tokens`, and `/v1/chat/completions`. | Integration test with recorded fixtures for each. |
+| PX-1 | Loopback TCP listener. Exposes `/v1/messages*` including `count_tokens`, and `/v1/chat/completions`. A shared header token is optional: loopback binding, browser-origin rejection, and the absence of stored credentials are the default protection, because requiring the token would force every user to configure custom headers before first contact. | Integration test with recorded fixtures for each; token test when set. |
 | PX-2 | Byte-for-byte passthrough of request and response, including SSE streaming with immediate flush, when no policy is enabled. | Hash of forwarded bytes equals hash of received bytes across the fixture corpus. |
 | PX-3 | Authentication headers are forwarded unchanged and never persisted or logged, including in debug mode. | Log scan test with a canary header value. |
-| PX-4 | Timeouts sized for multi-minute turns; retries only on rate limit, overload, server error, and connection failure, bounded, jittered, honoring retry-after; never on client errors; never after a response has started streaming. | Fault-injection tests per case. |
+| PX-4 | Timeouts sized for multi-minute turns. Retries (only on rate limit, overload, server error, and connection failure, bounded, jittered, honoring retry-after; never on client errors; never after a response has started streaming) ship with the v0.3 guards; in v0.2 the client's own retry policy applies and every provider response passes through unchanged. | Fault-injection tests per case. |
 | PX-5 | Fail open: any failure inside Buffy's own analysis or policy code results in the original bytes being forwarded. The spend cap is the single fail-closed exception. | Panic injection test. |
 | PX-6 | One environment variable disables all policies; a second disables Buffy entirely with a clear client-visible error that names the bypass. | Documented and tested. |
 | PX-7 | Session identity comes from the client's `x-claude-code-session-id` header when present (with `x-claude-code-agent-id` distinguishing sub-agents), and otherwise from a hash of the stable prefix. When identity is uncertain, no policy is applied. | Fixture with two interleaved sessions, with and without the header. |
