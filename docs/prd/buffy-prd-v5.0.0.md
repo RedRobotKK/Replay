@@ -216,9 +216,9 @@ Each requirement has an identifier and an acceptance test. A requirement without
 | PX-4 | Timeouts sized for multi-minute turns; retries only on rate limit, overload, server error, and connection failure, bounded, jittered, honoring retry-after; never on client errors; never after a response has started streaming. | Fault-injection tests per case. |
 | PX-5 | Fail open: any failure inside Buffy's own analysis or policy code results in the original bytes being forwarded. The spend cap is the single fail-closed exception. | Panic injection test. |
 | PX-6 | One environment variable disables all policies; a second disables Buffy entirely with a clear client-visible error that names the bypass. | Documented and tested. |
-| PX-7 | Session identity is a hash of the stable prefix (system prompt and first user turn). When identity is uncertain, no policy is applied. | Fixture with two interleaved sessions. |
+| PX-7 | Session identity comes from the client's `x-claude-code-session-id` header when present (with `x-claude-code-agent-id` distinguishing sub-agents), and otherwise from a hash of the stable prefix. When identity is uncertain, no policy is applied. | Fixture with two interleaved sessions, with and without the header. |
 | PX-8 | The policy for a session is chosen at its first request and pinned for the session's life, persisted to disk. | Change the policy file mid-session; the session continues under the pinned policy. |
-| PX-9 | Client-set request parameters and cache markers are never overridden. Buffy adds only what the client did not set, within provider limits (marker count, TTL ordering). | Fixture with four client markers; Buffy adds none. |
+| PX-9 | Client-set request parameters and cache markers are never overridden. Buffy adds only what the client did not set, within provider limits (marker count, TTL ordering). The `anthropic-version` and `anthropic-beta` headers are forwarded verbatim, never filtered. | Fixture with four client markers; Buffy adds none. Header round-trip test. |
 | PX-10 | Every applied transformation is logged with the before and after content hashes, and `buffy diff` can show the exact bytes. | Log format test. |
 | PX-11 | Server-side compaction is never enabled from the proxy. | Static check: parameter not present in the policy catalog. |
 
@@ -293,7 +293,7 @@ Initial catalog for v0.3: `freeze-system-prompt` (diagnostic only, reports when 
 | Client | Hook | v0.1 (replay) | v0.2+ (proxy) |
 |--------|------|---------------|---------------|
 | Claude Code, API key | `ANTHROPIC_BASE_URL` | Yes (transcripts) | Yes |
-| Claude Code, subscription | Unverified | Yes (transcripts) | Pending spike 3 |
+| Claude Code, subscription | `ANTHROPIC_BASE_URL` without a gateway credential | Yes (transcripts) | Yes, documented (spike 3 passed) |
 | Aider | Base URL variables | Transcript format pending | Yes |
 | OpenAI Codex CLI | Base URL variable | No transcripts known | Chat completions passthrough; caching rules later |
 | Cursor agent mode | None | No | No, and the README says so |
@@ -370,7 +370,7 @@ No public claim is made until all five pass. Spike 3 runs first because its answ
 |-------|----------|----------------|
 | 1 | Do Claude Code transcripts carry per-message usage with cache read and write counts? | Present on 20 real sessions across two client versions. |
 | 2 | Does the replay engine reproduce as-run cache reads and writes? | At least 95 percent of turns across 20 sessions, mismatches explained. |
-| 3 | Does Claude Code honor a base URL override under subscription authentication, and is proxying that traffic within the provider's terms? | Documented answer with a source. If no, v0.2 targets API-key users only and the README says so. |
+| 3 | Does Claude Code honor a base URL override under subscription authentication, and is proxying that traffic within the provider's terms? | Documented answer with a source. **Passed:** the LLM gateway documentation describes exactly this configuration; see `../architecture/proxy-protocol.md`. |
 | 4 | Does adding the context-editing parameter from a proxy leave Claude Code's behavior intact? | A ten-turn session completes with the parameter present. |
 | 5 | Does scoped rehydration hold under adversarial content? | Adversarial corpus never reaches a shell or network tool input. |
 

@@ -7,7 +7,8 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - `buffy replay`, `buffy blame`, and `buffy diff`: offline analysis of Claude Code transcripts. Reproduces the provider's cache reads turn by turn (the calibration line), classifies every cache break with a cause and location, attributes prompt tokens to content with per-turn sums that match provider usage exactly, prices visible error classes, and scores TTL and context-editing policies with the as-run behavior reproduced first. Every figure is labeled estimated or measured.
-- `buffy redact`: strips content from a transcript while keeping structure, sizes, usage, and tool names, for bug reports and fixtures. The repository fixture is a redacted real session.
+- `buffy redact`: strips content from a transcript while keeping structure, sizes, usage, tool names, and equality of values (salted, so nothing is confirmable from the output), for bug reports and fixtures. A redacted session analyzes identically to the original; the repository fixture is a redacted real session.
+- Spike 3 answered from documentation: subscription-authenticated Claude Code routes through `ANTHROPIC_BASE_URL` and stays on the subscription when no gateway credential is set. The gateway protocol facts the proxy must honor are recorded in `docs/architecture/proxy-protocol.md`.
 - Repository scaffold: Go module, `buffy` command skeleton with `version` and `help`, Makefile, CI on Linux, macOS, and Windows, golangci-lint, Markdown lint, Dependabot, issue and pull request templates, label set, weekly stale-issue housekeeping.
 - Governance and community documents: Apache 2.0 license and NOTICE (ADR-0005; the scaffold's initial BSL 1.1 draft was replaced before any release), contributing guide, code of conduct, security policy, support guide.
 - `docs/ROADMAP.md`, `docs/HOUSEKEEPING.md`, ADR process with ADR-0001, PRD v4.0.0 and its adversarial review under `docs/`.
