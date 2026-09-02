@@ -21,6 +21,10 @@ type BlameEntry struct {
 	Errors int
 }
 
+// rebillLabel names tokens re-written because a cache break forced the
+// provider to process history again.
+const rebillLabel = "cache breaks: history re-billed (see buffy diff)"
+
 // labelAcc accumulates attribution for one label, keeping measured and
 // estimated tokens apart so uncertainty is reported only where it exists.
 type labelAcc struct {
@@ -87,6 +91,12 @@ func Blame(cal *Calibration, fit TokenFit) []BlameEntry {
 		}
 		carried := total - t.Index
 		tc := splitTurn(t)
+		if tc.rebillTokens > 0 {
+			// A break re-bills history that is already attributed to its
+			// own labels; it is reported as its own line so the table
+			// names the break, not the content that happened to follow it.
+			get(rebillLabel).add(tc.rebillTokens, 1, true, false)
+		}
 		attributeOutput(t.Previous, carried, get)
 		var userBlocks []transcript.Block
 		for _, m := range t.Request.Context[min(len(t.Previous.Context), len(t.Request.Context)):] {

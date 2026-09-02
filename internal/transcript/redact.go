@@ -3,6 +3,7 @@ package transcript
 import (
 	"bufio"
 	"bytes"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -21,8 +22,13 @@ import (
 // The output is what a user can attach to a bug report, and what this
 // repository uses as test fixtures.
 func Redact(r io.Reader, w io.Writer) error {
+	salt := make([]byte, saltBytes)
+	if _, err := rand.Read(salt); err != nil {
+		return fmt.Errorf("generate redaction salt: %w", err)
+	}
+	red := &redactor{salt: salt}
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, 1<<20), maxLineBytes)
+	scanner.Buffer(make([]byte, 0, scannerInitialBytes), maxLineBytes)
 	bw := bufio.NewWriter(w)
 	for scanner.Scan() {
 		raw := bytes.TrimSpace(scanner.Bytes())
@@ -37,7 +43,7 @@ func Redact(r io.Reader, w io.Writer) error {
 		if _, ok := obj["uuid"]; !ok {
 			continue
 		}
-		redactLine(obj)
+		red.line(obj)
 		out, err := json.Marshal(obj)
 		if err != nil {
 			return fmt.Errorf("encode redacted line: %w", err)
@@ -63,7 +69,19 @@ var keptTop = map[string]bool{
 	"effort": true, "message": true, "version": true, "userType": true,
 }
 
-func redactLine(obj map[string]any) {
+// saltBytes sizes the per-file salt that keys every filler string.
+const saltBytes = 16
+
+// redactor carries the per-file salt. Filler is a keyed hash of the
+// original content expanded to the same length, so equal values stay equal
+// within one redacted file (repeated tool calls remain detectable), distinct
+// values stay distinct, and nothing can be confirmed against the output
+// without the salt, which is never written anywhere.
+type redactor struct {
+	salt []byte
+}
+
+func (rd *redactor) line(obj map[string]any) {
 	for k := range obj {
 		if !keptTop[k] {
 			delete(obj, k)
@@ -88,28 +106,28 @@ func redactLine(obj map[string]any) {
 	}
 	switch c := msg["content"].(type) {
 	case string:
-		msg["content"] = filler(len(c))
+		msg["content"] = rd.filler(c)
 	case []any:
 		for _, item := range c {
 			if b, ok := item.(map[string]any); ok {
-				redactBlock(b)
+				rd.block(b)
 			}
 		}
 	}
 }
 
-func redactBlock(b map[string]any) {
+func (rd *redactor) block(b map[string]any) {
 	for k, v := range b {
 		switch k {
 		case "type", "id", "tool_use_id", "is_error", "name":
 			// structural; keep
 		case "input":
-			b[k] = redactInput(v)
+			b[k] = rd.input(v)
 		case "content":
-			b[k] = redactContent(v)
+			b[k] = rd.content(v)
 		default:
 			if s, ok := v.(string); ok {
-				b[k] = filler(len(s))
+				b[k] = rd.filler(s)
 			} else {
 				delete(b, k)
 			}
@@ -117,38 +135,50 @@ func redactBlock(b map[string]any) {
 	}
 }
 
-// Argument names whose values are paths or commands; kept as hashed labels
-// so tool results still attribute to a stable, meaningless name.
-var labelArgs = map[string]bool{"file_path": true, "path": true, "pattern": true, "command": true, "url": true, "query": true}
+// Argument names whose values are labels the analysis groups by. They are
+// replaced by a hash of the same length so tool results still attribute to
+// a stable, meaningless name. Only true file paths keep their extension.
+var (
+	labelArgs = map[string]bool{"file_path": true, "path": true, "pattern": true, "command": true, "url": true, "query": true}
+	pathArgs  = map[string]bool{"file_path": true, "path": true}
+)
 
-func redactInput(v any) any {
-	m, ok := v.(map[string]any)
-	if !ok {
-		return map[string]any{}
-	}
-	out := make(map[string]any, len(m))
-	for k, val := range m {
-		s, isString := val.(string)
-		switch {
-		case !isString:
-			out[k] = filler(len(fmt.Sprint(val)))
-		case labelArgs[k]:
-			out[k] = hashedLabel(s)
-		default:
-			out[k] = filler(len(s))
+// redactInput rewrites a tool call's arguments. Strings become filler or a
+// hashed label of the same length; numbers, booleans, and null are kept
+// because they are not content and their JSON length must not change;
+// nested values are handled the same way recursively.
+func (rd *redactor) input(v any) any {
+	switch val := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(val))
+		for k, inner := range val {
+			if s, ok := inner.(string); ok && labelArgs[k] {
+				out[k] = rd.hashedLabel(s, pathArgs[k])
+				continue
+			}
+			out[k] = rd.input(inner)
 		}
+		return out
+	case []any:
+		for i := range val {
+			val[i] = rd.input(val[i])
+		}
+		return val
+	case string:
+		return rd.filler(val)
+	default:
+		return val
 	}
-	return out
 }
 
-func redactContent(v any) any {
+func (rd *redactor) content(v any) any {
 	switch c := v.(type) {
 	case string:
-		return filler(len(c))
+		return rd.filler(c)
 	case []any:
 		for _, item := range c {
 			if b, ok := item.(map[string]any); ok {
-				redactBlock(b)
+				rd.block(b)
 			}
 		}
 		return c
@@ -157,20 +187,70 @@ func redactContent(v any) any {
 	}
 }
 
-// hashedLabel keeps the extension of a path so per-language patterns stay
-// visible, and replaces the rest with a short hash.
-func hashedLabel(s string) string {
-	sum := sha256.Sum256([]byte(s))
-	ext := path.Ext(s)
-	if len(ext) > 8 || strings.ContainsAny(ext, " /") {
-		ext = ""
+// hashedLabelBytes is how much of the hash is kept when the original is
+// long enough to hold it.
+const hashedLabelBytes = 12
+
+// hashedLabel replaces a label with a hash of the same byte length. For file
+// paths the extension survives so per-language patterns stay visible; for
+// commands, queries, and URLs nothing after a dot is content-free, so
+// nothing is kept.
+func (rd *redactor) hashedLabel(s string, keepExtension bool) string {
+	ext := ""
+	if keepExtension {
+		ext = path.Ext(s)
+		if !safeExtension(ext) {
+			ext = ""
+		}
 	}
-	return "r/" + hex.EncodeToString(sum[:6]) + ext
+	label := "r/" + rd.digest(s)[:hashedLabelBytes]
+	room := len(s) - len(ext)
+	switch {
+	case room <= 0:
+		return rd.filler(s)
+	case len(label) > room:
+		return label[:room] + ext
+	default:
+		return label + rd.filler(s)[:room-len(label)] + ext
+	}
 }
 
-// filler returns a string of the same byte length as the original so size
-// based analysis is unchanged. Wire bytes of real content are UTF-8; the
-// filler is ASCII, which is what the analysis measures anyway.
-func filler(n int) string {
-	return strings.Repeat("x", n)
+// digest returns the salted hash of s as hex, long enough to fill any
+// label or string this file contains.
+func (rd *redactor) digest(s string) string {
+	h := sha256.New()
+	h.Write(rd.salt)
+	h.Write([]byte(s))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// safeExtension accepts short, alphanumeric extensions only.
+func safeExtension(ext string) bool {
+	if len(ext) < 2 || len(ext) > 8 || ext[0] != '.' {
+		return false
+	}
+	for _, r := range ext[1:] {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// filler returns a string of the same byte length as the original, derived
+// from its salted hash, so size-based analysis and equality are unchanged.
+// Real content is UTF-8; the filler is ASCII, which is what the analysis
+// measures anyway.
+func (rd *redactor) filler(s string) string {
+	n := len(s)
+	if n == 0 {
+		return ""
+	}
+	seed := rd.digest(s)
+	var sb strings.Builder
+	sb.Grow(n)
+	for sb.Len() < n {
+		sb.WriteString(seed)
+	}
+	return sb.String()[:n]
 }

@@ -85,10 +85,21 @@ func TestBlameSumsToReportedUsage(t *testing.T) {
 			continue
 		}
 		tc := splitTurn(turn)
-		want += tc.outputTokens + tc.userTokens
+		want += tc.outputTokens + tc.userTokens + tc.rebillTokens
 	}
 	if got != want {
 		t.Fatalf("attributed %d tokens, provider reported %d", got, want)
+	}
+	// The one break must be reported on its own line, not folded into the
+	// content that happened to follow it.
+	var rebill *BlameEntry
+	for i := range entries {
+		if entries[i].Label == rebillLabel {
+			rebill = &entries[i]
+		}
+	}
+	if rebill == nil || rebill.Tokens.Value == 0 || rebill.Tokens.Error != 0 {
+		t.Fatalf("break re-bill not reported as a measured line: %+v", rebill)
 	}
 	if entries[0].PromptTokens.Value < entries[len(entries)-1].PromptTokens.Value {
 		t.Fatal("blame is not sorted by prompt contribution")

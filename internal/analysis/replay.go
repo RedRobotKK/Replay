@@ -53,10 +53,12 @@ type cacheState struct {
 	prefix    int
 	lastTouch time.Time
 	ttl       time.Duration
+	minPrefix int
 }
 
 // serve returns the read and write for a request of the given prompt size
 // and uncached tail, then updates the state. Cache reads refresh the TTL.
+// A cacheable prefix below the model's minimum is never cached.
 //
 // observed is what the client's own behavior made readable on this turn,
 // or -1 when the invariant held. On turns where the as-run read fell short
@@ -65,7 +67,7 @@ type cacheState struct {
 // thing that differs from as-run is the policy under test.
 func (c *cacheState) serve(at time.Time, prompt, tail int, observed int) (read, write int) {
 	cacheable := prompt - tail
-	warm := c.prefix > 0 && at.Sub(c.lastTouch) <= c.ttl
+	warm := c.prefix > 0 && at.Sub(c.lastTouch) <= c.ttl && cacheable >= c.minPrefix
 	switch {
 	case !warm:
 		read = 0
@@ -89,6 +91,7 @@ func newCacheState(lane *transcript.Lane, ttl time.Duration) *cacheState {
 		first := lane.Requests[0]
 		state.prefix = first.Usage.CacheRead
 		state.lastTouch = first.Timestamp
+		state.minPrefix = cachemodel.MinCacheablePrefix(first.Model)
 	}
 	return state
 }
@@ -117,7 +120,7 @@ func observedAvailability(cal *Calibration) []int {
 func WithTTL(cal *Calibration, ttl time.Duration) PolicyResult {
 	lane := cal.Lane
 	name := fmt.Sprintf("ttl-%s", ttl)
-	r := PolicyResult{Name: name, ReachableLive: "no: the client sets the TTL on its own cache markers", Guardrail: "none"}
+	r := PolicyResult{Name: name, ReachableLive: "yes: Claude Code setting promptCacheTtl (5m or 1h); the proxy never changes client markers", Guardrail: "none"}
 	state := newCacheState(lane, ttl)
 	mult := cachemodel.WriteMultiplier(ttl)
 	available := observedAvailability(cal)
