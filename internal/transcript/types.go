@@ -21,10 +21,12 @@ const (
 	KindOther      = "other"
 )
 
-// Roles of a message in a request context.
+// Roles of a message in a request context. RoleSystem is used by ledger
+// data for the system prompt and tool definitions that precede messages.
 const (
 	RoleUser      = "user"
 	RoleAssistant = "assistant"
+	RoleSystem    = "system"
 )
 
 // Block is one content block of a message. Text is kept in memory for
@@ -111,11 +113,23 @@ type Lane struct {
 	Requests  []*Request
 }
 
-// Session is a parsed transcript.
+// Where a session's data came from. The source decides the truth tier of
+// every figure derived from it.
+const (
+	SourceTranscript = "claude-code-transcript"
+	SourceLedger     = "buffy-ledger"
+)
+
+// Session is a parsed transcript or ledger.
 type Session struct {
 	ID            string
 	Path          string
 	ClientVersion string
+	Source        string
+	// PrefixVisible is true when the system prompt and tool definitions are
+	// present in each request's context (ledger data), so nothing ahead of
+	// the first message needs estimating.
+	PrefixVisible bool
 	Lanes         []*Lane
 	// Skipped counts lines the parser could not interpret. Non-zero is not an
 	// error, but it is reported so a format change does not pass silently.

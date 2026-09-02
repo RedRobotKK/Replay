@@ -111,7 +111,7 @@ func ParseClaudeCode(r io.Reader) (*Session, error) {
 		}
 	}
 
-	session := &Session{Skipped: skipped}
+	session := &Session{Skipped: skipped, Source: SourceTranscript}
 	for _, l := range lines {
 		if l.SessionID != "" && session.ID == "" {
 			session.ID = l.SessionID
@@ -212,16 +212,16 @@ func collectToolNames(lines []*rawLine) map[string]string {
 		}
 		for _, b := range blocks {
 			if b.Type == KindToolUse && b.ID != "" {
-				names[b.ID] = toolLabel(b.Name, b.Input)
+				names[b.ID] = ToolLabel(b.Name, b.Input)
 			}
 		}
 	}
 	return names
 }
 
-// toolLabel renders "Read path/to/file" style labels from a tool call. Only
+// ToolLabel renders "Read path/to/file" style labels from a tool call. Only
 // well-known argument names are used; everything else is just the tool name.
-func toolLabel(name string, input json.RawMessage) string {
+func ToolLabel(name string, input json.RawMessage) string {
 	var args map[string]any
 	if err := json.Unmarshal(input, &args); err != nil || len(args) == 0 {
 		return name
@@ -445,7 +445,7 @@ func convertBlock(rb rawBlock, role string, toolNames map[string]string) Block {
 		// omitted; the thinking text may be empty.
 		return Block{Kind: KindThinking, Label: "assistant thinking", Bytes: len(rb.Thinking), Text: rb.Thinking}
 	case KindToolUse:
-		return Block{Kind: KindToolUse, Label: "tool call: " + rb.Name, Bytes: len(rb.Name) + contentBytes(rb.Input), Text: string(rb.Input), ToolUseID: rb.ID, ToolName: rb.Name}
+		return Block{Kind: KindToolUse, Label: "tool call: " + rb.Name, Bytes: len(rb.Name) + ContentBytes(rb.Input), Text: string(rb.Input), ToolUseID: rb.ID, ToolName: rb.Name}
 	case KindToolResult:
 		text := toolResultText(rb.Content)
 		name := toolNames[rb.ToolUseID]
@@ -460,11 +460,11 @@ func convertBlock(rb rawBlock, role string, toolNames map[string]string) Block {
 	}
 }
 
-// contentBytes measures a JSON value by its decoded content: string values
+// ContentBytes measures a JSON value by its decoded content: string values
 // and object keys by their length, numbers by their literal, booleans and
 // null by their keyword. It is independent of escaping and key order, so a
 // redacted transcript measures exactly like the original.
-func contentBytes(raw json.RawMessage) int {
+func ContentBytes(raw json.RawMessage) int {
 	if len(raw) == 0 {
 		return 0
 	}
