@@ -10,3 +10,4 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | [0002](0002-replay-engine-and-truth-tiers.md) | Replay engine with calibration gate and two tiers of truth | Proposed |
 | [0003](0003-policy-application-constraints.md) | Live policies use only provider-sanctioned mechanisms | Proposed |
 | [0004](0004-masking-and-scoped-rehydration.md) | Secret masking with persistent vault and scoped rehydration | Proposed |
+| [0005](0005-apache-2-license.md) | License the project under Apache 2.0 | Accepted |

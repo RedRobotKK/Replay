@@ -44,4 +44,4 @@ Docs live in `docs/` and are linted in CI. Every document opens with one sentenc
 
 ## License of contributions
 
-By contributing you agree that your contribution is licensed under the repository's [license](LICENSE), including its scheduled conversion to Apache 2.0.
+By contributing you agree that your contribution is licensed under the [Apache License 2.0](LICENSE), as its Section 5 provides. No separate contributor agreement is required.
