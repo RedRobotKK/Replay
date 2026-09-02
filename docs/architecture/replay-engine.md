@@ -22,6 +22,10 @@ Claude Code writes one JSONL line per content block. A request produces several 
 
 Lines that are not conversation content (hook summaries, queue operations, attachments) are skipped and counted; a format change shows up as a skipped count, never as a silent gap.
 
+## Measured tier: ledger sessions
+
+When the session comes from the proxy's ledger, every request's context begins with a synthetic system message holding the system prompt size and the tool definitions size, so nothing ahead of the first message is unseen and a change in that prefix shows up as a divergence at position zero. Message identity in the ledger is positional shape (role, block count, total bytes), which is exactly the history-edit signal the diff looks for. Assistant output structure and usage are recorded from the response itself.
+
 ## What the transcript does not contain
 
 Three things are on the wire and not in the file: the system prompt, the tool definitions, and content the client injects (attachments, reminders). Two measurements bound them:

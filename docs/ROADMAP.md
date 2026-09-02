@@ -22,9 +22,11 @@ Read Claude Code transcripts. Reproduce the provider's caching turn by turn, pri
 
 ## v0.2: transparent proxy
 
-`buffy serve`: loopback listener, byte-for-byte passthrough for the Anthropic Messages API and OpenAI chat completions with streaming, usage capture, measured tier, live `diff`. No policies yet.
+`buffy serve`: loopback listener, byte-for-byte passthrough for the Anthropic Messages API with streaming, usage capture into a derived-data ledger, measured tier for `replay`, `blame`, and `diff`. No policies yet.
 
-**Gate:** spike 3 answered; passthrough hash test green on the fixture corpus; added latency p99 published.
+**Status:** implemented for the Anthropic Messages API and tested against a fake provider (byte-exact request and response, incremental flushing, gzip, error passthrough, origin and token checks, no credential in ledger or logs). Not yet exercised against the real provider or a real client session. OpenAI chat completions passthrough works as bytes but its responses are not summarized; retries and provider-error handling are v0.3 with the guards.
+
+**Gate:** spike 3 answered (done); passthrough hash test green (done); a real Claude Code session recorded through the proxy with calibration at the measured tier; added latency p99 published.
 
 ## v0.3: policies, dry-run, guards
 
