@@ -44,6 +44,7 @@ Each item: the claim as written, why it fails, the concrete failure scenario, an
 **Failure scenario.** L1 summary is regenerated at turn 12. It is padded to the same 8,000 bytes. Every breakpoint after the system prompt misses. The user paid for the padding tokens on every one of the previous 11 turns for zero benefit.
 
 **Secondary defects in the sample code.**
+
 - `rawContext[:targetTokens*4]` truncates real context when it exceeds the slot. This silently drops code from the prompt. In a coding agent that is a correctness bug, not a degradation.
 - `len(rawContext) / 4` is not a token count. Token density varies by a factor of two or more between prose, code, JSON, and non-Latin text. The API has a `count_tokens` endpoint for this.
 - The filler `[{"buffy_anchor_zone":"0x4F1A","fill":"....` is placed inside the prompt where the model reads it. It is not free. Runs of dots tokenize unpredictably; measure it before claiming "minimal tokens".
@@ -59,6 +60,7 @@ Each item: the claim as written, why it fails, the concrete failure scenario, an
 **Claim.** An OpenAI-compatible endpoint is sufficient to sit in front of the named agents.
 
 **Why it fails.**
+
 - Claude Code uses the Anthropic Messages API through `ANTHROPIC_BASE_URL`. It calls `/v1/messages` and `/v1/messages/count_tokens`, sends `anthropic-beta` headers, streams SSE, sets its own `cache_control` breakpoints, and round-trips `thinking` blocks with signatures. None of that maps onto chat completions. A proxy that only exposes `/v1/chat/completions` is invisible to Claude Code.
 - Cursor's agent runs through Cursor's own backend. A user-configured base URL only applies to a narrow custom-model path and disables most agent features. There is no proxy-insertion point for the product's main use case.
 - Aider works with both API shapes via base URL overrides. It is the only one of the three where "drop-in" is currently true.
@@ -73,11 +75,13 @@ Each item: the claim as written, why it fails, the concrete failure scenario, an
 **Why it fails.** On Claude Fable 5.1 (and enforced more widely on future models), each `thinking` block's signature binds the conversation prefix that produced it: the top-level system prompt, the tool set, and every message before the block. When the transcript comes back, the API checks that prefix is unchanged. Organizations created on or after 2026-08-31 get a 400 on mismatch. Older orgs record the mismatch and will be enforced on later models.
 
 Buffy's design mutates history in at least three ways:
+
 1. **Pruning drift.** File X is "non-target" at turn 3 and is pruned to signatures. At turn 9 the agent starts editing X, so it becomes "target" and the tool result from turn 3 is re-expanded. That is an edit to an earlier turn. Result: 400 on enforced orgs, full cache miss on everyone else.
 2. **Non-deterministic placeholders.** `[SECURE_ASSET_4F1E]` looks random. If the same secret gets a different tag on the next request, every earlier message containing it changes.
 3. **Any compaction.** Buffy-side summarization of earlier turns is a middle-of-history edit.
 
 **Fix.**
+
 - Every transformation must be a pure, deterministic function of the input bytes so that a given client message always renders to the same provider bytes for the life of the session. No cross-turn state may influence how an earlier message is rendered.
 - Placeholders must be keyed by HMAC of the secret value under a per-session key, so the same secret always maps to the same tag.
 - Adopt the three-step compatibility check from the provider migration guide and run it in CI with `prefix_mismatch_behavior: "error"`.
@@ -150,7 +154,8 @@ There is also no definition of "target" vs. "non-target". That classifier is the
 
 The code is labeled "Production-Grade Implementation Blueprints". It would not pass a first-round review.
 
-**Go (`core`)**
+### Go (`core`)
+
 - Every error from `MkdirAll`, `WriteFile`, `Chmod`, `Remove`, `ReadFull(cryptoKey)`, `aes.NewCipher`, `cipher.NewGCM` is discarded. A failed vault write leaves the daemon with a token no client can read. A failed key read leaves an all-zero AES key.
 - `NewHardenedPlatformGate` writes the session token to the real `$HOME/.buffy/.session_vault` and, on macOS, deletes and rebinds the real socket path. Running the test suite overwrites the live daemon's credentials and socket. Tests must use a temp directory and injected paths.
 - `AuthenticateClient` is never invoked by `InterceptStream`. The gate is unauthenticated by default.
@@ -161,11 +166,13 @@ The code is labeled "Production-Grade Implementation Blueprints". It would not p
 - `CompileAnchorPaddedSlot`: silent truncation (see 1.1), returns un-padded input when the gap is under 64 bytes (so the "exact length" guarantee the test asserts is false in that band), and pads with dots inside a JSON string the model will read.
 - No HTTP server, no SSE, no upstream client, no retry, no timeout, no 429 handling, no context propagation to upstream. Multi-minute turns on frontier models need explicit timeout design.
 
-**Rust**
+### Rust
+
 - No framing; single read; truncation over 32 KB; lossy UTF-8; thread-per-connection with no limit; accept-loop error exits the daemon; socket file permissions not set; no cleanup on exit.
 - "Tree-Sitter AST Compactor" is a string prefix. There is no parser.
 
-**Test**
+### Test
+
 - Asserts `len(payload) == targetTokens*4` for a 21-byte input, which passes, but does not test the truncation or the under-64-byte branches where the guarantee fails.
 - Races the server goroutine's `Accept` against the client `Dial` with no synchronization. Flaky on loaded CI.
 - Uses the real home directory (see above).
@@ -177,13 +184,15 @@ The code is labeled "Production-Grade Implementation Blueprints". It would not p
 
 Steelmanning the document: there is a real product here, and it is narrower and better than the one described.
 
-**Defensible theses**
+### Defensible theses
+
 1. **Developers cannot see why their cache breaks.** Cache misses are silent, and the bill is the only symptom. A local proxy that diffs adjacent request payloads, detects the first divergent byte inside the overlap, and names the cause (tool list changed, timestamp in system prompt, non-sorted JSON, breakpoint pushed out of the 20-position lookback) is genuinely valuable and does not exist as a desktop tool. The provider's cache-diagnostics beta helps but requires code changes in the client; Buffy could do it for any client.
 2. **Local secret masking before egress** is a real enterprise requirement, provided it is deterministic, persistent, and honest about its threat model.
 3. **Spend circuit breakers per session and per day**, denominated in dollars from real `usage` fields, protect against runaway loops. Fail-closed on the next request, never mid-stream.
 4. **Per-session cost and token observability** with a local dashboard. Most developers have no idea what a single Claude Code task costs.
 
-**Design principles that make those four safe**
+### Design principles that make those four safe
+
 - **Byte transparency by default.** Buffy forwards `/v1/messages` and `/v1/chat/completions` exactly as received unless a feature is explicitly enabled. Off-switch is one environment variable. Every transformation is a pure function of the input, deterministic across turns, and logged.
 - **Never touch thinking blocks, signatures, or `cache_control` markers.**
 - **Never rewrite an earlier turn differently than it was rewritten before.** Enforce this with a per-session render cache keyed by message hash, and an integration test that runs the provider's prefix-binding check in error mode.
@@ -247,19 +256,22 @@ What a PRD needs for a team to build without guessing, and whether this one has 
 
 ## 6. Recommended Re-scope
 
-**v0.1 — Transparent proxy with visibility (4 to 6 weeks, one Go engineer)**
+### v0.1 — Transparent proxy with visibility (4 to 6 weeks, one Go engineer)
+
 - Single Go binary. TCP loopback listener with header-token auth. `/v1/messages*` and `/v1/chat/completions` byte-transparent passthrough with SSE streaming.
 - Per-request capture of `usage` fields. Local dashboard: cost, tokens, cache read ratio per session.
 - Cache-break detector: diff adjacent payload prefixes, report the first divergence and a likely cause.
 - One env var to disable. Clean uninstall.
 - Acceptance: zero behavior change on a fixed suite of Claude Code and Aider tasks; added latency p99 under a stated budget; cache ratio matches direct-to-provider within measurement noise.
 
-**v0.2 — Secret masking and spend control**
+### v0.2 — Secret masking and spend control
+
 - Deterministic HMAC placeholders; encrypted persistent vault; OS keychain key; rehydration across SSE chunk boundaries and inside tool-call JSON; thinking blocks untouched.
 - Dollar-denominated circuit breaker, fail-closed before the next request, per-session and per-day, with override.
 - Acceptance: provider prefix-binding check passes in error mode across a 50-turn masked session; restart mid-session loses nothing; documented false-positive rate on a corpus.
 
-**v0.3 — Opt-in context tools**
+### v0.3 — Opt-in context tools
+
 - MCP server exposing session history and summaries as resources (this is the honest version of `buffy://`).
 - Pruning as an opt-in per-glob feature, never on the last-read or last-edited file, gated on an A/B benchmark.
 
