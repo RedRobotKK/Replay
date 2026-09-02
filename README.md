@@ -1,8 +1,8 @@
 # Project Buffy
 
-**A local, transparent proxy that shows you what your coding agent is spending, keeps your secrets on your machine, and stops runaway loops.**
+**Buffy shows you the turn your coding agent's prompt cache broke, what it cost, and what a better context layout would have saved, on sessions you have already paid for.**
 
-Buffy sits between an agent (Claude Code, Aider, custom loops) and the model provider on `localhost`. It forwards requests byte-for-byte by default, and layers in per-session cost visibility, prompt-cache diagnostics, local secret masking, and spend circuit breakers.
+It reads the transcripts your agent already writes, reproduces the provider's caching turn by turn, and only then scores alternatives. Later, as a local proxy, it applies the better layout live using only mechanisms the provider itself sanctions, and keeps improving from your own history. Everything runs on your machine. No API calls are spent on analysis. Nothing leaves.
 
 > **Status: pre-MVP, design phase.** Nothing here proxies traffic yet. The build, test, and lint pipeline is real; the product is not. Follow [`docs/ROADMAP.md`](docs/ROADMAP.md) for what ships first.
 
@@ -20,24 +20,24 @@ Coding agents resend the whole conversation on every turn. Three things go wrong
 
 Buffy addresses each one locally, without changing how the agent works.
 
-## What it will do (v0.1 to v0.3)
+## What it will do
 
-| Release | Capability |
-|---------|------------|
-| v0.1 | Byte-transparent passthrough for the Anthropic Messages API and OpenAI chat completions. Per-session cost and cache-hit dashboard. Cache-break detector that names the first divergent byte between turns. |
-| v0.2 | Deterministic local secret masking with a persistent encrypted vault. Dollar-denominated circuit breakers per session and per day. |
-| v0.3 | Opt-in context tools exposed over MCP. |
+| Command | What you get |
+|---------|--------------|
+| `buffy replay` | Reproduces your sessions' caching, prints how well it matched the provider's own numbers, then scores alternative layouts in tokens saved |
+| `buffy blame` | Ranks which files, tool descriptions, and instructions are eating your prompt tokens across all sessions |
+| `buffy diff` | Points at the exact turn where the cached prefix diverged and classifies the cause |
+| `buffy serve` | Local proxy: byte-for-byte passthrough, measured numbers, safe policy application, spend and loop guards |
 
-Details, acceptance criteria, and what is deliberately deferred: [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Every number is labeled *estimated* (from transcripts) or *measured* (from the wire), with the calibration that justifies it. Release sequence, gates, and what is deliberately deferred: [`docs/ROADMAP.md`](docs/ROADMAP.md). Full requirements: [`docs/prd/buffy-prd-v5.0.0.md`](docs/prd/buffy-prd-v5.0.0.md).
 
 ## Quick start
 
-Not yet. When v0.1 lands the install will be one command and one environment variable:
+Not yet. When v0.1 lands, the first contact needs no proxy, no configuration, and no trust:
 
 ```sh
 brew install redrobotkk/tap/buffy      # planned
-buffy serve
-export ANTHROPIC_BASE_URL=http://127.0.0.1:4000
+buffy replay ~/.claude/projects/my-app/
 ```
 
 ## Development
@@ -55,7 +55,7 @@ make help     # all targets
 - [`docs/ROADMAP.md`](docs/ROADMAP.md): what ships when, and why
 - [`docs/adr/`](docs/adr/): architecture decision records
 - [`docs/architecture/`](docs/architecture/): system design
-- [`docs/prd/`](docs/prd/): product requirement documents (history)
+- [`docs/prd/buffy-prd-v5.0.0.md`](docs/prd/buffy-prd-v5.0.0.md): current requirements; earlier versions kept as history
 - [`docs/reviews/`](docs/reviews/): design reviews
 - [`docs/HOUSEKEEPING.md`](docs/HOUSEKEEPING.md): how this repository is run
 
