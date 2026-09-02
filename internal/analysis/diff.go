@@ -3,6 +3,7 @@ package analysis
 import (
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/RedRobotKK/Buffy/internal/cachemodel"
 	"github.com/RedRobotKK/Buffy/internal/transcript"
@@ -63,7 +64,7 @@ func classify(t Turn, fit TokenFit) Break {
 	switch {
 	case t.Gap > ttl:
 		b.Cause = CauseTTLExpired
-		b.Detail = fmt.Sprintf("gap %s exceeds TTL %s", t.Gap.Round(1e9), ttl)
+		b.Detail = fmt.Sprintf("gap %s exceeds TTL %s", t.Gap.Round(time.Second), ttl)
 		return b
 	case prev.Model != cur.Model:
 		b.Cause = CauseModelChanged

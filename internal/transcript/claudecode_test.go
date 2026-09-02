@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 const fixture = "testdata/session-redacted.jsonl"
@@ -139,6 +140,78 @@ func TestRedactPreservesAnalysisAndDropsContent(t *testing.T) {
 	}
 }
 
+func TestParseSkipsMalformedRequest(t *testing.T) {
+	good := `{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-09-02T00:00:00Z","sessionId":"s","version":"1","message":{"role":"user","content":"hi"}}` + "\n" +
+		`{"type":"assistant","uuid":"a1","parentUuid":"u1","requestId":"r1","apiBlockIndex":0,"timestamp":"2026-09-02T00:00:01Z","message":{"role":"assistant","model":"m","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":1,"cache_creation_input_tokens":2,"cache_read_input_tokens":3,"output_tokens":4}}}` + "\n"
+	bad := `{"type":"assistant","uuid":"a2","parentUuid":"a1","requestId":"r2","apiBlockIndex":0,"timestamp":"2026-09-02T00:00:02Z","message":{"role":"assistant","model":"m","content":[{"type":"text","text":"interrupted"}]}}` + "\n"
+	s, err := ParseClaudeCode(strings.NewReader(good + bad))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.RequestCount() != 1 || s.Skipped != 1 {
+		t.Fatalf("requests %d skipped %d, want 1 and 1", s.RequestCount(), s.Skipped)
+	}
+}
+
+func TestTruncateLabelIsRuneAware(t *testing.T) {
+	label := strings.Repeat("プ", 10)
+	got := TruncateLabel(label, 5)
+	if !utf8.ValidString(got) || utf8.RuneCountInString(got) != 5 || !strings.HasSuffix(got, "…") {
+		t.Fatalf("TruncateLabel = %q", got)
+	}
+	if TruncateLabel("short", 10) != "short" {
+		t.Fatal("short labels must be returned unchanged")
+	}
+}
+
+func TestRedactPreservesToolCallBytes(t *testing.T) {
+	input := `{"type":"assistant","uuid":"a1","parentUuid":null,"requestId":"r1","apiBlockIndex":0,"timestamp":"2026-09-02T00:00:01Z","message":{"role":"assistant","model":"m","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/Users/me/very/long/path/to/app.go","limit":10,"nested":{"query":"password.hunter2","flag":true}}}],"usage":{"input_tokens":1,"cache_creation_input_tokens":2,"cache_read_input_tokens":3,"output_tokens":4}}}` + "\n"
+	var out bytes.Buffer
+	if err := Redact(strings.NewReader(input), &out); err != nil {
+		t.Fatal(err)
+	}
+	before, err := ParseClaudeCode(strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := ParseClaudeCode(bytes.NewReader(out.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, a := before.Lanes[0].Requests[0].Output.Blocks[0], after.Lanes[0].Requests[0].Output.Blocks[0]
+	if b.Bytes != a.Bytes {
+		t.Fatalf("tool call bytes changed by redaction: %d -> %d\n%s", b.Bytes, a.Bytes, out.String())
+	}
+	got := out.String()
+	if strings.Contains(got, "hunter2") || strings.Contains(got, "/Users/me") {
+		t.Fatalf("redaction leaked a value:\n%s", got)
+	}
+	if !strings.Contains(got, ".go") || !strings.Contains(got, `"limit":10`) || !strings.Contains(got, `"flag":true`) {
+		t.Fatalf("redaction dropped structure it should keep:\n%s", got)
+	}
+}
+
+func TestRedactPreservesEqualityWithinFile(t *testing.T) {
+	line := func(uuid, parent, req, cmd string) string {
+		return `{"type":"assistant","uuid":"` + uuid + `","parentUuid":` + parent + `,"requestId":"` + req + `","apiBlockIndex":0,"timestamp":"2026-09-02T00:00:01Z","message":{"role":"assistant","model":"m","content":[{"type":"tool_use","id":"` + uuid + `","name":"Bash","input":{"command":"` + cmd + `"}}],"usage":{"input_tokens":1,"cache_creation_input_tokens":2,"cache_read_input_tokens":3,"output_tokens":4}}}` + "\n"
+	}
+	input := line("a1", "null", "r1", "go test ./...") + line("a2", `"a1"`, "r2", "go test ./...") + line("a3", `"a2"`, "r3", "go vet ./...")
+	var out bytes.Buffer
+	if err := Redact(strings.NewReader(input), &out); err != nil {
+		t.Fatal(err)
+	}
+	s, err := ParseClaudeCode(bytes.NewReader(out.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqs := s.Lanes[0].Requests
+	same := reqs[0].Output.Blocks[0].Text == reqs[1].Output.Blocks[0].Text
+	different := reqs[1].Output.Blocks[0].Text != reqs[2].Output.Blocks[0].Text
+	if !same || !different {
+		t.Fatalf("redaction must keep equal inputs equal and distinct inputs distinct: same=%v different=%v", same, different)
+	}
+}
+
 func TestRedactReplacesTextWithFiller(t *testing.T) {
 	line := `{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-09-02T00:00:00Z","sessionId":"s","cwd":"/Users/me","message":{"role":"user","content":[{"type":"text","text":"my secret is sk-ant-abc"}]}}` + "\n" +
 		`{"type":"assistant","uuid":"a1","parentUuid":"u1","requestId":"r1","apiBlockIndex":0,"timestamp":"2026-09-02T00:00:01Z","message":{"role":"assistant","model":"m","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/Users/me/app.go","limit":10}}],"usage":{"input_tokens":1,"cache_creation_input_tokens":2,"cache_read_input_tokens":3,"output_tokens":4}}}` + "\n"
@@ -154,6 +227,9 @@ func TestRedactReplacesTextWithFiller(t *testing.T) {
 	}
 	if !strings.Contains(got, `"name":"Read"`) || !strings.Contains(got, ".go") {
 		t.Fatalf("redaction dropped structure it should keep:\n%s", got)
+	}
+	if strings.Contains(got, "xxxxxxxx") {
+		t.Fatalf("filler must be derived from content, not a constant:\n%s", got)
 	}
 	if !strings.Contains(got, `"cache_read_input_tokens":3`) {
 		t.Fatalf("redaction changed usage:\n%s", got)

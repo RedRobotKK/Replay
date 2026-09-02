@@ -3,8 +3,6 @@ package transcript
 import (
 	"bufio"
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,11 +11,15 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
-// maxLineBytes bounds a single transcript line. Tool results can be large;
-// this is generous while still refusing pathological input.
-const maxLineBytes = 64 << 20
+// Scanner sizing. Tool results can be large; the maximum is generous while
+// still refusing pathological input.
+const (
+	scannerInitialBytes = 1 << 20
+	maxLineBytes        = 64 << 20
+)
 
 // Line types Claude Code writes that carry conversation content.
 const (
@@ -141,7 +143,10 @@ func ParseClaudeCode(r io.Reader) (*Session, error) {
 		sort.SliceStable(group, func(i, j int) bool { return group[i].APIBlockIndex < group[j].APIBlockIndex })
 		req, laneID, err := dec.buildRequest(group)
 		if err != nil {
-			return nil, fmt.Errorf("request %s: %w", id, err)
+			// One malformed request (no usage on an interrupted call, a bad
+			// timestamp) must not hide the rest of the session.
+			session.Skipped++
+			continue
 		}
 		lane, ok := lanes[laneID]
 		if !ok {
@@ -162,7 +167,7 @@ func ParseClaudeCode(r io.Reader) (*Session, error) {
 
 func readLines(r io.Reader) ([]*rawLine, int, error) {
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, 1<<20), maxLineBytes)
+	scanner.Buffer(make([]byte, 0, scannerInitialBytes), maxLineBytes)
 	var lines []*rawLine
 	skipped := 0
 	for scanner.Scan() {
@@ -229,15 +234,22 @@ func toolLabel(name string, input json.RawMessage) string {
 	return name
 }
 
-// labelMaxLen keeps labels readable in a terminal table.
-const labelMaxLen = 60
+// labelMaxLen bounds stored labels. It is far wider than any table column
+// so that distinct calls keep distinct labels; reports truncate for display.
+const labelMaxLen = 400
 
 func truncateLabel(s string) string {
-	s = strings.ReplaceAll(s, "\n", " ")
-	if len(s) <= labelMaxLen {
+	return TruncateLabel(strings.ReplaceAll(s, "\n", " "), labelMaxLen)
+}
+
+// TruncateLabel shortens a label to at most n runes, ending in an ellipsis
+// when it was cut. It never splits a multi-byte character.
+func TruncateLabel(s string, n int) string {
+	if n <= 0 || utf8.RuneCountInString(s) <= n {
 		return s
 	}
-	return s[:labelMaxLen-1] + "…"
+	runes := []rune(s)
+	return string(runes[:n-1]) + "…"
 }
 
 // decoder memoizes decoded messages by line uuid. Every request's context
@@ -433,7 +445,7 @@ func convertBlock(rb rawBlock, role string, toolNames map[string]string) Block {
 		// omitted; the thinking text may be empty.
 		return Block{Kind: KindThinking, Label: "assistant thinking", Bytes: len(rb.Thinking), Text: rb.Thinking}
 	case KindToolUse:
-		return Block{Kind: KindToolUse, Label: "tool call: " + rb.Name, Bytes: len(rb.Name) + len(rb.Input), Text: string(rb.Input), ToolUseID: rb.ID, ToolName: rb.Name}
+		return Block{Kind: KindToolUse, Label: "tool call: " + rb.Name, Bytes: len(rb.Name) + contentBytes(rb.Input), Text: string(rb.Input), ToolUseID: rb.ID, ToolName: rb.Name}
 	case KindToolResult:
 		text := toolResultText(rb.Content)
 		name := toolNames[rb.ToolUseID]
@@ -445,6 +457,53 @@ func convertBlock(rb rawBlock, role string, toolNames map[string]string) Block {
 		return Block{Kind: rb.Type, Label: rb.Type, Bytes: len(rb.Content)}
 	default:
 		return Block{Kind: KindOther, Label: "other: " + rb.Type, Bytes: len(rb.Content) + len(rb.Text)}
+	}
+}
+
+// contentBytes measures a JSON value by its decoded content: string values
+// and object keys by their length, numbers by their literal, booleans and
+// null by their keyword. It is independent of escaping and key order, so a
+// redacted transcript measures exactly like the original.
+func contentBytes(raw json.RawMessage) int {
+	if len(raw) == 0 {
+		return 0
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return len(raw)
+	}
+	return decodedBytes(v)
+}
+
+func decodedBytes(v any) int {
+	switch val := v.(type) {
+	case string:
+		return len(val)
+	case json.Number:
+		return len(val.String())
+	case bool:
+		if val {
+			return len("true")
+		}
+		return len("false")
+	case nil:
+		return len("null")
+	case []any:
+		n := 0
+		for _, item := range val {
+			n += decodedBytes(item)
+		}
+		return n
+	case map[string]any:
+		n := 0
+		for k, item := range val {
+			n += len(k) + decodedBytes(item)
+		}
+		return n
+	default:
+		return 0
 	}
 }
 
@@ -490,11 +549,4 @@ func parseTime(s string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("parse timestamp %q: %w", s, err)
 	}
 	return t, nil
-}
-
-// ContentHash returns a stable identifier for a block's content without the
-// content itself. Reports and any future ledger store this, never the text.
-func ContentHash(b Block) string {
-	sum := sha256.Sum256([]byte(b.Text))
-	return hex.EncodeToString(sum[:8])
 }

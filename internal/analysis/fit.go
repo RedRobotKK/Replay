@@ -39,13 +39,15 @@ const defaultTokensPerByte = 0.25
 // client's fixed per-message overhead, not the content, decides the ratio.
 const minFitBytes = 512
 
-// turnContent splits what a request added beyond the previous cached
-// prefix into the previous output (measured) and new user-side messages
-// (estimated from bytes).
+// turnContent splits what a request's cache write covered into the
+// previous output (measured), new user-side messages (estimated from
+// bytes), and history that was re-written because the prefix broke
+// (measured: the difference between expected and actual read).
 type turnContent struct {
 	outputTokens int
 	userBytes    int
 	userTokens   int
+	rebillTokens int
 }
 
 func splitTurn(t Turn) turnContent {
@@ -56,9 +58,16 @@ func splitTurn(t Turn) turnContent {
 			tc.userBytes += m.Bytes()
 		}
 	}
-	// The previous request's uncached tail is re-processed inside this
-	// request's cache write, so it is subtracted to isolate new content.
-	newTokens := cur.Usage.CacheCreation + cur.Usage.Input - prev.Usage.Input
+	// The cache write covers the previous request's uncached tail (which is
+	// subtracted to isolate new content), the new content, and, on a broken
+	// turn, the history that had to be re-written. On an exceeded turn a
+	// sibling request already wrote part of the new content, so the write
+	// undercounts it by the excess read.
+	written := cur.Usage.CacheCreation + cur.Usage.Input - prev.Usage.Input
+	if t.Outcome == cachemodel.ReadBroken {
+		tc.rebillTokens = min(t.Expected-t.Actual, written)
+	}
+	newTokens := written - tc.rebillTokens + max(t.Actual-t.Expected, 0)
 	tc.userTokens = max(newTokens-tc.outputTokens, 0)
 	return tc
 }

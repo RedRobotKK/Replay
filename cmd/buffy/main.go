@@ -113,33 +113,51 @@ func runReport(args []string, stdout, stderr io.Writer, write func(*analysis.Lan
 // transcriptFiles expands files and directories into transcript paths,
 // largest first so the most informative session prints first.
 func transcriptFiles(paths []string) ([]string, error) {
-	var files []string
+	type entry struct {
+		path string
+		size int64
+	}
+	var entries []entry
+	add := func(p string) error {
+		info, err := os.Stat(p)
+		if err != nil {
+			return err
+		}
+		entries = append(entries, entry{path: p, size: info.Size()})
+		return nil
+	}
 	for _, p := range paths {
 		info, err := os.Stat(p)
 		if err != nil {
 			return nil, err
 		}
 		if !info.IsDir() {
-			files = append(files, p)
+			entries = append(entries, entry{path: p, size: info.Size()})
 			continue
 		}
 		matches, err := filepath.Glob(filepath.Join(p, "*.jsonl"))
 		if err != nil {
 			return nil, err
 		}
-		files = append(files, matches...)
+		for _, m := range matches {
+			if err := add(m); err != nil {
+				return nil, err
+			}
+		}
 	}
-	if len(files) == 0 {
+	if len(entries) == 0 {
 		return nil, fmt.Errorf("no .jsonl transcripts found")
 	}
-	sort.Slice(files, func(i, j int) bool {
-		si, errI := os.Stat(files[i])
-		sj, errJ := os.Stat(files[j])
-		if errI != nil || errJ != nil {
-			return files[i] < files[j]
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].size != entries[j].size {
+			return entries[i].size > entries[j].size
 		}
-		return si.Size() > sj.Size()
+		return entries[i].path < entries[j].path
 	})
+	files := make([]string, 0, len(entries))
+	for _, e := range entries {
+		files = append(files, e.path)
+	}
 	return files, nil
 }
 

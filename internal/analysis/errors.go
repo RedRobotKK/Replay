@@ -35,6 +35,10 @@ var editAnchorMarkers = []string{"string to replace not found", "not found in fi
 
 var overflowMarkers = []string{"prompt is too long", "context window", "compact"}
 
+// overflowMarkerMaxBytes bounds how long a tool result may be and still be
+// read as an overflow notice rather than content that merely mentions one.
+const overflowMarkerMaxBytes = 400
+
 // ErrorCosts classifies error content across a lane and prices it with the
 // fit. Repeated identical tool calls are counted from the second occurrence.
 func ErrorCosts(cal *Calibration, fit TokenFit) []ErrorCost {
@@ -52,34 +56,43 @@ func ErrorCosts(cal *Calibration, fit TokenFit) []ErrorCost {
 		}
 		return a
 	}
+	// Every block is classified once, the first time any request carries
+	// it, and priced by how many requests carry that exact block. Walking
+	// each request's own context (rather than assuming the last request
+	// holds the whole history) keeps the count right after a compaction or
+	// a rewind removed blocks from later contexts.
+	carriedBy := blockCarryCounts(requests)
+	seenBlocks := map[blockKey]bool{}
 	seenCalls := map[string]bool{}
 	callBytes := map[string]int{}
-
-	// Walk the longest context (the last request) so each block is seen
-	// once, and price by how many requests carried it. Requests earlier in
-	// the lane carry a prefix of the same history.
-	last := requests[total-1]
-	for i, m := range last.Context {
-		carried := requestsCarrying(requests, i)
-		for _, b := range m.Blocks {
-			switch b.Kind {
-			case transcript.KindToolUse:
-				key := b.ToolName + "\x00" + b.Text
-				callBytes[b.ToolUseID] = b.Bytes
-				if seenCalls[key] {
-					get(ErrorRepeatedCommand).add(fit.EstimateTokens(b.Bytes), carried, false, false)
+	for _, req := range requests {
+		for _, m := range req.Context {
+			for bi, b := range m.Blocks {
+				key := blockKey{m.UUID, bi}
+				if seenBlocks[key] {
+					continue
 				}
-				seenCalls[key] = true
-			case transcript.KindToolResult:
-				size := fit.EstimateTokens(b.Bytes + callBytes[b.ToolUseID])
-				lower := strings.ToLower(b.Text)
-				switch {
-				case containsAny(lower, editAnchorMarkers) && b.IsError:
-					get(ErrorEditAnchor).add(size, carried, false, true)
-				case b.IsError:
-					get(ErrorToolFailed).add(size, carried, false, true)
-				case containsAny(lower, overflowMarkers) && len(b.Text) < 400:
-					get(ErrorContextOverflow).add(size, carried, false, true)
+				seenBlocks[key] = true
+				carried := carriedBy[key]
+				switch b.Kind {
+				case transcript.KindToolUse:
+					call := b.ToolName + "\x00" + b.Text
+					callBytes[b.ToolUseID] = b.Bytes
+					if seenCalls[call] {
+						get(ErrorRepeatedCommand).add(fit.EstimateTokens(b.Bytes), carried, false, false)
+					}
+					seenCalls[call] = true
+				case transcript.KindToolResult:
+					size := fit.EstimateTokens(b.Bytes + callBytes[b.ToolUseID])
+					lower := strings.ToLower(b.Text)
+					switch {
+					case containsAny(lower, editAnchorMarkers) && b.IsError:
+						get(ErrorEditAnchor).add(size, carried, false, true)
+					case b.IsError:
+						get(ErrorToolFailed).add(size, carried, false, true)
+					case containsAny(lower, overflowMarkers) && len(b.Text) < overflowMarkerMaxBytes:
+						get(ErrorContextOverflow).add(size, carried, false, true)
+					}
 				}
 			}
 		}
@@ -96,15 +109,23 @@ func ErrorCosts(cal *Calibration, fit TokenFit) []ErrorCost {
 	return out
 }
 
-// requestsCarrying counts requests whose context includes position i.
-func requestsCarrying(requests []*transcript.Request, i int) int {
-	n := 0
+// blockKey identifies one block across requests.
+type blockKey struct {
+	messageUUID string
+	index       int
+}
+
+// blockCarryCounts counts, for every block, how many requests carried it.
+func blockCarryCounts(requests []*transcript.Request) map[blockKey]int {
+	counts := map[blockKey]int{}
 	for _, r := range requests {
-		if len(r.Context) > i {
-			n++
+		for _, m := range r.Context {
+			for bi := range m.Blocks {
+				counts[blockKey{m.UUID, bi}]++
+			}
 		}
 	}
-	return n
+	return counts
 }
 
 func containsAny(s string, markers []string) bool {

@@ -40,6 +40,12 @@ var contextEditTriggerShares = []float64{0.5, 0.75}
 
 const contextEditKeepLast = 6
 
+// Report layout limits.
+const (
+	replayBlameLimit = 5
+	labelColumnWidth = 64
+)
+
 func contextEditPolicies(lane *transcript.Lane) []ContextEditPolicy {
 	largest := 0
 	for _, r := range lane.Requests {
@@ -168,7 +174,7 @@ func (r *LaneReport) WriteReplay(w io.Writer) error {
 	p.printf("\n")
 	r.errors(p)
 	p.printf("\n")
-	r.blame(p, 5)
+	r.blame(p, replayBlameLimit)
 	return p.err
 }
 
@@ -227,7 +233,7 @@ func (r *LaneReport) blame(p *printer, limit int) {
 		if e.Errors > 0 {
 			errs = fmt.Sprintf("  %d errors", e.Errors)
 		}
-		p.printf("    %2d. %-64s x%-3d %8s once  %9s in prompts (±%s)%s\n", i+1, truncate(e.Label, 64), e.Occurrences, formatTokens(e.Tokens.Value), formatTokens(e.PromptTokens.Value), formatTokens(e.PromptTokens.Error), errs)
+		p.printf("    %2d. %-*s x%-3d %8s once  %9s in prompts (±%s)%s\n", i+1, labelColumnWidth, transcript.TruncateLabel(e.Label, labelColumnWidth), e.Occurrences, formatTokens(e.Tokens.Value), formatTokens(e.PromptTokens.Value), formatTokens(e.PromptTokens.Error), errs)
 	}
 }
 
@@ -242,13 +248,6 @@ func formatTokens(n int) string {
 	default:
 		return fmt.Sprintf("%d", n)
 	}
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n-1] + "…"
 }
 
 func shortID(id string) string {
