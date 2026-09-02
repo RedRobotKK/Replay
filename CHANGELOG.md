@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- `buffy replay`, `buffy blame`, and `buffy diff`: offline analysis of Claude Code transcripts. Reproduces the provider's cache reads turn by turn (the calibration line), classifies every cache break with a cause and location, attributes prompt tokens to content with per-turn sums that match provider usage exactly, prices visible error classes, and scores TTL and context-editing policies with the as-run behavior reproduced first. Every figure is labeled estimated or measured.
+- `buffy redact`: strips content from a transcript while keeping structure, sizes, usage, and tool names, for bug reports and fixtures. The repository fixture is a redacted real session.
 - Repository scaffold: Go module, `buffy` command skeleton with `version` and `help`, Makefile, CI on Linux, macOS, and Windows, golangci-lint, Markdown lint, Dependabot, issue and pull request templates, label set, weekly stale-issue housekeeping.
 - Governance and community documents: license (BSL 1.1 converting to Apache 2.0), contributing guide, code of conduct, security policy, support guide.
 - `docs/ROADMAP.md`, `docs/HOUSEKEEPING.md`, ADR process with ADR-0001, PRD v4.0.0 and its adversarial review under `docs/`.

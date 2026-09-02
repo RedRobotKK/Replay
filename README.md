@@ -4,7 +4,7 @@
 
 It reads the transcripts your agent already writes, reproduces the provider's caching turn by turn, and only then scores alternatives. Later, as a local proxy, it applies the better layout live using only mechanisms the provider itself sanctions, and keeps improving from your own history. Everything runs on your machine. No API calls are spent on analysis. Nothing leaves.
 
-> **Status: pre-MVP, design phase.** Nothing here proxies traffic yet. The build, test, and lint pipeline is real; the product is not. Follow [`docs/ROADMAP.md`](docs/ROADMAP.md) for what ships first.
+> **Status: v0.1 in development.** `replay`, `blame`, `diff`, and `redact` work offline on Claude Code transcripts and have been calibrated against one real session so far; the 20-session corpus the roadmap requires is still pending. Nothing proxies traffic yet. Follow [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 [![CI](https://github.com/RedRobotKK/Buffy/actions/workflows/ci.yml/badge.svg)](https://github.com/RedRobotKK/Buffy/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/RedRobotKK/Buffy)](https://goreportcard.com/report/github.com/RedRobotKK/Buffy)
@@ -33,12 +33,34 @@ Every number is labeled *estimated* (from transcripts) or *measured* (from the w
 
 ## Quick start
 
-Not yet. When v0.1 lands, the first contact needs no proxy, no configuration, and no trust:
+No proxy, no configuration, no trust required. Build from source until the first release is tagged:
 
 ```sh
-brew install redrobotkk/tap/buffy      # planned
-buffy replay ~/.claude/projects/my-app/
+make build
+./bin/buffy replay ~/.claude/projects/<your-project>/
 ```
+
+Real output from a Claude Code session, on the session in which Buffy itself was written:
+
+```text
+Tier: estimated (transcripts only)
+Calibration: reproduced provider cache reads on 59/60 turns (5 read more than predicted: a sibling request extended the prefix); 1 cache breaks
+Assumption: replayed savings assume the agent would have behaved identically under the alternative layout
+Rules: anthropic-2026-09-01; user-content fit 0.423 tokens/byte ±47% from 27 turns; system prefix 39k (measured from the first request's cache read)
+
+  policy                                    prompt tokens  cached share  vs as-run  misses  guardrail
+  as-run                                           14.87M           96%          -       0
+  ttl-5m0s                                         14.87M           92%        +9%       2  none
+  ttl-1h0m0s                                       14.87M           96%        +0%       0  none
+  context-edit(keep=6,trigger=212k) *              13.71M           76%     +194%       0  re-read rate and failed edits: unknown until a live trial
+
+  turn 32 at 22:08:56 (+2m30s): read 39k of 228k expected, 189k re-billed
+    cause: client re-rendered history after the system prefix (no edit visible in transcript)
+    where: message 0 (user text)
+    evidence: read 38987 tokens, about the size of the system prefix (38547); the message history was re-billed from the first message
+```
+
+The calibration line is the point: Buffy first proves it can reproduce what the provider charged, and only then says anything about alternatives. Every figure is labeled estimated or measured. How it works: [`docs/architecture/replay-engine.md`](docs/architecture/replay-engine.md).
 
 ## Development
 

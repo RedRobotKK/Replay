@@ -4,7 +4,7 @@ System design as it exists today. Decisions that led here are in [`../adr/`](../
 
 ## Current state
 
-Nothing proxies traffic yet. The repository contains the command skeleton, build pipeline, and documentation. This page will grow with v0.1; until then, the target shape is:
+The offline analysis (`replay`, `blame`, `diff`, `redact`) is implemented; see [`replay-engine.md`](replay-engine.md). Nothing proxies traffic yet. The target shape once the proxy lands:
 
 ```text
  agent (Claude Code, Aider, custom)
