@@ -47,7 +47,7 @@ The simulator keeps one cached prefix with a last-touch time and a TTL. It is se
 
 | Policy | What changes | Reachable live |
 |--------|--------------|----------------|
-| ttl-5m, ttl-1h | Expiry and write multiplier | No: the client sets the TTL on its own markers |
+| ttl-5m, ttl-1h | Expiry and write multiplier | Yes, as a client setting: Claude Code exposes `promptCacheTtl`; the proxy never changes client markers |
 | context-edit | Old tool results are cleared in bulk when the prompt passes a trigger; the cache is invalidated from the earliest cleared block and the prompt shrinks afterwards | Yes: a request parameter the proxy can set |
 
 Context-editing triggers are chosen relative to the session's largest prompt so a policy is never scored at a threshold the session could not reach. Effective tokens price uncached input at 1x, writes at the TTL multiplier, and reads at the read multiplier; they are a relative measure for comparing layouts, not a bill.

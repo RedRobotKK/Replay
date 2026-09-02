@@ -44,15 +44,15 @@ Real output from a Claude Code session, on the session in which Buffy itself was
 
 ```text
 Tier: estimated (transcripts only)
-Calibration: reproduced provider cache reads on 59/60 turns (5 read more than predicted: a sibling request extended the prefix); 1 cache breaks
+Calibration: reproduced provider cache reads on 77/78 turns (7 read more than predicted: a sibling request extended the prefix); 1 cache breaks
 Assumption: replayed savings assume the agent would have behaved identically under the alternative layout
-Rules: anthropic-2026-09-01; user-content fit 0.423 tokens/byte ±47% from 27 turns; system prefix 39k (measured from the first request's cache read)
+Rules: anthropic-2026-09-01; user-content fit 0.469 tokens/byte ±64% from 34 turns; system prefix 39k (measured from the first request's cache read)
 
   policy                                    prompt tokens  cached share  vs as-run  misses  guardrail
-  as-run                                           14.87M           96%          -       0
-  ttl-5m0s                                         14.87M           92%        +9%       2  none
-  ttl-1h0m0s                                       14.87M           96%        +0%       0  none
-  context-edit(keep=6,trigger=212k) *              13.71M           76%     +194%       0  re-read rate and failed edits: unknown until a live trial
+  as-run                                           22.87M           97%          -       0
+  ttl-5m0s                                         22.87M           91%       +35%       4  none
+  ttl-1h0m0s                                       22.87M           97%        +0%       0  none
+  context-edit(keep=6,trigger=239k) *              20.98M           79%     +206%       0  re-read rate and failed edits: unknown until a live trial
 
   turn 32 at 22:08:56 (+2m30s): read 39k of 228k expected, 189k re-billed
     cause: client re-rendered history after the system prefix (no edit visible in transcript)
@@ -60,7 +60,7 @@ Rules: anthropic-2026-09-01; user-content fit 0.423 tokens/byte ±47% from 27 tu
     evidence: read 38987 tokens, about the size of the system prefix (38547); the message history was re-billed from the first message
 ```
 
-The calibration line is the point: Buffy first proves it can reproduce what the provider charged, and only then says anything about alternatives. Every figure is labeled estimated or measured. How it works: [`docs/architecture/replay-engine.md`](docs/architecture/replay-engine.md).
+The calibration line is the point: Buffy first proves it can reproduce what the provider charged, and only then says anything about alternatives. Every figure is labeled estimated or measured. Here the 1-hour TTL the client chose reproduces as-run to the token, the 5-minute TTL would have cost 35% more across four idle gaps, and context editing would have cost more, not less, for this session shape. How it works: [`docs/architecture/replay-engine.md`](docs/architecture/replay-engine.md).
 
 ## Development
 
