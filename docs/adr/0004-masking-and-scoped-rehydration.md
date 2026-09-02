@@ -1,0 +1,26 @@
+# 0004. Secret masking with persistent vault and scoped rehydration
+
+**Status:** Proposed
+**Date:** 2026-09-02
+
+## Context
+
+Masking replaces secrets in outbound prompts with placeholders and restores them in responses. Three attacks shape the design. Placeholder forgery: untrusted content the agent reads can instruct the model to emit a placeholder inside a shell command, and naive rehydration would put the real secret into that command. Non-deterministic placeholders break caching and history binding. A RAM-only vault orphans every placeholder in the client's transcript when the daemon restarts.
+
+## Decision
+
+Placeholders are derived by HMAC of the secret under a per-project key, so the same secret always maps to the same placeholder. The vault persists encrypted at rest with a key held in the operating system keychain. Rehydration is scoped: by default placeholders are restored only in assistant text and in file-edit tool inputs targeting paths inside the project, never in shell or network tool inputs; scope is configurable per pattern; every rehydration is logged with its destination. Thinking blocks are never modified in either direction. Detection uses a named pattern set plus user patterns and an optional entropy heuristic, and the README names the patterns rather than claiming completeness. Masking ships last in the release sequence because it depends on the deterministic rendering and history-binding test harness the earlier releases establish.
+
+## Consequences
+
+- The provider does not see the secret, and content the model reads cannot route the secret to the network through Buffy.
+- The same secret produces the same placeholder across sessions of a project, which lets the provider correlate them. Documented as a known limitation.
+- Some legitimate workflows (a secret needed in a shell command) require the user to widen scope for that pattern. That is a deliberate friction.
+
+## Alternatives considered
+
+**Random placeholders per request.** Rejected: breaks caching and history binding.
+
+**Rehydrate everywhere.** Rejected: turns masking into an exfiltration primitive.
+
+**RAM-only vault.** Rejected: data loss on restart.

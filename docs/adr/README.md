@@ -7,3 +7,6 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | ADR | Title | Status |
 |-----|-------|--------|
 | [0001](0001-transparent-proxy-first.md) | Ship a byte-transparent proxy before any context transformation | Proposed |
+| [0002](0002-replay-engine-and-truth-tiers.md) | Replay engine with calibration gate and two tiers of truth | Proposed |
+| [0003](0003-policy-application-constraints.md) | Live policies use only provider-sanctioned mechanisms | Proposed |
+| [0004](0004-masking-and-scoped-rehydration.md) | Secret masking with persistent vault and scoped rehydration | Proposed |
