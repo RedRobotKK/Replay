@@ -8,8 +8,8 @@ The sequence is chosen so the first release costs nothing to run, works for ever
 
 | Spike | Question | Pass condition |
 |-------|----------|----------------|
-| 1 | Do Claude Code transcripts carry per-message usage with cache read and write counts? | Present on 20 real sessions across two client versions |
-| 2 | Does the replay engine reproduce as-run cache reads and writes? | At least 95 percent of turns across 20 sessions, mismatches explained |
+| 1 | Do Claude Code transcripts carry per-message usage with cache read and write counts? | Present on 20 real sessions across two client versions. **Status:** confirmed on 1 session, client 2.1.258; corpus pending |
+| 2 | Does the replay engine reproduce as-run cache reads and writes? | At least 95 percent of turns across 20 sessions, mismatches explained. **Status:** 55/56 turns on 1 session, the miss explained; corpus pending |
 | 3 | Does Claude Code honor a base URL override under subscription authentication, within the provider's terms? | Documented answer with a source |
 | 4 | Does adding the context-editing parameter from a proxy leave Claude Code's behavior intact? | A ten-turn session completes with the parameter present |
 | 5 | Does scoped rehydration hold under adversarial content? | Adversarial corpus never reaches a shell or network tool input |
