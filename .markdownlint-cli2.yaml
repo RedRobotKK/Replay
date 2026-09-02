@@ -1,0 +1,6 @@
+# markdownlint-cli2 configuration. Rules are in .markdownlint.yaml.
+globs:
+  - "**/*.md"
+ignores:
+  - node_modules/**
+  - docs/prd/**   # historical documents are never edited after the fact
