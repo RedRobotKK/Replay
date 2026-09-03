@@ -70,6 +70,16 @@ func runLearn(args []string, stdout, stderr io.Writer) error {
 	} else {
 		p.Printf("Selected: %s\n  live: %s\n", res.Selected.Name, res.Selected.Live)
 	}
+	if len(res.Types) > 0 {
+		p.Printf("\nBy session type (model family and first-prompt size, both known at a session's first request):\n")
+		for _, tr := range res.Types {
+			if tr.Selected == nil {
+				p.Printf("  %-24s %3d sessions  none (%s)\n", tr.Type, tr.Sessions, tr.Reason)
+			} else {
+				p.Printf("  %-24s %3d sessions  %s\n", tr.Type, tr.Sessions, tr.Selected.Name)
+			}
+		}
+	}
 	if err := p.Err(); err != nil {
 		return err
 	}
