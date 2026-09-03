@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -87,11 +89,7 @@ func (s *Store) Append(rec Record) error {
 	if err != nil {
 		return fmt.Errorf("encode ledger record: %w", err)
 	}
-	name := safeName.ReplaceAllString(rec.SessionID, "_")
-	if name == "" {
-		name = "unknown"
-	}
-	path := filepath.Join(s.dir, name+".jsonl")
+	path := filepath.Join(s.dir, sessionFileName(rec.SessionID)+".jsonl")
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -104,6 +102,21 @@ func (s *Store) Append(rec Record) error {
 		return fmt.Errorf("write ledger record: %w", err)
 	}
 	return f.Close()
+}
+
+// sessionFileName maps a session id to a file name. Ids that need
+// characters replaced also get a short hash of the original, so two ids
+// that sanitize alike never share a file.
+func sessionFileName(id string) string {
+	name := safeName.ReplaceAllString(id, "_")
+	if name == "" {
+		return "unknown"
+	}
+	if name == id {
+		return name
+	}
+	sum := sha256.Sum256([]byte(id))
+	return name + "-" + hex.EncodeToString(sum[:])[:8]
 }
 
 // IsLedgerFile reports whether a file starts with a ledger record. It reads

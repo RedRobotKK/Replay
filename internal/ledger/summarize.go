@@ -48,6 +48,22 @@ func (l *Labeler) Label(name string, input json.RawMessage) string {
 	return name + " " + transcript.HashedPathLabel(hex.EncodeToString(mac.Sum(nil)), value)
 }
 
+// keyCalls replaces each tool call's identity with one keyed by the
+// ledger's secret, so equal calls still share a key inside one ledger
+// while nobody holding the file can confirm a guessed call.
+func (l *Labeler) keyCalls(blocks []Block) []Block {
+	for i := range blocks {
+		if blocks[i].Kind == transcript.KindToolUse {
+			mac := hmac.New(sha256.New, l.key)
+			mac.Write([]byte(blocks[i].ToolName))
+			mac.Write([]byte{0})
+			mac.Write([]byte(blocks[i].Text))
+			blocks[i].CallKey = hex.EncodeToString(mac.Sum(nil))[:hashLabelBytes]
+		}
+	}
+	return blocks
+}
+
 // SummarizeRequest reduces a Messages API request body to its structure
 // and attributes. Labels come from the labeler and carry no content; block
 // text is dropped before the summary leaves this function.
@@ -95,7 +111,7 @@ func SummarizeRequest(body []byte, labeler *Labeler) (RequestSummary, error) {
 					p.CacheControlCount++
 				}
 			}
-			msg.Blocks = stripText(transcript.DecodeBlocks(blocks, m.Role, toolNames, labeler.Label))
+			msg.Blocks = stripText(labeler.keyCalls(transcript.DecodeBlocks(blocks, m.Role, toolNames, labeler.Label)))
 		}
 		p.Messages = append(p.Messages, msg)
 	}

@@ -28,7 +28,12 @@ type SpendLimits struct {
 type spend struct {
 	tokens int
 	usd    float64
+	seen   time.Time
 }
+
+// maxSpendSessions bounds the guard's per-session table; the least
+// recently seen sessions are dropped past it.
+const maxSpendSessions = 1024
 
 // SpendGuard accounts tokens and dollars from provider usage and fails
 // closed before the next request once a cap is reached. It never
@@ -62,9 +67,19 @@ func (g *SpendGuard) Record(sessionID string, tokens int, usd float64) {
 	g.rollDay()
 	st, ok := g.session[sessionID]
 	if !ok {
+		for len(g.session) >= maxSpendSessions {
+			oldest, oldestSeen := "", time.Time{}
+			for k, v := range g.session {
+				if oldest == "" || v.seen.Before(oldestSeen) {
+					oldest, oldestSeen = k, v.seen
+				}
+			}
+			delete(g.session, oldest)
+		}
 		st = &spend{}
 		g.session[sessionID] = st
 	}
+	st.seen = g.now()
 	st.tokens += tokens
 	st.usd += usd
 	g.dayUsed.tokens += tokens
@@ -216,27 +231,27 @@ func (b *Breaker) Enabled() bool {
 	return b != nil && b.settings.Failures > 0
 }
 
-// Allow reports whether a request may go upstream, and when not, how long
-// the caller should wait.
-func (b *Breaker) Allow() (bool, time.Duration) {
+// Allow reports whether a request may go upstream, whether it is the one
+// half-open probe, and when refused, how long the caller should wait.
+func (b *Breaker) Allow() (ok bool, probe bool, wait time.Duration) {
 	if !b.Enabled() {
-		return true, 0
+		return true, false, 0
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.openedAt.IsZero() {
-		return true, 0
+		return true, false, 0
 	}
 	elapsed := b.now().Sub(b.openedAt)
 	if elapsed < b.settings.Cooldown {
-		return false, b.settings.Cooldown - elapsed
+		return false, false, b.settings.Cooldown - elapsed
 	}
 	if b.probing {
-		return false, b.settings.Cooldown
+		return false, false, b.settings.Cooldown
 	}
 	// Half-open: let exactly one request probe the provider.
 	b.probing = true
-	return true, 0
+	return true, true, 0
 }
 
 // Release gives back a half-open probe that never reached the provider
