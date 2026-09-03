@@ -65,7 +65,9 @@ func SummarizeRequest(body []byte, labeler *Labeler) (RequestSummary, error) {
 	p.ContextEdits = len(req.ContextManagement) > 0
 	p.SystemBytes, p.CacheControlCount = systemSize(req.System)
 	for _, t := range req.Tools {
-		p.ToolBytes += transcript.ContentBytes(t)
+		def := transcript.ToolDef{Name: toolName(t), Bytes: transcript.ContentBytes(t)}
+		p.Tools = append(p.Tools, def)
+		p.ToolBytes += def.Bytes
 		if hasCacheControl(t) {
 			p.CacheControlCount++
 		}
@@ -120,6 +122,19 @@ func hashOf(prefix string, parts ...json.RawMessage) string {
 		h.Write([]byte{0})
 	}
 	return prefix + hex.EncodeToString(h.Sum(nil))[:hashLabelBytes]
+}
+
+// toolName reads a tool definition's name; built-in tools carry a type
+// and a name, custom tools a name. Nothing else is decoded.
+func toolName(raw json.RawMessage) string {
+	var t struct {
+		Name string `json:"name"`
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(raw, &t); err != nil || t.Name == "" {
+		return transcript.LabelUnknownTool
+	}
+	return transcript.SanitizeLabel(t.Name)
 }
 
 // systemSize handles both the string and the block-list form of system.

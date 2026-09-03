@@ -40,6 +40,8 @@ Policy catalog using only provider-sanctioned mechanisms (ADR-0003), dry-run sco
 
 Nightly local re-scoring, held-out validation, session types, bounded live trials with automatic revert, suggestions tracked from prediction to verified saving.
 
+**Status:** the advisor is implemented as `buffy advise` (AD-1 to AD-3): suggestions from the largest token sources with predicted savings on the share of prompt tokens, tracked to closure across sessions. The learning job and the proxy reading its policy file are on a separate branch.
+
 **Gate:** synthetic-corpus selection test passes; policy file format documented.
 
 ## v0.5: secret masking

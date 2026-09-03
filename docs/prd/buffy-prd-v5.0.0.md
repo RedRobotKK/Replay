@@ -256,9 +256,9 @@ Initial catalog for v0.3: `freeze-system-prompt` (diagnostic only, reports when 
 
 | ID | Requirement | Acceptance |
 |----|-------------|------------|
-| AD-1 | Convert top token sources into concrete suggestions with a predicted saving: defer-load rarely used tools, add a summary header to a frequently read file, split an instruction file. | Fixture produces the three suggestion types. |
-| AD-2 | Track each suggestion to closure: pending, applied (detected from subsequent sessions), verified or not verified against the prediction. | State machine test. |
-| AD-3 | Realized savings are reported on the scale-free metric first. | Output contract test. |
+| AD-1 | Convert top token sources into concrete suggestions with a predicted saving: defer-load rarely used tools, add a summary header to a frequently read file, split an instruction file. **Status:** implemented (`buffy advise`), plus dominant tool inputs, oversized results, and cache breaks. | Fixture produces the three suggestion types. |
+| AD-2 | Track each suggestion to closure: pending, applied (detected from subsequent sessions), verified or not verified against the prediction. **Status:** implemented for kinds whose target is structural; hot files and cache breaks are advice only. | State machine test. |
+| AD-3 | Realized savings are reported on the scale-free metric first. **Status:** implemented; shares of prompt tokens lead, corpus tokens follow. | Output contract test. |
 
 ### 8.11 Secret masking
 

@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- `buffy advise`: turns the largest token sources across all sessions into suggestions with a predicted saving on the scale-free metric (share of prompt tokens) and tracks each to closure: pending, applied when the newest sessions show the target shrinking, then verified or not verified against the prediction. Kinds: dominant tool inputs, oversized tool results, hot files, first-turn instruction content, tool definitions never called (ledger sessions), and cache breaks. The ledger now records tool definition names and sizes, never their text, so the last kind is possible.
+
 - `buffy replay`, `buffy blame`, and `buffy diff`: offline analysis of Claude Code transcripts. Reproduces the provider's cache reads turn by turn (the calibration line), classifies every cache break with a cause and location, attributes prompt tokens to content with per-turn sums that match provider usage exactly, prices visible error classes, and scores TTL and context-editing policies with the as-run behavior reproduced first. Every figure is labeled estimated or measured.
 - `buffy doctor`: reports transcripts found, the proxy variable and whether Buffy answers there, and the ledger, with the next command to run.
 - `make test` and CI report statement coverage.
