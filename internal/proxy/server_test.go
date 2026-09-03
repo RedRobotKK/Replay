@@ -1609,8 +1609,16 @@ func TestMaskingReplacesSecretsBeforeEgressAndKeepsThemLocal(t *testing.T) {
 		t.Fatalf("a body without a secret must pass byte for byte: %s", last)
 	}
 	ph, _ := vault.Placeholder(canary, "")
-	if recs[0].Masked["anthropic-api-key"] != 1 {
-		t.Fatalf("ledger must count the masked secret: %+v", recs[0].Masked)
+	// The two records land in completion order, which the bookkeeping
+	// after each response does not fix; exactly one carries the count.
+	maskedRecords := 0
+	for _, rec := range recs {
+		if rec.Masked["anthropic-api-key"] == 1 {
+			maskedRecords++
+		}
+	}
+	if maskedRecords != 1 {
+		t.Fatalf("ledger must count the masked secret once: %+v %+v", recs[0].Masked, recs[1].Masked)
 	}
 	for name, text := range map[string]string{"log": logs.String()} {
 		if strings.Contains(text, canary) || strings.Contains(text, ph) {
