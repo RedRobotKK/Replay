@@ -73,6 +73,10 @@ type WhatIf struct {
 // a session; the status endpoint always has the latest figures.
 const whatIfLogEvery = 10
 
+// maxSessions bounds the in-memory session state; the least recently
+// seen sessions are dropped past it. The ledger is the durable record.
+const maxSessions = 256
+
 // stats is the proxy's in-memory observability state. It is derived data
 // only and is lost on restart; the ledger is the durable record.
 type stats struct {
@@ -129,11 +133,7 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 		return nil
 	}
 	cur := *rec.Response.Usage
-	st, ok := s.sessions[rec.SessionID]
-	if !ok {
-		st = &sessionState{}
-		s.sessions[rec.SessionID] = st
-	}
+	st := s.session(rec.SessionID)
 	var out *ledger.CacheOutcome
 	prefixChanged := st.tally.Requests > 0 && rec.PrefixHash != st.prefixHash
 	if prefixChanged {
@@ -171,6 +171,27 @@ func (s *stats) errorTokens(sessionID string) (errorTokens, promptTokens int) {
 	return st.errorTokens, st.tally.PromptTokens
 }
 
+// session finds or creates a session's state, evicting the least recently
+// seen ones past maxSessions. Callers hold the lock.
+func (s *stats) session(id string) *sessionState {
+	st, ok := s.sessions[id]
+	if ok {
+		return st
+	}
+	for len(s.sessions) >= maxSessions {
+		oldest, oldestSeen := "", time.Time{}
+		for k, v := range s.sessions {
+			if oldest == "" || v.lastSeen.Before(oldestSeen) {
+				oldest, oldestSeen = k, v.lastSeen
+			}
+		}
+		delete(s.sessions, oldest)
+	}
+	st = &sessionState{lastSeen: time.Now()}
+	s.sessions[id] = st
+	return st
+}
+
 // pinned returns a session's policy decision and parameters when one was
 // made in this process, and false otherwise.
 func (s *stats) pinned(sessionID string) (*policy.ContextEdit, policy.Decision, bool) {
@@ -189,11 +210,7 @@ func (s *stats) pinned(sessionID string) (*policy.ContextEdit, policy.Decision, 
 func (s *stats) pin(sessionID string, edit *policy.ContextEdit, decision policy.Decision, generated time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st, ok := s.sessions[sessionID]
-	if !ok {
-		st = &sessionState{}
-		s.sessions[sessionID] = st
-	}
+	st := s.session(sessionID)
 	if st.policy == "" {
 		st.policy, st.edit, st.generated = decision, edit, generated
 	}

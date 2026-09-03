@@ -991,7 +991,7 @@ func fastRetries(attempts int) RetrySettings {
 }
 
 func TestRetriesResendUntilSuccessAndAreRecorded(t *testing.T) {
-	up := &flakyUpstream{script: []string{"529", "drop", "503"}, afters: []string{"0", "", ""}}
+	up := &flakyUpstream{script: []string{"529", "429", "503"}, afters: []string{"0", "", ""}}
 	base, dir, logs := startProxyWith(t, up, Config{Retries: fastRetries(3)})
 	resp := post(t, base, "/v1/messages", nil)
 	body, _ := io.ReadAll(resp.Body)
@@ -1007,7 +1007,7 @@ func TestRetriesResendUntilSuccessAndAreRecorded(t *testing.T) {
 		t.Fatalf("ledger must carry the retry count: %+v", recs[0])
 	}
 	log := logs.String()
-	for _, want := range []string{"retry 1/3", "after status 529", "retry 2/3", "after connection failed", "retry 3/3", "after status 503", "retries=3"} {
+	for _, want := range []string{"retry 1/3", "after status 529", "retry 2/3", "after status 429", "retry 3/3", "after status 503", "retries=3"} {
 		if !strings.Contains(log, want) {
 			t.Errorf("log missing %q:\n%s", want, log)
 		}
@@ -1033,6 +1033,9 @@ func TestRetriesStopOnClientErrorsExhaustionAndLongRetryAfter(t *testing.T) {
 		wantCode int
 	}{
 		{"client error", []string{"400", "400"}, nil, 3, 1, 400},
+		// A connection that drops after the request was sent may already
+		// have been billed; it is never resent.
+		{"dropped after sending", []string{"drop"}, nil, 3, 1, 502},
 		{"exhausted", []string{"529", "529", "529"}, nil, 1, 2, 529},
 		{"retry-after beyond cap", []string{"429"}, []string{"3600"}, 3, 1, 429},
 		{"off", []string{"503"}, nil, 0, 1, 503},
@@ -1275,5 +1278,106 @@ func TestPolicyFlagWinsOverFileAndStaleFileAppliesNothing(t *testing.T) {
 	postWith(t, base2, requestBody, map[string]string{HeaderSessionID: "sess-stale", "anthropic-beta": policy.BetaFeature})
 	if got := triggerSeen(up2.seen()[0]); got != "none" || !strings.Contains(logs.String(), "schema 99") {
 		t.Fatalf("stale file must apply nothing and say why: %s\n%s", got, logs.String())
+	}
+}
+
+// A failure to connect cannot have billed anything and is resent; the
+// count of attempts shows in the log.
+func TestRetriesResendWhenTheProviderCannotBeReached(t *testing.T) {
+	closed := httptest.NewServer(http.NotFoundHandler())
+	target, err := url.Parse(closed.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed.Close()
+	logs := &syncBuffer{}
+	srv, err := New(Config{Listen: "127.0.0.1:0", Upstream: target, Store: mustStore(t), Logger: log.New(logs, "", 0), Retries: fastRetries(2)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- srv.ListenAndServe(ctx) }()
+	t.Cleanup(func() { cancel(); <-done })
+	resp := post(t, "http://"+srv.Addr(), "/v1/messages", nil)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Fatalf("unreachable provider must end in 502, got %d", resp.StatusCode)
+	}
+	for _, want := range []string{"retry 1/2 in", "retry 2/2 in", "after connection failed"} {
+		if !strings.Contains(logs.String(), want) {
+			t.Fatalf("log missing %q:\n%s", want, logs.String())
+		}
+	}
+}
+
+// PX-6: turning policies off must stop a session an earlier process
+// pinned on, and a restart with no policy source must do the same.
+func TestPoliciesOffOverrideAPersistedPin(t *testing.T) {
+	dir := t.TempDir()
+	up := &bodyEcho{}
+	base, _, _ := startProxyIn(t, up, Config{ContextEdit: &policy.ContextEdit{TriggerTokens: 150000, KeepLast: 6}}, dir)
+	beta := map[string]string{HeaderSessionID: "sess-pinned", "anthropic-beta": policy.BetaFeature}
+	postWith(t, base, requestBody, beta)
+	if triggerSeen(up.seen()[0]) != "150000" {
+		t.Fatal("first process must pin the session on")
+	}
+	for name, cfg := range map[string]Config{
+		"no policy env":    {ContextEdit: &policy.ContextEdit{TriggerTokens: 150000, KeepLast: 6}, NoPolicy: true},
+		"no policy source": {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			up2 := &bodyEcho{}
+			base2, _, _ := startProxyIn(t, up2, cfg, dir)
+			postWith(t, base2, requestBody, beta)
+			got := up2.seen()
+			if len(got) != 1 || strings.Contains(string(got[0]), "context_management") {
+				t.Fatalf("pinned session must run untouched: %s", got)
+			}
+		})
+	}
+}
+
+// A body the summarizer cannot read never gets the parameter, since it
+// may already carry one the summarizer failed to see.
+func TestUnparsedRequestsNeverCarryThePolicy(t *testing.T) {
+	up := &bodyEcho{}
+	base, _, logs := startProxyWith(t, up, Config{ContextEdit: &policy.ContextEdit{TriggerTokens: 150000, KeepLast: 6}})
+	odd := `{"model":"claude-opus-5","max_tokens":50,"messages":[{"role":"user","content":{"unexpected":"shape"}}]}`
+	postWith(t, base, odd, map[string]string{HeaderSessionID: "sess-odd", "anthropic-beta": policy.BetaFeature})
+	if got := up.seen(); len(got) != 1 || string(got[0]) != odd {
+		t.Fatalf("unparsed body must pass through byte for byte: %s", got)
+	}
+	if !strings.Contains(logs.String(), string(policy.SkipUnparsed)) {
+		t.Fatalf("skip must be logged:\n%s", logs.String())
+	}
+}
+
+// Client forwarding headers are the client's bytes and reach the provider.
+func TestClientForwardingHeadersAreKept(t *testing.T) {
+	up := &upstream{t: t}
+	base, _, _ := startProxy(t, up, "")
+	resp := post(t, base, "/v1/messages", map[string]string{"X-Forwarded-For": "10.0.0.7", "Forwarded": "for=10.0.0.7"})
+	_ = resp.Body.Close()
+	up.mu.Lock()
+	defer up.mu.Unlock()
+	if up.gotXFF != "10.0.0.7" {
+		t.Fatalf("X-Forwarded-For must pass through unchanged, got %q", up.gotXFF)
+	}
+}
+
+func TestSessionStateIsBounded(t *testing.T) {
+	s := newStats()
+	for i := 0; i < maxSessions*2; i++ {
+		s.pin(fmt.Sprintf("s-%d", i), nil, policy.NotConfigured, time.Time{})
+	}
+	if len(s.sessions) != maxSessions {
+		t.Fatalf("sessions = %d, want %d", len(s.sessions), maxSessions)
+	}
+	if _, _, ok := s.pinned("s-0"); ok {
+		t.Fatal("the oldest session must have been evicted")
+	}
+	if _, _, ok := s.pinned(fmt.Sprintf("s-%d", maxSessions*2-1)); !ok {
+		t.Fatal("the newest session must remain")
 	}
 }

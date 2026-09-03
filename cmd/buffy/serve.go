@@ -112,6 +112,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		Breaker:     proxy.NewBreaker(proxy.BreakerSettings{Failures: *breakerFailures, Cooldown: *breakerCooldown}),
 		ContextEdit: contextEdit,
 		PolicyFile:  *policyFile,
+		NoPolicy:    noPolicy,
 		Trial:       proxy.TrialSettings{Share: *trialShare, ReReadRate: *guardrail, RevertAfter: *revertAfter},
 		Retries:     proxy.RetrySettings{Attempts: *retries, BaseDelay: *retryBase, MaxDelay: *retryMax},
 		ErrorBudget: proxy.ErrorBudget{Share: *errorBudget},

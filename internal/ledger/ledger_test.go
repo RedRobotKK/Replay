@@ -167,7 +167,11 @@ func TestStoreRoundTripToSession(t *testing.T) {
 	if err := store.Append(Record{Timestamp: base, SessionID: "sess/one", Path: "/v1/messages/count_tokens"}); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(dir, "sess_one.jsonl")
+	matches, err := filepath.Glob(filepath.Join(dir, "sess_one-*.jsonl"))
+	if err != nil || len(matches) != 1 {
+		t.Fatalf("sanitized session file with a hash suffix expected: %v %v", matches, err)
+	}
+	path := matches[0]
 	if !IsLedgerFile(path) {
 		t.Fatal("ledger file not recognized")
 	}
@@ -280,5 +284,56 @@ func TestRevertPersistsAcrossReopen(t *testing.T) {
 	got, ok := again.Revert()
 	if !ok || got.Reason != want.Reason || got.Breached != 2 || !got.At.Equal(at) || !got.PolicyGenerated.Equal(want.PolicyGenerated) {
 		t.Fatalf("revert not persisted: %+v %v", got, ok)
+	}
+}
+
+func TestSessionFileNamesNeverCollide(t *testing.T) {
+	if sessionFileName("plain-id") != "plain-id" {
+		t.Fatal("a safe id keeps its name")
+	}
+	a, b := sessionFileName("a/b"), sessionFileName("a_b")
+	if a == b || !strings.HasPrefix(a, "a_b-") || b != "a_b" {
+		t.Fatalf("ids that sanitize alike must get different files: %q %q", a, b)
+	}
+	if sessionFileName("") != "unknown" || sessionFileName("///") == "unknown" {
+		t.Fatalf("empty and all-unsafe ids: %q %q", sessionFileName(""), sessionFileName("///"))
+	}
+}
+
+func TestStreamParserStopsOnAnEndlessLine(t *testing.T) {
+	sp := &StreamParser{}
+	chunk := []byte(strings.Repeat("x", 300_000))
+	for i := 0; i < 10; i++ {
+		if _, err := sp.Write(chunk); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !sp.dropped || sp.pending.Len() != 0 {
+		t.Fatalf("parser must stop buffering past the cap: dropped=%v pending=%d", sp.dropped, sp.pending.Len())
+	}
+	if resp := sp.Result(); resp.Usage != nil {
+		t.Fatal("a dropped stream reports no usage")
+	}
+}
+
+// Call keys in the ledger are keyed by the store's secret: equal calls
+// share a key within one ledger, and the key cannot be recomputed from a
+// guessed input without the secret.
+func TestLedgerCallKeysAreKeyed(t *testing.T) {
+	body := `{"model":"m","messages":[{"role":"assistant","content":[{"type":"tool_use","id":"1","name":"Bash","input":{"command":"ls"}},{"type":"tool_use","id":"2","name":"Bash","input":{"command":"ls"}}]}]}`
+	one, err := SummarizeRequest([]byte(body), NewLabeler([]byte("k1")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	two, err := SummarizeRequest([]byte(body), NewLabeler([]byte("k2")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b := one.Prompt.Messages[0].Blocks[0].CallKey, one.Prompt.Messages[0].Blocks[1].CallKey
+	if a == "" || a != b {
+		t.Fatalf("equal calls must share a key: %q %q", a, b)
+	}
+	if a == two.Prompt.Messages[0].Blocks[0].CallKey || a == transcript.CallKey("Bash", []byte(`{"command":"ls"}`)) {
+		t.Fatal("the key must depend on the ledger secret")
 	}
 }
