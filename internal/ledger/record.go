@@ -48,7 +48,10 @@ type Record struct {
 	Masked map[string]int `json:"masked,omitempty"`
 	// Retries is how many times the proxy resent this request before the
 	// response it recorded.
-	Retries   int   `json:"retries,omitempty"`
+	Retries int `json:"retries,omitempty"`
+	// HeldMS is how long the proxy held this request behind a sibling
+	// with the same prefix before forwarding it.
+	HeldMS    int64 `json:"held_ms,omitempty"`
 	LatencyMS int64 `json:"latency_ms"`
 	// Response is the structure of what the provider returned. Usage is
 	// absent on error responses and on endpoints that report none.
