@@ -21,6 +21,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+    # bash on every OS: PowerShell splits "-coverprofile=coverage.out"
+    # into two arguments and go test then looks for a package named .out.
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -28,7 +33,6 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Verify go.mod is tidy
-        shell: bash
         run: |
           go mod tidy
           git diff --exit-code -- go.mod go.sum || (echo "run 'go mod tidy' and commit" && exit 1)
@@ -37,7 +41,6 @@ jobs:
       - name: Test
         run: go test -race -count=1 -coverprofile=coverage.out ./...
       - name: Coverage
-        shell: bash
         run: go tool cover -func=coverage.out | tail -1
       - name: Build
         run: go build -trimpath ./...
