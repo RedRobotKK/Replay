@@ -59,6 +59,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	loopBlock := fs.Int("loop-block", 0, "refuse the request when one identical tool call repeats this many times (0 = off)")
 	breakerFailures := fs.Int("breaker-failures", 0, "open the circuit after this many consecutive provider failures (0 = off)")
 	breakerCooldown := fs.Duration("breaker-cooldown", defaultBreakerCooldown, "how long the circuit stays open")
+	holdSiblings := fs.Duration("hold-siblings", 0, "hold a request whose tools and system prompt are already in flight and not yet cached until that first response begins, so parallel sub-agents read the cache instead of all writing it; the value is the longest wait (0 = off; suggested "+proxy.DefaultSiblingWait.String()+")")
 	retries := fs.Int("retries", 0, "resend a request up to this many times on rate limit, overload, server error, or connection failure, before any response byte reached the client (0 = off)")
 	retryBase := fs.Duration("retry-base", proxy.DefaultRetryBaseDelay, "first retry backoff; doubles with jitter, capped by -retry-max; a provider Retry-After within the cap replaces it")
 	retryMax := fs.Duration("retry-max", proxy.DefaultRetryMaxDelay, "longest wait before a retry")
@@ -131,6 +132,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		Masker:      masker,
 		Rehydrator:  rehydrator,
 		Trial:       proxy.TrialSettings{Share: *trialShare, ReReadRate: *guardrail, RevertAfter: *revertAfter},
+		Siblings:    proxy.SiblingSettings{MaxWait: *holdSiblings},
 		Retries:     proxy.RetrySettings{Attempts: *retries, BaseDelay: *retryBase, MaxDelay: *retryMax},
 		ErrorBudget: proxy.ErrorBudget{Share: *errorBudget},
 	})
