@@ -131,6 +131,18 @@ buffy advise ~/.claude/projects/* ~/.buffy/ledger
 
 Turns the largest token sources across every session into suggestions with a predicted saving: tool inputs that dominate prompts (long heredocs), tool results that should be truncated, files read again and again, first-turn instruction files that every request re-carries, tool definitions a session never calls (visible in the ledger), and cache breaks to look at with `buffy diff`. Each prediction assumes the target is halved and is stated as a share of prompt tokens first, the scale-free metric, then as tokens across the corpus. Suggestions are tracked to closure: pending until the newest sessions show the target shrinking, then applied, then verified or not verified against the prediction. Written to `~/.buffy/advice.json`.
 
+### Secret masking (experimental, masking only)
+
+```sh
+buffy serve --mask [--mask-patterns ~/.buffy/patterns.txt]
+```
+
+Replaces secrets in outbound request bodies with placeholders before anything leaves the machine. Only the matched bytes inside JSON string values change; every other byte is forwarded as sent, and thinking blocks and signatures are never read or changed. The same secret always maps to the same placeholder, an HMAC under the vault key, so the cached prefix stays stable across turns and sessions. The mapping lives in `~/.buffy/vault`, encrypted with AES-256-GCM under an owner-only key file, and survives restarts. Each request's ledger record and `/buffy/status` count what was masked by pattern name, never the value, so you can check coverage.
+
+The pattern set is named, not complete: Anthropic, OpenAI, AWS access key ids, GitHub, GitLab, Slack, Google API keys, Stripe, private key blocks, JWTs, bearer tokens, and credentials embedded in URLs, plus your own patterns from a file with one `name<TAB>regexp` per line. On the repository's labeled corpus the set scores precision 1.00 and recall 1.00; that is a statement about the corpus, not about your secrets. There is no entropy heuristic yet.
+
+What is not built yet: restoring placeholders in responses. Until rehydration lands, the placeholders the model writes into text or file edits reach you as placeholders, so treat `--mask` as an evaluation of coverage on your traffic rather than a daily setting. When rehydration lands it will be scoped as ADR-0004 requires: assistant text and file edits inside the project, never shell or network tool inputs, with every rehydration logged. `BUFFY_NO_POLICY=1` turns masking off with the policies.
+
 One client caveat from the gateway docs: with a non-first-party base URL, Claude Code disables MCP tool search unless `ENABLE_TOOL_SEARCH=true` is set. Buffy forwards `tool_reference` blocks unchanged, so setting it is safe. Details: [`docs/architecture/proxy-protocol.md`](docs/architecture/proxy-protocol.md).
 
 ## Install

@@ -16,6 +16,7 @@ import (
 
 	"github.com/RedRobotKK/Buffy/internal/analysis"
 	"github.com/RedRobotKK/Buffy/internal/ledger"
+	"github.com/RedRobotKK/Buffy/internal/masking"
 	"github.com/RedRobotKK/Buffy/internal/policy"
 	"github.com/RedRobotKK/Buffy/internal/proxy"
 )
@@ -66,6 +67,8 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	trialShare := fs.Float64("trial-share", proxy.DefaultTrialShare, "share of new sessions that get the policy from -policy-file; the rest run as controls (stable per session id)")
 	guardrail := fs.Float64("guardrail-reread", 0, "revert the policy from -policy-file for new sessions once treated sessions' re-read rate after the provider's first clear reaches this share (0 = off)")
 	revertAfter := fs.Int("revert-after", proxy.DefaultRevertAfter, "how many sessions must breach the guardrail before the policy is reverted")
+	mask := fs.Bool("mask", false, "EXPERIMENTAL: replace secrets matching the named pattern set with vault placeholders before requests leave the machine; rehydration of responses is not built yet, so placeholders appear in the agent's output (see README)")
+	maskPatterns := fs.String("mask-patterns", "", "file of user-defined patterns for -mask, one per line as name<TAB>regexp")
 	policyFile := fs.String("policy-file", "", "EXPERIMENTAL: apply the context-edit candidate selected by buffy learn (usually ~/.buffy/policy.json), read at each session's first request; an explicit -context-edit-trigger wins; a session keeps its first decision whatever the file does later")
 	if err := fs.Parse(args); err != nil {
 		return errUsage
@@ -77,6 +80,11 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	}
 	if noPolicy {
 		*policyFile = ""
+		*mask = false
+	}
+	masker, err := maskerFromFlags(*mask, *maskPatterns)
+	if err != nil {
+		return err
 	}
 	if os.Getenv(envDisabled) != "" {
 		return errDisabled
@@ -113,6 +121,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		ContextEdit: contextEdit,
 		PolicyFile:  *policyFile,
 		NoPolicy:    noPolicy,
+		Masker:      masker,
 		Trial:       proxy.TrialSettings{Share: *trialShare, ReReadRate: *guardrail, RevertAfter: *revertAfter},
 		Retries:     proxy.RetrySettings{Attempts: *retries, BaseDelay: *retryBase, MaxDelay: *retryMax},
 		ErrorBudget: proxy.ErrorBudget{Share: *errorBudget},
@@ -132,9 +141,43 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		} else if *policyFile != "" {
 			_, _ = fmt.Fprintf(stdout, "policy: from %s at each session's first request (experimental)\n", *policyFile)
 		}
+		if masker != nil {
+			_, _ = fmt.Fprintf(stdout, "masking: on (experimental; placeholders are not yet restored in responses)\n")
+		}
 		_, _ = fmt.Fprintf(stdout, "buffy serve listening on http://%s -> %s\nledger: %s\n\nPoint your agent at it:\n  export ANTHROPIC_BASE_URL=http://%s\n\nThen analyze measured data with:\n  buffy replay %s\n\nStop with Ctrl-C. Disable without uninstalling: %s=1.\n", addr, target, dir, addr, dir, envDisabled)
 	}()
 	return srv.ListenAndServe(ctx)
+}
+
+// vaultDirName is where the masking vault lives under ~/.buffy.
+const vaultDirName = "vault"
+
+// maskerFromFlags opens the vault and builds the masker, or nil when
+// masking is off.
+func maskerFromFlags(on bool, patternsFile string) (*masking.Masker, error) {
+	if !on {
+		return nil, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("find home directory for the vault: %w", err)
+	}
+	vault, err := masking.OpenVault(filepath.Join(home, ".buffy", vaultDirName))
+	if err != nil {
+		return nil, err
+	}
+	var user []masking.Pattern
+	if patternsFile != "" {
+		text, err := os.ReadFile(patternsFile)
+		if err != nil {
+			return nil, fmt.Errorf("read mask patterns: %w", err)
+		}
+		user, err = masking.ParseUserPatterns(string(text))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return masking.New(vault, user), nil
 }
 
 // contextEditFromFlags builds the live policy, or nil when it is off or
