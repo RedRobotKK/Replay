@@ -8,7 +8,7 @@ import (
 
 // readTools are the tools whose result is a file the agent already had if
 // it read the same path before. Names cover the clients the parser knows.
-var readTools = map[string]bool{"Read": true, "Grep": true, "Glob": true, "NotebookRead": true, "view": true, "read_file": true}
+var readTools = map[string]bool{"Read": true, "NotebookRead": true, "view": true, "read_file": true}
 
 // ReReads measures how often the agent reads a file it already read in
 // the same session. It is the guardrail for context editing: clearing old
