@@ -1,0 +1,13 @@
+# Architecture Decision Records
+
+One file per decision. A record is written when a choice is made that would be expensive to reverse, and it is never edited after acceptance; a later decision supersedes it with a new record.
+
+Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to start one.
+
+| ADR | Title | Status |
+|-----|-------|--------|
+| [0001](0001-transparent-proxy-first.md) | Ship a byte-transparent proxy before any context transformation | Proposed |
+| [0002](0002-replay-engine-and-truth-tiers.md) | Replay engine with calibration gate and two tiers of truth | Proposed |
+| [0003](0003-policy-application-constraints.md) | Live policies use only provider-sanctioned mechanisms | Proposed |
+| [0004](0004-masking-and-scoped-rehydration.md) | Secret masking with persistent vault and scoped rehydration | Proposed |
+| [0005](0005-apache-2-license.md) | License the project under Apache 2.0 | Accepted |
