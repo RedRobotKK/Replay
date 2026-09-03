@@ -52,6 +52,10 @@ type sessionState struct {
 	masked     int
 	rehydrated int
 	denied     int
+	// held counts this session's requests held behind a sibling, and
+	// heldMS their total wait.
+	held   int
+	heldMS int64
 	// generated is the generation time of the policy file the pinned
 	// policy came from, for tying a revert to it.
 	generated time.Time
@@ -103,6 +107,8 @@ type stats struct {
 	masked        map[string]int
 	rehydrated    map[string]int
 	denied        map[string]int
+	held          int
+	heldMS        int64
 }
 
 func newStats() *stats {
@@ -178,6 +184,12 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 	for dest, n := range rec.RehydrationDenied {
 		st.denied += n
 		s.denied[dest] += n
+	}
+	if rec.HeldMS > 0 {
+		st.held++
+		st.heldMS += rec.HeldMS
+		s.held++
+		s.heldMS += rec.HeldMS
 	}
 	st.cleared += rec.Response.ClearedInputTokens
 	return out
@@ -369,6 +381,10 @@ type SessionSummary struct {
 	// RehydrationDenied counts those left in place.
 	Rehydrated        int `json:"rehydrated,omitempty"`
 	RehydrationDenied int `json:"rehydration_denied,omitempty"`
+	// Held counts requests held behind a sibling with the same prefix;
+	// HeldMS is their total wait.
+	Held   int   `json:"held,omitempty"`
+	HeldMS int64 `json:"held_ms,omitempty"`
 	// ReReads is the context-editing guardrail: file reads that repeated a
 	// path already in context, before and after the provider's first clear.
 	ReReads analysis.ReReads `json:"re_reads"`
@@ -413,7 +429,7 @@ func (s *stats) status() Status {
 				out.Trial.Treated++
 			}
 		}
-		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, ReReads: st.reReads, WhatIf: st.whatIf, ErrorShare: share(st.errorTokens, st.tally.PromptTokens), Masked: st.masked, Rehydrated: st.rehydrated, RehydrationDenied: st.denied})
+		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, ReReads: st.reReads, WhatIf: st.whatIf, ErrorShare: share(st.errorTokens, st.tally.PromptTokens), Masked: st.masked, Rehydrated: st.rehydrated, RehydrationDenied: st.denied, Held: st.held, HeldMS: st.heldMS})
 	}
 	sort.Slice(out.Sessions, func(i, j int) bool { return out.Sessions[i].LastSeen.After(out.Sessions[j].LastSeen) })
 	return out
@@ -480,6 +496,12 @@ func (s *stats) metrics() string {
 	line("# HELP buffy_retries_total Requests the proxy resent after a retryable provider failure.")
 	line("# TYPE buffy_retries_total counter")
 	line("buffy_retries_total %d", s.retries)
+	line("# HELP buffy_held_total Requests held behind a sibling with the same prefix.")
+	line("# TYPE buffy_held_total counter")
+	line("buffy_held_total %d", s.held)
+	line("# HELP buffy_held_milliseconds_total Time requests spent held behind a sibling.")
+	line("# TYPE buffy_held_milliseconds_total counter")
+	line("buffy_held_milliseconds_total %d", s.heldMS)
 	line("# HELP buffy_masked_total Secrets replaced with placeholders, by pattern.")
 	line("# TYPE buffy_masked_total counter")
 	for _, k := range sortedKeys(s.masked) {
