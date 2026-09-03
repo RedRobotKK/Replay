@@ -225,12 +225,15 @@ func allInside(root string, paths map[string]string) bool {
 
 // insideProject reports whether a path, relative ones taken from the
 // root, stays under the root. Symbolic links along the part of the path
-// that exists are resolved, so a link inside the project that points
-// outside is seen; a link that does not exist yet cannot be.
+// that exists are resolved, and the root is resolved the same way so a
+// root given through a link (macOS's /var to /private/var, say) compares
+// equal to the agent's paths; a link inside the project that points
+// outside is seen, and a link that does not exist yet cannot be.
 func insideProject(root, path string) bool {
 	if strings.Contains(path, PlaceholderPrefix) {
 		return false
 	}
+	root = resolveExisting(filepath.Clean(root))
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(root, path)
 	}

@@ -473,6 +473,14 @@ func TestInsideProjectResolvesLinks(t *testing.T) {
 	if !insideProject(root, filepath.Join(alias, "a.txt")) || !insideProject(root, filepath.Join(project, "a.txt")) {
 		t.Fatal("paths through the link and direct must both be inside")
 	}
+	// A root given through the link, unresolved, still matches paths
+	// under the real directory and paths that do not exist yet.
+	if !insideProject(alias, filepath.Join(project, "a.txt")) || !insideProject(alias, filepath.Join(alias, "new", "b.txt")) || !insideProject(alias, "c.txt") {
+		t.Fatal("an unresolved root must compare like the resolved one")
+	}
+	if insideProject(alias, filepath.Join(alias, "link", "x.txt")) {
+		t.Fatal("a link to outside must be denied under an unresolved root too")
+	}
 }
 
 func TestParseScopes(t *testing.T) {
