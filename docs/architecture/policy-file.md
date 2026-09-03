@@ -39,6 +39,7 @@ What `buffy learn` writes and what the proxy will read. One file, `~/.buffy/poli
 - Each candidate's `decision` is `selected` or a `rejected: ...` string naming the rule that fired (ADR-0006). `mean_saving` and `interval` are the training-set saving as a share of as-run effective tokens and its two-standard-error band; `holdout_mean_saving` is the saving on sessions selection never saw.
 - `estimated` is true when the score depends on the byte-to-token fit (context editing); TTL candidates are measured.
 - `selected` is null with a `reason` when nothing qualified. That is the expected answer on a small corpus.
+- `trial`, present when the ledger holds sessions the proxy treated or held out as controls, judges the live trial: each arm's mean cost per token of new content with its band, the realized saving of treated over control, the predicted saving, and whether the policy graduated. Graduation needs five sessions per arm, arms separated above noise, and a realized saving of at least half the prediction.
 - `types` holds one selection per session type under the same rules. A type is `<model family>/<small|large>-prefix`, both known at a session's first request: the model id's family and whether the first prompt was at least 20k tokens. A type with no selection falls back to the overall one; the overall selection stays null when the types disagree.
 
 ## Use

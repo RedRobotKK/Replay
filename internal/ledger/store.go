@@ -220,6 +220,26 @@ func (b *SessionBuilder) Add(rec Record) {
 	}
 	lane := b.session.Lane(rec.AgentID, rec.AgentID != "")
 	lane.Requests = append(lane.Requests, requestFromRecord(rec, b.added-1, b.memo))
+	if rec.Policy != "" {
+		b.session.Policy, b.session.Trial = rec.Policy, TrialTreated
+	}
+}
+
+// Trial arms as the pins and the sessions built from the ledger name them.
+const (
+	TrialTreated = "treated"
+	TrialControl = "control"
+)
+
+// MarkControl marks a session the pins say was held out of a trial, when
+// its records show no policy.
+func (s *Store) MarkControl(session *transcript.Session) {
+	if session.Trial != "" {
+		return
+	}
+	if p, ok := s.Pin(session.ID); ok && p.Trial == TrialControl {
+		session.Trial = TrialControl
+	}
 }
 
 // Session is the session built so far. Lanes are shared with the builder;
