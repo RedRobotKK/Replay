@@ -91,6 +91,7 @@ type Server struct {
 	rp    *httputil.ReverseProxy
 	ready chan struct{}
 	addr  string
+	stats *stats
 }
 
 // New builds a server. It does not listen yet.
@@ -107,7 +108,7 @@ func New(cfg Config) (*Server, error) {
 	if !isLoopback(cfg.Listen) {
 		return nil, fmt.Errorf("listen address %q is not loopback; Buffy only binds locally", cfg.Listen)
 	}
-	s := &Server{cfg: cfg, ready: make(chan struct{})}
+	s := &Server{cfg: cfg, ready: make(chan struct{}), stats: newStats()}
 	s.rp = &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.SetURL(cfg.Upstream)
@@ -142,6 +143,8 @@ func New(cfg Config) (*Server, error) {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/buffy/healthz", s.health)
+	mux.HandleFunc("/buffy/status", s.status)
+	mux.HandleFunc("/buffy/metrics", s.metrics)
 	mux.HandleFunc("/", s.handle)
 	s.http = &http.Server{Handler: mux, ReadHeaderTimeout: ReadHeaderTimeout}
 	return s, nil
@@ -181,6 +184,37 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	_, _ = io.WriteString(w, "ok\n") // best-effort health response
 }
 
+// localOnly guards the read endpoints the same way requests are guarded:
+// no browser origins, and the token when one is configured.
+func (s *Server) localOnly(w http.ResponseWriter, r *http.Request) bool {
+	if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Mode") != "" {
+		http.Error(w, "buffy: browser-originated requests are not accepted", http.StatusForbidden)
+		return false
+	}
+	if s.cfg.Token != "" && r.Header.Get(HeaderToken) != s.cfg.Token {
+		http.Error(w, "buffy: missing or wrong "+HeaderToken+" header", http.StatusUnauthorized)
+		return false
+	}
+	return true
+}
+
+func (s *Server) status(w http.ResponseWriter, r *http.Request) {
+	if !s.localOnly(w, r) {
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	// A failed write means the reader went away; nothing to do.
+	_ = json.NewEncoder(w).Encode(s.stats.status())
+}
+
+func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
+	if !s.localOnly(w, r) {
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	_, _ = io.WriteString(w, s.stats.metrics()) // best-effort scrape response
+}
+
 // handle is the passthrough. It rejects browser-originated calls, checks the
 // optional token, summarizes the request, forwards it, taps the response,
 // and records the ledger entry. Any failure inside the tap is logged and
@@ -199,6 +233,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	rec := ledger.Record{Timestamp: start, Path: r.URL.Path, SessionID: r.Header.Get(HeaderSessionID), AgentID: r.Header.Get(HeaderAgentID)}
 
 	if ok, wait := s.cfg.Breaker.Allow(); !ok {
+		s.stats.refused("circuit_open")
 		refuse(w, http.StatusServiceUnavailable, "buffy_circuit_open", fmt.Sprintf("the provider has been failing; Buffy is holding requests for %s so the agent stops burning retries", wait.Round(time.Second)), wait)
 		return
 	}
@@ -234,12 +269,14 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		override := r.Header.Get(HeaderOverride)
 		if reason := s.cfg.Spend.Check(rec.SessionID); reason != "" {
 			if override == "" {
+				s.stats.refused("spend_cap")
 				refuse(w, http.StatusBadRequest, "buffy_spend_cap", reason+". Raise the cap, start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
 				return
 			}
 			s.cfg.Logger.Printf("spend cap overridden for session=%s: %s", short(rec.SessionID), override)
 		}
 		if v := DetectLoop(body, s.cfg.Loops); v.Block && override == "" {
+			s.stats.refused("loop")
 			refuse(w, http.StatusBadRequest, "buffy_loop", fmt.Sprintf("the same %s call was just made %d times in a row; Buffy stopped the loop. Send %s with a reason to proceed once.", v.Label, v.Repeats, HeaderOverride), 0)
 			return
 		} else if v.Block {
@@ -267,10 +304,11 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			if u := rec.Response.Usage; u != nil {
 				s.cfg.Spend.Record(rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output)
 			}
-			if rec.SessionID != "" {
-				if err := s.cfg.Store.Append(rec); err != nil {
-					s.cfg.Logger.Printf("ledger write failed: %v", err)
-				}
+		}
+		rec.Cache = s.stats.observe(&rec, time.Since(start))
+		if isMessages(r.URL.Path) && rec.SessionID != "" {
+			if err := s.cfg.Store.Append(rec); err != nil {
+				s.cfg.Logger.Printf("ledger write failed: %v", err)
 			}
 		}
 		note := ""
@@ -278,6 +316,9 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			note = " aborted=client-disconnected"
 		}
 		s.cfg.Logger.Printf("%s %s status=%d ms=%d session=%s model=%s %s%s", r.Method, r.URL.Path, rec.Status, rec.LatencyMS, short(rec.SessionID), rec.Model, usageSummary(rec.Response.Usage), note)
+		if rec.Cache != nil && rec.Cache.Deficit > 0 {
+			s.cfg.Logger.Printf("cache break session=%s: read %d of %d expected, %d tokens re-billed; likely cause: %s", short(rec.SessionID), rec.Response.Usage.CacheRead, rec.Cache.Expected, rec.Cache.Deficit, rec.Cache.Cause)
+		}
 		if aborted != nil {
 			panic(aborted)
 		}

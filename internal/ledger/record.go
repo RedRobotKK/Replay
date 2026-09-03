@@ -35,6 +35,17 @@ type Record struct {
 	// Response is the structure of what the provider returned. Usage is
 	// absent on error responses and on endpoints that report none.
 	Response Response `json:"response"`
+	// Cache is the proxy's live classification of this response's cache
+	// read against the previous request in the session, when known.
+	Cache *CacheOutcome `json:"cache,omitempty"`
+}
+
+// CacheOutcome mirrors the proxy's live cache-read classification.
+type CacheOutcome struct {
+	Outcome  string `json:"outcome"`
+	Expected int    `json:"expected,omitempty"`
+	Deficit  int    `json:"deficit,omitempty"`
+	Cause    string `json:"cause,omitempty"`
 }
 
 // Prompt is the request body reduced to structure.

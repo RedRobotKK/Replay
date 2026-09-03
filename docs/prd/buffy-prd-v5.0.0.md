@@ -345,7 +345,7 @@ Coordinated disclosure per `SECURITY.md`. An external security review is schedul
 
 ## 12. Observability
 
-Metrics are computed from the provider's usage object, never inferred from bytes, and exposed locally as a Prometheus text endpoint behind the token.
+Metrics are computed from the provider's usage object, never inferred from bytes, and exposed locally as a Prometheus text endpoint behind the token. **Status:** `/buffy/metrics` and `/buffy/status` are implemented for the request, token, cache-break, upstream-error, refusal, and latency metrics; policy and rehydration counters arrive with those features.
 
 | Metric | Definition |
 |--------|------------|
