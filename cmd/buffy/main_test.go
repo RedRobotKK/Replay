@@ -2,7 +2,10 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -108,5 +111,32 @@ func TestContextEditFromFlags(t *testing.T) {
 	p, err := contextEditFromFlags(200000, 6, false)
 	if err != nil || p == nil || p.TriggerTokens != 200000 || p.KeepLast != 6 {
 		t.Fatalf("flags not applied: %+v %v", p, err)
+	}
+}
+
+func TestLearnOnTheFixtureSelectsNothingAndWritesTheFile(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "policy.json")
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"learn", "-out", out, "../../internal/transcript/testdata"}, &stdout, &stderr); err != nil {
+		t.Fatalf("learn: %v\n%s", err, stderr.String())
+	}
+	for _, want := range []string{"1 found, 1 calibrated", "Selected: none", "context-edit(keep=6,trigger=200000) *", "rejected: fewer than"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Errorf("output missing %q:\n%s", want, stdout.String())
+		}
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var file struct {
+		Schema   int `json:"schema"`
+		Selected any `json:"selected"`
+	}
+	if err := json.Unmarshal(data, &file); err != nil || file.Schema != 1 || file.Selected != nil {
+		t.Fatalf("policy file wrong: %v %s", err, data)
+	}
+	if err := run([]string{"learn", "-out", "-"}, &stdout, &stderr); err == nil {
+		t.Fatal("learn without a directory must fail")
 	}
 }

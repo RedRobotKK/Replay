@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- `buffy learn`: re-scores the policy catalog over every transcript and ledger session with the replay simulator and selects a policy under rules sized for a personal corpus: minimum sessions with evidence, a margin above noise, a repeat on held-out sessions chosen by a stable hash, and ties to the simpler candidate on the paired per-session difference (ADR-0006). Writes a versioned, documented policy file to `~/.buffy/policy.json`; says "none" when nothing qualifies. Reads files only.
 - `buffy replay`, `buffy blame`, and `buffy diff`: offline analysis of Claude Code transcripts. Reproduces the provider's cache reads turn by turn (the calibration line), classifies every cache break with a cause and location, attributes prompt tokens to content with per-turn sums that match provider usage exactly, prices visible error classes, and scores TTL and context-editing policies with the as-run behavior reproduced first. Every figure is labeled estimated or measured.
 - `buffy doctor`: reports transcripts found, the proxy variable and whether Buffy answers there, and the ledger, with the next command to run.
 - `make test` and CI report statement coverage.
