@@ -179,3 +179,74 @@ func TestMaskHandlesEscapesAndNonJSON(t *testing.T) {
 		t.Fatal("a body without secrets is returned as is")
 	}
 }
+
+// The entropy heuristic is judged on its own corpus: credentials no
+// pattern names must be found, and hashes, ids, identifiers, paths, and
+// timestamps must not.
+func TestEntropyCorpusPrecisionAndRecall(t *testing.T) {
+	pos, err := os.ReadFile("testdata/entropy-positives.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	neg, err := os.ReadFile("testdata/entropy-negatives.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found, total := 0, 0
+	for _, line := range strings.Split(strings.TrimSpace(string(pos)), "\n") {
+		total++
+		ms := FindEntropy([]byte("value: "+line+" end"), make([]bool, len(line)+11))
+		if len(ms) == 1 && ms[0].Pattern == EntropyPattern && ms[0].Start == 7 && ms[0].End == 7+len(line) {
+			found++
+			continue
+		}
+		t.Errorf("positive %q: got %+v", line, ms)
+	}
+	falsePositives := 0
+	negatives := strings.Split(strings.TrimSpace(string(neg)), "\n")
+	for _, line := range negatives {
+		if ms := FindEntropy([]byte(line), make([]bool, len(line))); len(ms) != 0 {
+			falsePositives++
+			t.Errorf("negative matched: %q %+v", line, ms)
+		}
+	}
+	precision := float64(found) / float64(found+falsePositives)
+	recall := float64(found) / float64(total)
+	t.Logf("entropy corpus: precision %.2f recall %.2f (%d positives, %d negatives)", precision, recall, total, len(negatives))
+	if precision < 1 || recall < 1 {
+		t.Fatalf("precision %.2f recall %.2f", precision, recall)
+	}
+}
+
+// With the heuristic on, a pattern match keeps its name and the bytes it
+// claimed, an unnamed credential next to it is masked as entropy, and a
+// long encoded blob is left alone; off, only patterns apply.
+func TestMaskEntropyHeuristic(t *testing.T) {
+	v, err := OpenVault(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := New(v, nil)
+	const generic = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+	blob := strings.Repeat("Ab0", EntropyMaxLength/3+1)
+	body := []byte(`{"messages":[{"role":"user","content":"id ` + secret + ` key ` + generic + ` blob ` + blob + `"}]}`)
+	out, rep, err := m.Mask(body)
+	if err != nil || rep.Total() != 1 || bytes.Contains(out, []byte(secret)) || !bytes.Contains(out, []byte(generic)) {
+		t.Fatalf("off: %v %v %s", rep, err, out)
+	}
+	m.Entropy = true
+	out, rep, err = m.Mask(body)
+	if err != nil || rep["anthropic-api-key"] != 1 || rep[EntropyPattern] != 1 || rep.Total() != 2 {
+		t.Fatalf("on: %v %v", rep, err)
+	}
+	if bytes.Contains(out, []byte(generic)) || !bytes.Contains(out, []byte(blob)) || !json.Valid(out) {
+		t.Fatalf("on: %s", out)
+	}
+	ph, _ := v.Placeholder(generic, EntropyPattern)
+	if _, pattern, ok := v.Secret(ph); !ok || pattern != EntropyPattern {
+		t.Fatal("the vault must record the heuristic as the pattern")
+	}
+	if _, err := ParseScopes("/p", []string{EntropyPattern + "=text"}, Patterns); err != nil {
+		t.Fatal("the heuristic is scopeable:", err)
+	}
+}
