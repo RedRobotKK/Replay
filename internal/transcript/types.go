@@ -129,6 +129,10 @@ type Request struct {
 	Context []*Message
 	// Output is the assistant message the request produced.
 	Output *Message
+	// AppliedEdits and ClearedTokens are the provider's own context edits
+	// on this request's response, known only from the ledger.
+	AppliedEdits  int
+	ClearedTokens int
 }
 
 // Lane is one linear sequence of requests sharing a conversation root.
