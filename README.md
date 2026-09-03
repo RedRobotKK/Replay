@@ -115,6 +115,14 @@ One live policy, experimental and off by default:
 
 - `--context-edit-trigger <tokens>` asks the provider to clear old tool results server-side once the prompt passes the trigger, keeping the last `--context-edit-keep` (default 6). Buffy adds the provider's `context_management` parameter after the client's own bytes, which stay byte-identical, and only on requests whose client already enabled the context-management beta and set no such parameter itself. The decision is made at a session's first request and pinned. Each edit is logged with body hashes before and after, never content; the ledger records which requests carried it and the provider's applied edits and cleared tokens, so `buffy replay` on the ledger shows what it did. `BUFFY_NO_POLICY=1` forces every policy off. The parameter shape follows the provider's documentation and has not yet been exercised against the real provider (roadmap spike 4); the `what_if` rows tell you what it should save before you turn it on, and the `re_reads` figures (file reads that repeated a path already in context, before and after the provider's first clear) tell you whether the agent is paying the savings back by re-reading.
 
+### Learn from your own sessions
+
+```sh
+buffy learn ~/.claude/projects/* ~/.buffy/ledger
+```
+
+Re-scores the policy catalog (both cache TTLs and context editing at four triggers) over every session with the replay simulator, then selects one with rules built for a corpus of tens of sessions: a minimum number of sessions that actually carry evidence, a margin above noise, a repeat on held-out sessions chosen by a stable hash, and ties to the simpler policy judged on the paired per-session difference (ADR-0006). The verdicts and the selection go to `~/.buffy/policy.json` in a documented format ([`docs/architecture/policy-file.md`](docs/architecture/policy-file.md)). On a small corpus the honest answer is "none", and that is what it says. Reads files only; never the network.
+
 One client caveat from the gateway docs: with a non-first-party base URL, Claude Code disables MCP tool search unless `ENABLE_TOOL_SEARCH=true` is set. Buffy forwards `tool_reference` blocks unchanged, so setting it is safe. Details: [`docs/architecture/proxy-protocol.md`](docs/architecture/proxy-protocol.md).
 
 ## Install
