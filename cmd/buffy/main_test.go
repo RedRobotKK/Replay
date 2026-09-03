@@ -51,6 +51,20 @@ func TestServeUsageNeverShowsTheToken(t *testing.T) {
 	}
 }
 
+func TestDoctorReportsWithoutFailing(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv(envBaseURL, "http://127.0.0.1:1") // nothing listens there
+	var out, errOut bytes.Buffer
+	if err := run([]string{"doctor"}, &out, &errOut); err != nil {
+		t.Fatalf("doctor: %v", err)
+	}
+	for _, want := range []string{"transcripts   none found", "nothing answered", "ledger        empty"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("doctor output missing %q:\n%s", want, out.String())
+		}
+	}
+}
+
 func TestCorpusOnFixture(t *testing.T) {
 	var out, errOut bytes.Buffer
 	err := run([]string{"corpus", "../../internal/transcript/testdata"}, &out, &errOut)

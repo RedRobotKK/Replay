@@ -7,6 +7,8 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - `buffy replay`, `buffy blame`, and `buffy diff`: offline analysis of Claude Code transcripts. Reproduces the provider's cache reads turn by turn (the calibration line), classifies every cache break with a cause and location, attributes prompt tokens to content with per-turn sums that match provider usage exactly, prices visible error classes, and scores TTL and context-editing policies with the as-run behavior reproduced first. Every figure is labeled estimated or measured.
+- `buffy doctor`: reports transcripts found, the proxy variable and whether Buffy answers there, and the ledger, with the next command to run.
+- `make test` and CI report statement coverage.
 - `--dollars` on `replay`: a list-price cost column per policy from a dated first-party price table (`cachemodel.PriceTableVersion`); models not in the table get no dollar figure. Effective-token math now uses the model's own cache-read multiple.
 - `buffy corpus`: calibration summary across every session in a directory as a Markdown report (session id prefixes, counts, match rates, fit numbers, break causes; no paths or content).
 - `buffy redact`: strips content from a transcript while keeping structure, sizes, usage, tool names, and equality of values (salted, so nothing is confirmable from the output), for bug reports and fixtures. A redacted session analyzes identically to the original; the repository fixture is a redacted real session.
