@@ -60,6 +60,9 @@ const (
 	// Reverted is pinned for a session that started after the trial's
 	// guardrail tripped.
 	Reverted Decision = "reverted: the trial's guardrail tripped"
+	// SkipUnparsed is logged for a request the summarizer could not read;
+	// the parameter is added only to bodies the proxy understood.
+	SkipUnparsed Decision = "skipped: request could not be summarized"
 )
 
 // Validate rejects parameters the provider or the simulator would not

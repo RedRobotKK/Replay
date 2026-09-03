@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -144,7 +145,7 @@ func Observe(s *transcript.Session) (Observation, bool) {
 		case strings.HasPrefix(e.Label, transcript.LabelToolResultPrefix):
 			name := strings.TrimPrefix(e.Label, transcript.LabelToolResultPrefix)
 			if analysis.IsFileRead(name) {
-				ob.noteReads(name, e)
+				ob.noteReads(fileTarget(name), e)
 			}
 			tool, _, _ := strings.Cut(name, " ")
 			f := byTool[tool]
@@ -166,6 +167,14 @@ func Observe(s *transcript.Session) (Observation, bool) {
 }
 
 func key(kind Kind, target string) string { return string(kind) + "\x00" + target }
+
+// fileTarget reduces a read label to the tool and the file's base name,
+// so the advice file never holds a full path; ledger labels are already
+// hashed and pass through unchanged.
+func fileTarget(label string) string {
+	tool, p, _ := strings.Cut(label, " ")
+	return tool + " " + path.Base(p)
+}
 
 // note records a target when it clears the share threshold, or always
 // for kinds whose threshold is elsewhere.
