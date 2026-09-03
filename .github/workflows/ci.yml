@@ -45,6 +45,30 @@ jobs:
       - name: Build
         run: go build -trimpath ./...
 
+  # The matrix above pins Go to go.mod, so a change in a newer standard
+  # library is invisible to it. That is how a shutdown bug reached main:
+  # only the release pipeline, which runs on the toolchain GoReleaser
+  # requires, exposed it. This job is the guard. It blocks on purpose --
+  # a standard-library change that breaks Buffy is worth knowing about
+  # before a release rather than after; make it continue-on-error if a Go
+  # release ever holds up unrelated work.
+  go-latest:
+    name: Go (latest release)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: true
+      - name: Go version under test
+        run: go version
+      - name: Test
+        run: go test -race -count=1 ./...
+
   lint:
     name: golangci-lint
     runs-on: ubuntu-latest
