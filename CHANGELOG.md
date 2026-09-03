@@ -48,6 +48,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- `replay <transcript|dir>` runs the replay analysis without naming the subcommand, so the tool is no longer `replay replay <path>`. A first argument that names something on disk is taken as the analysis's own argument; a subcommand name always wins, a leading flag is never a path, and a mistyped command is still an error rather than a silent path. `replay replay <path>` keeps working.
+
 - **The project is now Replay** (was Buffy). This renames everything a user touches: the binary and module path (`github.com/RedRobotKK/Replay/cmd/replay`), the state directory (`~/.buffy` becomes `~/.replay`), the endpoints (`/replay/status`, `/replay/metrics`), every metric name (`replay_*`), the headers (`x-replay-token`, `x-replay-override`, `x-replay-warning`), the environment variables (`REPLAY_DISABLED`, `REPLAY_NO_POLICY`, `REPLAY_TOKEN`, `REPLAY_UPSTREAM`), and the masking placeholder prefix (`REPLAY_SECRET_`). Nothing is migrated: move `~/.buffy` to `~/.replay` by hand if you were running the old name, and note that placeholders in an existing vault carry the old prefix and will no longer be recognised. Done before any tagged release, so no published artifact is affected.
 
 - CI runs the test suite once more under the latest released Go, not only the version pinned in `go.mod`. The shutdown bug above reached `main` because nothing exercised a newer standard library; only the release pipeline, which uses the toolchain GoReleaser requires, caught it.

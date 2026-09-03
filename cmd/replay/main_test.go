@@ -140,3 +140,59 @@ func TestLearnOnTheFixtureSelectsNothingAndWritesTheFile(t *testing.T) {
 		t.Fatal("learn without a directory must fail")
 	}
 }
+
+// The tool is named for its own first command, so a path given without a
+// subcommand runs the replay analysis. A mistyped command is still an
+// error, and a subcommand name always wins over a path of the same name.
+func TestPathWithoutASubcommandRunsReplay(t *testing.T) {
+	var out, errOut bytes.Buffer
+	fixture := "../../internal/transcript/testdata"
+	if err := run([]string{fixture}, &out, &errOut); err != nil {
+		t.Fatalf("a path must run the replay analysis: %v (stderr: %s)", err, errOut.String())
+	}
+	direct := out.String()
+	if !strings.Contains(direct, "Calibration:") {
+		t.Fatalf("expected a replay report:\n%s", direct)
+	}
+	// It is the same report the explicit form prints.
+	var explicit bytes.Buffer
+	if err := run([]string{"replay", fixture}, &explicit, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	if explicit.String() != direct {
+		t.Fatal("the implicit and explicit forms must print the same report")
+	}
+	// Flags still reach the analysis.
+	var withFlag bytes.Buffer
+	if err := run([]string{"-dollars", fixture}, &withFlag, &errOut); err == nil {
+		t.Fatal("a leading flag is not a path and must not be taken as one")
+	}
+	// A name that is not a command and not a path stays an error.
+	if err := run([]string{"relpay", fixture}, &out, &errOut); err == nil {
+		t.Fatal("a mistyped command must not be treated as a path")
+	}
+	// A subcommand name wins even when a file of that name exists.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "doctor"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(cwd); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	var doctorOut bytes.Buffer
+	if err := run([]string{"doctor"}, &doctorOut, &errOut); err != nil {
+		t.Fatalf("the subcommand must win over a file of the same name: %v", err)
+	}
+	if !strings.Contains(doctorOut.String(), "transcripts") {
+		t.Fatalf("expected doctor output:\n%s", doctorOut.String())
+	}
+}
