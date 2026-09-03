@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/RedRobotKK/Buffy/internal/cachemodel"
 	"github.com/RedRobotKK/Buffy/internal/ledger"
 	"github.com/RedRobotKK/Buffy/internal/policy"
 )
@@ -71,9 +72,10 @@ type Config struct {
 	// Logger receives one line per request. Never headers, never bodies.
 	Logger *log.Logger
 	// Guards are optional; a nil guard is off.
-	Spend   *SpendGuard
-	Loops   LoopLimits
-	Breaker *Breaker
+	Spend       *SpendGuard
+	Loops       LoopLimits
+	Breaker     *Breaker
+	ErrorBudget ErrorBudget
 	// ContextEdit, when set, is applied to sessions whose first request
 	// admits it and pinned for their life (ADR-0003). Nil is off.
 	ContextEdit *policy.ContextEdit
@@ -307,7 +309,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		if messages {
 			rec.Response = tap.result()
 			if u := rec.Response.Usage; u != nil {
-				s.cfg.Spend.Record(rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output)
+				s.cfg.Spend.Record(rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output, listCost(*u, rec.Model))
 			}
 		}
 		rec.Cache = s.stats.observe(&rec)
@@ -395,6 +397,13 @@ func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Recor
 		}
 		s.cfg.Logger.Printf("spend cap overridden for session=%s: %s", short(rec.SessionID), override)
 	}
+	if reason := s.cfg.ErrorBudget.Check(s.stats.errorTokens(rec.SessionID)); reason != "" {
+		if override == "" {
+			s.refuse(w, refusalErrorBudget, reason+". Look at what is failing (buffy replay on the ledger names it), start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
+			return false
+		}
+		s.cfg.Logger.Printf("error budget overridden for session=%s: %s", short(rec.SessionID), override)
+	}
 	v := DetectLoop(rec.Prompt, s.cfg.Loops)
 	switch {
 	case v.Block && override == "":
@@ -427,7 +436,18 @@ var (
 	refusalCircuitOpen = refusal{http.StatusServiceUnavailable, "buffy_circuit_open", "circuit_open"}
 	refusalSpendCap    = refusal{http.StatusBadRequest, "buffy_spend_cap", "spend_cap"}
 	refusalLoop        = refusal{http.StatusBadRequest, "buffy_loop", "loop"}
+	refusalErrorBudget = refusal{http.StatusBadRequest, "buffy_error_budget", "error_budget"}
 )
+
+// listCost prices one request's usage at list price, zero for a model
+// the price table does not know.
+func listCost(u ledger.Usage, model string) float64 {
+	price, ok := cachemodel.PriceFor(model)
+	if !ok {
+		return 0
+	}
+	return cachemodel.CostUSD(u, price)
+}
 
 // refuse answers a request locally in the provider's error shape so any
 // client that understands provider errors shows the message to the user.

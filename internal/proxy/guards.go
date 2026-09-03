@@ -13,45 +13,62 @@ import (
 // handler consults before forwarding (spend, loop) or after a response
 // (breaker); none of them touches request or response bytes.
 
-// SpendLimits caps prompt-plus-output tokens per session and per UTC day.
-// Zero means no cap.
+// SpendLimits caps prompt-plus-output tokens and list-price dollars per
+// session and per UTC day. Zero means no cap. Dollar caps count only
+// requests whose model is in the price table; the status endpoint shows
+// the same figure, so a model with no price shows zero there too.
 type SpendLimits struct {
 	SessionTokens int
 	DayTokens     int
+	SessionUSD    float64
+	DayUSD        float64
 }
 
-// SpendGuard accounts tokens from provider usage and fails closed before
-// the next request once a cap is reached. It never interrupts a response
-// in flight.
+// spend is one counter pair.
+type spend struct {
+	tokens int
+	usd    float64
+}
+
+// SpendGuard accounts tokens and dollars from provider usage and fails
+// closed before the next request once a cap is reached. It never
+// interrupts a response in flight.
 type SpendGuard struct {
 	limits  SpendLimits
 	mu      sync.Mutex
-	session map[string]int
+	session map[string]*spend
 	day     string
-	dayUsed int
+	dayUsed spend
 	now     func() time.Time
 }
 
 // NewSpendGuard builds a guard; a zero limits value disables it.
 func NewSpendGuard(limits SpendLimits) *SpendGuard {
-	return &SpendGuard{limits: limits, session: map[string]int{}, now: time.Now}
+	return &SpendGuard{limits: limits, session: map[string]*spend{}, now: time.Now}
 }
 
 // Enabled reports whether any cap is set.
 func (g *SpendGuard) Enabled() bool {
-	return g != nil && (g.limits.SessionTokens > 0 || g.limits.DayTokens > 0)
+	return g != nil && (g.limits.SessionTokens > 0 || g.limits.DayTokens > 0 || g.limits.SessionUSD > 0 || g.limits.DayUSD > 0)
 }
 
-// Record adds a completed request's tokens.
-func (g *SpendGuard) Record(sessionID string, tokens int) {
-	if !g.Enabled() || tokens <= 0 {
+// Record adds a completed request's tokens and list-price cost.
+func (g *SpendGuard) Record(sessionID string, tokens int, usd float64) {
+	if !g.Enabled() || (tokens <= 0 && usd <= 0) {
 		return
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.rollDay()
-	g.session[sessionID] += tokens
-	g.dayUsed += tokens
+	st, ok := g.session[sessionID]
+	if !ok {
+		st = &spend{}
+		g.session[sessionID] = st
+	}
+	st.tokens += tokens
+	st.usd += usd
+	g.dayUsed.tokens += tokens
+	g.dayUsed.usd += usd
 }
 
 // Check returns a human-readable reason when the next request for the
@@ -63,22 +80,59 @@ func (g *SpendGuard) Check(sessionID string) string {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.rollDay()
-	if g.limits.SessionTokens > 0 && g.session[sessionID] >= g.limits.SessionTokens {
-		return fmt.Sprintf("session spend cap reached: %d of %d tokens", g.session[sessionID], g.limits.SessionTokens)
+	var used spend
+	if st, ok := g.session[sessionID]; ok {
+		used = *st
 	}
-	if g.limits.DayTokens > 0 && g.dayUsed >= g.limits.DayTokens {
-		return fmt.Sprintf("daily spend cap reached: %d of %d tokens", g.dayUsed, g.limits.DayTokens)
+	switch {
+	case g.limits.SessionTokens > 0 && used.tokens >= g.limits.SessionTokens:
+		return fmt.Sprintf("session spend cap reached: %d of %d tokens", used.tokens, g.limits.SessionTokens)
+	case g.limits.SessionUSD > 0 && used.usd >= g.limits.SessionUSD:
+		return fmt.Sprintf("session spend cap reached: $%.2f of $%.2f at list price", used.usd, g.limits.SessionUSD)
+	case g.limits.DayTokens > 0 && g.dayUsed.tokens >= g.limits.DayTokens:
+		return fmt.Sprintf("daily spend cap reached: %d of %d tokens", g.dayUsed.tokens, g.limits.DayTokens)
+	case g.limits.DayUSD > 0 && g.dayUsed.usd >= g.limits.DayUSD:
+		return fmt.Sprintf("daily spend cap reached: $%.2f of $%.2f at list price", g.dayUsed.usd, g.limits.DayUSD)
 	}
 	return ""
 }
 
-// rollDay resets the daily counter at UTC midnight. Callers hold the lock.
+// rollDay resets the daily counters at UTC midnight. Callers hold the lock.
 func (g *SpendGuard) rollDay() {
 	today := g.now().UTC().Format("2006-01-02")
 	if today != g.day {
 		g.day = today
-		g.dayUsed = 0
+		g.dayUsed = spend{}
 	}
+}
+
+// ErrorBudget trips a session before its spend cap when too large a share
+// of its prompt tokens carried error content: failed tools, failed edits,
+// repeated identical calls, overflow notices. Share is that fraction;
+// zero is off. Small sessions are never judged, since one early failure
+// would dominate them.
+type ErrorBudget struct {
+	Share float64
+}
+
+// errorBudgetMinPromptTokens is the session size below which the budget
+// is not evaluated.
+const errorBudgetMinPromptTokens = 10_000
+
+// Enabled reports whether the budget is set.
+func (b ErrorBudget) Enabled() bool { return b.Share > 0 }
+
+// Check returns the refusal reason for a session whose error share of
+// prompt tokens exceeds the budget, or an empty string.
+func (b ErrorBudget) Check(errorTokens, promptTokens int) string {
+	if !b.Enabled() || promptTokens < errorBudgetMinPromptTokens {
+		return ""
+	}
+	share := float64(errorTokens) / float64(promptTokens)
+	if share < b.Share {
+		return ""
+	}
+	return fmt.Sprintf("error budget exceeded: %.0f%% of this session's prompt tokens (%d of %d) carried failed tools, failed edits, repeated identical calls, or overflow notices; the budget is %.0f%%", share*100, errorTokens, promptTokens, b.Share*100)
 }
 
 // LoopLimits set how many identical tool calls in one prompt warn and block.

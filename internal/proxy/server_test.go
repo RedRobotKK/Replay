@@ -664,6 +664,13 @@ type invariantUpstream struct {
 	prompt     int
 	prefixHash string
 	perTurn    int
+	seen       int
+}
+
+func (u *invariantUpstream) requests() int {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.seen
 }
 
 const invariantTail = 20
@@ -675,6 +682,7 @@ func (u *invariantUpstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.Unmarshal(body, &req)
 	u.mu.Lock()
+	u.seen++
 	read := 0
 	if u.prompt > 0 && string(req.System) == u.prefixHash {
 		read = u.prompt - invariantTail
@@ -1059,4 +1067,88 @@ func mustStore(t *testing.T) *ledger.Store {
 		t.Fatal(err)
 	}
 	return store
+}
+
+// failingBody renders turn n of a session whose every tool result is an
+// error, so error content dominates the prompt.
+func failingBody(turn int) string {
+	filler := strings.Repeat("e", 700)
+	msgs := []string{`{"role":"user","content":"` + strings.Repeat("x", 700) + `"}`}
+	for i := 1; i < turn; i++ {
+		id := fmt.Sprintf("t%d", i)
+		msgs = append(msgs,
+			`{"role":"assistant","content":[{"type":"tool_use","id":"`+id+`","name":"Bash","input":{"command":"make `+id+`"}}]}`,
+			`{"role":"user","content":[{"type":"tool_result","tool_use_id":"`+id+`","is_error":true,"content":"`+filler+`"}]}`)
+	}
+	return `{"model":"claude-opus-5","max_tokens":50,"system":"be brief","messages":[` + strings.Join(msgs, ",") + `]}`
+}
+
+func TestErrorBudgetRefusesBeforeSpendCapAndHonorsOverride(t *testing.T) {
+	up := &invariantUpstream{perTurn: 3000}
+	base, dir, logs := startProxyWith(t, up, Config{ErrorBudget: ErrorBudget{Share: 0.5}})
+	refusedAt := 0
+	for i := 1; i <= 12 && refusedAt == 0; i++ {
+		req, err := http.NewRequest(http.MethodPost, base+"/v1/messages", strings.NewReader(failingBody(i)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(HeaderSessionID, "session-fail")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		switch resp.StatusCode {
+		case http.StatusOK:
+			waitLedger(t, dir, i)
+			// The budget is judged from the analysis that runs after the
+			// response, so let it land before the next request.
+			waitFor(t, "error tokens to be scored", func() bool {
+				e, p := getSessionErrorTokens(t, base, "session-fail")
+				return p >= errorBudgetMinPromptTokens && e > 0 || p < errorBudgetMinPromptTokens
+			})
+		case http.StatusBadRequest:
+			if !strings.Contains(string(body), "buffy_error_budget") {
+				t.Fatalf("unexpected 400: %s", body)
+			}
+			refusedAt = i
+		default:
+			t.Fatalf("request %d: status %d %s", i, resp.StatusCode, body)
+		}
+	}
+	if refusedAt == 0 {
+		t.Fatalf("error budget never tripped:\n%s", logs.String())
+	}
+	if up.requests() != refusedAt-1 {
+		t.Fatalf("refused request must not reach the provider: %d upstream requests, refused at %d", up.requests(), refusedAt)
+	}
+	st := getStatus(t, base)
+	if len(st.Sessions) != 1 || st.Sessions[0].ErrorShare < 0.5 {
+		t.Fatalf("status must show the error share: %+v", st.Sessions)
+	}
+	// An override proceeds once and is logged.
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/messages", strings.NewReader(failingBody(refusedAt)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(HeaderSessionID, "session-fail")
+	req.Header.Set(HeaderOverride, "I know, keep going")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(logs.String(), "error budget overridden") {
+		t.Fatalf("override must proceed once and be logged: %d\n%s", resp.StatusCode, logs.String())
+	}
+}
+
+func getSessionErrorTokens(t *testing.T, base, id string) (int, int) {
+	t.Helper()
+	for _, s := range getStatus(t, base).Sessions {
+		if s.Session == id {
+			return int(s.ErrorShare * float64(s.PromptTokens)), s.PromptTokens
+		}
+	}
+	return 0, 0
 }
