@@ -264,7 +264,7 @@ Initial catalog for v0.3: `freeze-system-prompt` (diagnostic only, reports when 
 
 | ID | Requirement | Acceptance |
 |----|-------------|------------|
-| MK-1 | Detection uses a maintained pattern set for known key formats, user-defined patterns, and an optional entropy heuristic. The README names the patterns; it never says "all secrets". **Status:** pattern set and user patterns implemented; no entropy heuristic. | Corpus test with precision and recall reported. |
+| MK-1 | Detection uses a maintained pattern set for known key formats, user-defined patterns, and an optional entropy heuristic. The README names the patterns; it never says "all secrets". **Status:** implemented: pattern set, user patterns, and the entropy heuristic behind `--mask-entropy`, each with a corpus. | Corpus test with precision and recall reported. |
 | MK-2 | Placeholders are derived by HMAC of the secret under a per-project key, so the same secret always maps to the same placeholder. **Status:** implemented under a per-install vault key; per-project keys wait for a project identity the proxy can trust. | Determinism test across sessions. |
 | MK-3 | The vault persists encrypted at rest with a key from the OS keychain; a daemon restart loses nothing. **Status:** encrypted at rest under an owner-only key file; the keychain is not integrated. | Restart test mid-session. |
 | MK-4 | Rehydration works across SSE chunk boundaries and inside tool-call JSON with escaping awareness. **Status:** implemented; a streamed tool input is held until its block ends. | Fixtures with placeholders split across chunks and inside JSON strings. |

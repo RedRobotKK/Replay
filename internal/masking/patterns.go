@@ -48,6 +48,13 @@ type Match struct {
 // Find returns the secrets in a text, earliest first, without overlaps.
 // A later pattern never matches inside an earlier pattern's match.
 func Find(text []byte, patterns []Pattern) []Match {
+	out, _ := find(text, patterns)
+	return out
+}
+
+// find is Find returning the bytes its matches cover, so a further
+// detector can avoid them.
+func find(text []byte, patterns []Pattern) ([]Match, []bool) {
 	var out []Match
 	taken := make([]bool, len(text))
 	for _, p := range patterns {
@@ -66,7 +73,7 @@ func Find(text []byte, patterns []Pattern) []Match {
 		}
 	}
 	sortMatches(out)
-	return out
+	return out, taken
 }
 
 func overlaps(taken []bool, start, end int) bool {
