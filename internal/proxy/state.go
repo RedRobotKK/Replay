@@ -76,6 +76,7 @@ type stats struct {
 	latencyCount  int
 	refusedByKind map[string]int
 	policyApplied int
+	retries       int
 }
 
 func newStats() *stats {
@@ -98,6 +99,7 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 	defer s.mu.Unlock()
 	s.latencySum += time.Duration(rec.LatencyMS) * time.Millisecond
 	s.latencyCount++
+	s.retries += rec.Retries
 	switch {
 	case rec.Status >= 500:
 		s.requests["5xx"]++
@@ -352,6 +354,9 @@ func (s *stats) metrics() string {
 	for _, k := range sortedKeys(s.refusedByKind) {
 		line(`buffy_refused_total{guard=%q} %d`, k, s.refusedByKind[k])
 	}
+	line("# HELP buffy_retries_total Requests the proxy resent after a retryable provider failure.")
+	line("# TYPE buffy_retries_total counter")
+	line("buffy_retries_total %d", s.retries)
 	line("# HELP buffy_policy_applied_total Requests that carried a Buffy-added request parameter.")
 	line("# TYPE buffy_policy_applied_total counter")
 	line(`buffy_policy_applied_total{policy=%q} %d`, policy.Name, s.policyApplied)

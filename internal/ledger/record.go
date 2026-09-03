@@ -41,9 +41,12 @@ type Record struct {
 	RequestSummary
 	// Policy names the request-parameter policy the proxy applied to this
 	// request, empty when the bytes went through unchanged.
-	Policy    string `json:"policy,omitempty"`
-	Status    int    `json:"status"`
-	LatencyMS int64  `json:"latency_ms"`
+	Policy string `json:"policy,omitempty"`
+	Status int    `json:"status"`
+	// Retries is how many times the proxy resent this request before the
+	// response it recorded.
+	Retries   int   `json:"retries,omitempty"`
+	LatencyMS int64 `json:"latency_ms"`
 	// Response is the structure of what the provider returned. Usage is
 	// absent on error responses and on endpoints that report none.
 	Response Response `json:"response"`

@@ -55,6 +55,9 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	loopBlock := fs.Int("loop-block", 0, "refuse the request when one identical tool call repeats this many times (0 = off)")
 	breakerFailures := fs.Int("breaker-failures", 0, "open the circuit after this many consecutive provider failures (0 = off)")
 	breakerCooldown := fs.Duration("breaker-cooldown", defaultBreakerCooldown, "how long the circuit stays open")
+	retries := fs.Int("retries", 0, "resend a request up to this many times on rate limit, overload, server error, or connection failure, before any response byte reached the client (0 = off)")
+	retryBase := fs.Duration("retry-base", proxy.DefaultRetryBaseDelay, "first retry backoff; doubles with jitter, capped by -retry-max; a provider Retry-After within the cap replaces it")
+	retryMax := fs.Duration("retry-max", proxy.DefaultRetryMaxDelay, "longest wait before a retry")
 	editTrigger := fs.Int("context-edit-trigger", 0, "EXPERIMENTAL: ask the provider to clear old tool results once the prompt passes this many tokens, on requests whose client enabled "+policy.BetaFeature+" and set no context_management of its own (0 = off; "+envNoPolicy+"=1 forces off)")
 	editKeep := fs.Int("context-edit-keep", analysis.ContextEditKeepLast, "how many recent tool results a clear keeps")
 	if err := fs.Parse(args); err != nil {
@@ -97,6 +100,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		Loops:       proxy.LoopLimits{Warn: *loopWarn, Block: *loopBlock},
 		Breaker:     proxy.NewBreaker(proxy.BreakerSettings{Failures: *breakerFailures, Cooldown: *breakerCooldown}),
 		ContextEdit: contextEdit,
+		Retries:     proxy.RetrySettings{Attempts: *retries, BaseDelay: *retryBase, MaxDelay: *retryMax},
 	})
 	if err != nil {
 		return err

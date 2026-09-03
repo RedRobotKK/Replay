@@ -77,6 +77,10 @@ type Config struct {
 	// ContextEdit, when set, is applied to sessions whose first request
 	// admits it and pinned for their life (ADR-0003). Nil is off.
 	ContextEdit *policy.ContextEdit
+	// Retries, when Attempts is set, resend a request the provider refused
+	// with a retryable status or that never connected, before any byte of
+	// a response has reached the client.
+	Retries RetrySettings
 }
 
 // HealthPath answers "ok" for anything that wants to know the proxy is up.
@@ -120,6 +124,23 @@ func New(cfg Config) (*Server, error) {
 	if !isLoopback(cfg.Listen) {
 		return nil, fmt.Errorf("listen address %q is not loopback; Buffy only binds locally", cfg.Listen)
 	}
+	var transport http.RoundTripper = &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: DialTimeout}).DialContext,
+		TLSHandshakeTimeout:   TLSHandshakeTimeout,
+		ResponseHeaderTimeout: ResponseHeaderTimeout,
+		IdleConnTimeout:       IdleConnTimeout,
+		// The client decides whether it accepts compressed responses;
+		// the transport must not add its own header and decompress
+		// behind the client's back.
+		DisableCompression: true,
+	}
+	switch err := cfg.Retries.validate(); {
+	case err == nil:
+		transport = newRetryTransport(transport, cfg.Retries, cfg.Logger)
+	case !errors.Is(err, errRetriesOff):
+		return nil, err
+	}
 	s := &Server{cfg: cfg, ready: make(chan struct{}), stats: newStats()}
 	s.rp = &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
@@ -131,17 +152,7 @@ func New(cfg Config) (*Server, error) {
 			// provider.
 			r.Out.Header.Del(HeaderToken)
 		},
-		Transport: &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
-			DialContext:           (&net.Dialer{Timeout: DialTimeout}).DialContext,
-			TLSHandshakeTimeout:   TLSHandshakeTimeout,
-			ResponseHeaderTimeout: ResponseHeaderTimeout,
-			IdleConnTimeout:       IdleConnTimeout,
-			// The client decides whether it accepts compressed responses;
-			// the transport must not add its own header and decompress
-			// behind the client's back.
-			DisableCompression: true,
-		},
+		Transport: transport,
 		// Flush every write so streamed events reach the client as they
 		// arrive.
 		FlushInterval: -1,
@@ -262,8 +273,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "buffy: request body exceeds the proxy limit", http.StatusRequestEntityTooLarge)
 		return
 	}
-	r.Body = io.NopCloser(bytes.NewReader(body))
-	r.ContentLength = int64(len(body))
+	setBody(r, body)
 
 	if messages && len(body) > 0 {
 		if sum, err := ledger.SummarizeRequest(body, s.cfg.Store.Labeler()); err == nil {
@@ -276,9 +286,9 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		body = s.applyPolicy(r, &rec, body)
-		r.Body = io.NopCloser(bytes.NewReader(body))
-		r.ContentLength = int64(len(body))
+		setBody(r, body)
 	}
+	r, retries := withRetryCounter(r)
 
 	tap := &responseTap{ResponseWriter: w}
 	// Bookkeeping runs in a deferred function because the reverse proxy
@@ -291,6 +301,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		s.cfg.Breaker.Observe(tap.upstreamFailed || IsRetryableStatus(tap.status))
 		observed = true
 		rec.Status = tap.status
+		rec.Retries = retries.n
 		rec.LatencyMS = time.Since(start).Milliseconds()
 		rec.RequestID = tap.Header().Get("request-id")
 		if messages {
@@ -313,6 +324,9 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		if aborted != nil {
 			note = " aborted=client-disconnected"
 		}
+		if rec.Retries > 0 {
+			note += fmt.Sprintf(" retries=%d", rec.Retries)
+		}
 		s.cfg.Logger.Printf("%s %s status=%d ms=%d session=%s model=%s %s%s", r.Method, r.URL.Path, rec.Status, rec.LatencyMS, short(rec.SessionID), rec.Model, usageSummary(rec.Response.Usage), note)
 		if rec.Cache != nil && rec.Cache.Deficit > 0 {
 			s.cfg.Logger.Printf("cache break session=%s: read %d of %d expected, %d tokens re-billed; likely cause: %s", short(rec.SessionID), rec.Response.Usage.CacheRead, rec.Cache.Expected, rec.Cache.Deficit, rec.Cache.Cause)
@@ -325,6 +339,13 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	s.rp.ServeHTTP(tap, r)
+}
+
+// setBody installs an in-memory body that the retry transport can reopen.
+func setBody(r *http.Request, body []byte) {
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	r.ContentLength = int64(len(body))
+	r.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }
 }
 
 // applyPolicy adds the configured request parameter when the session's

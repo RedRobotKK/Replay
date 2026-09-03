@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -922,4 +923,140 @@ func TestContextEditPolicyIsAppliedRecordedAndPinned(t *testing.T) {
 	if !strings.Contains(string(metrics), `buffy_policy_applied_total{policy="context-edit"} 1`) {
 		t.Fatalf("metrics missing policy counter:\n%s", metrics)
 	}
+}
+
+// flakyUpstream answers from a script of statuses, one per request, then
+// a normal message. "drop" closes the connection without answering.
+type flakyUpstream struct {
+	mu     sync.Mutex
+	script []string
+	seen   int
+	afters []string
+}
+
+func (f *flakyUpstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	_, _ = io.ReadAll(r.Body)
+	f.mu.Lock()
+	i := f.seen
+	f.seen++
+	f.mu.Unlock()
+	if i >= len(f.script) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, messageResponse)
+		return
+	}
+	step := f.script[i]
+	if step == "drop" {
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err == nil {
+			_ = conn.Close()
+		}
+		return
+	}
+	code, _ := strconv.Atoi(step)
+	if i < len(f.afters) && f.afters[i] != "" {
+		w.Header().Set("Retry-After", f.afters[i])
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_, _ = io.WriteString(w, `{"type":"error","error":{"type":"overloaded_error","message":"busy"}}`)
+}
+
+func (f *flakyUpstream) requests() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.seen
+}
+
+func fastRetries(attempts int) RetrySettings {
+	return RetrySettings{Attempts: attempts, BaseDelay: time.Millisecond, MaxDelay: 50 * time.Millisecond}
+}
+
+func TestRetriesResendUntilSuccessAndAreRecorded(t *testing.T) {
+	up := &flakyUpstream{script: []string{"529", "drop", "503"}, afters: []string{"0", "", ""}}
+	base, dir, logs := startProxyWith(t, up, Config{Retries: fastRetries(3)})
+	resp := post(t, base, "/v1/messages", nil)
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || string(body) != messageResponse {
+		t.Fatalf("client must see the eventual success: %d %s", resp.StatusCode, body)
+	}
+	if up.requests() != 4 {
+		t.Fatalf("upstream requests = %d, want 4", up.requests())
+	}
+	recs := waitLedger(t, dir, 1)
+	if recs[0].Retries != 3 || recs[0].Status != http.StatusOK {
+		t.Fatalf("ledger must carry the retry count: %+v", recs[0])
+	}
+	log := logs.String()
+	for _, want := range []string{"retry 1/3", "after status 529", "retry 2/3", "after connection failed", "retry 3/3", "after status 503", "retries=3"} {
+		if !strings.Contains(log, want) {
+			t.Errorf("log missing %q:\n%s", want, log)
+		}
+	}
+	mresp, err := http.Get(base + "/buffy/metrics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	metrics, _ := io.ReadAll(mresp.Body)
+	_ = mresp.Body.Close()
+	if !strings.Contains(string(metrics), "buffy_retries_total 3") {
+		t.Fatalf("metrics missing retries:\n%s", metrics)
+	}
+}
+
+func TestRetriesStopOnClientErrorsExhaustionAndLongRetryAfter(t *testing.T) {
+	cases := []struct {
+		name     string
+		script   []string
+		afters   []string
+		attempts int
+		wantReqs int
+		wantCode int
+	}{
+		{"client error", []string{"400", "400"}, nil, 3, 1, 400},
+		{"exhausted", []string{"529", "529", "529"}, nil, 1, 2, 529},
+		{"retry-after beyond cap", []string{"429"}, []string{"3600"}, 3, 1, 429},
+		{"off", []string{"503"}, nil, 0, 1, 503},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			up := &flakyUpstream{script: c.script, afters: c.afters}
+			base, _, _ := startProxyWith(t, up, Config{Retries: fastRetries(c.attempts)})
+			resp := post(t, base, "/v1/messages", nil)
+			_ = resp.Body.Close()
+			if resp.StatusCode != c.wantCode || up.requests() != c.wantReqs {
+				t.Fatalf("status %d after %d upstream requests, want %d after %d", resp.StatusCode, up.requests(), c.wantCode, c.wantReqs)
+			}
+		})
+	}
+}
+
+func TestRetryAfterParsesSecondsAndDates(t *testing.T) {
+	now := time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC)
+	if d, ok := retryAfter("7", now); !ok || d != 7*time.Second {
+		t.Fatalf("seconds: %v %v", d, ok)
+	}
+	if d, ok := retryAfter(now.Add(90*time.Second).Format(http.TimeFormat), now); !ok || d != 90*time.Second {
+		t.Fatalf("date: %v %v", d, ok)
+	}
+	if d, ok := retryAfter(now.Add(-time.Minute).Format(http.TimeFormat), now); !ok || d != 0 {
+		t.Fatalf("past date must be zero: %v %v", d, ok)
+	}
+	if _, ok := retryAfter("soon", now); ok {
+		t.Fatal("garbage must not parse")
+	}
+	if _, err := New(Config{Listen: "127.0.0.1:0", Upstream: &url.URL{Scheme: "http", Host: "x"}, Store: mustStore(t), Retries: RetrySettings{Attempts: 2}}); err == nil {
+		t.Fatal("retries without delays must be rejected")
+	}
+}
+
+func mustStore(t *testing.T) *ledger.Store {
+	t.Helper()
+	store, err := ledger.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return store
 }
