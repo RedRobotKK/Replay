@@ -36,7 +36,8 @@ const (
 	ResponseHeaderTimeout = 10 * time.Minute
 	IdleConnTimeout       = 90 * time.Second
 	ShutdownTimeout       = 5 * time.Second
-	// TLSHandshakeTimeout bounds the upstream handshake.
+	// DialTimeout and TLSHandshakeTimeout bound connecting to the upstream.
+	DialTimeout         = 30 * time.Second
 	TLSHandshakeTimeout = 30 * time.Second
 )
 
@@ -111,16 +112,15 @@ func New(cfg Config) (*Server, error) {
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.SetURL(cfg.Upstream)
 			r.Out.Host = cfg.Upstream.Host
-			// The default rewrite appends the client address; the provider
-			// has no use for it and the request should carry nothing the
-			// client did not send. Buffy's own listener token is not the
-			// client's header to the provider either.
-			r.Out.Header.Del("X-Forwarded-For")
+			// A Rewrite adds no forwarding headers of its own, so the
+			// request carries only what the client sent, minus Buffy's own
+			// listener token, which is not the client's header to the
+			// provider.
 			r.Out.Header.Del(HeaderToken)
 		},
 		Transport: &http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
-			DialContext:           (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
+			DialContext:           (&net.Dialer{Timeout: DialTimeout}).DialContext,
 			TLSHandshakeTimeout:   TLSHandshakeTimeout,
 			ResponseHeaderTimeout: ResponseHeaderTimeout,
 			IdleConnTimeout:       IdleConnTimeout,
@@ -202,6 +202,14 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		refuse(w, http.StatusServiceUnavailable, "buffy_circuit_open", fmt.Sprintf("the provider has been failing; Buffy is holding requests for %s so the agent stops burning retries", wait.Round(time.Second)), wait)
 		return
 	}
+	// A half-open probe that never reaches an outcome (refused below, or
+	// aborted) is given back so the next request can probe instead.
+	observed := false
+	defer func() {
+		if !observed {
+			s.cfg.Breaker.Release()
+		}
+	}()
 
 	body, err := io.ReadAll(io.LimitReader(r.Body, MaxRequestBytes+1))
 	if err != nil {
@@ -223,41 +231,58 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		if rec.SessionID == "" {
 			rec.SessionID = prefixHash(body)
 		}
+		override := r.Header.Get(HeaderOverride)
 		if reason := s.cfg.Spend.Check(rec.SessionID); reason != "" {
-			if override := r.Header.Get(HeaderOverride); override != "" {
-				s.cfg.Logger.Printf("spend cap overridden for session=%s: %s", short(rec.SessionID), override)
-			} else {
+			if override == "" {
 				refuse(w, http.StatusBadRequest, "buffy_spend_cap", reason+". Raise the cap, start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
 				return
 			}
+			s.cfg.Logger.Printf("spend cap overridden for session=%s: %s", short(rec.SessionID), override)
 		}
-		if v := DetectLoop(body, s.cfg.Loops); v.Block {
-			refuse(w, http.StatusBadRequest, "buffy_loop", fmt.Sprintf("the same %s call appears %d times in this conversation; Buffy stopped the loop. Send %s with a reason to proceed once.", v.Label, v.Repeats, HeaderOverride), 0)
+		if v := DetectLoop(body, s.cfg.Loops); v.Block && override == "" {
+			refuse(w, http.StatusBadRequest, "buffy_loop", fmt.Sprintf("the same %s call was just made %d times in a row; Buffy stopped the loop. Send %s with a reason to proceed once.", v.Label, v.Repeats, HeaderOverride), 0)
 			return
+		} else if v.Block {
+			s.cfg.Logger.Printf("loop block overridden for session=%s: %s", short(rec.SessionID), override)
 		} else if v.Warn {
-			w.Header().Set(HeaderWarning, fmt.Sprintf("loop: the same %s call appears %d times", v.Label, v.Repeats))
+			w.Header().Set(HeaderWarning, fmt.Sprintf("loop: the same %s call was just made %d times in a row", v.Label, v.Repeats))
 		}
 	}
 
 	tap := &responseTap{ResponseWriter: w}
+	// Bookkeeping runs in a deferred function because the reverse proxy
+	// aborts the handler with a panic when the client goes away mid-stream
+	// (the user interrupting a turn). The provider still billed that turn,
+	// so it must still be observed, counted, and recorded; the panic is
+	// then re-raised for the server to handle as it normally does.
+	defer func() {
+		aborted := recover()
+		s.cfg.Breaker.Observe(tap.upstreamFailed || IsRetryableStatus(tap.status))
+		observed = true
+		rec.Status = tap.status
+		rec.LatencyMS = time.Since(start).Milliseconds()
+		rec.RequestID = tap.Header().Get("request-id")
+		if isMessages(r.URL.Path) {
+			rec.Response = tap.result()
+			if u := rec.Response.Usage; u != nil {
+				s.cfg.Spend.Record(rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output)
+			}
+			if rec.SessionID != "" {
+				if err := s.cfg.Store.Append(rec); err != nil {
+					s.cfg.Logger.Printf("ledger write failed: %v", err)
+				}
+			}
+		}
+		note := ""
+		if aborted != nil {
+			note = " aborted=client-disconnected"
+		}
+		s.cfg.Logger.Printf("%s %s status=%d ms=%d session=%s model=%s %s%s", r.Method, r.URL.Path, rec.Status, rec.LatencyMS, short(rec.SessionID), rec.Model, usageSummary(rec.Response.Usage), note)
+		if aborted != nil {
+			panic(aborted)
+		}
+	}()
 	s.rp.ServeHTTP(tap, r)
-	s.cfg.Breaker.Observe(tap.upstreamFailed || IsRetryableStatus(tap.status))
-
-	rec.Status = tap.status
-	rec.LatencyMS = time.Since(start).Milliseconds()
-	rec.RequestID = tap.Header().Get("request-id")
-	if isMessages(r.URL.Path) {
-		rec.Response = tap.result()
-		if u := rec.Response.Usage; u != nil {
-			s.cfg.Spend.Record(rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output)
-		}
-	}
-	if rec.SessionID != "" && isMessages(r.URL.Path) {
-		if err := s.cfg.Store.Append(rec); err != nil {
-			s.cfg.Logger.Printf("ledger write failed: %v", err)
-		}
-	}
-	s.cfg.Logger.Printf("%s %s status=%d ms=%d session=%s model=%s %s", r.Method, r.URL.Path, rec.Status, rec.LatencyMS, short(rec.SessionID), rec.Model, usageSummary(rec.Response.Usage))
 }
 
 // isMessages reports whether a path is the Messages endpoint proper (not
@@ -267,19 +292,20 @@ func isMessages(path string) bool {
 }
 
 // prefixHash derives a session id from the request body's stable prefix
-// when the client sent no session header: the system prompt and the first
-// message. It contains no content.
+// when the client sent no session header: the raw bytes of the system
+// prompt and the first message, which a client renders identically on
+// every turn. It contains no content.
 func prefixHash(body []byte) string {
 	var probe struct {
-		System   any              `json:"system"`
-		Messages []map[string]any `json:"messages"`
+		System   json.RawMessage   `json:"system"`
+		Messages []json.RawMessage `json:"messages"`
 	}
-	if err := jsonUnmarshal(body, &probe); err != nil || len(probe.Messages) == 0 {
+	if err := json.Unmarshal(body, &probe); err != nil || len(probe.Messages) == 0 {
 		return ""
 	}
 	h := sha256.New()
-	_, _ = fmt.Fprint(h, probe.System)      // hashing cannot fail
-	_, _ = fmt.Fprint(h, probe.Messages[0]) // hashing cannot fail
+	h.Write(probe.System)
+	h.Write(probe.Messages[0])
 	return "prefix-" + hex.EncodeToString(h.Sum(nil))[:16]
 }
 

@@ -468,12 +468,49 @@ func TestLoopGuardWarnsThenBlocks(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || !strings.Contains(resp.Header.Get(HeaderWarning), "3 times") {
 		t.Fatalf("three repeats must warn and pass: %d %q", resp.StatusCode, resp.Header.Get(HeaderWarning))
 	}
-	base, _, _ = startProxyWith(t, &upstream{t: t}, Config{Loops: LoopLimits{Block: 3}})
+	base, _, logs := startProxyWith(t, &upstream{t: t}, Config{Loops: LoopLimits{Block: 3}})
 	resp = postBody(t, base, loopingBody)
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(body), "buffy_loop") {
 		t.Fatalf("three repeats at block=3 must refuse: %d %s", resp.StatusCode, body)
+	}
+	req, err := http.NewRequest(http.MethodPost, base+"/v1/messages", strings.NewReader(loopingBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(HeaderOverride, "I know, once more")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(logs.String(), "loop block overridden") {
+		t.Fatalf("override must pass a loop block and be logged: %d", resp.StatusCode)
+	}
+}
+
+// A client that disconnects mid-stream (the user interrupting a turn) was
+// still billed by the provider; the ledger and the spend counter must see
+// it, and the breaker must not be left half-open.
+func TestClientAbortMidStreamIsStillRecorded(t *testing.T) {
+	up := &upstream{t: t, mode: "stream", release: make(chan struct{})}
+	base, dir, logs := startProxyWith(t, up, Config{Spend: NewSpendGuard(SpendLimits{SessionTokens: 1_000_000})})
+	resp := post(t, base, "/v1/messages", nil)
+	buf := make([]byte, 4096)
+	if _, err := resp.Body.Read(buf); err != nil {
+		t.Fatal(err)
+	}
+	// Go away before the upstream finishes, then let the upstream finish.
+	_ = resp.Body.Close()
+	close(up.release)
+	recs := waitLedger(t, dir, 1)
+	if len(recs) != 1 || recs[0].Response.Usage == nil || recs[0].Response.Usage.CacheRead != 300 {
+		t.Fatalf("aborted stream not recorded: %+v", recs)
+	}
+	if !strings.Contains(logs.String(), "aborted=client-disconnected") {
+		t.Fatalf("abort must be logged as such: %s", logs.String())
 	}
 }
 

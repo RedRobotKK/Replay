@@ -55,8 +55,9 @@ func NewLabeler(key []byte) *Labeler {
 	return &Labeler{key: key}
 }
 
-// Argument names that hold file paths. Everything else is content.
-var pathArgs = map[string]bool{"file_path": true, "path": true}
+// Argument names that hold file paths, in the order they are consulted.
+// Everything else is content.
+var pathArgs = []string{"file_path", "path"}
 
 // hashedPathBytes is how much of the hash the label keeps.
 const hashedPathBytes = 12
@@ -68,7 +69,7 @@ func (l *Labeler) Label(name string, input json.RawMessage) string {
 	if err := json.Unmarshal(input, &args); err != nil {
 		return name
 	}
-	for arg := range pathArgs {
+	for _, arg := range pathArgs {
 		v, ok := args[arg].(string)
 		if !ok || v == "" {
 			continue
