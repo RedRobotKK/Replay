@@ -611,9 +611,11 @@ func TestLiveCacheBreakIsLoggedRecordedAndCounted(t *testing.T) {
 	if recs[0].Cache != nil || recs[1].Cache == nil || recs[1].Cache.Outcome != "broken" || recs[1].Cache.Deficit != 6000 {
 		t.Fatalf("ledger cache outcomes wrong: %+v %+v", recs[0].Cache, recs[1].Cache)
 	}
-	if !strings.Contains(logs.String(), "cache break") || !strings.Contains(logs.String(), "6000 tokens re-billed") {
-		t.Fatalf("break not logged: %s", logs.String())
-	}
+	// The log line follows the ledger write, so it can land after the
+	// record the test waited for.
+	waitFor(t, "cache break log line", func() bool {
+		return strings.Contains(logs.String(), "cache break") && strings.Contains(logs.String(), "6000 tokens re-billed")
+	})
 	resp, err := http.Get(base + "/buffy/status")
 	if err != nil {
 		t.Fatal(err)
