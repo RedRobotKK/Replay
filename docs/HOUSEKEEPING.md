@@ -27,7 +27,7 @@ How this repository stays clean enough to be public. Maintainers own these rules
 
 - Semantic versioning. Tags are `vMAJOR.MINOR.PATCH`.
 - `CHANGELOG.md` is updated in the release pull request by moving **Unreleased** into a dated section.
-- Binaries are built by CI from the tag, never from a laptop. The release notes link to the changelog section.
+- Binaries are built by CI from the tag, never from a laptop: the release workflow refuses a tag that is not on `main`, builds every platform with GoReleaser, publishes a software bill of materials, and signs `checksums.txt` with Sigstore keyless signing. The release notes link to the changelog section and show the verification command.
 - Security fixes ship as patch releases with a `type: security` changelog entry.
 
 ## Documentation
