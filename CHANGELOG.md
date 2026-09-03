@@ -44,9 +44,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- `replay doctor` told anyone with `ANTHROPIC_BASE_URL` set to anything but Replay that "the agent will fail", which is false when it points at the provider or another gateway. It now separates the three cases: Replay answering, another gateway answering (the agent works, Replay just records nothing, with a `--upstream` command to chain through it), and nothing listening, which is the one real failure. It also no longer suggests the doubled `replay replay` form.
+
 - `replay serve` shut down cleanly only when no client held an unused connection. A coding agent keeps pooled connections open without a request on them, and those never become idle, so Ctrl-C waited the full five-second grace period and then exited non-zero with `context deadline exceeded`. Connections with no request in flight are now closed at once, turns in flight still get the grace period, and a turn that outlasts it is closed rather than holding the proxy open. Ctrl-C with a pooled connection open went from 5.006s and exit 1 to 4ms and exit 0.
 
 ### Changed
+
+- [`docs/live-capture.md`](docs/live-capture.md): a runbook for installing from a clone, putting Replay in front of a real Claude Code session, reading the measured-tier result, and running spike 4.
 
 - `replay <transcript|dir>` runs the replay analysis without naming the subcommand, so the tool is no longer `replay replay <path>`. A first argument that names something on disk is taken as the analysis's own argument; a subcommand name always wins, a leading flag is never a path, and a mistyped command is still an error rather than a silent path. `replay replay <path>` keeps working.
 - First calibration corpus on real traffic ([`docs/reviews/calibration-corpus-2026-09-03.md`](docs/reviews/calibration-corpus-2026-09-03.md)): 11 real sessions, 402 compared turns, 99.00% of provider cache reads reproduced, every session above the 95% threshold and every mismatch classified. Spikes 1 and 2 now have real evidence across two client versions; the corpus is one project on one machine, so the twenty-session half of the gate is still open.

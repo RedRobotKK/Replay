@@ -150,7 +150,9 @@ One client caveat from the gateway docs: with a non-first-party base URL, Claude
 
 ## Install
 
-No release is tagged yet. When one is, every release carries `checksums.txt` signed with Sigstore keyless signing, built only by CI from the tag. Verify before running:
+No release is tagged yet, so build from a clone; [`docs/live-capture.md`](docs/live-capture.md) walks through that and through recording a real session end to end.
+
+When a release is tagged, it carries `checksums.txt` signed with Sigstore keyless signing, built only by CI from the tag. Verify before running:
 
 ```sh
 cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
@@ -173,6 +175,7 @@ make help     # all targets
 
 ## Documentation
 
+- [`docs/live-capture.md`](docs/live-capture.md): install, put Replay in front of a real Claude Code session, and read the measured-tier result
 - [`docs/ROADMAP.md`](docs/ROADMAP.md): what ships when, and why
 - [`docs/adr/`](docs/adr/): architecture decision records
 - [`docs/architecture/`](docs/architecture/): system design

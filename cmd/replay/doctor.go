@@ -51,20 +51,28 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 		p.Printf("              run a Claude Code session first, or point replay at another directory\n")
 	} else {
 		p.Printf("transcripts   %d sessions across %d projects under %s\n", files, dirs, projects)
-		p.Printf("              next: replay replay %s\n", filepath.Join(projects, "<project>"))
+		p.Printf("              next: replay %s\n", filepath.Join(projects, "<project>"))
 	}
 
 	// Proxy configuration.
 	base := os.Getenv(envBaseURL)
 	if base == "" {
 		p.Printf("proxy         %s is not set in this shell; the agent talks to the provider directly\n", envBaseURL)
-		p.Printf("              next: replay serve, then export %s=http://%s\n", envBaseURL, defaultListen)
+		p.Printf("              to record live turns: run 'replay serve', then in the agent's own shell\n")
+		p.Printf("              export %s=http://%s\n", envBaseURL, defaultListen)
 	} else {
 		p.Printf("proxy         %s=%s\n", envBaseURL, base)
-		if ok, detail := probeProxy(base); ok {
-			p.Printf("              replay is answering there (%s)\n", detail)
-		} else {
-			p.Printf("              nothing answered at %s%s (%s); the agent will fail until replay serve runs or the variable is unset\n", strings.TrimRight(base, "/"), proxy.HealthPath, detail)
+		switch state, detail := probeProxy(base); state {
+		case proxyHealthy:
+			p.Printf("              replay is answering there (%s); turns through this shell are recorded\n", detail)
+		case proxyForeign:
+			// Another gateway, or the provider itself. The agent works;
+			// it is only replay that sees nothing.
+			p.Printf("              something other than replay answers there (%s)\n", detail)
+			p.Printf("              the agent works, but replay records nothing; to record live turns run\n")
+			p.Printf("              replay serve --upstream %s, then point %s at http://%s\n", base, envBaseURL, defaultListen)
+		case proxyDown:
+			p.Printf("              nothing is listening there (%s); the agent will fail until 'replay serve' runs or %s is unset\n", detail, envBaseURL)
 		}
 	}
 	if os.Getenv(envDisabled) != "" {
@@ -77,7 +85,7 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 		p.Printf("ledger        empty (%s)\n", ledgerDir)
 	} else {
 		p.Printf("ledger        %d sessions recorded under %s\n", n, ledgerDir)
-		p.Printf("              next: replay replay %s  (measured tier)\n", ledgerDir)
+		p.Printf("              next: replay %s  (measured tier)\n", ledgerDir)
 	}
 	return p.Err()
 }
@@ -107,22 +115,33 @@ func countFiles(dir, pattern string) int {
 	return len(matches)
 }
 
+// proxyState is what answered at the configured base URL. The three are
+// meaningfully different: only nothing listening is a failure for the
+// agent, while another gateway answering is a failure only for recording.
+type proxyState int
+
+const (
+	proxyDown proxyState = iota
+	proxyForeign
+	proxyHealthy
+)
+
 // probeProxy asks the health endpoint and reports what answered.
-func probeProxy(base string) (bool, string) {
+func probeProxy(base string) (proxyState, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), doctorTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(base, "/")+proxy.HealthPath, nil)
 	if err != nil {
-		return false, err.Error()
+		return proxyDown, err.Error()
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return false, "connection failed"
+		return proxyDown, "connection failed"
 	}
 	defer resp.Body.Close() //nolint:errcheck // probe only
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64))
 	if resp.StatusCode == http.StatusOK && strings.TrimSpace(string(body)) == "ok" {
-		return true, "healthy"
+		return proxyHealthy, "healthy"
 	}
-	return false, fmt.Sprintf("status %d; something other than replay is listening", resp.StatusCode)
+	return proxyForeign, fmt.Sprintf("status %d at %s", resp.StatusCode, strings.TrimRight(base, "/")+proxy.HealthPath)
 }

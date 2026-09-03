@@ -4,10 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/RedRobotKK/Replay/internal/proxy"
 )
 
 func TestRunBasicCommands(t *testing.T) {
@@ -61,7 +66,7 @@ func TestDoctorReportsWithoutFailing(t *testing.T) {
 	if err := run([]string{"doctor"}, &out, &errOut); err != nil {
 		t.Fatalf("doctor: %v", err)
 	}
-	for _, want := range []string{"transcripts   none found", "nothing answered", "ledger        empty"} {
+	for _, want := range []string{"transcripts   none found", "nothing is listening there", "the agent will fail", "ledger        empty"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("doctor output missing %q:\n%s", want, out.String())
 		}
@@ -194,5 +199,78 @@ func TestPathWithoutASubcommandRunsReplay(t *testing.T) {
 	}
 	if !strings.Contains(doctorOut.String(), "transcripts") {
 		t.Fatalf("expected doctor output:\n%s", doctorOut.String())
+	}
+}
+
+// The three things that can answer at ANTHROPIC_BASE_URL mean different
+// things, and only one of them is a failure for the agent. Telling a user
+// with a working gateway that "the agent will fail" is wrong and alarming.
+func TestDoctorDistinguishesWhatAnswersAtTheBaseURL(t *testing.T) {
+	healthy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == proxy.HealthPath {
+			_, _ = io.WriteString(w, "ok\n")
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer healthy.Close()
+	foreign := httptest.NewServer(http.NotFoundHandler())
+	defer foreign.Close()
+
+	doctor := func(t *testing.T, base string) string {
+		t.Helper()
+		t.Setenv(envBaseURL, base)
+		var out, errOut bytes.Buffer
+		if err := run([]string{"doctor"}, &out, &errOut); err != nil {
+			t.Fatalf("doctor: %v (stderr: %s)", err, errOut.String())
+		}
+		return out.String()
+	}
+
+	t.Run("replay answering", func(t *testing.T) {
+		got := doctor(t, healthy.URL)
+		if !strings.Contains(got, "replay is answering there") || !strings.Contains(got, "are recorded") {
+			t.Fatalf("expected a healthy report:\n%s", got)
+		}
+		if strings.Contains(got, "will fail") {
+			t.Fatalf("a healthy proxy must not warn of failure:\n%s", got)
+		}
+	})
+
+	t.Run("another gateway answering", func(t *testing.T) {
+		got := doctor(t, foreign.URL)
+		if strings.Contains(got, "will fail") {
+			t.Fatalf("a working gateway must not be reported as a failure:\n%s", got)
+		}
+		if !strings.Contains(got, "something other than replay answers there") || !strings.Contains(got, "the agent works, but replay records nothing") {
+			t.Fatalf("expected a foreign-gateway report:\n%s", got)
+		}
+		// The suggested command chains through whatever is already there.
+		if !strings.Contains(got, "replay serve --upstream "+foreign.URL) {
+			t.Fatalf("expected an upstream-chaining suggestion:\n%s", got)
+		}
+	})
+
+	t.Run("nothing listening", func(t *testing.T) {
+		dead := httptest.NewServer(http.NotFoundHandler())
+		url := dead.URL
+		dead.Close()
+		got := doctor(t, url)
+		if !strings.Contains(got, "nothing is listening there") || !strings.Contains(got, "the agent will fail") {
+			t.Fatalf("a dead base URL is the one real failure:\n%s", got)
+		}
+	})
+
+	t.Run("unset", func(t *testing.T) {
+		got := doctor(t, "")
+		if !strings.Contains(got, "is not set in this shell") || !strings.Contains(got, "to record live turns") {
+			t.Fatalf("expected the live-capture next step:\n%s", got)
+		}
+	})
+
+	// No suggestion may still tell the user to type "replay replay".
+	got := doctor(t, healthy.URL)
+	if strings.Contains(got, "replay replay") {
+		t.Fatalf("doctor still suggests the doubled form:\n%s", got)
 	}
 }
