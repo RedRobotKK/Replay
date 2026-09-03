@@ -46,6 +46,8 @@ type sessionState struct {
 	errorTokens int
 	// breached is set once the session's guardrail tripped.
 	breached bool
+	// masked counts secrets replaced in this session's requests.
+	masked int
 	// generated is the generation time of the policy file the pinned
 	// policy came from, for tying a revert to it.
 	generated time.Time
@@ -94,6 +96,7 @@ type stats struct {
 	breaches      int
 	reverted      bool
 	revertReason  string
+	masked        map[string]int
 }
 
 func newStats() *stats {
@@ -104,6 +107,7 @@ func newStats() *stats {
 		upstreamErrs:  map[int]int{},
 		breakCauses:   map[cachemodel.BreakCause]int{},
 		refusedByKind: map[string]int{},
+		masked:        map[string]int{},
 	}
 }
 
@@ -154,6 +158,10 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 	if rec.Policy != "" {
 		st.applied++
 		s.policyApplied++
+	}
+	for name, n := range rec.Masked {
+		st.masked += n
+		s.masked[name] += n
 	}
 	st.cleared += rec.Response.ClearedInputTokens
 	return out
@@ -338,6 +346,9 @@ type SessionSummary struct {
 	// ErrorShare is the share of the session's prompt tokens that carried
 	// error content, as the error budget judges it.
 	ErrorShare float64 `json:"error_share"`
+	// Masked counts secrets replaced with placeholders in this session's
+	// requests, so the user can check coverage (MK-7).
+	Masked int `json:"masked,omitempty"`
 	// ReReads is the context-editing guardrail: file reads that repeated a
 	// path already in context, before and after the provider's first clear.
 	ReReads analysis.ReReads `json:"re_reads"`
@@ -382,7 +393,7 @@ func (s *stats) status() Status {
 				out.Trial.Treated++
 			}
 		}
-		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, ReReads: st.reReads, WhatIf: st.whatIf, ErrorShare: share(st.errorTokens, st.tally.PromptTokens)})
+		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, ReReads: st.reReads, WhatIf: st.whatIf, ErrorShare: share(st.errorTokens, st.tally.PromptTokens), Masked: st.masked})
 	}
 	sort.Slice(out.Sessions, func(i, j int) bool { return out.Sessions[i].LastSeen.After(out.Sessions[j].LastSeen) })
 	return out
@@ -449,6 +460,11 @@ func (s *stats) metrics() string {
 	line("# HELP buffy_retries_total Requests the proxy resent after a retryable provider failure.")
 	line("# TYPE buffy_retries_total counter")
 	line("buffy_retries_total %d", s.retries)
+	line("# HELP buffy_masked_total Secrets replaced with placeholders, by pattern.")
+	line("# TYPE buffy_masked_total counter")
+	for _, k := range sortedKeys(s.masked) {
+		line(`buffy_masked_total{pattern=%q} %d`, k, s.masked[k])
+	}
 	line("# HELP buffy_policy_applied_total Requests that carried a Buffy-added request parameter.")
 	line("# TYPE buffy_policy_applied_total counter")
 	line(`buffy_policy_applied_total{policy=%q} %d`, policy.Name, s.policyApplied)

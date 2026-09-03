@@ -1,0 +1,15 @@
+skip-ant-colony-sim-2024
+sk-short
+AKIA-not-a-key
+AKIAIOSFODNN7EXAMPL
+ghp_tooshort
+xoxz-not-a-slack-prefix
+AIza-too-short
+sk_live_short
+eyJ.not.a.jwt
+Bearer short
+https://example.com/path:with:colons
+The author's key insight was caching.
+commit 3f2a9b1c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a
+uuid 6357c66f-9c60-4e8d-b8e9-63adf09c942b
+sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855

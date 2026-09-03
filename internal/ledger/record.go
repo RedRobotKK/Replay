@@ -43,6 +43,9 @@ type Record struct {
 	// request, empty when the bytes went through unchanged.
 	Policy string `json:"policy,omitempty"`
 	Status int    `json:"status"`
+	// Masked counts the secrets the proxy replaced with placeholders in
+	// this request, by pattern name. Never a secret or a placeholder.
+	Masked map[string]int `json:"masked,omitempty"`
 	// Retries is how many times the proxy resent this request before the
 	// response it recorded.
 	Retries   int   `json:"retries,omitempty"`

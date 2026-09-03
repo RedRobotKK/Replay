@@ -1,6 +1,6 @@
 # 0004. Secret masking with persistent vault and scoped rehydration
 
-**Status:** Proposed
+**Status:** Proposed (masking implemented 2026-09-03; rehydration pending)
 **Date:** 2026-09-02
 
 ## Context
@@ -24,3 +24,7 @@ Placeholders are derived by HMAC of the secret under a per-project key, so the s
 **Rehydrate everywhere.** Rejected: turns masking into an exfiltration primitive.
 
 **RAM-only vault.** Rejected: data loss on restart.
+
+## Amendment 2026-09-03
+
+Masking shipped ahead of rehydration, opt-in and documented as an evaluation of coverage. Two deviations from the decision above are in force until their prerequisites exist: the placeholder key is per Buffy install rather than per project, because the proxy has no project identity it can trust at a request's first byte, which widens the correlation the consequences section already accepts from one project to one machine; and the vault key lives in an owner-only file under the Buffy directory rather than the operating system keychain. Both are recorded in the PRD status column and the roadmap.
