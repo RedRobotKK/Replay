@@ -44,6 +44,11 @@ type sessionState struct {
 	// errorTokens is the estimated prompt cost of error content carried by
 	// the session so far, from the same analysis replay prints.
 	errorTokens int
+	// breached is set once the session's guardrail tripped.
+	breached bool
+	// generated is the generation time of the policy file the pinned
+	// policy came from, for tying a revert to it.
+	generated time.Time
 }
 
 // WhatIf is one candidate layout scored against the session so far. It is
@@ -82,6 +87,9 @@ type stats struct {
 	refusedByKind map[string]int
 	policyApplied int
 	retries       int
+	breaches      int
+	reverted      bool
+	revertReason  string
 }
 
 func newStats() *stats {
@@ -178,7 +186,7 @@ func (s *stats) pinned(sessionID string) (*policy.ContextEdit, policy.Decision, 
 // pin records a session's decision. The session is created here when its
 // first request has not completed yet, so the pin exists before any
 // usage does. A decision already made is kept.
-func (s *stats) pin(sessionID string, edit *policy.ContextEdit, decision policy.Decision) {
+func (s *stats) pin(sessionID string, edit *policy.ContextEdit, decision policy.Decision, generated time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st, ok := s.sessions[sessionID]
@@ -187,8 +195,20 @@ func (s *stats) pin(sessionID string, edit *policy.ContextEdit, decision policy.
 		s.sessions[sessionID] = st
 	}
 	if st.policy == "" {
-		st.policy, st.edit = decision, edit
+		st.policy, st.edit, st.generated = decision, edit, generated
 	}
+}
+
+// trialSession returns a treated session's policy and file generation
+// time, for the guardrail; false for controls and flag-set policies.
+func (s *stats) trialSession(sessionID string) (*policy.ContextEdit, time.Time, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st, ok := s.sessions[sessionID]
+	if !ok || st.policy != policy.Applied || st.edit == nil || st.generated.IsZero() {
+		return nil, time.Time{}, false
+	}
+	return st.edit, st.generated, true
 }
 
 // breakCause names a break from what the proxy can see. A changed prefix
@@ -211,12 +231,12 @@ func (s *stats) breakCause(st *sessionState, rec *ledger.Record, prefixChanged b
 // and takes only the session's own lock while it walks the session, so
 // other sessions are never held up. It returns a log line every
 // whatIfLogEvery requests and an empty string otherwise.
-func (s *stats) rescore(rec *ledger.Record) string {
+func (s *stats) rescore(rec *ledger.Record) (string, analysis.ReReads) {
 	s.mu.Lock()
 	st, ok := s.sessions[rec.SessionID]
 	if !ok {
 		s.mu.Unlock()
-		return ""
+		return "", analysis.ReReads{}
 	}
 	if st.builder == nil {
 		st.builder = ledger.NewSessionBuilder(rec.SessionID, "")
@@ -252,7 +272,7 @@ func (s *stats) rescore(rec *ledger.Record) string {
 	s.mu.Unlock()
 
 	if requests%whatIfLogEvery != 0 || len(rows) < 2 {
-		return ""
+		return "", report.ReReads
 	}
 	best := rows[1]
 	for _, r := range rows[2:] {
@@ -261,13 +281,13 @@ func (s *stats) rescore(rec *ledger.Record) string {
 		}
 	}
 	if best.VsAsRun >= 0 {
-		return fmt.Sprintf("what-if session=%s requests=%d as-run %.0f effective tokens; no candidate layout beats it", short(rec.SessionID), requests, asRun.EffectiveTokens)
+		return fmt.Sprintf("what-if session=%s requests=%d as-run %.0f effective tokens; no candidate layout beats it", short(rec.SessionID), requests, asRun.EffectiveTokens), report.ReReads
 	}
 	tier := "measured"
 	if best.Estimated {
 		tier = "estimated"
 	}
-	return fmt.Sprintf("what-if session=%s requests=%d as-run %.0f effective tokens; best candidate %s %+.0f%% (%s); live: %s", short(rec.SessionID), requests, asRun.EffectiveTokens, best.Policy, best.VsAsRun*100, tier, best.ReachableLive)
+	return fmt.Sprintf("what-if session=%s requests=%d as-run %.0f effective tokens; best candidate %s %+.0f%% (%s); live: %s", short(rec.SessionID), requests, asRun.EffectiveTokens, best.Policy, best.VsAsRun*100, tier, best.ReachableLive), report.ReReads
 }
 
 func (s *stats) refused(kind string) {
@@ -316,6 +336,16 @@ type Status struct {
 	Sessions      []SessionSummary `json:"sessions"`
 	PriceTable    string           `json:"price_table"`
 	Rules         string           `json:"rules"`
+	// Trial reports the live trial of a learned policy, when one runs.
+	Trial TrialStatus `json:"trial"`
+}
+
+// TrialStatus is the trial's arms and guardrail state.
+type TrialStatus struct {
+	Treated  int    `json:"treated"`
+	Control  int    `json:"control"`
+	Breached int    `json:"breached"`
+	Reverted string `json:"reverted,omitempty"`
 }
 
 func (s *stats) status() Status {
@@ -325,7 +355,16 @@ func (s *stats) status() Status {
 	for k, v := range s.requests {
 		out.Requests[k] = v
 	}
+	out.Trial = TrialStatus{Breached: s.breaches, Reverted: s.revertReason}
 	for id, st := range s.sessions {
+		switch st.policy {
+		case policy.Control:
+			out.Trial.Control++
+		case policy.Applied:
+			if st.edit != nil && !st.generated.IsZero() {
+				out.Trial.Treated++
+			}
+		}
 		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, ReReads: st.reReads, WhatIf: st.whatIf, ErrorShare: share(st.errorTokens, st.tally.PromptTokens)})
 	}
 	sort.Slice(out.Sessions, func(i, j int) bool { return out.Sessions[i].LastSeen.After(out.Sessions[j].LastSeen) })

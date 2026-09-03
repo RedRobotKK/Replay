@@ -258,3 +258,27 @@ func TestPinsPersistAcrossReopen(t *testing.T) {
 		t.Fatalf("a no-policy pin must persist too: %+v %v", p, ok)
 	}
 }
+
+func TestRevertPersistsAcrossReopen(t *testing.T) {
+	dir := t.TempDir()
+	store, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := store.Revert(); ok {
+		t.Fatal("fresh store must have no revert")
+	}
+	at := time.Date(2026, 9, 3, 4, 0, 0, 0, time.UTC)
+	want := Revert{Policy: "context-edit", Trigger: 200000, Keep: 6, Reason: "re-read rate after clears 80% on 2 sessions", Breached: 2, At: at, PolicyGenerated: at.Add(-time.Hour)}
+	if err := store.SetRevert(want); err != nil {
+		t.Fatal(err)
+	}
+	again, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := again.Revert()
+	if !ok || got.Reason != want.Reason || got.Breached != 2 || !got.At.Equal(at) || !got.PolicyGenerated.Equal(want.PolicyGenerated) {
+		t.Fatalf("revert not persisted: %+v %v", got, ok)
+	}
+}

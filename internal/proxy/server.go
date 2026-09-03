@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/RedRobotKK/Buffy/internal/analysis"
 	"github.com/RedRobotKK/Buffy/internal/cachemodel"
 	"github.com/RedRobotKK/Buffy/internal/learn"
 	"github.com/RedRobotKK/Buffy/internal/ledger"
@@ -84,6 +85,8 @@ type Config struct {
 	// session's first request when ContextEdit is not set. A pinned
 	// session never changes when the file does (PX-8).
 	PolicyFile string
+	// Trial bounds how a learned policy is tried live (LN-5).
+	Trial TrialSettings
 	// Retries, when Attempts is set, resend a request the provider refused
 	// with a retryable status or that never connected, before any byte of
 	// a response has reached the client.
@@ -323,9 +326,13 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 				s.cfg.Logger.Printf("ledger write failed: %v", err)
 			}
 		}
-		whatIf := ""
+		whatIf, guardrail := "", ""
 		if messages && rec.SessionID != "" && rec.Response.Usage != nil {
-			whatIf = s.stats.rescore(&rec)
+			var rr analysis.ReReads
+			whatIf, rr = s.stats.rescore(&rec)
+			if edit, generated, ok := s.stats.trialSession(rec.SessionID); ok && s.cfg.Trial.breached(rr) {
+				guardrail = s.stats.noteBreach(s.cfg.Store, s.cfg.Trial, rec.SessionID, edit, rr, generated)
+			}
 		}
 		note := ""
 		if aborted != nil {
@@ -340,6 +347,9 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		}
 		if whatIf != "" {
 			s.cfg.Logger.Print(whatIf)
+		}
+		if guardrail != "" {
+			s.cfg.Logger.Print(guardrail)
 		}
 		if aborted != nil {
 			panic(aborted)
@@ -369,8 +379,9 @@ func (s *Server) applyPolicy(r *http.Request, rec *ledger.Record, body []byte) [
 	beta, clientSet := r.Header.Get("anthropic-beta"), rec.Prompt.ContextEdits
 	edit, decision, ok := s.stats.pinned(rec.SessionID)
 	if !ok {
-		edit, decision = s.decidePolicy(rec.SessionID, beta, clientSet)
-		s.stats.pin(rec.SessionID, edit, decision)
+		var generated time.Time
+		edit, decision, generated = s.decidePolicy(rec.SessionID, beta, clientSet)
+		s.stats.pin(rec.SessionID, edit, decision, generated)
 	}
 	if edit == nil || decision != policy.Applied {
 		return body
@@ -394,21 +405,26 @@ func (s *Server) applyPolicy(r *http.Request, rec *ledger.Record, body []byte) [
 // process. A pin persisted by an earlier process wins over everything,
 // then the flag, then the policy file. The decision is persisted so a
 // restart or a rewritten file cannot change a running session.
-func (s *Server) decidePolicy(sessionID, beta string, clientSet bool) (*policy.ContextEdit, policy.Decision) {
+func (s *Server) decidePolicy(sessionID, beta string, clientSet bool) (*policy.ContextEdit, policy.Decision, time.Time) {
 	if pin, ok := s.cfg.Store.Pin(sessionID); ok {
 		var edit *policy.ContextEdit
 		if pin.Policy == policy.Name {
 			edit = &policy.ContextEdit{TriggerTokens: pin.Trigger, KeepLast: pin.Keep}
 		}
 		s.cfg.Logger.Printf("policy session=%s pinned earlier: %s", short(sessionID), pin.Decision)
-		return edit, policy.Decision(pin.Decision)
+		// A restored pin carries no file generation; the guardrail judges
+		// sessions this process started.
+		return edit, policy.Decision(pin.Decision), time.Time{}
 	}
 	edit := s.cfg.ContextEdit
-	if edit == nil && s.cfg.PolicyFile != "" {
-		edit = s.policyFromFile(sessionID)
-	}
 	decision := policy.NotConfigured
+	var generated time.Time
 	pin := ledger.Pin{SessionID: sessionID, At: time.Now(), Decision: string(decision)}
+	if edit == nil && s.cfg.PolicyFile != "" {
+		var arm string
+		edit, decision, arm, generated = s.trialPolicy(sessionID)
+		pin.Trial, pin.Decision = arm, string(decision)
+	}
 	if edit != nil {
 		decision = edit.Admissible(beta, clientSet)
 		pin.Policy, pin.Trigger, pin.Keep, pin.Decision = policy.Name, edit.TriggerTokens, edit.KeepLast, string(decision)
@@ -417,31 +433,58 @@ func (s *Server) decidePolicy(sessionID, beta string, clientSet bool) (*policy.C
 		// Fail open: the session runs under the in-memory pin.
 		s.cfg.Logger.Printf("policy pin not persisted for session=%s: %v", short(sessionID), err)
 	}
-	return edit, decision
+	return edit, decision, generated
 }
 
-// policyFromFile reads the learned selection for a session that is
-// starting. Only the context-edit family is something the proxy can
-// apply; a TTL selection is advice for a client setting and is logged.
-func (s *Server) policyFromFile(sessionID string) *policy.ContextEdit {
+// trialPolicy reads the learned selection for a session that is starting
+// and assigns the session to an arm of the trial: treated sessions get
+// the policy, control sessions are held out so the two can be compared,
+// and once the guardrail has reverted the policy nobody gets it until a
+// newer learning result replaces it.
+func (s *Server) trialPolicy(sessionID string) (*policy.ContextEdit, policy.Decision, string, time.Time) {
+	edit, generated := s.policyFromFile(sessionID)
+	if edit == nil {
+		return nil, policy.NotConfigured, "", time.Time{}
+	}
+	if r, ok := s.cfg.Store.Revert(); ok && !generated.After(r.At) {
+		s.cfg.Logger.Printf("policy %s reverted at %s (%s); session=%s runs without it until buffy learn writes a newer file", edit, r.At.Format(time.RFC3339), r.Reason, short(sessionID))
+		return nil, policy.Reverted, "", time.Time{}
+	}
+	if !s.cfg.Trial.treated(sessionID) {
+		s.cfg.Logger.Printf("policy %s session=%s is a control: held out of the trial", edit, short(sessionID))
+		return nil, policy.Control, trialControl, time.Time{}
+	}
+	return edit, policy.Applied, trialTreated, generated
+}
+
+// policyFromFile reads the learned selection. Only the context-edit
+// family is something the proxy can apply; a TTL selection is advice for
+// a client setting and is logged. The file's generation time comes back
+// so a revert can be tied to the file it happened under.
+func (s *Server) policyFromFile(sessionID string) (*policy.ContextEdit, time.Time) {
+	res, err := learn.LoadFile(s.cfg.PolicyFile)
+	if err != nil {
+		s.cfg.Logger.Printf("policy file %s not read for session=%s: %v", s.cfg.PolicyFile, short(sessionID), err)
+		return nil, time.Time{}
+	}
 	c, note, err := learn.LoadSelected(s.cfg.PolicyFile)
 	switch {
 	case err != nil:
 		s.cfg.Logger.Printf("policy file %s not read for session=%s: %v", s.cfg.PolicyFile, short(sessionID), err)
-		return nil
+		return nil, time.Time{}
 	case note != "":
 		s.cfg.Logger.Printf("policy file: %s (session=%s runs without a policy)", note, short(sessionID))
-		return nil
+		return nil, time.Time{}
 	case c.ContextEdit == nil:
 		s.cfg.Logger.Printf("policy file selects %s, which is a client setting (%s); session=%s runs without a proxy policy", c.Name, c.Live, short(sessionID))
-		return nil
+		return nil, time.Time{}
 	}
 	edit := &policy.ContextEdit{TriggerTokens: c.ContextEdit.TriggerTokens, KeepLast: c.ContextEdit.KeepLast}
 	if err := edit.Validate(); err != nil {
 		s.cfg.Logger.Printf("policy file selection rejected: %v", err)
-		return nil
+		return nil, time.Time{}
 	}
-	return edit
+	return edit, res.Generated
 }
 
 // bodyHash is a content-free fingerprint of a request body for the log.
