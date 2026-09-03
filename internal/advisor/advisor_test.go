@@ -50,7 +50,7 @@ func TestFixtureProducesTheExpectedSuggestions(t *testing.T) {
 	if first.Sessions != 1 || first.Share < MinShare || first.PredictedTokens != first.PromptTokens/2 || first.Status != Pending || !strings.Contains(first.Action, "heredoc") {
 		t.Fatalf("Bash suggestion wrong: %+v", first)
 	}
-	if by[KindCacheBreaks].Status != AdviceOnly || by[KindCacheBreaks].PromptTokens <= 0 {
+	if b := by[KindCacheBreaks]; b.Status != AdviceOnly || b.PromptTokens <= 0 || b.PredictedTokens != b.PromptTokens {
 		t.Fatalf("cache breaks are advice only: %+v", by[KindCacheBreaks])
 	}
 }

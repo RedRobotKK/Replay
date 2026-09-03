@@ -278,12 +278,17 @@ func Suggest(obs []Observation) []Suggestion {
 			s.Share += ev.share
 		}
 		s.Share /= float64(len(a.evidence))
-		if a.kind == KindHotFile {
+		switch a.kind {
+		case KindHotFile:
 			// Only the repeats are avoidable.
 			s.Share *= float64(a.reads-1) / float64(a.reads)
 			s.PredictedShare = s.Share
 			s.PredictedTokens = a.tokens * (a.reads - 1) / a.reads
-		} else {
+		case KindCacheBreaks:
+			// A break that does not happen re-bills nothing.
+			s.PredictedShare = s.Share
+			s.PredictedTokens = a.tokens
+		default:
 			s.PredictedShare = trimShare * s.Share
 			s.PredictedTokens = int(trimShare * float64(a.tokens))
 		}
