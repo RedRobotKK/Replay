@@ -2,6 +2,7 @@ package analysis
 
 import (
 	"bytes"
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -238,3 +239,42 @@ var errWrite = &writeError{}
 type writeError struct{}
 
 func (*writeError) Error() string { return "write failed" }
+
+func TestReReadsCountRepeatedPathsAndSplitAtFirstClear(t *testing.T) {
+	_, lane := loadFixture(t)
+	cal := Calibrate(lane)
+	rr := CountReReads(cal, Fit(cal, false))
+	// The fixture session worked through Bash and never read a file, so
+	// it must count nothing rather than something.
+	if rr.Reads != 0 || rr.Repeated != 0 || rr.ContextEdits != 0 || rr.ReadsAfterClear != 0 {
+		t.Fatalf("fixture re-reads implausible: %+v", rr)
+	}
+
+	// A synthetic lane: read a, read b, then a clear, then read a again.
+	read := func(uuid, path string) *transcript.Message {
+		return &transcript.Message{UUID: uuid, Role: transcript.RoleUser, Blocks: []transcript.Block{{Kind: transcript.KindToolResult, ToolName: "Read " + path, Label: "tool result: Read " + path, Bytes: 4000}}}
+	}
+	ask := &transcript.Message{UUID: "u0", Role: transcript.RoleUser, Blocks: []transcript.Block{{Kind: transcript.KindText, Bytes: 10}}}
+	msgs := []*transcript.Message{ask, read("r1", "a.go"), read("r2", "b.go"), read("r3", "a.go"), read("r4", "c.go"), read("r5", "b.go")}
+	syn := &transcript.Lane{ID: "syn"}
+	for i := 2; i <= len(msgs); i++ {
+		req := &transcript.Request{ID: fmt.Sprint(i), Context: msgs[:i], Usage: transcript.Usage{Input: 1000, CacheRead: 1000 * (i - 1)}}
+		if i == 3 {
+			req.AppliedEdits, req.ClearedTokens = 1, 500
+		}
+		syn.Requests = append(syn.Requests, req)
+	}
+	cal = Calibrate(syn)
+	rr = CountReReads(cal, TokenFit{TokensPerByte: 0.25})
+	if rr.Reads != 5 || rr.Repeated != 2 || rr.ContextEdits != 1 || rr.ClearedTokens != 500 {
+		t.Fatalf("synthetic totals wrong: %+v", rr)
+	}
+	// The clear was applied by request 3's response; reads from request 4
+	// on are after it: a (repeat), c, b (repeat).
+	if rr.ReadsAfterClear != 3 || rr.RepeatedAfterClear != 2 || rr.RateBeforeClear() != 0 {
+		t.Fatalf("split at first clear wrong: %+v", rr)
+	}
+	if rr.Tokens.Value <= 0 {
+		t.Fatalf("repeated reads must be priced: %+v", rr)
+	}
+}

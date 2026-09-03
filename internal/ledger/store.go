@@ -206,11 +206,13 @@ func (b *SessionBuilder) Session() *transcript.Session { return b.session }
 
 func requestFromRecord(rec Record, index int, memo map[string]*transcript.Message) *transcript.Request {
 	req := &transcript.Request{
-		ID:        rec.RequestID,
-		Model:     rec.Model,
-		Effort:    rec.Effort,
-		Timestamp: rec.Timestamp,
-		Usage:     *rec.Response.Usage,
+		ID:            rec.RequestID,
+		Model:         rec.Model,
+		Effort:        rec.Effort,
+		Timestamp:     rec.Timestamp,
+		Usage:         *rec.Response.Usage,
+		AppliedEdits:  rec.Response.AppliedEdits,
+		ClearedTokens: rec.Response.ClearedInputTokens,
 	}
 	if req.ID == "" {
 		req.ID = fmt.Sprintf("ledger-%d", index)

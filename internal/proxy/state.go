@@ -38,6 +38,7 @@ type sessionState struct {
 	scoreMu sync.Mutex
 	builder *ledger.SessionBuilder
 	whatIf  []WhatIf
+	reReads analysis.ReReads
 }
 
 // WhatIf is one candidate layout scored against the session so far. It is
@@ -198,7 +199,8 @@ func (s *stats) rescore(rec *ledger.Record) string {
 	st.builder.Add(*rec)
 	session := st.builder.Session()
 	lane := session.Lane(rec.AgentID, rec.AgentID != "")
-	policies := analysis.AnalyzeLane(session, lane).Policies()
+	report := analysis.AnalyzeLane(session, lane)
+	policies := report.Policies()
 	st.scoreMu.Unlock()
 
 	asRun := policies[0]
@@ -212,6 +214,7 @@ func (s *stats) rescore(rec *ledger.Record) string {
 	}
 	s.mu.Lock()
 	st.whatIf = rows
+	st.reReads = report.ReReads
 	s.mu.Unlock()
 
 	if requests%whatIfLogEvery != 0 || len(rows) < 2 {
@@ -260,6 +263,9 @@ type SessionSummary struct {
 	Policy             string `json:"policy,omitempty"`
 	PolicyApplied      int    `json:"policy_applied,omitempty"`
 	ClearedInputTokens int    `json:"cleared_input_tokens,omitempty"`
+	// ReReads is the context-editing guardrail: file reads that repeated a
+	// path already in context, before and after the provider's first clear.
+	ReReads analysis.ReReads `json:"re_reads"`
 	// WhatIf scores candidate layouts over the session so far; as-run is
 	// first. Nothing here was sent to the provider.
 	WhatIf []WhatIf `json:"what_if,omitempty"`
@@ -282,7 +288,7 @@ func (s *stats) status() Status {
 		out.Requests[k] = v
 	}
 	for id, st := range s.sessions {
-		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, WhatIf: st.whatIf})
+		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, ReReads: st.reReads, WhatIf: st.whatIf})
 	}
 	sort.Slice(out.Sessions, func(i, j int) bool { return out.Sessions[i].LastSeen.After(out.Sessions[j].LastSeen) })
 	return out

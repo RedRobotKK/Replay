@@ -21,6 +21,7 @@ type LaneReport struct {
 	Breaks      []Break
 	Blame       []BlameEntry
 	Errors      []ErrorCost
+	ReReads     ReReads
 	// Dollars adds a list-price column to the policy table when the
 	// session's model is in the price table.
 	Dollars bool
@@ -57,6 +58,7 @@ func AnalyzeLane(s *transcript.Session, lane *transcript.Lane) *LaneReport {
 		Breaks:      FindBreaks(cal, fit),
 		Blame:       Blame(cal, fit),
 		Errors:      ErrorCosts(cal, fit),
+		ReReads:     CountReReads(cal, fit),
 	}
 }
 
@@ -195,9 +197,25 @@ func (r *LaneReport) WriteReplay(w io.Writer) error {
 	}
 	p.Printf("\n")
 	r.errors(p)
+	r.reReads(p)
 	p.Printf("\n")
 	r.blame(p, replayBlameLimit)
 	return p.Err()
+}
+
+// reReads prints the context-editing guardrail: how often the agent read
+// a file it already had, and whether that rose after the provider began
+// clearing old results.
+func (r *LaneReport) reReads(p *Printer) {
+	rr := r.ReReads
+	if rr.Reads == 0 {
+		return
+	}
+	p.Printf("  file re-reads\n")
+	p.Printf("    %d of %d file reads repeated a path already in context (%.0f%%), %s in prompts (±%s)\n", rr.Repeated, rr.Reads, rr.Rate()*100, formatTokens(rr.Tokens.Value), formatTokens(rr.Tokens.Error))
+	if rr.ContextEdits > 0 {
+		p.Printf("    provider context edits: %d applied, %s prompt tokens cleared; re-read rate after the first clear %.0f%% (%d of %d) vs %.0f%% before\n", rr.ContextEdits, formatTokens(rr.ClearedTokens), rr.RateAfterClear()*100, rr.RepeatedAfterClear, rr.ReadsAfterClear, rr.RateBeforeClear()*100)
+	}
 }
 
 // WriteBlame prints the full attribution table.
