@@ -19,6 +19,10 @@ var untouchedKeys = map[string]bool{"thinking": true, "signature": true, "data":
 type Masker struct {
 	patterns []Pattern
 	vault    *Vault
+	// Entropy adds the heuristic detector for credentials no pattern
+	// names. Off by default: it is a guess by shape, and the README says
+	// what it can and cannot tell apart.
+	Entropy bool
 }
 
 // New builds a masker over the built-in patterns plus user patterns.
@@ -74,7 +78,7 @@ func (m *Masker) Mask(body []byte) ([]byte, Report, error) {
 		// Match on the literal's inner bytes. Secrets are ASCII and the
 		// placeholder is too, so the literal stays valid JSON.
 		inner := body[sv.start+1 : sv.end-1]
-		matches := Find(inner, m.patterns)
+		matches := m.find(inner)
 		if len(matches) == 0 {
 			continue
 		}
@@ -102,6 +106,18 @@ func (m *Masker) Mask(body []byte) ([]byte, Report, error) {
 	}
 	out = append(out, body[last:]...)
 	return out, report, nil
+}
+
+// find runs the patterns and, when enabled, the entropy heuristic on
+// bytes no pattern claimed.
+func (m *Masker) find(inner []byte) []Match {
+	matches, taken := find(inner, m.patterns)
+	if !m.Entropy {
+		return matches
+	}
+	matches = append(matches, FindEntropy(inner, taken)...)
+	sortMatches(matches)
+	return matches
 }
 
 // stringValues locates every JSON string value in the body that may be

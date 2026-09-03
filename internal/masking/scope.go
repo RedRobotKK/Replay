@@ -153,7 +153,7 @@ func ParseScope(spec string) (name string, s Scope, err error) {
 // against the known set.
 func ParseScopes(project string, specs []string, known []Pattern) (Scopes, error) {
 	out := Scopes{Project: project, Default: DefaultScope, ByPattern: map[string]Scope{}}
-	names := map[string]bool{}
+	names := map[string]bool{EntropyPattern: true}
 	for _, p := range known {
 		names[p.Name] = true
 	}
