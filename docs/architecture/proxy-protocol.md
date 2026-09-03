@@ -33,6 +33,7 @@ What the client sends through a local gateway and what the proxy must preserve. 
 - The request body is the same the client sends to the provider, `cache_control` markers included. Removing or converting markers bills the conversation uncached on every turn.
 - Block-form `system` content is never converted to a string and the `system` array is never reordered.
 - Nothing in the body is re-serialized in passthrough mode; bytes in are bytes out.
+- With a live policy enabled, the only change is one top-level member spliced before the closing brace of the request object, on requests whose client enabled the provider feature and did not set the member itself. Every byte the client sent stays in place. The transformation is a pure function of the flags and the body, so the same client body always renders to the same provider bytes, and it is logged with the body hashes before and after (PX-10). `BUFFY_NO_POLICY=1` turns every policy off (PX-6).
 
 ## Cache TTL
 

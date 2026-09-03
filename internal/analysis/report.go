@@ -35,7 +35,9 @@ type LaneReport struct {
 // recommendations.
 var contextEditTriggerShares = []float64{0.5, 0.75}
 
-const contextEditKeepLast = 6
+// ContextEditKeepLast is the default number of recent tool results a
+// clear keeps, for the simulated grid and the live policy alike.
+const ContextEditKeepLast = 6
 
 // Report layout limits.
 const (
@@ -81,7 +83,7 @@ func contextEditPolicies(lane *transcript.Lane) []ContextEditPolicy {
 	}
 	var out []ContextEditPolicy
 	for _, share := range contextEditTriggerShares {
-		out = append(out, ContextEditPolicy{KeepLast: contextEditKeepLast, TriggerTokens: int(float64(largest) * share)})
+		out = append(out, ContextEditPolicy{KeepLast: ContextEditKeepLast, TriggerTokens: int(float64(largest) * share)})
 	}
 	return out
 }

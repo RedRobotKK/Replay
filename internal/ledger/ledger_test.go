@@ -194,3 +194,24 @@ func TestStoreRoundTripToSession(t *testing.T) {
 		t.Fatalf("request not reconstructed: %+v", req)
 	}
 }
+
+func TestResponsesReportAppliedContextEdits(t *testing.T) {
+	body := `{"id":"m","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":1,"cache_creation_input_tokens":2,"cache_read_input_tokens":3,"output_tokens":4},"context_management":{"applied_edits":[{"type":"clear_tool_uses_20250919","cleared_tool_uses":8,"cleared_input_tokens":50000}]}}`
+	resp := ParseResponse([]byte(body))
+	if resp.AppliedEdits != 1 || resp.ClearedInputTokens != 50000 {
+		t.Fatalf("json response edits = %d cleared = %d", resp.AppliedEdits, resp.ClearedInputTokens)
+	}
+	if resp := ParseResponse([]byte(`{"id":"m","type":"message","content":[],"usage":{"input_tokens":1}}`)); resp.AppliedEdits != 0 {
+		t.Fatal("no edits reported must read as zero")
+	}
+	sp := &StreamParser{}
+	stream := "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":1,\"cache_read_input_tokens\":3}}}\n\n" +
+		"event: message_delta\ndata: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":4},\"context_management\":{\"applied_edits\":[{\"type\":\"clear_tool_uses_20250919\",\"cleared_input_tokens\":20000},{\"type\":\"clear_tool_uses_20250919\",\"cleared_input_tokens\":5}]}}\n\n"
+	if _, err := sp.Write([]byte(stream)); err != nil {
+		t.Fatal(err)
+	}
+	resp = sp.Result()
+	if resp.AppliedEdits != 2 || resp.ClearedInputTokens != 20005 || resp.Usage == nil || resp.Usage.Output != 4 {
+		t.Fatalf("stream edits = %d cleared = %d usage = %+v", resp.AppliedEdits, resp.ClearedInputTokens, resp.Usage)
+	}
+}

@@ -109,6 +109,10 @@ Guards, all off unless you set them (see `buffy serve -h`):
 - `--loop-warn` and `--loop-block` count how many times in a row the agent has just made the same tool call with the same input, and add a warning header or refuse the request. A repeated command earlier in the session never counts; only the current run does. `x-buffy-override` passes a block once.
 - `--breaker-failures` opens a circuit after consecutive provider failures and answers locally with `Retry-After` until the cooldown passes, so the agent stops burning retries against a provider that is already saying no.
 
+One live policy, experimental and off by default:
+
+- `--context-edit-trigger <tokens>` asks the provider to clear old tool results server-side once the prompt passes the trigger, keeping the last `--context-edit-keep` (default 6). Buffy adds the provider's `context_management` parameter after the client's own bytes, which stay byte-identical, and only on requests whose client already enabled the context-management beta and set no such parameter itself. The decision is made at a session's first request and pinned. Each edit is logged with body hashes before and after, never content; the ledger records which requests carried it and the provider's applied edits and cleared tokens, so `buffy replay` on the ledger shows what it did. `BUFFY_NO_POLICY=1` forces every policy off. The parameter shape follows the provider's documentation and has not yet been exercised against the real provider (roadmap spike 4); the `what_if` rows tell you what it should save before you turn it on.
+
 One client caveat from the gateway docs: with a non-first-party base URL, Claude Code disables MCP tool search unless `ENABLE_TOOL_SEARCH=true` is set. Buffy forwards `tool_reference` blocks unchanged, so setting it is safe. Details: [`docs/architecture/proxy-protocol.md`](docs/architecture/proxy-protocol.md).
 
 ## Install

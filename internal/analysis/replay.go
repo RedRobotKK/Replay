@@ -164,11 +164,11 @@ type ContextEditPolicy struct {
 	TriggerTokens int
 }
 
-// clearHysteresis is how far below the trigger a clear aims, as a share of
+// ClearHysteresis is how far below the trigger a clear aims, as a share of
 // the trigger. Clearing in bulk is what keeps the cache from being
 // invalidated on every turn; the provider exposes the same idea as a
-// minimum amount to clear.
-const clearHysteresis = 0.25
+// minimum amount to clear, and the live policy sends this value.
+const ClearHysteresis = 0.25
 
 // WithContextEdit replays the lane under a context-editing policy. The
 // result is estimated because block sizes come from the fit.
@@ -220,7 +220,7 @@ func WithContextEdit(cal *Calibration, p ContextEditPolicy, fit TokenFit) Policy
 		// comfortably under the trigger or only KeepLast results remain.
 		invalidateFrom := -1
 		if prompt > p.TriggerTokens && len(results) > p.KeepLast {
-			target := int(float64(p.TriggerTokens) * (1 - clearHysteresis))
+			target := int(float64(p.TriggerTokens) * (1 - ClearHysteresis))
 			for len(results) > p.KeepLast && prompt > target {
 				v := results[0]
 				results = results[1:]

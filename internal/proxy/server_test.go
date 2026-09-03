@@ -21,6 +21,7 @@ import (
 	"github.com/RedRobotKK/Buffy/internal/analysis"
 	"github.com/RedRobotKK/Buffy/internal/cachemodel"
 	"github.com/RedRobotKK/Buffy/internal/ledger"
+	"github.com/RedRobotKK/Buffy/internal/policy"
 )
 
 const secret = "sk-ant-test-secret-value"
@@ -791,5 +792,134 @@ func TestPrefixChangeIsNamedAsBreakCause(t *testing.T) {
 	st := getStatus(t, base)
 	if len(st.Sessions) != 1 || st.Sessions[0].PrefixChanges != 1 || st.Sessions[0].Breaks != 1 {
 		t.Fatalf("status must count the prefix change: %+v", st.Sessions)
+	}
+}
+
+// bodyEcho is a fake provider that keeps every request body it saw and
+// answers with a message that reports one applied edit.
+type bodyEcho struct {
+	mu     sync.Mutex
+	bodies [][]byte
+}
+
+func (b *bodyEcho) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body)
+	b.mu.Lock()
+	b.bodies = append(b.bodies, body)
+	b.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, `{"id":"m","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":4,"cache_creation_input_tokens":30,"cache_read_input_tokens":300,"output_tokens":2},"context_management":{"applied_edits":[{"type":"clear_tool_uses_20250919","cleared_input_tokens":1234}]}}`)
+}
+
+func (b *bodyEcho) seen() [][]byte {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([][]byte(nil), b.bodies...)
+}
+
+func postWith(t *testing.T, base, body string, headers map[string]string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, base+"/v1/messages", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+}
+
+// The live policy adds exactly one member to the client's body, is
+// recorded on the ledger with the provider's applied edits, is logged with
+// hashes only, and is pinned per session from the first request.
+func TestContextEditPolicyIsAppliedRecordedAndPinned(t *testing.T) {
+	up := &bodyEcho{}
+	base, dir, logs := startProxyWith(t, up, Config{ContextEdit: &policy.ContextEdit{TriggerTokens: 150000, KeepLast: 6}})
+	withBeta := map[string]string{HeaderSessionID: "sess-on", "anthropic-beta": "fast-mode-2026-02-01," + policy.BetaFeature}
+	noBeta := map[string]string{HeaderSessionID: "sess-off"}
+
+	postWith(t, base, requestBody, withBeta)
+	postWith(t, base, requestBody, noBeta)
+	// The session pinned on stays on; a request in it without the beta
+	// header goes through unchanged and the skip is logged.
+	postWith(t, base, requestBody, map[string]string{HeaderSessionID: "sess-on"})
+	// The session pinned off stays off even when a later request admits it.
+	postWith(t, base, requestBody, map[string]string{HeaderSessionID: "sess-off", "anthropic-beta": policy.BetaFeature})
+	// A client that set the parameter itself is never overridden.
+	clientSet := strings.TrimSuffix(requestBody, "}") + `,"context_management":{"edits":[]}}`
+	postWith(t, base, clientSet, map[string]string{HeaderSessionID: "sess-client", "anthropic-beta": policy.BetaFeature})
+
+	bodies := up.seen()
+	if len(bodies) != 5 {
+		t.Fatalf("upstream saw %d requests", len(bodies))
+	}
+	if !bytes.HasPrefix(bodies[0], []byte(strings.TrimSuffix(requestBody, "}"))) || !bytes.Contains(bodies[0], []byte(`"context_management":{"edits":[{"type":"clear_tool_uses_20250919","trigger":{"type":"input_tokens","value":150000}`)) {
+		t.Fatalf("first request must carry the parameter after the client's bytes: %s", bodies[0])
+	}
+	for i, want := range []string{requestBody, requestBody, requestBody, clientSet} {
+		if string(bodies[i+1]) != want {
+			t.Fatalf("request %d must be byte-identical to the client's: %s", i+1, bodies[i+1])
+		}
+	}
+
+	recs := waitLedger(t, dir, 5)
+	byID := map[string][]ledger.Record{}
+	for _, r := range recs {
+		byID[r.SessionID] = append(byID[r.SessionID], r)
+	}
+	on := byID["sess-on"]
+	if len(on) != 2 || on[0].Policy != policy.Name || on[1].Policy != "" || on[0].Response.AppliedEdits != 1 || on[0].Response.ClearedInputTokens != 1234 {
+		t.Fatalf("ledger for the pinned-on session wrong: %+v", on)
+	}
+	for _, id := range []string{"sess-off", "sess-client"} {
+		for _, r := range byID[id] {
+			if r.Policy != "" {
+				t.Fatalf("session %s must never carry the policy: %+v", id, r)
+			}
+		}
+	}
+
+	log := logs.String()
+	if !strings.Contains(log, "policy context-edit(keep=6,trigger=150000) session=sess-on applied body sha256 before=") || strings.Contains(log, "be brief") {
+		t.Fatalf("applied transformation must be logged with hashes and never content:\n%s", log)
+	}
+	if !strings.Contains(log, string(policy.SkipNoBeta)) {
+		t.Fatalf("skip in a pinned-on session must be logged:\n%s", log)
+	}
+
+	st := getStatus(t, base)
+	for _, sess := range st.Sessions {
+		switch sess.Session {
+		case "sess-on":
+			if sess.Policy != string(policy.Applied) || sess.PolicyApplied != 1 || sess.ClearedInputTokens != 1234*2 {
+				t.Fatalf("status for sess-on: %+v", sess)
+			}
+		case "sess-off":
+			if sess.Policy != string(policy.SkipNoBeta) || sess.PolicyApplied != 0 {
+				t.Fatalf("status for sess-off: %+v", sess)
+			}
+		case "sess-client":
+			if sess.Policy != string(policy.SkipClientSet) {
+				t.Fatalf("status for sess-client: %+v", sess)
+			}
+		}
+	}
+	resp, err := http.Get(base + "/buffy/metrics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	metrics, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if !strings.Contains(string(metrics), `buffy_policy_applied_total{policy="context-edit"} 1`) {
+		t.Fatalf("metrics missing policy counter:\n%s", metrics)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/RedRobotKK/Buffy/internal/analysis"
 	"github.com/RedRobotKK/Buffy/internal/cachemodel"
 	"github.com/RedRobotKK/Buffy/internal/ledger"
+	"github.com/RedRobotKK/Buffy/internal/policy"
 	"github.com/RedRobotKK/Buffy/internal/transcript"
 )
 
@@ -25,6 +26,11 @@ type sessionState struct {
 	// prefixChanges counts requests whose system prompt or tool definitions
 	// differed from the request before, which a transcript cannot see.
 	prefixChanges int
+	// policy is the decision pinned at the session's first request;
+	// empty until then. applied and cleared are the policy's measured side.
+	policy  policy.Decision
+	applied int
+	cleared int
 	// builder accumulates the session in the analysis's own shape, so the
 	// live what-if figures are the ones buffy replay prints for the ledger.
 	// scoreMu serializes additions and simulations for one session without
@@ -68,6 +74,7 @@ type stats struct {
 	latencySum    time.Duration
 	latencyCount  int
 	refusedByKind map[string]int
+	policyApplied int
 }
 
 func newStats() *stats {
@@ -128,7 +135,30 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 	}
 	st.last, st.lastSeen, st.model, st.prefixHash = cur, rec.Timestamp, rec.Model, rec.PrefixHash
 	st.tally.Add(cur, rec.Model)
+	if rec.Policy != "" {
+		st.applied++
+		s.policyApplied++
+	}
+	st.cleared += rec.Response.ClearedInputTokens
 	return out
+}
+
+// pinPolicy records the policy decision at a session's first request and
+// returns the pinned decision on every later one. Sessions are created
+// here when the first request has not completed yet, so the pin exists
+// before any usage does.
+func (s *stats) pinPolicy(sessionID string, first policy.Decision) policy.Decision {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st, ok := s.sessions[sessionID]
+	if !ok {
+		st = &sessionState{}
+		s.sessions[sessionID] = st
+	}
+	if st.policy == "" {
+		st.policy = first
+	}
+	return st.policy
 }
 
 // breakCause names a break from what the proxy can see. A changed prefix
@@ -223,6 +253,13 @@ type SessionSummary struct {
 	PrefixChanges int       `json:"prefix_changes"`
 	ListCostUSD   float64   `json:"list_cost_usd"`
 	LastSeen      time.Time `json:"last_seen"`
+	// Policy is the decision pinned at the session's first request when a
+	// live policy is configured. PolicyApplied counts requests that carried
+	// the parameter; ClearedInputTokens is what the provider's edits
+	// removed from prompts.
+	Policy             string `json:"policy,omitempty"`
+	PolicyApplied      int    `json:"policy_applied,omitempty"`
+	ClearedInputTokens int    `json:"cleared_input_tokens,omitempty"`
 	// WhatIf scores candidate layouts over the session so far; as-run is
 	// first. Nothing here was sent to the provider.
 	WhatIf []WhatIf `json:"what_if,omitempty"`
@@ -245,7 +282,7 @@ func (s *stats) status() Status {
 		out.Requests[k] = v
 	}
 	for id, st := range s.sessions {
-		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, WhatIf: st.whatIf})
+		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, WhatIf: st.whatIf})
 	}
 	sort.Slice(out.Sessions, func(i, j int) bool { return out.Sessions[i].LastSeen.After(out.Sessions[j].LastSeen) })
 	return out
@@ -309,6 +346,9 @@ func (s *stats) metrics() string {
 	for _, k := range sortedKeys(s.refusedByKind) {
 		line(`buffy_refused_total{guard=%q} %d`, k, s.refusedByKind[k])
 	}
+	line("# HELP buffy_policy_applied_total Requests that carried a Buffy-added request parameter.")
+	line("# TYPE buffy_policy_applied_total counter")
+	line(`buffy_policy_applied_total{policy=%q} %d`, policy.Name, s.policyApplied)
 	line("# HELP buffy_request_latency_seconds Time from request received to response finished, including the provider.")
 	line("# TYPE buffy_request_latency_seconds summary")
 	line("buffy_request_latency_seconds_sum %.6f", s.latencySum.Seconds())
