@@ -108,6 +108,7 @@ Guards, all off unless you set them (see `buffy serve -h`):
 - `--max-session-tokens` and `--max-day-tokens` refuse the *next* request once a cap is reached, never a response in flight. The refusal is a provider-shaped error the agent shows you; send `x-buffy-override: <reason>` to proceed once.
 - `--loop-warn` and `--loop-block` count how many times in a row the agent has just made the same tool call with the same input, and add a warning header or refuse the request. A repeated command earlier in the session never counts; only the current run does. `x-buffy-override` passes a block once.
 - `--breaker-failures` opens a circuit after consecutive provider failures and answers locally with `Retry-After` until the cooldown passes, so the agent stops burning retries against a provider that is already saying no.
+- `--retries` resends a request up to that many times on rate limit, overload, server error, or connection failure, with doubling jittered backoff from `--retry-base` capped at `--retry-max`, and the provider's `Retry-After` in place of the backoff when it fits under the cap. A retry can only happen before any byte of a response has reached the client, never on a client error, and never once a stream has started. The ledger records the count per request; the log names each attempt and its reason.
 
 One live policy, experimental and off by default:
 

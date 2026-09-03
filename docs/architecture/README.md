@@ -14,7 +14,7 @@ The offline analysis (`replay`, `blame`, `diff`, `redact`) is implemented; see [
    ├─ listener        loopback TCP, header-token auth
    ├─ passthrough     bytes in, bytes out; SSE preserved
    ├─ response tap    usage and output structure, parsed after forwarding
-   ├─ guards          spend caps, loop detection, circuit breaker (off by default)
+   ├─ guards          spend caps, loop detection, circuit breaker, retries (off by default)
    ├─ policy          adds one request parameter the client left unset (off by default)
    ├─ live analysis   break classification and dry-run scoring, after the response
    └─ ledger          ~/.buffy/ledger/<session>.jsonl, derived data only
