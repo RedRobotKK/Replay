@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // rawRequest is the subset of a Messages API request the summarizer reads.

@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/analysis"
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // Kind names what a suggestion asks the user to change.
@@ -365,7 +365,7 @@ func describe(a *agg, s Suggestion) (string, string) {
 			"defer-load tools the session does not use (Claude Code tool search) or trim their descriptions"
 	case KindCacheBreaks:
 		return fmt.Sprintf("cache breaks re-billed %s of prompt tokens", pct),
-			"run buffy diff on the session to see the cause of each break; most are a changed prefix or an edited turn"
+			"run replay diff on the session to see the cause of each break; most are a changed prefix or an edited turn"
 	}
 	return string(kind), ""
 }

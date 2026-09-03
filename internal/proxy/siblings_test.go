@@ -150,13 +150,13 @@ func TestSiblingsAreHeldUntilTheFirstResponseBegins(t *testing.T) {
 			t.Fatalf("status: %+v", s)
 		}
 	}
-	resp, err := http.Get(base + "/buffy/metrics")
+	resp, err := http.Get(base + "/replay/metrics")
 	if err != nil {
 		t.Fatal(err)
 	}
 	metrics, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if !strings.Contains(string(metrics), "buffy_held_total 1\n") || !strings.Contains(string(metrics), "buffy_held_milliseconds_total ") {
+	if !strings.Contains(string(metrics), "replay_held_total 1\n") || !strings.Contains(string(metrics), "replay_held_milliseconds_total ") {
 		t.Fatalf("metrics:\n%s", metrics)
 	}
 }

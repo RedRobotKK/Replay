@@ -12,4 +12,4 @@ stripe-key	sk_live_AbCdEfGhIjKlMnOpQrStUvWx
 stripe-key	rk_test_AbCdEfGhIjKlMnOpQrStUvWx
 jwt	eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
 bearer-token	Authorization: Bearer AbCdEfGhIjKlMnOpQrStUvWxYz0123456789
-url-credential	postgres://buffy:Sup3rS3cretPassw0rd@db.internal:5432/app
+url-credential	postgres://replay:Sup3rS3cretPassw0rd@db.internal:5432/app

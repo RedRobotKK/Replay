@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 func TestExpectedReadExcludesUncachedTail(t *testing.T) {

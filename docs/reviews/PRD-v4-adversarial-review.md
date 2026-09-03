@@ -1,6 +1,6 @@
-# Project Buffy PRD v4.0.0 — Adversarial Review (Red / Blue / Adopter)
+# Project Replay PRD v4.0.0 — Adversarial Review (Red / Blue / Adopter)
 
-**Reviewed document:** `projectbuffyprd.md`, version 4.0.0-PROD_FINAL, dated 2026-09-02
+**Reviewed document:** `projectreplayprd.md`, version 4.0.0-PROD_FINAL, dated 2026-09-02
 **Review date:** 2026-09-02
 **Review posture:** Senior systems engineer + security reviewer + prospective enterprise adopter. Every claim below was checked against current Anthropic API caching and history-binding semantics (see Appendix A for the facts used).
 
@@ -18,7 +18,7 @@ Blocking findings, in order of severity:
 |---|---------|------|----------|
 | 1 | "Byte-perfect padded slots" do not affect prompt caching. Caching is an exact-byte prefix match; length alignment buys nothing and the padding costs tokens. The `CompileAnchorPaddedSlot` function also silently truncates real context. | Correctness | **P0** |
 | 2 | The `/v1/chat/completions` facade cannot serve Claude Code, which speaks the Anthropic Messages API (`/v1/messages`, `count_tokens`, SSE streaming, thinking blocks, its own `cache_control`). Cursor does not route its agent through a user proxy at all. "Drop-in" is false for two of the three named clients. | Product | **P0** |
-| 3 | Rewriting conversation history mid-flight (pruning tool results, re-masking) collides with Anthropic's preserved-thinking history-binding check. On Claude Fable 5.1, organizations created on or after 2026-08-31 receive a **400** when an earlier turn changes. Buffy's users on new orgs will be enforced before Buffy is. | Correctness | **P0** |
+| 3 | Rewriting conversation history mid-flight (pruning tool results, re-masking) collides with Anthropic's preserved-thinking history-binding check. On Claude Fable 5.1, organizations created on or after 2026-08-31 receive a **400** when an earlier turn changes. Replay's users on new orgs will be enforced before Replay is. | Correctness | **P0** |
 | 4 | AST-pruning tool results changes what the agent believes is in the file. Coding agents edit by exact string match against the tool output they just read. Pruned bodies mean failed edits, retries, and hallucinated code. No mitigation is specified. | Product / Safety | **P0** |
 | 5 | The transport in the code (Unix socket + 32-byte raw pre-HTTP handshake) cannot be reached by any HTTP client. The diagram says `localhost:4000`; the code listens on a Unix socket. | Correctness | **P1** |
 | 6 | The masking vault lives only in RAM with random placeholder IDs. A daemon restart orphans every placeholder in the client's stored transcript, and non-deterministic placeholders break both caching and history binding. | Security / Data loss | **P1** |
@@ -47,10 +47,10 @@ Each item: the claim as written, why it fails, the concrete failure scenario, an
 
 - `rawContext[:targetTokens*4]` truncates real context when it exceeds the slot. This silently drops code from the prompt. In a coding agent that is a correctness bug, not a degradation.
 - `len(rawContext) / 4` is not a token count. Token density varies by a factor of two or more between prose, code, JSON, and non-Latin text. The API has a `count_tokens` endpoint for this.
-- The filler `[{"buffy_anchor_zone":"0x4F1A","fill":"....` is placed inside the prompt where the model reads it. It is not free. Runs of dots tokenize unpredictably; measure it before claiming "minimal tokens".
+- The filler `[{"replay_anchor_zone":"0x4F1A","fill":"....` is placed inside the prompt where the model reads it. It is not free. Runs of dots tokenize unpredictably; measure it before claiming "minimal tokens".
 - The provider minimum cacheable prefix is model-dependent (512 to 4096 tokens). A padded slot below that threshold silently does not cache at all.
-- Maximum 4 `cache_control` breakpoints per request. Claude Code already places its own. Buffy injecting more produces a 400 error.
-- Render order is `tools` then `system` then `messages`. Tools come first in the prefix. If the client's tool list changes (lazily loaded MCP servers), everything behind it misses regardless of what Buffy does. The PRD never mentions tools.
+- Maximum 4 `cache_control` breakpoints per request. Claude Code already places its own. Replay injecting more produces a 400 error.
+- Render order is `tools` then `system` then `messages`. Tools come first in the prefix. If the client's tool list changes (lazily loaded MCP servers), everything behind it misses regardless of what Replay does. The PRD never mentions tools.
 - L0 "appended directly to every active upstream execution turn" containing "global system state metrics" is by definition volatile. If it lands in the system prompt, it invalidates the whole cache every turn. It must go after the last breakpoint (as a mid-conversation `role: "system"` message where the model supports it, or in the user turn).
 
 **Fix.** Delete the padding concept entirely. Replace with: (a) freeze everything ahead of the first breakpoint; (b) place breakpoints at stability boundaries; (c) put per-turn volatile content after the last breakpoint; (d) verify with `usage.cache_read_input_tokens` on every request and alert when it collapses. That last item is a real product: a local "your cache broke at turn 7 because the tool list changed" diagnostic is something nobody ships today.
@@ -64,21 +64,21 @@ Each item: the claim as written, why it fails, the concrete failure scenario, an
 - Claude Code uses the Anthropic Messages API through `ANTHROPIC_BASE_URL`. It calls `/v1/messages` and `/v1/messages/count_tokens`, sends `anthropic-beta` headers, streams SSE, sets its own `cache_control` breakpoints, and round-trips `thinking` blocks with signatures. None of that maps onto chat completions. A proxy that only exposes `/v1/chat/completions` is invisible to Claude Code.
 - Cursor's agent runs through Cursor's own backend. A user-configured base URL only applies to a narrow custom-model path and disables most agent features. There is no proxy-insertion point for the product's main use case.
 - Aider works with both API shapes via base URL overrides. It is the only one of the three where "drop-in" is currently true.
-- Any translation layer between API shapes (OpenAI format in, Anthropic format out) forces Buffy to re-render the prompt. Re-rendering is precisely what destroys byte-stable prefixes.
+- Any translation layer between API shapes (OpenAI format in, Anthropic format out) forces Replay to re-render the prompt. Re-rendering is precisely what destroys byte-stable prefixes.
 
 **Fix.** Ship two transparent passthrough listeners: `/v1/messages*` (Anthropic-native, byte-preserving) and `/v1/chat/completions` (OpenAI-native, byte-preserving). Never translate between them in v1. Publish a client compatibility matrix with the exact environment variable per client and a "works / partial / unsupported" status.
 
 ### 1.3 History mutation vs. preserved thinking (Sections 2.2, 3.1)
 
-**Claim.** Buffy can prune, compact, and mask message content before forwarding, and the provider will not notice.
+**Claim.** Replay can prune, compact, and mask message content before forwarding, and the provider will not notice.
 
 **Why it fails.** On Claude Fable 5.1 (and enforced more widely on future models), each `thinking` block's signature binds the conversation prefix that produced it: the top-level system prompt, the tool set, and every message before the block. When the transcript comes back, the API checks that prefix is unchanged. Organizations created on or after 2026-08-31 get a 400 on mismatch. Older orgs record the mismatch and will be enforced on later models.
 
-Buffy's design mutates history in at least three ways:
+Replay's design mutates history in at least three ways:
 
 1. **Pruning drift.** File X is "non-target" at turn 3 and is pruned to signatures. At turn 9 the agent starts editing X, so it becomes "target" and the tool result from turn 3 is re-expanded. That is an edit to an earlier turn. Result: 400 on enforced orgs, full cache miss on everyone else.
 2. **Non-deterministic placeholders.** `[SECURE_ASSET_4F1E]` looks random. If the same secret gets a different tag on the next request, every earlier message containing it changes.
-3. **Any compaction.** Buffy-side summarization of earlier turns is a middle-of-history edit.
+3. **Any compaction.** Replay-side summarization of earlier turns is a middle-of-history edit.
 
 **Fix.**
 
@@ -91,16 +91,16 @@ Buffy's design mutates history in at least three ways:
 
 **Claim.** Stripping function bodies from "non-target" source frames reduces tokens without harming the agent.
 
-**Why it fails.** Coding agents edit files by exact string replacement against content they just read via a tool. If Buffy shows the model a skeleton and the model then issues an edit, the anchor string does not exist in the real file. The edit fails, the agent re-reads (full cost again, now uncached), and in the worst case it "fixes" the file by rewriting it from the skeleton, deleting the real bodies. The PRD's SQLite "source map" only helps Buffy, not the agent, because the agent's edit tool talks to the real filesystem, not to Buffy.
+**Why it fails.** Coding agents edit files by exact string replacement against content they just read via a tool. If Replay shows the model a skeleton and the model then issues an edit, the anchor string does not exist in the real file. The edit fails, the agent re-reads (full cost again, now uncached), and in the worst case it "fixes" the file by rewriting it from the skeleton, deleting the real bodies. The PRD's SQLite "source map" only helps Replay, not the agent, because the agent's edit tool talks to the real filesystem, not to Replay.
 
 There is also no definition of "target" vs. "non-target". That classifier is the entire feature and is absent.
 
-**Fix.** Do not prune tool results in v1. When it is introduced, make it opt-in per glob, never touch the file the agent last read or edited, and gate release on an A/B benchmark: task success rate, edit-failure count, cost, and wall-clock on a fixed set of real agent tasks with Buffy on vs. off. A `≥4.0x` reduction target as an SLO incentivizes the failure mode; the right SLO is "zero regression in task success at N% cost reduction".
+**Fix.** Do not prune tool results in v1. When it is introduced, make it opt-in per glob, never touch the file the agent last read or edited, and gate release on an A/B benchmark: task success rate, edit-failure count, cost, and wall-clock on a fixed set of real agent tasks with Replay on vs. off. A `≥4.0x` reduction target as an SLO incentivizes the failure mode; the right SLO is "zero regression in task success at N% cost reduction".
 
 ### 1.5 Transport and authentication (Sections 2.1, 2.4, 4.1)
 
 - Diagram: `localhost:4000`. Code: Unix domain socket. Pick one. HTTP clients configured with a base URL need TCP.
-- `AuthenticateClient` reads 32 raw bytes before any HTTP. No IDE can prepend a raw token to an HTTP connection. Use a bearer header or an `x-buffy-token` header instead.
+- `AuthenticateClient` reads 32 raw bytes before any HTTP. No IDE can prepend a raw token to an HTTP connection. Use a bearer header or an `x-replay-token` header instead.
 - Linux abstract-namespace sockets have **no filesystem permission checks**. Any local UID can connect. The PRD calls this "isolated within memory space"; it is less isolated than a `0700` directory socket. The 32-byte token becomes the only guard, which is fine only if it is actually enforced on every path (it is not; `InterceptStream` never calls `AuthenticateClient`).
 - Abstract sockets are scoped to the network namespace. A Claude Code session inside a devcontainer or Docker cannot reach the host daemon. That is a large fraction of the target audience.
 - The PRD text says the abstract prefix is a space character; the code uses `\x00`. Editorial, but it signals the text and code were not reviewed together.
@@ -113,9 +113,9 @@ There is also no definition of "target" vs. "non-target". That classifier is the
 - **"Encrypted in host RAM" is theater against the stated threat.** The AES key is in the same process memory as the ciphertext. A memory dump gets both. State the real threat model: the provider must not see secrets; local processes running as the same user are trusted.
 - **"Neutralizing cryptographic timing side-channels" via an async queue** is not a thing. Go's AES-GCM is constant-time on supported hardware. Delete the claim; it invites ridicule from security reviewers.
 - **Regex coverage is two patterns** (`sk-`, `ghp_`) while the prose promises credentials, JWTs, and PII. Either scope the claim down to "API-key patterns from a maintained list" or specify the detection engine, its false-positive budget, and how users add rules.
-- **Rehydration must cover `tool_use.input` JSON and streamed SSE deltas.** The model writes the secret into a file via a tool call; the placeholder arrives inside a JSON string, possibly split across chunks. Buffy must buffer to placeholder boundaries and rehydrate with JSON escaping awareness. None of this is specified.
-- **Secrets inside thinking blocks.** If a placeholder appears in a thinking block and Buffy rehydrates it, the client stores the modified block and sends it back. The signature no longer matches. Thinking blocks must pass through untouched in both directions.
-- **The proxy holds the crown jewels**: the provider API key, the session token, the vault key, and plaintext of every masked secret. A compromised Buffy is strictly worse than no Buffy. The PRD needs a hardening section (memory locking, no swap, no crash dumps, secure delete, audit log).
+- **Rehydration must cover `tool_use.input` JSON and streamed SSE deltas.** The model writes the secret into a file via a tool call; the placeholder arrives inside a JSON string, possibly split across chunks. Replay must buffer to placeholder boundaries and rehydrate with JSON escaping awareness. None of this is specified.
+- **Secrets inside thinking blocks.** If a placeholder appears in a thinking block and Replay rehydrates it, the client stores the modified block and sends it back. The signature no longer matches. Thinking blocks must pass through untouched in both directions.
+- **The proxy holds the crown jewels**: the provider API key, the session token, the vault key, and plaintext of every masked secret. A compromised Replay is strictly worse than no Replay. The PRD needs a hardening section (memory locking, no swap, no crash dumps, secure delete, audit log).
 
 ### 1.7 Go/Rust IPC split (Sections 2.2, 4.2)
 
@@ -129,7 +129,7 @@ There is also no definition of "target" vs. "non-target". That classifier is the
 
 ### 1.8 Virtual filesystem, vectors, mesh bus (Sections 2.3, 2.4)
 
-- "Accessible to the LLM via standard system commands": a shell cannot open `buffy://`. The only mechanisms are a FUSE mount (macFUSE kernel extension on macOS, a non-starter for enterprise laptops) or MCP resources. The MCP path is correct and should be the only one.
+- "Accessible to the LLM via standard system commands": a shell cannot open `replay://`. The only mechanisms are a FUSE mount (macFUSE kernel extension on macOS, a non-starter for enterprise laptops) or MCP resources. The MCP path is correct and should be the only one.
 - "AAK Shorthand Dialect" is undefined. A format the model must read and that affects cache bytes cannot be a placeholder name.
 - LanceDB is Rust/Python-native; Go bindings are immature. More importantly, **which embedding model?** A local one adds a runtime dependency (ONNX or similar) and hundreds of MB. A cloud one sends the very code the privacy shield is masking to a third party. The PRD is silent. This is a privacy-claim contradiction until answered.
 - The A2A/MCP "mesh bus", "AgMsg", and "microsecond-latency" claims have no requirements behind them. Nothing in the vision statement needs multi-agent messaging.
@@ -138,7 +138,7 @@ There is also no definition of "target" vs. "non-target". That classifier is the
 ### 1.9 Metrics (Section 3.2)
 
 - OpenTelemetry and Prometheus are different systems; pick the export path.
-- `buffy_cache_alignment_coefficient` cannot be computed from Buffy's side of the wire. Define it as `cache_read_input_tokens / (input_tokens + cache_creation_input_tokens + cache_read_input_tokens)` from the provider's `usage` object, per request and per session.
+- `replay_cache_alignment_coefficient` cannot be computed from Replay's side of the wire. Define it as `cache_read_input_tokens / (input_tokens + cache_creation_input_tokens + cache_read_input_tokens)` from the provider's `usage` object, per request and per session.
 - No baseline exists for the "90%" or "4.0x" numbers. Targets without a measurement method are marketing.
 - Missing operational metrics: added latency p50/p99, provider error rate by status, 429 retry count, masking false-positive count, edit-failure delta, daemon memory, vault size.
 
@@ -157,7 +157,7 @@ The code is labeled "Production-Grade Implementation Blueprints". It would not p
 ### Go (`core`)
 
 - Every error from `MkdirAll`, `WriteFile`, `Chmod`, `Remove`, `ReadFull(cryptoKey)`, `aes.NewCipher`, `cipher.NewGCM` is discarded. A failed vault write leaves the daemon with a token no client can read. A failed key read leaves an all-zero AES key.
-- `NewHardenedPlatformGate` writes the session token to the real `$HOME/.buffy/.session_vault` and, on macOS, deletes and rebinds the real socket path. Running the test suite overwrites the live daemon's credentials and socket. Tests must use a temp directory and injected paths.
+- `NewHardenedPlatformGate` writes the session token to the real `$HOME/.replay/.session_vault` and, on macOS, deletes and rebinds the real socket path. Running the test suite overwrites the live daemon's credentials and socket. Tests must use a temp directory and injected paths.
 - `AuthenticateClient` is never invoked by `InterceptStream`. The gate is unauthenticated by default.
 - `InterceptStream` spins at 5 ms intervals when `ActiveMemory >= MaxMemoryCap`, but nothing ever increments `ActiveMemory`.
 - `scrubRegex` is created and never used. No masking code exists.
@@ -186,14 +186,14 @@ Steelmanning the document: there is a real product here, and it is narrower and 
 
 ### Defensible theses
 
-1. **Developers cannot see why their cache breaks.** Cache misses are silent, and the bill is the only symptom. A local proxy that diffs adjacent request payloads, detects the first divergent byte inside the overlap, and names the cause (tool list changed, timestamp in system prompt, non-sorted JSON, breakpoint pushed out of the 20-position lookback) is genuinely valuable and does not exist as a desktop tool. The provider's cache-diagnostics beta helps but requires code changes in the client; Buffy could do it for any client.
+1. **Developers cannot see why their cache breaks.** Cache misses are silent, and the bill is the only symptom. A local proxy that diffs adjacent request payloads, detects the first divergent byte inside the overlap, and names the cause (tool list changed, timestamp in system prompt, non-sorted JSON, breakpoint pushed out of the 20-position lookback) is genuinely valuable and does not exist as a desktop tool. The provider's cache-diagnostics beta helps but requires code changes in the client; Replay could do it for any client.
 2. **Local secret masking before egress** is a real enterprise requirement, provided it is deterministic, persistent, and honest about its threat model.
 3. **Spend circuit breakers per session and per day**, denominated in dollars from real `usage` fields, protect against runaway loops. Fail-closed on the next request, never mid-stream.
 4. **Per-session cost and token observability** with a local dashboard. Most developers have no idea what a single Claude Code task costs.
 
 ### Design principles that make those four safe
 
-- **Byte transparency by default.** Buffy forwards `/v1/messages` and `/v1/chat/completions` exactly as received unless a feature is explicitly enabled. Off-switch is one environment variable. Every transformation is a pure function of the input, deterministic across turns, and logged.
+- **Byte transparency by default.** Replay forwards `/v1/messages` and `/v1/chat/completions` exactly as received unless a feature is explicitly enabled. Off-switch is one environment variable. Every transformation is a pure function of the input, deterministic across turns, and logged.
 - **Never touch thinking blocks, signatures, or `cache_control` markers.**
 - **Never rewrite an earlier turn differently than it was rewritten before.** Enforce this with a per-session render cache keyed by message hash, and an integration test that runs the provider's prefix-binding check in error mode.
 - **Persist what the client depends on.** Placeholders are HMAC-derived; the vault survives restarts; the key lives in the OS keychain.
@@ -221,7 +221,7 @@ Written as the questions a platform-engineering lead at a 200-person company ask
 | How do I turn it off? | Not stated. | One env var; uninstall leaves nothing behind. |
 | Is it open source? | Claims yes; license says no. | "Source-available under BSL 1.1; Apache 2.0 on YYYY-MM-DD; Additional Use Grant: ..." |
 | Who supports it, what is the release cadence? | Not stated. | Owners, versioning policy, security-disclosure process. |
-| Why not just use the provider's built-in compaction, context editing, and caching? | Not addressed. | A clear comparison. The provider's server-side compaction and context editing are free and do not trip the history check; Buffy's value is what they cannot do (local masking, spend caps, cross-client diagnostics). |
+| Why not just use the provider's built-in compaction, context editing, and caching? | Not addressed. | A clear comparison. The provider's server-side compaction and context editing are free and do not trip the history check; Replay's value is what they cannot do (local masking, spend caps, cross-client diagnostics). |
 | Why not LiteLLM or another proxy? | Not addressed. | Competitive comparison focused on byte transparency, cache diagnostics, and local secret handling. |
 | Show me the savings. | "Up to 90%" with no method. | A reproducible benchmark script and a dashboard showing `cache_read_input_tokens` and dollars per session, before and after. |
 
@@ -272,7 +272,7 @@ What a PRD needs for a team to build without guessing, and whether this one has 
 
 ### v0.3 — Opt-in context tools
 
-- MCP server exposing session history and summaries as resources (this is the honest version of `buffy://`).
+- MCP server exposing session history and summaries as resources (this is the honest version of `replay://`).
 - Pruning as an opt-in per-glob feature, never on the last-read or last-edited file, gated on an A/B benchmark.
 
 **Deferred indefinitely until a user asks:** vector store, A2A mesh bus, Rust sidecar, padded slots (never).

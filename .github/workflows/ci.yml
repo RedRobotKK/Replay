@@ -49,7 +49,7 @@ jobs:
   # library is invisible to it. That is how a shutdown bug reached main:
   # only the release pipeline, which runs on the toolchain GoReleaser
   # requires, exposed it. This job is the guard. It blocks on purpose --
-  # a standard-library change that breaks Buffy is worth knowing about
+  # a standard-library change that breaks Replay is worth knowing about
   # before a release rather than after; make it continue-on-error if a Go
   # release ever holds up unrelated work.
   go-latest:

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/RedRobotKK/Buffy/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
 )
 
 // Staleness detection (ST-1). Calibration is judged per model with the

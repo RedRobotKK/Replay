@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/analysis"
-	"github.com/RedRobotKK/Buffy/internal/proxy"
+	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/proxy"
 )
 
 // doctorTimeout bounds the probe of a running proxy.
@@ -23,7 +23,7 @@ const (
 	envBaseURL = "ANTHROPIC_BASE_URL"
 )
 
-// runDoctor reports what Buffy can see on this machine and what to do
+// runDoctor reports what Replay can see on this machine and what to do
 // next. It reads nothing but directory listings and a health endpoint.
 func runDoctor(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
@@ -41,7 +41,7 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	p.Printf("buffy doctor\n\n")
+	p.Printf("replay doctor\n\n")
 
 	// Transcripts.
 	projects := filepath.Join(home, ".claude", "projects")
@@ -51,20 +51,20 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 		p.Printf("              run a Claude Code session first, or point replay at another directory\n")
 	} else {
 		p.Printf("transcripts   %d sessions across %d projects under %s\n", files, dirs, projects)
-		p.Printf("              next: buffy replay %s\n", filepath.Join(projects, "<project>"))
+		p.Printf("              next: replay replay %s\n", filepath.Join(projects, "<project>"))
 	}
 
 	// Proxy configuration.
 	base := os.Getenv(envBaseURL)
 	if base == "" {
 		p.Printf("proxy         %s is not set in this shell; the agent talks to the provider directly\n", envBaseURL)
-		p.Printf("              next: buffy serve, then export %s=http://%s\n", envBaseURL, defaultListen)
+		p.Printf("              next: replay serve, then export %s=http://%s\n", envBaseURL, defaultListen)
 	} else {
 		p.Printf("proxy         %s=%s\n", envBaseURL, base)
 		if ok, detail := probeProxy(base); ok {
-			p.Printf("              buffy is answering there (%s)\n", detail)
+			p.Printf("              replay is answering there (%s)\n", detail)
 		} else {
-			p.Printf("              nothing answered at %s%s (%s); the agent will fail until buffy serve runs or the variable is unset\n", strings.TrimRight(base, "/"), proxy.HealthPath, detail)
+			p.Printf("              nothing answered at %s%s (%s); the agent will fail until replay serve runs or the variable is unset\n", strings.TrimRight(base, "/"), proxy.HealthPath, detail)
 		}
 	}
 	if os.Getenv(envDisabled) != "" {
@@ -77,7 +77,7 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 		p.Printf("ledger        empty (%s)\n", ledgerDir)
 	} else {
 		p.Printf("ledger        %d sessions recorded under %s\n", n, ledgerDir)
-		p.Printf("              next: buffy replay %s  (measured tier)\n", ledgerDir)
+		p.Printf("              next: replay replay %s  (measured tier)\n", ledgerDir)
 	}
 	return p.Err()
 }
@@ -124,5 +124,5 @@ func probeProxy(base string) (bool, string) {
 	if resp.StatusCode == http.StatusOK && strings.TrimSpace(string(body)) == "ok" {
 		return true, "healthy"
 	}
-	return false, fmt.Sprintf("status %d; something other than buffy is listening", resp.StatusCode)
+	return false, fmt.Sprintf("status %d; something other than replay is listening", resp.StatusCode)
 }

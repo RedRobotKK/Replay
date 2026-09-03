@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // File permissions: the ledger is the user's own data and nobody else's.

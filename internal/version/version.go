@@ -11,7 +11,7 @@ var (
 	Date = "unknown"
 )
 
-// String renders the version line shown by `buffy version`.
+// String renders the version line shown by `replay version`.
 func String() string {
 	return Version + " (" + Commit + ", built " + Date + ")"
 }

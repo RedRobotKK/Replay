@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/RedRobotKK/Buffy/internal/analysis"
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // Session types are classified from signals a proxy has at a session's

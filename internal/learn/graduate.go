@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // Graduation (DR-2): a policy the proxy tried live has to show, on

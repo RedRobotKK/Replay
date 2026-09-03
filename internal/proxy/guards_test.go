@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/ledger"
 )
 
 func TestSpendGuardCapsSessionAndDay(t *testing.T) {

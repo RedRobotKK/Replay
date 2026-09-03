@@ -9,12 +9,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/advisor"
-	"github.com/RedRobotKK/Buffy/internal/analysis"
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/advisor"
+	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
-// adviceFileName is where advise records its suggestions under ~/.buffy;
+// adviceFileName is where advise records its suggestions under ~/.replay;
 // adviceFileMode keeps it owner-only like the ledger.
 const (
 	adviceFileName = "advice.json"
@@ -34,7 +34,7 @@ type adviceFile struct {
 func runAdvise(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("advise", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	out := fs.String("out", "", "advice file to write (default ~/.buffy/advice.json; \"-\" for none)")
+	out := fs.String("out", "", "advice file to write (default ~/.replay/advice.json; \"-\" for none)")
 	if err := fs.Parse(args); err != nil {
 		return errUsage
 	}
@@ -91,7 +91,7 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("find home directory for the advice file: %w", err)
 		}
-		path = filepath.Join(home, ".buffy", adviceFileName)
+		path = filepath.Join(home, ".replay", adviceFileName)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create advice directory: %w", err)
