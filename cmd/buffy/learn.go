@@ -11,6 +11,7 @@ import (
 
 	"github.com/RedRobotKK/Buffy/internal/analysis"
 	"github.com/RedRobotKK/Buffy/internal/learn"
+	"github.com/RedRobotKK/Buffy/internal/ledger"
 	"github.com/RedRobotKK/Buffy/internal/transcript"
 )
 
@@ -42,9 +43,13 @@ func runLearn(args []string, stdout, stderr io.Writer) error {
 	candidates := learn.Catalog()
 	var scores []learn.SessionScore
 	// The visitor never fails, so the walk cannot either.
-	_ = forEachSession(files, func(_ string, session *transcript.Session, _ *analysis.LaneReport, err error) error {
+	stores := map[string]*ledger.Store{}
+	_ = forEachSession(files, func(path string, session *transcript.Session, _ *analysis.LaneReport, err error) error {
 		if err != nil {
 			return nil
+		}
+		if session.Source == transcript.SourceLedger {
+			markControl(stores, filepath.Dir(path), session)
 		}
 		if sc, ok := learn.Score(session, candidates); ok {
 			scores = append(scores, sc)
@@ -69,6 +74,9 @@ func runLearn(args []string, stdout, stderr io.Writer) error {
 		p.Printf("Selected: none (%s)\n", res.Reason)
 	} else {
 		p.Printf("Selected: %s\n  live: %s\n", res.Selected.Name, res.Selected.Live)
+	}
+	if tr := res.Trial; tr != nil {
+		p.Printf("\nLive trial of %s: %d treated, %d control sessions; cost per new token %.2f (%.2f..%.2f) vs %.2f (%.2f..%.2f); realized saving %.0f%%, predicted %.0f%%\n  %s\n", tr.Policy, tr.Treated, tr.Control, tr.TreatedCost, tr.TreatedInterval[0], tr.TreatedInterval[1], tr.ControlCost, tr.ControlInterval[0], tr.ControlInterval[1], tr.Realized*100, tr.Predicted*100, tr.Reason)
 	}
 	if len(res.Types) > 0 {
 		p.Printf("\nBy session type (model family and first-prompt size, both known at a session's first request):\n")
@@ -99,6 +107,24 @@ func runLearn(args []string, stdout, stderr io.Writer) error {
 	}
 	_, err = fmt.Fprintf(stdout, "Policy file: %s\n", path)
 	return err
+}
+
+// markControl consults a ledger directory's pins for the session's trial
+// arm. A directory that cannot be opened contributes no arm; the rest of
+// learning does not depend on it.
+func markControl(stores map[string]*ledger.Store, dir string, session *transcript.Session) {
+	store, ok := stores[dir]
+	if !ok {
+		var err error
+		store, err = ledger.Open(dir)
+		if err != nil {
+			store = nil
+		}
+		stores[dir] = store
+	}
+	if store != nil {
+		store.MarkControl(session)
+	}
 }
 
 // writePolicyFile renders the result as indented JSON, owner-only.

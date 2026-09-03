@@ -337,3 +337,41 @@ func TestLedgerCallKeysAreKeyed(t *testing.T) {
 		t.Fatal("the key must depend on the ledger secret")
 	}
 }
+
+func TestLedgerSessionsCarryTheirTrialArm(t *testing.T) {
+	dir := t.TempDir()
+	store, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum, err := SummarizeRequest([]byte(sampleRequest), store.Labeler())
+	if err != nil {
+		t.Fatal(err)
+	}
+	usage := &Usage{Input: 20, CacheCreation: 500, CacheRead: 1000, Output: 40}
+	at := time.Date(2026, 9, 3, 5, 0, 0, 0, time.UTC)
+	for _, id := range []string{"treated-1", "control-1", "plain-1"} {
+		rec := Record{Timestamp: at, SessionID: id, Path: "/v1/messages", RequestSummary: RequestSummary{Model: "claude-opus-5", Prompt: sum.Prompt}, Response: Response{Usage: usage}}
+		if id == "treated-1" {
+			rec.Policy = "context-edit"
+		}
+		if err := store.Append(rec); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.SetPin(Pin{SessionID: "control-1", Decision: "control", Trial: TrialControl, At: at}); err != nil {
+		t.Fatal(err)
+	}
+	arms := map[string]string{}
+	for _, id := range []string{"treated-1", "control-1", "plain-1"} {
+		s, err := ReadFile(filepath.Join(dir, id+".jsonl"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		store.MarkControl(s)
+		arms[id] = s.Trial
+	}
+	if arms["treated-1"] != TrialTreated || arms["control-1"] != TrialControl || arms["plain-1"] != "" {
+		t.Fatalf("arms: %v", arms)
+	}
+}
