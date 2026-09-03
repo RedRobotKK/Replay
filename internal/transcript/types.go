@@ -133,6 +133,17 @@ type Request struct {
 	// on this request's response, known only from the ledger.
 	AppliedEdits  int
 	ClearedTokens int
+	// Tools are the tool definitions the request carried, by name and
+	// size, known only from the ledger. Transcripts do not show them.
+	Tools []ToolDef
+}
+
+// ToolDef is one tool definition's name and decoded size. Names are the
+// same identifiers tool calls already carry; descriptions and schemas are
+// never kept.
+type ToolDef struct {
+	Name  string `json:"name"`
+	Bytes int    `json:"bytes"`
 }
 
 // Lane is one linear sequence of requests sharing a conversation root.
