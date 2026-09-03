@@ -44,6 +44,9 @@ func TestSummarizeRequest(t *testing.T) {
 	if p.SystemBytes != len("You are terse.") || p.ToolCount != 1 || p.ToolBytes == 0 {
 		t.Fatalf("prefix sizes wrong: %+v", p)
 	}
+	if len(p.Tools) != 1 || p.Tools[0].Name == "" || p.Tools[0].Bytes != p.ToolBytes {
+		t.Fatalf("tool definitions must be recorded by name and size only: %+v", p.Tools)
+	}
 	if p.CacheControlCount != 2 {
 		t.Fatalf("cache markers = %d, want 2", p.CacheControlCount)
 	}

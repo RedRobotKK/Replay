@@ -123,6 +123,14 @@ buffy learn ~/.claude/projects/* ~/.buffy/ledger
 
 Re-scores the policy catalog (both cache TTLs and context editing at four triggers) over every session with the replay simulator, then selects one with rules built for a corpus of tens of sessions: a minimum number of sessions that actually carry evidence, a margin above noise, a repeat on held-out sessions chosen by a stable hash, and ties to the simpler policy judged on the paired per-session difference (ADR-0006). The verdicts and the selection go to `~/.buffy/policy.json` in a documented format ([`docs/architecture/policy-file.md`](docs/architecture/policy-file.md)). On a small corpus the honest answer is "none", and that is what it says. Reads files only; never the network.
 
+### Get told what to change
+
+```sh
+buffy advise ~/.claude/projects/* ~/.buffy/ledger
+```
+
+Turns the largest token sources across every session into suggestions with a predicted saving: tool inputs that dominate prompts (long heredocs), tool results that should be truncated, files read again and again, first-turn instruction files that every request re-carries, tool definitions a session never calls (visible in the ledger), and cache breaks to look at with `buffy diff`. Each prediction assumes the target is halved and is stated as a share of prompt tokens first, the scale-free metric, then as tokens across the corpus. Suggestions are tracked to closure: pending until the newest sessions show the target shrinking, then applied, then verified or not verified against the prediction. Written to `~/.buffy/advice.json`.
+
 One client caveat from the gateway docs: with a non-first-party base URL, Claude Code disables MCP tool search unless `ENABLE_TOOL_SEARCH=true` is set. Buffy forwards `tool_reference` blocks unchanged, so setting it is safe. Details: [`docs/architecture/proxy-protocol.md`](docs/architecture/proxy-protocol.md).
 
 ## Install

@@ -21,9 +21,9 @@ type BlameEntry struct {
 	Errors int
 }
 
-// rebillLabel names tokens re-written because a cache break forced the
+// RebillLabel names tokens re-written because a cache break forced the
 // provider to process history again.
-const rebillLabel = "cache breaks: history re-billed (see buffy diff)"
+const RebillLabel = "cache breaks: history re-billed (see buffy diff)"
 
 // labelAcc accumulates attribution for one label.
 type labelAcc struct {
@@ -72,10 +72,10 @@ func Blame(cal *Calibration, fit TokenFit) []BlameEntry {
 	visible := first.Usage.PromptTotal() - fit.UnseenPrefix.Total() - fit.Injected.Total()
 	shareByBytes(firstBlocks, Estimated(visible), total, get)
 	if fit.UnseenPrefix.Total() > 0 {
-		get(unseenPrefixLabel).add(fit.UnseenPrefix, total, false)
+		get(UnseenPrefixLabel).add(fit.UnseenPrefix, total, false)
 	}
 	if fit.Injected.Total() > 0 {
-		get(injectedLabel).add(fit.Injected, total, false)
+		get(InjectedLabel).add(fit.Injected, total, false)
 	}
 
 	for _, t := range cal.Turns {
@@ -88,7 +88,7 @@ func Blame(cal *Calibration, fit TokenFit) []BlameEntry {
 			// A break re-bills history that is already attributed to its
 			// own labels; it is reported as its own line so the table
 			// names the break, not the content that happened to follow it.
-			get(rebillLabel).add(Measured(tc.rebillTokens), 1, false)
+			get(RebillLabel).add(Measured(tc.rebillTokens), 1, false)
 		}
 		attributeOutput(t.Previous, carried, get)
 		shareByBytes(tc.userBlocks, Estimated(tc.userTokens), carried, get)
