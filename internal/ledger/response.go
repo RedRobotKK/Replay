@@ -47,10 +47,14 @@ func (c *contextManagement) totals() (edits, cleared int) {
 	return len(c.AppliedEdits), cleared
 }
 
+// maxPendingLine bounds one unfinished event line the stream parser holds.
+const maxPendingLine = 1 << 20
+
 // StreamParser accumulates the structure and usage of a server-sent event
 // stream as bytes pass through. It is fed the response bytes in whatever
 // chunks arrive and never blocks the stream.
 type StreamParser struct {
+	dropped bool
 	pending bytes.Buffer
 	blocks  []Block
 	usage   transcript.WireUsage
@@ -62,7 +66,17 @@ type StreamParser struct {
 // Write feeds response bytes. It never returns an error: the stream must
 // reach the client whatever the parser makes of it.
 func (s *StreamParser) Write(p []byte) (int, error) {
+	if s.dropped {
+		return len(p), nil
+	}
 	s.pending.Write(p)
+	if s.pending.Len() > maxPendingLine {
+		// A stream with no line breaks is not one the parser understands;
+		// stop keeping it rather than grow without bound.
+		s.dropped = true
+		s.pending.Reset()
+		return len(p), nil
+	}
 	for {
 		i := bytes.IndexByte(s.pending.Bytes(), '\n')
 		if i < 0 {

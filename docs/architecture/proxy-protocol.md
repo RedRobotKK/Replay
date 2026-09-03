@@ -26,7 +26,7 @@ What the client sends through a local gateway and what the proxy must preserve. 
 - `x-buffy-token`, when the listener token is enabled, is Buffy's own secret and is removed before forwarding.
 - `x-buffy-override` is read by the guards and forwarded unchanged; it is harmless to the provider.
 - `x-buffy-warning` is the only header Buffy adds to a response, and only when a guard warns without blocking.
-- `X-Forwarded-For` is not added.
+- `X-Forwarded-For` is not added. A client's own `Forwarded` and `X-Forwarded-*` headers, which the reverse proxy's rewrite would drop, are put back and reach the provider unchanged.
 
 ## Body rules
 

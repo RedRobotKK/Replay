@@ -99,41 +99,41 @@ func TestBreakerOpensAndProbes(t *testing.T) {
 	b := NewBreaker(BreakerSettings{Failures: 2, Cooldown: time.Minute})
 	now := time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC)
 	b.now = func() time.Time { return now }
-	if ok, _ := b.Allow(); !ok {
+	if ok, _, _ := b.Allow(); !ok {
 		t.Fatal("closed breaker must allow")
 	}
 	b.Observe(true)
-	if ok, _ := b.Allow(); !ok {
+	if ok, _, _ := b.Allow(); !ok {
 		t.Fatal("one failure must not open")
 	}
 	b.Observe(true)
-	if ok, wait := b.Allow(); ok || wait <= 0 {
+	if ok, _, wait := b.Allow(); ok || wait <= 0 {
 		t.Fatalf("two failures must open and refuse with a wait: ok=%v wait=%s", ok, wait)
 	}
 	now = now.Add(time.Minute)
-	if ok, _ := b.Allow(); !ok {
-		t.Fatal("after cooldown one probe must pass")
+	if ok, probe, _ := b.Allow(); !ok || !probe {
+		t.Fatal("after cooldown one probe must pass and be marked as the probe")
 	}
-	if ok, _ := b.Allow(); ok {
+	if ok, _, _ := b.Allow(); ok {
 		t.Fatal("only one probe may pass while half-open")
 	}
 	// A probe that never reached an outcome is given back.
 	b.Release()
-	if ok, _ := b.Allow(); !ok {
+	if ok, _, _ := b.Allow(); !ok {
 		t.Fatal("after Release the next request must be allowed to probe")
 	}
 	b.Observe(false)
-	if ok, _ := b.Allow(); !ok {
+	if ok, _, _ := b.Allow(); !ok {
 		t.Fatal("a successful probe must close the breaker")
 	}
-	if ok, _ := b.Allow(); !ok {
+	if ok, _, _ := b.Allow(); !ok {
 		t.Fatal("a closed breaker allows every request, not one probe")
 	}
 }
 
 func TestBreakerDisabled(t *testing.T) {
 	var b *Breaker
-	if ok, _ := b.Allow(); !ok {
+	if ok, _, _ := b.Allow(); !ok {
 		t.Fatal("nil breaker must allow everything")
 	}
 	b.Observe(true)
