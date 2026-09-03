@@ -37,10 +37,12 @@ var safeName = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
 // Store appends records to one file per session.
 type Store struct {
-	dir     string
-	labeler *Labeler
-	mu      sync.Mutex
-	pins    map[string]Pin
+	dir      string
+	labeler  *Labeler
+	mu       sync.Mutex
+	pins     map[string]Pin
+	revert   Revert
+	reverted bool
 }
 
 // Open creates the ledger directory and its label key if needed.
@@ -56,7 +58,8 @@ func Open(dir string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Store{dir: dir, labeler: NewLabeler(key), pins: pins}, nil
+	revert, reverted := loadRevert(filepath.Join(dir, revertFile))
+	return &Store{dir: dir, labeler: NewLabeler(key), pins: pins, revert: revert, reverted: reverted}, nil
 }
 
 func loadOrCreateKey(path string) ([]byte, error) {
@@ -297,6 +300,65 @@ type Pin struct {
 	Keep     int       `json:"keep,omitempty"`
 	Decision string    `json:"decision"`
 	At       time.Time `json:"at"`
+	// Trial says which arm of a live trial the session is in: "treated"
+	// or "control"; empty when no trial was running.
+	Trial string `json:"trial,omitempty"`
+}
+
+// revertFile holds the one revert record, if a trial was reverted.
+const revertFile = ".revert"
+
+// Revert records that a live trial tripped its guardrail: from then on
+// new sessions run without the policy until a newer learning result
+// replaces it (LN-5).
+type Revert struct {
+	Policy  string `json:"policy"`
+	Trigger int    `json:"trigger,omitempty"`
+	Keep    int    `json:"keep,omitempty"`
+	Reason  string `json:"reason"`
+	// Breached counts the sessions whose guardrail tripped.
+	Breached int       `json:"breached_sessions"`
+	At       time.Time `json:"at"`
+	// PolicyGenerated is the generation time of the policy file the
+	// reverted policy came from; a newer file lifts the revert.
+	PolicyGenerated time.Time `json:"policy_generated"`
+}
+
+// Revert returns the persisted revert, if any.
+func (s *Store) Revert() (Revert, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.revert, s.reverted
+}
+
+// SetRevert persists a revert, replacing any earlier one.
+func (s *Store) SetRevert(r Revert) error {
+	data, err := json.Marshal(r)
+	if err != nil {
+		return fmt.Errorf("encode revert: %w", err)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := os.WriteFile(filepath.Join(s.dir, revertFile), append(data, '\n'), filePerm); err != nil {
+		return fmt.Errorf("write revert: %w", err)
+	}
+	s.revert, s.reverted = r, true
+	return nil
+}
+
+// loadRevert reads the revert record; a missing or unreadable one is no
+// revert, since a record the proxy cannot read must not silence a policy
+// it cannot name.
+func loadRevert(path string) (Revert, bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Revert{}, false
+	}
+	var r Revert
+	if err := json.Unmarshal(data, &r); err != nil || r.Policy == "" {
+		return Revert{}, false
+	}
+	return r, true
 }
 
 // Pin returns the persisted decision for a session, if one was made.
