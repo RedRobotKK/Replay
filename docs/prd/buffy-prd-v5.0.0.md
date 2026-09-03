@@ -167,7 +167,7 @@ Each requirement has an identifier and an acceptance test. A requirement without
 | ID | Requirement | Acceptance |
 |----|-------------|------------|
 | LG-1 | Ingest Claude Code transcripts and proxy captures into one schema: per turn, the block structure, content hashes, byte lengths, labels (file path, tool name), timestamps, and the provider usage object. | Ingest 20 real sessions; every usage field round-trips. |
-| LG-2 | Store derived data only by default: hashes, lengths, labels, usage. No message bodies. | Grep the ledger for a known string from a session; zero hits. |
+| LG-2 | Store derived data only by default: hashes, lengths, labels, usage. No message bodies, and no tool arguments in labels: tool names only, with file paths replaced by a keyed hash that keeps the extension. | Grep the ledger for a known string from a session, including one planted inside a command argument; zero hits. |
 | LG-3 | Optional raw mode stores bodies encrypted at rest with a key from the OS keychain, with a retention period and a `buffy purge` command. | Purge removes all raw data; encrypted files are unreadable without the keychain. |
 | LG-4 | Ledger files are owner-only permissions under the user's home directory. | Permission check in the test suite. |
 
@@ -276,9 +276,9 @@ Initial catalog for v0.3: `freeze-system-prompt` (diagnostic only, reports when 
 
 | ID | Requirement | Acceptance |
 |----|-------------|------------|
-| SP-1 | Token and dollar caps per session and per day computed from provider usage fields; fail closed before the next request; never mid-stream; user override with a logged reason. | Cap test with streaming in progress. |
-| SP-2 | Loop detection: the same tool call with the same input N times triggers a warning to the client and, above a second threshold, a block. | Fixture. |
-| SP-3 | Provider circuit breaker: sustained rate-limit or overload responses open the breaker for a cooling period so the agent stops burning retries. | Fault-injection test. |
+| SP-1 | Token and dollar caps per session and per day computed from provider usage fields; fail closed before the next request; never mid-stream; user override with a logged reason. **Status:** token caps implemented (`--max-session-tokens`, `--max-day-tokens`, `x-buffy-override`); dollar caps wait for the dated price table. | Cap test with streaming in progress. |
+| SP-2 | Loop detection: the same tool call with the same input N times triggers a warning to the client and, above a second threshold, a block. **Status:** implemented (`--loop-warn`, `--loop-block`, `x-buffy-warning` response header). | Fixture. |
+| SP-3 | Provider circuit breaker: sustained rate-limit or overload responses open the breaker for a cooling period so the agent stops burning retries. **Status:** implemented (`--breaker-failures`, `--breaker-cooldown`), answering locally with `Retry-After` and one probe after cooldown. | Fault-injection test. |
 | SP-4 | An error budget per session trips before the dollar cap when error cost exceeds a share of spend. | Fixture. |
 
 ### 8.13 Staleness detection

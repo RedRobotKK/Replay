@@ -93,6 +93,8 @@ What the proxy does and does not do:
 - Fails open: if anything inside Buffy's own bookkeeping fails, the bytes still flow. If the provider is unreachable you get a 502 that says how to bypass Buffy.
 - Off switch: `BUFFY_DISABLED=1` refuses to start; unsetting `ANTHROPIC_BASE_URL` bypasses it entirely.
 
+Added latency, measured on 2026-09-03 with a 46KB request against a local fake provider on a 4-core Xeon, 300 requests after warm-up: p50 48µs, p99 98µs on top of the round trip. Provider latency is three orders of magnitude larger. The method is in [`docs/reviews/proxy-latency-2026-09-03.md`](docs/reviews/proxy-latency-2026-09-03.md).
+
 Guards, all off unless you set them (see `buffy serve -h`):
 
 - `--max-session-tokens` and `--max-day-tokens` refuse the *next* request once a cap is reached, never a response in flight. The refusal is a provider-shaped error the agent shows you; send `x-buffy-override: <reason>` to proceed once.
