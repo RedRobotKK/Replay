@@ -8,54 +8,43 @@ import (
 	"github.com/RedRobotKK/Buffy/internal/transcript"
 )
 
-// rawUsage is the provider's usage object.
-type rawUsage struct {
-	Input         int `json:"input_tokens"`
-	CacheCreation int `json:"cache_creation_input_tokens"`
-	CacheRead     int `json:"cache_read_input_tokens"`
-	Output        int `json:"output_tokens"`
-	OutputDetails *struct {
-		Thinking int `json:"thinking_tokens"`
-	} `json:"output_tokens_details"`
-	CacheBreak *struct {
-		Short int `json:"ephemeral_5m_input_tokens"`
-		Long  int `json:"ephemeral_1h_input_tokens"`
-	} `json:"cache_creation"`
-}
-
-func (u *rawUsage) toUsage() *Usage {
-	if u == nil {
-		return nil
-	}
-	out := &Usage{Input: u.Input, CacheCreation: u.CacheCreation, CacheRead: u.CacheRead, Output: u.Output}
-	if u.OutputDetails != nil {
-		out.ThinkingTokens = u.OutputDetails.Thinking
-	}
-	if u.CacheBreak != nil {
-		out.Create5m = u.CacheBreak.Short
-		out.Create1h = u.CacheBreak.Long
-	}
-	return out
-}
-
 // ParseResponse reduces a non-streaming Messages API response to structure
 // and usage. A body that is not a message (an error object) yields an empty
 // response and no error; the status code carries the outcome.
 func ParseResponse(body []byte) Response {
 	var msg struct {
-		Type    string     `json:"type"`
-		Content []rawBlock `json:"content"`
-		Usage   *rawUsage  `json:"usage"`
+		Type              string                `json:"type"`
+		Content           []transcript.RawBlock `json:"content"`
+		Usage             *transcript.WireUsage `json:"usage"`
+		ContextManagement *contextManagement    `json:"context_management"`
 	}
 	if err := json.Unmarshal(body, &msg); err != nil || msg.Type != "message" {
 		return Response{}
 	}
-	resp := Response{Usage: msg.Usage.toUsage()}
-	names := map[string]string{}
-	for _, b := range msg.Content {
-		resp.Blocks = append(resp.Blocks, summarizeBlock(b, transcript.RoleAssistant, names, nil))
+	resp := Response{Blocks: stripText(transcript.DecodeBlocks(msg.Content, transcript.RoleAssistant, nil, nil))}
+	if msg.Usage != nil {
+		u := msg.Usage.Usage()
+		resp.Usage = &u
 	}
+	resp.AppliedEdits, resp.ClearedInputTokens = msg.ContextManagement.totals()
 	return resp
+}
+
+// contextManagement is the provider's report of the edits it applied.
+type contextManagement struct {
+	AppliedEdits []struct {
+		ClearedInputTokens int `json:"cleared_input_tokens"`
+	} `json:"applied_edits"`
+}
+
+func (c *contextManagement) totals() (edits, cleared int) {
+	if c == nil {
+		return 0, 0
+	}
+	for _, e := range c.AppliedEdits {
+		cleared += e.ClearedInputTokens
+	}
+	return len(c.AppliedEdits), cleared
 }
 
 // StreamParser accumulates the structure and usage of a server-sent event
@@ -64,8 +53,10 @@ func ParseResponse(body []byte) Response {
 type StreamParser struct {
 	pending bytes.Buffer
 	blocks  []Block
-	usage   rawUsage
+	usage   transcript.WireUsage
 	seen    bool
+	edits   int
+	cleared int
 }
 
 // Write feeds response bytes. It never returns an error: the stream must
@@ -73,42 +64,48 @@ type StreamParser struct {
 func (s *StreamParser) Write(p []byte) (int, error) {
 	s.pending.Write(p)
 	for {
-		line, err := s.pending.ReadString('\n')
-		if err != nil {
-			// Incomplete line: keep it for the next chunk.
-			s.pending.Reset()
-			s.pending.WriteString(line)
+		i := bytes.IndexByte(s.pending.Bytes(), '\n')
+		if i < 0 {
 			return len(p), nil
 		}
-		s.line(strings.TrimRight(line, "\r\n"))
+		line := s.pending.Next(i + 1)
+		s.line(bytes.TrimRight(line, "\r\n"))
 	}
 }
 
-// line handles one SSE line. Only data lines matter; event names are
-// repeated inside the JSON as "type".
-func (s *StreamParser) line(l string) {
-	const dataPrefix = "data: "
-	if !strings.HasPrefix(l, dataPrefix) {
+// dataPrefix introduces an SSE data line. Event names are repeated inside
+// the JSON as "type", so only data lines matter.
+var dataPrefix = []byte("data: ")
+
+func (s *StreamParser) line(l []byte) {
+	if !bytes.HasPrefix(l, dataPrefix) {
 		return
 	}
 	var ev struct {
 		Type    string `json:"type"`
 		Index   int    `json:"index"`
 		Message *struct {
-			Usage *rawUsage `json:"usage"`
+			Usage             *transcript.WireUsage `json:"usage"`
+			ContextManagement *contextManagement    `json:"context_management"`
 		} `json:"message"`
-		ContentBlock *rawBlock `json:"content_block"`
+		ContentBlock *transcript.RawBlock `json:"content_block"`
 		Delta        *struct {
-			Type        string `json:"type"`
 			Text        string `json:"text"`
 			PartialJSON string `json:"partial_json"`
 			Thinking    string `json:"thinking"`
 		} `json:"delta"`
-		Usage *rawUsage `json:"usage"`
+		Usage             *transcript.WireUsage `json:"usage"`
+		ContextManagement *contextManagement    `json:"context_management"`
 	}
-	if err := json.Unmarshal([]byte(strings.TrimPrefix(l, dataPrefix)), &ev); err != nil {
+	if err := json.Unmarshal(bytes.TrimPrefix(l, dataPrefix), &ev); err != nil {
 		return
 	}
+	// The provider reports applied edits on the message; the stream may
+	// carry them at the start or in the final delta.
+	if ev.Message != nil {
+		s.noteEdits(ev.Message.ContextManagement)
+	}
+	s.noteEdits(ev.ContextManagement)
 	switch ev.Type {
 	case "message_start":
 		if ev.Message != nil && ev.Message.Usage != nil {
@@ -117,7 +114,8 @@ func (s *StreamParser) line(l string) {
 		}
 	case "content_block_start":
 		if ev.ContentBlock != nil {
-			b := summarizeBlock(*ev.ContentBlock, transcript.RoleAssistant, map[string]string{}, nil)
+			b := transcript.DecodeBlock(*ev.ContentBlock, transcript.RoleAssistant, nil, nil)
+			b.Text = ""
 			s.blocks = append(s.blocks, b)
 		}
 	case "content_block_delta":
@@ -134,7 +132,7 @@ func (s *StreamParser) line(l string) {
 	}
 }
 
-func merge(dst, src *rawUsage) {
+func merge(dst, src *transcript.WireUsage) {
 	if src.Input > 0 {
 		dst.Input = src.Input
 	}
@@ -155,12 +153,20 @@ func merge(dst, src *rawUsage) {
 	}
 }
 
+func (s *StreamParser) noteEdits(c *contextManagement) {
+	if c == nil {
+		return
+	}
+	s.edits, s.cleared = c.totals()
+}
+
 // Result returns what the stream contained. Usage is nil when no
 // message_start or message_delta carried one.
 func (s *StreamParser) Result() Response {
-	resp := Response{Blocks: s.blocks}
+	resp := Response{Blocks: s.blocks, AppliedEdits: s.edits, ClearedInputTokens: s.cleared}
 	if s.seen {
-		resp.Usage = s.usage.toUsage()
+		u := s.usage.Usage()
+		resp.Usage = &u
 	}
 	return resp
 }

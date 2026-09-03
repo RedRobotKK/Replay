@@ -2,16 +2,29 @@
 // derived data: block kinds, sizes, labels, timings, and provider usage.
 // It never stores message text, headers, or credentials.
 //
-// One JSONL file per client session lives under the ledger directory. The
-// Reader turns those files back into transcript.Sessions so the analysis
-// commands work on measured data exactly as they do on transcripts.
+// The block and usage types are the transcript package's own, whose JSON
+// tags define exactly the content-free subset that is persisted. One JSONL
+// file per client session lives under the ledger directory, and the reader
+// turns those files back into transcript sessions so the analysis commands
+// work on measured data exactly as they do on transcripts.
 package ledger
 
-import "time"
+import (
+	"time"
+
+	"github.com/RedRobotKK/Buffy/internal/cachemodel"
+	"github.com/RedRobotKK/Buffy/internal/transcript"
+)
 
 // SchemaVersion is written on every record so a future reader can tell
 // what it is looking at. Bump it on any incompatible change.
-const SchemaVersion = 1
+const SchemaVersion = 2
+
+// Block is the transcript block type; its Text is never serialized.
+type Block = transcript.Block
+
+// Usage is the transcript usage type, serialized with the provider's names.
+type Usage = transcript.Usage
 
 // Record is one proxied request and its response.
 type Record struct {
@@ -25,16 +38,39 @@ type Record struct {
 	// RequestID is the provider's request id from the response headers.
 	RequestID string `json:"request_id,omitempty"`
 	Path      string `json:"path"`
-	Model     string `json:"model,omitempty"`
-	Effort    string `json:"effort,omitempty"`
-	Stream    bool   `json:"stream"`
-	Status    int    `json:"status"`
-	LatencyMS int64  `json:"latency_ms"`
-	// Prompt is the structure of what the client sent.
-	Prompt Prompt `json:"prompt"`
+	RequestSummary
+	// Policy names the request-parameter policy the proxy applied to this
+	// request, empty when the bytes went through unchanged.
+	Policy string `json:"policy,omitempty"`
+	Status int    `json:"status"`
+	// Retries is how many times the proxy resent this request before the
+	// response it recorded.
+	Retries   int   `json:"retries,omitempty"`
+	LatencyMS int64 `json:"latency_ms"`
 	// Response is the structure of what the provider returned. Usage is
 	// absent on error responses and on endpoints that report none.
 	Response Response `json:"response"`
+	// Cache is the proxy's live classification of this response's cache
+	// read against the previous request in the session, when known.
+	Cache *CacheOutcome `json:"cache,omitempty"`
+}
+
+// RequestSummary is what the proxy learns from a request body: its
+// structure and the attributes the analysis keys on. Embedded in Record so
+// the fields serialize flat.
+type RequestSummary struct {
+	Model  string `json:"model,omitempty"`
+	Effort string `json:"effort,omitempty"`
+	Stream bool   `json:"stream"`
+	Prompt Prompt `json:"prompt"`
+	// PrefixHash is a hash of the tool definitions and system prompt as
+	// sent. Two requests with the same hash rendered the same cacheable
+	// prefix; a change between requests is a break cause the proxy can
+	// name with certainty. It contains no content.
+	PrefixHash string `json:"prefix_hash,omitempty"`
+	// SessionHash identifies the session by its stable prefix and first
+	// message when the client sends no session header. Not persisted.
+	SessionHash string `json:"-"`
 }
 
 // Prompt is the request body reduced to structure.
@@ -56,31 +92,22 @@ type Message struct {
 	Blocks []Block `json:"blocks"`
 }
 
-// Block is one content block reduced to kind, size, and label.
-type Block struct {
-	Kind  string `json:"kind"`
-	Bytes int    `json:"bytes"`
-	// Label is the analysis label: tool name and a short argument for tool
-	// calls, the tool that produced it for tool results.
-	Label string `json:"label,omitempty"`
-	// ToolUseID links calls and results; it is an opaque provider id.
-	ToolUseID string `json:"tool_use_id,omitempty"`
-	IsError   bool   `json:"is_error,omitempty"`
-}
-
 // Response is the reply reduced to structure and usage.
 type Response struct {
 	Blocks []Block `json:"blocks,omitempty"`
 	Usage  *Usage  `json:"usage,omitempty"`
+	// AppliedEdits and ClearedInputTokens report the provider's own
+	// context edits on this response: how many it applied and how many
+	// prompt tokens they removed. They are the applied policy's measured
+	// side.
+	AppliedEdits       int `json:"applied_edits,omitempty"`
+	ClearedInputTokens int `json:"cleared_input_tokens,omitempty"`
 }
 
-// Usage mirrors the provider's usage object field for field.
-type Usage struct {
-	Input          int `json:"input_tokens"`
-	CacheCreation  int `json:"cache_creation_input_tokens"`
-	CacheRead      int `json:"cache_read_input_tokens"`
-	Output         int `json:"output_tokens"`
-	ThinkingTokens int `json:"thinking_tokens,omitempty"`
-	Create5m       int `json:"ephemeral_5m_input_tokens,omitempty"`
-	Create1h       int `json:"ephemeral_1h_input_tokens,omitempty"`
+// CacheOutcome is the live classification of one response's cache read.
+type CacheOutcome struct {
+	Outcome  string                `json:"outcome"`
+	Expected int                   `json:"expected,omitempty"`
+	Deficit  int                   `json:"deficit,omitempty"`
+	Cause    cachemodel.BreakCause `json:"cause,omitempty"`
 }

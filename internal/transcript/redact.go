@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"path"
+	"slices"
 	"strings"
 )
 
@@ -27,9 +27,8 @@ func Redact(r io.Reader, w io.Writer) error {
 		return fmt.Errorf("generate redaction salt: %w", err)
 	}
 	red := &redactor{salt: salt}
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, scannerInitialBytes), maxLineBytes)
-	bw := bufio.NewWriter(w)
+	scanner := NewLineScanner(r)
+	bw := newBufferedWriter(w)
 	for scanner.Scan() {
 		raw := bytes.TrimSpace(scanner.Bytes())
 		if len(raw) == 0 {
@@ -135,14 +134,6 @@ func (rd *redactor) block(b map[string]any) {
 	}
 }
 
-// Argument names whose values are labels the analysis groups by. They are
-// replaced by a hash of the same length so tool results still attribute to
-// a stable, meaningless name. Only true file paths keep their extension.
-var (
-	labelArgs = map[string]bool{"file_path": true, "path": true, "pattern": true, "command": true, "url": true, "query": true}
-	pathArgs  = map[string]bool{"file_path": true, "path": true}
-)
-
 // redactInput rewrites a tool call's arguments. Strings become filler or a
 // hashed label of the same length; numbers, booleans, and null are kept
 // because they are not content and their JSON length must not change;
@@ -152,8 +143,11 @@ func (rd *redactor) input(v any) any {
 	case map[string]any:
 		out := make(map[string]any, len(val))
 		for k, inner := range val {
-			if s, ok := inner.(string); ok && labelArgs[k] {
-				out[k] = rd.hashedLabel(s, pathArgs[k])
+			// Label arguments become a hash of the same length so tool
+			// results still attribute to a stable, meaningless name; only
+			// true file paths keep their extension.
+			if s, ok := inner.(string); ok && slices.Contains(LabelArgs, k) {
+				out[k] = rd.hashedLabel(s, slices.Contains(PathArgs, k))
 				continue
 			}
 			out[k] = rd.input(inner)
@@ -187,23 +181,18 @@ func (rd *redactor) content(v any) any {
 	}
 }
 
-// hashedLabelBytes is how much of the hash is kept when the original is
-// long enough to hold it.
-const hashedLabelBytes = 12
-
 // hashedLabel replaces a label with a hash of the same byte length. For file
 // paths the extension survives so per-language patterns stay visible; for
 // commands, queries, and URLs nothing after a dot is content-free, so
 // nothing is kept.
 func (rd *redactor) hashedLabel(s string, keepExtension bool) string {
-	ext := ""
+	digest := rd.digest(s)
+	label, ext := "r/"+digest[:HashedLabelBytes], ""
 	if keepExtension {
-		ext = path.Ext(s)
-		if !safeExtension(ext) {
-			ext = ""
-		}
+		label = HashedPathLabel(digest, s)
+		ext = label[len("r/")+HashedLabelBytes:]
+		label = label[:len("r/")+HashedLabelBytes]
 	}
-	label := "r/" + rd.digest(s)[:hashedLabelBytes]
 	room := len(s) - len(ext)
 	switch {
 	case room <= 0:
@@ -224,17 +213,9 @@ func (rd *redactor) digest(s string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// safeExtension accepts short, alphanumeric extensions only.
-func safeExtension(ext string) bool {
-	if len(ext) < 2 || len(ext) > 8 || ext[0] != '.' {
-		return false
-	}
-	for _, r := range ext[1:] {
-		if (r < 'a' || r > 'z') && (r < '0' || r > '9') {
-			return false
-		}
-	}
-	return true
+// newBufferedWriter wraps a writer for line output.
+func newBufferedWriter(w io.Writer) *bufio.Writer {
+	return bufio.NewWriter(w)
 }
 
 // filler returns a string of the same byte length as the original, derived

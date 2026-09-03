@@ -2,6 +2,7 @@ package analysis
 
 import (
 	"bytes"
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -39,14 +40,14 @@ func TestCalibrationOnRealSession(t *testing.T) {
 func TestBreakIsClassifiedAsRerender(t *testing.T) {
 	_, lane := loadFixture(t)
 	cal := Calibrate(lane)
-	fit := Fit(cal)
+	fit := Fit(cal, false)
 	breaks := FindBreaks(cal, fit)
 	if len(breaks) != 1 {
 		t.Fatalf("breaks = %d, want 1", len(breaks))
 	}
 	b := breaks[0]
-	if b.Cause != CauseRerendered {
-		t.Fatalf("cause = %q, want %q (%s)", b.Cause, CauseRerendered, b.Detail)
+	if b.Cause != cachemodel.CauseRerendered {
+		t.Fatalf("cause = %q, want %q (%s)", b.Cause, cachemodel.CauseRerendered, b.Detail)
 	}
 	if b.Deficit <= 0 || b.MessageIndex != 0 {
 		t.Fatalf("break detail wrong: %+v", b)
@@ -55,8 +56,8 @@ func TestBreakIsClassifiedAsRerender(t *testing.T) {
 
 func TestFitUsesMeasuredPrefix(t *testing.T) {
 	_, lane := loadFixture(t)
-	fit := Fit(Calibrate(lane))
-	if !fit.UnseenPrefixMeasured || fit.UnseenPrefixTokens != lane.Requests[0].Usage.CacheRead {
+	fit := Fit(Calibrate(lane), false)
+	if fit.UnseenPrefix.Estimated != 0 || fit.UnseenPrefix.Measured != lane.Requests[0].Usage.CacheRead {
 		t.Fatalf("system prefix should come from the first cache read: %+v", fit)
 	}
 	if fit.TokensPerByte <= 0 || fit.TokensPerByte > 2 {
@@ -72,7 +73,7 @@ func TestFitUsesMeasuredPrefix(t *testing.T) {
 func TestBlameSumsToReportedUsage(t *testing.T) {
 	_, lane := loadFixture(t)
 	cal := Calibrate(lane)
-	fit := Fit(cal)
+	fit := Fit(cal, false)
 	entries := Blame(cal, fit)
 
 	got := 0
@@ -85,7 +86,7 @@ func TestBlameSumsToReportedUsage(t *testing.T) {
 			continue
 		}
 		tc := splitTurn(turn)
-		want += tc.outputTokens + tc.userTokens + tc.rebillTokens
+		want += turn.Previous.Usage.Output + tc.userTokens + tc.rebillTokens
 	}
 	if got != want {
 		t.Fatalf("attributed %d tokens, provider reported %d", got, want)
@@ -180,15 +181,15 @@ func TestShortTTLMissesAcrossLongGap(t *testing.T) {
 	if short.Misses != 1 || long.Misses != 0 {
 		t.Fatalf("misses short=%d long=%d, want 1 and 0", short.Misses, long.Misses)
 	}
-	if short.CachedShare >= long.CachedShare {
-		t.Fatalf("a miss must lower the cached share: %.3f vs %.3f", short.CachedShare, long.CachedShare)
+	if short.CachedShare() >= long.CachedShare() {
+		t.Fatalf("a miss must lower the cached share: %.3f vs %.3f", short.CachedShare(), long.CachedShare())
 	}
 }
 
 func TestContextEditShrinksPromptAndInvalidates(t *testing.T) {
 	lane := syntheticLane(12, -1, 0, false)
 	cal := Calibrate(lane)
-	fit := Fit(cal)
+	fit := Fit(cal, false)
 	asRun := AsRun(lane)
 	edited := WithContextEdit(cal, ContextEditPolicy{KeepLast: 2, TriggerTokens: 9000}, fit)
 	if edited.PromptTokens >= asRun.PromptTokens {
@@ -216,7 +217,7 @@ func TestReportCarriesMandatoryLines(t *testing.T) {
 	if err := rep.WriteDiff(&buf); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(buf.String(), string(CauseRerendered)) {
+	if !strings.Contains(buf.String(), string(cachemodel.CauseRerendered)) {
 		t.Errorf("diff report does not name the break cause")
 	}
 }
@@ -238,3 +239,42 @@ var errWrite = &writeError{}
 type writeError struct{}
 
 func (*writeError) Error() string { return "write failed" }
+
+func TestReReadsCountRepeatedPathsAndSplitAtFirstClear(t *testing.T) {
+	_, lane := loadFixture(t)
+	cal := Calibrate(lane)
+	rr := CountReReads(cal, Fit(cal, false))
+	// The fixture session worked through Bash and never read a file, so
+	// it must count nothing rather than something.
+	if rr.Reads != 0 || rr.Repeated != 0 || rr.ContextEdits != 0 || rr.ReadsAfterClear != 0 {
+		t.Fatalf("fixture re-reads implausible: %+v", rr)
+	}
+
+	// A synthetic lane: read a, read b, then a clear, then read a again.
+	read := func(uuid, path string) *transcript.Message {
+		return &transcript.Message{UUID: uuid, Role: transcript.RoleUser, Blocks: []transcript.Block{{Kind: transcript.KindToolResult, ToolName: "Read " + path, Label: "tool result: Read " + path, Bytes: 4000}}}
+	}
+	ask := &transcript.Message{UUID: "u0", Role: transcript.RoleUser, Blocks: []transcript.Block{{Kind: transcript.KindText, Bytes: 10}}}
+	msgs := []*transcript.Message{ask, read("r1", "a.go"), read("r2", "b.go"), read("r3", "a.go"), read("r4", "c.go"), read("r5", "b.go")}
+	syn := &transcript.Lane{ID: "syn"}
+	for i := 2; i <= len(msgs); i++ {
+		req := &transcript.Request{ID: fmt.Sprint(i), Context: msgs[:i], Usage: transcript.Usage{Input: 1000, CacheRead: 1000 * (i - 1)}}
+		if i == 3 {
+			req.AppliedEdits, req.ClearedTokens = 1, 500
+		}
+		syn.Requests = append(syn.Requests, req)
+	}
+	cal = Calibrate(syn)
+	rr = CountReReads(cal, TokenFit{TokensPerByte: 0.25})
+	if rr.Reads != 5 || rr.Repeated != 2 || rr.ContextEdits != 1 || rr.ClearedTokens != 500 {
+		t.Fatalf("synthetic totals wrong: %+v", rr)
+	}
+	// The clear was applied by request 3's response; reads from request 4
+	// on are after it: a (repeat), c, b (repeat).
+	if rr.ReadsAfterClear != 3 || rr.RepeatedAfterClear != 2 || rr.RateBeforeClear() != 0 {
+		t.Fatalf("split at first clear wrong: %+v", rr)
+	}
+	if rr.Tokens.Value <= 0 {
+		t.Fatalf("repeated reads must be priced: %+v", rr)
+	}
+}

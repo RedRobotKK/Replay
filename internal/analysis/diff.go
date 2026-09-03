@@ -9,26 +9,12 @@ import (
 	"github.com/RedRobotKK/Buffy/internal/transcript"
 )
 
-// BreakCause classifies why a cached prefix stopped matching.
-type BreakCause string
-
-// Causes, from most to least specific.
-const (
-	CauseTTLExpired   BreakCause = "cache expired (gap longer than the TTL)"
-	CauseModelChanged BreakCause = "model changed between requests"
-	CauseEffortChange BreakCause = "effort or thinking setting changed"
-	CauseHistoryEdit  BreakCause = "an earlier message was edited or removed"
-	CauseRerendered   BreakCause = "client re-rendered history after the system prefix (no edit visible in transcript)"
-	CausePrefixChange BreakCause = "system prompt or tool definitions changed (not visible in transcripts)"
-	CauseUnknown      BreakCause = "prefix diverged inside the message history at an unknown block"
-)
-
 // Break describes one turn where the cache read fell short.
 type Break struct {
 	Turn Turn
 	// Deficit is how many tokens were re-written that should have been read.
 	Deficit int
-	Cause   BreakCause
+	Cause   cachemodel.BreakCause
 	// MessageIndex is the context position where divergence is located, or
 	// -1 when it cannot be placed.
 	MessageIndex int
@@ -56,53 +42,46 @@ func FindBreaks(cal *Calibration, fit TokenFit) []Break {
 	return breaks
 }
 
+// classify applies the usage-only causes first (shared with the proxy's
+// live classification), then the ones that need the message history.
 func classify(t Turn, fit TokenFit) Break {
 	b := Break{Turn: t, Deficit: t.Expected - t.Actual, MessageIndex: -1}
 	prev, cur := t.Previous, t.Request
 
-	ttl := cachemodel.TTLOf(prev.Usage)
-	switch {
-	case t.Gap > ttl:
-		b.Cause = CauseTTLExpired
-		b.Detail = fmt.Sprintf("gap %s exceeds TTL %s", t.Gap.Round(time.Second), ttl)
+	if cause, ok := cachemodel.ClassifyBreak(prev.Usage, cur.Usage, prev.Model, cur.Model, t.Gap); ok {
+		b.Cause = cause
+		switch cause {
+		case cachemodel.CauseTTLExpired:
+			b.Detail = fmt.Sprintf("gap %s exceeds TTL %s", t.Gap.Round(time.Second), cachemodel.TTLOf(prev.Usage))
+		case cachemodel.CauseModelChanged:
+			b.Detail = fmt.Sprintf("%s -> %s", prev.Model, cur.Model)
+		default:
+			b.Detail = "nothing was read; the divergence is before the first message"
+		}
 		return b
-	case prev.Model != cur.Model:
-		b.Cause = CauseModelChanged
-		b.Detail = fmt.Sprintf("%s -> %s", prev.Model, cur.Model)
-		return b
-	case prev.Effort != cur.Effort && prev.Effort != "" && cur.Effort != "":
-		b.Cause = CauseEffortChange
+	}
+	if prev.Effort != cur.Effort && prev.Effort != "" && cur.Effort != "" {
+		b.Cause = cachemodel.CauseEffortChange
 		b.Detail = fmt.Sprintf("%s -> %s", prev.Effort, cur.Effort)
 		return b
 	}
-
 	if idx, label, ok := firstDivergence(prev.Context, cur.Context); ok {
-		b.Cause = CauseHistoryEdit
+		b.Cause = cachemodel.CauseHistoryEdit
 		b.MessageIndex = idx
 		b.Label = label
 		b.Detail = fmt.Sprintf("message %d differs from the previous request (%s)", idx, label)
 		return b
 	}
-
-	if t.Actual == 0 {
-		b.Cause = CausePrefixChange
-		b.Detail = "nothing was read; the divergence is before the first message"
-		return b
-	}
-
-	unseen := float64(fit.UnseenPrefixTokens)
+	unseen := float64(fit.UnseenPrefix.Total())
 	if unseen > 0 && math.Abs(float64(t.Actual)-unseen) <= unseen*rerenderTolerance {
-		b.Cause = CauseRerendered
+		b.Cause = cachemodel.CauseRerendered
 		b.MessageIndex = 0
-		if len(cur.Context) > 0 && len(cur.Context[0].Blocks) > 0 {
-			b.Label = cur.Context[0].Blocks[0].Label
-		}
-		b.Detail = fmt.Sprintf("read %d tokens, about the size of the system prefix (%d); the message history was re-billed from the first message", t.Actual, fit.UnseenPrefixTokens)
+		b.Label = firstLabelOrEmpty(cur.Context, 0)
+		b.Detail = fmt.Sprintf("read %d tokens, about the size of the system prefix (%d); the message history was re-billed from the first message", t.Actual, fit.UnseenPrefix.Total())
 		return b
 	}
-
-	b.Cause = CauseUnknown
-	b.MessageIndex, b.Label = locateByTokens(cur.Context, t.Actual-fit.UnseenPrefixTokens, fit)
+	b.Cause = cachemodel.CauseUnknown
+	b.MessageIndex, b.Label = locateByTokens(cur.Context, t.Actual-fit.UnseenPrefix.Total(), fit)
 	b.Detail = fmt.Sprintf("read %d of %d expected tokens; position is an estimate from the byte-to-token fit", t.Actual, t.Expected)
 	return b
 }
