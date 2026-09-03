@@ -13,9 +13,10 @@ import (
 // response and no error; the status code carries the outcome.
 func ParseResponse(body []byte) Response {
 	var msg struct {
-		Type    string                `json:"type"`
-		Content []transcript.RawBlock `json:"content"`
-		Usage   *transcript.WireUsage `json:"usage"`
+		Type              string                `json:"type"`
+		Content           []transcript.RawBlock `json:"content"`
+		Usage             *transcript.WireUsage `json:"usage"`
+		ContextManagement *contextManagement    `json:"context_management"`
 	}
 	if err := json.Unmarshal(body, &msg); err != nil || msg.Type != "message" {
 		return Response{}
@@ -25,7 +26,25 @@ func ParseResponse(body []byte) Response {
 		u := msg.Usage.Usage()
 		resp.Usage = &u
 	}
+	resp.AppliedEdits, resp.ClearedInputTokens = msg.ContextManagement.totals()
 	return resp
+}
+
+// contextManagement is the provider's report of the edits it applied.
+type contextManagement struct {
+	AppliedEdits []struct {
+		ClearedInputTokens int `json:"cleared_input_tokens"`
+	} `json:"applied_edits"`
+}
+
+func (c *contextManagement) totals() (edits, cleared int) {
+	if c == nil {
+		return 0, 0
+	}
+	for _, e := range c.AppliedEdits {
+		cleared += e.ClearedInputTokens
+	}
+	return len(c.AppliedEdits), cleared
 }
 
 // StreamParser accumulates the structure and usage of a server-sent event
@@ -36,6 +55,8 @@ type StreamParser struct {
 	blocks  []Block
 	usage   transcript.WireUsage
 	seen    bool
+	edits   int
+	cleared int
 }
 
 // Write feeds response bytes. It never returns an error: the stream must
@@ -64,7 +85,8 @@ func (s *StreamParser) line(l []byte) {
 		Type    string `json:"type"`
 		Index   int    `json:"index"`
 		Message *struct {
-			Usage *transcript.WireUsage `json:"usage"`
+			Usage             *transcript.WireUsage `json:"usage"`
+			ContextManagement *contextManagement    `json:"context_management"`
 		} `json:"message"`
 		ContentBlock *transcript.RawBlock `json:"content_block"`
 		Delta        *struct {
@@ -72,11 +94,18 @@ func (s *StreamParser) line(l []byte) {
 			PartialJSON string `json:"partial_json"`
 			Thinking    string `json:"thinking"`
 		} `json:"delta"`
-		Usage *transcript.WireUsage `json:"usage"`
+		Usage             *transcript.WireUsage `json:"usage"`
+		ContextManagement *contextManagement    `json:"context_management"`
 	}
 	if err := json.Unmarshal(bytes.TrimPrefix(l, dataPrefix), &ev); err != nil {
 		return
 	}
+	// The provider reports applied edits on the message; the stream may
+	// carry them at the start or in the final delta.
+	if ev.Message != nil {
+		s.noteEdits(ev.Message.ContextManagement)
+	}
+	s.noteEdits(ev.ContextManagement)
 	switch ev.Type {
 	case "message_start":
 		if ev.Message != nil && ev.Message.Usage != nil {
@@ -124,10 +153,17 @@ func merge(dst, src *transcript.WireUsage) {
 	}
 }
 
+func (s *StreamParser) noteEdits(c *contextManagement) {
+	if c == nil {
+		return
+	}
+	s.edits, s.cleared = c.totals()
+}
+
 // Result returns what the stream contained. Usage is nil when no
 // message_start or message_delta carried one.
 func (s *StreamParser) Result() Response {
-	resp := Response{Blocks: s.blocks}
+	resp := Response{Blocks: s.blocks, AppliedEdits: s.edits, ClearedInputTokens: s.cleared}
 	if s.seen {
 		u := s.usage.Usage()
 		resp.Usage = &u

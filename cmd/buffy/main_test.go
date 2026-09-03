@@ -94,3 +94,19 @@ func TestReplayOnFixture(t *testing.T) {
 		}
 	}
 }
+
+func TestContextEditFromFlags(t *testing.T) {
+	if p, err := contextEditFromFlags(0, 6, false); p != nil || err != nil {
+		t.Fatalf("off by default: %v %v", p, err)
+	}
+	if p, err := contextEditFromFlags(200000, 6, true); p != nil || err != nil {
+		t.Fatalf("%s must win over the flag: %v %v", envNoPolicy, p, err)
+	}
+	if _, err := contextEditFromFlags(-5, 6, false); err == nil {
+		t.Fatal("negative trigger must be rejected")
+	}
+	p, err := contextEditFromFlags(200000, 6, false)
+	if err != nil || p == nil || p.TriggerTokens != 200000 || p.KeepLast != 6 {
+		t.Fatalf("flags not applied: %+v %v", p, err)
+	}
+}

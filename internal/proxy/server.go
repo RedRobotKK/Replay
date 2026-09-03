@@ -11,6 +11,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,6 +26,7 @@ import (
 	"time"
 
 	"github.com/RedRobotKK/Buffy/internal/ledger"
+	"github.com/RedRobotKK/Buffy/internal/policy"
 )
 
 // Timeouts. Provider turns on frontier models can run for minutes, so the
@@ -71,6 +74,9 @@ type Config struct {
 	Spend   *SpendGuard
 	Loops   LoopLimits
 	Breaker *Breaker
+	// ContextEdit, when set, is applied to sessions whose first request
+	// admits it and pinned for their life (ADR-0003). Nil is off.
+	ContextEdit *policy.ContextEdit
 }
 
 // HealthPath answers "ok" for anything that wants to know the proxy is up.
@@ -269,6 +275,9 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		if !s.guard(w, r, &rec) {
 			return
 		}
+		body = s.applyPolicy(r, &rec, body)
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		r.ContentLength = int64(len(body))
 	}
 
 	tap := &responseTap{ResponseWriter: w}
@@ -316,6 +325,42 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	s.rp.ServeHTTP(tap, r)
+}
+
+// applyPolicy adds the configured request parameter when the session's
+// pinned decision allows it. The decision is made at the session's first
+// request and kept: a session either always carries the parameter or
+// never does. Every transformation is logged with the body hashes before
+// and after (PX-10), never the bodies.
+func (s *Server) applyPolicy(r *http.Request, rec *ledger.Record, body []byte) []byte {
+	p := s.cfg.ContextEdit
+	if p == nil || rec.SessionID == "" {
+		return body
+	}
+	admissible := p.Admissible(r.Header.Get("anthropic-beta"), rec.Prompt.ContextEdits)
+	decision := s.stats.pinPolicy(rec.SessionID, admissible)
+	if decision != policy.Applied {
+		return body
+	}
+	if admissible != policy.Applied {
+		// Pinned on, but this request cannot carry the parameter.
+		s.cfg.Logger.Printf("policy %s session=%s %s", policy.Name, short(rec.SessionID), admissible)
+		return body
+	}
+	out, applied := p.Apply(body)
+	if applied != policy.Applied {
+		s.cfg.Logger.Printf("policy %s session=%s %s", policy.Name, short(rec.SessionID), applied)
+		return body
+	}
+	rec.Policy = policy.Name
+	s.cfg.Logger.Printf("policy %s session=%s applied body sha256 before=%s after=%s", p, short(rec.SessionID), bodyHash(body), bodyHash(out))
+	return out
+}
+
+// bodyHash is a content-free fingerprint of a request body for the log.
+func bodyHash(body []byte) string {
+	sum := sha256.Sum256(body)
+	return hex.EncodeToString(sum[:])[:16]
 }
 
 // guard applies the spend cap and loop detector to a summarized request.

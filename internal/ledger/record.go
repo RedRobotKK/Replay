@@ -39,8 +39,11 @@ type Record struct {
 	RequestID string `json:"request_id,omitempty"`
 	Path      string `json:"path"`
 	RequestSummary
-	Status    int   `json:"status"`
-	LatencyMS int64 `json:"latency_ms"`
+	// Policy names the request-parameter policy the proxy applied to this
+	// request, empty when the bytes went through unchanged.
+	Policy    string `json:"policy,omitempty"`
+	Status    int    `json:"status"`
+	LatencyMS int64  `json:"latency_ms"`
 	// Response is the structure of what the provider returned. Usage is
 	// absent on error responses and on endpoints that report none.
 	Response Response `json:"response"`
@@ -90,6 +93,12 @@ type Message struct {
 type Response struct {
 	Blocks []Block `json:"blocks,omitempty"`
 	Usage  *Usage  `json:"usage,omitempty"`
+	// AppliedEdits and ClearedInputTokens report the provider's own
+	// context edits on this response: how many it applied and how many
+	// prompt tokens they removed. They are the applied policy's measured
+	// side.
+	AppliedEdits       int `json:"applied_edits,omitempty"`
+	ClearedInputTokens int `json:"cleared_input_tokens,omitempty"`
 }
 
 // CacheOutcome is the live classification of one response's cache read.
