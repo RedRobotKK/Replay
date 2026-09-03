@@ -39,11 +39,22 @@ const (
 
 // Vault maps placeholders to the secrets they replaced and persists the
 // mapping encrypted at rest, so a restart loses nothing.
+//
+// A secret is held exactly as it appeared inside the request's JSON string
+// literal, escapes included, so restoring it into a response string
+// literal is a direct substitution.
 type Vault struct {
 	dir     string
 	key     []byte
 	mu      sync.Mutex
-	secrets map[string]string // placeholder -> secret
+	secrets map[string]entry // placeholder -> secret and pattern
+}
+
+// entry is one vault record. The pattern name lets rehydration apply
+// per-pattern scope to a placeholder found in a response.
+type entry struct {
+	Secret  string `json:"s"`
+	Pattern string `json:"p,omitempty"`
 }
 
 // OpenVault loads or creates the vault under dir.
@@ -55,7 +66,7 @@ func OpenVault(dir string) (*Vault, error) {
 	if err != nil {
 		return nil, err
 	}
-	v := &Vault{dir: dir, key: key, secrets: map[string]string{}}
+	v := &Vault{dir: dir, key: key, secrets: map[string]entry{}}
 	if err := v.load(); err != nil {
 		return nil, err
 	}
@@ -77,10 +88,11 @@ func loadOrCreateKey(path string) ([]byte, error) {
 	return key, nil
 }
 
-// Placeholder returns the placeholder for a secret, recording the pair
-// when it is new. The placeholder is the HMAC of the secret under the
-// vault key, so it is stable across sessions and restarts.
-func (v *Vault) Placeholder(secret string) (string, error) {
+// Placeholder returns the placeholder for a secret matched by the named
+// pattern, recording the pair when it is new. The placeholder is the HMAC
+// of the secret under the vault key, so it is stable across sessions and
+// restarts, and it depends on the secret alone, not on the pattern.
+func (v *Vault) Placeholder(secret, pattern string) (string, error) {
 	mac := hmac.New(sha256.New, v.key)
 	mac.Write([]byte(secret))
 	ph := PlaceholderPrefix + hex.EncodeToString(mac.Sum(nil))[:placeholderHex]
@@ -89,7 +101,7 @@ func (v *Vault) Placeholder(secret string) (string, error) {
 	if _, ok := v.secrets[ph]; ok {
 		return ph, nil
 	}
-	v.secrets[ph] = secret
+	v.secrets[ph] = entry{Secret: secret, Pattern: pattern}
 	if err := v.save(); err != nil {
 		delete(v.secrets, ph)
 		return "", err
@@ -97,12 +109,13 @@ func (v *Vault) Placeholder(secret string) (string, error) {
 	return ph, nil
 }
 
-// Secret returns the secret behind a placeholder, if the vault holds it.
-func (v *Vault) Secret(placeholder string) (string, bool) {
+// Secret returns the secret behind a placeholder and the pattern that
+// matched it, if the vault holds it.
+func (v *Vault) Secret(placeholder string) (secret, pattern string, ok bool) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	s, ok := v.secrets[placeholder]
-	return s, ok
+	e, ok := v.secrets[placeholder]
+	return e.Secret, e.Pattern, ok
 }
 
 // Len is how many secrets the vault holds.
@@ -146,7 +159,19 @@ func (v *Vault) load() error {
 	if err != nil {
 		return fmt.Errorf("decrypt vault: %w", err)
 	}
-	return json.Unmarshal(plain, &v.secrets)
+	if err := json.Unmarshal(plain, &v.secrets); err == nil {
+		return nil
+	}
+	// A vault written before patterns were recorded holds bare secrets;
+	// they rehydrate under the default scope.
+	var bare map[string]string
+	if err := json.Unmarshal(plain, &bare); err != nil {
+		return fmt.Errorf("decode vault: %w", err)
+	}
+	for ph, secret := range bare {
+		v.secrets[ph] = entry{Secret: secret}
+	}
+	return nil
 }
 
 func seal(key, plain []byte) ([]byte, error) {
