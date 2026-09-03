@@ -260,3 +260,42 @@ func TestSelectPerType(t *testing.T) {
 		t.Fatalf("SelectedFor small must fall back to the overall none: %+v", c)
 	}
 }
+
+func armCosts(treated, control []float64) []ArmCost {
+	var out []ArmCost
+	for i, c := range treated {
+		out = append(out, ArmCost{SessionID: fmt.Sprintf("t%d", i), Arm: "treated", CostPerNewToken: c})
+	}
+	for i, c := range control {
+		out = append(out, ArmCost{SessionID: fmt.Sprintf("c%d", i), Arm: "control", CostPerNewToken: c})
+	}
+	return out
+}
+
+// DR-2: a policy graduates when treated sessions cost less per new token
+// than controls, above noise, by at least half the predicted saving.
+func TestGraduate(t *testing.T) {
+	r := rand.New(rand.NewPCG(5, 5))
+	noisy := func(mean float64, n int) []float64 {
+		out := make([]float64, n)
+		for i := range out {
+			out[i] = mean * (1 + 0.05*r.NormFloat64())
+		}
+		return out
+	}
+	if rep := Graduate("edit", armCosts(noisy(8, 10), noisy(10, 10)), 0.2, 0); rep == nil || !rep.Graduated || rep.Realized < 0.1 {
+		t.Fatalf("a held saving must graduate: %+v", rep)
+	}
+	if rep := Graduate("edit", armCosts(noisy(9.5, 10), noisy(10, 10)), 0.2, 0); rep == nil || rep.Graduated || !strings.Contains(rep.Reason, "not graduated") {
+		t.Fatalf("a saving far under the prediction must not graduate: %+v", rep)
+	}
+	if rep := Graduate("edit", armCosts(noisy(8, 3), noisy(10, 10)), 0.2, 0); rep == nil || rep.Graduated || !strings.Contains(rep.Reason, "not judged") {
+		t.Fatalf("too few treated sessions must not be judged: %+v", rep)
+	}
+	if rep := Graduate("edit", armCosts(noisy(10, 10), noisy(10, 10)), 0.2, 0); rep == nil || rep.Graduated || !strings.Contains(rep.Reason, "not separated") {
+		t.Fatalf("equal arms must not graduate: %+v", rep)
+	}
+	if Graduate("edit", nil, 0.2, 0) != nil {
+		t.Fatal("no arms means no trial report")
+	}
+}
