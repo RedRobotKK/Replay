@@ -153,6 +153,18 @@ func TestParseSkipsMalformedRequest(t *testing.T) {
 	}
 }
 
+func TestSanitizeLabelStripsTerminalControls(t *testing.T) {
+	got := SanitizeLabel("ls \x1b]0;pwned\x07 \x1b[31mRED\x1b[0m\r\n\u0085x")
+	for _, bad := range []string{"\x1b", "\x07", "\r", "\n", "\u0085"} {
+		if strings.Contains(got, bad) {
+			t.Fatalf("control character survived: %q", got)
+		}
+	}
+	if !strings.Contains(got, "pwned") || !strings.Contains(got, "RED") {
+		t.Fatalf("printable text must survive: %q", got)
+	}
+}
+
 func TestTruncateLabelIsRuneAware(t *testing.T) {
 	label := strings.Repeat("プ", 10)
 	got := TruncateLabel(label, 5)

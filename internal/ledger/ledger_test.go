@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -20,7 +21,8 @@ const sampleRequest = `{"model":"claude-opus-5","max_tokens":100,"stream":true,
  ]}`
 
 func TestSummarizeRequest(t *testing.T) {
-	p, model, stream, effort, err := SummarizeRequest([]byte(sampleRequest))
+	labeler := NewLabeler([]byte("test-key"))
+	p, model, stream, effort, err := SummarizeRequest([]byte(sampleRequest), labeler)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,8 +39,11 @@ func TestSummarizeRequest(t *testing.T) {
 		t.Fatalf("messages = %d", len(p.Messages))
 	}
 	result := p.Messages[2].Blocks[0]
-	if result.Kind != transcript.KindToolResult || result.Label != "tool result: Read /tmp/x.go" || result.Bytes != len("package x") {
-		t.Fatalf("tool result not summarized: %+v", result)
+	if result.Kind != transcript.KindToolResult || !strings.HasPrefix(result.Label, "tool result: Read r/") || !strings.HasSuffix(result.Label, ".go") || result.Bytes != len("package x") {
+		t.Fatalf("tool result not summarized as a content-free label: %+v", result)
+	}
+	if strings.Contains(result.Label, "/tmp") || strings.Contains(result.Label, "x.go") {
+		t.Fatalf("label leaks the path: %q", result.Label)
 	}
 	for _, m := range p.Messages {
 		for _, b := range m.Blocks {
@@ -46,6 +51,43 @@ func TestSummarizeRequest(t *testing.T) {
 				t.Fatalf("label leaks content: %q", b.Label)
 			}
 		}
+	}
+}
+
+// LG-2: the ledger never holds message text. A secret inside a command
+// argument, a URL, or a query must not survive summarization.
+func TestLedgerHoldsNoArgumentContent(t *testing.T) {
+	body := `{"model":"m","messages":[
+	 {"role":"assistant","content":[
+	   {"type":"tool_use","id":"a","name":"Bash","input":{"command":"curl -H 'Authorization: Bearer sk-ant-LEAKED' https://x"}},
+	   {"type":"tool_use","id":"b","name":"WebFetch","input":{"url":"https://example.com/?token=LEAKED2"}},
+	   {"type":"tool_use","id":"c","name":"Grep","input":{"pattern":"LEAKED3"}},
+	   {"type":"tool_use","id":"d","name":"Read","input":{"file_path":"/Users/me/secret-plans.md"}}]},
+	 {"role":"user","content":[
+	   {"type":"tool_result","tool_use_id":"a","content":"ok"},{"type":"tool_result","tool_use_id":"b","content":"ok"},
+	   {"type":"tool_result","tool_use_id":"c","content":"ok"},{"type":"tool_result","tool_use_id":"d","content":"ok"}]}]}`
+	p, _, _, _, err := SummarizeRequest([]byte(body), NewLabeler([]byte("k")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, leak := range []string{"LEAKED", "curl", "example.com", "secret-plans", "/Users"} {
+		if strings.Contains(string(encoded), leak) {
+			t.Fatalf("ledger prompt contains %q:\n%s", leak, encoded)
+		}
+	}
+	labels := map[string]bool{}
+	for _, b := range p.Messages[1].Blocks {
+		labels[b.Label] = true
+	}
+	if !labels["tool result: Bash"] || !labels["tool result: WebFetch"] || !labels["tool result: Grep"] {
+		t.Fatalf("non-path tools must be labeled by name only: %v", labels)
+	}
+	if !strings.HasSuffix(p.Messages[0].Blocks[3].Label, "Read") {
+		t.Fatalf("tool call label must be the tool name: %q", p.Messages[0].Blocks[3].Label)
 	}
 }
 
@@ -93,7 +135,7 @@ func TestStoreRoundTripToSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
-	prompt, _, _, _, err := SummarizeRequest([]byte(sampleRequest))
+	prompt, _, _, _, err := SummarizeRequest([]byte(sampleRequest), store.Labeler())
 	if err != nil {
 		t.Fatal(err)
 	}

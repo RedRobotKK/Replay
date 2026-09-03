@@ -35,6 +35,7 @@ type upstream struct {
 	gotBeta  string
 	gotBody  []byte
 	gotXFF   string
+	gotToken string
 	gotHost  string
 	release  chan struct{}
 	mode     string
@@ -51,6 +52,7 @@ func (u *upstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	u.gotAuth = r.Header.Get("x-api-key")
 	u.gotBeta = r.Header.Get("anthropic-beta")
 	u.gotXFF = r.Header.Get("X-Forwarded-For")
+	u.gotToken = r.Header.Get(HeaderToken)
 	u.gotHost = r.Host
 	u.gotBody = body
 	u.mu.Unlock()
@@ -87,7 +89,7 @@ func (u *upstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (u *upstream) seen() upstream {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	return upstream{gotAuth: u.gotAuth, gotBeta: u.gotBeta, gotBody: u.gotBody, gotXFF: u.gotXFF, gotHost: u.gotHost, requests: u.requests}
+	return upstream{gotAuth: u.gotAuth, gotBeta: u.gotBeta, gotBody: u.gotBody, gotXFF: u.gotXFF, gotToken: u.gotToken, gotHost: u.gotHost, requests: u.requests}
 }
 
 // syncBuffer is a log sink the test can read while the handler still
@@ -339,8 +341,12 @@ func TestBrowserOriginAndTokenChecks(t *testing.T) {
 	}
 	resp = post(t, base, "/v1/messages", map[string]string{HeaderToken: "tok"})
 	_ = resp.Body.Close()
-	if n := up.seen().requests; resp.StatusCode != http.StatusOK || n != 1 {
-		t.Fatalf("valid token rejected: %d (upstream requests %d)", resp.StatusCode, n)
+	seen := up.seen()
+	if resp.StatusCode != http.StatusOK || seen.requests != 1 {
+		t.Fatalf("valid token rejected: %d (upstream requests %d)", resp.StatusCode, seen.requests)
+	}
+	if seen.gotToken != "" {
+		t.Fatal("the listener token must not be forwarded to the provider")
 	}
 }
 

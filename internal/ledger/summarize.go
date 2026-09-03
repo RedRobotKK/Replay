@@ -1,7 +1,11 @@
 package ledger
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"path"
 
 	"github.com/RedRobotKK/Buffy/internal/transcript"
 )
@@ -37,10 +41,66 @@ type rawBlock struct {
 	CacheControl json.RawMessage `json:"cache_control"`
 }
 
+// Labeler turns tool calls into labels that carry no content. Paths are
+// replaced by a keyed hash that keeps the extension, so the same file
+// attributes consistently within one ledger while the ledger never holds a
+// path; every other argument is dropped and only the tool name remains.
+type Labeler struct {
+	key []byte
+}
+
+// NewLabeler builds a labeler over a secret key. The key never leaves the
+// ledger directory; without it the hashes cannot be matched to a path.
+func NewLabeler(key []byte) *Labeler {
+	return &Labeler{key: key}
+}
+
+// Argument names that hold file paths. Everything else is content.
+var pathArgs = map[string]bool{"file_path": true, "path": true}
+
+// hashedPathBytes is how much of the hash the label keeps.
+const hashedPathBytes = 12
+
+// Label renders "Read r/3f9a…go" for path arguments and just the tool name
+// otherwise.
+func (l *Labeler) Label(name string, input json.RawMessage) string {
+	var args map[string]any
+	if err := json.Unmarshal(input, &args); err != nil {
+		return name
+	}
+	for arg := range pathArgs {
+		v, ok := args[arg].(string)
+		if !ok || v == "" {
+			continue
+		}
+		mac := hmac.New(sha256.New, l.key)
+		mac.Write([]byte(v))
+		ext := path.Ext(v)
+		if !safeExtension(ext) {
+			ext = ""
+		}
+		return name + " r/" + hex.EncodeToString(mac.Sum(nil))[:hashedPathBytes] + ext
+	}
+	return name
+}
+
+// safeExtension accepts short, alphanumeric extensions only.
+func safeExtension(ext string) bool {
+	if len(ext) < 2 || len(ext) > 8 || ext[0] != '.' {
+		return false
+	}
+	for _, r := range ext[1:] {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
+}
+
 // SummarizeRequest reduces a Messages API request body to its structure.
 // It returns the model and stream flag alongside so the caller does not
-// parse the body twice.
-func SummarizeRequest(body []byte) (Prompt, string, bool, string, error) {
+// parse the body twice. Labels come from the labeler and carry no content.
+func SummarizeRequest(body []byte, labeler *Labeler) (Prompt, string, bool, string, error) {
 	var req rawRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		return Prompt{}, "", false, "", err
@@ -70,7 +130,7 @@ func SummarizeRequest(body []byte) (Prompt, string, bool, string, error) {
 			if len(b.CacheControl) > 0 {
 				p.CacheControlCount++
 			}
-			msg.Blocks = append(msg.Blocks, summarizeBlock(b, m.Role, toolNames))
+			msg.Blocks = append(msg.Blocks, summarizeBlock(b, m.Role, toolNames, labeler))
 		}
 		p.Messages = append(p.Messages, msg)
 	}
@@ -111,7 +171,7 @@ func hasCacheControl(raw json.RawMessage) bool {
 	return json.Unmarshal(raw, &probe) == nil && len(probe.CacheControl) > 0
 }
 
-func summarizeBlock(b rawBlock, role string, toolNames map[string]string) Block {
+func summarizeBlock(b rawBlock, role string, toolNames map[string]string, labeler *Labeler) Block {
 	switch b.Type {
 	case transcript.KindText:
 		label := "user text"
@@ -122,7 +182,11 @@ func summarizeBlock(b rawBlock, role string, toolNames map[string]string) Block 
 	case transcript.KindThinking:
 		return Block{Kind: b.Type, Bytes: len(b.Thinking), Label: "assistant thinking"}
 	case transcript.KindToolUse:
-		toolNames[b.ID] = transcript.ToolLabel(b.Name, b.Input)
+		if labeler != nil {
+			toolNames[b.ID] = labeler.Label(b.Name, b.Input)
+		} else {
+			toolNames[b.ID] = b.Name
+		}
 		return Block{Kind: b.Type, Bytes: len(b.Name) + transcript.ContentBytes(b.Input), Label: "tool call: " + b.Name, ToolUseID: b.ID}
 	case transcript.KindToolResult:
 		name := toolNames[b.ToolUseID]

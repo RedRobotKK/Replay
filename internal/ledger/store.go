@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"bufio"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -23,22 +24,51 @@ const (
 // safeName restricts session ids to characters that are safe in a file name.
 var safeName = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
+// labelKeyFile holds the per-ledger key that keys path hashes in labels.
+const (
+	labelKeyFile  = ".label-key"
+	labelKeyBytes = 32
+)
+
 // Store appends records to one file per session.
 type Store struct {
-	dir string
-	mu  sync.Mutex
+	dir     string
+	labeler *Labeler
+	mu      sync.Mutex
 }
 
-// Open creates the ledger directory if needed.
+// Open creates the ledger directory and its label key if needed.
 func Open(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, dirPerm); err != nil {
 		return nil, fmt.Errorf("create ledger directory: %w", err)
 	}
-	return &Store{dir: dir}, nil
+	key, err := loadOrCreateKey(filepath.Join(dir, labelKeyFile))
+	if err != nil {
+		return nil, err
+	}
+	return &Store{dir: dir, labeler: NewLabeler(key)}, nil
+}
+
+func loadOrCreateKey(path string) ([]byte, error) {
+	key, err := os.ReadFile(path)
+	if err == nil && len(key) == labelKeyBytes {
+		return key, nil
+	}
+	key = make([]byte, labelKeyBytes)
+	if _, err := rand.Read(key); err != nil {
+		return nil, fmt.Errorf("generate label key: %w", err)
+	}
+	if err := os.WriteFile(path, key, filePerm); err != nil {
+		return nil, fmt.Errorf("write label key: %w", err)
+	}
+	return key, nil
 }
 
 // Dir is the ledger directory.
 func (s *Store) Dir() string { return s.dir }
+
+// Labeler is the store's content-free labeler.
+func (s *Store) Labeler() *Labeler { return s.labeler }
 
 // Append writes one record to its session file.
 func (s *Store) Append(rec Record) error {
@@ -168,13 +198,15 @@ func requestFromRecord(rec Record, index int) *transcript.Request {
 	for i, m := range rec.Prompt.Messages {
 		msg := &transcript.Message{UUID: messageUUID(i, m), Role: m.Role, Timestamp: rec.Timestamp}
 		for _, b := range m.Blocks {
-			msg.Blocks = append(msg.Blocks, transcript.Block{Kind: b.Kind, Label: b.Label, Bytes: b.Bytes, ToolUseID: b.ToolUseID, IsError: b.IsError})
+			// Ledger files are data any local process could have written;
+			// labels are sanitized again on the way to a terminal.
+			msg.Blocks = append(msg.Blocks, transcript.Block{Kind: b.Kind, Label: transcript.SanitizeLabel(b.Label), Bytes: b.Bytes, ToolUseID: b.ToolUseID, IsError: b.IsError})
 		}
 		req.Context = append(req.Context, msg)
 	}
 	req.Output = &transcript.Message{UUID: "out-" + req.ID, Role: transcript.RoleAssistant, Timestamp: rec.Timestamp.Add(time.Duration(rec.LatencyMS) * time.Millisecond)}
 	for _, b := range rec.Response.Blocks {
-		req.Output.Blocks = append(req.Output.Blocks, transcript.Block{Kind: b.Kind, Label: b.Label, Bytes: b.Bytes, ToolUseID: b.ToolUseID})
+		req.Output.Blocks = append(req.Output.Blocks, transcript.Block{Kind: b.Kind, Label: transcript.SanitizeLabel(b.Label), Bytes: b.Bytes, ToolUseID: b.ToolUseID})
 	}
 	return req
 }

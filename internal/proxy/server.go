@@ -99,8 +99,10 @@ func New(cfg Config) (*Server, error) {
 			r.Out.Host = cfg.Upstream.Host
 			// The default rewrite appends the client address; the provider
 			// has no use for it and the request should carry nothing the
-			// client did not send.
+			// client did not send. Buffy's own listener token is not the
+			// client's header to the provider either.
 			r.Out.Header.Del("X-Forwarded-For")
+			r.Out.Header.Del(HeaderToken)
 		},
 		Transport: &http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
@@ -192,7 +194,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	r.ContentLength = int64(len(body))
 
 	if isMessages(r.URL.Path) && len(body) > 0 {
-		prompt, model, stream, effort, err := ledger.SummarizeRequest(body)
+		prompt, model, stream, effort, err := ledger.SummarizeRequest(body, s.cfg.Store.Labeler())
 		if err == nil {
 			rec.Prompt, rec.Model, rec.Stream, rec.Effort = prompt, model, stream, effort
 		}
