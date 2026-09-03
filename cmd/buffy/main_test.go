@@ -75,7 +75,7 @@ func TestCorpusOnFixture(t *testing.T) {
 		t.Fatalf("corpus: %v (stderr: %s)", err, errOut.String())
 	}
 	got := out.String()
-	for _, want := range []string{"# Calibration Corpus", "| Session |", "Overall match rate:", "## Break causes", "client re-rendered history"} {
+	for _, want := range []string{"# Calibration Corpus", "| Session |", "Overall match rate:", "## Per model", "minimum cacheable prefix", "## Break causes", "client re-rendered history"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("corpus output missing %q", want)
 		}

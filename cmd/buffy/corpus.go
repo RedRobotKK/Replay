@@ -57,11 +57,13 @@ func runCorpus(args []string, stdout, stderr io.Writer) error {
 	var rows []corpusRow
 	var failures []string
 	// The visitor never fails, so the walk cannot either.
+	var reports []*analysis.LaneReport
 	_ = forEachSession(files, func(_ string, session *transcript.Session, rep *analysis.LaneReport, err error) error {
 		if err != nil {
 			failures = append(failures, err.Error())
 			return nil
 		}
+		reports = append(reports, rep)
 		row := corpusRow{
 			id:       prefixID(session.ID),
 			client:   session.ClientVersion,
@@ -82,10 +84,10 @@ func runCorpus(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("no session could be analyzed (%d failures)", len(failures))
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].requests > rows[j].requests })
-	return writeCorpus(stdout, rows, failures)
+	return writeCorpus(stdout, rows, analysis.ModelCalibrations(reports), failures)
 }
 
-func writeCorpus(w io.Writer, rows []corpusRow, failures []string) error {
+func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibration, failures []string) error {
 	p := analysis.NewPrinter(w)
 	p.Printf("# Calibration Corpus\n\n")
 	p.Printf("How well the replay engine reproduces the provider's cache reads across %d sessions found on one machine on %s. Rows carry a session id prefix, never a path, project name, or content.\n\n", len(rows), time.Now().UTC().Format("2006-01-02"))
@@ -116,6 +118,33 @@ func writeCorpus(w io.Writer, rows []corpusRow, failures []string) error {
 	p.Printf("- Overall match rate: %.2f%%\n", overall*100)
 	if len(rows) < corpusTarget {
 		p.Printf("- Fewer than %d sessions: the roadmap gate for spikes 1 and 2 is not met by this corpus alone\n", corpusTarget)
+	}
+
+	p.Printf("\n## Per model\n\n")
+	p.Printf("Calibration by the model of each session's first request, with the newest %d sessions judged on their own so a provider rule change shows as a drop (ST-1). The minimum cacheable prefix is bounded from usage: the largest uncached prompt lies below it, the smallest cached prefix at or above it.\n\n", analysis.StalenessRecentSessions)
+	p.Printf("| Model | Sessions | Match rate | Recent sessions | Recent match rate | Verdict |\n")
+	p.Printf("|---|---:|---:|---:|---:|---|\n")
+	for _, m := range models {
+		verdict := "calibrated"
+		switch {
+		case m.Stale:
+			verdict = "stale: provider behavior changed"
+		case m.MatchRate() < analysis.CalibrationThreshold:
+			verdict = "below threshold"
+		}
+		p.Printf("| %s | %d | %.1f%% | %d | %.1f%% | %s |\n", m.Model, m.Sessions, m.MatchRate()*100, m.RecentSessions, m.RecentMatchRate()*100, verdict)
+	}
+	for _, m := range models {
+		p.Printf("\n- %s: %s", m.Model, m.MinPrefix)
+		if m.MinPrefix.Disagrees() {
+			p.Printf("; the rules file disagrees with the observations")
+		}
+		if m.Stale {
+			p.Printf("\n  %s", m.Reason)
+		}
+	}
+	if len(models) > 0 {
+		p.Printf("\n")
 	}
 
 	p.Printf("\n## Break causes\n\n")

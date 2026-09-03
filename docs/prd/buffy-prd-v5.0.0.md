@@ -285,8 +285,8 @@ Initial catalog for v0.3: `freeze-system-prompt` (diagnostic only, reports when 
 
 | ID | Requirement | Acceptance |
 |----|-------------|------------|
-| ST-1 | When calibration for a model drops below threshold on new sessions, Buffy reports that the provider's behavior changed, stops scoring alternatives for that model, and attempts to refit the parameters it can infer (minimum cacheable size, effective lookback). | Simulated rule change test. |
-| ST-2 | Rules it cannot infer remain in the versioned rules file with a documented update process. | Documentation. |
+| ST-1 | When calibration for a model drops below threshold on new sessions, Buffy reports that the provider's behavior changed, stops scoring alternatives for that model, and attempts to refit the parameters it can infer (minimum cacheable size, effective lookback). **Status:** implemented offline in `buffy corpus` and `buffy learn`; the minimum cacheable size is bounded from usage, the lookback is not inferable from usage and is not refit. | Simulated rule change test. |
+| ST-2 | Rules it cannot infer remain in the versioned rules file with a documented update process. **Status:** documented in `docs/architecture/replay-engine.md`. | Documentation. |
 
 ## 9. Client and platform support
 
