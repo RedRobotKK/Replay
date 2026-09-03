@@ -197,7 +197,7 @@ func maskingFromFlags(on bool, patternsFile string, rehydrate bool, project stri
 			return nil, nil, fmt.Errorf("find the project directory: %w", err)
 		}
 	}
-	project, err = filepath.Abs(project)
+	project, err = masking.ResolveRoot(project)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolve the project directory: %w", err)
 	}

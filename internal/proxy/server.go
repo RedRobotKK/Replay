@@ -458,6 +458,10 @@ func (h *rehydration) modify(resp *http.Response) {
 	case ledger.IsEventStream(ct):
 		h.stream = h.rh.NewStream()
 		resp.Body = masking.NewTransformReader(resp.Body, h.stream)
+		// The rewritten stream's length is unknown; a declared one
+		// would cut the client off.
+		resp.Header.Del("Content-Length")
+		resp.ContentLength = -1
 	case strings.HasPrefix(strings.ToLower(ct), "application/json"):
 		body, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseBytes+1))
 		if err != nil {

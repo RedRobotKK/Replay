@@ -174,33 +174,39 @@ func ParseScopes(project string, specs []string, known []Pattern) (Scopes, error
 	return out, nil
 }
 
-// fileEditTools are tools whose input names a file the agent writes.
-// Anything else, shell and network tools included, is denied by default.
-var fileEditTools = map[string]bool{
-	"Edit": true, "Write": true, "MultiEdit": true, "NotebookEdit": true,
-	"str_replace_editor": true, "str_replace_based_edit_tool": true,
-	"create_file": true, "write_file": true, "edit_file": true, "write_to_file": true, "replace_in_file": true,
+// fileEditTools are tools whose input names a file the agent writes,
+// each with the input key that names its target. Anything else, shell and
+// network tools included, is denied by default.
+var fileEditTools = map[string]string{
+	"Edit": "file_path", "Write": "file_path", "MultiEdit": "file_path", "NotebookEdit": "notebook_path",
+	"str_replace_editor": "path", "str_replace_based_edit_tool": "path",
+	"create_file": "path", "write_to_file": "path", "replace_in_file": "path",
+	"write_file": "file_path", "edit_file": "target_file",
 }
 
-// pathKeys are the input fields file-edit tools use for their target.
+// pathKeys are every input field a file-edit tool is known to use for
+// its target. A file edit receives a secret only when its own key is
+// present and every path-like field is inside the project, so a decoy
+// in-project path next to the real target does not open the scope.
 var pathKeys = []string{"file_path", "path", "notebook_path", "filePath", "target_file"}
 
 // toolDestination classifies a tool call by name and input. The input is
 // the tool's JSON object as text.
 func (s Scopes) toolDestination(tool string, input []byte) Destination {
-	if !fileEditTools[tool] {
+	key, ok := fileEditTools[tool]
+	if !ok {
 		return Destination{Kind: DestinationTool, Tool: tool}
 	}
 	d := Destination{Kind: DestinationEdit, Tool: tool}
-	path, err := inputPath(input)
+	paths, err := inputPaths(input)
 	switch {
 	case err != nil:
 		d.Reason = ReasonUnparsedInput
-	case path == "":
+	case paths[key] == "":
 		d.Reason = ReasonNoPath
 	case s.Project == "":
 		d.Reason = ReasonNoProject
-	case !insideProject(s.Project, path):
+	case !allInside(s.Project, paths):
 		d.Reason = ReasonOutsideProject
 	default:
 		d.Inside = true
@@ -208,9 +214,19 @@ func (s Scopes) toolDestination(tool string, input []byte) Destination {
 	return d
 }
 
+func allInside(root string, paths map[string]string) bool {
+	for _, p := range paths {
+		if !insideProject(root, p) {
+			return false
+		}
+	}
+	return true
+}
+
 // insideProject reports whether a path, relative ones taken from the
-// root, stays under the root after cleaning. Symbolic links are not
-// resolved: a link inside the project that points outside is not detected.
+// root, stays under the root. Symbolic links along the part of the path
+// that exists are resolved, so a link inside the project that points
+// outside is seen; a link that does not exist yet cannot be.
 func insideProject(root, path string) bool {
 	if strings.Contains(path, PlaceholderPrefix) {
 		return false
@@ -218,9 +234,36 @@ func insideProject(root, path string) bool {
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(root, path)
 	}
-	rel, err := filepath.Rel(root, filepath.Clean(path))
+	rel, err := filepath.Rel(root, resolveExisting(filepath.Clean(path)))
 	if err != nil || filepath.IsAbs(rel) {
 		return false
 	}
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// ResolveRoot returns the project root with symbolic links resolved, as
+// paths are compared against it.
+func ResolveRoot(root string) (string, error) {
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return "", err
+	}
+	return resolveExisting(abs), nil
+}
+
+// resolveExisting resolves symbolic links in the deepest ancestor of a
+// clean path that exists and re-attaches the rest unchanged.
+func resolveExisting(path string) string {
+	rest := ""
+	for cur := path; ; {
+		if resolved, err := filepath.EvalSymlinks(cur); err == nil {
+			return filepath.Join(resolved, rest)
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return path
+		}
+		rest = filepath.Join(filepath.Base(cur), rest)
+		cur = parent
+	}
 }

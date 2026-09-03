@@ -1685,28 +1685,24 @@ func (u *rehydrationUpstream) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	ph := string(placeholderPattern.Find(body))
 	path, _ := json.Marshal(filepath.Join(u.project, "cfg.env"))
 	cut := max(len(ph)-5, 0)
-	switch r.Header.Get("X-Test-Mode") {
-	case "stream":
+	switch mode := r.Header.Get("X-Test-Mode"); mode {
+	case "stream", "stream-length":
 		w.Header().Set("Content-Type", "text/event-stream")
+		var events []string
+		total := 0
+		for _, ev := range streamFixture(ph, cut, path) {
+			events = append(events, "event: x\ndata: "+ev+"\n\n")
+			total += len(events[len(events)-1])
+		}
+		if mode == "stream-length" {
+			// An intermediary that buffers the stream and declares its
+			// length; the rewritten stream is longer.
+			w.Header().Set("Content-Length", strconv.Itoa(total))
+		}
 		w.WriteHeader(http.StatusOK)
 		fl := w.(http.Flusher)
-		for _, ev := range []string{
-			`{"type":"message_start","message":{"usage":{"input_tokens":4,"output_tokens":1}}}`,
-			`{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
-			`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"key is ` + ph[:cut] + `"}}`,
-			`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"` + ph[cut:] + ` ok"}}`,
-			`{"type":"content_block_stop","index":0}`,
-			`{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"t1","name":"Bash","input":{}}}`,
-			`{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"command\": \"echo ` + ph + `\"}"}}`,
-			`{"type":"content_block_stop","index":1}`,
-			`{"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":"t2","name":"Edit","input":{}}}`,
-			`{"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"{\"new_string\": \"K=` + ph + `\", "}}`,
-			`{"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"\"file_path\": ` + strings.ReplaceAll(strings.ReplaceAll(string(path), `\`, `\\`), `"`, `\"`) + `}"}}`,
-			`{"type":"content_block_stop","index":2}`,
-			`{"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":9}}`,
-			`{"type":"message_stop"}`,
-		} {
-			_, _ = io.WriteString(w, "event: x\ndata: "+ev+"\n\n")
+		for _, ev := range events {
+			_, _ = io.WriteString(w, ev)
 			fl.Flush()
 		}
 	case "gzip":
@@ -1718,6 +1714,25 @@ func (u *rehydrationUpstream) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	default:
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"id":"m","type":"message","role":"assistant","content":[{"type":"text","text":"key is `+ph+`"},{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"echo `+ph+`"}},{"type":"tool_use","id":"t2","name":"Edit","input":{"file_path":`+string(path)+`,"new_string":"K=`+ph+`"}}],"usage":{"input_tokens":4,"output_tokens":2}}`)
+	}
+}
+
+func streamFixture(ph string, cut int, path []byte) []string {
+	return []string{
+		`{"type":"message_start","message":{"usage":{"input_tokens":4,"output_tokens":1}}}`,
+		`{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+		`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"key is ` + ph[:cut] + `"}}`,
+		`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"` + ph[cut:] + ` ok"}}`,
+		`{"type":"content_block_stop","index":0}`,
+		`{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"t1","name":"Bash","input":{}}}`,
+		`{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"command\": \"echo ` + ph + `\"}"}}`,
+		`{"type":"content_block_stop","index":1}`,
+		`{"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":"t2","name":"Edit","input":{}}}`,
+		`{"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"{\"new_string\": \"K=` + ph + `\", "}}`,
+		`{"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"\"file_path\": ` + strings.ReplaceAll(strings.ReplaceAll(string(path), `\`, `\\`), `"`, `\"`) + `}"}}`,
+		`{"type":"content_block_stop","index":2}`,
+		`{"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":9}}`,
+		`{"type":"message_stop"}`,
 	}
 }
 
@@ -1781,6 +1796,10 @@ func TestRehydrationRestoresPlaceholdersWithinScope(t *testing.T) {
 		t.Fatalf("the in-project edit must be restored:\n%s", stream)
 	}
 
+	if withLength := fetch("stream-length"); withLength != stream {
+		t.Fatalf("a declared length must not cut the rewritten stream:\n%s", withLength)
+	}
+
 	plain := fetch("json")
 	if strings.Count(plain, canary) != 2 || !strings.Contains(plain, `"command":"echo `+ph+`"`) || !json.Valid([]byte(plain)) {
 		t.Fatalf("json response: %s", plain)
@@ -1796,14 +1815,14 @@ func TestRehydrationRestoresPlaceholdersWithinScope(t *testing.T) {
 		t.Fatalf("a compressed response must pass untouched: %s", unzipped)
 	}
 
-	recs := waitLedger(t, dir, 3)
-	for i := range 2 {
+	recs := waitLedger(t, dir, 4)
+	for i := range 3 {
 		if recs[i].Rehydrated["text"] != 1 || recs[i].Rehydrated["edit:Edit"] != 1 || recs[i].RehydrationDenied["tool:Bash/scope"] != 1 {
 			t.Fatalf("record %d: %+v %+v", i, recs[i].Rehydrated, recs[i].RehydrationDenied)
 		}
 	}
-	if len(recs[2].Rehydrated) != 0 || len(recs[2].RehydrationDenied) != 0 {
-		t.Fatalf("compressed response must count nothing: %+v", recs[2])
+	if len(recs[3].Rehydrated) != 0 || len(recs[3].RehydrationDenied) != 0 {
+		t.Fatalf("compressed response must count nothing: %+v", recs[3])
 	}
 	files, _ := filepath.Glob(filepath.Join(dir, "*.jsonl"))
 	for _, f := range files {
@@ -1825,7 +1844,7 @@ func TestRehydrationRestoresPlaceholdersWithinScope(t *testing.T) {
 		t.Fatalf("log must hold neither the secret nor the placeholder:\n%s", logs.String())
 	}
 	st := getStatus(t, base)
-	if len(st.Sessions) != 1 || st.Sessions[0].Rehydrated != 4 || st.Sessions[0].RehydrationDenied != 2 {
+	if len(st.Sessions) != 1 || st.Sessions[0].Rehydrated != 6 || st.Sessions[0].RehydrationDenied != 3 {
 		t.Fatalf("status must count rehydration: %+v", st.Sessions)
 	}
 	resp, err := http.Get(base + "/buffy/metrics")
@@ -1834,7 +1853,7 @@ func TestRehydrationRestoresPlaceholdersWithinScope(t *testing.T) {
 	}
 	metrics, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	for _, want := range []string{`buffy_rehydrated_total{destination="text"} 2`, `buffy_rehydrated_total{destination="edit:Edit"} 2`, `buffy_rehydration_denied_total{destination="tool:Bash/scope"} 2`} {
+	for _, want := range []string{`buffy_rehydrated_total{destination="text"} 3`, `buffy_rehydrated_total{destination="edit:Edit"} 3`, `buffy_rehydration_denied_total{destination="tool:Bash/scope"} 3`} {
 		if !strings.Contains(string(metrics), want) {
 			t.Fatalf("metrics missing %q:\n%s", want, metrics)
 		}

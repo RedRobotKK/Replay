@@ -231,12 +231,15 @@ func (r *Rehydrator) restoreJSONText(doc []byte, dest Destination, rep *Rehydrat
 	return append(out, doc[last:]...), true
 }
 
-// inputPath finds a file-edit tool's target path in its input object.
-func inputPath(input []byte) (string, error) {
+// inputPaths collects every path-like string field of a file-edit tool's
+// input object, by key. A path-like field that is not a string is an
+// unreadable input.
+func inputPaths(input []byte) (map[string]string, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(input, &fields); err != nil {
-		return "", err
+		return nil, err
 	}
+	paths := map[string]string{}
 	for _, k := range pathKeys {
 		raw, ok := fields[k]
 		if !ok {
@@ -244,9 +247,9 @@ func inputPath(input []byte) (string, error) {
 		}
 		var p string
 		if err := json.Unmarshal(raw, &p); err != nil {
-			return "", err
+			return nil, err
 		}
-		return p, nil
+		paths[k] = p
 	}
-	return "", nil
+	return paths, nil
 }
