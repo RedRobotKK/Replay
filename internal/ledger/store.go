@@ -337,6 +337,8 @@ type Pin struct {
 	// Trial says which arm of a live trial the session is in: "treated"
 	// or "control"; empty when no trial was running.
 	Trial string `json:"trial,omitempty"`
+	// Type is the session type the selection was looked up for.
+	Type string `json:"type,omitempty"`
 }
 
 // revertFile holds the one revert record, if a trial was reverted.

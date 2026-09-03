@@ -144,6 +144,28 @@ func TestScoreOnTheFixture(t *testing.T) {
 	}
 }
 
+func TestSelectionForFallsBackToOverall(t *testing.T) {
+	large := Catalog()[3]
+	overall := Catalog()[2]
+	res := Result{Schema: PolicyFileSchema, Rules: cachemodel.RulesVersion, Selected: &overall, Types: []TypeResult{{Type: "opus/large-prefix", Selected: &large}, {Type: "opus/small-prefix", Reason: "too few"}}}
+	if c, note := res.SelectionFor("opus/large-prefix"); note != "" || c == nil || c.Name != large.Name {
+		t.Fatalf("typed selection: %+v %q", c, note)
+	}
+	if c, note := res.SelectionFor("opus/small-prefix"); note != "" || c == nil || c.Name != overall.Name {
+		t.Fatalf("a type without a selection falls back to the overall one: %+v %q", c, note)
+	}
+	if c, note := res.SelectionFor(""); note != "" || c == nil || c.Name != overall.Name {
+		t.Fatalf("empty type is the overall selection: %+v %q", c, note)
+	}
+	res.Selected = nil
+	if c, note := res.SelectionFor("opus/small-prefix"); c != nil || !strings.Contains(note, "selects nothing") {
+		t.Fatalf("no selection anywhere: %+v %q", c, note)
+	}
+	if got := TypeFromBytes("claude-opus-5", largePrefixTokens*BytesPerTokenEstimate); got != "opus/large-prefix" {
+		t.Fatalf("TypeFromBytes = %q", got)
+	}
+}
+
 func TestLoadSelectedRejectsStaleFiles(t *testing.T) {
 	dir := t.TempDir()
 	write := func(name string, res Result) string {
