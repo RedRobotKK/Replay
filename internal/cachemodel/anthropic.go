@@ -181,7 +181,7 @@ type BreakCause string
 const (
 	CauseTTLExpired   BreakCause = "cache expired (gap longer than the TTL)"
 	CauseModelChanged BreakCause = "model changed between requests"
-	CausePrefixChange BreakCause = "system prompt or tool definitions changed (not visible in transcripts)"
+	CausePrefixChange BreakCause = "system prompt or tool definitions changed"
 	CauseEffortChange BreakCause = "effort or thinking setting changed"
 	CauseHistoryEdit  BreakCause = "an earlier message was edited or removed"
 	CauseRerendered   BreakCause = "client re-rendered history after the system prefix (no edit visible in transcript)"

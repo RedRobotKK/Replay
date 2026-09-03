@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -17,6 +18,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/RedRobotKK/Buffy/internal/analysis"
+	"github.com/RedRobotKK/Buffy/internal/cachemodel"
 	"github.com/RedRobotKK/Buffy/internal/ledger"
 )
 
@@ -647,5 +650,146 @@ func TestStatusEndpointsHonorTokenAndOrigin(t *testing.T) {
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("status with browser origin: %d", resp.StatusCode)
+	}
+}
+
+// invariantUpstream reports usage that follows the expected-read
+// invariant turn after turn: each request reads everything the previous
+// one billed except its uncached tail, and writes the new content. The
+// system prompt's hash is checked so a changed prefix shows as a zero read.
+type invariantUpstream struct {
+	mu         sync.Mutex
+	prompt     int
+	prefixHash string
+	perTurn    int
+}
+
+const invariantTail = 20
+
+func (u *invariantUpstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body)
+	var req struct {
+		System json.RawMessage `json:"system"`
+	}
+	_ = json.Unmarshal(body, &req)
+	u.mu.Lock()
+	read := 0
+	if u.prompt > 0 && string(req.System) == u.prefixHash {
+		read = u.prompt - invariantTail
+	}
+	u.prompt += u.perTurn
+	u.prefixHash = string(req.System)
+	creation := u.prompt - read - invariantTail
+	u.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = fmt.Fprintf(w, `{"id":"m","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":%d,"cache_creation_input_tokens":%d,"cache_read_input_tokens":%d,"output_tokens":5}}`, invariantTail, creation, read)
+}
+
+// growingBody renders turn n of a conversation whose every turn adds a
+// user message large enough to fit on.
+func growingBody(system string, turn int) string {
+	filler := strings.Repeat("x", 700)
+	msgs := []string{`{"role":"user","content":"` + filler + `"}`}
+	for i := 1; i < turn; i++ {
+		msgs = append(msgs, `{"role":"assistant","content":"ok"}`, `{"role":"user","content":"`+filler+`"}`)
+	}
+	return `{"model":"claude-opus-5","max_tokens":50,"system":"` + system + `","messages":[` + strings.Join(msgs, ",") + `]}`
+}
+
+func postTurn(t *testing.T, base, body string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, base+"/v1/messages", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(HeaderSessionID, "session-grow")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+}
+
+func getStatus(t *testing.T, base string) Status {
+	t.Helper()
+	resp, err := http.Get(base + "/buffy/status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // test read
+	var st Status
+	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
+		t.Fatal(err)
+	}
+	return st
+}
+
+// The live what-if figures must be exactly what buffy replay prints for
+// the same ledger, since they come from the same simulator over the same
+// records; and the candidates must never touch the wire.
+func TestWhatIfMatchesOfflineReplayAndStaysOffTheWire(t *testing.T) {
+	up := &invariantUpstream{perTurn: 800}
+	base, dir, logs := startProxy(t, up, "")
+	const turns = whatIfLogEvery
+	for i := 1; i <= turns; i++ {
+		postTurn(t, base, growingBody("be brief", i))
+		waitLedger(t, dir, i)
+	}
+	waitFor(t, "what-if to be scored", func() bool {
+		st := getStatus(t, base)
+		return len(st.Sessions) == 1 && len(st.Sessions[0].WhatIf) > 1
+	})
+	st := getStatus(t, base)
+	live := st.Sessions[0].WhatIf
+	if live[0].Policy != "as-run" || live[0].VsAsRun != 0 || live[0].Estimated {
+		t.Fatalf("as-run must lead and be measured: %+v", live[0])
+	}
+
+	matches, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+	if err != nil || len(matches) != 1 {
+		t.Fatalf("ledger files: %v %v", matches, err)
+	}
+	session, err := ledger.ReadFile(matches[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	offline := analysis.AnalyzeLane(session, analysis.MainLane(session)).Policies()
+	if len(offline) != len(live) {
+		t.Fatalf("live scored %d policies, offline %d", len(live), len(offline))
+	}
+	for i := range offline {
+		if offline[i].Name != live[i].Policy || offline[i].EffectiveTokens != live[i].EffectiveTokens || offline[i].CostUSD != live[i].ListCostUSD {
+			t.Fatalf("policy %d differs live vs offline:\n%+v\n%+v", i, live[i], offline[i])
+		}
+	}
+	if !strings.Contains(logs.String(), "what-if session=") {
+		t.Fatalf("what-if line not logged after %d requests:\n%s", turns, logs.String())
+	}
+	// Dry-run means dry: the upstream saw exactly the client's bodies.
+	if strings.Contains(logs.String(), "context_management") {
+		t.Fatal("candidate parameters must not reach the log or the wire")
+	}
+}
+
+func TestPrefixChangeIsNamedAsBreakCause(t *testing.T) {
+	base, dir, _ := startProxy(t, &invariantUpstream{perTurn: 800}, "")
+	postTurn(t, base, growingBody("be brief", 1))
+	waitLedger(t, dir, 1)
+	postTurn(t, base, growingBody("be verbose", 2))
+	recs := waitLedger(t, dir, 2)
+	if recs[1].Cache == nil || recs[1].Cache.Cause != cachemodel.CausePrefixChange {
+		t.Fatalf("a changed system prompt must be named as the cause: %+v", recs[1].Cache)
+	}
+	if recs[0].PrefixHash == "" || recs[0].PrefixHash == recs[1].PrefixHash {
+		t.Fatalf("prefix hashes must be recorded and differ: %q %q", recs[0].PrefixHash, recs[1].PrefixHash)
+	}
+	st := getStatus(t, base)
+	if len(st.Sessions) != 1 || st.Sessions[0].PrefixChanges != 1 || st.Sessions[0].Breaks != 1 {
+		t.Fatalf("status must count the prefix change: %+v", st.Sessions)
 	}
 }

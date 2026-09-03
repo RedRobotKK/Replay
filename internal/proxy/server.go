@@ -264,7 +264,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			rec.RequestSummary = sum
 		}
 		if rec.SessionID == "" {
-			rec.SessionID = rec.PrefixHash
+			rec.SessionID = rec.SessionHash
 		}
 		if !s.guard(w, r, &rec) {
 			return
@@ -296,6 +296,10 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 				s.cfg.Logger.Printf("ledger write failed: %v", err)
 			}
 		}
+		whatIf := ""
+		if messages && rec.SessionID != "" && rec.Response.Usage != nil {
+			whatIf = s.stats.rescore(&rec)
+		}
 		note := ""
 		if aborted != nil {
 			note = " aborted=client-disconnected"
@@ -303,6 +307,9 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		s.cfg.Logger.Printf("%s %s status=%d ms=%d session=%s model=%s %s%s", r.Method, r.URL.Path, rec.Status, rec.LatencyMS, short(rec.SessionID), rec.Model, usageSummary(rec.Response.Usage), note)
 		if rec.Cache != nil && rec.Cache.Deficit > 0 {
 			s.cfg.Logger.Printf("cache break session=%s: read %d of %d expected, %d tokens re-billed; likely cause: %s", short(rec.SessionID), rec.Response.Usage.CacheRead, rec.Cache.Expected, rec.Cache.Deficit, rec.Cache.Cause)
+		}
+		if whatIf != "" {
+			s.cfg.Logger.Print(whatIf)
 		}
 		if aborted != nil {
 			panic(aborted)

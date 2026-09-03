@@ -158,25 +158,51 @@ func ReadFile(path string) (*transcript.Session, error) {
 	return sessionFromRecords(records, path, skipped), nil
 }
 
-// sessionFromRecords builds lanes from records: one lane per agent id, in
-// order of first appearance. Only records that carry usage become
-// requests; the rest (count_tokens, errors) are counted as skipped.
-// Messages are memoized by identity, since every request's context is a
-// prefix of the next one's.
+// sessionFromRecords builds a session from a whole file.
 func sessionFromRecords(records []Record, path string, skipped int) *transcript.Session {
 	sort.SliceStable(records, func(i, j int) bool { return records[i].Timestamp.Before(records[j].Timestamp) })
-	session := &transcript.Session{ID: records[0].SessionID, Path: path, Source: transcript.SourceLedger, Skipped: skipped}
-	memo := map[string]*transcript.Message{}
-	for i, rec := range records {
-		if rec.Response.Usage == nil || len(rec.Prompt.Messages) == 0 {
-			session.Skipped++
-			continue
-		}
-		lane := session.Lane(rec.AgentID, rec.AgentID != "")
-		lane.Requests = append(lane.Requests, requestFromRecord(rec, i, memo))
+	b := NewSessionBuilder(records[0].SessionID, path)
+	b.session.Skipped = skipped
+	for _, rec := range records {
+		b.Add(rec)
 	}
-	return session
+	return b.Session()
 }
+
+// SessionBuilder turns records into a session one at a time, so the proxy
+// can score a session as it grows with the same code the offline reader
+// uses. One lane per agent id, in order of first appearance. Only records
+// that carry usage become requests; the rest (count_tokens, errors) are
+// counted as skipped. Messages are memoized by identity, since every
+// request's context is a prefix of the next one's.
+type SessionBuilder struct {
+	session *transcript.Session
+	memo    map[string]*transcript.Message
+	added   int
+}
+
+// NewSessionBuilder starts an empty session at the measured tier.
+func NewSessionBuilder(id, path string) *SessionBuilder {
+	return &SessionBuilder{
+		session: &transcript.Session{ID: id, Path: path, Source: transcript.SourceLedger},
+		memo:    map[string]*transcript.Message{},
+	}
+}
+
+// Add appends one record. Records must arrive in time order.
+func (b *SessionBuilder) Add(rec Record) {
+	b.added++
+	if rec.Response.Usage == nil || len(rec.Prompt.Messages) == 0 {
+		b.session.Skipped++
+		return
+	}
+	lane := b.session.Lane(rec.AgentID, rec.AgentID != "")
+	lane.Requests = append(lane.Requests, requestFromRecord(rec, b.added-1, b.memo))
+}
+
+// Session is the session built so far. Lanes are shared with the builder;
+// callers analyze, they do not modify.
+func (b *SessionBuilder) Session() *transcript.Session { return b.session }
 
 func requestFromRecord(rec Record, index int, memo map[string]*transcript.Message) *transcript.Request {
 	req := &transcript.Request{
@@ -191,7 +217,7 @@ func requestFromRecord(rec Record, index int, memo map[string]*transcript.Messag
 	}
 	// The prefix ahead of the messages is one synthetic system message so
 	// a change in it shows up as a divergence at position zero.
-	prefixID := prefixUUID(rec.Prompt)
+	prefixID := prefixUUID(rec)
 	prefix, ok := memo[prefixID]
 	if !ok {
 		prefix = &transcript.Message{UUID: prefixID, Role: transcript.RoleSystem, Timestamp: rec.Timestamp, Blocks: []Block{
@@ -225,10 +251,14 @@ func sanitized(blocks []Block) []Block {
 	return out
 }
 
-// prefixUUID identifies the system prefix by its sizes, so an unchanged
-// prefix keeps one identity across requests and a changed one does not.
-func prefixUUID(p Prompt) string {
-	return fmt.Sprintf("prefix-%d-%d-%d", p.SystemBytes, p.ToolBytes, p.ToolCount)
+// prefixUUID identifies the system prefix by its hash when the record has
+// one, and by its sizes otherwise, so an unchanged prefix keeps one
+// identity across requests and a changed one does not.
+func prefixUUID(rec Record) string {
+	if rec.PrefixHash != "" {
+		return rec.PrefixHash
+	}
+	return fmt.Sprintf("prefix-%d-%d-%d", rec.Prompt.SystemBytes, rec.Prompt.ToolBytes, rec.Prompt.ToolCount)
 }
 
 // messageUUID identifies a message by position and shape. Ledger records

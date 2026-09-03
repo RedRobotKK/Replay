@@ -99,7 +99,9 @@ What the proxy does and does not do:
 
 Added latency, measured on 2026-09-03 with a 46KB request against a local fake provider on a 4-core Xeon, 300 requests after warm-up: p50 48µs, p99 98µs on top of the round trip. Provider latency is three orders of magnitude larger. The method is in [`docs/reviews/proxy-latency-2026-09-03.md`](docs/reviews/proxy-latency-2026-09-03.md).
 
-While it runs, every response's cache read is checked against the expectation from the previous request, and a break is logged the moment it happens with the tokens re-billed and the likely cause. `GET /buffy/status` returns per-session totals (requests, prompt tokens, cached share, breaks, list cost) as JSON, and `GET /buffy/metrics` exposes the same as Prometheus text. Both honor the token when one is set and refuse browser origins.
+While it runs, every response's cache read is checked against the expectation from the previous request, and a break is logged the moment it happens with the tokens re-billed and the likely cause. Because the proxy hashes the tool definitions and system prompt of every request, a break caused by a changed prefix is named with certainty, which a transcript can only infer.
+
+After every turn the proxy also re-scores the session's candidate layouts (5-minute and 1-hour TTLs, context editing at two triggers) with the same simulator `buffy replay` uses, from measured usage. This is a dry run: nothing changes on the wire, and the live figures are exactly what `buffy replay` prints for the same ledger. `GET /buffy/status` returns per-session totals (requests, prompt tokens, cached share, breaks, prefix changes, list cost) and the `what_if` rows, each with a `vs_as_run` delta and how a user would turn it on, as JSON. `GET /buffy/metrics` exposes the totals as Prometheus text. Both honor the token when one is set and refuse browser origins. Every ten requests a session gets one log line naming its best candidate or saying none beats what ran.
 
 Guards, all off unless you set them (see `buffy serve -h`):
 
