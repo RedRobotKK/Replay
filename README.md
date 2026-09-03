@@ -27,6 +27,7 @@ Buffy addresses each one locally, without changing how the agent works.
 | `buffy replay` | Reproduces your sessions' caching, prints how well it matched the provider's own numbers, then scores alternative layouts in tokens saved |
 | `buffy blame` | Ranks which files, tool descriptions, and instructions are eating your prompt tokens across all sessions |
 | `buffy diff` | Points at the exact turn where the cached prefix diverged and classifies the cause |
+| `buffy corpus` | Calibration summary across every session in a directory, as Markdown with no paths or content, for reporting how well Buffy understands your sessions |
 | `buffy serve` | Local proxy: byte-for-byte passthrough that records what the provider charged, so the three commands above run on measured data (policies and guards come later) |
 
 Every number is labeled *estimated* (from transcripts) or *measured* (from the wire), with the calibration that justifies it. Release sequence, gates, and what is deliberately deferred: [`docs/ROADMAP.md`](docs/ROADMAP.md). Full requirements: [`docs/prd/buffy-prd-v5.0.0.md`](docs/prd/buffy-prd-v5.0.0.md).
@@ -61,6 +62,17 @@ Rules: anthropic-2026-09-01; user-content fit 0.469 tokens/byte ±64% from 34 tu
 ```
 
 The calibration line is the point: Buffy first proves it can reproduce what the provider charged, and only then says anything about alternatives. Every figure is labeled estimated or measured. Here the 1-hour TTL the client chose reproduces as-run to the token, the 5-minute TTL would have cost 35% more across four idle gaps, and context editing would have cost more, not less, for this session shape. How it works: [`docs/architecture/replay-engine.md`](docs/architecture/replay-engine.md).
+
+### Contributing a calibration corpus
+
+The roadmap gate for the first release is calibration on twenty real sessions. If you have Claude Code transcripts, this produces a report that contains no paths, project names, or content:
+
+```sh
+make build
+./bin/buffy corpus ~/.claude/projects > docs/reviews/calibration-corpus-$(date +%F).md
+```
+
+Open it, check that nothing in it identifies your projects, and commit it on a branch.
 
 ### Measured numbers with the proxy
 

@@ -49,6 +49,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return runReport(args[1:], stdout, stderr, func(r *analysis.LaneReport, w io.Writer) error { return r.WriteBlame(w, defaultBlameLimit) })
 	case "diff":
 		return runReport(args[1:], stdout, stderr, (*analysis.LaneReport).WriteDiff)
+	case "corpus":
+		return runCorpus(args[1:], stdout, stderr)
 	case "redact":
 		return runRedact(args[1:], stdout)
 	case "serve":
@@ -186,6 +188,7 @@ Usage:
   buffy replay <transcript|dir>   reproduce caching, then score alternative layouts
   buffy blame  <transcript|dir>   rank what is eating prompt tokens
   buffy diff   <transcript|dir>   locate and classify every cache break
+  buffy corpus <dir...>           calibration summary across many sessions, as Markdown (no paths or content)
   buffy redact <transcript>       strip content, keep structure and usage (for bug reports)
   buffy serve [flags]             local proxy: byte-for-byte passthrough, records a ledger
   buffy version                   print build information

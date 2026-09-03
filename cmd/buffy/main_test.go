@@ -42,6 +42,23 @@ func TestRunRejectsUnknownCommand(t *testing.T) {
 	}
 }
 
+func TestCorpusOnFixture(t *testing.T) {
+	var out, errOut bytes.Buffer
+	err := run([]string{"corpus", "../../internal/transcript/testdata"}, &out, &errOut)
+	if err != nil {
+		t.Fatalf("corpus: %v (stderr: %s)", err, errOut.String())
+	}
+	got := out.String()
+	for _, want := range []string{"# Calibration Corpus", "| Session |", "Overall match rate:", "## Break causes", "client re-rendered history"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("corpus output missing %q", want)
+		}
+	}
+	if strings.Contains(got, "testdata") || strings.Contains(got, "/") && strings.Contains(got, ".jsonl") {
+		t.Errorf("corpus output leaks a path:\n%s", got)
+	}
+}
+
 func TestReplayOnFixture(t *testing.T) {
 	var out, errOut bytes.Buffer
 	err := run([]string{"replay", "../../internal/transcript/testdata/session-redacted.jsonl"}, &out, &errOut)
