@@ -48,7 +48,9 @@ Nightly local re-scoring, held-out validation, session types, bounded live trial
 
 Named pattern set, HMAC-derived placeholders, persistent encrypted vault, scoped rehydration (ADR-0004), per-session masked report.
 
-**Gate:** spike 5 passes; precision and recall published for the pattern set.
+**Status:** masking is implemented as an opt-in flag: the named pattern set with user patterns (MK-1, no entropy heuristic), HMAC placeholders under a per-install vault key (MK-2, keyed per install rather than per project until a project identity exists), a vault encrypted at rest under an owner-only key file rather than the operating system keychain (MK-3, partial), and the per-request masked report on the ledger and status (MK-7). Precision and recall are reported by the corpus test (1.00 and 1.00 on 15 positives and 15 negatives). Rehydration (MK-4 to MK-6) is not built, so the flag is documented as an evaluation of coverage.
+
+**Gate:** spike 5 passes; precision and recall published for the pattern set (done for the repository corpus).
 
 ## 1.0
 

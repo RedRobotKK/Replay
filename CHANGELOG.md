@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Secret masking in `buffy serve --mask` (v0.5, experimental, masking only): a named pattern set plus user patterns replace secrets in outbound bodies with placeholders derived by HMAC under a vault key, changing only the matched bytes and never thinking blocks or signatures; the vault persists encrypted at rest; ledger records, status, and metrics count what was masked by pattern name. The pattern corpus test reports precision and recall. Rehydration of responses is not built yet and the README says so.
+
 - `buffy serve` picks the learned policy by session type at a session's first request, classified from the model and the prompt's size, and records the type on the pin. A type with no selection falls back to the overall one.
 
 - Session types in `buffy learn` (LN-3): sessions are typed by model family and first-prompt size, both known at a session's first request, and the policy file carries one selection per type under the same rules next to the overall one, so a policy that helps large-prefix sessions and hurts small ones is selected for the first and withheld from the second.

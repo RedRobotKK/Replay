@@ -1,0 +1,15 @@
+anthropic-api-key	sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcdefghij
+openai-api-key	sk-proj-Ab12Cd34Ef56Gh78Ij90Kl12Mn34Op56Qr78
+openai-api-key	sk-Ab12Cd34Ef56Gh78Ij90Kl12Mn34Op56Qr78St90
+aws-access-key-id	AKIAIOSFODNN7EXAMPLE
+aws-access-key-id	ASIAQ3ZXAMPLE1234567
+github-token	ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij
+github-token	github_pat_11ABCDEFG0abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOP
+gitlab-token	glpat-AbCdEfGhIjKlMnOpQrSt
+slack-token	xoxb-123456789012-1234567890123-AbCdEfGhIjKlMnOpQrStUvWx
+google-api-key	AIzaSyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q
+stripe-key	sk_live_AbCdEfGhIjKlMnOpQrStUvWx
+stripe-key	rk_test_AbCdEfGhIjKlMnOpQrStUvWx
+jwt	eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+bearer-token	Authorization: Bearer AbCdEfGhIjKlMnOpQrStUvWxYz0123456789
+url-credential	postgres://buffy:Sup3rS3cretPassw0rd@db.internal:5432/app
