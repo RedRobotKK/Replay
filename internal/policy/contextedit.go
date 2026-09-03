@@ -54,6 +54,12 @@ const (
 	// NotConfigured is the decision pinned for a session that started
 	// while no policy was configured or selected.
 	NotConfigured Decision = "no policy configured"
+	// Control is pinned for a session a live trial holds out so the
+	// treated sessions have something to be compared with.
+	Control Decision = "control: held out of the trial"
+	// Reverted is pinned for a session that started after the trial's
+	// guardrail tripped.
+	Reverted Decision = "reverted: the trial's guardrail tripped"
 )
 
 // Validate rejects parameters the provider or the simulator would not
