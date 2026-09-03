@@ -383,13 +383,9 @@ func SortVerdicts(vs []Verdict) {
 // returns no candidate and a note saying so, never an error, because a
 // stale learning result must not stop the proxy.
 func LoadSelected(path string) (*Candidate, string, error) {
-	data, err := os.ReadFile(path)
+	res, err := LoadFile(path)
 	if err != nil {
 		return nil, "", err
-	}
-	var res Result
-	if err := json.Unmarshal(data, &res); err != nil {
-		return nil, "", fmt.Errorf("decode policy file: %w", err)
 	}
 	switch {
 	case res.Schema != PolicyFileSchema:
@@ -400,4 +396,18 @@ func LoadSelected(path string) (*Candidate, string, error) {
 		return nil, "policy file selects nothing: " + res.Reason, nil
 	}
 	return res.Selected, "", nil
+}
+
+// LoadFile reads a policy file whole; callers that need the generation
+// time or the verdicts use it directly.
+func LoadFile(path string) (Result, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Result{}, err
+	}
+	var res Result
+	if err := json.Unmarshal(data, &res); err != nil {
+		return Result{}, fmt.Errorf("decode policy file: %w", err)
+	}
+	return res, nil
 }

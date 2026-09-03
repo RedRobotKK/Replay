@@ -63,6 +63,9 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	retryMax := fs.Duration("retry-max", proxy.DefaultRetryMaxDelay, "longest wait before a retry")
 	editTrigger := fs.Int("context-edit-trigger", 0, "EXPERIMENTAL: ask the provider to clear old tool results once the prompt passes this many tokens, on requests whose client enabled "+policy.BetaFeature+" and set no context_management of its own (0 = off; "+envNoPolicy+"=1 forces off)")
 	editKeep := fs.Int("context-edit-keep", analysis.ContextEditKeepLast, "how many recent tool results a clear keeps")
+	trialShare := fs.Float64("trial-share", proxy.DefaultTrialShare, "share of new sessions that get the policy from -policy-file; the rest run as controls (stable per session id)")
+	guardrail := fs.Float64("guardrail-reread", 0, "revert the policy from -policy-file for new sessions once treated sessions' re-read rate after the provider's first clear reaches this share (0 = off)")
+	revertAfter := fs.Int("revert-after", proxy.DefaultRevertAfter, "how many sessions must breach the guardrail before the policy is reverted")
 	policyFile := fs.String("policy-file", "", "EXPERIMENTAL: apply the context-edit candidate selected by buffy learn (usually ~/.buffy/policy.json), read at each session's first request; an explicit -context-edit-trigger wins; a session keeps its first decision whatever the file does later")
 	if err := fs.Parse(args); err != nil {
 		return errUsage
@@ -109,6 +112,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		Breaker:     proxy.NewBreaker(proxy.BreakerSettings{Failures: *breakerFailures, Cooldown: *breakerCooldown}),
 		ContextEdit: contextEdit,
 		PolicyFile:  *policyFile,
+		Trial:       proxy.TrialSettings{Share: *trialShare, ReReadRate: *guardrail, RevertAfter: *revertAfter},
 		Retries:     proxy.RetrySettings{Attempts: *retries, BaseDelay: *retryBase, MaxDelay: *retryMax},
 		ErrorBudget: proxy.ErrorBudget{Share: *errorBudget},
 	})
