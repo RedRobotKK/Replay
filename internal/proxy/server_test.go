@@ -549,3 +549,89 @@ func TestBreakerHoldsRequestsAfterProviderFailures(t *testing.T) {
 		t.Fatalf("held request must not reach the provider: %d", up.seen().requests)
 	}
 }
+
+// breakingUpstream answers the second request with a cache read below the
+// expectation derived from the first, which is what a cache break looks
+// like on the wire.
+type breakingUpstream struct {
+	mu sync.Mutex
+	n  int
+}
+
+func (b *breakingUpstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	_, _ = io.ReadAll(r.Body)
+	b.mu.Lock()
+	b.n++
+	n := b.n
+	b.mu.Unlock()
+	usage := `{"input_tokens":20,"cache_creation_input_tokens":1000,"cache_read_input_tokens":5000,"output_tokens":50}`
+	if n == 2 {
+		// Expected read is 6020 - 20 = 6000; report none.
+		usage = `{"input_tokens":20,"cache_creation_input_tokens":6000,"cache_read_input_tokens":0,"output_tokens":50}`
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, `{"id":"m","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"usage":`+usage+`}`)
+}
+
+func TestLiveCacheBreakIsLoggedRecordedAndCounted(t *testing.T) {
+	base, dir, logs := startProxy(t, &breakingUpstream{}, "")
+	for i := 0; i < 2; i++ {
+		resp := post(t, base, "/v1/messages", nil)
+		_ = resp.Body.Close()
+		waitLedger(t, dir, i+1)
+	}
+	recs := waitLedger(t, dir, 2)
+	if recs[0].Cache != nil || recs[1].Cache == nil || recs[1].Cache.Outcome != "broken" || recs[1].Cache.Deficit != 6000 {
+		t.Fatalf("ledger cache outcomes wrong: %+v %+v", recs[0].Cache, recs[1].Cache)
+	}
+	if !strings.Contains(logs.String(), "cache break") || !strings.Contains(logs.String(), "6000 tokens re-billed") {
+		t.Fatalf("break not logged: %s", logs.String())
+	}
+	resp, err := http.Get(base + "/buffy/status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var st Status
+	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if len(st.Sessions) != 1 || st.Sessions[0].Breaks != 1 || st.Sessions[0].Requests != 2 || st.Sessions[0].ListCostUSD <= 0 {
+		t.Fatalf("status wrong: %+v", st)
+	}
+	resp, err = http.Get(base + "/buffy/metrics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	for _, want := range []string{"buffy_cache_break_total 1", `buffy_requests_total{class="2xx"} 2`, "buffy_cached_share", "buffy_request_latency_seconds_count 2"} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("metrics missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestStatusEndpointsHonorTokenAndOrigin(t *testing.T) {
+	base, _, _ := startProxy(t, &upstream{t: t}, "tok")
+	resp, err := http.Get(base + "/buffy/metrics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("metrics without token: %d", resp.StatusCode)
+	}
+	req, _ := http.NewRequest(http.MethodGet, base+"/buffy/status", nil)
+	req.Header.Set(HeaderToken, "tok")
+	req.Header.Set("Origin", "https://evil.example")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status with browser origin: %d", resp.StatusCode)
+	}
+}

@@ -97,6 +97,8 @@ What the proxy does and does not do:
 
 Added latency, measured on 2026-09-03 with a 46KB request against a local fake provider on a 4-core Xeon, 300 requests after warm-up: p50 48µs, p99 98µs on top of the round trip. Provider latency is three orders of magnitude larger. The method is in [`docs/reviews/proxy-latency-2026-09-03.md`](docs/reviews/proxy-latency-2026-09-03.md).
 
+While it runs, every response's cache read is checked against the expectation from the previous request, and a break is logged the moment it happens with the tokens re-billed and the likely cause. `GET /buffy/status` returns per-session totals (requests, prompt tokens, cached share, breaks, list cost) as JSON, and `GET /buffy/metrics` exposes the same as Prometheus text. Both honor the token when one is set and refuse browser origins.
+
 Guards, all off unless you set them (see `buffy serve -h`):
 
 - `--max-session-tokens` and `--max-day-tokens` refuse the *next* request once a cap is reached, never a response in flight. The refusal is a provider-shaped error the agent shows you; send `x-buffy-override: <reason>` to proceed once.
