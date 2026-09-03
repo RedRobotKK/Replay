@@ -62,11 +62,30 @@ func run(args []string, stdout, stderr io.Writer) error {
 	case "serve":
 		return runServe(args[1:], stdout, stderr)
 	default:
+		// The tool is named for its own first command, so "replay replay
+		// <path>" would be the common invocation. A first argument that
+		// names something on disk is taken as the replay analysis's own
+		// argument instead. A subcommand name always wins, so a directory
+		// called "serve" still needs the explicit "replay replay serve".
+		if namesAPath(args[0]) {
+			return runReport(args, stdout, stderr, (*analysis.LaneReport).WriteReplay)
+		}
 		// The usage text is a courtesy on the error path; the error that
 		// matters is the unknown command.
 		_ = printUsage(stderr)
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+// namesAPath reports whether an argument refers to something that exists,
+// which is what separates a path the user meant from a command they
+// mistyped. A flag is never a path.
+func namesAPath(arg string) bool {
+	if arg == "" || strings.HasPrefix(arg, "-") {
+		return false
+	}
+	_, err := os.Stat(arg)
+	return err == nil
 }
 
 func runReport(args []string, stdout, stderr io.Writer, write func(*analysis.LaneReport, io.Writer) error) error {
@@ -217,7 +236,8 @@ func printUsage(w io.Writer) error {
 	_, err := fmt.Fprint(w, `replay - see where your coding agent's prompt cache broke and what it cost
 
 Usage:
-  replay replay <transcript|dir>   reproduce caching, then score alternative layouts (--dollars adds list cost)
+  replay <transcript|dir>          reproduce caching, then score alternative layouts (--dollars adds list cost)
+  replay replay <transcript|dir>   the same, named explicitly
   replay blame  <transcript|dir>   rank what is eating prompt tokens
   replay diff   <transcript|dir>   locate and classify every cache break
   replay corpus <dir...>           calibration summary across many sessions, as Markdown (no paths or content)
