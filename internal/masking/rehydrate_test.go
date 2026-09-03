@@ -281,6 +281,34 @@ func TestRehydrateStreamAcrossChunksAndDeltas(t *testing.T) {
 	if texts, _ := assembled(t, out); texts[0] != secret || bytes.Count(out, []byte("text_delta")) != 1 {
 		t.Fatalf("split placeholder: %s", out)
 	}
+	// A placeholder cut into three deltas, or with an empty delta between
+	// its halves, is still restored whole; a repeated block start releases
+	// what the old block held.
+	for name, cuts := range map[string][]int{"three-way": {6, 16}, "one-byte": {1, 2}, "late": {13, 20}, "at-the-end": {PlaceholderLength - 1, PlaceholderLength - 1}, "empty-middle": {9, 9}} {
+		p := ph[secret]
+		threeWay := sse(
+			`{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+			textDelta(0, "key "+p[:cuts[0]]),
+			textDelta(0, p[cuts[0]:cuts[1]]),
+			textDelta(0, p[cuts[1]:]+" end"),
+			`{"type":"content_block_stop","index":0}`,
+		)
+		out, rep := run(r, threeWay, 5)
+		if texts, _ := assembled(t, out); texts[0] != "key "+secret+" end" || rep.Restored["text"] != 1 {
+			t.Fatalf("%s split: %q %+v", name, texts[0], rep)
+		}
+	}
+	reused := sse(
+		`{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"t","name":"Edit","input":{}}}`,
+		inputDelta(1, `{"file_path": "x"`),
+		`{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"t2","name":"Edit","input":{}}}`,
+		inputDelta(1, `, "new_string": "y"}`),
+		`{"type":"content_block_stop","index":1}`,
+	)
+	if out, _ := run(r, reused, 7); !bytes.Equal(out, reused) {
+		t.Fatalf("a reused index must lose nothing:\n%s", out)
+	}
+
 	// A stream cut off mid-event or mid-placeholder releases what it holds.
 	partial := sse(`{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`, textDelta(0, "tail "+ph[secret][:5]))
 	partial = append(partial, []byte("event: ping\ndata: {\"type\":\"pi")...)
@@ -335,6 +363,10 @@ func TestRehydrateAdversarialCorpus(t *testing.T) {
 		{"edit without path", "Edit", `{"new_string":"PH"}`, nil, false},
 		{"edit with placeholder in path", "Edit", `{"file_path":` + in("PH") + `,"new_string":"PH"}`, nil, false},
 		{"edit path not a string", "Edit", `{"file_path":1,"new_string":"PH"}`, nil, false},
+		{"decoy in-project key beside the real target", "str_replace_based_edit_tool", `{"command":"create","file_path":` + in("ok.txt") + `,"path":"/etc/cron.d/evil","file_text":"PH"}`, nil, false},
+		{"decoy path for the tool's own key", "Edit", `{"file_path":` + in("ok.txt") + `,"path":"/etc/passwd","new_string":"PH"}`, nil, false},
+		{"tool key missing, another present", "Edit", `{"path":` + in("ok.txt") + `,"new_string":"PH"}`, nil, false},
+		{"editor tool with its own key", "str_replace_based_edit_tool", `{"command":"create","path":` + in("ok.txt") + `,"file_text":"PH"}`, nil, true},
 		{"write with escaped placeholder", "Write", `{"file_path":` + in("x") + `,"content":"EPH"}`, nil, false},
 		{"edit inside, pattern scoped out", "Edit", `{"file_path":` + in("x") + `,"new_string":"PH"}`, []string{"anthropic-api-key=none"}, false},
 		{"edit inside, default scoped to text", "Edit", `{"file_path":` + in("x") + `,"new_string":"PH"}`, []string{"*=text"}, false},
@@ -406,6 +438,40 @@ func TestRehydrateAdversarialCorpus(t *testing.T) {
 		if err != nil || bytes.Contains(out, []byte(secret)) != tc.expect {
 			t.Fatalf("%s: %s %v", tc.name, out, err)
 		}
+	}
+}
+
+// A symbolic link inside the project that points outside is followed
+// when it exists, and a project root given through a link resolves to
+// the same place the agent's absolute paths name.
+func TestInsideProjectResolvesLinks(t *testing.T) {
+	base := t.TempDir()
+	project := filepath.Join(base, "proj")
+	outside := filepath.Join(base, "outside")
+	for _, d := range []string{project, outside} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(outside, filepath.Join(project, "link")); err != nil {
+		t.Skip("symlinks unavailable:", err)
+	}
+	if insideProject(project, filepath.Join(project, "link", "new.txt")) {
+		t.Fatal("a link to outside the project must not be inside")
+	}
+	if !insideProject(project, filepath.Join(project, "src", "new", "deep.txt")) {
+		t.Fatal("a path that does not exist yet under the project is inside")
+	}
+	alias := filepath.Join(base, "alias")
+	if err := os.Symlink(project, alias); err != nil {
+		t.Fatal(err)
+	}
+	root, err := ResolveRoot(alias)
+	if err != nil || root != resolveExisting(project) {
+		t.Fatalf("root through a link: %q %v", root, err)
+	}
+	if !insideProject(root, filepath.Join(alias, "a.txt")) || !insideProject(root, filepath.Join(project, "a.txt")) {
+		t.Fatal("paths through the link and direct must both be inside")
 	}
 }
 

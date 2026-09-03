@@ -97,10 +97,7 @@ func (s *StreamRehydrator) giveUp() []byte {
 	for _, idx := range sortedBlocks(s.blocks) {
 		b := s.blocks[idx]
 		out = append(out, s.flushCarry(b)...)
-		for _, ev := range b.held {
-			out = append(out, ev...)
-		}
-		b.held, b.heldBytes = nil, 0
+		out = append(out, s.releaseHeld(b)...)
 	}
 	out = append(out, s.pending...)
 	s.pending = nil
@@ -198,10 +195,17 @@ func (s *StreamRehydrator) event(raw []byte) []byte {
 	}
 	switch ev.Type {
 	case "content_block_start":
-		if ev.ContentBlock != nil {
-			s.blocks[ev.Index] = &streamBlock{kind: ev.ContentBlock.Type, tool: ev.ContentBlock.Name}
+		if ev.ContentBlock == nil {
+			return raw
 		}
-		return raw
+		// A provider that reuses an index is broken, but nothing held for
+		// the old block may be lost.
+		var out []byte
+		if old := s.blocks[ev.Index]; old != nil {
+			out = append(s.flushCarry(old), s.releaseHeld(old)...)
+		}
+		s.blocks[ev.Index] = &streamBlock{kind: ev.ContentBlock.Type, tool: ev.ContentBlock.Name}
+		return append(out, raw...)
 	case "content_block_delta":
 		b := s.blocks[ev.Index]
 		if b == nil || ev.Delta == nil {
@@ -254,9 +258,14 @@ func (s *StreamRehydrator) textDelta(b *streamBlock, raw []byte, start, end int)
 				break
 			}
 		}
-		if crossing {
+		// A prefix that still spans the boundary (a placeholder cut into
+		// three or more deltas, or an empty delta between two halves)
+		// moves to this delta so it keeps being held.
+		spanning := partialPlaceholderSuffix(combined) > len(inner)
+		if crossing || spanning {
 			out = append(out, s.cutHeld(b)...)
 			inner = combined
+			crossing = true
 		} else {
 			out = append(out, b.heldText...)
 		}
@@ -306,41 +315,40 @@ func (s *StreamRehydrator) holdToolDelta(b *streamBlock, raw []byte, partial str
 		return nil
 	}
 	dest := Destination{Kind: DestinationTool, Tool: b.tool}
-	if fileEditTools[b.tool] {
+	if _, ok := fileEditTools[b.tool]; ok {
 		dest.Kind = DestinationEdit
 	}
 	for range placeholderRE.FindAllIndex(b.input, -1) {
 		s.rep.denied(dest, ReasonTooLarge)
 	}
 	b.gaveUp = true
-	out := make([]byte, 0, b.heldBytes)
-	for _, ev := range b.held {
-		out = append(out, ev...)
-	}
-	b.held, b.heldBytes, b.input = nil, 0, nil
-	return out
+	return s.releaseHeld(b)
 }
 
 // releaseTool decides a held tool block. Without a placeholder, or with
 // every placeholder denied, the held events go out exactly as received;
 // otherwise one delta carries the whole restored input.
 func (s *StreamRehydrator) releaseTool(b *streamBlock, index int) []byte {
-	unchanged := func() []byte {
-		out := make([]byte, 0, b.heldBytes)
-		for _, ev := range b.held {
-			out = append(out, ev...)
-		}
-		return out
-	}
 	if !bytes.Contains(b.input, []byte(PlaceholderPrefix)) {
-		return unchanged()
+		return s.releaseHeld(b)
 	}
 	dest := s.r.scopes.toolDestination(b.tool, b.input)
 	restored, changed := s.r.restoreJSONText(b.input, dest, &s.rep)
 	if !changed {
-		return unchanged()
+		return s.releaseHeld(b)
 	}
+	b.held, b.heldBytes, b.input = nil, 0, nil
 	return inputDeltaEvent(index, restored)
+}
+
+// releaseHeld returns a tool block's held events exactly as received.
+func (s *StreamRehydrator) releaseHeld(b *streamBlock) []byte {
+	out := make([]byte, 0, b.heldBytes)
+	for _, ev := range b.held {
+		out = append(out, ev...)
+	}
+	b.held, b.heldBytes, b.input = nil, 0, nil
+	return out
 }
 
 // inputDeltaEvent builds one content_block_delta carrying a whole tool
