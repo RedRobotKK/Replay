@@ -95,6 +95,19 @@ What the proxy does and does not do:
 
 One client caveat from the gateway docs: with a non-first-party base URL, Claude Code disables MCP tool search unless `ENABLE_TOOL_SEARCH=true` is set. Buffy forwards `tool_reference` blocks unchanged, so setting it is safe. Details: [`docs/architecture/proxy-protocol.md`](docs/architecture/proxy-protocol.md).
 
+## Install
+
+No release is tagged yet. When one is, every release carries `checksums.txt` signed with Sigstore keyless signing, built only by CI from the tag. Verify before running:
+
+```sh
+cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
+  --certificate-identity-regexp 'https://github.com/RedRobotKK/Buffy/.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
+sha256sum --check --ignore-missing checksums.txt
+```
+
+Until then, build from source as below.
+
 ## Development
 
 Requires Go 1.24+, [golangci-lint](https://golangci-lint.run/) v2, and Node 22+ (Markdown lint only).
