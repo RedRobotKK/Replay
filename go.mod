@@ -1,3 +1,3 @@
-module github.com/RedRobotKK/Buffy
+module github.com/RedRobotKK/Replay
 
 go 1.24

@@ -10,8 +10,8 @@ package analysis
 import (
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/cachemodel"
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // CalibrationThreshold is the share of turns whose cache read must be

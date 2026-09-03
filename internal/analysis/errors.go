@@ -3,7 +3,7 @@ package analysis
 import (
 	"strings"
 
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // ErrorClass names one kind of wasted work visible in a session.

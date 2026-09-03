@@ -10,17 +10,17 @@ The offline analysis (`replay`, `blame`, `diff`, `redact`) is implemented; see [
  agent (Claude Code, Aider, custom)
    │  ANTHROPIC_BASE_URL / OPENAI_BASE_URL -> http://127.0.0.1:4000
    ▼
- buffy serve
+ replay serve
    ├─ listener        loopback TCP, header-token auth
    ├─ passthrough     bytes in, bytes out; SSE preserved
    ├─ response tap    usage and output structure, parsed after forwarding
    ├─ guards          spend caps, loop detection, circuit breaker, retries (off by default)
    ├─ policy          adds one request parameter the client left unset (off by default)
    ├─ live analysis   break classification and dry-run scoring, after the response
-   └─ ledger          ~/.buffy/ledger/<session>.jsonl, derived data only
+   └─ ledger          ~/.replay/ledger/<session>.jsonl, derived data only
    │
-   └─ buffy replay | blame | diff  read the ledger at the measured tier
-   └─ buffy learn                   scores the catalog over all sessions, writes ~/.buffy/policy.json
+   └─ replay replay | blame | diff  read the ledger at the measured tier
+   └─ replay learn                   scores the catalog over all sessions, writes ~/.replay/policy.json
    ▼
  provider (api.anthropic.com, api.openai.com, ...)
 ```

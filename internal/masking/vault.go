@@ -19,7 +19,7 @@ import (
 // keyed hash so the same secret always maps to the same placeholder and
 // the placeholder reveals nothing about the secret.
 const (
-	PlaceholderPrefix = "BUFFY_SECRET_"
+	PlaceholderPrefix = "REPLAY_SECRET_"
 	placeholderHex    = 16
 	// PlaceholderLength is the full placeholder length, which a stream
 	// rehydrator holds back at chunk boundaries.

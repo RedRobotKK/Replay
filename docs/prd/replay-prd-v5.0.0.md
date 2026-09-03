@@ -1,6 +1,6 @@
-# Product Requirements: Project Buffy v5.0.0
+# Product Requirements: Project Replay v5.0.0
 
-The execution-ready requirements for Buffy, a local tool that shows developers where their coding agent's prompt cache broke, what it cost, what a different context layout would have saved, and then applies the better layout live. This version supersedes v4.0.0 and incorporates every constraint from the two adversarial reviews.
+The execution-ready requirements for Replay, a local tool that shows developers where their coding agent's prompt cache broke, what it cost, what a different context layout would have saved, and then applies the better layout live. This version supersedes v4.0.0 and incorporates every constraint from the two adversarial reviews.
 
 | | |
 |---|---|
@@ -8,7 +8,7 @@ The execution-ready requirements for Buffy, a local tool that shows developers w
 | **Status** | Draft, awaiting owner approval |
 | **Date** | 2026-09-02 |
 | **Owner** | RedRobotKK (single maintainer) |
-| **Supersedes** | `buffy-prd-v4.0.0.md` (kept as history, not edited) |
+| **Supersedes** | `replay-prd-v4.0.0.md` (kept as history, not edited) |
 | **Inputs** | `../reviews/PRD-v4-adversarial-review.md`, `../reviews/solution-red-blue-review-2026-09-02.md` |
 | **Decisions recorded** | ADR-0001 through ADR-0005 in `../adr/` |
 
@@ -18,15 +18,15 @@ The execution-ready requirements for Buffy, a local tool that shows developers w
 
 Coding agents resend the entire conversation on every turn. The provider caches the unchanged prefix and charges a fraction for it, but the cache is an exact-byte prefix match, so one changed byte early in the prompt silently re-bills everything after it. Developers see the invoice, never the cause.
 
-Every Claude Code session already sits on disk as a transcript with exact per-turn usage. Buffy reads those transcripts and reproduces the provider's caching behavior turn by turn. Once its model of the session matches what the provider actually charged, it can answer three questions nobody can answer today:
+Every Claude Code session already sits on disk as a transcript with exact per-turn usage. Replay reads those transcripts and reproduces the provider's caching behavior turn by turn. Once its model of the session matches what the provider actually charged, it can answer three questions nobody can answer today:
 
-1. **Where did the cache break, and what did that turn cost?** (`buffy diff`)
-2. **Which file, tool description, or instruction is eating the most tokens across all my sessions?** (`buffy blame`)
-3. **What would a different context layout have cost on the sessions I already paid for?** (`buffy replay`)
+1. **Where did the cache break, and what did that turn cost?** (`replay diff`)
+2. **Which file, tool description, or instruction is eating the most tokens across all my sessions?** (`replay blame`)
+3. **What would a different context layout have cost on the sessions I already paid for?** (`replay replay`)
 
 Then, as a local proxy, it applies the best layout on new sessions using only mechanisms the provider itself sanctions, measures the result, and keeps improving from the user's own history. Everything runs on the developer's machine. Nothing learns across users. No API calls are spent on analysis.
 
-**Positioning line:** Buffy shows you the turn your agent's cache broke, what it cost, and what a better layout would have saved, on sessions you have already paid for.
+**Positioning line:** Replay shows you the turn your agent's cache broke, what it cost, and what a better layout would have saved, on sessions you have already paid for.
 
 ## 2. Problem and evidence
 
@@ -43,29 +43,29 @@ Three failures, all silent:
 ### Goals
 
 1. A developer runs one command on existing transcripts and learns something true and actionable about their own spend within thirty seconds.
-2. Every number Buffy shows is either measured from the wire or labeled as an estimate, with the calibration that justifies it.
+2. Every number Replay shows is either measured from the wire or labeled as an estimate, with the calibration that justifies it.
 3. Installing the proxy changes nothing about agent behavior until the user turns a policy on.
-4. No policy Buffy applies can trip a provider history-binding check or corrupt a session.
+4. No policy Replay applies can trip a provider history-binding check or corrupt a session.
 5. Secrets in prompts stay on the machine, and the mechanism that keeps them there cannot be turned into an exfiltration path.
 6. The tool improves from the user's own history without spending API calls and without a network connection.
 
 ### Non-goals
 
-- Translating between provider API shapes. Buffy never re-renders a prompt from one format to another.
-- Replacing the provider's server-side compaction or context editing. Buffy configures them; it does not reimplement them.
+- Translating between provider API shapes. Replay never re-renders a prompt from one format to another.
+- Replacing the provider's server-side compaction or context editing. Replay configures them; it does not reimplement them.
 - Multi-agent messaging, vector search, or a virtual filesystem. Removed from scope; see ADR-0001.
 - Cross-user learning, hosted dashboards, or any server component.
 - Supporting clients that offer no base URL override (Cursor's agent mode).
 
 ## 4. Users
 
-| User | Situation | What they need from Buffy |
+| User | Situation | What they need from Replay |
 |------|-----------|---------------------------|
 | Solo developer on Claude Code | Pays per token or holds a subscription; has weeks of transcripts | One command that explains their bill and one change that lowers it |
 | Team lead with an agent budget | Ten developers, one invoice, no attribution | Per-project blame and a policy that is safe to roll out |
 | Platform or security engineer | Must approve any tool that touches API traffic | A threat model, a data-handling statement, and a binary they can verify |
 
-**Non-user:** anyone whose agent cannot be pointed at a local base URL and who does not keep local transcripts. Buffy has nothing to offer them and the README says so.
+**Non-user:** anyone whose agent cannot be pointed at a local base URL and who does not keep local transcripts. Replay has nothing to offer them and the README says so.
 
 ## 5. Product principles (non-negotiable)
 
@@ -73,11 +73,11 @@ These bind every requirement below and every future change. They are restated in
 
 1. **Transparent by default.** The proxy forwards bytes unchanged until a policy is explicitly enabled. One environment variable disables everything.
 2. **Deterministic rendering.** Every transformation is a pure function of its input. The same client message renders to the same provider bytes for the life of a session.
-3. **Append-only history.** Buffy never edits an earlier turn client-side. Context reduction is requested from the provider through request parameters, which the provider excludes from its history-binding check.
+3. **Append-only history.** Replay never edits an earlier turn client-side. Context reduction is requested from the provider through request parameters, which the provider excludes from its history-binding check.
 4. **Never touch thinking blocks, signatures, or cache markers the client placed.**
 5. **Two tiers of truth.** Numbers derived from transcripts are labeled *estimated*. Numbers captured on the wire are labeled *measured*. They never share a table without the label.
 6. **State the assumption.** Every replayed saving carries the note that it assumes unchanged agent behavior. Behavior effects are measured only in live trials.
-7. **No credentials, no raw content.** Buffy forwards the client's authentication headers unchanged and never persists them. The ledger stores derived data unless the user opts into raw storage.
+7. **No credentials, no raw content.** Replay forwards the client's authentication headers unchanged and never persists them. The ledger stores derived data unless the user opts into raw storage.
 8. **Secrets stay local, and rehydration is scoped.** Placeholders never rehydrate into shell or network tool inputs by default.
 9. **Learning never touches bytes.** Learning writes a policy file. The proxy reads it at session start. The policy is a pure function.
 10. **Offline and free.** No analysis step calls the provider API. No telemetry leaves the machine, ever.
@@ -89,10 +89,10 @@ Four commands. Errors, suggestions, and calibration are sections of their output
 
 | Command | Purpose | Tier |
 |---------|---------|------|
-| `buffy replay <path>` | Reproduce as-run caching for recorded sessions, then score alternative layout policies | Estimated from transcripts; measured once the proxy has recorded the session |
-| `buffy blame <path>` | Rank the sources of prompt tokens across sessions: files, tool results, tool descriptions, instructions | Same |
-| `buffy diff <session> [turn]` | Locate the turn and the content where the cached prefix diverged, and classify the cause | Same |
-| `buffy serve` | Local proxy: passthrough, usage capture, policy application, dry-run, spend guards | Measured |
+| `replay replay <path>` | Reproduce as-run caching for recorded sessions, then score alternative layout policies | Estimated from transcripts; measured once the proxy has recorded the session |
+| `replay blame <path>` | Rank the sources of prompt tokens across sessions: files, tool results, tool descriptions, instructions | Same |
+| `replay diff <session> [turn]` | Locate the turn and the content where the cached prefix diverged, and classify the cause | Same |
+| `replay serve` | Local proxy: passthrough, usage capture, policy application, dry-run, spend guards | Measured |
 
 ### 6.1 Output contract
 
@@ -109,7 +109,7 @@ If calibration falls below the threshold in Section 8.2, `replay` prints the cal
 ### 6.2 Reference output
 
 ```text
-$ buffy replay ~/.claude/projects/my-app/
+$ replay replay ~/.claude/projects/my-app/
 
 Tier: estimated (transcripts only)
 Calibration: reproduced provider cache reads on 312/312 turns
@@ -168,7 +168,7 @@ Each requirement has an identifier and an acceptance test. A requirement without
 |----|-------------|------------|
 | LG-1 | Ingest Claude Code transcripts and proxy captures into one schema: per turn, the block structure, content hashes, byte lengths, labels (file path, tool name), timestamps, and the provider usage object. | Ingest 20 real sessions; every usage field round-trips. |
 | LG-2 | Store derived data only by default: hashes, lengths, labels, usage. No message bodies, and no tool arguments in labels: tool names only, with file paths replaced by a keyed hash that keeps the extension. | Grep the ledger for a known string from a session, including one planted inside a command argument; zero hits. |
-| LG-3 | Optional raw mode stores bodies encrypted at rest with a key from the OS keychain, with a retention period and a `buffy purge` command. | Purge removes all raw data; encrypted files are unreadable without the keychain. |
+| LG-3 | Optional raw mode stores bodies encrypted at rest with a key from the OS keychain, with a retention period and a `replay purge` command. | Purge removes all raw data; encrypted files are unreadable without the keychain. |
 | LG-4 | Ledger files are owner-only permissions under the user's home directory. | Permission check in the test suite. |
 
 ### 8.2 Replay engine
@@ -214,12 +214,12 @@ Each requirement has an identifier and an acceptance test. A requirement without
 | PX-2 | Byte-for-byte passthrough of request and response, including SSE streaming with immediate flush, when no policy is enabled. | Hash of forwarded bytes equals hash of received bytes across the fixture corpus. |
 | PX-3 | Authentication headers are forwarded unchanged and never persisted or logged, including in debug mode. | Log scan test with a canary header value. |
 | PX-4 | Timeouts sized for multi-minute turns. Retries (only on rate limit, overload, server error, and connection failure, bounded, jittered, honoring retry-after; never on client errors; never after a response has started streaming) ship with the v0.3 guards; in v0.2 the client's own retry policy applies and every provider response passes through unchanged. | Fault-injection tests per case. |
-| PX-5 | Fail open: any failure inside Buffy's own analysis or policy code results in the original bytes being forwarded. The spend cap is the single fail-closed exception. | Panic injection test. |
-| PX-6 | One environment variable disables all policies; a second disables Buffy entirely with a clear client-visible error that names the bypass. | Documented and tested. |
+| PX-5 | Fail open: any failure inside Replay's own analysis or policy code results in the original bytes being forwarded. The spend cap is the single fail-closed exception. | Panic injection test. |
+| PX-6 | One environment variable disables all policies; a second disables Replay entirely with a clear client-visible error that names the bypass. | Documented and tested. |
 | PX-7 | Session identity comes from the client's `x-claude-code-session-id` header when present (with `x-claude-code-agent-id` distinguishing sub-agents), and otherwise from a hash of the stable prefix. When identity is uncertain, no policy is applied. | Fixture with two interleaved sessions, with and without the header. |
 | PX-8 | The policy for a session is chosen at its first request and pinned for the session's life, persisted to disk. **Status:** implemented (`--policy-file`, pins under the ledger directory); tested across a file rewrite and a proxy restart. | Change the policy file mid-session; the session continues under the pinned policy. |
-| PX-9 | Client-set request parameters and cache markers are never overridden. Buffy adds only what the client did not set, within provider limits (marker count, TTL ordering). The `anthropic-version` and `anthropic-beta` headers are forwarded verbatim, never filtered. | Fixture with four client markers; Buffy adds none. Header round-trip test. |
-| PX-10 | Every applied transformation is logged with the before and after content hashes, and `buffy diff` can show the exact bytes. | Log format test. |
+| PX-9 | Client-set request parameters and cache markers are never overridden. Replay adds only what the client did not set, within provider limits (marker count, TTL ordering). The `anthropic-version` and `anthropic-beta` headers are forwarded verbatim, never filtered. | Fixture with four client markers; Replay adds none. Header round-trip test. |
+| PX-10 | Every applied transformation is logged with the before and after content hashes, and `replay diff` can show the exact bytes. | Log format test. |
 | PX-11 | Server-side compaction is never enabled from the proxy. | Static check: parameter not present in the policy catalog. |
 
 ### 8.7 Policy catalog
@@ -256,7 +256,7 @@ Initial catalog for v0.3: `freeze-system-prompt` (diagnostic only, reports when 
 
 | ID | Requirement | Acceptance |
 |----|-------------|------------|
-| AD-1 | Convert top token sources into concrete suggestions with a predicted saving: defer-load rarely used tools, add a summary header to a frequently read file, split an instruction file. **Status:** implemented (`buffy advise`), plus dominant tool inputs, oversized results, and cache breaks. | Fixture produces the three suggestion types. |
+| AD-1 | Convert top token sources into concrete suggestions with a predicted saving: defer-load rarely used tools, add a summary header to a frequently read file, split an instruction file. **Status:** implemented (`replay advise`), plus dominant tool inputs, oversized results, and cache breaks. | Fixture produces the three suggestion types. |
 | AD-2 | Track each suggestion to closure: pending, applied (detected from subsequent sessions), verified or not verified against the prediction. **Status:** implemented for kinds whose target is structural; hot files and cache breaks are advice only. | State machine test. |
 | AD-3 | Realized savings are reported on the scale-free metric first. **Status:** implemented; shares of prompt tokens lead, corpus tokens follow. | Output contract test. |
 
@@ -276,8 +276,8 @@ Initial catalog for v0.3: `freeze-system-prompt` (diagnostic only, reports when 
 
 | ID | Requirement | Acceptance |
 |----|-------------|------------|
-| SP-1 | Token and dollar caps per session and per day computed from provider usage fields; fail closed before the next request; never mid-stream; user override with a logged reason. **Status:** implemented: token caps (`--max-session-tokens`, `--max-day-tokens`) and list-price dollar caps (`--max-session-usd`, `--max-day-usd`) with `x-buffy-override`. | Cap test with streaming in progress. |
-| SP-2 | Loop detection: the same tool call with the same input N times triggers a warning to the client and, above a second threshold, a block. **Status:** implemented (`--loop-warn`, `--loop-block`, `x-buffy-warning` response header). | Fixture. |
+| SP-1 | Token and dollar caps per session and per day computed from provider usage fields; fail closed before the next request; never mid-stream; user override with a logged reason. **Status:** implemented: token caps (`--max-session-tokens`, `--max-day-tokens`) and list-price dollar caps (`--max-session-usd`, `--max-day-usd`) with `x-replay-override`. | Cap test with streaming in progress. |
+| SP-2 | Loop detection: the same tool call with the same input N times triggers a warning to the client and, above a second threshold, a block. **Status:** implemented (`--loop-warn`, `--loop-block`, `x-replay-warning` response header). | Fixture. |
 | SP-3 | Provider circuit breaker: sustained rate-limit or overload responses open the breaker for a cooling period so the agent stops burning retries. **Status:** implemented (`--breaker-failures`, `--breaker-cooldown`), answering locally with `Retry-After` and one probe after cooldown. | Fault-injection test. |
 | SP-4 | An error budget per session trips before the dollar cap when error cost exceeds a share of spend. **Status:** implemented (`--error-budget <share>`), judged from the same error classification `replay` prints, on sessions above a minimum size, with the override header. | Fixture. |
 
@@ -285,7 +285,7 @@ Initial catalog for v0.3: `freeze-system-prompt` (diagnostic only, reports when 
 
 | ID | Requirement | Acceptance |
 |----|-------------|------------|
-| ST-1 | When calibration for a model drops below threshold on new sessions, Buffy reports that the provider's behavior changed, stops scoring alternatives for that model, and attempts to refit the parameters it can infer (minimum cacheable size, effective lookback). **Status:** implemented offline in `buffy corpus` and `buffy learn`; the minimum cacheable size is bounded from usage, the lookback is not inferable from usage and is not refit. | Simulated rule change test. |
+| ST-1 | When calibration for a model drops below threshold on new sessions, Replay reports that the provider's behavior changed, stops scoring alternatives for that model, and attempts to refit the parameters it can infer (minimum cacheable size, effective lookback). **Status:** implemented offline in `replay corpus` and `replay learn`; the minimum cacheable size is bounded from usage, the lookback is not inferable from usage and is not refit. | Simulated rule change test. |
 | ST-2 | Rules it cannot infer remain in the versioned rules file with a documented update process. **Status:** documented in `docs/architecture/replay-engine.md`. | Documentation. |
 
 ## 9. Client and platform support
@@ -311,7 +311,7 @@ Initial catalog for v0.3: `freeze-system-prompt` (diagnostic only, reports when 
 
 **Assets:** provider credentials in transit; conversation content, which includes source code and secrets; the masking vault; the ledger; the policy file; the binary itself.
 
-**Adversaries:** untrusted content that the agent reads (files in a cloned repository, web pages, tool output) and that can instruct the model; a malicious web page on the same machine; a compromised dependency or release channel; another user on a shared machine. The provider is trusted with what the client already sends it; Buffy's job is to send it less, never more.
+**Adversaries:** untrusted content that the agent reads (files in a cloned repository, web pages, tool output) and that can instruct the model; a malicious web page on the same machine; a compromised dependency or release channel; another user on a shared machine. The provider is trusted with what the client already sends it; Replay's job is to send it less, never more.
 
 **Trust boundaries:** the loopback listener; the ledger on disk; the rehydration point where a placeholder becomes a secret again.
 
@@ -320,7 +320,7 @@ Initial catalog for v0.3: `freeze-system-prompt` (diagnostic only, reports when 
 | Threat | Control | Requirement |
 |--------|---------|-------------|
 | Placeholder forgery leading to exfiltration | Scoped rehydration with default deny for shell and network tools; rehydration log | MK-5, MK-6 |
-| Credential theft from Buffy | No credentials persisted or logged | PX-3 |
+| Credential theft from Replay | No credentials persisted or logged | PX-3 |
 | Second copy of transcripts at rest | Derived-data ledger; raw mode opt-in, encrypted, purgeable | LG-2, LG-3 |
 | Local web page reaching the listener | No stored credentials; token on every read; Host and Origin checks; loopback only | PX-1, dashboard requirements when one ships |
 | Stored script in tool output rendered by a dashboard | Terminal-only output until a dashboard ships; then strict escaping and a content security policy with no inline script | Dashboard requirements |
@@ -328,7 +328,7 @@ Initial catalog for v0.3: `freeze-system-prompt` (diagnostic only, reports when 
 | Memory disclosure | No core dumps; no body logging; redacting debug logs | PX-3 |
 | Shared machine | Owner-only files; loopback with token | LG-4 |
 
-### 10.3 What Buffy never does
+### 10.3 What Replay never does
 
 Stores or logs credentials. Sends anything anywhere except the provider request the client asked for. Learns across users. Edits an earlier turn. Touches thinking blocks or signatures. Enables server-side compaction on the client's behalf. Rehydrates a secret into a shell or network tool input by default. Auto-updates itself.
 
@@ -341,22 +341,22 @@ Coordinated disclosure per `SECURITY.md`. An external security review is schedul
 - All data stays on the machine. There is no telemetry, no crash reporting, and no update check. The README states this in its first screen.
 - The ledger holds derived data by default. Raw content is opt-in, encrypted, retention-limited, and purgeable.
 - Placeholders are keyed per project, which limits the provider's ability to correlate a secret across projects. This is documented as a known limitation, not hidden.
-- A `buffy purge` command removes everything Buffy wrote.
+- A `replay purge` command removes everything Replay wrote.
 
 ## 12. Observability
 
-Metrics are computed from the provider's usage object, never inferred from bytes, and exposed locally as a Prometheus text endpoint behind the token. **Status:** `/buffy/metrics` and `/buffy/status` are implemented for the request, token, cache-break, upstream-error, refusal, and latency metrics; policy and rehydration counters arrive with those features.
+Metrics are computed from the provider's usage object, never inferred from bytes, and exposed locally as a Prometheus text endpoint behind the token. **Status:** `/replay/metrics` and `/replay/status` are implemented for the request, token, cache-break, upstream-error, refusal, and latency metrics; policy and rehydration counters arrive with those features.
 
 | Metric | Definition |
 |--------|------------|
-| `buffy_cached_share` | `cache_read / (input + cache_creation + cache_read)` per request |
-| `buffy_prompt_tokens_total` | Sum of the three usage fields per session |
-| `buffy_cache_break_total` | Count of requests where the diff classifier found a divergence, by cause |
-| `buffy_error_cost_tokens` | Tokens attributed to the error classes in Section 8.5 |
-| `buffy_added_latency_seconds` | Time between receiving the last request byte and forwarding it, p50 and p99 |
-| `buffy_upstream_errors_total` | By status class |
-| `buffy_policy_applied_total` | By policy name and session type |
-| `buffy_rehydration_total` | By destination kind |
+| `replay_cached_share` | `cache_read / (input + cache_creation + cache_read)` per request |
+| `replay_prompt_tokens_total` | Sum of the three usage fields per session |
+| `replay_cache_break_total` | Count of requests where the diff classifier found a divergence, by cause |
+| `replay_error_cost_tokens` | Tokens attributed to the error classes in Section 8.5 |
+| `replay_added_latency_seconds` | Time between receiving the last request byte and forwarding it, p50 and p99 |
+| `replay_upstream_errors_total` | By status class |
+| `replay_policy_applied_total` | By policy name and session type |
+| `replay_rehydration_total` | By destination kind |
 
 Logs redact bodies and headers. A debug mode that logs bodies requires an explicit flag, prints a warning, and still redacts credentials.
 
@@ -385,7 +385,7 @@ No public claim is made until all five pass. Spike 3 runs first because its answ
 
 ### 13.3 Benchmark
 
-An A/B harness runs a fixed set of real agent tasks with Buffy off, on with passthrough, and on with a policy, and reports task success, failed-edit count, prompt tokens, cached share, and wall-clock. It runs on demand under a hard spend cap, never on a schedule that spends money unattended. Its results page is the only place a savings percentage may appear, and each figure links to its run.
+An A/B harness runs a fixed set of real agent tasks with Replay off, on with passthrough, and on with a policy, and reports task success, failed-edit count, prompt tokens, cached share, and wall-clock. It runs on demand under a hard spend cap, never on a schedule that spends money unattended. Its results page is the only place a savings percentage may appear, and each figure links to its run.
 
 ## 14. Release plan
 

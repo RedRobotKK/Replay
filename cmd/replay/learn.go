@@ -9,13 +9,13 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/analysis"
-	"github.com/RedRobotKK/Buffy/internal/learn"
-	"github.com/RedRobotKK/Buffy/internal/ledger"
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/learn"
+	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
-// policyFileName is where learn writes its result under ~/.buffy.
+// policyFileName is where learn writes its result under ~/.replay.
 const policyFileName = "policy.json"
 
 // policyFileMode keeps the file owner-only like the ledger; it holds no
@@ -28,7 +28,7 @@ const policyFileMode = 0o600
 func runLearn(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("learn", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	out := fs.String("out", "", "policy file to write (default ~/.buffy/policy.json; \"-\" for none)")
+	out := fs.String("out", "", "policy file to write (default ~/.replay/policy.json; \"-\" for none)")
 	minSessions := fs.Int("min-sessions", learn.DefaultMinSessions, "sessions with evidence a candidate needs before it can be selected")
 	if err := fs.Parse(args); err != nil {
 		return errUsage
@@ -118,7 +118,7 @@ func runLearn(args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("find home directory for the policy file: %w", err)
 		}
-		path = filepath.Join(home, ".buffy", policyFileName)
+		path = filepath.Join(home, ".replay", policyFileName)
 	}
 	if err := writePolicyFile(path, res); err != nil {
 		return err

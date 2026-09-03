@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/RedRobotKK/Buffy/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/analysis"
 )
 
 // ContextEdit asks the provider to clear old tool results server-side

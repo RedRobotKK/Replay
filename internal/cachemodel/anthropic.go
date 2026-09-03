@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // RulesVersion is printed on every report so a reader knows which rules a
 // figure was computed under.
 const RulesVersion = "anthropic-2026-09-01"
 
-// PriceTableVersion dates the price table. Every dollar figure Buffy prints
+// PriceTableVersion dates the price table. Every dollar figure Replay prints
 // cites it, because prices change and the figure is only as current as the
 // table.
 const PriceTableVersion = "2026-06-24"

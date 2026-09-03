@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/cachemodel"
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // PolicyResult scores one context layout over a lane.

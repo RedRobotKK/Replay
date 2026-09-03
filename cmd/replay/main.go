@@ -1,4 +1,4 @@
-// Command buffy analyzes coding-agent sessions for prompt-cache behavior.
+// Command replay analyzes coding-agent sessions for prompt-cache behavior.
 //
 // replay, blame, and diff work offline on transcripts the agent already
 // wrote and on the ledger the proxy records. serve is the proxy.
@@ -14,10 +14,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/RedRobotKK/Buffy/internal/analysis"
-	"github.com/RedRobotKK/Buffy/internal/ledger"
-	"github.com/RedRobotKK/Buffy/internal/transcript"
-	"github.com/RedRobotKK/Buffy/internal/version"
+	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/version"
 )
 
 // errUsage is returned for malformed invocations after usage is printed.
@@ -28,7 +28,7 @@ const defaultBlameLimit = 20
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "buffy:", err)
+		fmt.Fprintln(os.Stderr, "replay:", err)
 		os.Exit(1)
 	}
 }
@@ -39,7 +39,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	}
 	switch args[0] {
 	case "version", "--version", "-v":
-		_, err := fmt.Fprintln(stdout, "buffy", version.String())
+		_, err := fmt.Fprintln(stdout, "replay", version.String())
 		return err
 	case "help", "--help", "-h":
 		return printUsage(stdout)
@@ -203,7 +203,7 @@ func transcriptFiles(paths []string) ([]string, error) {
 
 func runRedact(args []string, stdout io.Writer) error {
 	if len(args) != 1 {
-		return fmt.Errorf("usage: buffy redact <transcript.jsonl> > redacted.jsonl: %w", errUsage)
+		return fmt.Errorf("usage: replay redact <transcript.jsonl> > redacted.jsonl: %w", errUsage)
 	}
 	f, err := os.Open(args[0])
 	if err != nil {
@@ -214,22 +214,22 @@ func runRedact(args []string, stdout io.Writer) error {
 }
 
 func printUsage(w io.Writer) error {
-	_, err := fmt.Fprint(w, `buffy - see where your coding agent's prompt cache broke and what it cost
+	_, err := fmt.Fprint(w, `replay - see where your coding agent's prompt cache broke and what it cost
 
 Usage:
-  buffy replay <transcript|dir>   reproduce caching, then score alternative layouts (--dollars adds list cost)
-  buffy blame  <transcript|dir>   rank what is eating prompt tokens
-  buffy diff   <transcript|dir>   locate and classify every cache break
-  buffy corpus <dir...>           calibration summary across many sessions, as Markdown (no paths or content)
-  buffy advise <dir...>           turn the largest token sources across sessions into suggestions with predicted savings, tracked to closure
-  buffy learn  <dir...>           re-score the policy catalog over all sessions, select one with held-out checks, write ~/.buffy/policy.json
-  buffy doctor                    what buffy can see on this machine and what to do next
-  buffy redact <transcript>       strip content, keep structure and usage (for bug reports)
-  buffy serve [flags]             local proxy: byte-for-byte passthrough, records a ledger
-  buffy version                   print build information
+  replay replay <transcript|dir>   reproduce caching, then score alternative layouts (--dollars adds list cost)
+  replay blame  <transcript|dir>   rank what is eating prompt tokens
+  replay diff   <transcript|dir>   locate and classify every cache break
+  replay corpus <dir...>           calibration summary across many sessions, as Markdown (no paths or content)
+  replay advise <dir...>           turn the largest token sources across sessions into suggestions with predicted savings, tracked to closure
+  replay learn  <dir...>           re-score the policy catalog over all sessions, select one with held-out checks, write ~/.replay/policy.json
+  replay doctor                    what replay can see on this machine and what to do next
+  replay redact <transcript>       strip content, keep structure and usage (for bug reports)
+  replay serve [flags]             local proxy: byte-for-byte passthrough, records a ledger
+  replay version                   print build information
 
 Transcripts: Claude Code writes them under ~/.claude/projects/<project>/*.jsonl
-Ledger:      buffy serve writes ~/.buffy/ledger/<session>.jsonl (measured tier)
+Ledger:      replay serve writes ~/.replay/ledger/<session>.jsonl (measured tier)
 `)
 	return err
 }

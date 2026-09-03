@@ -15,9 +15,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/analysis"
-	"github.com/RedRobotKK/Buffy/internal/cachemodel"
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // Selection rules. They are deliberately conservative: a developer's own
@@ -73,7 +73,7 @@ func Catalog() []Candidate {
 	}
 	for _, trigger := range contextEditTriggers {
 		p := analysis.ContextEditPolicy{KeepLast: analysis.ContextEditKeepLast, TriggerTokens: trigger}
-		out = append(out, Candidate{Name: fmt.Sprintf("context-edit(keep=%d,trigger=%d)", p.KeepLast, p.TriggerTokens), Family: FamilyContextEdit, ContextEdit: &p, Live: fmt.Sprintf("buffy serve --context-edit-trigger %d --context-edit-keep %d", p.TriggerTokens, p.KeepLast)})
+		out = append(out, Candidate{Name: fmt.Sprintf("context-edit(keep=%d,trigger=%d)", p.KeepLast, p.TriggerTokens), Family: FamilyContextEdit, ContextEdit: &p, Live: fmt.Sprintf("replay serve --context-edit-trigger %d --context-edit-keep %d", p.TriggerTokens, p.KeepLast)})
 	}
 	return out
 }
@@ -447,9 +447,9 @@ func LoadSelected(path string) (*Candidate, string, error) {
 func (r Result) SelectionFor(sessionType string) (*Candidate, string) {
 	switch {
 	case r.Schema != PolicyFileSchema:
-		return nil, fmt.Sprintf("policy file schema %d is not %d; run buffy learn again", r.Schema, PolicyFileSchema)
+		return nil, fmt.Sprintf("policy file schema %d is not %d; run replay learn again", r.Schema, PolicyFileSchema)
 	case r.Rules != cachemodel.RulesVersion:
-		return nil, fmt.Sprintf("policy file was learned under rules %q, current rules are %q; run buffy learn again", r.Rules, cachemodel.RulesVersion)
+		return nil, fmt.Sprintf("policy file was learned under rules %q, current rules are %q; run replay learn again", r.Rules, cachemodel.RulesVersion)
 	}
 	c := r.Selected
 	if sessionType != "" {
