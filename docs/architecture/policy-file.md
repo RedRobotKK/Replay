@@ -42,4 +42,4 @@ What `buffy learn` writes and what the proxy will read. One file, `~/.buffy/poli
 
 ## Use
 
-The proxy does not read the file yet (roadmap: PX-8). Until then the selected candidate's `live` field is the command or client setting to apply by hand.
+`buffy serve --policy-file ~/.buffy/policy.json` reads the file at each session's first request and applies the selected candidate when it is one the proxy can apply (the context-edit family; a TTL selection is a client setting and is logged as advice). The decision and its parameters are pinned for the session and written to `.pins` under the ledger directory, one JSON line per session, so a rewritten file or a restarted proxy never changes a running session. An explicit `--context-edit-trigger` wins over the file. A file from another schema or rules version applies nothing and says so in the log.

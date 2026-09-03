@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,6 +40,7 @@ type Store struct {
 	dir     string
 	labeler *Labeler
 	mu      sync.Mutex
+	pins    map[string]Pin
 }
 
 // Open creates the ledger directory and its label key if needed.
@@ -50,7 +52,11 @@ func Open(dir string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Store{dir: dir, labeler: NewLabeler(key)}, nil
+	pins, err := loadPins(filepath.Join(dir, pinsFile))
+	if err != nil {
+		return nil, err
+	}
+	return &Store{dir: dir, labeler: NewLabeler(key), pins: pins}, nil
 }
 
 func loadOrCreateKey(path string) ([]byte, error) {
@@ -273,4 +279,82 @@ func messageUUID(i int, m Message) string {
 		total += b.Bytes
 	}
 	return fmt.Sprintf("m%d-%s-%d-%d", i, m.Role, len(m.Blocks), total)
+}
+
+// pinsFile records, per session, the policy decision made at its first
+// request, one JSON line each. It lives next to the session files under
+// a name no ledger glob matches and holds names and numbers only.
+const pinsFile = ".pins"
+
+// Pin is a session's policy decision, made once and kept for the
+// session's life across policy-file rewrites and proxy restarts (PX-8).
+type Pin struct {
+	SessionID string `json:"session_id"`
+	// Policy names the pinned policy, empty when the session runs with
+	// none. Trigger and Keep are its parameters.
+	Policy   string    `json:"policy,omitempty"`
+	Trigger  int       `json:"trigger,omitempty"`
+	Keep     int       `json:"keep,omitempty"`
+	Decision string    `json:"decision"`
+	At       time.Time `json:"at"`
+}
+
+// Pin returns the persisted decision for a session, if one was made.
+func (s *Store) Pin(sessionID string) (Pin, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.pins[sessionID]
+	return p, ok
+}
+
+// SetPin persists a session's decision. The file is append-only; the
+// last line for a session wins on reload, and the first decision is the
+// only one the proxy ever writes.
+func (s *Store) SetPin(p Pin) error {
+	line, err := json.Marshal(p)
+	if err != nil {
+		return fmt.Errorf("encode pin: %w", err)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f, err := os.OpenFile(filepath.Join(s.dir, pinsFile), os.O_CREATE|os.O_APPEND|os.O_WRONLY, filePerm)
+	if err != nil {
+		return fmt.Errorf("open pins file: %w", err)
+	}
+	if _, err := f.Write(append(line, '\n')); err != nil {
+		_ = f.Close() // the write error is the one worth reporting
+		return fmt.Errorf("write pin: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close pins file: %w", err)
+	}
+	s.pins[p.SessionID] = p
+	return nil
+}
+
+// loadPins reads the pins file; a missing file is an empty map and a
+// line that does not parse is skipped, since a pin the proxy cannot read
+// is a decision it must make again rather than a reason to refuse to start.
+func loadPins(path string) (map[string]Pin, error) {
+	pins := map[string]Pin{}
+	f, err := os.Open(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return pins, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("open pins file: %w", err)
+	}
+	defer f.Close() //nolint:errcheck // read-only file; a close error carries no information we can act on
+	scanner := transcript.NewLineScanner(f)
+	for scanner.Scan() {
+		var p Pin
+		if err := json.Unmarshal(scanner.Bytes(), &p); err != nil || p.SessionID == "" {
+			continue
+		}
+		pins[p.SessionID] = p
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("read pins file: %w", err)
+	}
+	return pins, nil
 }

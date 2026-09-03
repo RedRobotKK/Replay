@@ -7,9 +7,11 @@
 package learn
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"math"
+	"os"
 	"sort"
 	"time"
 
@@ -336,4 +338,28 @@ func SortVerdicts(vs []Verdict) {
 		}
 		return vs[i].Mean > vs[j].Mean
 	})
+}
+
+// LoadSelected reads a policy file and returns its selected candidate.
+// A file from another schema or another rules version is stale: it
+// returns no candidate and a note saying so, never an error, because a
+// stale learning result must not stop the proxy.
+func LoadSelected(path string) (*Candidate, string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, "", err
+	}
+	var res Result
+	if err := json.Unmarshal(data, &res); err != nil {
+		return nil, "", fmt.Errorf("decode policy file: %w", err)
+	}
+	switch {
+	case res.Schema != PolicyFileSchema:
+		return nil, fmt.Sprintf("policy file schema %d is not %d; run buffy learn again", res.Schema, PolicyFileSchema), nil
+	case res.Rules != cachemodel.RulesVersion:
+		return nil, fmt.Sprintf("policy file was learned under rules %q, current rules are %q; run buffy learn again", res.Rules, cachemodel.RulesVersion), nil
+	case res.Selected == nil:
+		return nil, "policy file selects nothing: " + res.Reason, nil
+	}
+	return res.Selected, "", nil
 }

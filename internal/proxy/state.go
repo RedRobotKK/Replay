@@ -26,9 +26,11 @@ type sessionState struct {
 	// prefixChanges counts requests whose system prompt or tool definitions
 	// differed from the request before, which a transcript cannot see.
 	prefixChanges int
-	// policy is the decision pinned at the session's first request;
-	// empty until then. applied and cleared are the policy's measured side.
+	// policy is the decision pinned at the session's first request and
+	// edit the parameters it was made for; both empty until then. applied
+	// and cleared are the policy's measured side.
 	policy  policy.Decision
+	edit    *policy.ContextEdit
 	applied int
 	cleared int
 	// builder accumulates the session in the analysis's own shape, so the
@@ -161,11 +163,22 @@ func (s *stats) errorTokens(sessionID string) (errorTokens, promptTokens int) {
 	return st.errorTokens, st.tally.PromptTokens
 }
 
-// pinPolicy records the policy decision at a session's first request and
-// returns the pinned decision on every later one. Sessions are created
-// here when the first request has not completed yet, so the pin exists
-// before any usage does.
-func (s *stats) pinPolicy(sessionID string, first policy.Decision) policy.Decision {
+// pinned returns a session's policy decision and parameters when one was
+// made in this process, and false otherwise.
+func (s *stats) pinned(sessionID string) (*policy.ContextEdit, policy.Decision, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st, ok := s.sessions[sessionID]
+	if !ok || st.policy == "" {
+		return nil, "", false
+	}
+	return st.edit, st.policy, true
+}
+
+// pin records a session's decision. The session is created here when its
+// first request has not completed yet, so the pin exists before any
+// usage does. A decision already made is kept.
+func (s *stats) pin(sessionID string, edit *policy.ContextEdit, decision policy.Decision) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st, ok := s.sessions[sessionID]
@@ -174,9 +187,8 @@ func (s *stats) pinPolicy(sessionID string, first policy.Decision) policy.Decisi
 		s.sessions[sessionID] = st
 	}
 	if st.policy == "" {
-		st.policy = first
+		st.policy, st.edit = decision, edit
 	}
-	return st.policy
 }
 
 // breakCause names a break from what the proxy can see. A changed prefix
@@ -278,11 +290,12 @@ type SessionSummary struct {
 	PrefixChanges int       `json:"prefix_changes"`
 	ListCostUSD   float64   `json:"list_cost_usd"`
 	LastSeen      time.Time `json:"last_seen"`
-	// Policy is the decision pinned at the session's first request when a
-	// live policy is configured. PolicyApplied counts requests that carried
-	// the parameter; ClearedInputTokens is what the provider's edits
-	// removed from prompts.
+	// Policy is the decision pinned at the session's first request and
+	// PinnedPolicy the policy it was made for. PolicyApplied counts
+	// requests that carried the parameter; ClearedInputTokens is what the
+	// provider's edits removed from prompts.
 	Policy             string `json:"policy,omitempty"`
+	PinnedPolicy       string `json:"pinned_policy,omitempty"`
 	PolicyApplied      int    `json:"policy_applied,omitempty"`
 	ClearedInputTokens int    `json:"cleared_input_tokens,omitempty"`
 	// ErrorShare is the share of the session's prompt tokens that carried
@@ -313,7 +326,7 @@ func (s *stats) status() Status {
 		out.Requests[k] = v
 	}
 	for id, st := range s.sessions {
-		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, ReReads: st.reReads, WhatIf: st.whatIf, ErrorShare: share(st.errorTokens, st.tally.PromptTokens)})
+		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, ReReads: st.reReads, WhatIf: st.whatIf, ErrorShare: share(st.errorTokens, st.tally.PromptTokens)})
 	}
 	sort.Slice(out.Sessions, func(i, j int) bool { return out.Sessions[i].LastSeen.After(out.Sessions[j].LastSeen) })
 	return out
@@ -388,6 +401,13 @@ func (s *stats) metrics() string {
 	line("buffy_request_latency_seconds_sum %.6f", s.latencySum.Seconds())
 	line("buffy_request_latency_seconds_count %d", s.latencyCount)
 	return string(b)
+}
+
+func pinnedName(edit *policy.ContextEdit) string {
+	if edit == nil {
+		return ""
+	}
+	return edit.String()
 }
 
 func share(part, whole int) float64 {
