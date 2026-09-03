@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // synthLane builds a session of n turns whose cache reads follow the

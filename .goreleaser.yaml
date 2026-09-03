@@ -4,7 +4,7 @@
 # the release page. Validate locally with: go run github.com/goreleaser/goreleaser/v2@latest check
 version: 2
 
-project_name: buffy
+project_name: replay
 
 before:
   hooks:
@@ -12,9 +12,9 @@ before:
     - go test ./...
 
 builds:
-  - id: buffy
-    main: ./cmd/buffy
-    binary: buffy
+  - id: replay
+    main: ./cmd/replay
+    binary: replay
     env:
       - CGO_ENABLED=0
     goos: [linux, darwin, windows]
@@ -23,9 +23,9 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
-      - -X github.com/RedRobotKK/Buffy/internal/version.Version={{ .Version }}
-      - -X github.com/RedRobotKK/Buffy/internal/version.Commit={{ .ShortCommit }}
-      - -X github.com/RedRobotKK/Buffy/internal/version.Date={{ .CommitDate }}
+      - -X github.com/RedRobotKK/Replay/internal/version.Version={{ .Version }}
+      - -X github.com/RedRobotKK/Replay/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/RedRobotKK/Replay/internal/version.Date={{ .CommitDate }}
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:
@@ -90,7 +90,7 @@ release:
 
     ```sh
     cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
-      --certificate-identity-regexp 'https://github.com/RedRobotKK/Buffy/.*' \
+      --certificate-identity-regexp 'https://github.com/RedRobotKK/Replay/.*' \
       --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
     sha256sum --check --ignore-missing checksums.txt
     ```

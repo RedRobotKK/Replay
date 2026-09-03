@@ -6,11 +6,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/analysis"
-	"github.com/RedRobotKK/Buffy/internal/cachemodel"
-	"github.com/RedRobotKK/Buffy/internal/ledger"
-	"github.com/RedRobotKK/Buffy/internal/policy"
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/policy"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // sessionState is what the proxy remembers about one client session so it
@@ -34,7 +34,7 @@ type sessionState struct {
 	applied int
 	cleared int
 	// builder accumulates the session in the analysis's own shape, so the
-	// live what-if figures are the ones buffy replay prints for the ledger.
+	// live what-if figures are the ones replay replay prints for the ledger.
 	// scoreMu serializes additions and simulations for one session without
 	// holding the proxy-wide lock through a walk of the whole session.
 	scoreMu sync.Mutex
@@ -450,80 +450,80 @@ func (s *stats) metrics() string {
 	}
 	var b []byte
 	line := func(format string, args ...any) { b = fmt.Appendf(b, format+"\n", args...) }
-	line("# HELP buffy_requests_total Requests handled, by outcome class.")
-	line("# TYPE buffy_requests_total counter")
+	line("# HELP replay_requests_total Requests handled, by outcome class.")
+	line("# TYPE replay_requests_total counter")
 	for _, k := range sortedKeys(s.requests) {
-		line(`buffy_requests_total{class=%q} %d`, k, s.requests[k])
+		line(`replay_requests_total{class=%q} %d`, k, s.requests[k])
 	}
-	line("# HELP buffy_prompt_tokens_total Prompt tokens the provider processed.")
-	line("# TYPE buffy_prompt_tokens_total counter")
-	line("buffy_prompt_tokens_total %d", total.PromptTokens)
-	line("# HELP buffy_cache_read_tokens_total Prompt tokens served from cache.")
-	line("# TYPE buffy_cache_read_tokens_total counter")
-	line("buffy_cache_read_tokens_total %d", total.Reads)
-	line("# HELP buffy_cache_write_tokens_total Prompt tokens written to cache.")
-	line("# TYPE buffy_cache_write_tokens_total counter")
-	line("buffy_cache_write_tokens_total %d", total.Writes)
-	line("# HELP buffy_cached_share Cache reads divided by prompt tokens, all sessions.")
-	line("# TYPE buffy_cached_share gauge")
-	line("buffy_cached_share %.4f", total.CachedShare())
-	line("# HELP buffy_cache_break_total Responses whose cache read fell short of the expectation, by cause.")
-	line("# TYPE buffy_cache_break_total counter")
-	line("buffy_cache_break_total %d", breaks)
+	line("# HELP replay_prompt_tokens_total Prompt tokens the provider processed.")
+	line("# TYPE replay_prompt_tokens_total counter")
+	line("replay_prompt_tokens_total %d", total.PromptTokens)
+	line("# HELP replay_cache_read_tokens_total Prompt tokens served from cache.")
+	line("# TYPE replay_cache_read_tokens_total counter")
+	line("replay_cache_read_tokens_total %d", total.Reads)
+	line("# HELP replay_cache_write_tokens_total Prompt tokens written to cache.")
+	line("# TYPE replay_cache_write_tokens_total counter")
+	line("replay_cache_write_tokens_total %d", total.Writes)
+	line("# HELP replay_cached_share Cache reads divided by prompt tokens, all sessions.")
+	line("# TYPE replay_cached_share gauge")
+	line("replay_cached_share %.4f", total.CachedShare())
+	line("# HELP replay_cache_break_total Responses whose cache read fell short of the expectation, by cause.")
+	line("# TYPE replay_cache_break_total counter")
+	line("replay_cache_break_total %d", breaks)
 	causes := make([]string, 0, len(s.breakCauses))
 	for c := range s.breakCauses {
 		causes = append(causes, string(c))
 	}
 	sort.Strings(causes)
 	for _, c := range causes {
-		line(`buffy_cache_break_total{cause=%q} %d`, c, s.breakCauses[cachemodel.BreakCause(c)])
+		line(`replay_cache_break_total{cause=%q} %d`, c, s.breakCauses[cachemodel.BreakCause(c)])
 	}
-	line("# HELP buffy_upstream_errors_total Provider responses with an error status.")
-	line("# TYPE buffy_upstream_errors_total counter")
+	line("# HELP replay_upstream_errors_total Provider responses with an error status.")
+	line("# TYPE replay_upstream_errors_total counter")
 	codes := make([]int, 0, len(s.upstreamErrs))
 	for c := range s.upstreamErrs {
 		codes = append(codes, c)
 	}
 	sort.Ints(codes)
 	for _, c := range codes {
-		line(`buffy_upstream_errors_total{status="%d"} %d`, c, s.upstreamErrs[c])
+		line(`replay_upstream_errors_total{status="%d"} %d`, c, s.upstreamErrs[c])
 	}
-	line("# HELP buffy_refused_total Requests Buffy refused locally, by guard.")
-	line("# TYPE buffy_refused_total counter")
+	line("# HELP replay_refused_total Requests Replay refused locally, by guard.")
+	line("# TYPE replay_refused_total counter")
 	for _, k := range sortedKeys(s.refusedByKind) {
-		line(`buffy_refused_total{guard=%q} %d`, k, s.refusedByKind[k])
+		line(`replay_refused_total{guard=%q} %d`, k, s.refusedByKind[k])
 	}
-	line("# HELP buffy_retries_total Requests the proxy resent after a retryable provider failure.")
-	line("# TYPE buffy_retries_total counter")
-	line("buffy_retries_total %d", s.retries)
-	line("# HELP buffy_held_total Requests held behind a sibling with the same prefix.")
-	line("# TYPE buffy_held_total counter")
-	line("buffy_held_total %d", s.held)
-	line("# HELP buffy_held_milliseconds_total Time requests spent held behind a sibling.")
-	line("# TYPE buffy_held_milliseconds_total counter")
-	line("buffy_held_milliseconds_total %d", s.heldMS)
-	line("# HELP buffy_masked_total Secrets replaced with placeholders, by pattern.")
-	line("# TYPE buffy_masked_total counter")
+	line("# HELP replay_retries_total Requests the proxy resent after a retryable provider failure.")
+	line("# TYPE replay_retries_total counter")
+	line("replay_retries_total %d", s.retries)
+	line("# HELP replay_held_total Requests held behind a sibling with the same prefix.")
+	line("# TYPE replay_held_total counter")
+	line("replay_held_total %d", s.held)
+	line("# HELP replay_held_milliseconds_total Time requests spent held behind a sibling.")
+	line("# TYPE replay_held_milliseconds_total counter")
+	line("replay_held_milliseconds_total %d", s.heldMS)
+	line("# HELP replay_masked_total Secrets replaced with placeholders, by pattern.")
+	line("# TYPE replay_masked_total counter")
 	for _, k := range sortedKeys(s.masked) {
-		line(`buffy_masked_total{pattern=%q} %d`, k, s.masked[k])
+		line(`replay_masked_total{pattern=%q} %d`, k, s.masked[k])
 	}
-	line("# HELP buffy_rehydrated_total Placeholders restored in responses, by destination.")
-	line("# TYPE buffy_rehydrated_total counter")
+	line("# HELP replay_rehydrated_total Placeholders restored in responses, by destination.")
+	line("# TYPE replay_rehydrated_total counter")
 	for _, k := range sortedKeys(s.rehydrated) {
-		line(`buffy_rehydrated_total{destination=%q} %d`, k, s.rehydrated[k])
+		line(`replay_rehydrated_total{destination=%q} %d`, k, s.rehydrated[k])
 	}
-	line("# HELP buffy_rehydration_denied_total Placeholders left in place, by destination and reason.")
-	line("# TYPE buffy_rehydration_denied_total counter")
+	line("# HELP replay_rehydration_denied_total Placeholders left in place, by destination and reason.")
+	line("# TYPE replay_rehydration_denied_total counter")
 	for _, k := range sortedKeys(s.denied) {
-		line(`buffy_rehydration_denied_total{destination=%q} %d`, k, s.denied[k])
+		line(`replay_rehydration_denied_total{destination=%q} %d`, k, s.denied[k])
 	}
-	line("# HELP buffy_policy_applied_total Requests that carried a Buffy-added request parameter.")
-	line("# TYPE buffy_policy_applied_total counter")
-	line(`buffy_policy_applied_total{policy=%q} %d`, policy.Name, s.policyApplied)
-	line("# HELP buffy_request_latency_seconds Time from request received to response finished, including the provider.")
-	line("# TYPE buffy_request_latency_seconds summary")
-	line("buffy_request_latency_seconds_sum %.6f", s.latencySum.Seconds())
-	line("buffy_request_latency_seconds_count %d", s.latencyCount)
+	line("# HELP replay_policy_applied_total Requests that carried a Replay-added request parameter.")
+	line("# TYPE replay_policy_applied_total counter")
+	line(`replay_policy_applied_total{policy=%q} %d`, policy.Name, s.policyApplied)
+	line("# HELP replay_request_latency_seconds Time from request received to response finished, including the provider.")
+	line("# TYPE replay_request_latency_seconds summary")
+	line("replay_request_latency_seconds_sum %.6f", s.latencySum.Seconds())
+	line("replay_request_latency_seconds_count %d", s.latencyCount)
 	return string(b)
 }
 

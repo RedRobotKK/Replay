@@ -3,7 +3,7 @@ package analysis
 import (
 	"strings"
 
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // readTools are the tools whose result is a file the agent already had if

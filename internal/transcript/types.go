@@ -161,7 +161,7 @@ type Source string
 // Sources.
 const (
 	SourceTranscript Source = "claude-code-transcript"
-	SourceLedger     Source = "buffy-ledger"
+	SourceLedger     Source = "replay-ledger"
 )
 
 // PrefixVisible reports whether the system prompt and tool definitions are

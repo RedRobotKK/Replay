@@ -1,21 +1,21 @@
 # Security Policy
 
-Buffy will sit between developers and their model provider and will hold API keys, session tokens, and plaintext of masked secrets in memory. We treat every report seriously.
+Replay will sit between developers and their model provider and will hold API keys, session tokens, and plaintext of masked secrets in memory. We treat every report seriously.
 
 ## Reporting a vulnerability
 
 **Do not open a public issue.** Use one of:
 
-1. GitHub private vulnerability reporting: <https://github.com/RedRobotKK/Buffy/security/advisories/new>
+1. GitHub private vulnerability reporting: <https://github.com/RedRobotKK/Replay/security/advisories/new>
 2. Email: <security@redrobot.jp>
 
-Include the version (`buffy version`), platform, a reproduction, and the impact as you understand it. You will get an acknowledgement within 3 working days and a status update at least every 7 days until resolution.
+Include the version (`replay version`), platform, a reproduction, and the impact as you understand it. You will get an acknowledgement within 3 working days and a status update at least every 7 days until resolution.
 
 ## Scope
 
 In scope: anything in this repository, including the daemon, its build and release pipeline, and the documentation where it would lead a user into an unsafe configuration.
 
-Out of scope: vulnerabilities in the model providers, IDEs, or agents Buffy talks to. Report those upstream.
+Out of scope: vulnerabilities in the model providers, IDEs, or agents Replay talks to. Report those upstream.
 
 ## Supported versions
 

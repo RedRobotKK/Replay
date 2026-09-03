@@ -11,7 +11,7 @@ Cached share is blind to a policy that shrinks the prompt: context editing can l
 
 ## Decision
 
-`buffy learn` scores every catalog candidate over every calibrated session with the replay simulator and selects on the **relative effective-token saving**: the share of as-run effective tokens (input plus writes and reads at the provider multipliers) the candidate would have avoided. It is scale-free like cached share and sees prompt shrinking. Cached share is reported next to it, not used to select.
+`replay learn` scores every catalog candidate over every calibrated session with the replay simulator and selects on the **relative effective-token saving**: the share of as-run effective tokens (input plus writes and reads at the provider multipliers) the candidate would have avoided. It is scale-free like cached share and sees prompt shrinking. Cached share is reported next to it, not used to select.
 
 Selection rules, in order:
 
@@ -23,11 +23,11 @@ Selection rules, in order:
 
 Candidate parameters form a coarse, bounded, absolute grid (context-edit triggers of 50k, 100k, 200k, and 400k tokens with the default keep count) because the proxy must know the parameter at a session's first request and every extra candidate is another chance to elect noise.
 
-The result is a versioned JSON policy file, `~/.buffy/policy.json`, that lists every candidate's verdict with its numbers and the selected candidate or the reason none qualified. Learning reads files and writes one file; it never touches request bytes, and the proxy will read the file only at a session's first request (PX-8, not yet built).
+The result is a versioned JSON policy file, `~/.replay/policy.json`, that lists every candidate's verdict with its numbers and the selected candidate or the reason none qualified. Learning reads files and writes one file; it never touches request bytes, and the proxy will read the file only at a session's first request (PX-8, not yet built).
 
 ## Consequences
 
-- The learner says "none" on small corpora, which is the correct answer for them; the what-if rows on `/buffy/status` remain the per-session view.
+- The learner says "none" on small corpora, which is the correct answer for them; the what-if rows on `/replay/status` remain the per-session view.
 - Estimated candidates (context editing, which depends on the byte-to-token fit) carry the estimated mark through to the file. The proxy can apply only the context-edit family; TTL candidates are advice for a client setting.
 - Session types (LN-3) are not part of this decision; one policy is selected for all sessions until the corpus is large enough to split.
 

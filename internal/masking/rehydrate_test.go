@@ -195,7 +195,7 @@ func TestRehydrateStreamAcrossChunksAndDeltas(t *testing.T) {
 		`{"type":"message_start","message":{"id":"m","type":"message","usage":{"input_tokens":1,"output_tokens":0}}}`,
 		`{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
 		textDelta(0, "key is "+ph[secret][:cut]),
-		textDelta(0, ph[secret][cut:]+" and BUFFY_SEC"),
+		textDelta(0, ph[secret][cut:]+" and REPLAY_SEC"),
 		textDelta(0, "OND is not one; "+ph[privateKey][:PlaceholderLength-1]),
 		textDelta(0, ph[privateKey][PlaceholderLength-1:]),
 		`{"type":"content_block_stop","index":0}`,
@@ -227,7 +227,7 @@ func TestRehydrateStreamAcrossChunksAndDeltas(t *testing.T) {
 		}
 	}
 	texts, inputs := assembled(t, first)
-	wantText := "key is " + secret + " and BUFFY_SECOND is not one; " + strings.ReplaceAll(privateKey, `\n`, "\n")
+	wantText := "key is " + secret + " and REPLAY_SECOND is not one; " + strings.ReplaceAll(privateKey, `\n`, "\n")
 	if texts[0] != wantText {
 		t.Fatalf("text: %q", texts[0])
 	}
@@ -257,7 +257,7 @@ func TestRehydrateStreamAcrossChunksAndDeltas(t *testing.T) {
 	// A stream without placeholders is forwarded exactly.
 	plain := sse(
 		`{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
-		textDelta(0, "hello BUFFY_"),
+		textDelta(0, "hello REPLAY_"),
 		textDelta(0, "SECRET is a word"),
 		`{"type":"content_block_stop","index":0}`,
 		`{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"t","name":"Edit","input":{}}}`,
@@ -532,16 +532,16 @@ func TestLiteralsPaths(t *testing.T) {
 
 func TestPartialPlaceholderSuffix(t *testing.T) {
 	cases := map[string]int{
-		"":                                  0,
-		"hello":                             0,
-		"B":                                 1,
-		"BUFFY_SECRET_":                     len(PlaceholderPrefix),
-		"xx BUFFY_SECRET_abc":               len(PlaceholderPrefix) + 3,
-		"BUFFY_SECRET_abcdefabcdefabcd":     0, // complete; not a partial
-		"BUFFY_SECRET_abcdefabcdefabc":      PlaceholderLength - 1,
-		"BUFFY_SECRET_xyz":                  0,
-		"BUFFY_SECOND":                      0,
-		"BUFFY_SECRET_abcdefabcdefabcdBUFF": 4,
+		"":                                   0,
+		"hello":                              0,
+		"R":                                  1,
+		"REPLAY_SECRET_":                     len(PlaceholderPrefix),
+		"xx REPLAY_SECRET_abc":               len(PlaceholderPrefix) + 3,
+		"REPLAY_SECRET_abcdefabcdefabcd":     0, // complete; not a partial
+		"REPLAY_SECRET_abcdefabcdefabc":      PlaceholderLength - 1,
+		"REPLAY_SECRET_xyz":                  0,
+		"REPLAY_SECOND":                      0,
+		"REPLAY_SECRET_abcdefabcdefabcdREPL": 4,
 	}
 	for in, want := range cases {
 		if got := partialPlaceholderSuffix([]byte(in)); got != want {

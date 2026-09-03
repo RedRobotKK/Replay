@@ -5,9 +5,9 @@ import (
 	"hash/fnv"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/analysis"
-	"github.com/RedRobotKK/Buffy/internal/ledger"
-	"github.com/RedRobotKK/Buffy/internal/policy"
+	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/policy"
 )
 
 // TrialSettings bound a live trial of a learned policy (LN-5). They
@@ -92,5 +92,5 @@ func (s *stats) noteBreach(store *ledger.Store, settings TrialSettings, sessionI
 	}
 	s.reverted = true
 	s.revertReason = r.Reason
-	return line + "; policy " + edit.String() + " reverted for new sessions until buffy learn writes a newer file"
+	return line + "; policy " + edit.String() + " reverted for new sessions until replay learn writes a newer file"
 }

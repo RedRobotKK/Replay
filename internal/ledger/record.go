@@ -12,8 +12,8 @@ package ledger
 import (
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/cachemodel"
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // SchemaVersion is written on every record so a future reader can tell

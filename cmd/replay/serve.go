@@ -15,11 +15,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/analysis"
-	"github.com/RedRobotKK/Buffy/internal/ledger"
-	"github.com/RedRobotKK/Buffy/internal/masking"
-	"github.com/RedRobotKK/Buffy/internal/policy"
-	"github.com/RedRobotKK/Buffy/internal/proxy"
+	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/masking"
+	"github.com/RedRobotKK/Replay/internal/policy"
+	"github.com/RedRobotKK/Replay/internal/proxy"
 )
 
 // Defaults for serve. The listen port is the one the README documents.
@@ -32,24 +32,24 @@ const (
 
 // Environment variables that control serve without flags.
 const (
-	envDisabled = "BUFFY_DISABLED"
-	envToken    = "BUFFY_TOKEN"
-	envUpstream = "BUFFY_UPSTREAM"
+	envDisabled = "REPLAY_DISABLED"
+	envToken    = "REPLAY_TOKEN"
+	envUpstream = "REPLAY_UPSTREAM"
 	// envNoPolicy turns every live policy off without touching flags, so
-	// a user can rule Buffy's edits out in one move while keeping the
+	// a user can rule Replay's edits out in one move while keeping the
 	// ledger and the guards.
-	envNoPolicy = "BUFFY_NO_POLICY"
+	envNoPolicy = "REPLAY_NO_POLICY"
 )
 
 // errDisabled is returned when the kill switch is set.
-var errDisabled = errors.New(envDisabled + " is set; Buffy will not start. To bypass Buffy entirely, unset ANTHROPIC_BASE_URL")
+var errDisabled = errors.New(envDisabled + " is set; Replay will not start. To bypass Replay entirely, unset ANTHROPIC_BASE_URL")
 
 func runServe(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	listen := fs.String("listen", defaultListen, "loopback address to bind")
 	upstream := fs.String("upstream", envOr(envUpstream, defaultUpstream), "provider base URL")
-	ledgerDir := fs.String("ledger", "", "ledger directory (default ~/.buffy/ledger)")
+	ledgerDir := fs.String("ledger", "", "ledger directory (default ~/.replay/ledger)")
 	token := fs.String("token", "", "require this value in the "+proxy.HeaderToken+" header (or set "+envToken+")")
 	maxSession := fs.Int("max-session-tokens", 0, "refuse a session's next request once it has consumed this many tokens (0 = off)")
 	maxDay := fs.Int("max-day-tokens", 0, "refuse requests once this many tokens were consumed today, UTC (0 = off)")
@@ -79,7 +79,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		scopeSpecs = append(scopeSpecs, v)
 		return nil
 	})
-	policyFile := fs.String("policy-file", "", "EXPERIMENTAL: apply the context-edit candidate selected by buffy learn (usually ~/.buffy/policy.json), read at each session's first request; an explicit -context-edit-trigger wins; a session keeps its first decision whatever the file does later")
+	policyFile := fs.String("policy-file", "", "EXPERIMENTAL: apply the context-edit candidate selected by replay learn (usually ~/.replay/policy.json), read at each session's first request; an explicit -context-edit-trigger wins; a session keeps its first decision whatever the file does later")
 	if err := fs.Parse(args); err != nil {
 		return errUsage
 	}
@@ -127,7 +127,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		Upstream:    target,
 		Token:       *token,
 		Store:       store,
-		Logger:      log.New(stderr, "buffy ", log.LstdFlags),
+		Logger:      log.New(stderr, "replay ", log.LstdFlags),
 		Spend:       proxy.NewSpendGuard(proxy.SpendLimits{SessionTokens: *maxSession, DayTokens: *maxDay, SessionUSD: *maxSessionUSD, DayUSD: *maxDayUSD}),
 		Loops:       proxy.LoopLimits{Warn: *loopWarn, Block: *loopBlock},
 		Breaker:     proxy.NewBreaker(proxy.BreakerSettings{Failures: *breakerFailures, Cooldown: *breakerCooldown}),
@@ -161,12 +161,12 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		} else if masker != nil {
 			_, _ = fmt.Fprintf(stdout, "masking: on (experimental); rehydration off, placeholders stay in responses\n")
 		}
-		_, _ = fmt.Fprintf(stdout, "buffy serve listening on http://%s -> %s\nledger: %s\n\nPoint your agent at it:\n  export ANTHROPIC_BASE_URL=http://%s\n\nThen analyze measured data with:\n  buffy replay %s\n\nStop with Ctrl-C. Disable without uninstalling: %s=1.\n", addr, target, dir, addr, dir, envDisabled)
+		_, _ = fmt.Fprintf(stdout, "replay serve listening on http://%s -> %s\nledger: %s\n\nPoint your agent at it:\n  export ANTHROPIC_BASE_URL=http://%s\n\nThen analyze measured data with:\n  replay replay %s\n\nStop with Ctrl-C. Disable without uninstalling: %s=1.\n", addr, target, dir, addr, dir, envDisabled)
 	}()
 	return srv.ListenAndServe(ctx)
 }
 
-// vaultDirName is where the masking vault lives under ~/.buffy.
+// vaultDirName is where the masking vault lives under ~/.replay.
 const vaultDirName = "vault"
 
 // maskingFromFlags opens the vault and builds the masker and, unless
@@ -179,7 +179,7 @@ func maskingFromFlags(on bool, patternsFile string, rehydrate bool, project stri
 	if err != nil {
 		return nil, nil, fmt.Errorf("find home directory for the vault: %w", err)
 	}
-	vault, err := masking.OpenVault(filepath.Join(home, ".buffy", vaultDirName))
+	vault, err := masking.OpenVault(filepath.Join(home, ".replay", vaultDirName))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -233,7 +233,7 @@ func defaultLedgerDir() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("find home directory for the ledger: %w", err)
 	}
-	return filepath.Join(home, ".buffy", ledgerDirName), nil
+	return filepath.Join(home, ".replay", ledgerDirName), nil
 }
 
 func envOr(key, fallback string) string {

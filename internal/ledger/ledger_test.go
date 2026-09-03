@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 const sampleRequest = `{"model":"claude-opus-5","max_tokens":100,"stream":true,

@@ -12,7 +12,7 @@ import (
 
 // placeholderRE matches a placeholder in a JSON string literal's bytes.
 // Placeholder characters never need escaping, so a placeholder the
-// model spelled with escapes (BUFFY_...) does not match and stays a
+// model spelled with escapes (REPLAY_...) does not match and stays a
 // placeholder: forgery through escaping fails closed.
 var placeholderRE = regexp.MustCompile(PlaceholderPrefix + `[0-9a-f]{` + strconv.Itoa(placeholderHex) + `}`)
 

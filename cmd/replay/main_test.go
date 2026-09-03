@@ -19,7 +19,7 @@ func TestRunBasicCommands(t *testing.T) {
 		wantOut string
 	}{
 		{name: "no args prints usage", args: nil, wantOut: "Usage:"},
-		{name: "version", args: []string{"version"}, wantOut: "buffy "},
+		{name: "version", args: []string{"version"}, wantOut: "replay "},
 		{name: "help", args: []string{"help"}, wantOut: "replay"},
 		{name: "serve honors the kill switch", args: []string{"serve"}, wantErr: errDisabled},
 		{name: "replay needs a path", args: []string{"replay"}, wantErr: errUsage},

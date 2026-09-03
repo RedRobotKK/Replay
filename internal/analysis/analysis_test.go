@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/cachemodel"
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 const fixture = "../transcript/testdata/session-redacted.jsonl"
