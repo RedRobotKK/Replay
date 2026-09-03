@@ -52,6 +52,19 @@ func TypeOf(model string, firstPromptTokens int) string {
 	return fmt.Sprintf("%s/%s-prefix", family, size)
 }
 
+// BytesPerTokenEstimate is the coarse ratio the proxy uses to classify a
+// session at its first request, when the prompt's size is known in bytes
+// but its token count only after the response. Learning classifies from
+// measured tokens; the two agree except near the boundary, and a session
+// that lands on the wrong side gets the overall selection, never a wrong
+// one.
+const BytesPerTokenEstimate = 4
+
+// TypeFromBytes classifies from what the proxy has before the response.
+func TypeFromBytes(model string, firstPromptBytes int) string {
+	return TypeOf(model, firstPromptBytes/BytesPerTokenEstimate)
+}
+
 // TypeResult is the selection for one session type.
 type TypeResult struct {
 	Type     string     `json:"type"`

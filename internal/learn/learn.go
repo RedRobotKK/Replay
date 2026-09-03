@@ -387,15 +387,29 @@ func LoadSelected(path string) (*Candidate, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
+	c, note := res.SelectionFor("")
+	return c, note, nil
+}
+
+// SelectionFor returns the selection to apply to a session of the given
+// type, or a note saying why there is none: a stale file, or nothing
+// selected for the type or overall. An empty type asks for the overall
+// selection only.
+func (r Result) SelectionFor(sessionType string) (*Candidate, string) {
 	switch {
-	case res.Schema != PolicyFileSchema:
-		return nil, fmt.Sprintf("policy file schema %d is not %d; run buffy learn again", res.Schema, PolicyFileSchema), nil
-	case res.Rules != cachemodel.RulesVersion:
-		return nil, fmt.Sprintf("policy file was learned under rules %q, current rules are %q; run buffy learn again", res.Rules, cachemodel.RulesVersion), nil
-	case res.Selected == nil:
-		return nil, "policy file selects nothing: " + res.Reason, nil
+	case r.Schema != PolicyFileSchema:
+		return nil, fmt.Sprintf("policy file schema %d is not %d; run buffy learn again", r.Schema, PolicyFileSchema)
+	case r.Rules != cachemodel.RulesVersion:
+		return nil, fmt.Sprintf("policy file was learned under rules %q, current rules are %q; run buffy learn again", r.Rules, cachemodel.RulesVersion)
 	}
-	return res.Selected, "", nil
+	c := r.Selected
+	if sessionType != "" {
+		c = r.SelectedFor(sessionType)
+	}
+	if c == nil {
+		return nil, "policy file selects nothing for this session: " + r.Reason
+	}
+	return c, ""
 }
 
 // LoadFile reads a policy file whole; callers that need the generation
