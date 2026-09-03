@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/RedRobotKK/Buffy/internal/analysis"
@@ -143,6 +144,12 @@ type Server struct {
 	stats *stats
 	// siblings holds parallel requests with the same prefix (Config.Siblings).
 	siblings *siblingGate
+	// shutdownGrace overrides ShutdownTimeout in tests. Zero is the constant.
+	shutdownGrace time.Duration
+	// idleConns holds accepted connections that have not sent a request.
+	// A shutdown closes them rather than waiting: they carry no turn.
+	idleMu    sync.Mutex
+	idleConns map[net.Conn]struct{}
 }
 
 // New builds a server. It does not listen yet.
@@ -217,7 +224,15 @@ func New(cfg Config) (*Server, error) {
 	mux.HandleFunc(StatusPath, s.status)
 	mux.HandleFunc(MetricsPath, s.metrics)
 	mux.HandleFunc("/", s.handle)
-	s.http = &http.Server{Handler: mux, ReadHeaderTimeout: ReadHeaderTimeout}
+	s.idleConns = map[net.Conn]struct{}{}
+	s.http = &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: ReadHeaderTimeout,
+		// A connection is tracked from the moment it is accepted until it
+		// carries a request, so a shutdown can tell "pooled but unused"
+		// from "serving a turn".
+		ConnState: s.noteConnState,
+	}
 	return s, nil
 }
 
@@ -233,15 +248,79 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	go func() { errc <- s.http.Serve(ln) }()
 	select {
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), ShutdownTimeout)
-		defer cancel()
-		return s.http.Shutdown(shutdownCtx)
+		return s.shutdown()
 	case err := <-errc:
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil
 		}
 		return err
 	}
+}
+
+// noteConnState tracks connections that have been accepted but have not
+// sent a request. Every other state means the connection either carries a
+// request or is finished, and a graceful shutdown handles both.
+func (s *Server) noteConnState(c net.Conn, state http.ConnState) {
+	s.idleMu.Lock()
+	defer s.idleMu.Unlock()
+	if state == http.StateNew {
+		s.idleConns[c] = struct{}{}
+		return
+	}
+	delete(s.idleConns, c)
+}
+
+// closeUnusedConns closes the connections that never sent a request and
+// returns how many. A connection that started a request between the state
+// callback and this call is no longer in the map, so no turn is cut.
+func (s *Server) closeUnusedConns() int {
+	s.idleMu.Lock()
+	conns := make([]net.Conn, 0, len(s.idleConns))
+	for c := range s.idleConns {
+		conns = append(conns, c)
+	}
+	s.idleConns = map[net.Conn]struct{}{}
+	s.idleMu.Unlock()
+	for _, c := range conns {
+		// The connection is being discarded; a close error says only that
+		// the peer got there first.
+		_ = c.Close()
+	}
+	return len(conns)
+}
+
+// shutdown stops serving: turns in flight get the grace period, then
+// whatever is left is closed.
+//
+// A graceful shutdown alone is not enough. It waits for every connection
+// to become idle, and one that has been accepted but has not sent a
+// request never does; it is closed only when ReadHeaderTimeout expires,
+// which is deliberately longer than the grace period so a slow client is
+// not cut off mid-header. Agents hold pooled connections open exactly
+// like that, so waiting for them turned Ctrl-C into a five-second hang
+// and a non-zero exit. Those connections carry no turn, so they are
+// closed first; the force-close afterwards is the backstop for a turn
+// that outlasts the grace period.
+func (s *Server) shutdown() error {
+	if n := s.closeUnusedConns(); n > 0 {
+		s.cfg.Logger.Printf("shutdown: closed %d connection(s) with no request in flight", n)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), s.grace())
+	defer cancel()
+	err := s.http.Shutdown(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	s.cfg.Logger.Printf("shutdown: turns still running after %s; closing them", s.grace())
+	return s.http.Close()
+}
+
+// grace is how long a shutdown waits for connections to finish.
+func (s *Server) grace() time.Duration {
+	if s.shutdownGrace > 0 {
+		return s.shutdownGrace
+	}
+	return ShutdownTimeout
 }
 
 // Addr is the bound address, valid after ListenAndServe has started.
