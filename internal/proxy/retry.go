@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -67,7 +68,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	counter, _ := req.Context().Value(retryKey{}).(*retryCounter)
 	for attempt := 0; ; attempt++ {
 		resp, err := t.next.RoundTrip(req)
-		retryable := err != nil || IsRetryableStatus(resp.StatusCode)
+		retryable := (err != nil && beforeRequestSent(err)) || (err == nil && IsRetryableStatus(resp.StatusCode))
 		if !retryable || attempt >= t.settings.Attempts || req.GetBody == nil {
 			return resp, err
 		}
@@ -128,6 +129,33 @@ func retryAfter(value string, now time.Time) (time.Duration, bool) {
 		return max(at.Sub(now), 0), true
 	}
 	return 0, false
+}
+
+// dialError marks a failure to connect, which is the one transport
+// failure that cannot have billed the request.
+type dialError struct{ err error }
+
+func (e dialError) Error() string { return e.err.Error() }
+func (e dialError) Unwrap() error { return e.err }
+
+// dialContext wraps a dialer so its failures are recognizable.
+func dialContext(d *net.Dialer) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		conn, err := d.DialContext(ctx, network, addr)
+		if err != nil {
+			return nil, dialError{err}
+		}
+		return conn, nil
+	}
+}
+
+// beforeRequestSent reports whether a transport error happened before
+// the request could have reached the provider. A reset after the body
+// was written, or a timeout waiting for headers, may already have been
+// billed and is not resent.
+func beforeRequestSent(err error) bool {
+	var d dialError
+	return errors.As(err, &d)
 }
 
 func drain(resp *http.Response) {

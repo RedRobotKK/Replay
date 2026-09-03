@@ -30,6 +30,7 @@ import (
 	"github.com/RedRobotKK/Buffy/internal/learn"
 	"github.com/RedRobotKK/Buffy/internal/ledger"
 	"github.com/RedRobotKK/Buffy/internal/policy"
+	"github.com/RedRobotKK/Buffy/internal/transcript"
 )
 
 // Timeouts. Provider turns on frontier models can run for minutes, so the
@@ -87,6 +88,9 @@ type Config struct {
 	PolicyFile string
 	// Trial bounds how a learned policy is tried live (LN-5).
 	Trial TrialSettings
+	// NoPolicy turns every live policy off, including one a persisted pin
+	// would otherwise restore (PX-6).
+	NoPolicy bool
 	// Retries, when Attempts is set, resend a request the provider refused
 	// with a retryable status or that never connected, before any byte of
 	// a response has reached the client.
@@ -100,6 +104,10 @@ const (
 	StatusPath  = "/buffy/status"
 	MetricsPath = "/buffy/metrics"
 )
+
+// forwardingHeaders are the ones httputil.ReverseProxy removes from a
+// rewritten request; Buffy puts the client's back.
+var forwardingHeaders = []string{"Forwarded", "X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto"}
 
 // HeaderOverride is the header a client sets to acknowledge a spend cap or
 // a loop block and proceed once. Its value is logged as the reason.
@@ -136,7 +144,7 @@ func New(cfg Config) (*Server, error) {
 	}
 	var transport http.RoundTripper = &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           (&net.Dialer{Timeout: DialTimeout}).DialContext,
+		DialContext:           dialContext(&net.Dialer{Timeout: DialTimeout}),
 		TLSHandshakeTimeout:   TLSHandshakeTimeout,
 		ResponseHeaderTimeout: ResponseHeaderTimeout,
 		IdleConnTimeout:       IdleConnTimeout,
@@ -161,6 +169,13 @@ func New(cfg Config) (*Server, error) {
 			// listener token, which is not the client's header to the
 			// provider.
 			r.Out.Header.Del(HeaderToken)
+			// Rewrite drops the client's own forwarding headers; they are
+			// the client's bytes and go through like any other header.
+			for _, h := range forwardingHeaders {
+				if v, ok := r.In.Header[h]; ok {
+					r.Out.Header[h] = v
+				}
+			}
 		},
 		Transport: transport,
 		// Flush every write so streamed events reach the client as they
@@ -261,15 +276,17 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	messages := isMessages(r.URL.Path)
 	rec := ledger.Record{Timestamp: start, Path: r.URL.Path, SessionID: r.Header.Get(HeaderSessionID), AgentID: r.Header.Get(HeaderAgentID)}
 
-	if ok, wait := s.cfg.Breaker.Allow(); !ok {
+	ok, probe, wait := s.cfg.Breaker.Allow()
+	if !ok {
 		s.refuse(w, refusalCircuitOpen, fmt.Sprintf("the provider has been failing; Buffy is holding requests for %s so the agent stops burning retries", wait.Round(time.Second)), wait)
 		return
 	}
 	// A half-open probe that never reaches an outcome (refused below, or
-	// aborted) is given back so the next request can probe instead.
+	// aborted) is given back so the next request can probe instead. Only
+	// the probe itself may give the slot back.
 	observed := false
 	defer func() {
-		if !observed {
+		if probe && !observed {
 			s.cfg.Breaker.Release()
 		}
 	}()
@@ -285,9 +302,11 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	}
 	setBody(r, body)
 
+	summarized := false
 	if messages && len(body) > 0 {
 		if sum, err := ledger.SummarizeRequest(body, s.cfg.Store.Labeler()); err == nil {
 			rec.RequestSummary = sum
+			summarized = true
 		}
 		if rec.SessionID == "" {
 			rec.SessionID = rec.SessionHash
@@ -295,7 +314,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		if !s.guard(w, r, &rec) {
 			return
 		}
-		body = s.applyPolicy(r, &rec, body)
+		body = s.applyPolicy(r, &rec, body, summarized)
 		setBody(r, body)
 	}
 	r, retries := withRetryCounter(r)
@@ -308,8 +327,12 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	// then re-raised for the server to handle as it normally does.
 	defer func() {
 		aborted := recover()
-		s.cfg.Breaker.Observe(tap.upstreamFailed || IsRetryableStatus(tap.status))
-		observed = true
+		if tap.status != 0 || tap.upstreamFailed {
+			// A client that left before any response is no observation of
+			// the provider.
+			s.cfg.Breaker.Observe(tap.upstreamFailed || IsRetryableStatus(tap.status))
+			observed = true
+		}
 		rec.Status = tap.status
 		rec.Retries = retries.n
 		rec.LatencyMS = time.Since(start).Milliseconds()
@@ -372,8 +395,8 @@ func setBody(r *http.Request, body []byte) {
 // a session either always carries the parameter or never does. Every
 // transformation is logged with the body hashes before and after
 // (PX-10), never the bodies.
-func (s *Server) applyPolicy(r *http.Request, rec *ledger.Record, body []byte) []byte {
-	if rec.SessionID == "" {
+func (s *Server) applyPolicy(r *http.Request, rec *ledger.Record, body []byte, summarized bool) []byte {
+	if rec.SessionID == "" || !s.policyConfigured() {
 		return body
 	}
 	beta, clientSet := r.Header.Get("anthropic-beta"), rec.Prompt.ContextEdits
@@ -384,6 +407,12 @@ func (s *Server) applyPolicy(r *http.Request, rec *ledger.Record, body []byte) [
 		s.stats.pin(rec.SessionID, edit, decision, generated)
 	}
 	if edit == nil || decision != policy.Applied {
+		return body
+	}
+	if !summarized {
+		// A body the summarizer could not read may already carry the
+		// parameter; a second copy is worse than none.
+		s.cfg.Logger.Printf("policy %s session=%s %s", policy.Name, short(rec.SessionID), policy.SkipUnparsed)
 		return body
 	}
 	if admissible := edit.Admissible(beta, clientSet); admissible != policy.Applied {
@@ -401,6 +430,13 @@ func (s *Server) applyPolicy(r *http.Request, rec *ledger.Record, body []byte) [
 	return out
 }
 
+// policyConfigured reports whether any live policy source is on. With
+// none, a persisted pin is left alone: turning policies off must stop
+// every session, including one pinned on by an earlier process.
+func (s *Server) policyConfigured() bool {
+	return !s.cfg.NoPolicy && (s.cfg.ContextEdit != nil || s.cfg.PolicyFile != "")
+}
+
 // decidePolicy makes a session's decision at its first request in this
 // process. A pin persisted by an earlier process wins over everything,
 // then the flag, then the policy file. The decision is persisted so a
@@ -410,8 +446,13 @@ func (s *Server) decidePolicy(sessionID, beta string, clientSet bool) (*policy.C
 		var edit *policy.ContextEdit
 		if pin.Policy == policy.Name {
 			edit = &policy.ContextEdit{TriggerTokens: pin.Trigger, KeepLast: pin.Keep}
+			if err := edit.Validate(); err != nil {
+				// A pin another process wrote is data, not an order.
+				s.cfg.Logger.Printf("policy session=%s pinned earlier with invalid parameters (%v); running without it", short(sessionID), err)
+				return nil, policy.NotConfigured, time.Time{}
+			}
 		}
-		s.cfg.Logger.Printf("policy session=%s pinned earlier: %s", short(sessionID), pin.Decision)
+		s.cfg.Logger.Printf("policy session=%s pinned earlier: %s", short(sessionID), transcript.SanitizeLabel(pin.Decision))
 		// A restored pin carries no file generation; the guardrail judges
 		// sessions this process started.
 		return edit, policy.Decision(pin.Decision), time.Time{}
@@ -473,10 +514,10 @@ func (s *Server) policyFromFile(sessionID string) (*policy.ContextEdit, time.Tim
 		s.cfg.Logger.Printf("policy file %s not read for session=%s: %v", s.cfg.PolicyFile, short(sessionID), err)
 		return nil, time.Time{}
 	case note != "":
-		s.cfg.Logger.Printf("policy file: %s (session=%s runs without a policy)", note, short(sessionID))
+		s.cfg.Logger.Printf("policy file: %s (session=%s runs without a policy)", transcript.SanitizeLabel(note), short(sessionID))
 		return nil, time.Time{}
 	case c.ContextEdit == nil:
-		s.cfg.Logger.Printf("policy file selects %s, which is a client setting (%s); session=%s runs without a proxy policy", c.Name, c.Live, short(sessionID))
+		s.cfg.Logger.Printf("policy file selects %s, which is a client setting (%s); session=%s runs without a proxy policy", transcript.SanitizeLabel(c.Name), transcript.SanitizeLabel(c.Live), short(sessionID))
 		return nil, time.Time{}
 	}
 	edit := &policy.ContextEdit{TriggerTokens: c.ContextEdit.TriggerTokens, KeepLast: c.ContextEdit.KeepLast}
