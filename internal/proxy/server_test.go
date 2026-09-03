@@ -1016,6 +1016,8 @@ func TestRetriesResendUntilSuccessAndAreRecorded(t *testing.T) {
 	if recs[0].Retries != 3 || recs[0].Status != http.StatusOK {
 		t.Fatalf("ledger must carry the retry count: %+v", recs[0])
 	}
+	// The request line is logged after the ledger write.
+	waitFor(t, "the request log line", func() bool { return strings.Contains(logs.String(), "retries=3") })
 	log := logs.String()
 	for _, want := range []string{"retry 1/3", "after status 529", "retry 2/3", "after status 429", "retry 3/3", "after status 503", "retries=3"} {
 		if !strings.Contains(log, want) {

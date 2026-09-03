@@ -346,6 +346,8 @@ func TestRehydrateStreamGivesUpOnOversizedInput(t *testing.T) {
 func TestRehydrateAdversarialCorpus(t *testing.T) {
 	project := t.TempDir()
 	in := func(parts ...string) string { return jsonString(filepath.Join(append([]string{project}, parts...)...)) }
+	// An absolute path outside the project on every platform.
+	out := func(name string) string { return jsonString(filepath.Join(filepath.Dir(project), name)) }
 	cases := []struct {
 		name   string
 		tool   string
@@ -358,13 +360,13 @@ func TestRehydrateAdversarialCorpus(t *testing.T) {
 		{"unknown tool", "curl", `{"args":"PH"}`, nil, false},
 		{"mcp tool", "mcp__server__send", `{"body":"PH"}`, nil, false},
 		{"edit with relative escape", "Edit", `{"file_path":"../outside.txt","new_string":"PH"}`, nil, false},
-		{"edit absolute outside", "Edit", `{"file_path":` + jsonString(filepath.Join(filepath.Dir(project), "o.txt")) + `,"new_string":"PH"}`, nil, false},
+		{"edit absolute outside", "Edit", `{"file_path":` + out("o.txt") + `,"new_string":"PH"}`, nil, false},
 		{"edit dot-dot inside path", "Edit", `{"file_path":` + in("a", "..", "..", "etc", "passwd") + `,"new_string":"PH"}`, nil, false},
 		{"edit without path", "Edit", `{"new_string":"PH"}`, nil, false},
 		{"edit with placeholder in path", "Edit", `{"file_path":` + in("PH") + `,"new_string":"PH"}`, nil, false},
 		{"edit path not a string", "Edit", `{"file_path":1,"new_string":"PH"}`, nil, false},
-		{"decoy in-project key beside the real target", "str_replace_based_edit_tool", `{"command":"create","file_path":` + in("ok.txt") + `,"path":"/etc/cron.d/evil","file_text":"PH"}`, nil, false},
-		{"decoy path for the tool's own key", "Edit", `{"file_path":` + in("ok.txt") + `,"path":"/etc/passwd","new_string":"PH"}`, nil, false},
+		{"decoy in-project key beside the real target", "str_replace_based_edit_tool", `{"command":"create","file_path":` + in("ok.txt") + `,"path":` + out("evil") + `,"file_text":"PH"}`, nil, false},
+		{"decoy path for the tool's own key", "Edit", `{"file_path":` + in("ok.txt") + `,"path":` + out("passwd") + `,"new_string":"PH"}`, nil, false},
 		{"tool key missing, another present", "Edit", `{"path":` + in("ok.txt") + `,"new_string":"PH"}`, nil, false},
 		{"editor tool with its own key", "str_replace_based_edit_tool", `{"command":"create","path":` + in("ok.txt") + `,"file_text":"PH"}`, nil, true},
 		{"write with escaped placeholder", "Write", `{"file_path":` + in("x") + `,"content":"EPH"}`, nil, false},
