@@ -41,25 +41,43 @@ func runLearn(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	candidates := learn.Catalog()
-	var scores []learn.SessionScore
 	// The visitor never fails, so the walk cannot either.
 	stores := map[string]*ledger.Store{}
-	_ = forEachSession(files, func(path string, session *transcript.Session, _ *analysis.LaneReport, err error) error {
+	var sessions []*transcript.Session
+	var reports []*analysis.LaneReport
+	_ = forEachSession(files, func(path string, session *transcript.Session, rep *analysis.LaneReport, err error) error {
 		if err != nil {
 			return nil
 		}
 		if session.Source == transcript.SourceLedger {
 			markControl(stores, filepath.Dir(path), session)
 		}
+		sessions = append(sessions, session)
+		reports = append(reports, rep)
+		return nil
+	})
+	// A model whose newest sessions stopped calibrating has no alternatives
+	// scored (ST-1); its sessions are left out before selection.
+	models := analysis.ModelCalibrations(reports)
+	stale := analysis.StaleModels(models)
+	var scores []learn.SessionScore
+	for i, session := range sessions {
+		if stale[reports[i].Lane.Requests[0].Model] {
+			continue
+		}
 		if sc, ok := learn.Score(session, candidates); ok {
 			scores = append(scores, sc)
 		}
-		return nil
-	})
+	}
 	res := learn.Select(candidates, scores, len(files), learn.Options{MinSessions: *minSessions}, time.Now())
 	learn.SortVerdicts(res.Verdicts)
 
 	p := analysis.NewPrinter(stdout)
+	for _, m := range models {
+		if m.Stale {
+			p.Printf("Provider behavior changed for %s: %s.\n  %s\n\n", m.Model, m.Reason, m.MinPrefix)
+		}
+	}
 	p.Printf("Sessions: %d found, %d calibrated, %d held out. Rules %s.\n\n", res.Sessions.Found, res.Sessions.Calibrated, res.Sessions.Holdout, res.Rules)
 	p.Printf("  %-36s %8s %18s %9s %s\n", "candidate", "sessions", "saving (interval)", "held-out", "decision")
 	for _, v := range res.Verdicts {

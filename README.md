@@ -76,7 +76,7 @@ make build
 ./bin/buffy corpus ~/.claude/projects > docs/reviews/calibration-corpus-$(date +%F).md
 ```
 
-Open it, check that nothing in it identifies your projects, and commit it on a branch.
+Open it, check that nothing in it identifies your projects, and commit it on a branch. The report also judges calibration per model with the newest sessions on their own, so a provider rule change shows up as "provider behavior changed" rather than as a silent drift in the numbers, and it bounds the minimum cacheable prefix from your usage next to what the rules file says. `buffy learn` scores no alternatives for a model reported that way.
 
 ### Measured numbers with the proxy
 
