@@ -193,6 +193,19 @@ func waitLedger(t *testing.T, dir string, n int) []ledger.Record {
 	}
 }
 
+// waitFor polls a condition that the proxy settles after it has answered
+// the client, up to the same deadline ledger writes get.
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(ledgerWait)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func readLedger(t *testing.T, dir string) []ledger.Record {
 	t.Helper()
 	matches, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
@@ -201,21 +214,14 @@ func readLedger(t *testing.T, dir string) []ledger.Record {
 	}
 	var out []ledger.Record
 	for _, m := range matches {
-		data, err := os.ReadFile(m)
+		recs, skipped, err := ledger.ReadRecords(m)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, line := range bytes.Split(bytes.TrimSpace(data), []byte("\n")) {
-			if len(bytes.TrimSpace(line)) == 0 {
-				// The file can exist before its first record is flushed.
-				continue
-			}
-			var rec ledger.Record
-			if err := json.Unmarshal(line, &rec); err != nil {
-				t.Fatalf("bad ledger line %q: %v", line, err)
-			}
-			out = append(out, rec)
+		if skipped != 0 {
+			t.Fatalf("%d unreadable ledger lines in %s", skipped, m)
 		}
+		out = append(out, recs...)
 	}
 	return out
 }
@@ -531,7 +537,8 @@ func TestClientAbortMidStreamIsStillRecorded(t *testing.T) {
 
 func TestBreakerHoldsRequestsAfterProviderFailures(t *testing.T) {
 	up := &upstream{t: t, mode: "error"}
-	base, _, _ := startProxyWith(t, up, Config{Breaker: NewBreaker(BreakerSettings{Failures: 2, Cooldown: time.Minute})})
+	breaker := NewBreaker(BreakerSettings{Failures: 2, Cooldown: time.Minute})
+	base, _, _ := startProxyWith(t, up, Config{Breaker: breaker})
 	for i := 0; i < 2; i++ {
 		resp := post(t, base, "/v1/messages", nil)
 		_ = resp.Body.Close()
@@ -539,6 +546,13 @@ func TestBreakerHoldsRequestsAfterProviderFailures(t *testing.T) {
 			t.Fatalf("provider errors must pass through: %d", resp.StatusCode)
 		}
 	}
+	// The outcome is observed after the response has been sent, so the
+	// client can get ahead of the breaker; wait for it to open.
+	waitFor(t, "breaker to open", func() bool {
+		breaker.mu.Lock()
+		defer breaker.mu.Unlock()
+		return !breaker.openedAt.IsZero()
+	})
 	resp := post(t, base, "/v1/messages", nil)
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()

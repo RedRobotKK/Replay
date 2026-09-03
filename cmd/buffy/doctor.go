@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/RedRobotKK/Buffy/internal/analysis"
+	"github.com/RedRobotKK/Buffy/internal/proxy"
 )
 
 // doctorTimeout bounds the probe of a running proxy.
@@ -28,52 +31,55 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 	if err := fs.Parse(args); err != nil {
 		return errUsage
 	}
-	p := &corpusPrinter{w: stdout}
+	p := analysis.NewPrinter(stdout)
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("find home directory: %w", err)
 	}
+	ledgerDir, err := defaultLedgerDir()
+	if err != nil {
+		return err
+	}
 
-	p.printf("buffy doctor\n\n")
+	p.Printf("buffy doctor\n\n")
 
 	// Transcripts.
 	projects := filepath.Join(home, ".claude", "projects")
 	files, dirs := countTranscripts(projects)
 	if dirs == 0 {
-		p.printf("transcripts   none found under %s\n", projects)
-		p.printf("              run a Claude Code session first, or point replay at another directory\n")
+		p.Printf("transcripts   none found under %s\n", projects)
+		p.Printf("              run a Claude Code session first, or point replay at another directory\n")
 	} else {
-		p.printf("transcripts   %d sessions across %d projects under %s\n", files, dirs, projects)
-		p.printf("              next: buffy replay %s\n", filepath.Join(projects, "<project>"))
+		p.Printf("transcripts   %d sessions across %d projects under %s\n", files, dirs, projects)
+		p.Printf("              next: buffy replay %s\n", filepath.Join(projects, "<project>"))
 	}
 
 	// Proxy configuration.
 	base := os.Getenv(envBaseURL)
 	if base == "" {
-		p.printf("proxy         %s is not set in this shell; the agent talks to the provider directly\n", envBaseURL)
-		p.printf("              next: buffy serve, then export %s=http://%s\n", envBaseURL, defaultListen)
+		p.Printf("proxy         %s is not set in this shell; the agent talks to the provider directly\n", envBaseURL)
+		p.Printf("              next: buffy serve, then export %s=http://%s\n", envBaseURL, defaultListen)
 	} else {
-		p.printf("proxy         %s=%s\n", envBaseURL, base)
+		p.Printf("proxy         %s=%s\n", envBaseURL, base)
 		if ok, detail := probeProxy(base); ok {
-			p.printf("              buffy is answering there (%s)\n", detail)
+			p.Printf("              buffy is answering there (%s)\n", detail)
 		} else {
-			p.printf("              nothing answered at %s/buffy/healthz (%s); the agent will fail until buffy serve runs or the variable is unset\n", strings.TrimRight(base, "/"), detail)
+			p.Printf("              nothing answered at %s%s (%s); the agent will fail until buffy serve runs or the variable is unset\n", strings.TrimRight(base, "/"), proxy.HealthPath, detail)
 		}
 	}
 	if os.Getenv(envDisabled) != "" {
-		p.printf("              %s is set: serve will refuse to start\n", envDisabled)
+		p.Printf("              %s is set: serve will refuse to start\n", envDisabled)
 	}
 
 	// Ledger.
-	ledgerDir := filepath.Join(home, ".buffy", ledgerDirName)
 	n := countFiles(ledgerDir, "*.jsonl")
 	if n == 0 {
-		p.printf("ledger        empty (%s)\n", ledgerDir)
+		p.Printf("ledger        empty (%s)\n", ledgerDir)
 	} else {
-		p.printf("ledger        %d sessions recorded under %s\n", n, ledgerDir)
-		p.printf("              next: buffy replay %s  (measured tier)\n", ledgerDir)
+		p.Printf("ledger        %d sessions recorded under %s\n", n, ledgerDir)
+		p.Printf("              next: buffy replay %s  (measured tier)\n", ledgerDir)
 	}
-	return p.err
+	return p.Err()
 }
 
 func countTranscripts(projects string) (files int, dirs int) {
@@ -105,7 +111,7 @@ func countFiles(dir, pattern string) int {
 func probeProxy(base string) (bool, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), doctorTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(base, "/")+"/buffy/healthz", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(base, "/")+proxy.HealthPath, nil)
 	if err != nil {
 		return false, err.Error()
 	}

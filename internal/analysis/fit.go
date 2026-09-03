@@ -7,28 +7,61 @@ import (
 	"github.com/RedRobotKK/Buffy/internal/transcript"
 )
 
+// Tokens is a token count that remembers how much of it was measured from
+// provider usage and how much was estimated through the byte-to-token fit.
+// Arithmetic keeps the two apart so reports can state uncertainty on the
+// estimated part only.
+type Tokens struct {
+	Measured  int
+	Estimated int
+}
+
+// Measured constructs a count the provider reported.
+func Measured(n int) Tokens { return Tokens{Measured: n} }
+
+// Estimated constructs a count derived from the byte-to-token fit.
+func Estimated(n int) Tokens { return Tokens{Estimated: n} }
+
+// Total is the whole count regardless of provenance.
+func (t Tokens) Total() int { return t.Measured + t.Estimated }
+
+// Add sums two counts.
+func (t Tokens) Add(o Tokens) Tokens {
+	return Tokens{Measured: t.Measured + o.Measured, Estimated: t.Estimated + o.Estimated}
+}
+
+// Times scales a count.
+func (t Tokens) Times(n int) Tokens {
+	return Tokens{Measured: t.Measured * n, Estimated: t.Estimated * n}
+}
+
+// Figure is a token figure ready to print: the value and the uncertainty
+// of its estimated part.
+type Figure struct {
+	Value int
+	Error int
+}
+
 // TokenFit is the session's observed relationship between user-side content
 // bytes (tool results, user text) and provider tokens. Assistant output is
-// never fitted: its token count is reported by the provider and replayed
-// verbatim, so it is measured, not estimated.
+// never fitted: the provider reports its token count and replays exactly
+// those tokens, so it is measured.
 type TokenFit struct {
 	// TokensPerByte is the pooled ratio across fitted turns.
 	TokensPerByte float64
-	// RelativeError is the standard deviation of per-turn ratios divided by
-	// the pooled ratio. Estimates carry this as their uncertainty.
+	// RelativeError is the byte-weighted standard deviation of per-turn
+	// ratios divided by the pooled ratio. Estimates carry this uncertainty.
 	RelativeError float64
 	// Turns is how many turns contributed.
 	Turns int
-	// UnseenPrefixTokens is the shared prefix ahead of the first message:
-	// system prompt and tool definitions. It is measured from the first
-	// request's cache read when that request found a warm cache, and
-	// estimated from bytes otherwise.
-	UnseenPrefixTokens int
-	// UnseenPrefixMeasured says which of the two applied.
-	UnseenPrefixMeasured bool
-	// InjectedTokens is content the client sent with the first request that
-	// the transcript does not show (attachments, injected reminders).
-	InjectedTokens int
+	// UnseenPrefix is the shared prefix ahead of the first message (system
+	// prompt and tool definitions) when the transcript does not show it:
+	// measured from the first request's cache read when that request found
+	// a warm cache, estimated from bytes otherwise, zero when visible.
+	UnseenPrefix Tokens
+	// Injected is content the client sent with the first request that the
+	// transcript does not show (attachments, injected reminders).
+	Injected Tokens
 }
 
 // defaultTokensPerByte is used only when a session offers no turn to fit
@@ -40,11 +73,10 @@ const defaultTokensPerByte = 0.25
 const minFitBytes = 512
 
 // turnContent splits what a request's cache write covered into the
-// previous output (measured), new user-side messages (estimated from
-// bytes), and history that was re-written because the prefix broke
-// (measured: the difference between expected and actual read).
+// previous output (measured), new user-side content (estimated from bytes),
+// and history re-written because the prefix broke (measured).
 type turnContent struct {
-	outputTokens int
+	userBlocks   []transcript.Block
 	userBytes    int
 	userTokens   int
 	rebillTokens int
@@ -52,9 +84,10 @@ type turnContent struct {
 
 func splitTurn(t Turn) turnContent {
 	prev, cur := t.Previous, t.Request
-	tc := turnContent{outputTokens: prev.Usage.Output}
+	var tc turnContent
 	for _, m := range cur.Context[min(len(prev.Context), len(cur.Context)):] {
 		if m.Role == transcript.RoleUser {
+			tc.userBlocks = append(tc.userBlocks, m.Blocks...)
 			tc.userBytes += m.Bytes()
 		}
 	}
@@ -68,12 +101,20 @@ func splitTurn(t Turn) turnContent {
 		tc.rebillTokens = min(t.Expected-t.Actual, written)
 	}
 	newTokens := written - tc.rebillTokens + max(t.Actual-t.Expected, 0)
-	tc.userTokens = max(newTokens-tc.outputTokens, 0)
+	tc.userTokens = max(newTokens-prev.Usage.Output, 0)
 	return tc
 }
 
+// sample is one turn's ratio, weighted by the bytes behind it so a large
+// tool result counts for more than a one-line acknowledgement.
+type sample struct {
+	ratio, weight float64
+}
+
 // Fit computes the byte-to-token relationship for a calibrated lane.
-func Fit(cal *Calibration) TokenFit {
+// prefixVisible says the system prompt and tools are in the context (ledger
+// data), so nothing ahead of the first message needs estimating.
+func Fit(cal *Calibration, prefixVisible bool) TokenFit {
 	var sumBytes, sumTokens float64
 	var samples []sample
 	for _, t := range cal.Turns {
@@ -96,7 +137,7 @@ func Fit(cal *Calibration) TokenFit {
 		fit.TokensPerByte = sumTokens / sumBytes
 		fit.RelativeError = weightedSpread(samples, fit.TokensPerByte)
 	}
-	if len(cal.Lane.Requests) > 0 && !cal.PrefixVisible {
+	if len(cal.Lane.Requests) > 0 && !prefixVisible {
 		first := cal.Lane.Requests[0]
 		seen := 0
 		for _, m := range first.Context {
@@ -104,20 +145,13 @@ func Fit(cal *Calibration) TokenFit {
 		}
 		visible := fit.EstimateTokens(seen)
 		if first.Usage.CacheRead > 0 {
-			fit.UnseenPrefixTokens = first.Usage.CacheRead
-			fit.UnseenPrefixMeasured = true
-			fit.InjectedTokens = max(first.Usage.PromptTotal()-first.Usage.CacheRead-visible, 0)
+			fit.UnseenPrefix = Measured(first.Usage.CacheRead)
+			fit.Injected = Estimated(max(first.Usage.PromptTotal()-first.Usage.CacheRead-visible, 0))
 		} else {
-			fit.UnseenPrefixTokens = max(first.Usage.PromptTotal()-visible, 0)
+			fit.UnseenPrefix = Estimated(max(first.Usage.PromptTotal()-visible, 0))
 		}
 	}
 	return fit
-}
-
-// sample is one turn's ratio, weighted by the bytes behind it so a large
-// tool result counts for more than a one-line acknowledgement.
-type sample struct {
-	ratio, weight float64
 }
 
 // weightedSpread is the byte-weighted standard deviation of per-turn
@@ -143,17 +177,9 @@ func (f TokenFit) EstimateTokens(bytes int) int {
 	return int(math.Round(float64(bytes) * f.TokensPerByte))
 }
 
-// Estimated is a token figure with the part of it that carries uncertainty.
-type Estimated struct {
-	Value int
-	// Error is the fit's relative error applied to the estimated portion
-	// only; measured tokens contribute no error.
-	Error int
-}
-
-// Estimate builds a figure from measured and estimated token counts.
-func (f TokenFit) Estimate(measured, estimated int) Estimated {
-	return Estimated{Value: measured + estimated, Error: int(math.Round(float64(estimated) * f.RelativeError))}
+// Figure turns a count into a printable figure with its uncertainty.
+func (f TokenFit) Figure(t Tokens) Figure {
+	return Figure{Value: t.Total(), Error: int(math.Round(float64(t.Estimated) * f.RelativeError))}
 }
 
 // Labels for content the transcript does not show.

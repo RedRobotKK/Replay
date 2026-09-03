@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -245,5 +246,53 @@ func TestRedactReplacesTextWithFiller(t *testing.T) {
 	}
 	if !strings.Contains(got, `"cache_read_input_tokens":3`) {
 		t.Fatalf("redaction changed usage:\n%s", got)
+	}
+}
+
+// A parallel tool call is one request whose assistant lines are interleaved
+// in the parent chain with their tool results. The request's output holds
+// every block, but a later context must render each line's own blocks
+// exactly once.
+func TestParallelToolCallBlocksCountedOnce(t *testing.T) {
+	line := func(typ, uuid, parent, req string, idx int, content string) string {
+		usage := ""
+		if typ == "assistant" {
+			usage = `,"usage":{"input_tokens":1,"cache_creation_input_tokens":2,"cache_read_input_tokens":3,"output_tokens":4}`
+		}
+		return `{"type":"` + typ + `","uuid":"` + uuid + `","parentUuid":"` + parent + `","requestId":"` + req + `","apiBlockIndex":` + fmt.Sprint(idx) + `,"timestamp":"2026-09-02T00:00:01Z","message":{"role":"` + typ + `","model":"m","content":` + content + usage + `}}` + "\n"
+	}
+	call := func(id string) string {
+		return `[{"type":"tool_use","id":"` + id + `","name":"Bash","input":{"command":"go test ./..."}}]`
+	}
+	result := func(id string) string {
+		return `[{"type":"tool_result","tool_use_id":"` + id + `","content":"ok"}]`
+	}
+	input := line("user", "u1", "", "", 0, `"run the tests twice"`) +
+		line("assistant", "a1", "u1", "r1", 0, call("t1")) +
+		line("user", "u2", "a1", "", 0, result("t1")) +
+		line("assistant", "a2", "u2", "r1", 1, call("t2")) +
+		line("user", "u3", "a2", "", 0, result("t2")) +
+		line("assistant", "a3", "u3", "r2", 0, `[{"type":"text","text":"done"}]`)
+	s, err := ParseClaudeCode(strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.RequestCount() != 2 {
+		t.Fatalf("requests = %d, want 2", s.RequestCount())
+	}
+	first, second := s.Lanes[0].Requests[0], s.Lanes[0].Requests[1]
+	if got := len(first.Output.Blocks); got != 2 {
+		t.Fatalf("parallel call output blocks = %d, want 2", got)
+	}
+	var calls int
+	for _, m := range second.Context {
+		for _, b := range m.Blocks {
+			if b.Kind == KindToolUse {
+				calls++
+			}
+		}
+	}
+	if calls != 2 {
+		t.Fatalf("tool calls in the next context = %d, want 2 (each line's blocks once)", calls)
 	}
 }

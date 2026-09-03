@@ -1,7 +1,6 @@
 package transcript
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -9,16 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
-	"unicode/utf8"
-)
-
-// Scanner sizing. Tool results can be large; the maximum is generous while
-// still refusing pathological input.
-const (
-	scannerInitialBytes = 1 << 20
-	maxLineBytes        = 64 << 20
 )
 
 // Line types Claude Code writes that carry conversation content.
@@ -31,51 +21,18 @@ const (
 // Unknown fields are ignored on purpose so a client update does not break
 // parsing; unknown line types are counted in Session.Skipped.
 type rawLine struct {
-	Type          string          `json:"type"`
-	UUID          string          `json:"uuid"`
-	ParentUUID    string          `json:"parentUuid"`
-	SessionID     string          `json:"sessionId"`
-	Version       string          `json:"version"`
-	Timestamp     string          `json:"timestamp"`
-	RequestID     string          `json:"requestId"`
-	APIBlockIndex int             `json:"apiBlockIndex"`
-	IsSidechain   bool            `json:"isSidechain"`
-	Effort        string          `json:"effort"`
-	Message       json.RawMessage `json:"message"`
-}
-
-type rawMessage struct {
-	Role    string          `json:"role"`
-	Model   string          `json:"model"`
-	Content json.RawMessage `json:"content"`
-	Usage   *rawUsage       `json:"usage"`
-}
-
-type rawUsage struct {
-	Input         int `json:"input_tokens"`
-	CacheCreation int `json:"cache_creation_input_tokens"`
-	CacheRead     int `json:"cache_read_input_tokens"`
-	Output        int `json:"output_tokens"`
-	OutputDetails *struct {
-		Thinking int `json:"thinking_tokens"`
-	} `json:"output_tokens_details"`
-	CacheBreak *struct {
-		Short int `json:"ephemeral_5m_input_tokens"`
-		Long  int `json:"ephemeral_1h_input_tokens"`
-	} `json:"cache_creation"`
-}
-
-type rawBlock struct {
-	Type      string          `json:"type"`
-	Text      string          `json:"text"`
-	Thinking  string          `json:"thinking"`
-	Signature string          `json:"signature"`
-	ID        string          `json:"id"`
-	Name      string          `json:"name"`
-	Input     json.RawMessage `json:"input"`
-	ToolUseID string          `json:"tool_use_id"`
-	Content   json.RawMessage `json:"content"`
-	IsError   bool            `json:"is_error"`
+	Type          string `json:"type"`
+	UUID          string `json:"uuid"`
+	ParentUUID    string `json:"parentUuid"`
+	SessionID     string `json:"sessionId"`
+	Version       string `json:"version"`
+	Timestamp     string `json:"timestamp"`
+	RequestID     string `json:"requestId"`
+	APIBlockIndex int    `json:"apiBlockIndex"`
+	IsSidechain   bool   `json:"isSidechain"`
+	Effort        string `json:"effort"`
+	// Message is decoded once, at read time, for the lines that carry one.
+	Message *RawMessage `json:"message"`
 }
 
 // ParseClaudeCodeFile parses one Claude Code transcript file.
@@ -106,9 +63,7 @@ func ParseClaudeCode(r io.Reader) (*Session, error) {
 
 	byUUID := make(map[string]*rawLine, len(lines))
 	for _, l := range lines {
-		if l.UUID != "" {
-			byUUID[l.UUID] = l
-		}
+		byUUID[l.UUID] = l
 	}
 
 	session := &Session{Skipped: skipped, Source: SourceTranscript}
@@ -135,9 +90,6 @@ func ParseClaudeCode(r io.Reader) (*Session, error) {
 	}
 
 	dec := &decoder{toolNames: collectToolNames(lines), byUUID: byUUID, messages: make(map[string]*Message)}
-	lanes := make(map[string]*Lane)
-	var laneOrder []string
-
 	for _, id := range order {
 		group := groups[id]
 		sort.SliceStable(group, func(i, j int) bool { return group[i].APIBlockIndex < group[j].APIBlockIndex })
@@ -148,16 +100,8 @@ func ParseClaudeCode(r io.Reader) (*Session, error) {
 			session.Skipped++
 			continue
 		}
-		lane, ok := lanes[laneID]
-		if !ok {
-			lane = &Lane{ID: laneID, Sidechain: req.Sidechain}
-			lanes[laneID] = lane
-			laneOrder = append(laneOrder, laneID)
-		}
+		lane := session.Lane(laneID, group[0].IsSidechain)
 		lane.Requests = append(lane.Requests, req)
-	}
-	for _, id := range laneOrder {
-		session.Lanes = append(session.Lanes, lanes[id])
 	}
 	if len(session.Lanes) == 0 {
 		return nil, fmt.Errorf("no provider requests found")
@@ -166,8 +110,7 @@ func ParseClaudeCode(r io.Reader) (*Session, error) {
 }
 
 func readLines(r io.Reader) ([]*rawLine, int, error) {
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, scannerInitialBytes), maxLineBytes)
+	scanner := NewLineScanner(r)
 	var lines []*rawLine
 	skipped := 0
 	for scanner.Scan() {
@@ -176,13 +119,10 @@ func readLines(r io.Reader) ([]*rawLine, int, error) {
 			continue
 		}
 		var l rawLine
-		if err := json.Unmarshal(raw, &l); err != nil {
-			skipped++
-			continue
-		}
-		if l.UUID == "" {
-			// Housekeeping lines (queue operations, mode changes) carry no
-			// conversation content and cannot appear in a parent chain.
+		if err := json.Unmarshal(raw, &l); err != nil || l.UUID == "" {
+			// Unparseable lines, and housekeeping lines (queue operations,
+			// mode changes) that carry no uuid and cannot sit in a parent
+			// chain, are counted and skipped.
 			skipped++
 			continue
 		}
@@ -194,20 +134,16 @@ func readLines(r io.Reader) ([]*rawLine, int, error) {
 	return lines, skipped, nil
 }
 
-// collectToolNames maps tool_use ids to the tool name and a short label of
-// its input so tool results can be attributed to what produced them.
+// collectToolNames maps tool_use ids to labels so tool results can be
+// attributed to what produced them.
 func collectToolNames(lines []*rawLine) map[string]string {
 	names := make(map[string]string)
 	for _, l := range lines {
-		if l.Type != lineTypeAssistant {
+		if l.Type != lineTypeAssistant || l.Message == nil {
 			continue
 		}
-		var m rawMessage
-		if err := json.Unmarshal(l.Message, &m); err != nil {
-			continue
-		}
-		var blocks []rawBlock
-		if err := json.Unmarshal(m.Content, &blocks); err != nil {
+		_, blocks, _, err := DecodeContent(l.Message.Content)
+		if err != nil {
 			continue
 		}
 		for _, b := range blocks {
@@ -217,51 +153,6 @@ func collectToolNames(lines []*rawLine) map[string]string {
 		}
 	}
 	return names
-}
-
-// ToolLabel renders "Read path/to/file" style labels from a tool call. Only
-// well-known argument names are used; everything else is just the tool name.
-func ToolLabel(name string, input json.RawMessage) string {
-	var args map[string]any
-	if err := json.Unmarshal(input, &args); err != nil || len(args) == 0 {
-		return name
-	}
-	for _, key := range []string{"file_path", "path", "pattern", "command", "url", "query"} {
-		if v, ok := args[key].(string); ok && v != "" {
-			return name + " " + truncateLabel(v)
-		}
-	}
-	return name
-}
-
-// labelMaxLen bounds stored labels. It is far wider than any table column
-// so that distinct calls keep distinct labels; reports truncate for display.
-const labelMaxLen = 400
-
-func truncateLabel(s string) string {
-	return TruncateLabel(SanitizeLabel(s), labelMaxLen)
-}
-
-// SanitizeLabel makes a label safe to print: control characters (including
-// escape, carriage return, and the C1 range) become spaces so content that
-// an agent read from an untrusted file cannot drive the user's terminal.
-func SanitizeLabel(s string) string {
-	return strings.Map(func(r rune) rune {
-		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
-			return ' '
-		}
-		return r
-	}, s)
-}
-
-// TruncateLabel shortens a label to at most n runes, ending in an ellipsis
-// when it was cut. It never splits a multi-byte character.
-func TruncateLabel(s string, n int) string {
-	if n <= 0 || utf8.RuneCountInString(s) <= n {
-		return s
-	}
-	runes := []rune(s)
-	return string(runes[:n-1]) + "…"
 }
 
 // decoder memoizes decoded messages by line uuid. Every request's context
@@ -274,51 +165,38 @@ type decoder struct {
 }
 
 func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
-	byUUID, toolNames := d.byUUID, d.toolNames
 	first := group[0]
-	var firstMsg rawMessage
-	if err := json.Unmarshal(first.Message, &firstMsg); err != nil {
-		return nil, "", fmt.Errorf("decode assistant message: %w", err)
-	}
-	if firstMsg.Usage == nil {
+	if first.Message == nil || first.Message.Usage == nil {
 		return nil, "", fmt.Errorf("assistant line has no usage")
 	}
 	ts, err := parseTime(first.Timestamp)
 	if err != nil {
 		return nil, "", err
 	}
-
+	// The output is decoded directly, never through the memo: the same
+	// lines reappear in later contexts as runs of the parent chain, and a
+	// parallel tool call's lines are interleaved there with their results,
+	// so a run holds fewer lines than the whole group.
+	out, err := decodeAssistantRun(group, d.toolNames)
+	if err != nil {
+		return nil, "", err
+	}
 	req := &Request{
 		ID:        first.RequestID,
-		Model:     firstMsg.Model,
+		Model:     first.Message.Model,
 		Effort:    first.Effort,
 		Timestamp: ts,
-		Sidechain: first.IsSidechain,
-		Usage:     convertUsage(firstMsg.Usage),
+		Usage:     first.Message.Usage.Usage(),
+		Output:    out,
 	}
-
-	// Output: every block across the group's lines, in API order.
-	out := &Message{UUID: first.UUID, Role: RoleAssistant, Timestamp: ts}
-	for _, l := range group {
-		var m rawMessage
-		if err := json.Unmarshal(l.Message, &m); err != nil {
-			return nil, "", fmt.Errorf("decode assistant line: %w", err)
-		}
-		blocks, err := decodeBlocks(m.Content, RoleAssistant, toolNames)
-		if err != nil {
-			return nil, "", err
-		}
-		out.Blocks = append(out.Blocks, blocks...)
-	}
-	req.Output = out
 
 	// Context: walk the parent chain from the first output line back to the
 	// root, collecting conversation messages. Consecutive assistant lines
 	// with one request id collapse into one message.
 	var chain []*rawLine
-	for cur := byUUID[first.ParentUUID]; cur != nil; cur = byUUID[cur.ParentUUID] {
+	for cur := d.byUUID[first.ParentUUID]; cur != nil; cur = d.byUUID[cur.ParentUUID] {
 		chain = append(chain, cur)
-		if len(chain) > len(byUUID) {
+		if len(chain) > len(d.byUUID) {
 			return nil, "", fmt.Errorf("parent chain cycle at %s", cur.UUID)
 		}
 	}
@@ -362,24 +240,12 @@ func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
 	return req, laneID, nil
 }
 
-func (d *decoder) userMessage(l *rawLine) (*Message, error) {
-	if msg, ok := d.messages[l.UUID]; ok {
-		return msg, nil
-	}
-	msg, err := decodeUserLine(l, d.toolNames)
-	if err != nil {
-		return nil, err
-	}
-	d.messages[l.UUID] = msg
-	return msg, nil
-}
-
-func (d *decoder) assistantMessage(run []*rawLine) (*Message, error) {
-	key := run[0].UUID
+// memo returns the cached message for key or builds and caches it.
+func (d *decoder) memo(key string, build func() (*Message, error)) (*Message, error) {
 	if msg, ok := d.messages[key]; ok {
 		return msg, nil
 	}
-	msg, err := decodeAssistantRun(run, d.toolNames)
+	msg, err := build()
 	if err != nil {
 		return nil, err
 	}
@@ -387,30 +253,37 @@ func (d *decoder) assistantMessage(run []*rawLine) (*Message, error) {
 	return msg, nil
 }
 
-func decodeUserLine(l *rawLine, toolNames map[string]string) (*Message, error) {
-	var m rawMessage
-	if err := json.Unmarshal(l.Message, &m); err != nil {
-		return nil, fmt.Errorf("decode user message: %w", err)
-	}
-	ts, err := parseTime(l.Timestamp)
-	if err != nil {
-		return nil, err
-	}
-	msg := &Message{UUID: l.UUID, Role: RoleUser, Timestamp: ts}
-	// User content is either a plain string or a list of blocks.
-	var text string
-	if err := json.Unmarshal(m.Content, &text); err == nil {
-		msg.Blocks = []Block{{Kind: KindText, Label: "user text", Bytes: len(text), Text: text}}
+func (d *decoder) userMessage(l *rawLine) (*Message, error) {
+	return d.memo(l.UUID, func() (*Message, error) {
+		if l.Message == nil {
+			return nil, fmt.Errorf("user line %s has no message", l.UUID)
+		}
+		ts, err := parseTime(l.Timestamp)
+		if err != nil {
+			return nil, err
+		}
+		msg := &Message{UUID: l.UUID, Role: RoleUser, Timestamp: ts}
+		text, blocks, isText, err := DecodeContent(l.Message.Content)
+		if err != nil {
+			return nil, fmt.Errorf("decode user content: %w", err)
+		}
+		if isText {
+			msg.Blocks = []Block{{Kind: KindText, Label: LabelUserText, Bytes: len(text), Text: text}}
+			return msg, nil
+		}
+		msg.Blocks = DecodeBlocks(blocks, RoleUser, d.toolNames, ToolLabel)
 		return msg, nil
-	}
-	blocks, err := decodeBlocks(m.Content, RoleUser, toolNames)
-	if err != nil {
-		return nil, err
-	}
-	msg.Blocks = blocks
-	return msg, nil
+	})
 }
 
+// assistantMessage merges a run of assistant lines that share a request id
+// into one message, in API block order.
+func (d *decoder) assistantMessage(run []*rawLine) (*Message, error) {
+	return d.memo(run[0].UUID, func() (*Message, error) { return decodeAssistantRun(run, d.toolNames) })
+}
+
+// decodeAssistantRun merges the lines of one assistant turn into one
+// message, in API block order.
 func decodeAssistantRun(run []*rawLine, toolNames map[string]string) (*Message, error) {
 	sort.SliceStable(run, func(i, j int) bool { return run[i].APIBlockIndex < run[j].APIBlockIndex })
 	ts, err := parseTime(run[0].Timestamp)
@@ -419,137 +292,16 @@ func decodeAssistantRun(run []*rawLine, toolNames map[string]string) (*Message, 
 	}
 	msg := &Message{UUID: run[0].UUID, Role: RoleAssistant, Timestamp: ts}
 	for _, l := range run {
-		var m rawMessage
-		if err := json.Unmarshal(l.Message, &m); err != nil {
-			return nil, fmt.Errorf("decode assistant message: %w", err)
+		if l.Message == nil {
+			return nil, fmt.Errorf("assistant line %s has no message", l.UUID)
 		}
-		blocks, err := decodeBlocks(m.Content, RoleAssistant, toolNames)
+		_, blocks, _, err := DecodeContent(l.Message.Content)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("decode assistant content: %w", err)
 		}
-		msg.Blocks = append(msg.Blocks, blocks...)
+		msg.Blocks = append(msg.Blocks, DecodeBlocks(blocks, RoleAssistant, toolNames, ToolLabel)...)
 	}
 	return msg, nil
-}
-
-func decodeBlocks(content json.RawMessage, role string, toolNames map[string]string) ([]Block, error) {
-	var raws []rawBlock
-	if err := json.Unmarshal(content, &raws); err != nil {
-		return nil, fmt.Errorf("decode %s content blocks: %w", role, err)
-	}
-	blocks := make([]Block, 0, len(raws))
-	for _, rb := range raws {
-		blocks = append(blocks, convertBlock(rb, role, toolNames))
-	}
-	return blocks, nil
-}
-
-func convertBlock(rb rawBlock, role string, toolNames map[string]string) Block {
-	switch rb.Type {
-	case KindText:
-		label := "user text"
-		if role == RoleAssistant {
-			label = "assistant text"
-		}
-		return Block{Kind: KindText, Label: label, Bytes: len(rb.Text), Text: rb.Text}
-	case KindThinking:
-		// The signature is what travels on the wire when reasoning is
-		// omitted; the thinking text may be empty.
-		return Block{Kind: KindThinking, Label: "assistant thinking", Bytes: len(rb.Thinking), Text: rb.Thinking}
-	case KindToolUse:
-		return Block{Kind: KindToolUse, Label: "tool call: " + rb.Name, Bytes: len(rb.Name) + ContentBytes(rb.Input), Text: string(rb.Input), ToolUseID: rb.ID, ToolName: rb.Name}
-	case KindToolResult:
-		text := toolResultText(rb.Content)
-		name := toolNames[rb.ToolUseID]
-		if name == "" {
-			name = "unknown tool"
-		}
-		return Block{Kind: KindToolResult, Label: "tool result: " + name, Bytes: len(text), Text: text, ToolUseID: rb.ToolUseID, ToolName: name, IsError: rb.IsError}
-	case KindImage, KindDocument:
-		return Block{Kind: rb.Type, Label: rb.Type, Bytes: len(rb.Content)}
-	default:
-		return Block{Kind: KindOther, Label: "other: " + rb.Type, Bytes: len(rb.Content) + len(rb.Text)}
-	}
-}
-
-// ContentBytes measures a JSON value by its decoded content: string values
-// and object keys by their length, numbers by their literal, booleans and
-// null by their keyword. It is independent of escaping and key order, so a
-// redacted transcript measures exactly like the original.
-func ContentBytes(raw json.RawMessage) int {
-	if len(raw) == 0 {
-		return 0
-	}
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.UseNumber()
-	var v any
-	if err := dec.Decode(&v); err != nil {
-		return len(raw)
-	}
-	return decodedBytes(v)
-}
-
-func decodedBytes(v any) int {
-	switch val := v.(type) {
-	case string:
-		return len(val)
-	case json.Number:
-		return len(val.String())
-	case bool:
-		if val {
-			return len("true")
-		}
-		return len("false")
-	case nil:
-		return len("null")
-	case []any:
-		n := 0
-		for _, item := range val {
-			n += decodedBytes(item)
-		}
-		return n
-	case map[string]any:
-		n := 0
-		for k, item := range val {
-			n += len(k) + decodedBytes(item)
-		}
-		return n
-	default:
-		return 0
-	}
-}
-
-// toolResultText extracts the textual content of a tool result, which the
-// client stores either as a string or as a list of text blocks.
-func toolResultText(content json.RawMessage) string {
-	if len(content) == 0 {
-		return ""
-	}
-	var s string
-	if err := json.Unmarshal(content, &s); err == nil {
-		return s
-	}
-	var parts []rawBlock
-	if err := json.Unmarshal(content, &parts); err != nil {
-		return ""
-	}
-	var sb strings.Builder
-	for _, p := range parts {
-		sb.WriteString(p.Text)
-	}
-	return sb.String()
-}
-
-func convertUsage(u *rawUsage) Usage {
-	out := Usage{Input: u.Input, CacheCreation: u.CacheCreation, CacheRead: u.CacheRead, Output: u.Output}
-	if u.OutputDetails != nil {
-		out.ThinkingTokens = u.OutputDetails.Thinking
-	}
-	if u.CacheBreak != nil {
-		out.Create5m = u.CacheBreak.Short
-		out.Create1h = u.CacheBreak.Long
-	}
-	return out
 }
 
 func parseTime(s string) (time.Time, error) {

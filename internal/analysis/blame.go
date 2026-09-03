@@ -11,12 +11,12 @@ import (
 type BlameEntry struct {
 	Label string
 	// Tokens is the size of all blocks with this label, counted once each.
-	Tokens Estimated
+	Tokens Figure
 	// Occurrences is how many blocks carried the label.
 	Occurrences int
 	// PromptTokens is the total contribution to prompts across the lane:
 	// each block's size multiplied by the number of requests that carried it.
-	PromptTokens Estimated
+	PromptTokens Figure
 	// Errors counts blocks flagged as tool errors.
 	Errors int
 }
@@ -25,22 +25,15 @@ type BlameEntry struct {
 // provider to process history again.
 const rebillLabel = "cache breaks: history re-billed (see buffy diff)"
 
-// labelAcc accumulates attribution for one label, keeping measured and
-// estimated tokens apart so uncertainty is reported only where it exists.
+// labelAcc accumulates attribution for one label.
 type labelAcc struct {
-	measured, estimated             int
-	promptMeasured, promptEstimated int
-	occurrences, errors             int
+	once, prompt        Tokens
+	occurrences, errors int
 }
 
-func (a *labelAcc) add(tokens, carried int, measured bool, isError bool) {
-	if measured {
-		a.measured += tokens
-		a.promptMeasured += tokens * carried
-	} else {
-		a.estimated += tokens
-		a.promptEstimated += tokens * carried
-	}
+func (a *labelAcc) add(t Tokens, carried int, isError bool) {
+	a.once = a.once.Add(t)
+	a.prompt = a.prompt.Add(t.Times(carried))
 	a.occurrences++
 	if isError {
 		a.errors++
@@ -49,7 +42,7 @@ func (a *labelAcc) add(tokens, carried int, measured bool, isError bool) {
 
 // Blame attributes prompt tokens to content labels.
 //
-// Assistant output is measured: thinking blocks get the reported thinking
+// Assistant output is measured: thinking blocks share the reported thinking
 // tokens and the remaining output blocks share the rest of the reported
 // output tokens by bytes. User-side content of each turn shares the turn's
 // reported new-content tokens by bytes, so per-turn sums match provider
@@ -76,13 +69,13 @@ func Blame(cal *Calibration, fit TokenFit) []BlameEntry {
 	for _, m := range first.Context {
 		firstBlocks = append(firstBlocks, m.Blocks...)
 	}
-	visible := first.Usage.PromptTotal() - fit.UnseenPrefixTokens - fit.InjectedTokens
-	shareByBytes(firstBlocks, visible, total, false, get)
-	if fit.UnseenPrefixTokens > 0 {
-		get(unseenPrefixLabel).add(fit.UnseenPrefixTokens, total, fit.UnseenPrefixMeasured, false)
+	visible := first.Usage.PromptTotal() - fit.UnseenPrefix.Total() - fit.Injected.Total()
+	shareByBytes(firstBlocks, Estimated(visible), total, get)
+	if fit.UnseenPrefix.Total() > 0 {
+		get(unseenPrefixLabel).add(fit.UnseenPrefix, total, false)
 	}
-	if fit.InjectedTokens > 0 {
-		get(injectedLabel).add(fit.InjectedTokens, total, false, false)
+	if fit.Injected.Total() > 0 {
+		get(injectedLabel).add(fit.Injected, total, false)
 	}
 
 	for _, t := range cal.Turns {
@@ -95,25 +88,19 @@ func Blame(cal *Calibration, fit TokenFit) []BlameEntry {
 			// A break re-bills history that is already attributed to its
 			// own labels; it is reported as its own line so the table
 			// names the break, not the content that happened to follow it.
-			get(rebillLabel).add(tc.rebillTokens, 1, true, false)
+			get(rebillLabel).add(Measured(tc.rebillTokens), 1, false)
 		}
 		attributeOutput(t.Previous, carried, get)
-		var userBlocks []transcript.Block
-		for _, m := range t.Request.Context[min(len(t.Previous.Context), len(t.Request.Context)):] {
-			if m.Role == transcript.RoleUser {
-				userBlocks = append(userBlocks, m.Blocks...)
-			}
-		}
-		shareByBytes(userBlocks, tc.userTokens, carried, false, get)
+		shareByBytes(tc.userBlocks, Estimated(tc.userTokens), carried, get)
 	}
 
 	entries := make([]BlameEntry, 0, len(byLabel))
 	for label, a := range byLabel {
 		entries = append(entries, BlameEntry{
 			Label:        label,
-			Tokens:       fit.Estimate(a.measured, a.estimated),
+			Tokens:       fit.Figure(a.once),
 			Occurrences:  a.occurrences,
-			PromptTokens: fit.Estimate(a.promptMeasured, a.promptEstimated),
+			PromptTokens: fit.Figure(a.prompt),
 			Errors:       a.errors,
 		})
 	}
@@ -127,9 +114,10 @@ func Blame(cal *Calibration, fit TokenFit) []BlameEntry {
 }
 
 // attributeOutput credits a request's output blocks with its reported
-// output tokens: the thinking blocks share the reported thinking tokens,
-// the remaining blocks share the rest by bytes. An output with no thinking
-// block keeps every output token on its visible blocks.
+// output tokens: the thinking blocks share the reported thinking tokens
+// equally (their bytes say nothing about their size), the remaining blocks
+// share the rest by bytes. An output with no thinking block keeps every
+// output token on its visible blocks.
 func attributeOutput(req *transcript.Request, carried int, get func(string) *labelAcc) {
 	if req.Output == nil {
 		return
@@ -146,48 +134,44 @@ func attributeOutput(req *transcript.Request, carried int, get func(string) *lab
 	if len(thinking) == 0 {
 		thinkingTokens = 0
 	}
-	shareEqually(thinking, thinkingTokens, carried, get)
-	shareByBytes(rest, req.Usage.Output-thinkingTokens, carried, true, get)
-}
-
-// shareEqually splits measured tokens evenly across blocks whose bytes say
-// nothing about their size (thinking blocks with omitted text).
-func shareEqually(blocks []transcript.Block, tokens int, carried int, get func(string) *labelAcc) {
-	if tokens <= 0 || len(blocks) == 0 {
-		return
-	}
-	remaining := tokens
-	for i, b := range blocks {
-		share := tokens / len(blocks)
-		if i == len(blocks)-1 {
+	remaining := thinkingTokens
+	for i, b := range thinking {
+		share := thinkingTokens / len(thinking)
+		if i == len(thinking)-1 {
 			share = remaining
 		}
 		remaining -= share
-		get(b.Label).add(share, carried, true, false)
+		get(b.Label).add(Measured(share), carried, false)
 	}
+	shareByBytes(rest, Measured(req.Usage.Output-thinkingTokens), carried, get)
 }
 
 // shareByBytes splits tokens across blocks in proportion to bytes. The last
 // block absorbs rounding so the sum is exact. carried is how many requests
 // carry these blocks in their prompt, this one included.
-func shareByBytes(blocks []transcript.Block, tokens int, carried int, measured bool, get func(string) *labelAcc) {
-	if tokens <= 0 || len(blocks) == 0 {
+func shareByBytes(blocks []transcript.Block, tokens Tokens, carried int, get func(string) *labelAcc) {
+	total := tokens.Total()
+	if total <= 0 || len(blocks) == 0 {
 		return
 	}
 	totalBytes := 0
 	for _, b := range blocks {
 		totalBytes += b.Bytes
 	}
-	remaining := tokens
+	remaining := total
 	for i, b := range blocks {
 		share := 0
 		if totalBytes > 0 {
-			share = tokens * b.Bytes / totalBytes
+			share = total * b.Bytes / totalBytes
 		}
 		if i == len(blocks)-1 {
 			share = remaining
 		}
 		remaining -= share
-		get(b.Label).add(share, carried, measured, b.IsError)
+		part := Estimated(share)
+		if tokens.Measured > 0 {
+			part = Measured(share)
+		}
+		get(b.Label).add(part, carried, b.IsError)
 	}
 }

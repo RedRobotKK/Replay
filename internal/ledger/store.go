@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -21,27 +22,17 @@ const (
 	filePerm = 0o600
 )
 
-// Scanner sizing for ledger lines, shared by every reader.
-const (
-	scannerInitialBytes = 1 << 20
-	maxLineBytes        = 64 << 20
-)
-
-// newScanner returns a line scanner sized for ledger records.
-func newScanner(f *os.File) *bufio.Scanner {
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 0, scannerInitialBytes), maxLineBytes)
-	return scanner
-}
-
-// safeName restricts session ids to characters that are safe in a file name.
-var safeName = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
-
 // labelKeyFile holds the per-ledger key that keys path hashes in labels.
 const (
 	labelKeyFile  = ".label-key"
 	labelKeyBytes = 32
 )
+
+// probeBytes is how much of a file IsLedgerFile reads.
+const probeBytes = 4096
+
+// safeName restricts session ids to characters that are safe in a file name.
+var safeName = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
 // Store appends records to one file per session.
 type Store struct {
@@ -77,9 +68,6 @@ func loadOrCreateKey(path string) ([]byte, error) {
 	return key, nil
 }
 
-// Dir is the ledger directory.
-func (s *Store) Dir() string { return s.dir }
-
 // Labeler is the store's content-free labeler.
 func (s *Store) Labeler() *Labeler { return s.labeler }
 
@@ -110,7 +98,7 @@ func (s *Store) Append(rec Record) error {
 }
 
 // IsLedgerFile reports whether a file starts with a ledger record. It reads
-// only the first line.
+// only the first few kilobytes.
 func IsLedgerFile(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
@@ -120,34 +108,49 @@ func IsLedgerFile(path string) bool {
 	var probe struct {
 		Schema int `json:"schema"`
 	}
-	scanner := newScanner(f)
-	if !scanner.Scan() {
+	line, err := bufio.NewReaderSize(f, probeBytes).ReadBytes('\n')
+	if err != nil && len(line) == 0 {
 		return false
 	}
-	return json.Unmarshal(scanner.Bytes(), &probe) == nil && probe.Schema > 0
+	return json.Unmarshal(line, &probe) == nil && probe.Schema > 0
 }
 
-// ReadFile turns one ledger file into a Session at the measured tier.
-func ReadFile(path string) (*transcript.Session, error) {
+// ReadRecords reads every record in a ledger file and counts lines it could
+// not decode.
+func ReadRecords(path string) (records []Record, skipped int, err error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("open ledger: %w", err)
+		return nil, 0, fmt.Errorf("open ledger: %w", err)
 	}
 	defer f.Close() //nolint:errcheck // read-only file; a close error carries no information we can act on
-
-	var records []Record
-	scanner := newScanner(f)
-	skipped := 0
+	scanner := transcript.NewLineScanner(f)
 	for scanner.Scan() {
+		line := bytes.TrimSpace(scanner.Bytes())
+		if len(line) == 0 {
+			// A file exists before its first record is flushed.
+			continue
+		}
 		var rec Record
-		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
+		if err := json.Unmarshal(line, &rec); err != nil || rec.Schema != SchemaVersion {
+			// An older schema names fields differently; reading it as the
+			// current one would produce figures that look measured and
+			// are not.
 			skipped++
 			continue
 		}
 		records = append(records, rec)
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("read ledger: %w", err)
+		return nil, skipped, fmt.Errorf("read ledger: %w", err)
+	}
+	return records, skipped, nil
+}
+
+// ReadFile turns one ledger file into a Session at the measured tier.
+func ReadFile(path string) (*transcript.Session, error) {
+	records, skipped, err := ReadRecords(path)
+	if err != nil {
+		return nil, err
 	}
 	if len(records) == 0 {
 		return nil, fmt.Errorf("no records in %s", filepath.Base(path))
@@ -158,67 +161,68 @@ func ReadFile(path string) (*transcript.Session, error) {
 // sessionFromRecords builds lanes from records: one lane per agent id, in
 // order of first appearance. Only records that carry usage become
 // requests; the rest (count_tokens, errors) are counted as skipped.
+// Messages are memoized by identity, since every request's context is a
+// prefix of the next one's.
 func sessionFromRecords(records []Record, path string, skipped int) *transcript.Session {
 	sort.SliceStable(records, func(i, j int) bool { return records[i].Timestamp.Before(records[j].Timestamp) })
-	session := &transcript.Session{ID: records[0].SessionID, Path: path, Source: transcript.SourceLedger, PrefixVisible: true, Skipped: skipped}
-	lanes := map[string]*transcript.Lane{}
-	var order []string
+	session := &transcript.Session{ID: records[0].SessionID, Path: path, Source: transcript.SourceLedger, Skipped: skipped}
+	memo := map[string]*transcript.Message{}
 	for i, rec := range records {
 		if rec.Response.Usage == nil || len(rec.Prompt.Messages) == 0 {
 			session.Skipped++
 			continue
 		}
-		lane, ok := lanes[rec.AgentID]
-		if !ok {
-			lane = &transcript.Lane{ID: rec.AgentID, Sidechain: rec.AgentID != ""}
-			lanes[rec.AgentID] = lane
-			order = append(order, rec.AgentID)
-		}
-		lane.Requests = append(lane.Requests, requestFromRecord(rec, i))
-	}
-	for _, id := range order {
-		session.Lanes = append(session.Lanes, lanes[id])
+		lane := session.Lane(rec.AgentID, rec.AgentID != "")
+		lane.Requests = append(lane.Requests, requestFromRecord(rec, i, memo))
 	}
 	return session
 }
 
-func requestFromRecord(rec Record, index int) *transcript.Request {
-	u := rec.Response.Usage
+func requestFromRecord(rec Record, index int, memo map[string]*transcript.Message) *transcript.Request {
 	req := &transcript.Request{
 		ID:        rec.RequestID,
 		Model:     rec.Model,
 		Effort:    rec.Effort,
 		Timestamp: rec.Timestamp,
-		Sidechain: rec.AgentID != "",
-		Usage: transcript.Usage{
-			Input: u.Input, CacheCreation: u.CacheCreation, CacheRead: u.CacheRead, Output: u.Output,
-			ThinkingTokens: u.ThinkingTokens, Create5m: u.Create5m, Create1h: u.Create1h,
-		},
+		Usage:     *rec.Response.Usage,
 	}
 	if req.ID == "" {
 		req.ID = fmt.Sprintf("ledger-%d", index)
 	}
 	// The prefix ahead of the messages is one synthetic system message so
 	// a change in it shows up as a divergence at position zero.
-	prefix := &transcript.Message{UUID: prefixUUID(rec.Prompt), Role: transcript.RoleSystem, Timestamp: rec.Timestamp, Blocks: []transcript.Block{
-		{Kind: transcript.KindText, Label: "system prompt", Bytes: rec.Prompt.SystemBytes},
-		{Kind: transcript.KindOther, Label: fmt.Sprintf("tool definitions (%d tools)", rec.Prompt.ToolCount), Bytes: rec.Prompt.ToolBytes},
-	}}
+	prefixID := prefixUUID(rec.Prompt)
+	prefix, ok := memo[prefixID]
+	if !ok {
+		prefix = &transcript.Message{UUID: prefixID, Role: transcript.RoleSystem, Timestamp: rec.Timestamp, Blocks: []Block{
+			{Kind: transcript.KindText, Label: "system prompt", Bytes: rec.Prompt.SystemBytes},
+			{Kind: transcript.KindOther, Label: fmt.Sprintf("tool definitions (%d tools)", rec.Prompt.ToolCount), Bytes: rec.Prompt.ToolBytes},
+		}}
+		memo[prefixID] = prefix
+	}
 	req.Context = append(req.Context, prefix)
 	for i, m := range rec.Prompt.Messages {
-		msg := &transcript.Message{UUID: messageUUID(i, m), Role: m.Role, Timestamp: rec.Timestamp}
-		for _, b := range m.Blocks {
-			// Ledger files are data any local process could have written;
-			// labels are sanitized again on the way to a terminal.
-			msg.Blocks = append(msg.Blocks, transcript.Block{Kind: b.Kind, Label: transcript.SanitizeLabel(b.Label), Bytes: b.Bytes, ToolUseID: b.ToolUseID, IsError: b.IsError})
+		id := messageUUID(i, m)
+		msg, ok := memo[id]
+		if !ok {
+			msg = &transcript.Message{UUID: id, Role: m.Role, Timestamp: rec.Timestamp, Blocks: sanitized(m.Blocks)}
+			memo[id] = msg
 		}
 		req.Context = append(req.Context, msg)
 	}
-	req.Output = &transcript.Message{UUID: "out-" + req.ID, Role: transcript.RoleAssistant, Timestamp: rec.Timestamp.Add(time.Duration(rec.LatencyMS) * time.Millisecond)}
-	for _, b := range rec.Response.Blocks {
-		req.Output.Blocks = append(req.Output.Blocks, transcript.Block{Kind: b.Kind, Label: transcript.SanitizeLabel(b.Label), Bytes: b.Bytes, ToolUseID: b.ToolUseID})
-	}
+	req.Output = &transcript.Message{UUID: "out-" + req.ID, Role: transcript.RoleAssistant, Timestamp: rec.Timestamp.Add(time.Duration(rec.LatencyMS) * time.Millisecond), Blocks: sanitized(rec.Response.Blocks)}
 	return req
+}
+
+// sanitized copies blocks with their labels made safe to print. Ledger
+// files are data any local process could have written.
+func sanitized(blocks []Block) []Block {
+	out := make([]Block, len(blocks))
+	for i, b := range blocks {
+		b.Label = transcript.SanitizeLabel(b.Label)
+		out[i] = b
+	}
+	return out
 }
 
 // prefixUUID identifies the system prefix by its sizes, so an unchanged

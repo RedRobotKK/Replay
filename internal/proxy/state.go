@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/RedRobotKK/Buffy/internal/analysis"
 	"github.com/RedRobotKK/Buffy/internal/cachemodel"
 	"github.com/RedRobotKK/Buffy/internal/ledger"
 	"github.com/RedRobotKK/Buffy/internal/transcript"
@@ -14,21 +15,12 @@ import (
 // sessionState is what the proxy remembers about one client session so it
 // can classify each new cache read the moment the response arrives.
 type sessionState struct {
-	last      transcript.Usage
-	lastModel string
-	lastSeen  time.Time
-	model     string
-	requests  int
-	prompt    int
-	reads     int
-	writes    int
-	output    int
-	breaks    int
-	costUSD   float64
+	last     transcript.Usage
+	lastSeen time.Time
+	model    string
+	tally    analysis.Tally
+	breaks   int
 }
-
-// CacheOutcome is the ledger's live classification type.
-type CacheOutcome = ledger.CacheOutcome
 
 // stats is the proxy's in-memory observability state. It is derived data
 // only and is lost on restart; the ledger is the durable record.
@@ -38,7 +30,7 @@ type stats struct {
 	sessions      map[string]*sessionState
 	requests      map[string]int // by status class: 2xx, 4xx, 5xx, refused
 	upstreamErrs  map[int]int
-	breakCauses   map[string]int
+	breakCauses   map[cachemodel.BreakCause]int
 	latencySum    time.Duration
 	latencyCount  int
 	refusedByKind map[string]int
@@ -50,33 +42,19 @@ func newStats() *stats {
 		sessions:      map[string]*sessionState{},
 		requests:      map[string]int{},
 		upstreamErrs:  map[int]int{},
-		breakCauses:   map[string]int{},
+		breakCauses:   map[cachemodel.BreakCause]int{},
 		refusedByKind: map[string]int{},
 	}
 }
 
-// causeForLiveBreak names the most likely cause from what the proxy can
-// see at response time. The offline diff does a fuller job with the
-// message history; this is the version that can be logged immediately.
-func causeForLiveBreak(prev transcript.Usage, prevModel string, gap time.Duration, cur transcript.Usage, model string) string {
-	switch {
-	case gap > cachemodel.TTLOf(prev):
-		return "cache expired (gap longer than the TTL)"
-	case prevModel != model:
-		return "model changed"
-	case cur.CacheRead == 0:
-		return "system prompt or tools changed"
-	default:
-		return "prefix diverged inside the message history"
-	}
-}
-
 // observe records a completed request and returns the cache outcome for
-// the ledger and the log line.
-func (s *stats) observe(rec *ledger.Record, latency time.Duration) *CacheOutcome {
+// the ledger and the log line. Causes that need the message history are
+// left to the offline diff; the live classification names what usage and
+// timing alone can settle.
+func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.latencySum += latency
+	s.latencySum += time.Duration(rec.LatencyMS) * time.Millisecond
 	s.latencyCount++
 	switch {
 	case rec.Status >= 500:
@@ -90,36 +68,32 @@ func (s *stats) observe(rec *ledger.Record, latency time.Duration) *CacheOutcome
 	case rec.Status >= 200:
 		s.requests["2xx"]++
 	}
-	u := rec.Response.Usage
-	if u == nil || rec.SessionID == "" {
+	if rec.Response.Usage == nil || rec.SessionID == "" {
 		return nil
 	}
-	cur := transcript.Usage{Input: u.Input, CacheCreation: u.CacheCreation, CacheRead: u.CacheRead, Output: u.Output, Create5m: u.Create5m, Create1h: u.Create1h}
+	cur := *rec.Response.Usage
 	st, ok := s.sessions[rec.SessionID]
 	if !ok {
 		st = &sessionState{}
 		s.sessions[rec.SessionID] = st
 	}
-	var out *CacheOutcome
-	if st.requests > 0 {
+	var out *ledger.CacheOutcome
+	if st.tally.Requests > 0 {
 		outcome, expected := cachemodel.ClassifyRead(st.last, cur)
-		out = &CacheOutcome{Outcome: outcome.String(), Expected: expected}
+		out = &ledger.CacheOutcome{Outcome: outcome.String(), Expected: expected}
 		if outcome == cachemodel.ReadBroken {
 			out.Deficit = expected - cur.CacheRead
-			out.Cause = causeForLiveBreak(st.last, st.lastModel, rec.Timestamp.Sub(st.lastSeen), cur, rec.Model)
+			cause, ok := cachemodel.ClassifyBreak(st.last, cur, st.model, rec.Model, rec.Timestamp.Sub(st.lastSeen))
+			if !ok {
+				cause = cachemodel.CauseUnknown
+			}
+			out.Cause = cause
 			st.breaks++
-			s.breakCauses[out.Cause]++
+			s.breakCauses[cause]++
 		}
 	}
-	st.last, st.lastModel, st.lastSeen, st.model = cur, rec.Model, rec.Timestamp, rec.Model
-	st.requests++
-	st.prompt += cur.PromptTotal()
-	st.reads += cur.CacheRead
-	st.writes += cur.CacheCreation
-	st.output += cur.Output
-	if p, ok := cachemodel.PriceFor(rec.Model); ok {
-		st.costUSD += cachemodel.CostUSD(cur, p)
-	}
+	st.last, st.lastSeen, st.model = cur, rec.Timestamp, rec.Model
+	st.tally.Add(cur, rec.Model)
 	return out
 }
 
@@ -159,11 +133,7 @@ func (s *stats) status() Status {
 		out.Requests[k] = v
 	}
 	for id, st := range s.sessions {
-		share := 0.0
-		if st.prompt > 0 {
-			share = float64(st.reads) / float64(st.prompt)
-		}
-		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.requests, PromptTokens: st.prompt, CachedShare: share, Breaks: st.breaks, ListCostUSD: st.costUSD, LastSeen: st.lastSeen})
+		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen})
 	}
 	sort.Slice(out.Sessions, func(i, j int) bool { return out.Sessions[i].LastSeen.After(out.Sessions[j].LastSeen) })
 	return out
@@ -174,16 +144,13 @@ func (s *stats) status() Status {
 func (s *stats) metrics() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var prompt, reads, writes, breaks int
+	var total analysis.Tally
+	breaks := 0
 	for _, st := range s.sessions {
-		prompt += st.prompt
-		reads += st.reads
-		writes += st.writes
+		total.PromptTokens += st.tally.PromptTokens
+		total.Reads += st.tally.Reads
+		total.Writes += st.tally.Writes
 		breaks += st.breaks
-	}
-	share := 0.0
-	if prompt > 0 {
-		share = float64(reads) / float64(prompt)
 	}
 	var b []byte
 	line := func(format string, args ...any) { b = fmt.Appendf(b, format+"\n", args...) }
@@ -194,21 +161,26 @@ func (s *stats) metrics() string {
 	}
 	line("# HELP buffy_prompt_tokens_total Prompt tokens the provider processed.")
 	line("# TYPE buffy_prompt_tokens_total counter")
-	line("buffy_prompt_tokens_total %d", prompt)
+	line("buffy_prompt_tokens_total %d", total.PromptTokens)
 	line("# HELP buffy_cache_read_tokens_total Prompt tokens served from cache.")
 	line("# TYPE buffy_cache_read_tokens_total counter")
-	line("buffy_cache_read_tokens_total %d", reads)
+	line("buffy_cache_read_tokens_total %d", total.Reads)
 	line("# HELP buffy_cache_write_tokens_total Prompt tokens written to cache.")
 	line("# TYPE buffy_cache_write_tokens_total counter")
-	line("buffy_cache_write_tokens_total %d", writes)
+	line("buffy_cache_write_tokens_total %d", total.Writes)
 	line("# HELP buffy_cached_share Cache reads divided by prompt tokens, all sessions.")
 	line("# TYPE buffy_cached_share gauge")
-	line("buffy_cached_share %.4f", share)
+	line("buffy_cached_share %.4f", total.CachedShare())
 	line("# HELP buffy_cache_break_total Responses whose cache read fell short of the expectation, by cause.")
 	line("# TYPE buffy_cache_break_total counter")
 	line("buffy_cache_break_total %d", breaks)
-	for _, k := range sortedKeys(s.breakCauses) {
-		line(`buffy_cache_break_total{cause=%q} %d`, k, s.breakCauses[k])
+	causes := make([]string, 0, len(s.breakCauses))
+	for c := range s.breakCauses {
+		causes = append(causes, string(c))
+	}
+	sort.Strings(causes)
+	for _, c := range causes {
+		line(`buffy_cache_break_total{cause=%q} %d`, c, s.breakCauses[cachemodel.BreakCause(c)])
 	}
 	line("# HELP buffy_upstream_errors_total Provider responses with an error status.")
 	line("# TYPE buffy_upstream_errors_total counter")

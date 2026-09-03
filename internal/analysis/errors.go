@@ -6,7 +6,7 @@ import (
 	"github.com/RedRobotKK/Buffy/internal/transcript"
 )
 
-// ErrorClass names one kind of wasted work visible in a transcript.
+// ErrorClass names one kind of wasted work visible in a session.
 type ErrorClass string
 
 // Error classes. Provider-level retries are not visible in transcripts and
@@ -24,9 +24,9 @@ type ErrorCost struct {
 	Count int
 	// Tokens is the estimated size of the error content itself plus the
 	// tool call that produced it, counted once.
-	Tokens Estimated
+	Tokens Figure
 	// PromptTokens is the size multiplied by the requests that carried it.
-	PromptTokens Estimated
+	PromptTokens Figure
 }
 
 // Substrings the client uses in edit failures. They are matched on the
@@ -39,12 +39,18 @@ var overflowMarkers = []string{"prompt is too long", "context window", "compact"
 // read as an overflow notice rather than content that merely mentions one.
 const overflowMarkerMaxBytes = 400
 
+// blockKey identifies one block across requests.
+type blockKey struct {
+	messageUUID string
+	index       int
+}
+
 // ErrorCosts classifies error content across a lane and prices it with the
-// fit. Repeated identical tool calls are counted from the second occurrence.
+// fit. Repeated identical tool calls are counted from the second occurrence,
+// keyed by the call's content-free identity so ledger data works too.
 func ErrorCosts(cal *Calibration, fit TokenFit) []ErrorCost {
 	requests := cal.Lane.Requests
-	total := len(requests)
-	if total == 0 {
+	if len(requests) == 0 {
 		return nil
 	}
 	counts := map[ErrorClass]*labelAcc{}
@@ -76,22 +82,16 @@ func ErrorCosts(cal *Calibration, fit TokenFit) []ErrorCost {
 				carried := carriedBy[key]
 				switch b.Kind {
 				case transcript.KindToolUse:
-					call := b.ToolName + "\x00" + b.Text
 					callBytes[b.ToolUseID] = b.Bytes
-					if seenCalls[call] {
-						get(ErrorRepeatedCommand).add(fit.EstimateTokens(b.Bytes), carried, false, false)
+					if b.CallKey != "" && seenCalls[b.CallKey] {
+						get(ErrorRepeatedCommand).add(Estimated(fit.EstimateTokens(b.Bytes)), carried, false)
 					}
-					seenCalls[call] = true
+					seenCalls[b.CallKey] = true
 				case transcript.KindToolResult:
-					size := fit.EstimateTokens(b.Bytes + callBytes[b.ToolUseID])
-					lower := strings.ToLower(b.Text)
-					switch {
-					case containsAny(lower, editAnchorMarkers) && b.IsError:
-						get(ErrorEditAnchor).add(size, carried, false, true)
-					case b.IsError:
-						get(ErrorToolFailed).add(size, carried, false, true)
-					case containsAny(lower, overflowMarkers) && len(b.Text) < overflowMarkerMaxBytes:
-						get(ErrorContextOverflow).add(size, carried, false, true)
+					class, ok := classifyResult(b)
+					if ok {
+						size := Estimated(fit.EstimateTokens(b.Bytes + callBytes[b.ToolUseID]))
+						get(class).add(size, carried, true)
 					}
 				}
 			}
@@ -104,15 +104,29 @@ func ErrorCosts(cal *Calibration, fit TokenFit) []ErrorCost {
 		if !ok {
 			continue
 		}
-		out = append(out, ErrorCost{Class: c, Count: a.occurrences, Tokens: fit.Estimate(0, a.estimated), PromptTokens: fit.Estimate(0, a.promptEstimated)})
+		out = append(out, ErrorCost{Class: c, Count: a.occurrences, Tokens: fit.Figure(a.once), PromptTokens: fit.Figure(a.prompt)})
 	}
 	return out
 }
 
-// blockKey identifies one block across requests.
-type blockKey struct {
-	messageUUID string
-	index       int
+// classifyResult decides which error class a tool result belongs to. Text
+// is only lower-cased when a class could match, so large results are not
+// copied for nothing.
+func classifyResult(b transcript.Block) (ErrorClass, bool) {
+	if !b.IsError && len(b.Text) >= overflowMarkerMaxBytes {
+		return "", false
+	}
+	lower := strings.ToLower(b.Text)
+	switch {
+	case b.IsError && containsAny(lower, editAnchorMarkers):
+		return ErrorEditAnchor, true
+	case b.IsError:
+		return ErrorToolFailed, true
+	case containsAny(lower, overflowMarkers):
+		return ErrorContextOverflow, true
+	default:
+		return "", false
+	}
 }
 
 // blockCarryCounts counts, for every block, how many requests carried it.
