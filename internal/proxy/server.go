@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -96,6 +97,11 @@ type Config struct {
 	// placeholders before anything else reads the body (ADR-0004). Nil is
 	// off.
 	Masker *masking.Masker
+	// Rehydrator, when set, restores placeholders in response bodies
+	// within its scope (ADR-0004). Responses are then requested
+	// uncompressed, because a compressed body cannot be rewritten as it
+	// passes. Nil is off.
+	Rehydrator *masking.Rehydrator
 	// Siblings, when MaxWait is set, holds a request whose prefix is in
 	// flight and not yet cached until the first response begins (the
 	// hold-parallel-siblings policy).
@@ -192,6 +198,12 @@ func New(cfg Config) (*Server, error) {
 		// Flush every write so streamed events reach the client as they
 		// arrive.
 		FlushInterval: -1,
+		ModifyResponse: func(resp *http.Response) error {
+			if tap, ok := resp.Request.Context().Value(tapKey{}).(*responseTap); ok && tap.rehydrate != nil {
+				tap.rehydrate.modify(resp)
+			}
+			return nil
+		},
 		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
 			cfg.Logger.Printf("upstream error: %v", err)
 			if tap, ok := w.(*responseTap); ok {
@@ -336,6 +348,11 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	r, retries := withRetryCounter(r)
 
 	tap := &responseTap{ResponseWriter: w}
+	if messages && s.cfg.Rehydrator != nil && !s.cfg.NoPolicy {
+		tap.rehydrate = &rehydration{rh: s.cfg.Rehydrator}
+		r = r.WithContext(context.WithValue(r.Context(), tapKey{}, tap))
+		r.Header.Del(headerAcceptEncoding)
+	}
 	if messages && summarized {
 		// Wait behind a sibling with the same prefix, then lead for the
 		// ones behind this request until its response begins.
@@ -373,6 +390,9 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			if u := rec.Response.Usage; u != nil {
 				s.cfg.Spend.Record(rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output, listCost(*u, rec.Model))
 			}
+		}
+		if tap.rehydrate != nil {
+			s.noteRehydration(&rec, tap.rehydrate)
 		}
 		rec.Cache = s.stats.observe(&rec)
 		if messages && rec.SessionID != "" {
@@ -430,6 +450,98 @@ func (s *Server) mask(rec *ledger.Record, body []byte) []byte {
 		s.cfg.Logger.Printf("masked %d secret(s) session=%s: %s", report.Total(), short(rec.SessionID), report)
 	}
 	return out
+}
+
+// headerAcceptEncoding is dropped from requests whose response will be
+// rehydrated.
+const headerAcceptEncoding = "Accept-Encoding"
+
+// tapKey carries the response tap to the reverse proxy's response hook.
+type tapKey struct{}
+
+// rehydration is one response's rehydration: set up on the response
+// hook, read by the handler's bookkeeping once the body has passed.
+type rehydration struct {
+	rh     *masking.Rehydrator
+	stream *masking.StreamRehydrator
+	report masking.RehydrationReport
+	// skipped says why the body was not inspected, when it was not.
+	skipped string
+	err     error
+}
+
+// modify installs the rehydrating body. A compressed response, or one
+// past the size limit, is forwarded as it is and the skip is reported.
+func (h *rehydration) modify(resp *http.Response) {
+	if resp.Header.Get("Content-Encoding") != "" {
+		h.skipped = "compressed response"
+		return
+	}
+	ct := resp.Header.Get("Content-Type")
+	switch {
+	case ledger.IsEventStream(ct):
+		h.stream = h.rh.NewStream()
+		resp.Body = masking.NewTransformReader(resp.Body, h.stream)
+		// The rewritten stream's length is unknown; a declared one
+		// would cut the client off.
+		resp.Header.Del("Content-Length")
+		resp.ContentLength = -1
+	case strings.HasPrefix(strings.ToLower(ct), "application/json"):
+		body, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseBytes+1))
+		if err != nil {
+			h.skipped = "body not read: " + err.Error()
+			resp.Body = readCloser{Reader: io.MultiReader(bytes.NewReader(body), resp.Body), Closer: resp.Body}
+			return
+		}
+		if len(body) > MaxResponseBytes {
+			h.skipped = "response over the size limit"
+			resp.Body = readCloser{Reader: io.MultiReader(bytes.NewReader(body), resp.Body), Closer: resp.Body}
+			return
+		}
+		out, report, err := h.rh.Body(body)
+		if err != nil {
+			h.err = err
+			out = body
+		}
+		h.report = report
+		// The original body is fully read; its close only releases the
+		// connection, which the replacement's close does in turn.
+		resp.Body = readCloser{Reader: bytes.NewReader(out), Closer: resp.Body}
+		resp.ContentLength = int64(len(out))
+		resp.Header.Set("Content-Length", strconv.Itoa(len(out)))
+	}
+}
+
+// result is the report once the body has passed.
+func (h *rehydration) result() masking.RehydrationReport {
+	if h.stream != nil {
+		return h.stream.Report()
+	}
+	return h.report
+}
+
+type readCloser struct {
+	io.Reader
+	io.Closer
+}
+
+// noteRehydration records and logs what a response's rehydration did
+// (MK-6): counts by destination, never a value or a path.
+func (s *Server) noteRehydration(rec *ledger.Record, h *rehydration) {
+	rep := h.result()
+	rec.Rehydrated, rec.RehydrationDenied = rep.Restored, rep.Denied
+	switch {
+	case h.err != nil:
+		s.cfg.Logger.Printf("rehydration session=%s: response forwarded with placeholders: %v", short(rec.SessionID), h.err)
+	case h.skipped != "":
+		s.cfg.Logger.Printf("rehydration skipped session=%s: %s", short(rec.SessionID), h.skipped)
+	}
+	if len(rep.Restored) > 0 {
+		s.cfg.Logger.Printf("rehydrated %d placeholder(s) session=%s: %s", rep.Total(), short(rec.SessionID), rep.RestoredSummary())
+	}
+	if len(rep.Denied) > 0 {
+		s.cfg.Logger.Printf("rehydration denied session=%s: %s", short(rec.SessionID), rep.DeniedSummary())
+	}
 }
 
 // setBody installs an in-memory body that the retry transport can reopen.
@@ -707,6 +819,8 @@ type responseTap struct {
 	http.ResponseWriter
 	// upstreamFailed is set by the error handler when no response arrived.
 	upstreamFailed bool
+	// rehydrate, when set, rewrites the response body on its way through.
+	rehydrate *rehydration
 	// onHeaders, when set, is called once with the status as the response
 	// begins.
 	onHeaders func(status int)
