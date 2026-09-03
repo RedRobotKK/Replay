@@ -29,6 +29,7 @@ import (
 	"github.com/RedRobotKK/Buffy/internal/cachemodel"
 	"github.com/RedRobotKK/Buffy/internal/learn"
 	"github.com/RedRobotKK/Buffy/internal/ledger"
+	"github.com/RedRobotKK/Buffy/internal/masking"
 	"github.com/RedRobotKK/Buffy/internal/policy"
 	"github.com/RedRobotKK/Buffy/internal/transcript"
 )
@@ -89,8 +90,12 @@ type Config struct {
 	// Trial bounds how a learned policy is tried live (LN-5).
 	Trial TrialSettings
 	// NoPolicy turns every live policy off, including one a persisted pin
-	// would otherwise restore (PX-6).
+	// would otherwise restore (PX-6). It also turns masking off.
 	NoPolicy bool
+	// Masker, when set, replaces secrets in request bodies with vault
+	// placeholders before anything else reads the body (ADR-0004). Nil is
+	// off.
+	Masker *masking.Masker
 	// Retries, when Attempts is set, resend a request the provider refused
 	// with a retryable status or that never connected, before any byte of
 	// a response has reached the client.
@@ -302,6 +307,11 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	}
 	setBody(r, body)
 
+	if messages && len(body) > 0 && s.cfg.Masker != nil && !s.cfg.NoPolicy {
+		body = s.mask(&rec, body)
+		setBody(r, body)
+	}
+
 	summarized := false
 	if messages && len(body) > 0 {
 		if sum, err := ledger.SummarizeRequest(body, s.cfg.Store.Labeler()); err == nil {
@@ -379,6 +389,23 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	s.rp.ServeHTTP(tap, r)
+}
+
+// mask replaces secrets in the body with placeholders and records what it
+// did. A body the masker cannot read goes through unchanged: masking
+// fails open like every other feature, and the log says so without the
+// content.
+func (s *Server) mask(rec *ledger.Record, body []byte) []byte {
+	out, report, err := s.cfg.Masker.Mask(body)
+	if err != nil {
+		s.cfg.Logger.Printf("mask session=%s: body not masked: %v", short(rec.SessionID), err)
+		return body
+	}
+	if report.Total() > 0 {
+		rec.Masked = report
+		s.cfg.Logger.Printf("masked %d secret(s) session=%s: %s", report.Total(), short(rec.SessionID), report)
+	}
+	return out
 }
 
 // setBody installs an in-memory body that the retry transport can reopen.

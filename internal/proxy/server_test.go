@@ -23,6 +23,7 @@ import (
 	"github.com/RedRobotKK/Buffy/internal/cachemodel"
 	"github.com/RedRobotKK/Buffy/internal/learn"
 	"github.com/RedRobotKK/Buffy/internal/ledger"
+	"github.com/RedRobotKK/Buffy/internal/masking"
 	"github.com/RedRobotKK/Buffy/internal/policy"
 )
 
@@ -1579,5 +1580,86 @@ func TestGuardrailBreachesRevertThePolicyUntilANewerFile(t *testing.T) {
 	postSession(t, base2, "sess-relearned", requestBody)
 	if got := triggerSeen(lastBody(t, up2, 1)); got != "300000" {
 		t.Fatalf("a newer policy file must lift the revert, got trigger %s", got)
+	}
+}
+
+// Masking replaces a secret with its placeholder before the request
+// leaves, records the count on the ledger, and the secret never reaches
+// the log, the ledger, or the status endpoint; a body without a secret is
+// forwarded byte for byte.
+func TestMaskingReplacesSecretsBeforeEgressAndKeepsThemLocal(t *testing.T) {
+	vault, err := masking.OpenVault(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	up := &upstream{t: t}
+	base, dir, logs := startProxyWith(t, up, Config{Masker: masking.New(vault, nil)})
+	const canary = "sk-ant-api03-CanaryCanaryCanaryCanaryCanary0123456789"
+	body := `{"model":"claude-opus-5","max_tokens":50,"system":"be brief","messages":[{"role":"user","content":"my key is ` + canary + `"}]}`
+	postWith(t, base, body, map[string]string{HeaderSessionID: "sess-mask"})
+	postWith(t, base, requestBody, map[string]string{HeaderSessionID: "sess-mask"})
+	recs := waitLedger(t, dir, 2)
+	up.mu.Lock()
+	last := string(up.gotBody)
+	up.mu.Unlock()
+	if last != requestBody {
+		t.Fatalf("a body without a secret must pass byte for byte: %s", last)
+	}
+	ph, _ := vault.Placeholder(canary)
+	if recs[0].Masked["anthropic-api-key"] != 1 {
+		t.Fatalf("ledger must count the masked secret: %+v", recs[0].Masked)
+	}
+	for name, text := range map[string]string{"log": logs.String()} {
+		if strings.Contains(text, canary) || strings.Contains(text, ph) {
+			t.Fatalf("%s must hold neither the secret nor the placeholder:\n%s", name, text)
+		}
+	}
+	if !strings.Contains(logs.String(), "masked 1 secret(s) session=sess-mask: anthropic-api-key:1") {
+		t.Fatalf("masking must be logged by pattern:\n%s", logs.String())
+	}
+	files, _ := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+	for _, f := range files {
+		data, _ := os.ReadFile(f)
+		if bytes.Contains(data, []byte(canary)) {
+			t.Fatalf("ledger holds the secret: %s", f)
+		}
+	}
+	st := getStatus(t, base)
+	if len(st.Sessions) != 1 || st.Sessions[0].Masked != 1 {
+		t.Fatalf("status must count masked secrets: %+v", st.Sessions)
+	}
+	resp, err := http.Get(base + "/buffy/metrics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	metrics, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if !strings.Contains(string(metrics), `buffy_masked_total{pattern="anthropic-api-key"} 1`) {
+		t.Fatalf("metrics missing masked counter:\n%s", metrics)
+	}
+}
+
+// The first request's upstream body carried the placeholder, not the
+// secret, and the same secret masks to the same placeholder next time.
+func TestMaskingIsDeterministicOnTheWire(t *testing.T) {
+	vault, err := masking.OpenVault(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	up := &bodyEcho{}
+	base, _, _ := startProxyWith(t, up, Config{Masker: masking.New(vault, nil)})
+	const canary = "ghp_CanaryCanaryCanaryCanaryCanary0123456789"
+	body := `{"model":"claude-opus-5","max_tokens":50,"messages":[{"role":"user","content":"token ` + canary + `"}]}`
+	postWith(t, base, body, map[string]string{HeaderSessionID: "sess-a"})
+	postWith(t, base, body, map[string]string{HeaderSessionID: "sess-b"})
+	got := up.seen()
+	ph, _ := vault.Placeholder(canary)
+	for i, b := range got {
+		if bytes.Contains(b, []byte(canary)) || !bytes.Contains(b, []byte(ph)) {
+			t.Fatalf("request %d must carry the placeholder, not the secret: %s", i, b)
+		}
+	}
+	if !bytes.Equal(got[0], got[1]) {
+		t.Fatal("the same body must mask to the same bytes")
 	}
 }
