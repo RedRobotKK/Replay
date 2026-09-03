@@ -42,6 +42,10 @@ All notable changes to this project are documented here. The format follows [Kee
 - `docs/ROADMAP.md`, `docs/HOUSEKEEPING.md`, ADR process with ADR-0001, PRD v4.0.0 and its adversarial review under `docs/`.
 - PRD v5.0.0 (`docs/prd/buffy-prd-v5.0.0.md`): replay-first product, two-tier truth labels, provider-sanctioned policy catalog, scoped rehydration, gating spikes, and the release sequence. ADR-0002 to ADR-0004 record the decisions. Red/blue review of the full design under `docs/reviews/`.
 
+### Fixed
+
+- `buffy serve` shut down cleanly only when no client held an unused connection. A coding agent keeps pooled connections open without a request on them, and those never become idle, so Ctrl-C waited the full five-second grace period and then exited non-zero with `context deadline exceeded`. Connections with no request in flight are now closed at once, turns in flight still get the grace period, and a turn that outlasts it is closed rather than holding the proxy open. Ctrl-C with a pooled connection open went from 5.006s and exit 1 to 4ms and exit 0.
+
 ### Changed
 
 - README and roadmap now describe the replay-first sequence (`replay`, `blame`, `diff`, then `serve`).
