@@ -276,10 +276,10 @@ Initial catalog for v0.3: `freeze-system-prompt` (diagnostic only, reports when 
 
 | ID | Requirement | Acceptance |
 |----|-------------|------------|
-| SP-1 | Token and dollar caps per session and per day computed from provider usage fields; fail closed before the next request; never mid-stream; user override with a logged reason. **Status:** token caps implemented (`--max-session-tokens`, `--max-day-tokens`, `x-buffy-override`); dollar caps wait for the dated price table. | Cap test with streaming in progress. |
+| SP-1 | Token and dollar caps per session and per day computed from provider usage fields; fail closed before the next request; never mid-stream; user override with a logged reason. **Status:** implemented: token caps (`--max-session-tokens`, `--max-day-tokens`) and list-price dollar caps (`--max-session-usd`, `--max-day-usd`) with `x-buffy-override`. | Cap test with streaming in progress. |
 | SP-2 | Loop detection: the same tool call with the same input N times triggers a warning to the client and, above a second threshold, a block. **Status:** implemented (`--loop-warn`, `--loop-block`, `x-buffy-warning` response header). | Fixture. |
 | SP-3 | Provider circuit breaker: sustained rate-limit or overload responses open the breaker for a cooling period so the agent stops burning retries. **Status:** implemented (`--breaker-failures`, `--breaker-cooldown`), answering locally with `Retry-After` and one probe after cooldown. | Fault-injection test. |
-| SP-4 | An error budget per session trips before the dollar cap when error cost exceeds a share of spend. | Fixture. |
+| SP-4 | An error budget per session trips before the dollar cap when error cost exceeds a share of spend. **Status:** implemented (`--error-budget <share>`), judged from the same error classification `replay` prints, on sessions above a minimum size, with the override header. | Fixture. |
 
 ### 8.13 Staleness detection
 

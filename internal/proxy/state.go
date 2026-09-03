@@ -39,6 +39,9 @@ type sessionState struct {
 	builder *ledger.SessionBuilder
 	whatIf  []WhatIf
 	reReads analysis.ReReads
+	// errorTokens is the estimated prompt cost of error content carried by
+	// the session so far, from the same analysis replay prints.
+	errorTokens int
 }
 
 // WhatIf is one candidate layout scored against the session so far. It is
@@ -146,6 +149,18 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 	return out
 }
 
+// errorTokens returns a session's error-content prompt tokens and its
+// prompt tokens so far, for the error budget.
+func (s *stats) errorTokens(sessionID string) (errorTokens, promptTokens int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st, ok := s.sessions[sessionID]
+	if !ok {
+		return 0, 0
+	}
+	return st.errorTokens, st.tally.PromptTokens
+}
+
 // pinPolicy records the policy decision at a session's first request and
 // returns the pinned decision on every later one. Sessions are created
 // here when the first request has not completed yet, so the pin exists
@@ -214,9 +229,14 @@ func (s *stats) rescore(rec *ledger.Record) string {
 		}
 		rows = append(rows, row)
 	}
+	errorTokens := 0
+	for _, e := range report.Errors {
+		errorTokens += e.PromptTokens.Value
+	}
 	s.mu.Lock()
 	st.whatIf = rows
 	st.reReads = report.ReReads
+	st.errorTokens = errorTokens
 	s.mu.Unlock()
 
 	if requests%whatIfLogEvery != 0 || len(rows) < 2 {
@@ -265,6 +285,9 @@ type SessionSummary struct {
 	Policy             string `json:"policy,omitempty"`
 	PolicyApplied      int    `json:"policy_applied,omitempty"`
 	ClearedInputTokens int    `json:"cleared_input_tokens,omitempty"`
+	// ErrorShare is the share of the session's prompt tokens that carried
+	// error content, as the error budget judges it.
+	ErrorShare float64 `json:"error_share"`
 	// ReReads is the context-editing guardrail: file reads that repeated a
 	// path already in context, before and after the provider's first clear.
 	ReReads analysis.ReReads `json:"re_reads"`
@@ -290,7 +313,7 @@ func (s *stats) status() Status {
 		out.Requests[k] = v
 	}
 	for id, st := range s.sessions {
-		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, ReReads: st.reReads, WhatIf: st.whatIf})
+		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, ReReads: st.reReads, WhatIf: st.whatIf, ErrorShare: share(st.errorTokens, st.tally.PromptTokens)})
 	}
 	sort.Slice(out.Sessions, func(i, j int) bool { return out.Sessions[i].LastSeen.After(out.Sessions[j].LastSeen) })
 	return out
@@ -365,6 +388,13 @@ func (s *stats) metrics() string {
 	line("buffy_request_latency_seconds_sum %.6f", s.latencySum.Seconds())
 	line("buffy_request_latency_seconds_count %d", s.latencyCount)
 	return string(b)
+}
+
+func share(part, whole int) float64 {
+	if whole == 0 {
+		return 0
+	}
+	return float64(part) / float64(whole)
 }
 
 func sortedKeys(m map[string]int) []string {

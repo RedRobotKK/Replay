@@ -51,6 +51,9 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	token := fs.String("token", "", "require this value in the "+proxy.HeaderToken+" header (or set "+envToken+")")
 	maxSession := fs.Int("max-session-tokens", 0, "refuse a session's next request once it has consumed this many tokens (0 = off)")
 	maxDay := fs.Int("max-day-tokens", 0, "refuse requests once this many tokens were consumed today, UTC (0 = off)")
+	maxSessionUSD := fs.Float64("max-session-usd", 0, "refuse a session's next request once its list-price cost reaches this many dollars (0 = off; models not in the price table count as free)")
+	maxDayUSD := fs.Float64("max-day-usd", 0, "refuse requests once today's list-price cost reaches this many dollars, UTC (0 = off)")
+	errorBudget := fs.Float64("error-budget", 0, "refuse a session's next request once this share of its prompt tokens carried error content, e.g. 0.3 (0 = off)")
 	loopWarn := fs.Int("loop-warn", 0, "add a warning header when one identical tool call repeats this many times (0 = off)")
 	loopBlock := fs.Int("loop-block", 0, "refuse the request when one identical tool call repeats this many times (0 = off)")
 	breakerFailures := fs.Int("breaker-failures", 0, "open the circuit after this many consecutive provider failures (0 = off)")
@@ -96,11 +99,12 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		Token:       *token,
 		Store:       store,
 		Logger:      log.New(stderr, "buffy ", log.LstdFlags),
-		Spend:       proxy.NewSpendGuard(proxy.SpendLimits{SessionTokens: *maxSession, DayTokens: *maxDay}),
+		Spend:       proxy.NewSpendGuard(proxy.SpendLimits{SessionTokens: *maxSession, DayTokens: *maxDay, SessionUSD: *maxSessionUSD, DayUSD: *maxDayUSD}),
 		Loops:       proxy.LoopLimits{Warn: *loopWarn, Block: *loopBlock},
 		Breaker:     proxy.NewBreaker(proxy.BreakerSettings{Failures: *breakerFailures, Cooldown: *breakerCooldown}),
 		ContextEdit: contextEdit,
 		Retries:     proxy.RetrySettings{Attempts: *retries, BaseDelay: *retryBase, MaxDelay: *retryMax},
+		ErrorBudget: proxy.ErrorBudget{Share: *errorBudget},
 	})
 	if err != nil {
 		return err

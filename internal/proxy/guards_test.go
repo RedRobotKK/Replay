@@ -13,18 +13,18 @@ func TestSpendGuardCapsSessionAndDay(t *testing.T) {
 	if g.Check("a") != "" {
 		t.Fatal("fresh session must be allowed")
 	}
-	g.Record("a", 60)
+	g.Record("a", 60, 0)
 	if g.Check("a") != "" {
 		t.Fatal("under the cap must be allowed")
 	}
-	g.Record("a", 40)
+	g.Record("a", 40, 0)
 	if reason := g.Check("a"); reason == "" {
 		t.Fatal("session cap must refuse the next request")
 	}
 	if g.Check("b") != "" {
 		t.Fatal("another session is under its own cap")
 	}
-	g.Record("b", 60)
+	g.Record("b", 60, 0)
 	if reason := g.Check("b"); reason == "" {
 		t.Fatal("daily cap must refuse across sessions")
 	}
@@ -34,7 +34,7 @@ func TestSpendGuardRollsOverAtMidnightUTC(t *testing.T) {
 	g := NewSpendGuard(SpendLimits{DayTokens: 10})
 	day := time.Date(2026, 9, 2, 23, 59, 0, 0, time.UTC)
 	g.now = func() time.Time { return day }
-	g.Record("a", 10)
+	g.Record("a", 10, 0)
 	if g.Check("a") == "" {
 		t.Fatal("cap must apply today")
 	}
@@ -49,7 +49,7 @@ func TestSpendGuardDisabledIsNoop(t *testing.T) {
 	if g.Enabled() || g.Check("x") != "" {
 		t.Fatal("nil guard must allow everything")
 	}
-	g.Record("x", 1)
+	g.Record("x", 1, 0)
 }
 
 func TestDetectLoop(t *testing.T) {
@@ -144,5 +144,37 @@ func TestIsRetryableStatus(t *testing.T) {
 		if got := IsRetryableStatus(status); got != want {
 			t.Errorf("%d: %v", status, got)
 		}
+	}
+}
+
+func TestSpendGuardDollarCaps(t *testing.T) {
+	g := NewSpendGuard(SpendLimits{SessionUSD: 1, DayUSD: 1.5})
+	g.Record("a", 100, 0.6)
+	if g.Check("a") != "" {
+		t.Fatal("under the dollar cap must be allowed")
+	}
+	g.Record("a", 100, 0.4)
+	if reason := g.Check("a"); !strings.Contains(reason, "$1.00 of $1.00") {
+		t.Fatalf("session dollar cap must refuse: %q", reason)
+	}
+	g.Record("b", 100, 0.5)
+	if reason := g.Check("b"); !strings.Contains(reason, "daily spend cap reached: $1.50") {
+		t.Fatalf("daily dollar cap must refuse across sessions: %q", reason)
+	}
+}
+
+func TestErrorBudgetJudgesOnlyLargeSessions(t *testing.T) {
+	b := ErrorBudget{Share: 0.3}
+	if b.Check(9000, 9000) != "" {
+		t.Fatal("a session under the minimum size must not be judged")
+	}
+	if b.Check(2999, errorBudgetMinPromptTokens) != "" {
+		t.Fatal("under the share must pass")
+	}
+	if reason := b.Check(3000, errorBudgetMinPromptTokens); !strings.Contains(reason, "30% of this session") {
+		t.Fatalf("at the share must refuse: %q", reason)
+	}
+	if (ErrorBudget{}).Check(1e9, 1e9) != "" {
+		t.Fatal("off must pass everything")
 	}
 }
