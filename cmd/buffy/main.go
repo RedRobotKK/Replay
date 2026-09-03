@@ -53,6 +53,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return runCorpus(args[1:], stdout, stderr)
 	case "doctor":
 		return runDoctor(args[1:], stdout, stderr)
+	case "advise":
+		return runAdvise(args[1:], stdout, stderr)
 	case "redact":
 		return runRedact(args[1:], stdout)
 	case "serve":
@@ -217,6 +219,7 @@ Usage:
   buffy blame  <transcript|dir>   rank what is eating prompt tokens
   buffy diff   <transcript|dir>   locate and classify every cache break
   buffy corpus <dir...>           calibration summary across many sessions, as Markdown (no paths or content)
+  buffy advise <dir...>           turn the largest token sources across sessions into suggestions with predicted savings, tracked to closure
   buffy doctor                    what buffy can see on this machine and what to do next
   buffy redact <transcript>       strip content, keep structure and usage (for bug reports)
   buffy serve [flags]             local proxy: byte-for-byte passthrough, records a ledger

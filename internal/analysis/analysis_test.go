@@ -95,7 +95,7 @@ func TestBlameSumsToReportedUsage(t *testing.T) {
 	// content that happened to follow it.
 	var rebill *BlameEntry
 	for i := range entries {
-		if entries[i].Label == rebillLabel {
+		if entries[i].Label == RebillLabel {
 			rebill = &entries[i]
 		}
 	}

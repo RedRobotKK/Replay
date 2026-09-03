@@ -184,6 +184,6 @@ func (f TokenFit) Figure(t Tokens) Figure {
 
 // Labels for content the transcript does not show.
 const (
-	unseenPrefixLabel = "system prompt and tool definitions (shared prefix, not in transcript)"
-	injectedLabel     = "client-injected content on the first turn (attachments, reminders; not in transcript)"
+	UnseenPrefixLabel = "system prompt and tool definitions (shared prefix, not in transcript)"
+	InjectedLabel     = "client-injected content on the first turn (attachments, reminders; not in transcript)"
 )

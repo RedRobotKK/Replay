@@ -115,6 +115,14 @@ One live policy, experimental and off by default:
 
 - `--context-edit-trigger <tokens>` asks the provider to clear old tool results server-side once the prompt passes the trigger, keeping the last `--context-edit-keep` (default 6). Buffy adds the provider's `context_management` parameter after the client's own bytes, which stay byte-identical, and only on requests whose client already enabled the context-management beta and set no such parameter itself. The decision is made at a session's first request and pinned. Each edit is logged with body hashes before and after, never content; the ledger records which requests carried it and the provider's applied edits and cleared tokens, so `buffy replay` on the ledger shows what it did. `BUFFY_NO_POLICY=1` forces every policy off. The parameter shape follows the provider's documentation and has not yet been exercised against the real provider (roadmap spike 4); the `what_if` rows tell you what it should save before you turn it on, and the `re_reads` figures (file reads that repeated a path already in context, before and after the provider's first clear) tell you whether the agent is paying the savings back by re-reading.
 
+### Get told what to change
+
+```sh
+buffy advise ~/.claude/projects/* ~/.buffy/ledger
+```
+
+Turns the largest token sources across every session into suggestions with a predicted saving: tool inputs that dominate prompts (long heredocs), tool results that should be truncated, files read again and again, first-turn instruction files that every request re-carries, tool definitions a session never calls (visible in the ledger), and cache breaks to look at with `buffy diff`. Each prediction assumes the target is halved and is stated as a share of prompt tokens first, the scale-free metric, then as tokens across the corpus. Suggestions are tracked to closure: pending until the newest sessions show the target shrinking, then applied, then verified or not verified against the prediction. Written to `~/.buffy/advice.json`.
+
 One client caveat from the gateway docs: with a non-first-party base URL, Claude Code disables MCP tool search unless `ENABLE_TOOL_SEARCH=true` is set. Buffy forwards `tool_reference` blocks unchanged, so setting it is safe. Details: [`docs/architecture/proxy-protocol.md`](docs/architecture/proxy-protocol.md).
 
 ## Install
