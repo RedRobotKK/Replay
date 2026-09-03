@@ -87,7 +87,7 @@ func (m *Masker) Mask(body []byte) ([]byte, Report, error) {
 			if strings.HasPrefix(secret, PlaceholderPrefix) {
 				continue
 			}
-			ph, err := m.vault.Placeholder(secret)
+			ph, err := m.vault.Placeholder(secret, mt.Pattern)
 			if err != nil {
 				return body, nil, err
 			}

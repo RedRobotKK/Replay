@@ -46,6 +46,12 @@ type Record struct {
 	// Masked counts the secrets the proxy replaced with placeholders in
 	// this request, by pattern name. Never a secret or a placeholder.
 	Masked map[string]int `json:"masked,omitempty"`
+	// Rehydrated counts the placeholders the proxy restored in this
+	// response, by destination: text, edit:<tool>, or tool:<tool>.
+	// RehydrationDenied counts those left in place, by destination and
+	// reason. Neither ever holds a secret, a placeholder, or a path.
+	Rehydrated        map[string]int `json:"rehydrated,omitempty"`
+	RehydrationDenied map[string]int `json:"rehydration_denied,omitempty"`
 	// Retries is how many times the proxy resent this request before the
 	// response it recorded.
 	Retries   int   `json:"retries,omitempty"`
