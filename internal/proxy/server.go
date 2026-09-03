@@ -102,6 +102,10 @@ type Config struct {
 	// uncompressed, because a compressed body cannot be rewritten as it
 	// passes. Nil is off.
 	Rehydrator *masking.Rehydrator
+	// Siblings, when MaxWait is set, holds a request whose prefix is in
+	// flight and not yet cached until the first response begins (the
+	// hold-parallel-siblings policy).
+	Siblings SiblingSettings
 	// Retries, when Attempts is set, resend a request the provider refused
 	// with a retryable status or that never connected, before any byte of
 	// a response has reached the client.
@@ -137,6 +141,8 @@ type Server struct {
 	ready chan struct{}
 	addr  string
 	stats *stats
+	// siblings holds parallel requests with the same prefix (Config.Siblings).
+	siblings *siblingGate
 }
 
 // New builds a server. It does not listen yet.
@@ -170,7 +176,7 @@ func New(cfg Config) (*Server, error) {
 	case !errors.Is(err, errRetriesOff):
 		return nil, err
 	}
-	s := &Server{cfg: cfg, ready: make(chan struct{}), stats: newStats()}
+	s := &Server{cfg: cfg, ready: make(chan struct{}), stats: newStats(), siblings: newSiblingGate(cfg.Siblings)}
 	s.rp = &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.SetURL(cfg.Upstream)
@@ -347,6 +353,21 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		r = r.WithContext(context.WithValue(r.Context(), tapKey{}, tap))
 		r.Header.Del(headerAcceptEncoding)
 	}
+	if messages && summarized {
+		// Wait behind a sibling with the same prefix, then lead for the
+		// ones behind this request until its response begins.
+		release, waited := s.siblings.enter(r.Context(), rec.PrefixHash)
+		defer release()
+		rec.HeldMS = waited.Milliseconds()
+		prefix := rec.PrefixHash
+		tap.onHeaders = func(status int) {
+			if status < http.StatusMultipleChoices {
+				s.siblings.began(prefix)
+			} else {
+				release()
+			}
+		}
+	}
 	// Bookkeeping runs in a deferred function because the reverse proxy
 	// aborts the handler with a panic when the client goes away mid-stream
 	// (the user interrupting a turn). The provider still billed that turn,
@@ -393,6 +414,9 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		}
 		if rec.Retries > 0 {
 			note += fmt.Sprintf(" retries=%d", rec.Retries)
+		}
+		if rec.HeldMS > 0 {
+			note += fmt.Sprintf(" held_ms=%d", rec.HeldMS)
 		}
 		s.cfg.Logger.Printf("%s %s status=%d ms=%d session=%s model=%s %s%s", r.Method, r.URL.Path, rec.Status, rec.LatencyMS, short(rec.SessionID), rec.Model, usageSummary(rec.Response.Usage), note)
 		if rec.Cache != nil && rec.Cache.Deficit > 0 {
@@ -797,6 +821,9 @@ type responseTap struct {
 	upstreamFailed bool
 	// rehydrate, when set, rewrites the response body on its way through.
 	rehydrate *rehydration
+	// onHeaders, when set, is called once with the status as the response
+	// begins.
+	onHeaders func(status int)
 	status    int
 	stream    *ledger.StreamParser
 	buffer    bytes.Buffer
@@ -806,6 +833,10 @@ type responseTap struct {
 
 func (t *responseTap) WriteHeader(code int) {
 	t.status = code
+	if t.onHeaders != nil {
+		t.onHeaders(code)
+		t.onHeaders = nil
+	}
 	ct := t.Header().Get("Content-Type")
 	t.gz = strings.EqualFold(t.Header().Get("Content-Encoding"), "gzip")
 	if ledger.IsEventStream(ct) && !t.gz {
