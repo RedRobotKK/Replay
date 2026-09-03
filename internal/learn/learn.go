@@ -83,6 +83,7 @@ func Catalog() []Candidate {
 // when it would have cost more). Cached share is kept for the report.
 type SessionScore struct {
 	SessionID string
+	Type      string
 	Holdout   bool
 	AsRun     analysis.Tally
 	Saving    map[string]float64
@@ -106,7 +107,7 @@ func Score(s *transcript.Session, candidates []Candidate) (SessionScore, bool) {
 	if asRun.EffectiveTokens <= 0 {
 		return SessionScore{}, false
 	}
-	out := SessionScore{SessionID: s.ID, Holdout: isHoldout(s.ID), AsRun: asRun.Tally, Saving: map[string]float64{}, Cached: map[string]float64{}, Estimated: map[string]bool{}}
+	out := SessionScore{SessionID: s.ID, Type: Type(s), Holdout: isHoldout(s.ID), AsRun: asRun.Tally, Saving: map[string]float64{}, Cached: map[string]float64{}, Estimated: map[string]bool{}}
 	for _, c := range candidates {
 		var r analysis.PolicyResult
 		switch {
@@ -180,12 +181,49 @@ type Result struct {
 	Selected *Candidate `json:"selected"`
 	// Reason explains an empty selection.
 	Reason string `json:"reason,omitempty"`
+	// Types holds one selection per session type (LN-3), under the same
+	// rules, so a policy that helps large-prefix sessions and hurts small
+	// ones can be applied to the first and withheld from the second.
+	Types []TypeResult `json:"types,omitempty"`
 }
 
 // Select applies the rules to scored sessions: minimum evidence, a
 // margin above noise, a repeat on held-out sessions, and ties to the
 // simpler candidate.
 func Select(candidates []Candidate, scores []SessionScore, found int, opts Options, now time.Time) Result {
+	res := selectFrom(candidates, scores, found, opts, now)
+	byType := map[string][]SessionScore{}
+	var types []string
+	for _, s := range scores {
+		if s.Type == "" {
+			continue
+		}
+		if _, ok := byType[s.Type]; !ok {
+			types = append(types, s.Type)
+		}
+		byType[s.Type] = append(byType[s.Type], s)
+	}
+	sort.Strings(types)
+	for _, t := range types {
+		sub := selectFrom(candidates, byType[t], len(byType[t]), opts, now)
+		res.Types = append(res.Types, TypeResult{Type: t, Sessions: len(byType[t]), Selected: sub.Selected, Reason: sub.Reason})
+	}
+	return res
+}
+
+// SelectedFor returns the selection for a session type, falling back to
+// the overall selection when the type has none.
+func (r Result) SelectedFor(sessionType string) *Candidate {
+	for _, t := range r.Types {
+		if t.Type == sessionType && t.Selected != nil {
+			return t.Selected
+		}
+	}
+	return r.Selected
+}
+
+// selectFrom applies the rules to one set of scored sessions.
+func selectFrom(candidates []Candidate, scores []SessionScore, found int, opts Options, now time.Time) Result {
 	if opts.MinSessions <= 0 {
 		opts.MinSessions = DefaultMinSessions
 	}
