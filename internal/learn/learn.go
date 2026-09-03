@@ -85,10 +85,14 @@ type SessionScore struct {
 	SessionID string
 	Type      string
 	Holdout   bool
-	AsRun     analysis.Tally
-	Saving    map[string]float64
-	Cached    map[string]float64
-	Estimated map[string]bool
+	// Arm and CostPerNewToken feed graduation; Arm is empty outside a
+	// trial.
+	Arm             string
+	CostPerNewToken float64
+	AsRun           analysis.Tally
+	Saving          map[string]float64
+	Cached          map[string]float64
+	Estimated       map[string]bool
 }
 
 // Score simulates every catalog candidate over one session's main lane.
@@ -107,7 +111,16 @@ func Score(s *transcript.Session, candidates []Candidate) (SessionScore, bool) {
 	if asRun.EffectiveTokens <= 0 {
 		return SessionScore{}, false
 	}
-	out := SessionScore{SessionID: s.ID, Type: Type(s), Holdout: isHoldout(s.ID), AsRun: asRun.Tally, Saving: map[string]float64{}, Cached: map[string]float64{}, Estimated: map[string]bool{}}
+	out := SessionScore{SessionID: s.ID, Type: Type(s), Holdout: isHoldout(s.ID), Arm: ArmOf(s), AsRun: asRun.Tally, Saving: map[string]float64{}, Cached: map[string]float64{}, Estimated: map[string]bool{}}
+	// Cost per token of new content: the denominator a layout policy
+	// cannot change, so arms of a trial compare on it.
+	newTokens := 0
+	for _, req := range lane.Requests {
+		newTokens += req.Usage.Input + req.Usage.Output
+	}
+	if newTokens > 0 {
+		out.CostPerNewToken = asRun.EffectiveTokens / float64(newTokens)
+	}
 	for _, c := range candidates {
 		var r analysis.PolicyResult
 		switch {
@@ -185,6 +198,9 @@ type Result struct {
 	// rules, so a policy that helps large-prefix sessions and hurts small
 	// ones can be applied to the first and withheld from the second.
 	Types []TypeResult `json:"types,omitempty"`
+	// Trial is the live trial's outcome when the corpus holds treated or
+	// control sessions (DR-2).
+	Trial *TrialReport `json:"trial,omitempty"`
 }
 
 // Select applies the rules to scored sessions: minimum evidence, a
@@ -208,7 +224,40 @@ func Select(candidates []Candidate, scores []SessionScore, found int, opts Optio
 		sub := selectFrom(candidates, byType[t], len(byType[t]), opts, now)
 		res.Types = append(res.Types, TypeResult{Type: t, Sessions: len(byType[t]), Selected: sub.Selected, Reason: sub.Reason})
 	}
+	res.Trial = trialReport(res, scores, opts)
 	return res
+}
+
+// trialReport judges the live trial from the sessions' arms. The
+// prediction is the selected candidate's mean saving, or the best
+// context-edit verdict's when nothing is selected now, since the trial
+// ran under an earlier selection.
+func trialReport(res Result, scores []SessionScore, opts Options) *TrialReport {
+	var costs []ArmCost
+	policy := ""
+	for _, s := range scores {
+		if s.Arm == "" {
+			continue
+		}
+		costs = append(costs, ArmCost{SessionID: s.SessionID, Arm: s.Arm, CostPerNewToken: s.CostPerNewToken})
+	}
+	if len(costs) == 0 {
+		return nil
+	}
+	predicted := 0.0
+	for _, v := range res.Verdicts {
+		if v.Family != FamilyContextEdit {
+			continue
+		}
+		if res.Selected != nil && v.Name == res.Selected.Name {
+			policy, predicted = v.Name, v.Mean
+			break
+		}
+		if v.Mean > predicted {
+			policy, predicted = v.Name, v.Mean
+		}
+	}
+	return Graduate(policy, costs, predicted, opts.MinSessions)
 }
 
 // SelectedFor returns the selection for a session type, falling back to

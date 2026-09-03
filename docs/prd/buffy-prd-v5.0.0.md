@@ -239,7 +239,7 @@ Initial catalog for v0.3: `freeze-system-prompt` (diagnostic only, reports when 
 | ID | Requirement | Acceptance |
 |----|-------------|------------|
 | DR-1 | The proxy renders a candidate policy alongside the active one on every turn, sends only the active one, and scores the candidate against the observed usage. | Candidate never appears on the wire; scores recorded. |
-| DR-2 | A candidate graduates only after a configurable number of sessions in which predicted savings held within a tolerance. | Graduation test with synthetic sessions. |
+| DR-2 | A candidate graduates only after a configurable number of sessions in which predicted savings held within a tolerance. **Status:** implemented in `learn` from treated and control sessions the trial recorded; tolerance is half the predicted saving. | Graduation test with synthetic sessions. |
 
 ### 8.9 Learning
 

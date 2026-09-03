@@ -189,6 +189,11 @@ type Session struct {
 	// Skipped counts lines the parser could not interpret. Non-zero is not an
 	// error, but it is reported so a format change does not pass silently.
 	Skipped int
+	// Policy names the request-parameter policy the proxy applied to this
+	// session's requests, and Trial the arm of the live trial it was in:
+	// "treated", "control", or empty. Only the ledger knows either.
+	Policy string
+	Trial  string
 }
 
 // Lane finds or creates the lane with the given id, keeping lanes in order
