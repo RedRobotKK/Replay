@@ -61,3 +61,13 @@ Every replay table states the assumption that the agent would have behaved ident
 ## Redaction and fixtures
 
 `buffy redact` rewrites a transcript so that structure, block kinds, byte lengths, usage, timestamps, ids, and tool names survive and nothing readable does: text becomes filler of the same length, paths become hashes that keep their extension, and machine-specific fields are replaced. Redacting a redacted file is a fixed point, and the analysis of a redacted session is identical to the original. The repository's test fixture is a redacted real session.
+
+## Staleness: when the rules stop fitting
+
+The rules are a dated description of the provider, and the provider changes. Calibration is therefore also judged per model across sessions, with the newest five sessions on their own (`analysis.ModelCalibrations`). When a model's earlier sessions calibrated and three of its newest five each fall below the threshold, `buffy corpus` reports that the provider's behavior changed and `buffy learn` scores no alternatives for that model until the rules are updated. One bad session is not a rule change, and a model whose sessions never calibrated is left to the per-session gate.
+
+Of the rules, one can be bounded from usage alone: the minimum cacheable prefix lies above the largest prompt that saw no cache activity and at or below the smallest cached prefix, and both reports print those bounds next to the rules file's value. The lookback window and the TTLs cannot be told from usage and are not refit.
+
+## Updating the rules
+
+The rules live in `internal/cachemodel/anthropic.go` as named constants and one model table, with `RulesVersion` and `PriceTableVersion` printed on every report. To update them: change the constant or table row, move the version date, cite the provider document the value comes from in the commit message, and run `buffy corpus` on a recent corpus to show calibration back above the threshold. A rules change is a user-visible change and gets a changelog entry.
