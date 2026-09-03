@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/RedRobotKK/Buffy/internal/ledger"
 	"github.com/RedRobotKK/Buffy/internal/proxy"
@@ -19,9 +20,10 @@ import (
 
 // Defaults for serve. The listen port is the one the README documents.
 const (
-	defaultListen   = "127.0.0.1:4000"
-	defaultUpstream = "https://api.anthropic.com"
-	ledgerDirName   = "ledger"
+	defaultListen          = "127.0.0.1:4000"
+	defaultUpstream        = "https://api.anthropic.com"
+	ledgerDirName          = "ledger"
+	defaultBreakerCooldown = 30 * time.Second
 )
 
 // Environment variables that control serve without flags.
@@ -41,6 +43,12 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	upstream := fs.String("upstream", envOr(envUpstream, defaultUpstream), "provider base URL")
 	ledgerDir := fs.String("ledger", "", "ledger directory (default ~/.buffy/ledger)")
 	token := fs.String("token", os.Getenv(envToken), "require this value in the "+proxy.HeaderToken+" header")
+	maxSession := fs.Int("max-session-tokens", 0, "refuse a session's next request once it has consumed this many tokens (0 = off)")
+	maxDay := fs.Int("max-day-tokens", 0, "refuse requests once this many tokens were consumed today, UTC (0 = off)")
+	loopWarn := fs.Int("loop-warn", 0, "add a warning header when one identical tool call repeats this many times (0 = off)")
+	loopBlock := fs.Int("loop-block", 0, "refuse the request when one identical tool call repeats this many times (0 = off)")
+	breakerFailures := fs.Int("breaker-failures", 0, "open the circuit after this many consecutive provider failures (0 = off)")
+	breakerCooldown := fs.Duration("breaker-cooldown", defaultBreakerCooldown, "how long the circuit stays open")
 	if err := fs.Parse(args); err != nil {
 		return errUsage
 	}
@@ -68,6 +76,9 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		Token:    *token,
 		Store:    store,
 		Logger:   log.New(stderr, "buffy ", log.LstdFlags),
+		Spend:    proxy.NewSpendGuard(proxy.SpendLimits{SessionTokens: *maxSession, DayTokens: *maxDay}),
+		Loops:    proxy.LoopLimits{Warn: *loopWarn, Block: *loopBlock},
+		Breaker:  proxy.NewBreaker(proxy.BreakerSettings{Failures: *breakerFailures, Cooldown: *breakerCooldown}),
 	})
 	if err != nil {
 		return err

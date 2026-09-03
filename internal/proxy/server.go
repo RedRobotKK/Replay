@@ -13,6 +13,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -67,7 +68,20 @@ type Config struct {
 	Store *ledger.Store
 	// Logger receives one line per request. Never headers, never bodies.
 	Logger *log.Logger
+	// Guards are optional; a nil guard is off.
+	Spend   *SpendGuard
+	Loops   LoopLimits
+	Breaker *Breaker
 }
+
+// HeaderOverride is the header a client sets to acknowledge a spend cap or
+// a loop block and proceed once. Its value is logged as the reason.
+const HeaderOverride = "x-buffy-override"
+
+// HeaderWarning is added to a forwarded response when a guard has
+// something to say but did not block. It is the only header Buffy adds to
+// a response.
+const HeaderWarning = "x-buffy-warning"
 
 // Server is the running proxy.
 type Server struct {
@@ -120,6 +134,9 @@ func New(cfg Config) (*Server, error) {
 		FlushInterval: -1,
 		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
 			cfg.Logger.Printf("upstream error: %v", err)
+			if tap, ok := w.(*responseTap); ok {
+				tap.upstreamFailed = true
+			}
 			http.Error(w, "buffy: upstream request failed: "+err.Error()+"\nTo bypass Buffy, unset ANTHROPIC_BASE_URL.", http.StatusBadGateway)
 		},
 	}
@@ -181,6 +198,11 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	rec := ledger.Record{Timestamp: start, Path: r.URL.Path, SessionID: r.Header.Get(HeaderSessionID), AgentID: r.Header.Get(HeaderAgentID)}
 
+	if ok, wait := s.cfg.Breaker.Allow(); !ok {
+		refuse(w, http.StatusServiceUnavailable, "buffy_circuit_open", fmt.Sprintf("the provider has been failing; Buffy is holding requests for %s so the agent stops burning retries", wait.Round(time.Second)), wait)
+		return
+	}
+
 	body, err := io.ReadAll(io.LimitReader(r.Body, MaxRequestBytes+1))
 	if err != nil {
 		http.Error(w, "buffy: could not read request body", http.StatusBadRequest)
@@ -201,16 +223,34 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		if rec.SessionID == "" {
 			rec.SessionID = prefixHash(body)
 		}
+		if reason := s.cfg.Spend.Check(rec.SessionID); reason != "" {
+			if override := r.Header.Get(HeaderOverride); override != "" {
+				s.cfg.Logger.Printf("spend cap overridden for session=%s: %s", short(rec.SessionID), override)
+			} else {
+				refuse(w, http.StatusBadRequest, "buffy_spend_cap", reason+". Raise the cap, start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
+				return
+			}
+		}
+		if v := DetectLoop(body, s.cfg.Loops); v.Block {
+			refuse(w, http.StatusBadRequest, "buffy_loop", fmt.Sprintf("the same %s call appears %d times in this conversation; Buffy stopped the loop. Send %s with a reason to proceed once.", v.Label, v.Repeats, HeaderOverride), 0)
+			return
+		} else if v.Warn {
+			w.Header().Set(HeaderWarning, fmt.Sprintf("loop: the same %s call appears %d times", v.Label, v.Repeats))
+		}
 	}
 
 	tap := &responseTap{ResponseWriter: w}
 	s.rp.ServeHTTP(tap, r)
+	s.cfg.Breaker.Observe(tap.upstreamFailed || IsRetryableStatus(tap.status))
 
 	rec.Status = tap.status
 	rec.LatencyMS = time.Since(start).Milliseconds()
 	rec.RequestID = tap.Header().Get("request-id")
 	if isMessages(r.URL.Path) {
 		rec.Response = tap.result()
+		if u := rec.Response.Usage; u != nil {
+			s.cfg.Spend.Record(rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output)
+		}
 	}
 	if rec.SessionID != "" && isMessages(r.URL.Path) {
 		if err := s.cfg.Store.Append(rec); err != nil {
@@ -241,6 +281,19 @@ func prefixHash(body []byte) string {
 	_, _ = fmt.Fprint(h, probe.System)      // hashing cannot fail
 	_, _ = fmt.Fprint(h, probe.Messages[0]) // hashing cannot fail
 	return "prefix-" + hex.EncodeToString(h.Sum(nil))[:16]
+}
+
+// refuse answers a request locally in the provider's error shape so any
+// client that understands provider errors shows the message to the user.
+func refuse(w http.ResponseWriter, status int, kind, message string, retryAfter time.Duration) {
+	w.Header().Set("Content-Type", "application/json")
+	if retryAfter > 0 {
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", int(retryAfter.Seconds())+1))
+	}
+	w.WriteHeader(status)
+	body := map[string]any{"type": "error", "error": map[string]string{"type": kind, "message": message}}
+	// A failed write here means the client went away; nothing to do.
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 func isLoopback(addr string) bool {
@@ -274,11 +327,13 @@ func usageSummary(u *ledger.Usage) string {
 // they pass; for JSON responses the body is buffered up to the cap.
 type responseTap struct {
 	http.ResponseWriter
-	status  int
-	stream  *ledger.StreamParser
-	buffer  bytes.Buffer
-	gz      bool
-	dropped bool
+	// upstreamFailed is set by the error handler when no response arrived.
+	upstreamFailed bool
+	status         int
+	stream         *ledger.StreamParser
+	buffer         bytes.Buffer
+	gz             bool
+	dropped        bool
 }
 
 func (t *responseTap) WriteHeader(code int) {
