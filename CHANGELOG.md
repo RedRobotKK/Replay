@@ -26,5 +26,6 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Changed
 
 - README and roadmap now describe the replay-first sequence (`replay`, `blame`, `diff`, then `serve`).
+- Ledger schema 2: records carry provider-named usage fields and a typed break cause. Files written by schema 1 are skipped by the reader rather than misread; delete `~/.buffy/ledger` from earlier builds.
 
 [Unreleased]: https://github.com/RedRobotKK/Buffy/compare/main...HEAD

@@ -3,7 +3,8 @@
 // content costs the most, and what alternative layouts would have cost.
 //
 // Every figure is either measured (taken from provider usage) or estimated
-// (derived through the byte-to-token fit) and reports say which.
+// (derived through the byte-to-token fit); the Tokens type carries that
+// distinction with the number, and reports print it.
 package analysis
 
 import (
@@ -32,15 +33,11 @@ type Turn struct {
 
 // Calibration is the per-lane result of checking every turn.
 type Calibration struct {
-	Lane *transcript.Lane
-	// PrefixVisible mirrors the session flag: the system prompt and tools
-	// are part of each request's context, so nothing needs estimating
-	// ahead of the first message.
-	PrefixVisible bool
-	Turns         []Turn
-	Reproduced    int
-	Exceeded      int
-	Broken        int
+	Lane       *transcript.Lane
+	Turns      []Turn
+	Reproduced int
+	Exceeded   int
+	Broken     int
 }
 
 // Compared is the number of turns that had a predecessor to compare with.

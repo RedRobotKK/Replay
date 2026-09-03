@@ -11,17 +11,7 @@ import (
 // PolicyResult scores one context layout over a lane.
 type PolicyResult struct {
 	Name string
-	// PromptTokens is the sum of prompt sizes across requests.
-	PromptTokens int
-	// EffectiveTokens prices writes and reads with the provider multipliers.
-	EffectiveTokens float64
-	// CachedShare is cache reads divided by prompt tokens.
-	CachedShare float64
-	// Misses counts requests that read nothing from cache after the first.
-	Misses int
-	// CostUSD is the list-price cost when the model is in the price table,
-	// and zero otherwise. Priced reports say which.
-	CostUSD float64
+	Tally
 	// ReachableLive says whether a proxy can apply this policy and how.
 	ReachableLive string
 	// Guardrail names the risk a live trial must watch.
@@ -30,26 +20,54 @@ type PolicyResult struct {
 	Estimated bool
 }
 
+// Tally accumulates usage across requests and prices it. The same tally
+// serves as-run sessions, simulated policies, and the proxy's per-session
+// totals, so one definition of "cost" exists.
+type Tally struct {
+	Requests int
+	// PromptTokens is the sum of prompt sizes across requests.
+	PromptTokens int
+	Reads        int
+	Writes       int
+	Output       int
+	// EffectiveTokens prices writes and reads with the provider multipliers.
+	EffectiveTokens float64
+	// CostUSD is the list-price cost when the model is in the price table,
+	// and zero otherwise. Priced reports say which.
+	CostUSD float64
+	// Misses counts requests that read nothing from cache after the first.
+	Misses int
+}
+
+// Add records one request's usage.
+func (t *Tally) Add(u transcript.Usage, model string) {
+	if t.Requests > 0 && u.CacheRead == 0 {
+		t.Misses++
+	}
+	t.Requests++
+	t.PromptTokens += u.PromptTotal()
+	t.Reads += u.CacheRead
+	t.Writes += u.CacheCreation
+	t.Output += u.Output
+	t.EffectiveTokens += cachemodel.EffectiveTokens(u, model)
+	if p, ok := cachemodel.PriceFor(model); ok {
+		t.CostUSD += cachemodel.CostUSD(u, p)
+	}
+}
+
+// CachedShare is cache reads divided by prompt tokens.
+func (t Tally) CachedShare() float64 {
+	return cachemodel.CachedShare(t.Reads, t.PromptTokens)
+}
+
 // AssumptionNote is printed with every replay table.
 const AssumptionNote = "replayed savings assume the agent would have behaved identically under the alternative layout"
 
 // AsRun scores the lane from reported usage alone. Nothing is estimated.
 func AsRun(lane *transcript.Lane) PolicyResult {
 	r := PolicyResult{Name: "as-run", ReachableLive: "n/a"}
-	var reads int
-	for i, req := range lane.Requests {
-		r.PromptTokens += req.Usage.PromptTotal()
-		r.EffectiveTokens += cachemodel.EffectiveTokens(req.Usage, req.Model)
-		if p, ok := cachemodel.PriceFor(req.Model); ok {
-			r.CostUSD += cachemodel.CostUSD(req.Usage, p)
-		}
-		reads += req.Usage.CacheRead
-		if i > 0 && req.Usage.CacheRead == 0 {
-			r.Misses++
-		}
-	}
-	if r.PromptTokens > 0 {
-		r.CachedShare = float64(reads) / float64(r.PromptTokens)
+	for _, req := range lane.Requests {
+		r.Add(req.Usage, req.Model)
 	}
 	return r
 }
@@ -60,6 +78,20 @@ type cacheState struct {
 	lastTouch time.Time
 	ttl       time.Duration
 	minPrefix int
+}
+
+// newCacheState seeds the simulator with whatever the first request found
+// already cached (the shared system prefix from an earlier session), so a
+// policy is never charged for a cold start the real session did not pay.
+func newCacheState(lane *transcript.Lane, ttl time.Duration) *cacheState {
+	state := &cacheState{ttl: ttl}
+	if len(lane.Requests) > 0 {
+		first := lane.Requests[0]
+		state.prefix = first.Usage.CacheRead
+		state.lastTouch = first.Timestamp
+		state.minPrefix = cachemodel.MinCacheablePrefix(first.Model)
+	}
+	return state
 }
 
 // serve returns the read and write for a request of the given prompt size
@@ -88,20 +120,6 @@ func (c *cacheState) serve(at time.Time, prompt, tail int, observed int) (read, 
 	return read, write
 }
 
-// newCacheState seeds the simulator with whatever the first request found
-// already cached (the shared system prefix from an earlier session), so a
-// policy is never charged for a cold start the real session did not pay.
-func newCacheState(lane *transcript.Lane, ttl time.Duration) *cacheState {
-	state := &cacheState{ttl: ttl}
-	if len(lane.Requests) > 0 {
-		first := lane.Requests[0]
-		state.prefix = first.Usage.CacheRead
-		state.lastTouch = first.Timestamp
-		state.minPrefix = cachemodel.MinCacheablePrefix(first.Model)
-	}
-	return state
-}
-
 // observedAvailability returns, per turn, the prefix the client's own
 // behavior left readable: -1 when the invariant held (no constraint), the
 // actual read otherwise. TTL expiries are not client behavior and are left
@@ -125,27 +143,12 @@ func observedAvailability(cal *Calibration) []int {
 // measured, not estimated, because no byte-to-token conversion is involved.
 func WithTTL(cal *Calibration, ttl time.Duration) PolicyResult {
 	lane := cal.Lane
-	name := fmt.Sprintf("ttl-%s", ttl)
-	r := PolicyResult{Name: name, ReachableLive: "yes: Claude Code setting promptCacheTtl (5m or 1h); the proxy never changes client markers", Guardrail: "none"}
+	r := PolicyResult{Name: fmt.Sprintf("ttl-%s", ttl), ReachableLive: "yes: Claude Code setting promptCacheTtl (5m or 1h); the proxy never changes client markers", Guardrail: "none"}
 	state := newCacheState(lane, ttl)
-	mult := cachemodel.WriteMultiplier(ttl)
 	available := observedAvailability(cal)
-	var reads int
 	for i, req := range lane.Requests {
-		prompt, tail := req.Usage.PromptTotal(), req.Usage.Input
-		read, write := state.serve(req.Timestamp, prompt, tail, available[i])
-		r.PromptTokens += prompt
-		r.EffectiveTokens += float64(tail) + float64(write)*mult + float64(read)*cachemodel.ReadMultiplierFor(req.Model)
-		if p, ok := cachemodel.PriceFor(req.Model); ok {
-			r.CostUSD += cachemodel.PromptCostUSD(tail, write, read, mult, p) + float64(req.Usage.Output)*p.OutputPerMTok/1_000_000
-		}
-		reads += read
-		if i > 0 && read == 0 {
-			r.Misses++
-		}
-	}
-	if r.PromptTokens > 0 {
-		r.CachedShare = float64(reads) / float64(r.PromptTokens)
+		read, write := state.serve(req.Timestamp, req.Usage.PromptTotal(), req.Usage.Input, available[i])
+		r.Add(cachemodel.SimulatedUsage(req.Usage.Input, write, read, req.Usage.Output, ttl), req.Model)
 	}
 	return r
 }
@@ -179,31 +182,29 @@ func WithContextEdit(cal *Calibration, p ContextEditPolicy, fit TokenFit) Policy
 		Estimated:     true,
 	}
 	state := newCacheState(lane, cachemodel.TTLShort)
-	var reads int
-	// cleared maps a tool result's uuid+block index to the request index
-	// where it was cleared; once cleared it stays cleared.
-	cleared := map[string]bool{}
+	// cleared remembers tool results removed by earlier clears; once
+	// cleared they stay cleared.
+	cleared := map[blockKey]bool{}
 
 	for i, req := range lane.Requests {
 		state.ttl = cachemodel.TTLOf(req.Usage)
 		prompt, tail := req.Usage.PromptTotal(), req.Usage.Input
-		mult := cachemodel.WriteMultiplier(state.ttl)
 
 		// Sizes of tool results still present, in context order, with the
 		// estimated token offset where each begins.
 		type slot struct {
-			key    string
+			key    blockKey
 			tokens int
 			offset int
 		}
 		var results []slot
-		offset := fit.UnseenPrefixTokens
+		offset := fit.UnseenPrefix.Total()
 		removed := 0
 		for _, m := range req.Context {
 			for bi, b := range m.Blocks {
 				size := fit.EstimateTokens(b.Bytes)
 				if b.Kind == transcript.KindToolResult {
-					key := fmt.Sprintf("%s/%d", m.UUID, bi)
+					key := blockKey{m.UUID, bi}
 					if cleared[key] {
 						removed += size
 						continue
@@ -238,18 +239,7 @@ func WithContextEdit(cal *Calibration, p ContextEditPolicy, fit TokenFit) Policy
 			read = invalidateFrom
 			state.prefix = prompt - tail
 		}
-		r.PromptTokens += prompt
-		r.EffectiveTokens += float64(tail) + float64(write)*mult + float64(read)*cachemodel.ReadMultiplierFor(req.Model)
-		if p, ok := cachemodel.PriceFor(req.Model); ok {
-			r.CostUSD += cachemodel.PromptCostUSD(tail, write, read, mult, p) + float64(req.Usage.Output)*p.OutputPerMTok/1_000_000
-		}
-		reads += read
-		if i > 0 && read == 0 {
-			r.Misses++
-		}
-	}
-	if r.PromptTokens > 0 {
-		r.CachedShare = float64(reads) / float64(r.PromptTokens)
+		r.Add(cachemodel.SimulatedUsage(tail, write, read, req.Usage.Output, state.ttl), req.Model)
 	}
 	return r
 }

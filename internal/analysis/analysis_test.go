@@ -39,14 +39,14 @@ func TestCalibrationOnRealSession(t *testing.T) {
 func TestBreakIsClassifiedAsRerender(t *testing.T) {
 	_, lane := loadFixture(t)
 	cal := Calibrate(lane)
-	fit := Fit(cal)
+	fit := Fit(cal, false)
 	breaks := FindBreaks(cal, fit)
 	if len(breaks) != 1 {
 		t.Fatalf("breaks = %d, want 1", len(breaks))
 	}
 	b := breaks[0]
-	if b.Cause != CauseRerendered {
-		t.Fatalf("cause = %q, want %q (%s)", b.Cause, CauseRerendered, b.Detail)
+	if b.Cause != cachemodel.CauseRerendered {
+		t.Fatalf("cause = %q, want %q (%s)", b.Cause, cachemodel.CauseRerendered, b.Detail)
 	}
 	if b.Deficit <= 0 || b.MessageIndex != 0 {
 		t.Fatalf("break detail wrong: %+v", b)
@@ -55,8 +55,8 @@ func TestBreakIsClassifiedAsRerender(t *testing.T) {
 
 func TestFitUsesMeasuredPrefix(t *testing.T) {
 	_, lane := loadFixture(t)
-	fit := Fit(Calibrate(lane))
-	if !fit.UnseenPrefixMeasured || fit.UnseenPrefixTokens != lane.Requests[0].Usage.CacheRead {
+	fit := Fit(Calibrate(lane), false)
+	if fit.UnseenPrefix.Estimated != 0 || fit.UnseenPrefix.Measured != lane.Requests[0].Usage.CacheRead {
 		t.Fatalf("system prefix should come from the first cache read: %+v", fit)
 	}
 	if fit.TokensPerByte <= 0 || fit.TokensPerByte > 2 {
@@ -72,7 +72,7 @@ func TestFitUsesMeasuredPrefix(t *testing.T) {
 func TestBlameSumsToReportedUsage(t *testing.T) {
 	_, lane := loadFixture(t)
 	cal := Calibrate(lane)
-	fit := Fit(cal)
+	fit := Fit(cal, false)
 	entries := Blame(cal, fit)
 
 	got := 0
@@ -85,7 +85,7 @@ func TestBlameSumsToReportedUsage(t *testing.T) {
 			continue
 		}
 		tc := splitTurn(turn)
-		want += tc.outputTokens + tc.userTokens + tc.rebillTokens
+		want += turn.Previous.Usage.Output + tc.userTokens + tc.rebillTokens
 	}
 	if got != want {
 		t.Fatalf("attributed %d tokens, provider reported %d", got, want)
@@ -180,15 +180,15 @@ func TestShortTTLMissesAcrossLongGap(t *testing.T) {
 	if short.Misses != 1 || long.Misses != 0 {
 		t.Fatalf("misses short=%d long=%d, want 1 and 0", short.Misses, long.Misses)
 	}
-	if short.CachedShare >= long.CachedShare {
-		t.Fatalf("a miss must lower the cached share: %.3f vs %.3f", short.CachedShare, long.CachedShare)
+	if short.CachedShare() >= long.CachedShare() {
+		t.Fatalf("a miss must lower the cached share: %.3f vs %.3f", short.CachedShare(), long.CachedShare())
 	}
 }
 
 func TestContextEditShrinksPromptAndInvalidates(t *testing.T) {
 	lane := syntheticLane(12, -1, 0, false)
 	cal := Calibrate(lane)
-	fit := Fit(cal)
+	fit := Fit(cal, false)
 	asRun := AsRun(lane)
 	edited := WithContextEdit(cal, ContextEditPolicy{KeepLast: 2, TriggerTokens: 9000}, fit)
 	if edited.PromptTokens >= asRun.PromptTokens {
@@ -216,7 +216,7 @@ func TestReportCarriesMandatoryLines(t *testing.T) {
 	if err := rep.WriteDiff(&buf); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(buf.String(), string(CauseRerendered)) {
+	if !strings.Contains(buf.String(), string(cachemodel.CauseRerendered)) {
 		t.Errorf("diff report does not name the break cause")
 	}
 }

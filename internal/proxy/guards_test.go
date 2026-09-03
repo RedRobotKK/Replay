@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/RedRobotKK/Buffy/internal/ledger"
 )
 
 func TestSpendGuardCapsSessionAndDay(t *testing.T) {
@@ -60,26 +62,37 @@ func TestDetectLoop(t *testing.T) {
 	 {"role":"assistant","content":[{"type":"tool_use","id":"3","name":"Bash","input":{"command":"go test ./..."}}]},
 	 {"role":"user","content":[{"type":"tool_result","tool_use_id":"3","content":"FAIL"}]}
 	]}`
-	v := DetectLoop([]byte(body), LoopLimits{Warn: 3, Block: 5})
+	v := DetectLoop(summarize(t, body), LoopLimits{Warn: 3, Block: 5})
 	if v.Repeats != 3 || v.Label != "Bash" || !v.Warn || v.Block {
 		t.Fatalf("verdict = %+v", v)
 	}
 	// A different call at the tail ends the run: history alone never blocks.
 	broken := strings.Replace(body, `{"type":"tool_result","tool_use_id":"3","content":"FAIL"}]}`, `{"type":"tool_result","tool_use_id":"3","content":"FAIL"}]},
 	 {"role":"assistant","content":[{"type":"tool_use","id":"4","name":"Read","input":{"file_path":"a.go"}}]}`, 1)
-	if v := DetectLoop([]byte(broken), LoopLimits{Warn: 3, Block: 3}); v.Repeats != 1 || v.Warn || v.Block {
+	if v := DetectLoop(summarize(t, broken), LoopLimits{Warn: 3, Block: 3}); v.Repeats != 1 || v.Warn || v.Block {
 		t.Fatalf("a differing tail call must reset the run: %+v", v)
 	}
-	v = DetectLoop([]byte(body), LoopLimits{Warn: 2, Block: 3})
+	v = DetectLoop(summarize(t, body), LoopLimits{Warn: 2, Block: 3})
 	if !v.Block {
 		t.Fatalf("block threshold not applied: %+v", v)
 	}
-	if v := DetectLoop([]byte(body), LoopLimits{}); v.Warn || v.Block || v.Repeats != 0 {
+	if v := DetectLoop(summarize(t, body), LoopLimits{}); v.Warn || v.Block || v.Repeats != 0 {
 		t.Fatalf("disabled detector must be silent: %+v", v)
 	}
-	if v := DetectLoop([]byte("not json"), LoopLimits{Warn: 1}); v.Warn {
-		t.Fatal("unparseable body must not warn")
+	if v := DetectLoop(ledger.Prompt{}, LoopLimits{Warn: 1}); v.Warn {
+		t.Fatal("an empty prompt must not warn")
 	}
+}
+
+// summarize reduces a request body the way the proxy does before the
+// guards see it.
+func summarize(t *testing.T, body string) ledger.Prompt {
+	t.Helper()
+	sum, err := ledger.SummarizeRequest([]byte(body), ledger.NewLabeler([]byte("k")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sum.Prompt
 }
 
 func TestBreakerOpensAndProbes(t *testing.T) {
@@ -90,15 +103,12 @@ func TestBreakerOpensAndProbes(t *testing.T) {
 		t.Fatal("closed breaker must allow")
 	}
 	b.Observe(true)
-	if b.Open() {
+	if ok, _ := b.Allow(); !ok {
 		t.Fatal("one failure must not open")
 	}
 	b.Observe(true)
-	if !b.Open() {
-		t.Fatal("two failures must open")
-	}
 	if ok, wait := b.Allow(); ok || wait <= 0 {
-		t.Fatalf("open breaker must refuse with a wait: ok=%v wait=%s", ok, wait)
+		t.Fatalf("two failures must open and refuse with a wait: ok=%v wait=%s", ok, wait)
 	}
 	now = now.Add(time.Minute)
 	if ok, _ := b.Allow(); !ok {
@@ -113,17 +123,17 @@ func TestBreakerOpensAndProbes(t *testing.T) {
 		t.Fatal("after Release the next request must be allowed to probe")
 	}
 	b.Observe(false)
-	if b.Open() {
+	if ok, _ := b.Allow(); !ok {
 		t.Fatal("a successful probe must close the breaker")
 	}
 	if ok, _ := b.Allow(); !ok {
-		t.Fatal("closed again must allow")
+		t.Fatal("a closed breaker allows every request, not one probe")
 	}
 }
 
 func TestBreakerDisabled(t *testing.T) {
 	var b *Breaker
-	if ok, _ := b.Allow(); !ok || b.Open() {
+	if ok, _ := b.Allow(); !ok {
 		t.Fatal("nil breaker must allow everything")
 	}
 	b.Observe(true)

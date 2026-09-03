@@ -1,12 +1,12 @@
 package proxy
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/RedRobotKK/Buffy/internal/ledger"
+	"github.com/RedRobotKK/Buffy/internal/transcript"
 )
 
 // Guards are off unless configured. Each is a pure decision component the
@@ -99,50 +99,31 @@ type LoopVerdict struct {
 }
 
 // DetectLoop measures the run of identical tool calls (same tool, same
-// input) at the tail of a Messages API conversation: how many times in a
-// row the agent has just made the same call. Counting the tail rather than
-// the whole history means a legitimate repeated command earlier in a long
-// session cannot block it forever. The hash is over the input bytes and
-// never leaves the process.
-func DetectLoop(body []byte, limits LoopLimits) LoopVerdict {
+// input) at the tail of a summarized conversation: how many times in a row
+// the agent has just made the same call. Counting the tail rather than the
+// whole history means a legitimate repeated command earlier in a long
+// session cannot block it forever. Identity is the block's content-free
+// call key, so the body is not parsed a second time.
+func DetectLoop(prompt ledger.Prompt, limits LoopLimits) LoopVerdict {
 	if limits.Warn <= 0 && limits.Block <= 0 {
-		return LoopVerdict{}
-	}
-	var req struct {
-		Messages []struct {
-			Role    string          `json:"role"`
-			Content json.RawMessage `json:"content"`
-		} `json:"messages"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
 		return LoopVerdict{}
 	}
 	var v LoopVerdict
 	lastKey := ""
-	for _, m := range req.Messages {
-		if m.Role != "assistant" {
+	for _, m := range prompt.Messages {
+		if m.Role != transcript.RoleAssistant {
 			continue
 		}
-		var blocks []struct {
-			Type  string          `json:"type"`
-			Name  string          `json:"name"`
-			Input json.RawMessage `json:"input"`
-		}
-		if err := json.Unmarshal(m.Content, &blocks); err != nil {
-			continue
-		}
-		for _, b := range blocks {
-			if b.Type != "tool_use" {
+		for _, b := range m.Blocks {
+			if b.Kind != transcript.KindToolUse || b.CallKey == "" {
 				continue
 			}
-			sum := sha256.Sum256(append([]byte(b.Name+"\x00"), b.Input...))
-			key := hex.EncodeToString(sum[:])
-			if key == lastKey {
+			if b.CallKey == lastKey {
 				v.Repeats++
 			} else {
-				lastKey = key
+				lastKey = b.CallKey
 				v.Repeats = 1
-				v.Label = b.Name
+				v.Label = b.ToolName
 			}
 		}
 	}
@@ -237,17 +218,9 @@ func (b *Breaker) Observe(retryable bool) {
 	}
 }
 
-// Open reports whether the circuit is currently open.
-func (b *Breaker) Open() bool {
-	if !b.Enabled() {
-		return false
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return !b.openedAt.IsZero()
-}
-
-// IsRetryableStatus classifies provider responses the breaker counts.
+// IsRetryableStatus classifies provider responses the breaker counts:
+// rate limits and every server-side status, which includes the provider's
+// overload code.
 func IsRetryableStatus(status int) bool {
-	return status == 429 || status == 529 || (status >= 500 && status <= 599)
+	return status == 429 || (status >= 500 && status <= 599)
 }

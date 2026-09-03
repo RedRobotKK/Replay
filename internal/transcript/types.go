@@ -6,6 +6,10 @@
 // produces several assistant lines, and the request's input is the whole
 // parent chain leading up to it. This package rebuilds that view so the
 // analysis packages can reason about prefixes, not lines.
+//
+// The types here are also the ledger's wire model: the proxy persists the
+// content-free subset (everything but Text) and reads it back as the same
+// structures, so one block model serves both tiers.
 package transcript
 
 import "time"
@@ -29,25 +33,48 @@ const (
 	RoleSystem    = "system"
 )
 
+// Labels shared by every decoder so both tiers group content identically.
+const (
+	LabelUserText          = "user text"
+	LabelAssistantText     = "assistant text"
+	LabelAssistantThinking = "assistant thinking"
+	LabelToolCallPrefix    = "tool call: "
+	LabelToolResultPrefix  = "tool result: "
+	LabelUnknownTool       = "unknown tool"
+	LabelOtherPrefix       = "other: "
+)
+
+// TextLabel is the label of a text block by the role that produced it.
+func TextLabel(role string) string {
+	if role == RoleAssistant {
+		return LabelAssistantText
+	}
+	return LabelUserText
+}
+
 // Block is one content block of a message. Text is kept in memory for
-// analysis and is never persisted by this package.
+// analysis and is never persisted: the JSON tags define exactly what the
+// ledger stores.
 type Block struct {
-	Kind string
+	Kind string `json:"kind"`
 	// Label identifies the block for attribution, for example
 	// "tool result: Read internal/foo.go" or "assistant text".
-	Label string
+	Label string `json:"label,omitempty"`
 	// Bytes is the size of the block's textual content. It is the input to
 	// the byte-to-token fit and is unaffected by JSON escaping so redacted
 	// and original transcripts measure the same.
-	Bytes int
+	Bytes int `json:"bytes"`
 	// Text is the block's textual content where it has one.
-	Text string
+	Text string `json:"-"`
 	// ToolUseID links a tool_use block to its tool_result and back.
-	ToolUseID string
+	ToolUseID string `json:"tool_use_id,omitempty"`
 	// ToolName is set on tool_use blocks and on the tool_result they produced.
-	ToolName string
+	ToolName string `json:"tool_name,omitempty"`
+	// CallKey identifies a tool call by tool name and input without holding
+	// the input: identical calls share a key. Set on tool_use blocks.
+	CallKey string `json:"call_key,omitempty"`
 	// IsError is set on tool_result blocks the client flagged as errors.
-	IsError bool
+	IsError bool `json:"is_error,omitempty"`
 }
 
 // Message is one turn of context as sent to the provider.
@@ -68,20 +95,21 @@ func (m *Message) Bytes() int {
 }
 
 // Usage is the provider's accounting for one request. Every field comes from
-// the transcript verbatim; nothing here is estimated.
+// the provider verbatim; nothing here is estimated. The JSON tags mirror the
+// provider's names so ledger records read naturally.
 type Usage struct {
-	Input         int
-	CacheCreation int
-	CacheRead     int
-	Output        int
+	Input         int `json:"input_tokens"`
+	CacheCreation int `json:"cache_creation_input_tokens"`
+	CacheRead     int `json:"cache_read_input_tokens"`
+	Output        int `json:"output_tokens"`
 	// ThinkingTokens is the share of Output spent on reasoning. The provider
 	// replays those tokens when the thinking block is sent back, so they are
 	// the block's measured input size.
-	ThinkingTokens int
+	ThinkingTokens int `json:"thinking_tokens,omitempty"`
 	// Create5m and Create1h split CacheCreation by the TTL it was written with.
 	// Both are zero when the client did not report the breakdown.
-	Create5m int
-	Create1h int
+	Create5m int `json:"ephemeral_5m_input_tokens,omitempty"`
+	Create1h int `json:"ephemeral_1h_input_tokens,omitempty"`
 }
 
 // PromptTotal is the size of the whole prompt the provider processed.
@@ -101,8 +129,6 @@ type Request struct {
 	Context []*Message
 	// Output is the assistant message the request produced.
 	Output *Message
-	// Sidechain marks requests made by a sub-agent rather than the main loop.
-	Sidechain bool
 }
 
 // Lane is one linear sequence of requests sharing a conversation root.
@@ -113,27 +139,54 @@ type Lane struct {
 	Requests  []*Request
 }
 
-// Where a session's data came from. The source decides the truth tier of
-// every figure derived from it.
+// Source says where a session's data came from. It decides the truth tier
+// of every figure derived from the session.
+type Source string
+
+// Sources.
 const (
-	SourceTranscript = "claude-code-transcript"
-	SourceLedger     = "buffy-ledger"
+	SourceTranscript Source = "claude-code-transcript"
+	SourceLedger     Source = "buffy-ledger"
 )
+
+// PrefixVisible reports whether the system prompt and tool definitions are
+// present in each request's context, so nothing ahead of the first message
+// needs estimating. Only the proxy sees them.
+func (s Source) PrefixVisible() bool {
+	return s == SourceLedger
+}
+
+// Tier is the provenance label every report carries.
+func (s Source) Tier() string {
+	if s == SourceLedger {
+		return "measured (proxy-recorded)"
+	}
+	return "estimated (transcripts only)"
+}
 
 // Session is a parsed transcript or ledger.
 type Session struct {
 	ID            string
 	Path          string
 	ClientVersion string
-	Source        string
-	// PrefixVisible is true when the system prompt and tool definitions are
-	// present in each request's context (ledger data), so nothing ahead of
-	// the first message needs estimating.
-	PrefixVisible bool
+	Source        Source
 	Lanes         []*Lane
 	// Skipped counts lines the parser could not interpret. Non-zero is not an
 	// error, but it is reported so a format change does not pass silently.
 	Skipped int
+}
+
+// Lane finds or creates the lane with the given id, keeping lanes in order
+// of first appearance.
+func (s *Session) Lane(id string, sidechain bool) *Lane {
+	for _, l := range s.Lanes {
+		if l.ID == id {
+			return l
+		}
+	}
+	l := &Lane{ID: id, Sidechain: sidechain}
+	s.Lanes = append(s.Lanes, l)
+	return l
 }
 
 // RequestCount is the number of provider requests across all lanes.
