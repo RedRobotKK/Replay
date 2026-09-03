@@ -125,14 +125,15 @@ func TTLOf(u transcript.Usage) time.Duration {
 }
 
 // EffectiveTokens prices a request's prompt in base-input-token equivalents:
-// uncached input at 1x, writes at their TTL multiplier, reads at the read
-// multiplier. It is a relative measure for comparing layouts, not a bill.
-func EffectiveTokens(u transcript.Usage) float64 {
+// uncached input at 1x, writes at their TTL multiplier, reads at the
+// model's read multiplier. It is a relative measure for comparing layouts,
+// not a bill.
+func EffectiveTokens(u transcript.Usage, model string) float64 {
 	writes := float64(u.Create5m)*WriteMultiplierShort + float64(u.Create1h)*WriteMultiplierLong
 	if u.Create5m == 0 && u.Create1h == 0 {
 		writes = float64(u.CacheCreation) * WriteMultiplierShort
 	}
-	return float64(u.Input) + writes + float64(u.CacheRead)*ReadMultiplier
+	return float64(u.Input) + writes + float64(u.CacheRead)*ReadMultiplierFor(model)
 }
 
 // WriteMultiplier returns the write multiplier for a TTL.

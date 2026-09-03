@@ -66,6 +66,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 func runReport(args []string, stdout, stderr io.Writer, write func(*analysis.LaneReport, io.Writer) error) error {
 	fs := flag.NewFlagSet("report", flag.ContinueOnError)
 	fs.SetOutput(stderr)
+	dollars := fs.Bool("dollars", false, "add a list-price cost column (first-party rates, dated price table)")
 	if err := fs.Parse(args); err != nil {
 		return errUsage
 	}
@@ -99,7 +100,9 @@ func runReport(args []string, stdout, stderr io.Writer, write func(*analysis.Lan
 		if _, err := io.WriteString(stdout, header); err != nil {
 			return fmt.Errorf("write report: %w", err)
 		}
-		if err := write(analysis.AnalyzeLane(session, lane), stdout); err != nil {
+		rep := analysis.AnalyzeLane(session, lane)
+		rep.Dollars = *dollars
+		if err := write(rep, stdout); err != nil {
 			return fmt.Errorf("write report: %w", err)
 		}
 	}
@@ -185,7 +188,7 @@ func printUsage(w io.Writer) error {
 	_, err := fmt.Fprint(w, `buffy - see where your coding agent's prompt cache broke and what it cost
 
 Usage:
-  buffy replay <transcript|dir>   reproduce caching, then score alternative layouts
+  buffy replay <transcript|dir>   reproduce caching, then score alternative layouts (--dollars adds list cost)
   buffy blame  <transcript|dir>   rank what is eating prompt tokens
   buffy diff   <transcript|dir>   locate and classify every cache break
   buffy corpus <dir...>           calibration summary across many sessions, as Markdown (no paths or content)

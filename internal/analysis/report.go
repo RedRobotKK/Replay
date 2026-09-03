@@ -30,6 +30,9 @@ type LaneReport struct {
 	Errors      []ErrorCost
 	Policies    []PolicyResult
 	Tier        Tier
+	// Dollars adds a list-price column to the policy table when the
+	// session's model is in the price table.
+	Dollars bool
 }
 
 // Context-editing policies are scored at triggers relative to the session's
@@ -162,7 +165,15 @@ func (r *LaneReport) WriteReplay(w io.Writer) error {
 		return p.err
 	}
 	base := r.Policies[0]
-	p.printf("  %-40s %14s %13s %10s %7s  %s\n", "policy", "prompt tokens", "cached share", "vs as-run", "misses", "guardrail")
+	priced := r.Dollars && base.CostUSD > 0
+	costHeader, costNote := "", ""
+	if priced {
+		costHeader = fmt.Sprintf(" %10s", "list cost")
+		costNote = fmt.Sprintf(" list cost uses the first-party price table dated %s; other platforms and discounts differ.", cachemodel.PriceTableVersion)
+	} else if r.Dollars {
+		costNote = " no list price is known for this model, so no dollar column."
+	}
+	p.printf("  %-40s %14s %13s %10s %7s%s  %s\n", "policy", "prompt tokens", "cached share", "vs as-run", "misses", costHeader, "guardrail")
 	for _, pol := range r.Policies {
 		delta := "-"
 		if pol.Name != base.Name && base.EffectiveTokens > 0 {
@@ -172,9 +183,13 @@ func (r *LaneReport) WriteReplay(w io.Writer) error {
 		if pol.Estimated {
 			name += " *"
 		}
-		p.printf("  %-40s %14s %12.0f%% %10s %7d  %s\n", name, formatTokens(pol.PromptTokens), pol.CachedShare*100, delta, pol.Misses, pol.Guardrail)
+		cost := ""
+		if priced {
+			cost = fmt.Sprintf(" %10s", fmt.Sprintf("$%.2f", pol.CostUSD))
+		}
+		p.printf("  %-40s %14s %12.0f%% %10s %7d%s  %s\n", name, formatTokens(pol.PromptTokens), pol.CachedShare*100, delta, pol.Misses, cost, pol.Guardrail)
 	}
-	p.printf("  vs as-run compares effective tokens (writes and reads at provider multipliers). * = estimated via the fit.\n\n")
+	p.printf("  vs as-run compares effective tokens (writes and reads at provider multipliers). * = estimated via the fit.%s\n\n", costNote)
 	for _, pol := range r.Policies[1:] {
 		p.printf("  %-40s live: %s\n", pol.Name, pol.ReachableLive)
 	}
