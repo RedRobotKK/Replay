@@ -206,6 +206,10 @@ func readLedger(t *testing.T, dir string) []ledger.Record {
 			t.Fatal(err)
 		}
 		for _, line := range bytes.Split(bytes.TrimSpace(data), []byte("\n")) {
+			if len(bytes.TrimSpace(line)) == 0 {
+				// The file can exist before its first record is flushed.
+				continue
+			}
 			var rec ledger.Record
 			if err := json.Unmarshal(line, &rec); err != nil {
 				t.Fatalf("bad ledger line %q: %v", line, err)

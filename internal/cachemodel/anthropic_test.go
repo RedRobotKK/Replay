@@ -48,12 +48,16 @@ func TestTTLOf(t *testing.T) {
 func TestEffectiveTokensUsesMultipliers(t *testing.T) {
 	u := transcript.Usage{Input: 100, CacheCreation: 1000, Create1h: 1000, CacheRead: 10000}
 	want := 100 + 1000*WriteMultiplierLong + 10000*ReadMultiplier
-	if got := EffectiveTokens(u); got != want {
+	if got := EffectiveTokens(u, "claude-opus-5"); got != want {
 		t.Fatalf("EffectiveTokens = %v, want %v", got, want)
 	}
 	noBreakdown := transcript.Usage{CacheCreation: 1000}
-	if got := EffectiveTokens(noBreakdown); got != 1000*WriteMultiplierShort {
+	if got := EffectiveTokens(noBreakdown, "claude-opus-5"); got != 1000*WriteMultiplierShort {
 		t.Fatalf("EffectiveTokens without breakdown = %v", got)
+	}
+	newest := EffectiveTokens(transcript.Usage{CacheRead: 10000}, "claude-fable-5-1")
+	if newest != 10000*readMultNewest {
+		t.Fatalf("newest tier must use its lower read multiple: %v", newest)
 	}
 }
 
@@ -77,5 +81,26 @@ func TestMinCacheablePrefixByFamily(t *testing.T) {
 func TestWriteMultiplier(t *testing.T) {
 	if WriteMultiplier(5*time.Minute) != WriteMultiplierShort || WriteMultiplier(time.Hour) != WriteMultiplierLong {
 		t.Fatal("write multiplier does not follow TTL")
+	}
+}
+
+func TestPricesAndCost(t *testing.T) {
+	p, ok := PriceFor("claude-opus-5")
+	if !ok || p.InputPerMTok != 5 || p.OutputPerMTok != 25 || p.ReadMult != ReadMultiplier {
+		t.Fatalf("opus 5 price = %+v ok=%v", p, ok)
+	}
+	if _, ok := PriceFor("some-unknown-model"); ok {
+		t.Fatal("unknown models must have no price")
+	}
+	if p, _ := PriceFor("claude-fable-5-1"); p.ReadMult != readMultNewest {
+		t.Fatal("fable 5.1 read multiple wrong")
+	}
+	// 1M uncached input at $5 = $5; 1M 1h-writes at 2x = $10; 1M reads at 0.1x = $0.50; 1M output = $25.
+	u := transcript.Usage{Input: 1_000_000, CacheCreation: 1_000_000, Create1h: 1_000_000, CacheRead: 1_000_000, Output: 1_000_000}
+	if got := CostUSD(u, p); got != 40.5 {
+		t.Fatalf("CostUSD = %v, want 40.5", got)
+	}
+	if got := PromptCostUSD(0, 1_000_000, 0, WriteMultiplierLong, p); got != 10 {
+		t.Fatalf("PromptCostUSD = %v, want 10", got)
 	}
 }

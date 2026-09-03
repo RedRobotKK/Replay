@@ -61,6 +61,8 @@ Rules: anthropic-2026-09-01; user-content fit 0.469 tokens/byte ±64% from 34 tu
     evidence: read 38987 tokens, about the size of the system prefix (38547); the message history was re-billed from the first message
 ```
 
+Add `--dollars` for a list-price column computed from a dated first-party price table; the output names the table date because prices change and other platforms differ.
+
 The calibration line is the point: Buffy first proves it can reproduce what the provider charged, and only then says anything about alternatives. Every figure is labeled estimated or measured. Here the 1-hour TTL the client chose reproduces as-run to the token, the 5-minute TTL would have cost 35% more across four idle gaps, and context editing would have cost more, not less, for this session shape. How it works: [`docs/architecture/replay-engine.md`](docs/architecture/replay-engine.md).
 
 ### Contributing a calibration corpus

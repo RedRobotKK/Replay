@@ -19,6 +19,9 @@ type PolicyResult struct {
 	CachedShare float64
 	// Misses counts requests that read nothing from cache after the first.
 	Misses int
+	// CostUSD is the list-price cost when the model is in the price table,
+	// and zero otherwise. Priced reports say which.
+	CostUSD float64
 	// ReachableLive says whether a proxy can apply this policy and how.
 	ReachableLive string
 	// Guardrail names the risk a live trial must watch.
@@ -36,7 +39,10 @@ func AsRun(lane *transcript.Lane) PolicyResult {
 	var reads int
 	for i, req := range lane.Requests {
 		r.PromptTokens += req.Usage.PromptTotal()
-		r.EffectiveTokens += cachemodel.EffectiveTokens(req.Usage)
+		r.EffectiveTokens += cachemodel.EffectiveTokens(req.Usage, req.Model)
+		if p, ok := cachemodel.PriceFor(req.Model); ok {
+			r.CostUSD += cachemodel.CostUSD(req.Usage, p)
+		}
 		reads += req.Usage.CacheRead
 		if i > 0 && req.Usage.CacheRead == 0 {
 			r.Misses++
@@ -129,7 +135,10 @@ func WithTTL(cal *Calibration, ttl time.Duration) PolicyResult {
 		prompt, tail := req.Usage.PromptTotal(), req.Usage.Input
 		read, write := state.serve(req.Timestamp, prompt, tail, available[i])
 		r.PromptTokens += prompt
-		r.EffectiveTokens += float64(tail) + float64(write)*mult + float64(read)*cachemodel.ReadMultiplier
+		r.EffectiveTokens += float64(tail) + float64(write)*mult + float64(read)*cachemodel.ReadMultiplierFor(req.Model)
+		if p, ok := cachemodel.PriceFor(req.Model); ok {
+			r.CostUSD += cachemodel.PromptCostUSD(tail, write, read, mult, p) + float64(req.Usage.Output)*p.OutputPerMTok/1_000_000
+		}
 		reads += read
 		if i > 0 && read == 0 {
 			r.Misses++
@@ -230,7 +239,10 @@ func WithContextEdit(cal *Calibration, p ContextEditPolicy, fit TokenFit) Policy
 			state.prefix = prompt - tail
 		}
 		r.PromptTokens += prompt
-		r.EffectiveTokens += float64(tail) + float64(write)*mult + float64(read)*cachemodel.ReadMultiplier
+		r.EffectiveTokens += float64(tail) + float64(write)*mult + float64(read)*cachemodel.ReadMultiplierFor(req.Model)
+		if p, ok := cachemodel.PriceFor(req.Model); ok {
+			r.CostUSD += cachemodel.PromptCostUSD(tail, write, read, mult, p) + float64(req.Usage.Output)*p.OutputPerMTok/1_000_000
+		}
 		reads += read
 		if i > 0 && read == 0 {
 			r.Misses++
