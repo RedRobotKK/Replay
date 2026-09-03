@@ -51,6 +51,20 @@ func TestServeUsageNeverShowsTheToken(t *testing.T) {
 	}
 }
 
+func TestDoctorReportsWithoutFailing(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv(envBaseURL, "http://127.0.0.1:1") // nothing listens there
+	var out, errOut bytes.Buffer
+	if err := run([]string{"doctor"}, &out, &errOut); err != nil {
+		t.Fatalf("doctor: %v", err)
+	}
+	for _, want := range []string{"transcripts   none found", "nothing answered", "ledger        empty"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("doctor output missing %q:\n%s", want, out.String())
+		}
+	}
+}
+
 func TestCorpusOnFixture(t *testing.T) {
 	var out, errOut bytes.Buffer
 	err := run([]string{"corpus", "../../internal/transcript/testdata"}, &out, &errOut)
@@ -78,5 +92,21 @@ func TestReplayOnFixture(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("replay output missing mandatory line %q", want)
 		}
+	}
+}
+
+func TestContextEditFromFlags(t *testing.T) {
+	if p, err := contextEditFromFlags(0, 6, false); p != nil || err != nil {
+		t.Fatalf("off by default: %v %v", p, err)
+	}
+	if p, err := contextEditFromFlags(200000, 6, true); p != nil || err != nil {
+		t.Fatalf("%s must win over the flag: %v %v", envNoPolicy, p, err)
+	}
+	if _, err := contextEditFromFlags(-5, 6, false); err == nil {
+		t.Fatal("negative trigger must be rejected")
+	}
+	p, err := contextEditFromFlags(200000, 6, false)
+	if err != nil || p == nil || p.TriggerTokens != 200000 || p.KeepLast != 6 {
+		t.Fatalf("flags not applied: %+v %v", p, err)
 	}
 }

@@ -25,7 +25,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/RedRobotKK/Buffy/internal/cachemodel"
 	"github.com/RedRobotKK/Buffy/internal/ledger"
+	"github.com/RedRobotKK/Buffy/internal/policy"
 )
 
 // Timeouts. Provider turns on frontier models can run for minutes, so the
@@ -70,10 +72,26 @@ type Config struct {
 	// Logger receives one line per request. Never headers, never bodies.
 	Logger *log.Logger
 	// Guards are optional; a nil guard is off.
-	Spend   *SpendGuard
-	Loops   LoopLimits
-	Breaker *Breaker
+	Spend       *SpendGuard
+	Loops       LoopLimits
+	Breaker     *Breaker
+	ErrorBudget ErrorBudget
+	// ContextEdit, when set, is applied to sessions whose first request
+	// admits it and pinned for their life (ADR-0003). Nil is off.
+	ContextEdit *policy.ContextEdit
+	// Retries, when Attempts is set, resend a request the provider refused
+	// with a retryable status or that never connected, before any byte of
+	// a response has reached the client.
+	Retries RetrySettings
 }
+
+// HealthPath answers "ok" for anything that wants to know the proxy is up.
+// StatusPath and MetricsPath are the read endpoints.
+const (
+	HealthPath  = "/buffy/healthz"
+	StatusPath  = "/buffy/status"
+	MetricsPath = "/buffy/metrics"
+)
 
 // HeaderOverride is the header a client sets to acknowledge a spend cap or
 // a loop block and proceed once. Its value is logged as the reason.
@@ -91,6 +109,7 @@ type Server struct {
 	rp    *httputil.ReverseProxy
 	ready chan struct{}
 	addr  string
+	stats *stats
 }
 
 // New builds a server. It does not listen yet.
@@ -107,7 +126,24 @@ func New(cfg Config) (*Server, error) {
 	if !isLoopback(cfg.Listen) {
 		return nil, fmt.Errorf("listen address %q is not loopback; Buffy only binds locally", cfg.Listen)
 	}
-	s := &Server{cfg: cfg, ready: make(chan struct{})}
+	var transport http.RoundTripper = &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: DialTimeout}).DialContext,
+		TLSHandshakeTimeout:   TLSHandshakeTimeout,
+		ResponseHeaderTimeout: ResponseHeaderTimeout,
+		IdleConnTimeout:       IdleConnTimeout,
+		// The client decides whether it accepts compressed responses;
+		// the transport must not add its own header and decompress
+		// behind the client's back.
+		DisableCompression: true,
+	}
+	switch err := cfg.Retries.validate(); {
+	case err == nil:
+		transport = newRetryTransport(transport, cfg.Retries, cfg.Logger)
+	case !errors.Is(err, errRetriesOff):
+		return nil, err
+	}
+	s := &Server{cfg: cfg, ready: make(chan struct{}), stats: newStats()}
 	s.rp = &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.SetURL(cfg.Upstream)
@@ -118,17 +154,7 @@ func New(cfg Config) (*Server, error) {
 			// provider.
 			r.Out.Header.Del(HeaderToken)
 		},
-		Transport: &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
-			DialContext:           (&net.Dialer{Timeout: DialTimeout}).DialContext,
-			TLSHandshakeTimeout:   TLSHandshakeTimeout,
-			ResponseHeaderTimeout: ResponseHeaderTimeout,
-			IdleConnTimeout:       IdleConnTimeout,
-			// The client decides whether it accepts compressed responses;
-			// the transport must not add its own header and decompress
-			// behind the client's back.
-			DisableCompression: true,
-		},
+		Transport: transport,
 		// Flush every write so streamed events reach the client as they
 		// arrive.
 		FlushInterval: -1,
@@ -141,7 +167,9 @@ func New(cfg Config) (*Server, error) {
 		},
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/buffy/healthz", s.health)
+	mux.HandleFunc(HealthPath, s.health)
+	mux.HandleFunc(StatusPath, s.status)
+	mux.HandleFunc(MetricsPath, s.metrics)
 	mux.HandleFunc("/", s.handle)
 	s.http = &http.Server{Handler: mux, ReadHeaderTimeout: ReadHeaderTimeout}
 	return s, nil
@@ -181,25 +209,52 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	_, _ = io.WriteString(w, "ok\n") // best-effort health response
 }
 
+// localOnly guards the read endpoints the same way requests are guarded:
+// no browser origins, and the token when one is configured.
+func (s *Server) localOnly(w http.ResponseWriter, r *http.Request) bool {
+	if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Mode") != "" {
+		http.Error(w, "buffy: browser-originated requests are not accepted", http.StatusForbidden)
+		return false
+	}
+	if s.cfg.Token != "" && r.Header.Get(HeaderToken) != s.cfg.Token {
+		http.Error(w, "buffy: missing or wrong "+HeaderToken+" header", http.StatusUnauthorized)
+		return false
+	}
+	return true
+}
+
+func (s *Server) status(w http.ResponseWriter, r *http.Request) {
+	if !s.localOnly(w, r) {
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	// A failed write means the reader went away; nothing to do.
+	_ = json.NewEncoder(w).Encode(s.stats.status())
+}
+
+func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
+	if !s.localOnly(w, r) {
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	_, _ = io.WriteString(w, s.stats.metrics()) // best-effort scrape response
+}
+
 // handle is the passthrough. It rejects browser-originated calls, checks the
 // optional token, summarizes the request, forwards it, taps the response,
 // and records the ledger entry. Any failure inside the tap is logged and
 // the bytes still flow.
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Mode") != "" {
-		http.Error(w, "buffy: browser-originated requests are not accepted", http.StatusForbidden)
-		return
-	}
-	if s.cfg.Token != "" && r.Header.Get(HeaderToken) != s.cfg.Token {
-		http.Error(w, "buffy: missing or wrong "+HeaderToken+" header", http.StatusUnauthorized)
+	if !s.localOnly(w, r) {
 		return
 	}
 
 	start := time.Now()
+	messages := isMessages(r.URL.Path)
 	rec := ledger.Record{Timestamp: start, Path: r.URL.Path, SessionID: r.Header.Get(HeaderSessionID), AgentID: r.Header.Get(HeaderAgentID)}
 
 	if ok, wait := s.cfg.Breaker.Allow(); !ok {
-		refuse(w, http.StatusServiceUnavailable, "buffy_circuit_open", fmt.Sprintf("the provider has been failing; Buffy is holding requests for %s so the agent stops burning retries", wait.Round(time.Second)), wait)
+		s.refuse(w, refusalCircuitOpen, fmt.Sprintf("the provider has been failing; Buffy is holding requests for %s so the agent stops burning retries", wait.Round(time.Second)), wait)
 		return
 	}
 	// A half-open probe that never reaches an outcome (refused below, or
@@ -220,34 +275,22 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "buffy: request body exceeds the proxy limit", http.StatusRequestEntityTooLarge)
 		return
 	}
-	r.Body = io.NopCloser(bytes.NewReader(body))
-	r.ContentLength = int64(len(body))
+	setBody(r, body)
 
-	if isMessages(r.URL.Path) && len(body) > 0 {
-		prompt, model, stream, effort, err := ledger.SummarizeRequest(body, s.cfg.Store.Labeler())
-		if err == nil {
-			rec.Prompt, rec.Model, rec.Stream, rec.Effort = prompt, model, stream, effort
+	if messages && len(body) > 0 {
+		if sum, err := ledger.SummarizeRequest(body, s.cfg.Store.Labeler()); err == nil {
+			rec.RequestSummary = sum
 		}
 		if rec.SessionID == "" {
-			rec.SessionID = prefixHash(body)
+			rec.SessionID = rec.SessionHash
 		}
-		override := r.Header.Get(HeaderOverride)
-		if reason := s.cfg.Spend.Check(rec.SessionID); reason != "" {
-			if override == "" {
-				refuse(w, http.StatusBadRequest, "buffy_spend_cap", reason+". Raise the cap, start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
-				return
-			}
-			s.cfg.Logger.Printf("spend cap overridden for session=%s: %s", short(rec.SessionID), override)
-		}
-		if v := DetectLoop(body, s.cfg.Loops); v.Block && override == "" {
-			refuse(w, http.StatusBadRequest, "buffy_loop", fmt.Sprintf("the same %s call was just made %d times in a row; Buffy stopped the loop. Send %s with a reason to proceed once.", v.Label, v.Repeats, HeaderOverride), 0)
+		if !s.guard(w, r, &rec) {
 			return
-		} else if v.Block {
-			s.cfg.Logger.Printf("loop block overridden for session=%s: %s", short(rec.SessionID), override)
-		} else if v.Warn {
-			w.Header().Set(HeaderWarning, fmt.Sprintf("loop: the same %s call was just made %d times in a row", v.Label, v.Repeats))
 		}
+		body = s.applyPolicy(r, &rec, body)
+		setBody(r, body)
 	}
+	r, retries := withRetryCounter(r)
 
 	tap := &responseTap{ResponseWriter: w}
 	// Bookkeeping runs in a deferred function because the reverse proxy
@@ -260,29 +303,118 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		s.cfg.Breaker.Observe(tap.upstreamFailed || IsRetryableStatus(tap.status))
 		observed = true
 		rec.Status = tap.status
+		rec.Retries = retries.n
 		rec.LatencyMS = time.Since(start).Milliseconds()
 		rec.RequestID = tap.Header().Get("request-id")
-		if isMessages(r.URL.Path) {
+		if messages {
 			rec.Response = tap.result()
 			if u := rec.Response.Usage; u != nil {
-				s.cfg.Spend.Record(rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output)
+				s.cfg.Spend.Record(rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output, listCost(*u, rec.Model))
 			}
-			if rec.SessionID != "" {
-				if err := s.cfg.Store.Append(rec); err != nil {
-					s.cfg.Logger.Printf("ledger write failed: %v", err)
-				}
+		}
+		rec.Cache = s.stats.observe(&rec)
+		if messages && rec.SessionID != "" {
+			if err := s.cfg.Store.Append(rec); err != nil {
+				s.cfg.Logger.Printf("ledger write failed: %v", err)
 			}
+		}
+		whatIf := ""
+		if messages && rec.SessionID != "" && rec.Response.Usage != nil {
+			whatIf = s.stats.rescore(&rec)
 		}
 		note := ""
 		if aborted != nil {
 			note = " aborted=client-disconnected"
 		}
+		if rec.Retries > 0 {
+			note += fmt.Sprintf(" retries=%d", rec.Retries)
+		}
 		s.cfg.Logger.Printf("%s %s status=%d ms=%d session=%s model=%s %s%s", r.Method, r.URL.Path, rec.Status, rec.LatencyMS, short(rec.SessionID), rec.Model, usageSummary(rec.Response.Usage), note)
+		if rec.Cache != nil && rec.Cache.Deficit > 0 {
+			s.cfg.Logger.Printf("cache break session=%s: read %d of %d expected, %d tokens re-billed; likely cause: %s", short(rec.SessionID), rec.Response.Usage.CacheRead, rec.Cache.Expected, rec.Cache.Deficit, rec.Cache.Cause)
+		}
+		if whatIf != "" {
+			s.cfg.Logger.Print(whatIf)
+		}
 		if aborted != nil {
 			panic(aborted)
 		}
 	}()
 	s.rp.ServeHTTP(tap, r)
+}
+
+// setBody installs an in-memory body that the retry transport can reopen.
+func setBody(r *http.Request, body []byte) {
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	r.ContentLength = int64(len(body))
+	r.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }
+}
+
+// applyPolicy adds the configured request parameter when the session's
+// pinned decision allows it. The decision is made at the session's first
+// request and kept: a session either always carries the parameter or
+// never does. Every transformation is logged with the body hashes before
+// and after (PX-10), never the bodies.
+func (s *Server) applyPolicy(r *http.Request, rec *ledger.Record, body []byte) []byte {
+	p := s.cfg.ContextEdit
+	if p == nil || rec.SessionID == "" {
+		return body
+	}
+	admissible := p.Admissible(r.Header.Get("anthropic-beta"), rec.Prompt.ContextEdits)
+	decision := s.stats.pinPolicy(rec.SessionID, admissible)
+	if decision != policy.Applied {
+		return body
+	}
+	if admissible != policy.Applied {
+		// Pinned on, but this request cannot carry the parameter.
+		s.cfg.Logger.Printf("policy %s session=%s %s", policy.Name, short(rec.SessionID), admissible)
+		return body
+	}
+	out, applied := p.Apply(body)
+	if applied != policy.Applied {
+		s.cfg.Logger.Printf("policy %s session=%s %s", policy.Name, short(rec.SessionID), applied)
+		return body
+	}
+	rec.Policy = policy.Name
+	s.cfg.Logger.Printf("policy %s session=%s applied body sha256 before=%s after=%s", p, short(rec.SessionID), bodyHash(body), bodyHash(out))
+	return out
+}
+
+// bodyHash is a content-free fingerprint of a request body for the log.
+func bodyHash(body []byte) string {
+	sum := sha256.Sum256(body)
+	return hex.EncodeToString(sum[:])[:16]
+}
+
+// guard applies the spend cap and loop detector to a summarized request.
+// It reports false when the request was answered locally.
+func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Record) bool {
+	override := r.Header.Get(HeaderOverride)
+	if reason := s.cfg.Spend.Check(rec.SessionID); reason != "" {
+		if override == "" {
+			s.refuse(w, refusalSpendCap, reason+". Raise the cap, start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
+			return false
+		}
+		s.cfg.Logger.Printf("spend cap overridden for session=%s: %s", short(rec.SessionID), override)
+	}
+	if reason := s.cfg.ErrorBudget.Check(s.stats.errorTokens(rec.SessionID)); reason != "" {
+		if override == "" {
+			s.refuse(w, refusalErrorBudget, reason+". Look at what is failing (buffy replay on the ledger names it), start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
+			return false
+		}
+		s.cfg.Logger.Printf("error budget overridden for session=%s: %s", short(rec.SessionID), override)
+	}
+	v := DetectLoop(rec.Prompt, s.cfg.Loops)
+	switch {
+	case v.Block && override == "":
+		s.refuse(w, refusalLoop, fmt.Sprintf("the same %s call was just made %d times in a row; Buffy stopped the loop. Send %s with a reason to proceed once.", v.Label, v.Repeats, HeaderOverride), 0)
+		return false
+	case v.Block:
+		s.cfg.Logger.Printf("loop block overridden for session=%s: %s", short(rec.SessionID), override)
+	case v.Warn:
+		w.Header().Set(HeaderWarning, fmt.Sprintf("loop: the same %s call was just made %d times in a row", v.Label, v.Repeats))
+	}
+	return true
 }
 
 // isMessages reports whether a path is the Messages endpoint proper (not
@@ -291,33 +423,42 @@ func isMessages(path string) bool {
 	return strings.HasSuffix(path, "/v1/messages")
 }
 
-// prefixHash derives a session id from the request body's stable prefix
-// when the client sent no session header: the raw bytes of the system
-// prompt and the first message, which a client renders identically on
-// every turn. It contains no content.
-func prefixHash(body []byte) string {
-	var probe struct {
-		System   json.RawMessage   `json:"system"`
-		Messages []json.RawMessage `json:"messages"`
+// refusal is one way Buffy answers a request itself instead of forwarding
+// it: the status it sends, the error type a provider-aware client shows,
+// and the counter it lands in.
+type refusal struct {
+	status  int
+	errType string
+	counter string
+}
+
+var (
+	refusalCircuitOpen = refusal{http.StatusServiceUnavailable, "buffy_circuit_open", "circuit_open"}
+	refusalSpendCap    = refusal{http.StatusBadRequest, "buffy_spend_cap", "spend_cap"}
+	refusalLoop        = refusal{http.StatusBadRequest, "buffy_loop", "loop"}
+	refusalErrorBudget = refusal{http.StatusBadRequest, "buffy_error_budget", "error_budget"}
+)
+
+// listCost prices one request's usage at list price, zero for a model
+// the price table does not know.
+func listCost(u ledger.Usage, model string) float64 {
+	price, ok := cachemodel.PriceFor(model)
+	if !ok {
+		return 0
 	}
-	if err := json.Unmarshal(body, &probe); err != nil || len(probe.Messages) == 0 {
-		return ""
-	}
-	h := sha256.New()
-	h.Write(probe.System)
-	h.Write(probe.Messages[0])
-	return "prefix-" + hex.EncodeToString(h.Sum(nil))[:16]
+	return cachemodel.CostUSD(u, price)
 }
 
 // refuse answers a request locally in the provider's error shape so any
 // client that understands provider errors shows the message to the user.
-func refuse(w http.ResponseWriter, status int, kind, message string, retryAfter time.Duration) {
+func (s *Server) refuse(w http.ResponseWriter, kind refusal, message string, retryAfter time.Duration) {
+	s.stats.refused(kind.counter)
 	w.Header().Set("Content-Type", "application/json")
 	if retryAfter > 0 {
 		w.Header().Set("Retry-After", fmt.Sprintf("%d", int(retryAfter.Seconds())+1))
 	}
-	w.WriteHeader(status)
-	body := map[string]any{"type": "error", "error": map[string]string{"type": kind, "message": message}}
+	w.WriteHeader(kind.status)
+	body := map[string]any{"type": "error", "error": map[string]string{"type": kind.errType, "message": message}}
 	// A failed write here means the client went away; nothing to do.
 	_ = json.NewEncoder(w).Encode(body)
 }

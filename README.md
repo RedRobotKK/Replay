@@ -27,6 +27,7 @@ Buffy addresses each one locally, without changing how the agent works.
 | `buffy replay` | Reproduces your sessions' caching, prints how well it matched the provider's own numbers, then scores alternative layouts in tokens saved |
 | `buffy blame` | Ranks which files, tool descriptions, and instructions are eating your prompt tokens across all sessions |
 | `buffy diff` | Points at the exact turn where the cached prefix diverged and classifies the cause |
+| `buffy doctor` | What Buffy can see on this machine (transcripts, proxy variable, a running proxy, ledger) and the next command to run |
 | `buffy corpus` | Calibration summary across every session in a directory, as Markdown with no paths or content, for reporting how well Buffy understands your sessions |
 | `buffy serve` | Local proxy: byte-for-byte passthrough that records what the provider charged, so the three commands above run on measured data (policies and guards come later) |
 
@@ -38,6 +39,7 @@ No proxy, no configuration, no trust required. Build from source until the first
 
 ```sh
 make build
+./bin/buffy doctor                                  # what is on this machine, and what to run next
 ./bin/buffy replay ~/.claude/projects/<your-project>/
 ```
 
@@ -97,11 +99,21 @@ What the proxy does and does not do:
 
 Added latency, measured on 2026-09-03 with a 46KB request against a local fake provider on a 4-core Xeon, 300 requests after warm-up: p50 48µs, p99 98µs on top of the round trip. Provider latency is three orders of magnitude larger. The method is in [`docs/reviews/proxy-latency-2026-09-03.md`](docs/reviews/proxy-latency-2026-09-03.md).
 
+While it runs, every response's cache read is checked against the expectation from the previous request, and a break is logged the moment it happens with the tokens re-billed and the likely cause. Because the proxy hashes the tool definitions and system prompt of every request, a break caused by a changed prefix is named with certainty, which a transcript can only infer.
+
+After every turn the proxy also re-scores the session's candidate layouts (5-minute and 1-hour TTLs, context editing at two triggers) with the same simulator `buffy replay` uses, from measured usage. This is a dry run: nothing changes on the wire, and the live figures are exactly what `buffy replay` prints for the same ledger. `GET /buffy/status` returns per-session totals (requests, prompt tokens, cached share, breaks, prefix changes, list cost) and the `what_if` rows, each with a `vs_as_run` delta and how a user would turn it on, as JSON. `GET /buffy/metrics` exposes the totals as Prometheus text. Both honor the token when one is set and refuse browser origins. Every ten requests a session gets one log line naming its best candidate or saying none beats what ran.
+
 Guards, all off unless you set them (see `buffy serve -h`):
 
-- `--max-session-tokens` and `--max-day-tokens` refuse the *next* request once a cap is reached, never a response in flight. The refusal is a provider-shaped error the agent shows you; send `x-buffy-override: <reason>` to proceed once.
+- `--max-session-tokens` and `--max-day-tokens` refuse the *next* request once a cap is reached, never a response in flight. `--max-session-usd` and `--max-day-usd` do the same at list price from the dated price table (a model not in the table counts as free, and the status endpoint shows the same figure). The refusal is a provider-shaped error the agent shows you; send `x-buffy-override: <reason>` to proceed once.
+- `--error-budget 0.3` refuses a session's next request once that share of its prompt tokens carried error content: failed tools, failed edits, repeated identical calls, overflow notices. It trips before the spend cap because an agent stuck on failures burns money on nothing; sessions under ten thousand prompt tokens are never judged. The same figure is `error_share` on `/buffy/status`, and `buffy replay` on the ledger names what failed.
 - `--loop-warn` and `--loop-block` count how many times in a row the agent has just made the same tool call with the same input, and add a warning header or refuse the request. A repeated command earlier in the session never counts; only the current run does. `x-buffy-override` passes a block once.
 - `--breaker-failures` opens a circuit after consecutive provider failures and answers locally with `Retry-After` until the cooldown passes, so the agent stops burning retries against a provider that is already saying no.
+- `--retries` resends a request up to that many times on rate limit, overload, server error, or connection failure, with doubling jittered backoff from `--retry-base` capped at `--retry-max`, and the provider's `Retry-After` in place of the backoff when it fits under the cap. A retry can only happen before any byte of a response has reached the client, never on a client error, and never once a stream has started. The ledger records the count per request; the log names each attempt and its reason.
+
+One live policy, experimental and off by default:
+
+- `--context-edit-trigger <tokens>` asks the provider to clear old tool results server-side once the prompt passes the trigger, keeping the last `--context-edit-keep` (default 6). Buffy adds the provider's `context_management` parameter after the client's own bytes, which stay byte-identical, and only on requests whose client already enabled the context-management beta and set no such parameter itself. The decision is made at a session's first request and pinned. Each edit is logged with body hashes before and after, never content; the ledger records which requests carried it and the provider's applied edits and cleared tokens, so `buffy replay` on the ledger shows what it did. `BUFFY_NO_POLICY=1` forces every policy off. The parameter shape follows the provider's documentation and has not yet been exercised against the real provider (roadmap spike 4); the `what_if` rows tell you what it should save before you turn it on, and the `re_reads` figures (file reads that repeated a path already in context, before and after the provider's first clear) tell you whether the agent is paying the savings back by re-reading.
 
 One client caveat from the gateway docs: with a non-first-party base URL, Claude Code disables MCP tool search unless `ENABLE_TOOL_SEARCH=true` is set. Buffy forwards `tool_reference` blocks unchanged, so setting it is safe. Details: [`docs/architecture/proxy-protocol.md`](docs/architecture/proxy-protocol.md).
 

@@ -22,8 +22,9 @@ build: ## Build the binary into ./bin
 	go build -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY) ./cmd/$(BINARY)
 
 .PHONY: test
-test: ## Run unit tests with the race detector
-	go test -race -count=1 ./...
+test: ## Run unit tests with the race detector and report coverage
+	go test -race -count=1 -coverprofile=coverage.out ./...
+	@go tool cover -func=coverage.out | tail -1
 
 .PHONY: lint
 lint: ## Run go vet and golangci-lint

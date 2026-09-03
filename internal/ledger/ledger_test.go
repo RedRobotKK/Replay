@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -22,13 +23,24 @@ const sampleRequest = `{"model":"claude-opus-5","max_tokens":100,"stream":true,
 
 func TestSummarizeRequest(t *testing.T) {
 	labeler := NewLabeler([]byte("test-key"))
-	p, model, stream, effort, err := SummarizeRequest([]byte(sampleRequest), labeler)
+	sum, err := SummarizeRequest([]byte(sampleRequest), labeler)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if model != "claude-opus-5" || !stream || effort != "high" {
-		t.Fatalf("model/stream/effort = %q/%v/%q", model, stream, effort)
+	if sum.Model != "claude-opus-5" || !sum.Stream || sum.Effort != "high" {
+		t.Fatalf("model/stream/effort = %q/%v/%q", sum.Model, sum.Stream, sum.Effort)
 	}
+	if sum.PrefixHash == "" || sum.SessionHash == "" || sum.PrefixHash == sum.SessionHash {
+		t.Fatalf("prefix and session hashes must both be derived and differ: %q %q", sum.PrefixHash, sum.SessionHash)
+	}
+	changed, err := SummarizeRequest([]byte(strings.Replace(sampleRequest, "You are terse.", "You are verbose.", 1)), labeler)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed.PrefixHash == sum.PrefixHash {
+		t.Fatal("a changed system prompt must change the prefix hash")
+	}
+	p := sum.Prompt
 	if p.SystemBytes != len("You are terse.") || p.ToolCount != 1 || p.ToolBytes == 0 {
 		t.Fatalf("prefix sizes wrong: %+v", p)
 	}
@@ -66,10 +78,11 @@ func TestLedgerHoldsNoArgumentContent(t *testing.T) {
 	 {"role":"user","content":[
 	   {"type":"tool_result","tool_use_id":"a","content":"ok"},{"type":"tool_result","tool_use_id":"b","content":"ok"},
 	   {"type":"tool_result","tool_use_id":"c","content":"ok"},{"type":"tool_result","tool_use_id":"d","content":"ok"}]}]}`
-	p, _, _, _, err := SummarizeRequest([]byte(body), NewLabeler([]byte("k")))
+	sum, err := SummarizeRequest([]byte(body), NewLabeler([]byte("k")))
 	if err != nil {
 		t.Fatal(err)
 	}
+	p := sum.Prompt
 	encoded, err := json.Marshal(p)
 	if err != nil {
 		t.Fatal(err)
@@ -135,13 +148,14 @@ func TestStoreRoundTripToSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
-	prompt, _, _, _, err := SummarizeRequest([]byte(sampleRequest), store.Labeler())
+	sum, err := SummarizeRequest([]byte(sampleRequest), store.Labeler())
 	if err != nil {
 		t.Fatal(err)
 	}
+	prompt := sum.Prompt
 	usage := &Usage{Input: 20, CacheCreation: 500, CacheRead: 1000, Output: 40, Create1h: 500}
 	for i := 0; i < 3; i++ {
-		rec := Record{Timestamp: base.Add(time.Duration(i) * time.Minute), SessionID: "sess/one", RequestID: "req" + string(rune('a'+i)), Path: "/v1/messages", Model: "claude-opus-5", Prompt: prompt, Response: Response{Usage: usage, Blocks: []Block{{Kind: "text", Bytes: 10, Label: "assistant text"}}}}
+		rec := Record{Timestamp: base.Add(time.Duration(i) * time.Minute), SessionID: "sess/one", RequestID: "req" + string(rune('a'+i)), Path: "/v1/messages", RequestSummary: RequestSummary{Model: "claude-opus-5", Prompt: prompt}, Response: Response{Usage: usage, Blocks: []Block{{Kind: "text", Bytes: 10, Label: "assistant text"}}}}
 		if err := store.Append(rec); err != nil {
 			t.Fatal(err)
 		}
@@ -154,12 +168,23 @@ func TestStoreRoundTripToSession(t *testing.T) {
 	if !IsLedgerFile(path) {
 		t.Fatal("ledger file not recognized")
 	}
+	// A record from an earlier schema is skipped rather than misread.
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(`{"schema":1,"ts":"2026-09-02T12:00:00Z","session_id":"sess/one","path":"/v1/messages","status":200,"response":{}}` + "\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
 	s, err := ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Source != transcript.SourceLedger || !s.PrefixVisible || s.RequestCount() != 3 || s.Skipped != 1 {
-		t.Fatalf("session shape wrong: source=%s visible=%v requests=%d skipped=%d", s.Source, s.PrefixVisible, s.RequestCount(), s.Skipped)
+	if s.Source != transcript.SourceLedger || !s.Source.PrefixVisible() || s.RequestCount() != 3 || s.Skipped != 2 {
+		t.Fatalf("session shape wrong: source=%s visible=%v requests=%d skipped=%d", s.Source, s.Source.PrefixVisible(), s.RequestCount(), s.Skipped)
 	}
 	req := s.Lanes[0].Requests[0]
 	if req.Context[0].Role != transcript.RoleSystem || req.Context[0].Blocks[0].Bytes != len("You are terse.") {
@@ -167,5 +192,26 @@ func TestStoreRoundTripToSession(t *testing.T) {
 	}
 	if req.Usage.CacheRead != 1000 || req.Usage.Create1h != 500 || req.Output == nil || len(req.Output.Blocks) != 1 {
 		t.Fatalf("request not reconstructed: %+v", req)
+	}
+}
+
+func TestResponsesReportAppliedContextEdits(t *testing.T) {
+	body := `{"id":"m","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":1,"cache_creation_input_tokens":2,"cache_read_input_tokens":3,"output_tokens":4},"context_management":{"applied_edits":[{"type":"clear_tool_uses_20250919","cleared_tool_uses":8,"cleared_input_tokens":50000}]}}`
+	resp := ParseResponse([]byte(body))
+	if resp.AppliedEdits != 1 || resp.ClearedInputTokens != 50000 {
+		t.Fatalf("json response edits = %d cleared = %d", resp.AppliedEdits, resp.ClearedInputTokens)
+	}
+	if resp := ParseResponse([]byte(`{"id":"m","type":"message","content":[],"usage":{"input_tokens":1}}`)); resp.AppliedEdits != 0 {
+		t.Fatal("no edits reported must read as zero")
+	}
+	sp := &StreamParser{}
+	stream := "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":1,\"cache_read_input_tokens\":3}}}\n\n" +
+		"event: message_delta\ndata: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":4},\"context_management\":{\"applied_edits\":[{\"type\":\"clear_tool_uses_20250919\",\"cleared_input_tokens\":20000},{\"type\":\"clear_tool_uses_20250919\",\"cleared_input_tokens\":5}]}}\n\n"
+	if _, err := sp.Write([]byte(stream)); err != nil {
+		t.Fatal(err)
+	}
+	resp = sp.Result()
+	if resp.AppliedEdits != 2 || resp.ClearedInputTokens != 20005 || resp.Usage == nil || resp.Usage.Output != 4 {
+		t.Fatalf("stream edits = %d cleared = %d usage = %+v", resp.AppliedEdits, resp.ClearedInputTokens, resp.Usage)
 	}
 }

@@ -51,6 +51,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return runReport(args[1:], stdout, stderr, (*analysis.LaneReport).WriteDiff)
 	case "corpus":
 		return runCorpus(args[1:], stdout, stderr)
+	case "doctor":
+		return runDoctor(args[1:], stdout, stderr)
 	case "redact":
 		return runRedact(args[1:], stdout)
 	case "serve":
@@ -77,37 +79,60 @@ func runReport(args []string, stdout, stderr io.Writer, write func(*analysis.Lan
 	if err != nil {
 		return err
 	}
-	failures := 0
-	for i, f := range files {
-		session, err := loadSession(f)
+	failures, printed := 0, 0
+	err = forEachSession(files, func(f string, _ *transcript.Session, rep *analysis.LaneReport, err error) error {
 		if err != nil {
 			failures++
 			// Diagnostics on stderr are best effort; a failure there must
 			// not mask the analysis error being reported.
 			_, _ = fmt.Fprintf(stderr, "skip %s: %v\n", f, err)
-			continue
-		}
-		lane := analysis.MainLane(session)
-		if lane == nil {
-			failures++
-			_, _ = fmt.Fprintf(stderr, "skip %s: no requests\n", f)
-			continue
+			return nil
 		}
 		header := f + "\n"
-		if i > 0 {
+		if printed > 0 {
 			header = strings.Repeat("-", 80) + "\n" + header
 		}
+		printed++
 		if _, err := io.WriteString(stdout, header); err != nil {
 			return fmt.Errorf("write report: %w", err)
 		}
-		rep := analysis.AnalyzeLane(session, lane)
 		rep.Dollars = *dollars
 		if err := write(rep, stdout); err != nil {
 			return fmt.Errorf("write report: %w", err)
 		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 	if failures == len(files) {
 		return fmt.Errorf("no transcript could be analyzed")
+	}
+	return nil
+}
+
+// forEachSession loads and analyzes every file's main lane and hands each
+// result, or the reason it could not be produced, to visit. It stops at
+// the first error visit returns.
+func forEachSession(files []string, visit func(path string, session *transcript.Session, rep *analysis.LaneReport, err error) error) error {
+	for _, f := range files {
+		session, err := loadSession(f)
+		if err != nil {
+			if err := visit(f, nil, nil, err); err != nil {
+				return err
+			}
+			continue
+		}
+		lane := analysis.MainLane(session)
+		if lane == nil {
+			if err := visit(f, session, nil, errors.New("no requests")); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := visit(f, session, analysis.AnalyzeLane(session, lane), nil); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -192,6 +217,7 @@ Usage:
   buffy blame  <transcript|dir>   rank what is eating prompt tokens
   buffy diff   <transcript|dir>   locate and classify every cache break
   buffy corpus <dir...>           calibration summary across many sessions, as Markdown (no paths or content)
+  buffy doctor                    what buffy can see on this machine and what to do next
   buffy redact <transcript>       strip content, keep structure and usage (for bug reports)
   buffy serve [flags]             local proxy: byte-for-byte passthrough, records a ledger
   buffy version                   print build information
