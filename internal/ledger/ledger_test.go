@@ -30,8 +30,15 @@ func TestSummarizeRequest(t *testing.T) {
 	if sum.Model != "claude-opus-5" || !sum.Stream || sum.Effort != "high" {
 		t.Fatalf("model/stream/effort = %q/%v/%q", sum.Model, sum.Stream, sum.Effort)
 	}
-	if sum.PrefixHash == "" {
-		t.Fatal("prefix hash must be derived from the system prompt and first message")
+	if sum.PrefixHash == "" || sum.SessionHash == "" || sum.PrefixHash == sum.SessionHash {
+		t.Fatalf("prefix and session hashes must both be derived and differ: %q %q", sum.PrefixHash, sum.SessionHash)
+	}
+	changed, err := SummarizeRequest([]byte(strings.Replace(sampleRequest, "You are terse.", "You are verbose.", 1)), labeler)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed.PrefixHash == sum.PrefixHash {
+		t.Fatal("a changed system prompt must change the prefix hash")
 	}
 	p := sum.Prompt
 	if p.SystemBytes != len("You are terse.") || p.ToolCount != 1 || p.ToolBytes == 0 {

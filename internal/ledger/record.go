@@ -57,10 +57,14 @@ type RequestSummary struct {
 	Effort string `json:"effort,omitempty"`
 	Stream bool   `json:"stream"`
 	Prompt Prompt `json:"prompt"`
-	// PrefixHash identifies the session by its stable prefix (system prompt
-	// and first message) when the client sends no session header. It
-	// contains no content.
-	PrefixHash string `json:"-"`
+	// PrefixHash is a hash of the tool definitions and system prompt as
+	// sent. Two requests with the same hash rendered the same cacheable
+	// prefix; a change between requests is a break cause the proxy can
+	// name with certainty. It contains no content.
+	PrefixHash string `json:"prefix_hash,omitempty"`
+	// SessionHash identifies the session by its stable prefix and first
+	// message when the client sends no session header. Not persisted.
+	SessionHash string `json:"-"`
 }
 
 // Prompt is the request body reduced to structure.

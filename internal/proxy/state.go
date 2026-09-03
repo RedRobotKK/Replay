@@ -13,14 +13,48 @@ import (
 )
 
 // sessionState is what the proxy remembers about one client session so it
-// can classify each new cache read the moment the response arrives.
+// can classify each new cache read the moment the response arrives and
+// score what other layouts would have cost.
 type sessionState struct {
-	last     transcript.Usage
-	lastSeen time.Time
-	model    string
-	tally    analysis.Tally
-	breaks   int
+	last       transcript.Usage
+	lastSeen   time.Time
+	model      string
+	prefixHash string
+	tally      analysis.Tally
+	breaks     int
+	// prefixChanges counts requests whose system prompt or tool definitions
+	// differed from the request before, which a transcript cannot see.
+	prefixChanges int
+	// builder accumulates the session in the analysis's own shape, so the
+	// live what-if figures are the ones buffy replay prints for the ledger.
+	// scoreMu serializes additions and simulations for one session without
+	// holding the proxy-wide lock through a walk of the whole session.
+	scoreMu sync.Mutex
+	builder *ledger.SessionBuilder
+	whatIf  []WhatIf
 }
+
+// WhatIf is one candidate layout scored against the session so far. It is
+// dry-run only: the candidate is simulated from measured usage and never
+// sent to the provider.
+type WhatIf struct {
+	Policy string `json:"policy"`
+	// EffectiveTokens prices writes and reads at the provider multipliers.
+	EffectiveTokens float64 `json:"effective_tokens"`
+	// VsAsRun is the change in effective tokens relative to what ran:
+	// negative is a saving.
+	VsAsRun     float64 `json:"vs_as_run"`
+	CachedShare float64 `json:"cached_share"`
+	ListCostUSD float64 `json:"list_cost_usd"`
+	// Estimated is true when the score depends on the byte-to-token fit.
+	Estimated bool `json:"estimated"`
+	// ReachableLive says how a user would turn the candidate on.
+	ReachableLive string `json:"reachable_live"`
+}
+
+// whatIfLogEvery is how many requests pass between what-if log lines for
+// a session; the status endpoint always has the latest figures.
+const whatIfLogEvery = 10
 
 // stats is the proxy's in-memory observability state. It is derived data
 // only and is lost on restart; the ledger is the durable record.
@@ -78,23 +112,95 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 		s.sessions[rec.SessionID] = st
 	}
 	var out *ledger.CacheOutcome
+	prefixChanged := st.tally.Requests > 0 && rec.PrefixHash != st.prefixHash
+	if prefixChanged {
+		st.prefixChanges++
+	}
 	if st.tally.Requests > 0 {
 		outcome, expected := cachemodel.ClassifyRead(st.last, cur)
 		out = &ledger.CacheOutcome{Outcome: outcome.String(), Expected: expected}
 		if outcome == cachemodel.ReadBroken {
 			out.Deficit = expected - cur.CacheRead
-			cause, ok := cachemodel.ClassifyBreak(st.last, cur, st.model, rec.Model, rec.Timestamp.Sub(st.lastSeen))
-			if !ok {
-				cause = cachemodel.CauseUnknown
-			}
-			out.Cause = cause
+			out.Cause = s.breakCause(st, rec, prefixChanged)
 			st.breaks++
-			s.breakCauses[cause]++
+			s.breakCauses[out.Cause]++
 		}
 	}
-	st.last, st.lastSeen, st.model = cur, rec.Timestamp, rec.Model
+	st.last, st.lastSeen, st.model, st.prefixHash = cur, rec.Timestamp, rec.Model, rec.PrefixHash
 	st.tally.Add(cur, rec.Model)
 	return out
+}
+
+// breakCause names a break from what the proxy can see. A changed prefix
+// is certain, since the proxy hashed both requests; the usage-and-timing
+// causes come next; the rest is left to the offline diff.
+func (s *stats) breakCause(st *sessionState, rec *ledger.Record, prefixChanged bool) cachemodel.BreakCause {
+	if prefixChanged {
+		return cachemodel.CausePrefixChange
+	}
+	cause, ok := cachemodel.ClassifyBreak(st.last, *rec.Response.Usage, st.model, rec.Model, rec.Timestamp.Sub(st.lastSeen))
+	if !ok {
+		return cachemodel.CauseUnknown
+	}
+	return cause
+}
+
+// rescore adds the record to the session's analysis shape, simulates the
+// candidate layouts over the session as it stands, and stores the result
+// for the status endpoint. It runs after the response has been delivered
+// and takes only the session's own lock while it walks the session, so
+// other sessions are never held up. It returns a log line every
+// whatIfLogEvery requests and an empty string otherwise.
+func (s *stats) rescore(rec *ledger.Record) string {
+	s.mu.Lock()
+	st, ok := s.sessions[rec.SessionID]
+	if !ok {
+		s.mu.Unlock()
+		return ""
+	}
+	if st.builder == nil {
+		st.builder = ledger.NewSessionBuilder(rec.SessionID, "")
+	}
+	requests := st.tally.Requests
+	s.mu.Unlock()
+
+	st.scoreMu.Lock()
+	st.builder.Add(*rec)
+	session := st.builder.Session()
+	lane := session.Lane(rec.AgentID, rec.AgentID != "")
+	policies := analysis.AnalyzeLane(session, lane).Policies()
+	st.scoreMu.Unlock()
+
+	asRun := policies[0]
+	rows := make([]WhatIf, 0, len(policies))
+	for _, p := range policies {
+		row := WhatIf{Policy: p.Name, EffectiveTokens: p.EffectiveTokens, CachedShare: p.CachedShare(), ListCostUSD: p.CostUSD, Estimated: p.Estimated, ReachableLive: p.ReachableLive}
+		if asRun.EffectiveTokens > 0 {
+			row.VsAsRun = (p.EffectiveTokens - asRun.EffectiveTokens) / asRun.EffectiveTokens
+		}
+		rows = append(rows, row)
+	}
+	s.mu.Lock()
+	st.whatIf = rows
+	s.mu.Unlock()
+
+	if requests%whatIfLogEvery != 0 || len(rows) < 2 {
+		return ""
+	}
+	best := rows[1]
+	for _, r := range rows[2:] {
+		if r.VsAsRun < best.VsAsRun {
+			best = r
+		}
+	}
+	if best.VsAsRun >= 0 {
+		return fmt.Sprintf("what-if session=%s requests=%d as-run %.0f effective tokens; no candidate layout beats it", short(rec.SessionID), requests, asRun.EffectiveTokens)
+	}
+	tier := "measured"
+	if best.Estimated {
+		tier = "estimated"
+	}
+	return fmt.Sprintf("what-if session=%s requests=%d as-run %.0f effective tokens; best candidate %s %+.0f%% (%s); live: %s", short(rec.SessionID), requests, asRun.EffectiveTokens, best.Policy, best.VsAsRun*100, tier, best.ReachableLive)
 }
 
 func (s *stats) refused(kind string) {
@@ -106,14 +212,20 @@ func (s *stats) refused(kind string) {
 
 // SessionSummary is one row of the status endpoint.
 type SessionSummary struct {
-	Session      string    `json:"session"`
-	Model        string    `json:"model"`
-	Requests     int       `json:"requests"`
-	PromptTokens int       `json:"prompt_tokens"`
-	CachedShare  float64   `json:"cached_share"`
-	Breaks       int       `json:"cache_breaks"`
-	ListCostUSD  float64   `json:"list_cost_usd"`
-	LastSeen     time.Time `json:"last_seen"`
+	Session      string  `json:"session"`
+	Model        string  `json:"model"`
+	Requests     int     `json:"requests"`
+	PromptTokens int     `json:"prompt_tokens"`
+	CachedShare  float64 `json:"cached_share"`
+	Breaks       int     `json:"cache_breaks"`
+	// PrefixChanges counts requests whose system prompt or tools differed
+	// from the previous request; each one rewrites the cache from the top.
+	PrefixChanges int       `json:"prefix_changes"`
+	ListCostUSD   float64   `json:"list_cost_usd"`
+	LastSeen      time.Time `json:"last_seen"`
+	// WhatIf scores candidate layouts over the session so far; as-run is
+	// first. Nothing here was sent to the provider.
+	WhatIf []WhatIf `json:"what_if,omitempty"`
 }
 
 // Status is the status endpoint's body.
@@ -133,7 +245,7 @@ func (s *stats) status() Status {
 		out.Requests[k] = v
 	}
 	for id, st := range s.sessions {
-		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen})
+		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, WhatIf: st.whatIf})
 	}
 	sort.Slice(out.Sessions, func(i, j int) bool { return out.Sessions[i].LastSeen.After(out.Sessions[j].LastSeen) })
 	return out

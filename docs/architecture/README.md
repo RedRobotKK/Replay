@@ -4,7 +4,7 @@ System design as it exists today. Decisions that led here are in [`../adr/`](../
 
 ## Current state
 
-The offline analysis (`replay`, `blame`, `diff`, `redact`) is implemented; see [`replay-engine.md`](replay-engine.md). The passthrough proxy (`serve`) is implemented for the Anthropic Messages API and records a derived-data ledger; the client-side facts it honors are in [`proxy-protocol.md`](proxy-protocol.md). Policies, dry-run, and guards are not built yet. The shape today:
+The offline analysis (`replay`, `blame`, `diff`, `redact`) is implemented; see [`replay-engine.md`](replay-engine.md). The passthrough proxy (`serve`) is implemented for the Anthropic Messages API and records a derived-data ledger; the client-side facts it honors are in [`proxy-protocol.md`](proxy-protocol.md). Guards (spend caps, loop detection, circuit breaker) and dry-run scoring of candidate layouts are built; no policy is applied live yet. The shape today:
 
 ```text
  agent (Claude Code, Aider, custom)
@@ -14,6 +14,8 @@ The offline analysis (`replay`, `blame`, `diff`, `redact`) is implemented; see [
    ├─ listener        loopback TCP, header-token auth
    ├─ passthrough     bytes in, bytes out; SSE preserved
    ├─ response tap    usage and output structure, parsed after forwarding
+   ├─ guards          spend caps, loop detection, circuit breaker (off by default)
+   ├─ live analysis   break classification and dry-run scoring, after the response
    └─ ledger          ~/.buffy/ledger/<session>.jsonl, derived data only
    │
    └─ buffy replay | blame | diff  read the ledger at the measured tier

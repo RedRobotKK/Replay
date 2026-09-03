@@ -70,8 +70,9 @@ func SummarizeRequest(body []byte, labeler *Labeler) (RequestSummary, error) {
 			p.CacheControlCount++
 		}
 	}
+	sum.PrefixHash = hashOf("prefix-", append(req.Tools, req.System)...)
 	if len(req.Messages) > 0 {
-		sum.PrefixHash = prefixHash(req.System, req.Messages[0])
+		sum.SessionHash = hashOf("session-", req.System, req.Messages[0])
 	}
 	toolNames := map[string]string{}
 	for _, raw := range req.Messages {
@@ -107,13 +108,18 @@ func stripText(blocks []Block) []Block {
 	return blocks
 }
 
-// prefixHash hashes the raw bytes of the system prompt and the first
-// message, which a client renders identically on every turn.
-func prefixHash(system, first json.RawMessage) string {
+// hashLabelBytes is how much of a hash the prefix and session labels keep.
+const hashLabelBytes = 16
+
+// hashOf hashes raw JSON values as sent, so a byte-identical prefix hashes
+// identically and any change, including whitespace, does not.
+func hashOf(prefix string, parts ...json.RawMessage) string {
 	h := sha256.New()
-	h.Write(system)
-	h.Write(first)
-	return "prefix-" + hex.EncodeToString(h.Sum(nil))[:16]
+	for _, p := range parts {
+		h.Write(p)
+		h.Write([]byte{0})
+	}
+	return prefix + hex.EncodeToString(h.Sum(nil))[:hashLabelBytes]
 }
 
 // systemSize handles both the string and the block-list form of system.
