@@ -32,6 +32,8 @@ Read Claude Code transcripts. Reproduce the provider's caching turn by turn, pri
 
 Policy catalog using only provider-sanctioned mechanisms (ADR-0003), dry-run scoring of candidates, spend and loop guards, provider circuit breaker, error budget.
 
+**Status:** guards are implemented and tested against a fake provider: spend caps per session and per day (fail closed before the next request, override logged), loop detection (warn or refuse), and the circuit breaker. Policies, dry-run, retries, and the error budget are not built; they depend on spike 4 against the real provider.
+
 **Gate:** spike 4 passes; provider history-binding check green in CI against a policy-applied session; guardrail revert tested.
 
 ## v0.4: learning and advisor

@@ -93,6 +93,12 @@ What the proxy does and does not do:
 - Fails open: if anything inside Buffy's own bookkeeping fails, the bytes still flow. If the provider is unreachable you get a 502 that says how to bypass Buffy.
 - Off switch: `BUFFY_DISABLED=1` refuses to start; unsetting `ANTHROPIC_BASE_URL` bypasses it entirely.
 
+Guards, all off unless you set them (see `buffy serve -h`):
+
+- `--max-session-tokens` and `--max-day-tokens` refuse the *next* request once a cap is reached, never a response in flight. The refusal is a provider-shaped error the agent shows you; send `x-buffy-override: <reason>` to proceed once.
+- `--loop-warn` and `--loop-block` count identical tool calls in the conversation and add a warning header or refuse the request.
+- `--breaker-failures` opens a circuit after consecutive provider failures and answers locally with `Retry-After` until the cooldown passes, so the agent stops burning retries against a provider that is already saying no.
+
 One client caveat from the gateway docs: with a non-first-party base URL, Claude Code disables MCP tool search unless `ENABLE_TOOL_SEARCH=true` is set. Buffy forwards `tool_reference` blocks unchanged, so setting it is safe. Details: [`docs/architecture/proxy-protocol.md`](docs/architecture/proxy-protocol.md).
 
 ## Install

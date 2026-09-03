@@ -113,6 +113,12 @@ func (b *syncBuffer) String() string {
 
 func startProxy(t *testing.T, up http.Handler, token string) (string, string, *syncBuffer) {
 	t.Helper()
+	return startProxyWith(t, up, Config{Token: token})
+}
+
+// startProxyWith starts a proxy with extra config (guards) applied.
+func startProxyWith(t *testing.T, up http.Handler, extra Config) (string, string, *syncBuffer) {
+	t.Helper()
 	upSrv := httptest.NewServer(up)
 	t.Cleanup(upSrv.Close)
 	target, err := url.Parse(upSrv.URL)
@@ -125,7 +131,9 @@ func startProxy(t *testing.T, up http.Handler, token string) (string, string, *s
 		t.Fatal(err)
 	}
 	logs := &syncBuffer{}
-	srv, err := New(Config{Listen: "127.0.0.1:0", Upstream: target, Token: token, Store: store, Logger: log.New(logs, "", 0)})
+	cfg := extra
+	cfg.Listen, cfg.Upstream, cfg.Store, cfg.Logger = "127.0.0.1:0", target, store, log.New(logs, "", 0)
+	srv, err := New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,5 +404,96 @@ func TestRefusesNonLoopbackListen(t *testing.T) {
 	}
 	if _, err := New(Config{Listen: "0.0.0.0:4000", Upstream: target, Store: store}); err == nil {
 		t.Fatal("binding all interfaces must be refused")
+	}
+}
+
+func TestSpendCapRefusesNextRequestNotCurrent(t *testing.T) {
+	up := &upstream{t: t}
+	// Each response reports 4+30+300+2 = 336 tokens; cap at 500 so the
+	// second request passes and the third is refused.
+	base, dir, logs := startProxyWith(t, up, Config{Spend: NewSpendGuard(SpendLimits{SessionTokens: 500})})
+	for i := 0; i < 2; i++ {
+		resp := post(t, base, "/v1/messages", nil)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("request %d refused early: %d", i, resp.StatusCode)
+		}
+		waitLedger(t, dir, i+1)
+	}
+	resp := post(t, base, "/v1/messages", nil)
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(body), "buffy_spend_cap") {
+		t.Fatalf("third request must be refused with the provider error shape: %d %s", resp.StatusCode, body)
+	}
+	if up.seen().requests != 2 {
+		t.Fatalf("refused request must not reach the provider: %d", up.seen().requests)
+	}
+	resp = post(t, base, "/v1/messages", map[string]string{HeaderOverride: "one more, I am watching"})
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(logs.String(), "overridden") {
+		t.Fatalf("override must pass and be logged: %d", resp.StatusCode)
+	}
+}
+
+const loopingBody = `{"model":"claude-opus-5","max_tokens":50,"messages":[
+ {"role":"user","content":"go"},
+ {"role":"assistant","content":[{"type":"tool_use","id":"1","name":"Bash","input":{"command":"make"}}]},
+ {"role":"user","content":[{"type":"tool_result","tool_use_id":"1","content":"err"}]},
+ {"role":"assistant","content":[{"type":"tool_use","id":"2","name":"Bash","input":{"command":"make"}}]},
+ {"role":"user","content":[{"type":"tool_result","tool_use_id":"2","content":"err"}]},
+ {"role":"assistant","content":[{"type":"tool_use","id":"3","name":"Bash","input":{"command":"make"}}]},
+ {"role":"user","content":[{"type":"tool_result","tool_use_id":"3","content":"err"}]}]}`
+
+func postBody(t *testing.T, base, body string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, base+"/v1/messages", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", secret)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
+func TestLoopGuardWarnsThenBlocks(t *testing.T) {
+	up := &upstream{t: t}
+	base, _, _ := startProxyWith(t, up, Config{Loops: LoopLimits{Warn: 3, Block: 4}})
+	resp := postBody(t, base, loopingBody)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(resp.Header.Get(HeaderWarning), "3 times") {
+		t.Fatalf("three repeats must warn and pass: %d %q", resp.StatusCode, resp.Header.Get(HeaderWarning))
+	}
+	base, _, _ = startProxyWith(t, &upstream{t: t}, Config{Loops: LoopLimits{Block: 3}})
+	resp = postBody(t, base, loopingBody)
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(body), "buffy_loop") {
+		t.Fatalf("three repeats at block=3 must refuse: %d %s", resp.StatusCode, body)
+	}
+}
+
+func TestBreakerHoldsRequestsAfterProviderFailures(t *testing.T) {
+	up := &upstream{t: t, mode: "error"}
+	base, _, _ := startProxyWith(t, up, Config{Breaker: NewBreaker(BreakerSettings{Failures: 2, Cooldown: time.Minute})})
+	for i := 0; i < 2; i++ {
+		resp := post(t, base, "/v1/messages", nil)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusTooManyRequests {
+			t.Fatalf("provider errors must pass through: %d", resp.StatusCode)
+		}
+	}
+	resp := post(t, base, "/v1/messages", nil)
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable || resp.Header.Get("Retry-After") == "" || !strings.Contains(string(body), "buffy_circuit_open") {
+		t.Fatalf("open circuit must refuse locally with Retry-After: %d %s", resp.StatusCode, body)
+	}
+	if up.seen().requests != 2 {
+		t.Fatalf("held request must not reach the provider: %d", up.seen().requests)
 	}
 }
