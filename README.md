@@ -24,7 +24,7 @@ Replay addresses each one locally, without changing how the agent works.
 
 | Command | What you get |
 |---------|--------------|
-| `replay replay` | Reproduces your sessions' caching, prints how well it matched the provider's own numbers, then scores alternative layouts in tokens saved |
+| `replay <path>` | Reproduces your sessions' caching, prints how well it matched the provider's own numbers, then scores alternative layouts in tokens saved |
 | `replay blame` | Ranks which files, tool descriptions, and instructions are eating your prompt tokens across all sessions |
 | `replay diff` | Points at the exact turn where the cached prefix diverged and classifies the cause |
 | `replay doctor` | What Replay can see on this machine (transcripts, proxy variable, a running proxy, ledger) and the next command to run |
@@ -40,7 +40,7 @@ No proxy, no configuration, no trust required. Build from source until the first
 ```sh
 make build
 ./bin/replay doctor                                  # what is on this machine, and what to run next
-./bin/replay replay ~/.claude/projects/<your-project>/
+./bin/replay ~/.claude/projects/<your-project>/
 ```
 
 Real output from a Claude Code session, on the session in which Replay itself was written:
@@ -85,7 +85,7 @@ Transcripts do not contain the system prompt, tool definitions, or cache markers
 ```sh
 ./bin/replay serve                                  # listens on 127.0.0.1:4000
 export ANTHROPIC_BASE_URL=http://127.0.0.1:4000    # in the shell that runs your agent
-./bin/replay replay ~/.replay/ledger/                # same commands, measured tier
+./bin/replay ~/.replay/ledger/                       # same commands, measured tier
 ```
 
 What the proxy does and does not do:
