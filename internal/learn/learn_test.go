@@ -180,3 +180,61 @@ func TestLoadSelectedRejectsStaleFiles(t *testing.T) {
 		t.Fatal("missing file must be an error")
 	}
 }
+
+func TestTypeFromEarlySignals(t *testing.T) {
+	cases := []struct {
+		model  string
+		tokens int
+		want   string
+	}{
+		{"claude-opus-5", 100, "opus/small-prefix"},
+		{"claude-fable-5-1", 50000, "fable/large-prefix"},
+		{"claude-sonnet-4-6", largePrefixTokens, "sonnet/large-prefix"},
+		{"gpt-x", 10, "other/small-prefix"},
+	}
+	for _, c := range cases {
+		if got := TypeOf(c.model, c.tokens); got != c.want {
+			t.Errorf("TypeOf(%q, %d) = %q, want %q", c.model, c.tokens, got, c.want)
+		}
+	}
+	s, err := transcript.ParseClaudeCodeFile("../transcript/testdata/session-redacted.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := Type(s); got != "fable/large-prefix" {
+		t.Fatalf("fixture type = %q", got)
+	}
+	if Type(&transcript.Session{}) != "" {
+		t.Fatal("an empty session has no type")
+	}
+}
+
+// LN-3: a candidate that helps one type and hurts another is selected
+// for the first, withheld from the second, and the overall selection
+// says none because the corpus as a whole does not agree.
+func TestSelectPerType(t *testing.T) {
+	candidates := []Candidate{{Name: "edit", Family: FamilyContextEdit}}
+	var scores []SessionScore
+	r := rand.New(rand.NewPCG(11, 11))
+	for i := 0; i < 60; i++ {
+		id := fmt.Sprintf("s-%d", i)
+		typ, saving := "opus/large-prefix", 0.25+0.02*r.NormFloat64()
+		if i%2 == 1 {
+			typ, saving = "opus/small-prefix", -0.25+0.02*r.NormFloat64()
+		}
+		scores = append(scores, SessionScore{SessionID: id, Type: typ, Holdout: isHoldout(id), AsRun: analysis.Tally{PromptTokens: 1, EffectiveTokens: 1}, Saving: map[string]float64{"edit": saving}, Cached: map[string]float64{"edit": 0.8}, Estimated: map[string]bool{}})
+	}
+	res := Select(candidates, scores, 60, Options{}, time.Now())
+	if res.Selected != nil {
+		t.Fatalf("overall must not select a candidate the types disagree on: %+v", res.Verdicts)
+	}
+	if len(res.Types) != 2 || res.Types[0].Type != "opus/large-prefix" || res.Types[0].Selected == nil || res.Types[1].Selected != nil {
+		t.Fatalf("per-type selection wrong: %+v", res.Types)
+	}
+	if c := res.SelectedFor("opus/large-prefix"); c == nil || c.Name != "edit" {
+		t.Fatalf("SelectedFor large: %+v", c)
+	}
+	if c := res.SelectedFor("opus/small-prefix"); c != nil {
+		t.Fatalf("SelectedFor small must fall back to the overall none: %+v", c)
+	}
+}

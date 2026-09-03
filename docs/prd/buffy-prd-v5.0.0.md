@@ -247,7 +247,7 @@ Initial catalog for v0.3: `freeze-system-prompt` (diagnostic only, reports when 
 |----|-------------|------------|
 | LN-1 | A nightly local job re-scores the catalog over all recorded sessions and writes a versioned, human-readable policy file. No network access. | Job runs with networking disabled. |
 | LN-2 | Selection uses held-out sessions, a minimum sample size, and a required margin above noise; a win must repeat across sessions; ties go to the simpler policy. | Statistical test on synthetic corpora with a known best policy and a decoy. |
-| LN-3 | Session types (exploration, edit-heavy, long-running, model) are classified from early-turn signals with one policy per type. | Classifier fixtures. |
+| LN-3 | Session types (exploration, edit-heavy, long-running, model) are classified from early-turn signals with one policy per type. **Status:** implemented on the two signals a proxy has at a first request, model family and first-prompt size; edit-heavy and long-running are not early signals and are not types. | Classifier fixtures. |
 | LN-4 | Parameter grids are coarse and bounded; the sweep reports confidence, not a single point. | Output includes intervals. |
 | LN-5 | Live trials of graduated policies run on a bounded share of sessions, never on sessions the user marked important, with automatic revert when a guardrail metric (failed-edit rate, re-read rate) exceeds its threshold. **Status:** implemented (`--trial-share`, `--guardrail-reread`, `--revert-after`) on the re-read rate; marking a session important has no client mechanism yet and is not built. | Revert test. |
 | LN-6 | Primary success metric is the cached share of the prompt per turn, which is scale-free. Absolute totals are secondary. | Metric definition test. |
