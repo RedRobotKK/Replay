@@ -27,6 +27,7 @@ Buffy addresses each one locally, without changing how the agent works.
 | `buffy replay` | Reproduces your sessions' caching, prints how well it matched the provider's own numbers, then scores alternative layouts in tokens saved |
 | `buffy blame` | Ranks which files, tool descriptions, and instructions are eating your prompt tokens across all sessions |
 | `buffy diff` | Points at the exact turn where the cached prefix diverged and classifies the cause |
+| `buffy doctor` | What Buffy can see on this machine (transcripts, proxy variable, a running proxy, ledger) and the next command to run |
 | `buffy corpus` | Calibration summary across every session in a directory, as Markdown with no paths or content, for reporting how well Buffy understands your sessions |
 | `buffy serve` | Local proxy: byte-for-byte passthrough that records what the provider charged, so the three commands above run on measured data (policies and guards come later) |
 
@@ -38,6 +39,7 @@ No proxy, no configuration, no trust required. Build from source until the first
 
 ```sh
 make build
+./bin/buffy doctor                                  # what is on this machine, and what to run next
 ./bin/buffy replay ~/.claude/projects/<your-project>/
 ```
 
