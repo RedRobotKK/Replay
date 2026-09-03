@@ -74,7 +74,7 @@ func CountReReads(cal *Calibration, fit TokenFit) ReReads {
 		start := min(prevLen, len(req.Context))
 		for _, m := range req.Context[start:] {
 			for bi, b := range m.Blocks {
-				if b.Kind != transcript.KindToolResult || !isFileRead(b.ToolName) {
+				if b.Kind != transcript.KindToolResult || !IsFileRead(b.ToolName) {
 					continue
 				}
 				out.Reads++
@@ -103,9 +103,9 @@ func CountReReads(cal *Calibration, fit TokenFit) ReReads {
 	return out
 }
 
-// isFileRead reports whether a tool-result label names a read of a path:
+// IsFileRead reports whether a tool-result label names a read of a path:
 // a read tool followed by the path label the client or the ledger gave it.
-func isFileRead(label string) bool {
+func IsFileRead(label string) bool {
 	name, path, ok := strings.Cut(label, " ")
 	return ok && path != "" && readTools[name]
 }

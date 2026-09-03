@@ -219,6 +219,7 @@ func requestFromRecord(rec Record, index int, memo map[string]*transcript.Messag
 		Usage:         *rec.Response.Usage,
 		AppliedEdits:  rec.Response.AppliedEdits,
 		ClearedTokens: rec.Response.ClearedInputTokens,
+		Tools:         rec.Prompt.Tools,
 	}
 	if req.ID == "" {
 		req.ID = fmt.Sprintf("ledger-%d", index)
