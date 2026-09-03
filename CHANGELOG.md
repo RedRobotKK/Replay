@@ -48,6 +48,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- CI runs the test suite once more under the latest released Go, not only the version pinned in `go.mod`. The shutdown bug above reached `main` because nothing exercised a newer standard library; only the release pipeline, which uses the toolchain GoReleaser requires, caught it.
 - README and roadmap now describe the replay-first sequence (`replay`, `blame`, `diff`, then `serve`).
 - Ledger schema 2: records carry provider-named usage fields and a typed break cause. Files written by schema 1 are skipped by the reader rather than misread; delete `~/.buffy/ledger` from earlier builds.
 
