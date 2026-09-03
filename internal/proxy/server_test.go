@@ -1997,7 +1997,8 @@ func TestShutdownForcesATurnThatOutlastsTheGrace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := ledger.Open(t.TempDir())
+	dir := t.TempDir()
+	store, err := ledger.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2040,5 +2041,11 @@ func TestShutdownForcesATurnThatOutlastsTheGrace(t *testing.T) {
 	}
 	if !strings.Contains(logs.String(), "turns still running after") {
 		t.Fatalf("the forced close must be logged:\n%s", logs.String())
+	}
+	// The provider may already have billed the turn Buffy cut short, so it
+	// is still recorded. Waiting for the record also lets the handler
+	// finish before the test's temporary directory goes away.
+	if recs := waitLedger(t, dir, 1); recs[0].Path != "/v1/messages" {
+		t.Fatalf("a turn cut short by shutdown must still be recorded: %+v", recs[0])
 	}
 }
