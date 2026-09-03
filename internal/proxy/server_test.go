@@ -21,6 +21,7 @@ import (
 
 	"github.com/RedRobotKK/Buffy/internal/analysis"
 	"github.com/RedRobotKK/Buffy/internal/cachemodel"
+	"github.com/RedRobotKK/Buffy/internal/learn"
 	"github.com/RedRobotKK/Buffy/internal/ledger"
 	"github.com/RedRobotKK/Buffy/internal/policy"
 )
@@ -130,13 +131,19 @@ func startProxy(t *testing.T, up http.Handler, token string) (string, string, *s
 // startProxyWith starts a proxy with extra config (guards) applied.
 func startProxyWith(t *testing.T, up http.Handler, extra Config) (string, string, *syncBuffer) {
 	t.Helper()
+	return startProxyIn(t, up, extra, t.TempDir())
+}
+
+// startProxyIn starts a proxy over an existing ledger directory, so a test
+// can restart a proxy and check what it remembers.
+func startProxyIn(t *testing.T, up http.Handler, extra Config, dir string) (string, string, *syncBuffer) {
+	t.Helper()
 	upSrv := httptest.NewServer(up)
 	t.Cleanup(upSrv.Close)
 	target, err := url.Parse(upSrv.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := t.TempDir()
 	store, err := ledger.Open(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -1151,4 +1158,120 @@ func getSessionErrorTokens(t *testing.T, base, id string) (int, int) {
 		}
 	}
 	return 0, 0
+}
+
+// writePolicyFile writes a learn result selecting a context-edit trigger,
+// or selecting nothing when trigger is zero.
+func writePolicyFile(t *testing.T, path string, trigger int) {
+	t.Helper()
+	res := learn.Result{Schema: learn.PolicyFileSchema, Rules: cachemodel.RulesVersion, Reason: "test"}
+	if trigger > 0 {
+		p := analysis.ContextEditPolicy{KeepLast: 6, TriggerTokens: trigger}
+		res.Selected = &learn.Candidate{Name: fmt.Sprintf("context-edit(keep=6,trigger=%d)", trigger), Family: learn.FamilyContextEdit, ContextEdit: &p}
+	}
+	data, err := json.Marshal(res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func triggerSeen(body []byte) string {
+	i := bytes.Index(body, []byte(`"trigger":{"type":"input_tokens","value":`))
+	if i < 0 {
+		return "none"
+	}
+	rest := body[i+len(`"trigger":{"type":"input_tokens","value":`):]
+	j := bytes.IndexByte(rest, '}')
+	return string(rest[:j])
+}
+
+// PX-8: the policy is chosen at a session's first request from the policy
+// file and pinned for the session's life, on disk, so neither a rewritten
+// file nor a restarted proxy changes a running session.
+func TestPolicyFileIsReadAtSessionStartAndPinsSurviveRewritesAndRestarts(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "policy.json")
+	writePolicyFile(t, file, 200000)
+	up := &bodyEcho{}
+	base, _, logs := startProxyIn(t, up, Config{PolicyFile: file}, dir)
+	beta := func(id string) map[string]string {
+		return map[string]string{HeaderSessionID: id, "anthropic-beta": policy.BetaFeature}
+	}
+	postWith(t, base, requestBody, beta("sess-a"))
+	writePolicyFile(t, file, 400000)
+	postWith(t, base, requestBody, beta("sess-a"))
+	postWith(t, base, requestBody, beta("sess-b"))
+	writePolicyFile(t, file, 0)
+	postWith(t, base, requestBody, beta("sess-c"))
+	got := up.seen()
+	if len(got) != 4 {
+		t.Fatalf("upstream saw %d requests", len(got))
+	}
+	for i, want := range []string{"200000", "200000", "400000", "none"} {
+		if triggerSeen(got[i]) != want {
+			t.Fatalf("request %d carried trigger %s, want %s", i, triggerSeen(got[i]), want)
+		}
+	}
+	if !strings.Contains(logs.String(), "policy file selects nothing") {
+		t.Fatalf("an empty selection must be logged:\n%s", logs.String())
+	}
+	st := getStatus(t, base)
+	for _, sess := range st.Sessions {
+		switch sess.Session {
+		case "sess-a":
+			if sess.PinnedPolicy != "context-edit(keep=6,trigger=200000)" || sess.Policy != string(policy.Applied) {
+				t.Fatalf("sess-a status: %+v", sess)
+			}
+		case "sess-c":
+			if sess.PinnedPolicy != "" || sess.Policy != string(policy.NotConfigured) {
+				t.Fatalf("sess-c status: %+v", sess)
+			}
+		}
+	}
+
+	// A new proxy over the same ledger directory, with the file now
+	// selecting 400k: sess-a keeps 200k from its persisted pin, sess-c
+	// keeps none, and a fresh session gets 400k.
+	writePolicyFile(t, file, 400000)
+	up2 := &bodyEcho{}
+	base2, _, logs2 := startProxyIn(t, up2, Config{PolicyFile: file}, dir)
+	postWith(t, base2, requestBody, beta("sess-a"))
+	postWith(t, base2, requestBody, beta("sess-c"))
+	postWith(t, base2, requestBody, beta("sess-d"))
+	got = up2.seen()
+	for i, want := range []string{"200000", "none", "400000"} {
+		if triggerSeen(got[i]) != want {
+			t.Fatalf("after restart request %d carried trigger %s, want %s", i, triggerSeen(got[i]), want)
+		}
+	}
+	if !strings.Contains(logs2.String(), "pinned earlier") {
+		t.Fatalf("a restored pin must be logged:\n%s", logs2.String())
+	}
+}
+
+// The explicit flag wins over the file, and a stale file applies nothing.
+func TestPolicyFlagWinsOverFileAndStaleFileAppliesNothing(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "policy.json")
+	writePolicyFile(t, file, 400000)
+	up := &bodyEcho{}
+	base, _, _ := startProxyIn(t, up, Config{PolicyFile: file, ContextEdit: &policy.ContextEdit{TriggerTokens: 150000, KeepLast: 6}}, dir)
+	postWith(t, base, requestBody, map[string]string{HeaderSessionID: "sess-flag", "anthropic-beta": policy.BetaFeature})
+	if got := triggerSeen(up.seen()[0]); got != "150000" {
+		t.Fatalf("flag must win over the file: %s", got)
+	}
+
+	stale := filepath.Join(t.TempDir(), "stale.json")
+	if err := os.WriteFile(stale, []byte(`{"schema":99,"rules":"x","selected":{"name":"context-edit","family":"context-edit","context_edit":{"KeepLast":6,"TriggerTokens":100}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	up2 := &bodyEcho{}
+	base2, _, logs := startProxyWith(t, up2, Config{PolicyFile: stale})
+	postWith(t, base2, requestBody, map[string]string{HeaderSessionID: "sess-stale", "anthropic-beta": policy.BetaFeature})
+	if got := triggerSeen(up2.seen()[0]); got != "none" || !strings.Contains(logs.String(), "schema 99") {
+		t.Fatalf("stale file must apply nothing and say why: %s\n%s", got, logs.String())
+	}
 }

@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/RedRobotKK/Buffy/internal/cachemodel"
+	"github.com/RedRobotKK/Buffy/internal/learn"
 	"github.com/RedRobotKK/Buffy/internal/ledger"
 	"github.com/RedRobotKK/Buffy/internal/policy"
 )
@@ -79,6 +80,10 @@ type Config struct {
 	// ContextEdit, when set, is applied to sessions whose first request
 	// admits it and pinned for their life (ADR-0003). Nil is off.
 	ContextEdit *policy.ContextEdit
+	// PolicyFile, when set, is the buffy learn result to read at each
+	// session's first request when ContextEdit is not set. A pinned
+	// session never changes when the file does (PX-8).
+	PolicyFile string
 	// Retries, when Attempts is set, resend a request the provider refused
 	// with a retryable status or that never connected, before any byte of
 	// a response has reached the client.
@@ -350,34 +355,93 @@ func setBody(r *http.Request, body []byte) {
 	r.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }
 }
 
-// applyPolicy adds the configured request parameter when the session's
-// pinned decision allows it. The decision is made at the session's first
-// request and kept: a session either always carries the parameter or
-// never does. Every transformation is logged with the body hashes before
-// and after (PX-10), never the bodies.
+// applyPolicy adds the session's pinned request parameter when its
+// decision allows it. The decision and the parameters are made at the
+// session's first request, from the flag, else the policy file, else the
+// persisted pin of an earlier process, and kept for the session's life:
+// a session either always carries the parameter or never does. Every
+// transformation is logged with the body hashes before and after
+// (PX-10), never the bodies.
 func (s *Server) applyPolicy(r *http.Request, rec *ledger.Record, body []byte) []byte {
-	p := s.cfg.ContextEdit
-	if p == nil || rec.SessionID == "" {
+	if rec.SessionID == "" {
 		return body
 	}
-	admissible := p.Admissible(r.Header.Get("anthropic-beta"), rec.Prompt.ContextEdits)
-	decision := s.stats.pinPolicy(rec.SessionID, admissible)
-	if decision != policy.Applied {
+	beta, clientSet := r.Header.Get("anthropic-beta"), rec.Prompt.ContextEdits
+	edit, decision, ok := s.stats.pinned(rec.SessionID)
+	if !ok {
+		edit, decision = s.decidePolicy(rec.SessionID, beta, clientSet)
+		s.stats.pin(rec.SessionID, edit, decision)
+	}
+	if edit == nil || decision != policy.Applied {
 		return body
 	}
-	if admissible != policy.Applied {
+	if admissible := edit.Admissible(beta, clientSet); admissible != policy.Applied {
 		// Pinned on, but this request cannot carry the parameter.
 		s.cfg.Logger.Printf("policy %s session=%s %s", policy.Name, short(rec.SessionID), admissible)
 		return body
 	}
-	out, applied := p.Apply(body)
+	out, applied := edit.Apply(body)
 	if applied != policy.Applied {
 		s.cfg.Logger.Printf("policy %s session=%s %s", policy.Name, short(rec.SessionID), applied)
 		return body
 	}
 	rec.Policy = policy.Name
-	s.cfg.Logger.Printf("policy %s session=%s applied body sha256 before=%s after=%s", p, short(rec.SessionID), bodyHash(body), bodyHash(out))
+	s.cfg.Logger.Printf("policy %s session=%s applied body sha256 before=%s after=%s", edit, short(rec.SessionID), bodyHash(body), bodyHash(out))
 	return out
+}
+
+// decidePolicy makes a session's decision at its first request in this
+// process. A pin persisted by an earlier process wins over everything,
+// then the flag, then the policy file. The decision is persisted so a
+// restart or a rewritten file cannot change a running session.
+func (s *Server) decidePolicy(sessionID, beta string, clientSet bool) (*policy.ContextEdit, policy.Decision) {
+	if pin, ok := s.cfg.Store.Pin(sessionID); ok {
+		var edit *policy.ContextEdit
+		if pin.Policy == policy.Name {
+			edit = &policy.ContextEdit{TriggerTokens: pin.Trigger, KeepLast: pin.Keep}
+		}
+		s.cfg.Logger.Printf("policy session=%s pinned earlier: %s", short(sessionID), pin.Decision)
+		return edit, policy.Decision(pin.Decision)
+	}
+	edit := s.cfg.ContextEdit
+	if edit == nil && s.cfg.PolicyFile != "" {
+		edit = s.policyFromFile(sessionID)
+	}
+	decision := policy.NotConfigured
+	pin := ledger.Pin{SessionID: sessionID, At: time.Now(), Decision: string(decision)}
+	if edit != nil {
+		decision = edit.Admissible(beta, clientSet)
+		pin.Policy, pin.Trigger, pin.Keep, pin.Decision = policy.Name, edit.TriggerTokens, edit.KeepLast, string(decision)
+	}
+	if err := s.cfg.Store.SetPin(pin); err != nil {
+		// Fail open: the session runs under the in-memory pin.
+		s.cfg.Logger.Printf("policy pin not persisted for session=%s: %v", short(sessionID), err)
+	}
+	return edit, decision
+}
+
+// policyFromFile reads the learned selection for a session that is
+// starting. Only the context-edit family is something the proxy can
+// apply; a TTL selection is advice for a client setting and is logged.
+func (s *Server) policyFromFile(sessionID string) *policy.ContextEdit {
+	c, note, err := learn.LoadSelected(s.cfg.PolicyFile)
+	switch {
+	case err != nil:
+		s.cfg.Logger.Printf("policy file %s not read for session=%s: %v", s.cfg.PolicyFile, short(sessionID), err)
+		return nil
+	case note != "":
+		s.cfg.Logger.Printf("policy file: %s (session=%s runs without a policy)", note, short(sessionID))
+		return nil
+	case c.ContextEdit == nil:
+		s.cfg.Logger.Printf("policy file selects %s, which is a client setting (%s); session=%s runs without a proxy policy", c.Name, c.Live, short(sessionID))
+		return nil
+	}
+	edit := &policy.ContextEdit{TriggerTokens: c.ContextEdit.TriggerTokens, KeepLast: c.ContextEdit.KeepLast}
+	if err := edit.Validate(); err != nil {
+		s.cfg.Logger.Printf("policy file selection rejected: %v", err)
+		return nil
+	}
+	return edit
 }
 
 // bodyHash is a content-free fingerprint of a request body for the log.

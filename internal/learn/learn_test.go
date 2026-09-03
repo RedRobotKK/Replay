@@ -1,9 +1,13 @@
 package learn
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/RedRobotKK/Buffy/internal/cachemodel"
 	"math"
 	"math/rand/v2"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -137,5 +141,42 @@ func TestScoreOnTheFixture(t *testing.T) {
 	res := Select(Catalog(), []SessionScore{sc}, 1, Options{}, time.Now())
 	if res.Selected != nil || res.Reason == "" {
 		t.Fatalf("one session must not elect a policy: %+v", res)
+	}
+}
+
+func TestLoadSelectedRejectsStaleFiles(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name string, res Result) string {
+		path := filepath.Join(dir, name)
+		data, err := json.Marshal(res)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	chosen := Catalog()[3]
+	good := Result{Schema: PolicyFileSchema, Rules: cachemodel.RulesVersion, Selected: &chosen}
+	if c, note, err := LoadSelected(write("good.json", good)); err != nil || note != "" || c == nil || c.ContextEdit == nil || c.ContextEdit.TriggerTokens != chosen.ContextEdit.TriggerTokens {
+		t.Fatalf("good file: %+v %q %v", c, note, err)
+	}
+	stale := good
+	stale.Schema = 99
+	if c, note, err := LoadSelected(write("schema.json", stale)); err != nil || c != nil || !strings.Contains(note, "schema 99") {
+		t.Fatalf("stale schema: %+v %q %v", c, note, err)
+	}
+	stale = good
+	stale.Rules = "other"
+	if c, note, err := LoadSelected(write("rules.json", stale)); err != nil || c != nil || !strings.Contains(note, "learned under rules") {
+		t.Fatalf("stale rules: %+v %q %v", c, note, err)
+	}
+	none := Result{Schema: PolicyFileSchema, Rules: cachemodel.RulesVersion, Reason: "too few"}
+	if c, note, err := LoadSelected(write("none.json", none)); err != nil || c != nil || !strings.Contains(note, "too few") {
+		t.Fatalf("no selection: %+v %q %v", c, note, err)
+	}
+	if _, _, err := LoadSelected(filepath.Join(dir, "missing.json")); err == nil {
+		t.Fatal("missing file must be an error")
 	}
 }
