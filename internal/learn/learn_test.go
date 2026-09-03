@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/RedRobotKK/Buffy/internal/analysis"
+	"github.com/RedRobotKK/Buffy/internal/cachemodel"
 	"github.com/RedRobotKK/Buffy/internal/transcript"
 )
 
