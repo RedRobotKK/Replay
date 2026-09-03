@@ -63,12 +63,17 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	retryMax := fs.Duration("retry-max", proxy.DefaultRetryMaxDelay, "longest wait before a retry")
 	editTrigger := fs.Int("context-edit-trigger", 0, "EXPERIMENTAL: ask the provider to clear old tool results once the prompt passes this many tokens, on requests whose client enabled "+policy.BetaFeature+" and set no context_management of its own (0 = off; "+envNoPolicy+"=1 forces off)")
 	editKeep := fs.Int("context-edit-keep", analysis.ContextEditKeepLast, "how many recent tool results a clear keeps")
+	policyFile := fs.String("policy-file", "", "EXPERIMENTAL: apply the context-edit candidate selected by buffy learn (usually ~/.buffy/policy.json), read at each session's first request; an explicit -context-edit-trigger wins; a session keeps its first decision whatever the file does later")
 	if err := fs.Parse(args); err != nil {
 		return errUsage
 	}
-	contextEdit, err := contextEditFromFlags(*editTrigger, *editKeep, os.Getenv(envNoPolicy) != "")
+	noPolicy := os.Getenv(envNoPolicy) != ""
+	contextEdit, err := contextEditFromFlags(*editTrigger, *editKeep, noPolicy)
 	if err != nil {
 		return err
+	}
+	if noPolicy {
+		*policyFile = ""
 	}
 	if os.Getenv(envDisabled) != "" {
 		return errDisabled
@@ -103,6 +108,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		Loops:       proxy.LoopLimits{Warn: *loopWarn, Block: *loopBlock},
 		Breaker:     proxy.NewBreaker(proxy.BreakerSettings{Failures: *breakerFailures, Cooldown: *breakerCooldown}),
 		ContextEdit: contextEdit,
+		PolicyFile:  *policyFile,
 		Retries:     proxy.RetrySettings{Attempts: *retries, BaseDelay: *retryBase, MaxDelay: *retryMax},
 		ErrorBudget: proxy.ErrorBudget{Share: *errorBudget},
 	})
@@ -118,6 +124,8 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		// writable.
 		if contextEdit != nil {
 			_, _ = fmt.Fprintf(stdout, "policy: %s (experimental; applied to sessions whose client enables %s)\n", contextEdit, policy.BetaFeature)
+		} else if *policyFile != "" {
+			_, _ = fmt.Fprintf(stdout, "policy: from %s at each session's first request (experimental)\n", *policyFile)
 		}
 		_, _ = fmt.Fprintf(stdout, "buffy serve listening on http://%s -> %s\nledger: %s\n\nPoint your agent at it:\n  export ANTHROPIC_BASE_URL=http://%s\n\nThen analyze measured data with:\n  buffy replay %s\n\nStop with Ctrl-C. Disable without uninstalling: %s=1.\n", addr, target, dir, addr, dir, envDisabled)
 	}()
