@@ -3,8 +3,8 @@ package analysis
 import (
 	"sort"
 
-	"github.com/RedRobotKK/Buffy/internal/cachemodel"
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // BlameEntry aggregates attributed tokens for one label across a lane.
@@ -23,7 +23,7 @@ type BlameEntry struct {
 
 // RebillLabel names tokens re-written because a cache break forced the
 // provider to process history again.
-const RebillLabel = "cache breaks: history re-billed (see buffy diff)"
+const RebillLabel = "cache breaks: history re-billed (see replay diff)"
 
 // labelAcc accumulates attribution for one label.
 type labelAcc struct {

@@ -1,4 +1,4 @@
-# Contributing to Buffy
+# Contributing to Replay
 
 Thanks for helping. This page is the whole process; if something here is wrong or missing, fixing it is a welcome first pull request.
 
@@ -6,13 +6,13 @@ Thanks for helping. This page is the whole process; if something here is wrong o
 
 - **Bugs and features start as issues.** Use the templates. A pull request with no linked issue is fine for typos, docs, and one-line fixes; anything larger needs the discussion first so nobody builds the wrong thing.
 - **Security problems never go in a public issue.** Read [`SECURITY.md`](SECURITY.md).
-- **Design changes get an ADR.** If your change alters how Buffy handles traffic, secrets, caching, or storage, add a record under [`docs/adr/`](docs/adr/) in the same pull request. The template is there.
+- **Design changes get an ADR.** If your change alters how Replay handles traffic, secrets, caching, or storage, add a record under [`docs/adr/`](docs/adr/) in the same pull request. The template is there.
 
 ## Development setup
 
 ```sh
-git clone https://github.com/RedRobotKK/Buffy.git
-cd Buffy
+git clone https://github.com/RedRobotKK/Replay.git
+cd Replay
 make ci
 ```
 

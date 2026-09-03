@@ -22,12 +22,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/analysis"
-	"github.com/RedRobotKK/Buffy/internal/cachemodel"
-	"github.com/RedRobotKK/Buffy/internal/learn"
-	"github.com/RedRobotKK/Buffy/internal/ledger"
-	"github.com/RedRobotKK/Buffy/internal/masking"
-	"github.com/RedRobotKK/Buffy/internal/policy"
+	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/learn"
+	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/masking"
+	"github.com/RedRobotKK/Replay/internal/policy"
 )
 
 const secret = "sk-ant-test-secret-value"
@@ -455,7 +455,7 @@ func TestSpendCapRefusesNextRequestNotCurrent(t *testing.T) {
 	resp := post(t, base, "/v1/messages", nil)
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(body), "buffy_spend_cap") {
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(body), "replay_spend_cap") {
 		t.Fatalf("third request must be refused with the provider error shape: %d %s", resp.StatusCode, body)
 	}
 	if up.seen().requests != 2 {
@@ -504,7 +504,7 @@ func TestLoopGuardWarnsThenBlocks(t *testing.T) {
 	resp = postBody(t, base, loopingBody)
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(body), "buffy_loop") {
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(body), "replay_loop") {
 		t.Fatalf("three repeats at block=3 must refuse: %d %s", resp.StatusCode, body)
 	}
 	req, err := http.NewRequest(http.MethodPost, base+"/v1/messages", strings.NewReader(loopingBody))
@@ -572,7 +572,7 @@ func TestBreakerHoldsRequestsAfterProviderFailures(t *testing.T) {
 	resp := post(t, base, "/v1/messages", nil)
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusServiceUnavailable || resp.Header.Get("Retry-After") == "" || !strings.Contains(string(body), "buffy_circuit_open") {
+	if resp.StatusCode != http.StatusServiceUnavailable || resp.Header.Get("Retry-After") == "" || !strings.Contains(string(body), "replay_circuit_open") {
 		t.Fatalf("open circuit must refuse locally with Retry-After: %d %s", resp.StatusCode, body)
 	}
 	if up.seen().requests != 2 {
@@ -620,7 +620,7 @@ func TestLiveCacheBreakIsLoggedRecordedAndCounted(t *testing.T) {
 	waitFor(t, "cache break log line", func() bool {
 		return strings.Contains(logs.String(), "cache break") && strings.Contains(logs.String(), "6000 tokens re-billed")
 	})
-	resp, err := http.Get(base + "/buffy/status")
+	resp, err := http.Get(base + "/replay/status")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -632,13 +632,13 @@ func TestLiveCacheBreakIsLoggedRecordedAndCounted(t *testing.T) {
 	if len(st.Sessions) != 1 || st.Sessions[0].Breaks != 1 || st.Sessions[0].Requests != 2 || st.Sessions[0].ListCostUSD <= 0 {
 		t.Fatalf("status wrong: %+v", st)
 	}
-	resp, err = http.Get(base + "/buffy/metrics")
+	resp, err = http.Get(base + "/replay/metrics")
 	if err != nil {
 		t.Fatal(err)
 	}
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	for _, want := range []string{"buffy_cache_break_total 1", `buffy_requests_total{class="2xx"} 2`, "buffy_cached_share", "buffy_request_latency_seconds_count 2"} {
+	for _, want := range []string{"replay_cache_break_total 1", `replay_requests_total{class="2xx"} 2`, "replay_cached_share", "replay_request_latency_seconds_count 2"} {
 		if !strings.Contains(string(body), want) {
 			t.Errorf("metrics missing %q:\n%s", want, body)
 		}
@@ -647,7 +647,7 @@ func TestLiveCacheBreakIsLoggedRecordedAndCounted(t *testing.T) {
 
 func TestStatusEndpointsHonorTokenAndOrigin(t *testing.T) {
 	base, _, _ := startProxy(t, &upstream{t: t}, "tok")
-	resp, err := http.Get(base + "/buffy/metrics")
+	resp, err := http.Get(base + "/replay/metrics")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -655,7 +655,7 @@ func TestStatusEndpointsHonorTokenAndOrigin(t *testing.T) {
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("metrics without token: %d", resp.StatusCode)
 	}
-	req, _ := http.NewRequest(http.MethodGet, base+"/buffy/status", nil)
+	req, _ := http.NewRequest(http.MethodGet, base+"/replay/status", nil)
 	req.Header.Set(HeaderToken, "tok")
 	req.Header.Set("Origin", "https://evil.example")
 	resp, err = http.DefaultClient.Do(req)
@@ -748,7 +748,7 @@ func postTurn(t *testing.T, base, body string) {
 
 func getStatus(t *testing.T, base string) Status {
 	t.Helper()
-	resp, err := http.Get(base + "/buffy/status")
+	resp, err := http.Get(base + "/replay/status")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -760,7 +760,7 @@ func getStatus(t *testing.T, base string) Status {
 	return st
 }
 
-// The live what-if figures must be exactly what buffy replay prints for
+// The live what-if figures must be exactly what replay replay prints for
 // the same ledger, since they come from the same simulator over the same
 // records; and the candidates must never touch the wire.
 func TestWhatIfMatchesOfflineReplayAndStaysOffTheWire(t *testing.T) {
@@ -943,13 +943,13 @@ func TestContextEditPolicyIsAppliedRecordedAndPinned(t *testing.T) {
 			}
 		}
 	}
-	resp, err := http.Get(base + "/buffy/metrics")
+	resp, err := http.Get(base + "/replay/metrics")
 	if err != nil {
 		t.Fatal(err)
 	}
 	metrics, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if !strings.Contains(string(metrics), `buffy_policy_applied_total{policy="context-edit"} 1`) {
+	if !strings.Contains(string(metrics), `replay_policy_applied_total{policy="context-edit"} 1`) {
 		t.Fatalf("metrics missing policy counter:\n%s", metrics)
 	}
 }
@@ -1026,13 +1026,13 @@ func TestRetriesResendUntilSuccessAndAreRecorded(t *testing.T) {
 			t.Errorf("log missing %q:\n%s", want, log)
 		}
 	}
-	mresp, err := http.Get(base + "/buffy/metrics")
+	mresp, err := http.Get(base + "/replay/metrics")
 	if err != nil {
 		t.Fatal(err)
 	}
 	metrics, _ := io.ReadAll(mresp.Body)
 	_ = mresp.Body.Close()
-	if !strings.Contains(string(metrics), "buffy_retries_total 3") {
+	if !strings.Contains(string(metrics), "replay_retries_total 3") {
 		t.Fatalf("metrics missing retries:\n%s", metrics)
 	}
 }
@@ -1136,7 +1136,7 @@ func TestErrorBudgetRefusesBeforeSpendCapAndHonorsOverride(t *testing.T) {
 				return p >= errorBudgetMinPromptTokens && e > 0 || p < errorBudgetMinPromptTokens
 			})
 		case http.StatusBadRequest:
-			if !strings.Contains(string(body), "buffy_error_budget") {
+			if !strings.Contains(string(body), "replay_error_budget") {
 				t.Fatalf("unexpected 400: %s", body)
 			}
 			refusedAt = i
@@ -1641,13 +1641,13 @@ func TestMaskingReplacesSecretsBeforeEgressAndKeepsThemLocal(t *testing.T) {
 	if len(st.Sessions) != 1 || st.Sessions[0].Masked != 1 {
 		t.Fatalf("status must count masked secrets: %+v", st.Sessions)
 	}
-	resp, err := http.Get(base + "/buffy/metrics")
+	resp, err := http.Get(base + "/replay/metrics")
 	if err != nil {
 		t.Fatal(err)
 	}
 	metrics, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if !strings.Contains(string(metrics), `buffy_masked_total{pattern="anthropic-api-key"} 1`) {
+	if !strings.Contains(string(metrics), `replay_masked_total{pattern="anthropic-api-key"} 1`) {
 		t.Fatalf("metrics missing masked counter:\n%s", metrics)
 	}
 }
@@ -1687,7 +1687,7 @@ type rehydrationUpstream struct {
 	encoding string
 }
 
-var placeholderPattern = regexp.MustCompile(`BUFFY_SECRET_[0-9a-f]{16}`)
+var placeholderPattern = regexp.MustCompile(`REPLAY_SECRET_[0-9a-f]{16}`)
 
 func (u *rehydrationUpstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
@@ -1859,13 +1859,13 @@ func TestRehydrationRestoresPlaceholdersWithinScope(t *testing.T) {
 	if len(st.Sessions) != 1 || st.Sessions[0].Rehydrated != 6 || st.Sessions[0].RehydrationDenied != 3 {
 		t.Fatalf("status must count rehydration: %+v", st.Sessions)
 	}
-	resp, err := http.Get(base + "/buffy/metrics")
+	resp, err := http.Get(base + "/replay/metrics")
 	if err != nil {
 		t.Fatal(err)
 	}
 	metrics, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	for _, want := range []string{`buffy_rehydrated_total{destination="text"} 3`, `buffy_rehydrated_total{destination="edit:Edit"} 3`, `buffy_rehydration_denied_total{destination="tool:Bash/scope"} 3`} {
+	for _, want := range []string{`replay_rehydrated_total{destination="text"} 3`, `replay_rehydrated_total{destination="edit:Edit"} 3`, `replay_rehydration_denied_total{destination="tool:Bash/scope"} 3`} {
 		if !strings.Contains(string(metrics), want) {
 			t.Fatalf("metrics missing %q:\n%s", want, metrics)
 		}
@@ -1895,7 +1895,7 @@ func TestRehydrationOffLeavesResponsesAlone(t *testing.T) {
 	up.mu.Lock()
 	encoding := up.encoding
 	up.mu.Unlock()
-	if encoding != "gzip" || strings.Contains(string(got), "BUFFY_SECRET_") {
+	if encoding != "gzip" || strings.Contains(string(got), "REPLAY_SECRET_") {
 		t.Fatalf("kill switch: encoding %q body %s", encoding, got)
 	}
 }
@@ -2042,7 +2042,7 @@ func TestShutdownForcesATurnThatOutlastsTheGrace(t *testing.T) {
 	if !strings.Contains(logs.String(), "turns still running after") {
 		t.Fatalf("the forced close must be logged:\n%s", logs.String())
 	}
-	// The provider may already have billed the turn Buffy cut short, so it
+	// The provider may already have billed the turn Replay cut short, so it
 	// is still recorded. Waiting for the record also lets the handler
 	// finish before the test's temporary directory goes away.
 	if recs := waitLedger(t, dir, 1); recs[0].Path != "/v1/messages" {

@@ -8,8 +8,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: Buffy version
-      description: Output of `buffy version`
+      label: Replay version
+      description: Output of `replay version`
       placeholder: "0.1.0 (abc1234, built 2026-09-02T00:00:00Z)"
     validations:
       required: true
@@ -23,14 +23,14 @@ body:
   - type: input
     id: client
     attributes:
-      label: Agent or client in front of Buffy
+      label: Agent or client in front of Replay
       placeholder: "Claude Code 2.1.x / Aider 0.9x / custom"
   - type: textarea
     id: steps
     attributes:
       label: Steps to reproduce
       placeholder: |
-        1. Start buffy with ...
+        1. Start replay with ...
         2. Run ...
         3. Observe ...
     validations:

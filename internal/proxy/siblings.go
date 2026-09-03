@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
 )
 
 // SiblingSettings configures the hold-parallel-siblings policy. A cache

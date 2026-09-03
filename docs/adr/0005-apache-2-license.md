@@ -13,7 +13,7 @@ The project is licensed under the Apache License, Version 2.0, from this commit 
 
 ## Consequences
 
-- Anyone may use, modify, and redistribute Buffy, including in commercial products. That is intended.
+- Anyone may use, modify, and redistribute Replay, including in commercial products. That is intended.
 - The patent grant in Section 3 protects users and contributors.
 - A future commercial offering must be a separate work; it cannot retroactively restrict this code.
 - The BSL parameters that were drafted (Additional Use Grant, Change Date) are void; no release was ever published under them.

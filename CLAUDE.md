@@ -4,7 +4,7 @@ Conventions for agents (and humans) working in this repository. Read fully befor
 
 ## Project
 
-Project Buffy is a local, byte-transparent proxy between coding agents and model providers that adds cost visibility, prompt-cache diagnostics, secret masking, and spend circuit breakers. Status: pre-MVP. Roadmap in `docs/ROADMAP.md`. Decisions in `docs/adr/`.
+Project Replay is a local, byte-transparent proxy between coding agents and model providers that adds cost visibility, prompt-cache diagnostics, secret masking, and spend circuit breakers. Status: pre-MVP. Roadmap in `docs/ROADMAP.md`. Decisions in `docs/adr/`.
 
 ## Commands
 
@@ -12,7 +12,7 @@ Project Buffy is a local, byte-transparent proxy between coding agents and model
 make ci          # lint + test + build + docs-lint; must be green before any push
 make test        # go test -race ./...
 make lint        # go vet + golangci-lint
-make build       # ./bin/buffy
+make build       # ./bin/replay
 make docs-lint   # markdownlint over all Markdown
 ```
 
@@ -38,7 +38,7 @@ make docs-lint   # markdownlint over all Markdown
 ## Layout
 
 ```text
-cmd/buffy/          command entry point
+cmd/replay/          command entry point
 internal/           private packages (version, later: proxy, masking, spend, dashboard)
 docs/adr/           architecture decision records
 docs/architecture/  system design

@@ -1,4 +1,4 @@
-# Canonical label set. Apply with: npx --yes github-label-sync --labels .github/labels.yml RedRobotKK/Buffy
+# Canonical label set. Apply with: npx --yes github-label-sync --labels .github/labels.yml RedRobotKK/Replay
 - name: "type: bug"
   color: "d73a4a"
   description: Something is broken

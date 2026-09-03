@@ -27,13 +27,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/analysis"
-	"github.com/RedRobotKK/Buffy/internal/cachemodel"
-	"github.com/RedRobotKK/Buffy/internal/learn"
-	"github.com/RedRobotKK/Buffy/internal/ledger"
-	"github.com/RedRobotKK/Buffy/internal/masking"
-	"github.com/RedRobotKK/Buffy/internal/policy"
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/learn"
+	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/masking"
+	"github.com/RedRobotKK/Replay/internal/policy"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // Timeouts. Provider turns on frontier models can run for minutes, so the
@@ -62,7 +62,7 @@ const (
 const (
 	HeaderSessionID = "x-claude-code-session-id"
 	HeaderAgentID   = "x-claude-code-agent-id"
-	HeaderToken     = "x-buffy-token"
+	HeaderToken     = "x-replay-token"
 )
 
 // Config is everything serve needs.
@@ -85,7 +85,7 @@ type Config struct {
 	// ContextEdit, when set, is applied to sessions whose first request
 	// admits it and pinned for their life (ADR-0003). Nil is off.
 	ContextEdit *policy.ContextEdit
-	// PolicyFile, when set, is the buffy learn result to read at each
+	// PolicyFile, when set, is the replay learn result to read at each
 	// session's first request when ContextEdit is not set. A pinned
 	// session never changes when the file does (PX-8).
 	PolicyFile string
@@ -116,23 +116,23 @@ type Config struct {
 // HealthPath answers "ok" for anything that wants to know the proxy is up.
 // StatusPath and MetricsPath are the read endpoints.
 const (
-	HealthPath  = "/buffy/healthz"
-	StatusPath  = "/buffy/status"
-	MetricsPath = "/buffy/metrics"
+	HealthPath  = "/replay/healthz"
+	StatusPath  = "/replay/status"
+	MetricsPath = "/replay/metrics"
 )
 
 // forwardingHeaders are the ones httputil.ReverseProxy removes from a
-// rewritten request; Buffy puts the client's back.
+// rewritten request; Replay puts the client's back.
 var forwardingHeaders = []string{"Forwarded", "X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto"}
 
 // HeaderOverride is the header a client sets to acknowledge a spend cap or
 // a loop block and proceed once. Its value is logged as the reason.
-const HeaderOverride = "x-buffy-override"
+const HeaderOverride = "x-replay-override"
 
 // HeaderWarning is added to a forwarded response when a guard has
-// something to say but did not block. It is the only header Buffy adds to
+// something to say but did not block. It is the only header Replay adds to
 // a response.
-const HeaderWarning = "x-buffy-warning"
+const HeaderWarning = "x-replay-warning"
 
 // Server is the running proxy.
 type Server struct {
@@ -164,7 +164,7 @@ func New(cfg Config) (*Server, error) {
 		cfg.Logger = log.New(io.Discard, "", 0)
 	}
 	if !isLoopback(cfg.Listen) {
-		return nil, fmt.Errorf("listen address %q is not loopback; Buffy only binds locally", cfg.Listen)
+		return nil, fmt.Errorf("listen address %q is not loopback; Replay only binds locally", cfg.Listen)
 	}
 	var transport http.RoundTripper = &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
@@ -189,7 +189,7 @@ func New(cfg Config) (*Server, error) {
 			r.SetURL(cfg.Upstream)
 			r.Out.Host = cfg.Upstream.Host
 			// A Rewrite adds no forwarding headers of its own, so the
-			// request carries only what the client sent, minus Buffy's own
+			// request carries only what the client sent, minus Replay's own
 			// listener token, which is not the client's header to the
 			// provider.
 			r.Out.Header.Del(HeaderToken)
@@ -216,7 +216,7 @@ func New(cfg Config) (*Server, error) {
 			if tap, ok := w.(*responseTap); ok {
 				tap.upstreamFailed = true
 			}
-			http.Error(w, "buffy: upstream request failed: "+err.Error()+"\nTo bypass Buffy, unset ANTHROPIC_BASE_URL.", http.StatusBadGateway)
+			http.Error(w, "replay: upstream request failed: "+err.Error()+"\nTo bypass Replay, unset ANTHROPIC_BASE_URL.", http.StatusBadGateway)
 		},
 	}
 	mux := http.NewServeMux()
@@ -338,11 +338,11 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 // no browser origins, and the token when one is configured.
 func (s *Server) localOnly(w http.ResponseWriter, r *http.Request) bool {
 	if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Mode") != "" {
-		http.Error(w, "buffy: browser-originated requests are not accepted", http.StatusForbidden)
+		http.Error(w, "replay: browser-originated requests are not accepted", http.StatusForbidden)
 		return false
 	}
 	if s.cfg.Token != "" && r.Header.Get(HeaderToken) != s.cfg.Token {
-		http.Error(w, "buffy: missing or wrong "+HeaderToken+" header", http.StatusUnauthorized)
+		http.Error(w, "replay: missing or wrong "+HeaderToken+" header", http.StatusUnauthorized)
 		return false
 	}
 	return true
@@ -380,7 +380,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 	ok, probe, wait := s.cfg.Breaker.Allow()
 	if !ok {
-		s.refuse(w, refusalCircuitOpen, fmt.Sprintf("the provider has been failing; Buffy is holding requests for %s so the agent stops burning retries", wait.Round(time.Second)), wait)
+		s.refuse(w, refusalCircuitOpen, fmt.Sprintf("the provider has been failing; Replay is holding requests for %s so the agent stops burning retries", wait.Round(time.Second)), wait)
 		return
 	}
 	// A half-open probe that never reaches an outcome (refused below, or
@@ -395,11 +395,11 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 	body, err := io.ReadAll(io.LimitReader(r.Body, MaxRequestBytes+1))
 	if err != nil {
-		http.Error(w, "buffy: could not read request body", http.StatusBadRequest)
+		http.Error(w, "replay: could not read request body", http.StatusBadRequest)
 		return
 	}
 	if len(body) > MaxRequestBytes {
-		http.Error(w, "buffy: request body exceeds the proxy limit", http.StatusRequestEntityTooLarge)
+		http.Error(w, "replay: request body exceeds the proxy limit", http.StatusRequestEntityTooLarge)
 		return
 	}
 	setBody(r, body)
@@ -731,7 +731,7 @@ func (s *Server) trialPolicy(sessionID, sessionType string) (*policy.ContextEdit
 		return nil, policy.NotConfigured, "", time.Time{}
 	}
 	if r, ok := s.cfg.Store.Revert(); ok && !generated.After(r.At) {
-		s.cfg.Logger.Printf("policy %s reverted at %s (%s); session=%s runs without it until buffy learn writes a newer file", edit, r.At.Format(time.RFC3339), r.Reason, short(sessionID))
+		s.cfg.Logger.Printf("policy %s reverted at %s (%s); session=%s runs without it until replay learn writes a newer file", edit, r.At.Format(time.RFC3339), r.Reason, short(sessionID))
 		return nil, policy.Reverted, "", time.Time{}
 	}
 	if !s.cfg.Trial.treated(sessionID) {
@@ -801,7 +801,7 @@ func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Recor
 	}
 	if reason := s.cfg.ErrorBudget.Check(s.stats.errorTokens(rec.SessionID)); reason != "" {
 		if override == "" {
-			s.refuse(w, refusalErrorBudget, reason+". Look at what is failing (buffy replay on the ledger names it), start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
+			s.refuse(w, refusalErrorBudget, reason+". Look at what is failing (replay replay on the ledger names it), start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
 			return false
 		}
 		s.cfg.Logger.Printf("error budget overridden for session=%s: %s", short(rec.SessionID), override)
@@ -809,7 +809,7 @@ func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Recor
 	v := DetectLoop(rec.Prompt, s.cfg.Loops)
 	switch {
 	case v.Block && override == "":
-		s.refuse(w, refusalLoop, fmt.Sprintf("the same %s call was just made %d times in a row; Buffy stopped the loop. Send %s with a reason to proceed once.", v.Label, v.Repeats, HeaderOverride), 0)
+		s.refuse(w, refusalLoop, fmt.Sprintf("the same %s call was just made %d times in a row; Replay stopped the loop. Send %s with a reason to proceed once.", v.Label, v.Repeats, HeaderOverride), 0)
 		return false
 	case v.Block:
 		s.cfg.Logger.Printf("loop block overridden for session=%s: %s", short(rec.SessionID), override)
@@ -825,7 +825,7 @@ func isMessages(path string) bool {
 	return strings.HasSuffix(path, "/v1/messages")
 }
 
-// refusal is one way Buffy answers a request itself instead of forwarding
+// refusal is one way Replay answers a request itself instead of forwarding
 // it: the status it sends, the error type a provider-aware client shows,
 // and the counter it lands in.
 type refusal struct {
@@ -835,10 +835,10 @@ type refusal struct {
 }
 
 var (
-	refusalCircuitOpen = refusal{http.StatusServiceUnavailable, "buffy_circuit_open", "circuit_open"}
-	refusalSpendCap    = refusal{http.StatusBadRequest, "buffy_spend_cap", "spend_cap"}
-	refusalLoop        = refusal{http.StatusBadRequest, "buffy_loop", "loop"}
-	refusalErrorBudget = refusal{http.StatusBadRequest, "buffy_error_budget", "error_budget"}
+	refusalCircuitOpen = refusal{http.StatusServiceUnavailable, "replay_circuit_open", "circuit_open"}
+	refusalSpendCap    = refusal{http.StatusBadRequest, "replay_spend_cap", "spend_cap"}
+	refusalLoop        = refusal{http.StatusBadRequest, "replay_loop", "loop"}
+	refusalErrorBudget = refusal{http.StatusBadRequest, "replay_error_budget", "error_budget"}
 )
 
 // listCost prices one request's usage at list price, zero for a model

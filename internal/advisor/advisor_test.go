@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/RedRobotKK/Buffy/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 func kinds(ss []Suggestion) map[Kind]Suggestion {

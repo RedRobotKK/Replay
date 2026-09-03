@@ -1,6 +1,6 @@
 # Policy file
 
-What `buffy learn` writes and what the proxy will read. One file, `~/.buffy/policy.json`, owner-only, human-readable, diffable. It holds numbers and names, never content.
+What `replay learn` writes and what the proxy will read. One file, `~/.replay/policy.json`, owner-only, human-readable, diffable. It holds numbers and names, never content.
 
 ## Shape
 
@@ -14,7 +14,7 @@ What `buffy learn` writes and what the proxy will read. One file, `~/.buffy/poli
     {
       "name": "context-edit(keep=6,trigger=200000)",
       "family": "context-edit",
-      "live": "buffy serve --context-edit-trigger 200000 --context-edit-keep 6",
+      "live": "replay serve --context-edit-trigger 200000 --context-edit-keep 6",
       "context_edit": { "KeepLast": 6, "TriggerTokens": 200000 },
       "sessions": 17,
       "holdout_sessions": 5,
@@ -44,4 +44,4 @@ What `buffy learn` writes and what the proxy will read. One file, `~/.buffy/poli
 
 ## Use
 
-`buffy serve --policy-file ~/.buffy/policy.json` reads the file at each session's first request and applies the selected candidate when it is one the proxy can apply (the context-edit family; a TTL selection is a client setting and is logged as advice). The decision and its parameters are pinned for the session and written to `.pins` under the ledger directory, one JSON line per session, so a rewritten file or a restarted proxy never changes a running session. An explicit `--context-edit-trigger` wins over the file. A file from another schema or rules version applies nothing and says so in the log. With `--trial-share` below one, only a stable share of new sessions gets the selection and the rest are pinned as controls; with `--guardrail-reread` set, enough treated sessions breaching the re-read rate write a `.revert` record next to `.pins`, and new sessions run without the policy until a file with a newer `generated` time replaces it.
+`replay serve --policy-file ~/.replay/policy.json` reads the file at each session's first request and applies the selected candidate when it is one the proxy can apply (the context-edit family; a TTL selection is a client setting and is logged as advice). The decision and its parameters are pinned for the session and written to `.pins` under the ledger directory, one JSON line per session, so a rewritten file or a restarted proxy never changes a running session. An explicit `--context-edit-trigger` wins over the file. A file from another schema or rules version applies nothing and says so in the log. With `--trial-share` below one, only a stable share of new sessions gets the selection and the rest are pinned as controls; with `--guardrail-reread` set, enough treated sessions breaching the re-read rate write a `.revert` record next to `.pins`, and new sessions run without the policy until a file with a newer `generated` time replaces it.
