@@ -51,6 +51,9 @@ const (
 	SkipNoBeta      Decision = "skipped: client did not enable " + BetaFeature
 	SkipNotAnObject Decision = "skipped: body is not a JSON object"
 	SkipInvalid     Decision = "skipped: edited body would not parse"
+	// NotConfigured is the decision pinned for a session that started
+	// while no policy was configured or selected.
+	NotConfigured Decision = "no policy configured"
 )
 
 // Validate rejects parameters the provider or the simulator would not

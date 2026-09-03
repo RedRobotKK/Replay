@@ -40,9 +40,9 @@ Policy catalog using only provider-sanctioned mechanisms (ADR-0003), dry-run sco
 
 Nightly local re-scoring, held-out validation, session types, bounded live trials with automatic revert, suggestions tracked from prediction to verified saving.
 
-**Status:** the advisor is implemented as `buffy advise` (AD-1 to AD-3): suggestions from the largest token sources with predicted savings on the share of prompt tokens, tracked to closure across sessions. The learning job and the proxy reading its policy file are on a separate branch.
+**Status:** the learning job is implemented as `buffy learn` (LN-1, LN-2, LN-4, LN-6 with the metric decision in ADR-0006): catalog re-scoring over all sessions, held-out validation, minimum evidence, margin above noise, paired ties to the simpler policy, intervals in the output, a documented policy file. The proxy reads the policy file at each session's first request and pins the decision on disk (PX-8, `serve --policy-file`). The advisor is implemented as `buffy advise` (AD-1 to AD-3): suggestions from the largest token sources with predicted savings on the share of prompt tokens, tracked to closure across sessions. Session types (LN-3) and live trials with revert (LN-5) are not built.
 
-**Gate:** synthetic-corpus selection test passes; policy file format documented.
+**Gate:** synthetic-corpus selection test passes (done); policy file format documented (done: `architecture/policy-file.md`).
 
 ## v0.5: secret masking
 
