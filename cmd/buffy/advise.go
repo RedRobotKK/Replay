@@ -1,0 +1,119 @@
+package main
+
+import (
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/RedRobotKK/Buffy/internal/advisor"
+	"github.com/RedRobotKK/Buffy/internal/analysis"
+	"github.com/RedRobotKK/Buffy/internal/transcript"
+)
+
+// adviceFileName is where advise records its suggestions under ~/.buffy;
+// adviceFileMode keeps it owner-only like the ledger.
+const (
+	adviceFileName = "advice.json"
+	adviceFileMode = 0o600
+)
+
+// adviceFile is the on-disk record: every suggestion with its status.
+type adviceFile struct {
+	Schema      int                  `json:"schema"`
+	Generated   time.Time            `json:"generated"`
+	Sessions    int                  `json:"sessions"`
+	Suggestions []advisor.Suggestion `json:"suggestions"`
+}
+
+// runAdvise turns the largest token sources across all sessions into
+// suggestions and prints them best first with their tracking status.
+func runAdvise(args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("advise", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	out := fs.String("out", "", "advice file to write (default ~/.buffy/advice.json; \"-\" for none)")
+	if err := fs.Parse(args); err != nil {
+		return errUsage
+	}
+	if fs.NArg() == 0 {
+		return fmt.Errorf("one or more transcript or ledger directories are required: %w", errUsage)
+	}
+	files, err := transcriptFiles(fs.Args())
+	if err != nil {
+		return err
+	}
+	var obs []advisor.Observation
+	// The visitor never fails, so the walk cannot either.
+	_ = forEachSession(files, func(_ string, session *transcript.Session, _ *analysis.LaneReport, err error) error {
+		if err != nil {
+			return nil
+		}
+		if ob, ok := advisor.Observe(session); ok {
+			obs = append(obs, ob)
+		}
+		return nil
+	})
+	suggestions := advisor.Suggest(obs)
+
+	p := analysis.NewPrinter(stdout)
+	p.Printf("Sessions: %d found, %d calibrated. Predictions assume the target is halved; shares are of prompt tokens, the scale-free metric.\n\n", len(files), len(obs))
+	if len(suggestions) == 0 {
+		p.Printf("No token source above %.0f%% of prompt tokens in any session.\n", advisor.MinShare*100)
+	}
+	for i, s := range suggestions {
+		tier := ""
+		if s.Estimated {
+			tier = " *"
+		}
+		p.Printf("%d. [%s] %s\n", i+1, s.Status, s.Title)
+		p.Printf("   %s\n", s.Action)
+		p.Printf("   evidence: %d session(s), %s tokens in prompts%s; predicted saving %.0f%% of prompt tokens per session (%s tokens across the corpus)", s.Sessions, formatCount(s.PromptTokens), tier, s.PredictedShare*100, formatCount(s.PredictedTokens))
+		if s.Status == advisor.Verified || s.Status == advisor.NotVerified {
+			p.Printf("; realized %.0f%%", s.RealizedShare*100)
+		}
+		p.Printf("\n\n")
+	}
+	if len(suggestions) > 0 {
+		p.Printf("* = estimated via the byte-to-token fit. Statuses: pending, applied, verified, not verified, advice only.\n")
+	}
+	if err := p.Err(); err != nil {
+		return err
+	}
+	if *out == "-" {
+		return nil
+	}
+	path := *out
+	if path == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("find home directory for the advice file: %w", err)
+		}
+		path = filepath.Join(home, ".buffy", adviceFileName)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("create advice directory: %w", err)
+	}
+	data, err := json.MarshalIndent(adviceFile{Schema: advisor.AdviceFileSchema, Generated: time.Now().UTC(), Sessions: len(obs), Suggestions: suggestions}, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode advice file: %w", err)
+	}
+	if err := os.WriteFile(path, append(data, '\n'), adviceFileMode); err != nil {
+		return fmt.Errorf("write advice file: %w", err)
+	}
+	_, err = fmt.Fprintf(stdout, "Advice file: %s\n", path)
+	return err
+}
+
+// formatCount renders a token count the way the reports do.
+func formatCount(n int) string {
+	switch {
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.2fM", float64(n)/1_000_000)
+	case n >= 1_000:
+		return fmt.Sprintf("%.0fk", float64(n)/1_000)
+	}
+	return fmt.Sprint(n)
+}

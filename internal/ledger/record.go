@@ -76,9 +76,12 @@ type RequestSummary struct {
 // Prompt is the request body reduced to structure.
 type Prompt struct {
 	SystemBytes int `json:"system_bytes"`
-	// ToolBytes is the decoded size of the tool definitions; ToolCount how many.
-	ToolBytes int `json:"tool_bytes"`
-	ToolCount int `json:"tool_count"`
+	// ToolBytes is the decoded size of the tool definitions; ToolCount how
+	// many; Tools their names and sizes, so an advisor can tell which of
+	// them the session never called.
+	ToolBytes int                  `json:"tool_bytes"`
+	ToolCount int                  `json:"tool_count"`
+	Tools     []transcript.ToolDef `json:"tools,omitempty"`
 	// CacheControlCount is how many cache markers the client placed.
 	CacheControlCount int       `json:"cache_control"`
 	Messages          []Message `json:"messages"`
