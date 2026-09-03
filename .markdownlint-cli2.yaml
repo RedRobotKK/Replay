@@ -1,0 +1,6 @@
+# markdownlint-cli2 configuration. Rules are in .markdownlint.yaml.
+globs:
+  - "**/*.md"
+ignores:
+  - node_modules/**
+  - docs/prd/buffy-prd-v4.0.0.md   # historical; never edited after the fact

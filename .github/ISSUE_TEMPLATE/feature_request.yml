@@ -1,0 +1,34 @@
+name: Feature request
+description: Propose a capability or a change in behavior
+labels: ["type: feature", "status: triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that Buffy makes hard or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What should happen instead? Sketch the user-facing behavior, not the implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - proxy / transport
+        - caching diagnostics
+        - secret masking
+        - spend controls
+        - observability / dashboard
+        - docs
+        - other

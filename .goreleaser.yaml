@@ -1,0 +1,96 @@
+# GoReleaser configuration. A pushed tag vX.Y.Z builds every platform from
+# CI, publishes archives with checksums, and signs the checksum file with
+# Sigstore keyless signing so users can verify a download without trusting
+# the release page. Validate locally with: go run github.com/goreleaser/goreleaser/v2@latest check
+version: 2
+
+project_name: buffy
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: buffy
+    main: ./cmd/buffy
+    binary: buffy
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/RedRobotKK/Buffy/internal/version.Version={{ .Version }}
+      - -X github.com/RedRobotKK/Buffy/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/RedRobotKK/Buffy/internal/version.Date={{ .CommitDate }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+signs:
+  - id: checksums
+    cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - --yes
+      - --output-certificate=${certificate}
+      - --output-signature=${signature}
+      - ${artifact}
+    artifacts: checksum
+    output: true
+
+sboms:
+  - id: archive
+    artifacts: archive
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Documentation
+      regexp: '^.*?docs(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - "^chore\\(release\\):"
+
+release:
+  draft: false
+  prerelease: auto
+  footer: |
+    ## Verify a download
+
+    Every release ships `checksums.txt` signed with Sigstore keyless signing. Verify before running anything:
+
+    ```sh
+    cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
+      --certificate-identity-regexp 'https://github.com/RedRobotKK/Buffy/.*' \
+      --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
+    sha256sum --check --ignore-missing checksums.txt
+    ```

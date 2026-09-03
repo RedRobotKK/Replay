@@ -1,0 +1,47 @@
+# Canonical label set. Apply with: npx --yes github-label-sync --labels .github/labels.yml RedRobotKK/Buffy
+- name: "type: bug"
+  color: "d73a4a"
+  description: Something is broken
+- name: "type: feature"
+  color: "0e8a16"
+  description: New capability or behavior change
+- name: "type: docs"
+  color: "0075ca"
+  description: Documentation only
+- name: "type: chore"
+  color: "cfd3d7"
+  description: Tooling, CI, housekeeping
+- name: "type: security"
+  color: "b60205"
+  description: Security-relevant change or report
+- name: "type: dependencies"
+  color: "ededed"
+  description: Dependency updates
+- name: "status: triage"
+  color: "fbca04"
+  description: Needs a maintainer to classify
+- name: "status: accepted"
+  color: "c2e0c6"
+  description: Agreed and ready to build
+- name: "status: blocked"
+  color: "e99695"
+  description: Waiting on something else
+- name: "status: stale"
+  color: "eeeeee"
+  description: No recent activity
+- name: "good first issue"
+  color: "7057ff"
+  description: Small, well-scoped, good for newcomers
+- name: "help wanted"
+  color: "008672"
+  description: Maintainers would welcome a contribution
+- name: "area: proxy"
+  color: "1d76db"
+- name: "area: caching"
+  color: "1d76db"
+- name: "area: masking"
+  color: "1d76db"
+- name: "area: spend"
+  color: "1d76db"
+- name: "area: observability"
+  color: "1d76db"
