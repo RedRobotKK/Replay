@@ -46,8 +46,12 @@ type sessionState struct {
 	errorTokens int
 	// breached is set once the session's guardrail tripped.
 	breached bool
-	// masked counts secrets replaced in this session's requests.
-	masked int
+	// masked counts secrets replaced in this session's requests;
+	// rehydrated and denied count placeholders restored and left in place
+	// in its responses.
+	masked     int
+	rehydrated int
+	denied     int
 	// generated is the generation time of the policy file the pinned
 	// policy came from, for tying a revert to it.
 	generated time.Time
@@ -97,6 +101,8 @@ type stats struct {
 	reverted      bool
 	revertReason  string
 	masked        map[string]int
+	rehydrated    map[string]int
+	denied        map[string]int
 }
 
 func newStats() *stats {
@@ -108,6 +114,8 @@ func newStats() *stats {
 		breakCauses:   map[cachemodel.BreakCause]int{},
 		refusedByKind: map[string]int{},
 		masked:        map[string]int{},
+		rehydrated:    map[string]int{},
+		denied:        map[string]int{},
 	}
 }
 
@@ -162,6 +170,14 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 	for name, n := range rec.Masked {
 		st.masked += n
 		s.masked[name] += n
+	}
+	for dest, n := range rec.Rehydrated {
+		st.rehydrated += n
+		s.rehydrated[dest] += n
+	}
+	for dest, n := range rec.RehydrationDenied {
+		st.denied += n
+		s.denied[dest] += n
 	}
 	st.cleared += rec.Response.ClearedInputTokens
 	return out
@@ -349,6 +365,10 @@ type SessionSummary struct {
 	// Masked counts secrets replaced with placeholders in this session's
 	// requests, so the user can check coverage (MK-7).
 	Masked int `json:"masked,omitempty"`
+	// Rehydrated counts placeholders restored in this session's responses;
+	// RehydrationDenied counts those left in place.
+	Rehydrated        int `json:"rehydrated,omitempty"`
+	RehydrationDenied int `json:"rehydration_denied,omitempty"`
 	// ReReads is the context-editing guardrail: file reads that repeated a
 	// path already in context, before and after the provider's first clear.
 	ReReads analysis.ReReads `json:"re_reads"`
@@ -393,7 +413,7 @@ func (s *stats) status() Status {
 				out.Trial.Treated++
 			}
 		}
-		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, ReReads: st.reReads, WhatIf: st.whatIf, ErrorShare: share(st.errorTokens, st.tally.PromptTokens), Masked: st.masked})
+		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, ReReads: st.reReads, WhatIf: st.whatIf, ErrorShare: share(st.errorTokens, st.tally.PromptTokens), Masked: st.masked, Rehydrated: st.rehydrated, RehydrationDenied: st.denied})
 	}
 	sort.Slice(out.Sessions, func(i, j int) bool { return out.Sessions[i].LastSeen.After(out.Sessions[j].LastSeen) })
 	return out
@@ -464,6 +484,16 @@ func (s *stats) metrics() string {
 	line("# TYPE buffy_masked_total counter")
 	for _, k := range sortedKeys(s.masked) {
 		line(`buffy_masked_total{pattern=%q} %d`, k, s.masked[k])
+	}
+	line("# HELP buffy_rehydrated_total Placeholders restored in responses, by destination.")
+	line("# TYPE buffy_rehydrated_total counter")
+	for _, k := range sortedKeys(s.rehydrated) {
+		line(`buffy_rehydrated_total{destination=%q} %d`, k, s.rehydrated[k])
+	}
+	line("# HELP buffy_rehydration_denied_total Placeholders left in place, by destination and reason.")
+	line("# TYPE buffy_rehydration_denied_total counter")
+	for _, k := range sortedKeys(s.denied) {
+		line(`buffy_rehydration_denied_total{destination=%q} %d`, k, s.denied[k])
 	}
 	line("# HELP buffy_policy_applied_total Requests that carried a Buffy-added request parameter.")
 	line("# TYPE buffy_policy_applied_total counter")

@@ -81,12 +81,12 @@ func TestVaultIsDeterministicAndPersistent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, err := v.Placeholder("sk-ant-secret-one")
+	a, err := v.Placeholder("sk-ant-secret-one", "anthropic-api-key")
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, _ := v.Placeholder("sk-ant-secret-one")
-	c, _ := v.Placeholder("sk-ant-secret-two")
+	b, _ := v.Placeholder("sk-ant-secret-one", "anthropic-api-key")
+	c, _ := v.Placeholder("sk-ant-secret-two", "anthropic-api-key")
 	if a != b || a == c || !strings.HasPrefix(a, PlaceholderPrefix) || len(a) != PlaceholderLength {
 		t.Fatalf("placeholders: %q %q %q", a, b, c)
 	}
@@ -102,17 +102,17 @@ func TestVaultIsDeterministicAndPersistent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s, ok := again.Secret(a); !ok || s != "sk-ant-secret-one" || again.Len() != 2 {
+	if s, p, ok := again.Secret(a); !ok || s != "sk-ant-secret-one" || p != "anthropic-api-key" || again.Len() != 2 {
 		t.Fatalf("vault must survive a restart: %q %v %d", s, ok, again.Len())
 	}
-	if d, _ := again.Placeholder("sk-ant-secret-one"); d != a {
+	if d, _ := again.Placeholder("sk-ant-secret-one", "anthropic-api-key"); d != a {
 		t.Fatal("placeholder must be the same after a restart")
 	}
 	other, err := OpenVault(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e, _ := other.Placeholder("sk-ant-secret-one"); e == a {
+	if e, _ := other.Placeholder("sk-ant-secret-one", "anthropic-api-key"); e == a {
 		t.Fatal("another vault key must give another placeholder")
 	}
 }
@@ -130,7 +130,7 @@ func TestMaskChangesOnlyTheSecretBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ph, _ := v.Placeholder(secret)
+	ph, _ := v.Placeholder(secret, "anthropic-api-key")
 	if rep["anthropic-api-key"] != 3 || rep.Total() != 3 {
 		t.Fatalf("report: %v", rep)
 	}
