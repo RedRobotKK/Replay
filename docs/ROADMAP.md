@@ -26,7 +26,7 @@ Read Claude Code transcripts. Reproduce the provider's caching turn by turn, pri
 
 **Status:** implemented for the Anthropic Messages API and tested against a fake provider (byte-exact request and response, incremental flushing, gzip, error passthrough, origin and token checks, no credential in ledger or logs). Not yet exercised against the real provider or a real client session. OpenAI chat completions passthrough works as bytes but its responses are not summarized; retries and provider-error handling are v0.3 with the guards.
 
-**Gate:** spike 3 answered (done); passthrough hash test green (done); a real Claude Code session recorded through the proxy with calibration at the measured tier; added latency p99 published.
+**Gate:** spike 3 answered (done); passthrough hash test green (done); added latency p99 published (done: 98µs, see `reviews/proxy-latency-2026-09-03.md`); a real Claude Code session recorded through the proxy with calibration at the measured tier (pending, needs a person at a machine).
 
 ## v0.3: policies, dry-run, guards
 

@@ -21,6 +21,13 @@ What the client sends through a local gateway and what the proxy must preserve. 
 | `anthropic-workspace-id` | Required when the upstream is Claude Platform on AWS |
 | Custom headers from `ANTHROPIC_CUSTOM_HEADERS` | User-supplied; opaque to Buffy |
 
+## Headers Buffy removes or adds
+
+- `x-buffy-token`, when the listener token is enabled, is Buffy's own secret and is removed before forwarding.
+- `x-buffy-override` is read by the guards and forwarded unchanged; it is harmless to the provider.
+- `x-buffy-warning` is the only header Buffy adds to a response, and only when a guard warns without blocking.
+- `X-Forwarded-For` is not added.
+
 ## Body rules
 
 - The request body is the same the client sends to the provider, `cache_control` markers included. Removing or converting markers bills the conversation uncached on every turn.
