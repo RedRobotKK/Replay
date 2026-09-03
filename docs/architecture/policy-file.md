@@ -39,7 +39,7 @@ What `buffy learn` writes and what the proxy will read. One file, `~/.buffy/poli
 - Each candidate's `decision` is `selected` or a `rejected: ...` string naming the rule that fired (ADR-0006). `mean_saving` and `interval` are the training-set saving as a share of as-run effective tokens and its two-standard-error band; `holdout_mean_saving` is the saving on sessions selection never saw.
 - `estimated` is true when the score depends on the byte-to-token fit (context editing); TTL candidates are measured.
 - `selected` is null with a `reason` when nothing qualified. That is the expected answer on a small corpus.
-- `types` holds one selection per session type under the same rules. A type is `<model family>/<small|large>-prefix`, both known at a session's first request: the model id's family and whether the first prompt was at least 20k tokens. A type with no selection falls back to the overall one; the overall selection stays null when the types disagree.
+- `types` holds one selection per session type under the same rules. A type is `<model family>/<small|large>-prefix`, both known at a session's first request: the model id's family and whether the first prompt was at least 20k tokens. A type with no selection falls back to the overall one; the overall selection stays null when the types disagree. The proxy classifies a starting session the same way, with the first prompt's size estimated at four bytes per token since the token count arrives only with the response, and records the type on the session's pin.
 
 ## Use
 

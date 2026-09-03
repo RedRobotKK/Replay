@@ -674,6 +674,9 @@ type invariantUpstream struct {
 	prefixHash string
 	perTurn    int
 	seen       int
+	// edits makes every response report one applied context edit.
+	edits  bool
+	bodies [][]byte
 }
 
 func (u *invariantUpstream) requests() int {
@@ -692,6 +695,7 @@ func (u *invariantUpstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_ = json.Unmarshal(body, &req)
 	u.mu.Lock()
 	u.seen++
+	u.bodies = append(u.bodies, body)
 	read := 0
 	if u.prompt > 0 && string(req.System) == u.prefixHash {
 		read = u.prompt - invariantTail
@@ -702,7 +706,11 @@ func (u *invariantUpstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	u.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = fmt.Fprintf(w, `{"id":"m","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":%d,"cache_creation_input_tokens":%d,"cache_read_input_tokens":%d,"output_tokens":5}}`, invariantTail, creation, read)
+	extra := ""
+	if u.edits {
+		extra = `,"context_management":{"applied_edits":[{"type":"clear_tool_uses_20250919","cleared_input_tokens":100}]}`
+	}
+	_, _ = fmt.Fprintf(w, `{"id":"m","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":%d,"cache_creation_input_tokens":%d,"cache_read_input_tokens":%d,"output_tokens":5}%s}`, invariantTail, creation, read, extra)
 }
 
 // growingBody renders turn n of a conversation whose every turn adds a
@@ -1379,5 +1387,197 @@ func TestSessionStateIsBounded(t *testing.T) {
 	}
 	if _, _, ok := s.pinned(fmt.Sprintf("s-%d", maxSessions*2-1)); !ok {
 		t.Fatal("the newest session must remain")
+	}
+}
+
+// A session gets the selection learned for its type, judged at its first
+// request from the model and the prompt's size, and the type is pinned.
+func TestPolicyIsChosenBySessionType(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "policy.json")
+	large := analysis.ContextEditPolicy{KeepLast: 6, TriggerTokens: 300000}
+	res := learn.Result{Schema: learn.PolicyFileSchema, Rules: cachemodel.RulesVersion, Generated: time.Now(), Reason: "types disagree",
+		Types: []learn.TypeResult{{Type: "opus/large-prefix", Sessions: 9, Selected: &learn.Candidate{Name: "context-edit(keep=6,trigger=300000)", Family: learn.FamilyContextEdit, ContextEdit: &large}}, {Type: "opus/small-prefix", Sessions: 9, Reason: "hurts"}}}
+	data, err := json.Marshal(res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	up := &bodyEcho{}
+	base, _, logs := startProxyIn(t, up, Config{PolicyFile: file}, dir)
+	big := `{"model":"claude-opus-5","max_tokens":50,"system":"` + strings.Repeat("s", 90_000) + `","messages":[{"role":"user","content":"hi"}]}`
+	postSession(t, base, "sess-large", big)
+	postSession(t, base, "sess-small", requestBody)
+	got := up.seen()
+	if triggerSeen(got[0]) != "300000" || triggerSeen(got[1]) != "none" {
+		t.Fatalf("large-prefix session must get its type's policy and small none: %s / %s", triggerSeen(got[0]), triggerSeen(got[1]))
+	}
+	store, err := ledger.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, ok := store.Pin("sess-large"); !ok || p.Type != "opus/large-prefix" || p.Trigger != 300000 {
+		t.Fatalf("large pin: %+v %v", p, ok)
+	}
+	if p, ok := store.Pin("sess-small"); !ok || p.Type != "opus/small-prefix" || p.Policy != "" {
+		t.Fatalf("small pin: %+v %v", p, ok)
+	}
+	if !strings.Contains(logs.String(), "type=opus/small-prefix runs without a policy") {
+		t.Fatalf("the typed no-selection must be logged:\n%s", logs.String())
+	}
+}
+
+// writePolicyFileAt is writePolicyFile with a generation time, which a
+// revert is tied to.
+func writePolicyFileAt(t *testing.T, path string, trigger int, generated time.Time) {
+	t.Helper()
+	p := analysis.ContextEditPolicy{KeepLast: 6, TriggerTokens: trigger}
+	res := learn.Result{Schema: learn.PolicyFileSchema, Rules: cachemodel.RulesVersion, Generated: generated, Selected: &learn.Candidate{Name: fmt.Sprintf("context-edit(keep=6,trigger=%d)", trigger), Family: learn.FamilyContextEdit, ContextEdit: &p}}
+	data, err := json.Marshal(res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// sessionInArm finds a session id the trial assigns to the wanted arm.
+func sessionInArm(t *testing.T, settings TrialSettings, treated bool) string {
+	t.Helper()
+	for i := 0; i < 1000; i++ {
+		id := fmt.Sprintf("trial-%d", i)
+		if settings.treated(id) == treated {
+			return id
+		}
+	}
+	t.Fatal("no session id lands in the wanted arm")
+	return ""
+}
+
+func postSession(t *testing.T, base, id, body string) {
+	t.Helper()
+	postWith(t, base, body, map[string]string{HeaderSessionID: id, "anthropic-beta": policy.BetaFeature})
+}
+
+// readingBody renders turn n of a session that reads the same file on
+// every turn, which is what a context edit makes expensive.
+func readingBody(turn int) string {
+	filler := strings.Repeat("y", 700)
+	msgs := []string{`{"role":"user","content":"` + strings.Repeat("x", 700) + `"}`}
+	for i := 1; i < turn; i++ {
+		id := fmt.Sprintf("r%d", i)
+		msgs = append(msgs,
+			`{"role":"assistant","content":[{"type":"tool_use","id":"`+id+`","name":"Read","input":{"file_path":"/src/a.go"}}]}`,
+			`{"role":"user","content":[{"type":"tool_result","tool_use_id":"`+id+`","content":"`+filler+`"}]}`)
+	}
+	return `{"model":"claude-opus-5","max_tokens":50,"system":"be brief","messages":[` + strings.Join(msgs, ",") + `]}`
+}
+
+// lastBody returns the body of the request the upstream saw after the
+// first n.
+func lastBody(t *testing.T, up *invariantUpstream, n int) []byte {
+	t.Helper()
+	up.mu.Lock()
+	defer up.mu.Unlock()
+	if len(up.bodies) <= n {
+		t.Fatalf("upstream saw %d requests, want more than %d", len(up.bodies), n)
+	}
+	return up.bodies[n]
+}
+
+// LN-5: a learned policy is tried on a stable share of new sessions with
+// the rest held out as controls, and the arms are pinned.
+func TestTrialShareSplitsSessionsIntoArms(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "policy.json")
+	writePolicyFileAt(t, file, 200000, time.Now())
+	settings := TrialSettings{Share: 0.5, RevertAfter: DefaultRevertAfter}
+	up := &bodyEcho{}
+	base, _, logs := startProxyIn(t, up, Config{PolicyFile: file, Trial: settings}, dir)
+	treated, control := sessionInArm(t, settings, true), sessionInArm(t, settings, false)
+	postSession(t, base, treated, requestBody)
+	postSession(t, base, control, requestBody)
+	got := up.seen()
+	if triggerSeen(got[0]) != "200000" || triggerSeen(got[1]) != "none" {
+		t.Fatalf("treated must carry the parameter and control must not: %s / %s", triggerSeen(got[0]), triggerSeen(got[1]))
+	}
+	st := getStatus(t, base)
+	if st.Trial.Treated != 1 || st.Trial.Control != 1 || st.Trial.Reverted != "" {
+		t.Fatalf("trial status: %+v", st.Trial)
+	}
+	store, err := ledger.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, ok := store.Pin(control); !ok || p.Trial != trialControl || p.Decision != string(policy.Control) {
+		t.Fatalf("control pin: %+v %v", p, ok)
+	}
+	if p, ok := store.Pin(treated); !ok || p.Trial != trialTreated || p.Policy != policy.Name {
+		t.Fatalf("treated pin: %+v %v", p, ok)
+	}
+	if !strings.Contains(logs.String(), "is a control") {
+		t.Fatalf("control assignment must be logged:\n%s", logs.String())
+	}
+}
+
+// LN-5: treated sessions whose re-read rate after the provider's clears
+// reaches the guardrail breach it; enough breaches revert the policy for
+// new sessions, persistently, until a newer learning result lifts it.
+func TestGuardrailBreachesRevertThePolicyUntilANewerFile(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "policy.json")
+	learned := time.Now().Add(-time.Hour)
+	writePolicyFileAt(t, file, 200000, learned)
+	settings := TrialSettings{Share: 1, ReReadRate: 0.5, RevertAfter: 2}
+	up := &invariantUpstream{perTurn: 800, edits: true}
+	base, _, logs := startProxyIn(t, up, Config{PolicyFile: file, Trial: settings}, dir)
+	const turns = 7
+	// Session ids are logged truncated to twelve characters.
+	for _, id := range []string{"breach-1", "breach-2"} {
+		for i := 1; i <= turns; i++ {
+			postSession(t, base, id, readingBody(i))
+		}
+		waitFor(t, "guardrail to be judged for "+id, func() bool {
+			return strings.Contains(logs.String(), "guardrail session="+id+":")
+		})
+	}
+	waitFor(t, "revert to be recorded", func() bool { return getStatus(t, base).Trial.Reverted != "" })
+	st := getStatus(t, base)
+	if st.Trial.Breached != 2 || !strings.Contains(st.Trial.Reverted, "re-read rate after clears") {
+		t.Fatalf("trial status after breaches: %+v", st.Trial)
+	}
+	if !strings.Contains(logs.String(), "reverted for new sessions") {
+		t.Fatalf("revert must be logged:\n%s", logs.String())
+	}
+	before := up.requests()
+	postSession(t, base, "sess-after-revert", requestBody)
+	if got := triggerSeen(lastBody(t, up, before)); got != "none" {
+		t.Fatalf("a session after the revert must run without the policy, got trigger %s", got)
+	}
+	store, err := ledger.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, ok := store.Revert(); !ok || r.Breached != 2 || !r.PolicyGenerated.Equal(learned) {
+		t.Fatalf("revert not persisted: %+v %v", r, ok)
+	}
+	if p, ok := store.Pin("sess-after-revert"); !ok || p.Decision != string(policy.Reverted) {
+		t.Fatalf("post-revert pin: %+v %v", p, ok)
+	}
+
+	// A restarted proxy honors the revert; a newer learning result lifts it.
+	up2 := &invariantUpstream{perTurn: 800}
+	base2, _, _ := startProxyIn(t, up2, Config{PolicyFile: file, Trial: settings}, dir)
+	postSession(t, base2, "sess-restart", requestBody)
+	if got := triggerSeen(lastBody(t, up2, 0)); got != "none" {
+		t.Fatalf("revert must survive a restart, got trigger %s", got)
+	}
+	writePolicyFileAt(t, file, 300000, time.Now())
+	postSession(t, base2, "sess-relearned", requestBody)
+	if got := triggerSeen(lastBody(t, up2, 1)); got != "300000" {
+		t.Fatalf("a newer policy file must lift the revert, got trigger %s", got)
 	}
 }
