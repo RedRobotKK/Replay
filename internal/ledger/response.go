@@ -53,7 +53,7 @@ func ParseResponse(body []byte) Response {
 	resp := Response{Usage: msg.Usage.toUsage()}
 	names := map[string]string{}
 	for _, b := range msg.Content {
-		resp.Blocks = append(resp.Blocks, summarizeBlock(b, transcript.RoleAssistant, names))
+		resp.Blocks = append(resp.Blocks, summarizeBlock(b, transcript.RoleAssistant, names, nil))
 	}
 	return resp
 }
@@ -117,7 +117,7 @@ func (s *StreamParser) line(l string) {
 		}
 	case "content_block_start":
 		if ev.ContentBlock != nil {
-			b := summarizeBlock(*ev.ContentBlock, transcript.RoleAssistant, map[string]string{})
+			b := summarizeBlock(*ev.ContentBlock, transcript.RoleAssistant, map[string]string{}, nil)
 			s.blocks = append(s.blocks, b)
 		}
 	case "content_block_delta":

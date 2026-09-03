@@ -239,7 +239,19 @@ func ToolLabel(name string, input json.RawMessage) string {
 const labelMaxLen = 400
 
 func truncateLabel(s string) string {
-	return TruncateLabel(strings.ReplaceAll(s, "\n", " "), labelMaxLen)
+	return TruncateLabel(SanitizeLabel(s), labelMaxLen)
+}
+
+// SanitizeLabel makes a label safe to print: control characters (including
+// escape, carriage return, and the C1 range) become spaces so content that
+// an agent read from an untrusted file cannot drive the user's terminal.
+func SanitizeLabel(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
+			return ' '
+		}
+		return r
+	}, s)
 }
 
 // TruncateLabel shortens a label to at most n runes, ending in an ellipsis
