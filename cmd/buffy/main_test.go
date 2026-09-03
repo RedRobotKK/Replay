@@ -42,6 +42,15 @@ func TestRunRejectsUnknownCommand(t *testing.T) {
 	}
 }
 
+func TestServeUsageNeverShowsTheToken(t *testing.T) {
+	t.Setenv(envToken, "s3cret-token-value")
+	var out, errOut bytes.Buffer
+	_ = run([]string{"serve", "-h"}, &out, &errOut)
+	if strings.Contains(errOut.String(), "s3cret") || strings.Contains(out.String(), "s3cret") {
+		t.Fatalf("usage text leaks the token:\n%s", errOut.String())
+	}
+}
+
 func TestCorpusOnFixture(t *testing.T) {
 	var out, errOut bytes.Buffer
 	err := run([]string{"corpus", "../../internal/transcript/testdata"}, &out, &errOut)

@@ -98,9 +98,12 @@ type LoopVerdict struct {
 	Block bool
 }
 
-// DetectLoop counts identical tool calls (same tool, same input) in a
-// Messages API request body. The hash is over the input bytes and never
-// leaves the process.
+// DetectLoop measures the run of identical tool calls (same tool, same
+// input) at the tail of a Messages API conversation: how many times in a
+// row the agent has just made the same call. Counting the tail rather than
+// the whole history means a legitimate repeated command earlier in a long
+// session cannot block it forever. The hash is over the input bytes and
+// never leaves the process.
 func DetectLoop(body []byte, limits LoopLimits) LoopVerdict {
 	if limits.Warn <= 0 && limits.Block <= 0 {
 		return LoopVerdict{}
@@ -114,8 +117,8 @@ func DetectLoop(body []byte, limits LoopLimits) LoopVerdict {
 	if err := json.Unmarshal(body, &req); err != nil {
 		return LoopVerdict{}
 	}
-	counts := map[string]int{}
-	names := map[string]string{}
+	var v LoopVerdict
+	lastKey := ""
 	for _, m := range req.Messages {
 		if m.Role != "assistant" {
 			continue
@@ -134,14 +137,13 @@ func DetectLoop(body []byte, limits LoopLimits) LoopVerdict {
 			}
 			sum := sha256.Sum256(append([]byte(b.Name+"\x00"), b.Input...))
 			key := hex.EncodeToString(sum[:])
-			counts[key]++
-			names[key] = b.Name
-		}
-	}
-	var v LoopVerdict
-	for key, n := range counts {
-		if n > v.Repeats {
-			v.Repeats, v.Label = n, names[key]
+			if key == lastKey {
+				v.Repeats++
+			} else {
+				lastKey = key
+				v.Repeats = 1
+				v.Label = b.Name
+			}
 		}
 	}
 	v.Warn = limits.Warn > 0 && v.Repeats >= limits.Warn
@@ -200,6 +202,18 @@ func (b *Breaker) Allow() (bool, time.Duration) {
 	// Half-open: let exactly one request probe the provider.
 	b.probing = true
 	return true, 0
+}
+
+// Release gives back a half-open probe that never reached the provider
+// (the request was refused or aborted before an outcome), so the next
+// request can probe instead of every request being refused until restart.
+func (b *Breaker) Release() {
+	if !b.Enabled() {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.probing = false
 }
 
 // Observe records an upstream outcome. Retryable is true for rate limit,

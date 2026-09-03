@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -57,12 +58,17 @@ func TestDetectLoop(t *testing.T) {
 	 {"role":"assistant","content":[{"type":"tool_use","id":"2","name":"Bash","input":{"command":"go test ./..."}}]},
 	 {"role":"user","content":[{"type":"tool_result","tool_use_id":"2","content":"FAIL"}]},
 	 {"role":"assistant","content":[{"type":"tool_use","id":"3","name":"Bash","input":{"command":"go test ./..."}}]},
-	 {"role":"user","content":[{"type":"tool_result","tool_use_id":"3","content":"FAIL"}]},
-	 {"role":"assistant","content":[{"type":"tool_use","id":"4","name":"Read","input":{"file_path":"a.go"}}]}
+	 {"role":"user","content":[{"type":"tool_result","tool_use_id":"3","content":"FAIL"}]}
 	]}`
 	v := DetectLoop([]byte(body), LoopLimits{Warn: 3, Block: 5})
 	if v.Repeats != 3 || v.Label != "Bash" || !v.Warn || v.Block {
 		t.Fatalf("verdict = %+v", v)
+	}
+	// A different call at the tail ends the run: history alone never blocks.
+	broken := strings.Replace(body, `{"type":"tool_result","tool_use_id":"3","content":"FAIL"}]}`, `{"type":"tool_result","tool_use_id":"3","content":"FAIL"}]},
+	 {"role":"assistant","content":[{"type":"tool_use","id":"4","name":"Read","input":{"file_path":"a.go"}}]}`, 1)
+	if v := DetectLoop([]byte(broken), LoopLimits{Warn: 3, Block: 3}); v.Repeats != 1 || v.Warn || v.Block {
+		t.Fatalf("a differing tail call must reset the run: %+v", v)
 	}
 	v = DetectLoop([]byte(body), LoopLimits{Warn: 2, Block: 3})
 	if !v.Block {
@@ -100,6 +106,11 @@ func TestBreakerOpensAndProbes(t *testing.T) {
 	}
 	if ok, _ := b.Allow(); ok {
 		t.Fatal("only one probe may pass while half-open")
+	}
+	// A probe that never reached an outcome is given back.
+	b.Release()
+	if ok, _ := b.Allow(); !ok {
+		t.Fatal("after Release the next request must be allowed to probe")
 	}
 	b.Observe(false)
 	if b.Open() {

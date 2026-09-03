@@ -135,7 +135,11 @@ func writeCorpus(w io.Writer, rows []corpusRow, failures []string) error {
 			keys = append(keys, string(c))
 		}
 		sort.Slice(keys, func(i, j int) bool {
-			return causes[analysis.BreakCause(keys[i])] > causes[analysis.BreakCause(keys[j])]
+			ci, cj := causes[analysis.BreakCause(keys[i])], causes[analysis.BreakCause(keys[j])]
+			if ci != cj {
+				return ci > cj
+			}
+			return keys[i] < keys[j]
 		})
 		for _, k := range keys {
 			p.printf("| %s | %d |\n", k, causes[analysis.BreakCause(k)])

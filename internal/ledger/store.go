@@ -21,6 +21,19 @@ const (
 	filePerm = 0o600
 )
 
+// Scanner sizing for ledger lines, shared by every reader.
+const (
+	scannerInitialBytes = 1 << 20
+	maxLineBytes        = 64 << 20
+)
+
+// newScanner returns a line scanner sized for ledger records.
+func newScanner(f *os.File) *bufio.Scanner {
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, scannerInitialBytes), maxLineBytes)
+	return scanner
+}
+
 // safeName restricts session ids to characters that are safe in a file name.
 var safeName = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
@@ -107,8 +120,7 @@ func IsLedgerFile(path string) bool {
 	var probe struct {
 		Schema int `json:"schema"`
 	}
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 0, 1<<20), 64<<20)
+	scanner := newScanner(f)
 	if !scanner.Scan() {
 		return false
 	}
@@ -124,8 +136,7 @@ func ReadFile(path string) (*transcript.Session, error) {
 	defer f.Close() //nolint:errcheck // read-only file; a close error carries no information we can act on
 
 	var records []Record
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 0, 1<<20), 64<<20)
+	scanner := newScanner(f)
 	skipped := 0
 	for scanner.Scan() {
 		var rec Record
@@ -189,11 +200,10 @@ func requestFromRecord(rec Record, index int) *transcript.Request {
 	}
 	// The prefix ahead of the messages is one synthetic system message so
 	// a change in it shows up as a divergence at position zero.
-	prefix := &transcript.Message{UUID: "prefix", Role: transcript.RoleSystem, Timestamp: rec.Timestamp, Blocks: []transcript.Block{
+	prefix := &transcript.Message{UUID: prefixUUID(rec.Prompt), Role: transcript.RoleSystem, Timestamp: rec.Timestamp, Blocks: []transcript.Block{
 		{Kind: transcript.KindText, Label: "system prompt", Bytes: rec.Prompt.SystemBytes},
 		{Kind: transcript.KindOther, Label: fmt.Sprintf("tool definitions (%d tools)", rec.Prompt.ToolCount), Bytes: rec.Prompt.ToolBytes},
 	}}
-	prefix.UUID = prefixUUID(rec.Prompt)
 	req.Context = append(req.Context, prefix)
 	for i, m := range rec.Prompt.Messages {
 		msg := &transcript.Message{UUID: messageUUID(i, m), Role: m.Role, Timestamp: rec.Timestamp}

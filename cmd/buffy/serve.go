@@ -42,7 +42,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	listen := fs.String("listen", defaultListen, "loopback address to bind")
 	upstream := fs.String("upstream", envOr(envUpstream, defaultUpstream), "provider base URL")
 	ledgerDir := fs.String("ledger", "", "ledger directory (default ~/.buffy/ledger)")
-	token := fs.String("token", os.Getenv(envToken), "require this value in the "+proxy.HeaderToken+" header")
+	token := fs.String("token", "", "require this value in the "+proxy.HeaderToken+" header (or set "+envToken+")")
 	maxSession := fs.Int("max-session-tokens", 0, "refuse a session's next request once it has consumed this many tokens (0 = off)")
 	maxDay := fs.Int("max-day-tokens", 0, "refuse requests once this many tokens were consumed today, UTC (0 = off)")
 	loopWarn := fs.Int("loop-warn", 0, "add a warning header when one identical tool call repeats this many times (0 = off)")
@@ -54,6 +54,11 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	}
 	if os.Getenv(envDisabled) != "" {
 		return errDisabled
+	}
+	// The environment value is applied after parsing so it never appears
+	// as a default in the usage text.
+	if *token == "" {
+		*token = os.Getenv(envToken)
 	}
 	target, err := url.Parse(*upstream)
 	if err != nil || target.Scheme == "" || target.Host == "" {
@@ -88,6 +93,8 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	defer stop()
 	go func() {
 		addr := srv.Addr()
+		// Best-effort banner: the server runs whether or not stdout is
+		// writable.
 		_, _ = fmt.Fprintf(stdout, "buffy serve listening on http://%s -> %s\nledger: %s\n\nPoint your agent at it:\n  export ANTHROPIC_BASE_URL=http://%s\n\nThen analyze measured data with:\n  buffy replay %s\n\nStop with Ctrl-C. Disable without uninstalling: %s=1.\n", addr, target, dir, addr, dir, envDisabled)
 	}()
 	return srv.ListenAndServe(ctx)
