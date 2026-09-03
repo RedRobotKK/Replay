@@ -403,7 +403,7 @@ func (s *Server) applyPolicy(r *http.Request, rec *ledger.Record, body []byte, s
 	edit, decision, ok := s.stats.pinned(rec.SessionID)
 	if !ok {
 		var generated time.Time
-		edit, decision, generated = s.decidePolicy(rec.SessionID, beta, clientSet)
+		edit, decision, generated = s.decidePolicy(rec.SessionID, beta, clientSet, rec.Model, promptSize(rec.Prompt))
 		s.stats.pin(rec.SessionID, edit, decision, generated)
 	}
 	if edit == nil || decision != policy.Applied {
@@ -441,7 +441,7 @@ func (s *Server) policyConfigured() bool {
 // process. A pin persisted by an earlier process wins over everything,
 // then the flag, then the policy file. The decision is persisted so a
 // restart or a rewritten file cannot change a running session.
-func (s *Server) decidePolicy(sessionID, beta string, clientSet bool) (*policy.ContextEdit, policy.Decision, time.Time) {
+func (s *Server) decidePolicy(sessionID, beta string, clientSet bool, model string, promptBytes int) (*policy.ContextEdit, policy.Decision, time.Time) {
 	if pin, ok := s.cfg.Store.Pin(sessionID); ok {
 		var edit *policy.ContextEdit
 		if pin.Policy == policy.Name {
@@ -463,8 +463,9 @@ func (s *Server) decidePolicy(sessionID, beta string, clientSet bool) (*policy.C
 	pin := ledger.Pin{SessionID: sessionID, At: time.Now(), Decision: string(decision)}
 	if edit == nil && s.cfg.PolicyFile != "" {
 		var arm string
-		edit, decision, arm, generated = s.trialPolicy(sessionID)
-		pin.Trial, pin.Decision = arm, string(decision)
+		sessionType := learn.TypeFromBytes(model, promptBytes)
+		edit, decision, arm, generated = s.trialPolicy(sessionID, sessionType)
+		pin.Trial, pin.Type, pin.Decision = arm, sessionType, string(decision)
 	}
 	if edit != nil {
 		decision = edit.Admissible(beta, clientSet)
@@ -482,8 +483,8 @@ func (s *Server) decidePolicy(sessionID, beta string, clientSet bool) (*policy.C
 // the policy, control sessions are held out so the two can be compared,
 // and once the guardrail has reverted the policy nobody gets it until a
 // newer learning result replaces it.
-func (s *Server) trialPolicy(sessionID string) (*policy.ContextEdit, policy.Decision, string, time.Time) {
-	edit, generated := s.policyFromFile(sessionID)
+func (s *Server) trialPolicy(sessionID, sessionType string) (*policy.ContextEdit, policy.Decision, string, time.Time) {
+	edit, generated := s.policyFromFile(sessionID, sessionType)
 	if edit == nil {
 		return nil, policy.NotConfigured, "", time.Time{}
 	}
@@ -498,23 +499,34 @@ func (s *Server) trialPolicy(sessionID string) (*policy.ContextEdit, policy.Deci
 	return edit, policy.Applied, trialTreated, generated
 }
 
-// policyFromFile reads the learned selection. Only the context-edit
-// family is something the proxy can apply; a TTL selection is advice for
-// a client setting and is logged. The file's generation time comes back
-// so a revert can be tied to the file it happened under.
-func (s *Server) policyFromFile(sessionID string) (*policy.ContextEdit, time.Time) {
+// promptSize is the size of a summarized request as the client sent it:
+// the prefix and every message block, which is what the session type is
+// estimated from at a first request.
+func promptSize(p ledger.Prompt) int {
+	n := p.SystemBytes + p.ToolBytes
+	for _, m := range p.Messages {
+		for _, b := range m.Blocks {
+			n += b.Bytes
+		}
+	}
+	return n
+}
+
+// policyFromFile reads the learned selection for the session's type,
+// falling back to the overall one. Only the context-edit family is
+// something the proxy can apply; a TTL selection is advice for a client
+// setting and is logged. The file's generation time comes back so a
+// revert can be tied to the file it happened under.
+func (s *Server) policyFromFile(sessionID, sessionType string) (*policy.ContextEdit, time.Time) {
 	res, err := learn.LoadFile(s.cfg.PolicyFile)
 	if err != nil {
 		s.cfg.Logger.Printf("policy file %s not read for session=%s: %v", s.cfg.PolicyFile, short(sessionID), err)
 		return nil, time.Time{}
 	}
-	c, note, err := learn.LoadSelected(s.cfg.PolicyFile)
+	c, note := res.SelectionFor(sessionType)
 	switch {
-	case err != nil:
-		s.cfg.Logger.Printf("policy file %s not read for session=%s: %v", s.cfg.PolicyFile, short(sessionID), err)
-		return nil, time.Time{}
 	case note != "":
-		s.cfg.Logger.Printf("policy file: %s (session=%s runs without a policy)", transcript.SanitizeLabel(note), short(sessionID))
+		s.cfg.Logger.Printf("policy file: %s (session=%s type=%s runs without a policy)", transcript.SanitizeLabel(note), short(sessionID), sessionType)
 		return nil, time.Time{}
 	case c.ContextEdit == nil:
 		s.cfg.Logger.Printf("policy file selects %s, which is a client setting (%s); session=%s runs without a proxy policy", transcript.SanitizeLabel(c.Name), transcript.SanitizeLabel(c.Live), short(sessionID))
