@@ -11,3 +11,6 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | [0003](0003-policy-application-constraints.md) | Live policies use only provider-sanctioned mechanisms | Proposed |
 | [0004](0004-masking-and-scoped-rehydration.md) | Secret masking with persistent vault and scoped rehydration | Proposed |
 | [0005](0005-apache-2-license.md) | License the project under Apache 2.0 | Accepted |
+| [0006](0006-learning-selection.md) | Learning selection | Accepted |
+| [0007](0007-federated-calibration-corpus.md) | Improving the cache model from many machines | Proposed |
+| [0008](0008-corpus-at-launch.md) | Collecting a corpus from a public launch without shipping telemetry | Proposed |

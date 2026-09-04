@@ -12,6 +12,8 @@
 #   --bin-dir <dir>     where the binary lands
 #   --dry-run           print what would happen, change nothing
 #   --no-modify-path    never mention or touch shell configuration
+#   --no-verify         install even if the checksum cannot be verified. Off by
+#                       default: an unverifiable download aborts.
 #   --corpus-opt-in     agree now to share calibration reports. Off unless you
 #                       pass it. It writes a file; it sends nothing, ever. You
 #                       still run `replay corpus --submit` to send anything.
@@ -28,6 +30,7 @@ BIN_DIR="${REPLAY_BIN_DIR:-}"
 DRY_RUN=0
 MODIFY_PATH=1
 CORPUS_OPT_IN=0
+ALLOW_UNVERIFIED=0
 
 # ---------------------------------------------------------------- presentation
 # Colour only when stdout is a terminal that wants it. Piped into a file or a
@@ -58,6 +61,7 @@ while [ $# -gt 0 ]; do
     --dry-run)        DRY_RUN=1; shift ;;
     --no-modify-path) MODIFY_PATH=0; shift ;;
     --corpus-opt-in)  CORPUS_OPT_IN=1; shift ;;
+    --no-verify)      ALLOW_UNVERIFIED=1; shift ;;
     -h|--help)        usage ;;
     *)                die "unknown option: $1. Try --help." ;;
   esac
@@ -65,11 +69,11 @@ done
 
 # ------------------------------------------------------------------- downloader
 if command -v curl >/dev/null 2>&1; then
-  fetch() { curl -fsSL --proto '=https' --tlsv1.2 "$1"; }
-  save()  { curl -fsSL --proto '=https' --tlsv1.2 -o "$2" "$1"; }
+  fetch() { curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 "$1"; }
+  save()  { curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 -o "$2" "$1"; }
 elif command -v wget >/dev/null 2>&1; then
-  fetch() { wget -qO- "$1"; }
-  save()  { wget -qO "$2" "$1"; }
+  fetch() { wget -q --https-only --secure-protocol=TLSv1_2 -O- "$1"; }
+  save()  { wget -q --https-only --secure-protocol=TLSv1_2 -O "$2" "$1"; }
 else
   die "curl or wget is required."
 fi
@@ -171,11 +175,17 @@ else
           || die "Checksum mismatch for ${archive}. Nothing was installed.
    Expected one of the hashes in ${base}/checksums.txt, got ${sum}."
         ok "Checksum verified"
+      elif [ "$ALLOW_UNVERIFIED" -eq 1 ]; then
+        warn "No sha256 tool found. Installing unverified because --no-verify was passed."
       else
-        warn "No sha256 tool found, so the download was not verified."
+        die "No sha256 tool (sha256sum or shasum) was found, so the download cannot be
+   verified. Install one, or re-run with --no-verify to accept an unverified binary."
       fi
+    elif [ "$ALLOW_UNVERIFIED" -eq 1 ]; then
+      warn "checksums.txt could not be fetched. Installing unverified because --no-verify was passed."
     else
-      warn "checksums.txt could not be fetched, so the download was not verified."
+      die "checksums.txt could not be fetched from ${base}, so the download cannot be verified.
+   Nothing was installed. Re-run with --no-verify to accept an unverified binary."
     fi
 
     tar -xzf "$tmp/$archive" -C "$tmp" || die "Could not unpack ${archive}."
@@ -218,9 +228,11 @@ fi
 if [ "$CORPUS_OPT_IN" -eq 1 ]; then
   cfg_dir="${XDG_CONFIG_HOME:-$HOME/.config}/replay"
   mkdir -p "$cfg_dir"
+  # A dedicated file, because '>' on config.toml would silently truncate any
+  # other settings the user already had there.
   printf 'corpus_opt_in = true\n# Written by install.sh --corpus-opt-in on %s\n# Delete this file to withdraw. Nothing is sent until you run: replay corpus --submit\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$cfg_dir/config.toml"
-  ok "Corpus contribution enabled in ${cfg_dir}/config.toml"
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$cfg_dir/corpus-consent.toml"
+  ok "Corpus contribution enabled in ${cfg_dir}/corpus-consent.toml"
   info "Still nothing is sent until you run: ${BIN} corpus --submit"
 fi
 

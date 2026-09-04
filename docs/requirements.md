@@ -5,7 +5,7 @@ The execution-ready requirements for Replay, a local tool that shows developers 
 | | |
 |---|---|
 | **Version** | 5.0.0 |
-| **Status** | Draft, awaiting owner approval |
+| **Status** | Current. Build status is recorded per requirement below |
 | **Date** | 2026-09-02 |
 | **Owner** | RedRobotKK (single maintainer) |
 | **Supersedes** | `replay-prd-v4.0.0.md` (kept as history, not edited) |
@@ -389,7 +389,7 @@ An A/B harness runs a fixed set of real agent tasks with Replay off, on with pas
 
 ## 14. Release plan
 
-Sequenced so that the first release costs nothing to run, works for every user regardless of spike 3, and produces the screenshot that gets the project noticed.
+Sequenced so that the first release costs nothing to run, works for every user regardless of spike 3, and produces a first release that can be evaluated on its own output.
 
 | Release | Scope | Gate |
 |---------|-------|------|
@@ -412,7 +412,7 @@ These are in force now and are described in `../HOUSEKEEPING.md` and `CONTRIBUTI
 - Historical documents under `docs/internal/prd/` and `docs/internal/reviews/` are never edited; a new version is added instead.
 - Issue and pull request templates, a canonical label set, weekly stale automation, Dependabot, CODEOWNERS.
 - Security reports go through private advisories, never public issues.
-- The README states status truthfully and names the maintainer's availability for work.
+- The README states status truthfully and names the maintainer.
 
 ## 16. Licensing
 
@@ -427,16 +427,10 @@ Apache License 2.0, decided by the owner on 2026-09-02 and recorded in ADR-0005.
 | Calibration cannot reach threshold because client breakpoint placement is unobservable | Medium | High | Fit breakpoint placement per client version during calibration; label estimated; prefer proxy data |
 | Estimated figures debunked publicly | Medium | High | Two-tier labels, calibration line, no savings percentage outside the benchmark page |
 | Provider changes caching rules | Certain over time | Medium | Versioned rules, staleness detection, refusal to score |
-| Provider absorbs the diagnostic natively | Medium | Medium | Cross-client, local what-if and advisor remain; the goal is reach, not moat |
+| Provider absorbs the diagnostic natively | Medium | Medium | Cross-client, local what-if and advisor remain; the goal is a tool that is worth using |
 | Single maintainer availability | High | High | Small releases; every step leaves a usable tool; documentation good enough for a second contributor |
 | Masking false negatives create false confidence | Medium | High | Named pattern set, per-session masked report, never claim completeness |
 
-## 18. Decisions required from the owner
-
-1. ~~License for the first public release.~~ Decided: Apache 2.0 (ADR-0005).
-2. Approval of the release sequence in Section 14, in particular replay before proxy and masking last.
-3. ~~A real transcript sample for spikes 1 and 2.~~ One session confirmed both; the 20-session corpus is still needed.
-4. Whether the "looking for work" line appears in the README from day one.
 
 ## 19. Open questions
 

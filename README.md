@@ -4,7 +4,7 @@
 
 It reads the transcripts your agent already writes, reproduces the provider's caching turn by turn, and only then scores alternatives. Later, as a local proxy, it applies the better layout live using only mechanisms the provider itself sanctions, and keeps improving from your own history. Everything runs on your machine. No API calls are spent on analysis. Nothing leaves.
 
-> **Status: v0.1 and v0.2 in development, no release tagged yet.** `replay`, `blame`, `diff`, and `redact` work offline on Claude Code transcripts and have been calibrated against one real session so far; the 20-session corpus the roadmap requires is still pending. `serve` is a byte-for-byte passthrough proxy that records a derived-data ledger; it has been exercised against a fake provider, not yet against the real one. Follow [`docs/ROADMAP.md`](docs/ROADMAP.md).
+> **Status: v0.1 and v0.2 in development, no release tagged yet.** `replay`, `blame`, `diff`, and `redact` work offline on Claude Code transcripts and have been calibrated against 11 real sessions so far, all from this repository's own development; the 20-session corpus the roadmap requires is still pending. `serve` is a byte-for-byte passthrough proxy that records a derived-data ledger; it has been exercised against a fake provider, not yet against the real one. Follow [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 [![CI](https://github.com/RedRobotKK/Replay/actions/workflows/ci.yml/badge.svg)](https://github.com/RedRobotKK/Replay/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/RedRobotKK/Replay)](https://goreportcard.com/report/github.com/RedRobotKK/Replay)
@@ -25,11 +25,11 @@ Replay addresses each one locally, without changing how the agent works.
 | Command | What you get |
 |---------|--------------|
 | `replay <path>` | Reproduces your sessions' caching, prints how well it matched the provider's own numbers, then scores alternative layouts in tokens saved |
-| `replay blame` | Ranks which files, tool descriptions, and instructions are eating your prompt tokens across all sessions |
+| `replay blame` | Ranks which files and blocks are eating your prompt tokens, per session |
 | `replay diff` | Points at the exact turn where the cached prefix diverged and classifies the cause |
 | `replay doctor` | What Replay can see on this machine (transcripts, proxy variable, a running proxy, ledger) and the next command to run |
 | `replay corpus` | Calibration summary across every session in a directory, as Markdown with no paths or content, for reporting how well Replay understands your sessions |
-| `replay serve` | Local proxy: byte-for-byte passthrough that records what the provider charged, so the three commands above run on measured data (policies and guards come later) |
+| `replay serve` | Local proxy: byte-for-byte passthrough that records what the provider charged, so the three commands above run on measured data (policies and guards are implemented; see below) |
 
 Every number is labeled *estimated* (from transcripts) or *measured* (from the wire), with the calibration that justifies it. Release sequence, gates, and what is deliberately deferred: [`docs/ROADMAP.md`](docs/ROADMAP.md). Full requirements: [`docs/requirements.md`](docs/requirements.md).
 
@@ -39,8 +39,10 @@ Every number is labeled *estimated* (from transcripts) or *measured* (from the w
 curl -fsSL https://raw.githubusercontent.com/RedRobotKK/Replay/main/install.sh | sh
 ```
 
-Downloads the released binary for your platform and verifies it against the release checksums before
-installing. Falls back to building from source when no release is tagged. Set `REPLAY_BIN_DIR` to
+Downloads the released binary for your platform and verifies it against the release checksums.
+**An unverifiable download aborts**; pass `--no-verify` to accept one deliberately. The checksums are
+fetched from the same origin as the archive, so this defends against corruption, not against a
+compromised release: verify the Sigstore signature below if that is your threat model. Falls back to building from source when no release is tagged. Set `REPLAY_BIN_DIR` to
 choose where it lands. Read the script first if you would rather not pipe to a shell; it is short.
 
 With Go already installed:
@@ -64,7 +66,10 @@ replay doctor                                        # what is on this machine, 
 replay ~/.claude/projects/<your-project>/
 ```
 
-Real output from a Claude Code session, on the session in which Replay itself was written:
+Real output from one Claude Code session, the session in which Replay itself was written. It is a
+paste from a single run, not a summary: the aggregate across every session measured so far is in
+[`docs/evidence/`](docs/evidence/calibration-corpus-2026-09-03.md), which reports 398 of 402 turns
+reproduced across 11 sessions and is candid that those sessions are this repository's own.
 
 ```text
 Tier: estimated (transcripts only)
@@ -94,7 +99,7 @@ The roadmap gate for the first release is calibration on twenty real sessions. I
 
 ```sh
 make build
-./bin/replay corpus ~/.claude/projects > docs/internal/reviews/calibration-corpus-$(date +%F).md
+./bin/replay corpus ~/.claude/projects > docs/evidence/calibration-corpus-$(date +%F).md
 ```
 
 Open it, check that nothing in it identifies your projects, and commit it on a branch. The report also judges calibration per model with the newest sessions on their own, so a provider rule change shows up as "provider behavior changed" rather than as a silent drift in the numbers, and it bounds the minimum cacheable prefix from your usage next to what the rules file says. `replay learn` scores no alternatives for a model reported that way.

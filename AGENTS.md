@@ -43,6 +43,6 @@ internal/           private packages (version, later: proxy, masking, spend, das
 docs/adr/           architecture decision records
 docs/architecture/  system design
 docs/internal/prd/           product requirement documents (history)
-docs/internal/reviews/       design reviews
+docs/evidence/       design reviews
 .github/            CI, templates, labels, housekeeping automation
 ```

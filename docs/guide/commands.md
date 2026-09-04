@@ -1,6 +1,6 @@
 # Commands
 
-Nine commands. Most people use three of them.
+Ten commands. Most people use three of them.
 
 Run `replay` with no arguments for the built-in usage text, which is always the authority on flags
 your installed version actually has.
@@ -36,8 +36,8 @@ Flags are below.
 
 ### `replay blame`
 
-Ranks what is eating your prompt tokens across all sessions: which files, which tool descriptions,
-which instructions. Useful when the bill is high and you do not know which part of your setup is
+Ranks what is eating your prompt tokens **within one session**: which files, and which blocks.
+Run it per session; `replay advise` is the one that aggregates. Useful when the bill is high and you do not know which part of your setup is
 responsible.
 
 ### `replay diff`
@@ -74,6 +74,12 @@ bug report.
 replay redact session.jsonl > redacted.jsonl
 ```
 
+### `replay advise`
+
+Aggregates across sessions and suggests changes worth making, then tracks whether a suggestion was
+later borne out. Each suggestion is `pending`, `verified` or `not verified` on a subsequent run.
+Unlike `blame`, this one does look across sessions.
+
 ### `replay version`
 
 Version and build commit.
@@ -102,11 +108,14 @@ A refusal arrives as a provider-shaped error your agent will show you. Send
 | `--breaker-failures` | Open a circuit after consecutive provider failures and answer locally with `Retry-After` until the cooldown passes |
 | `--retries`, `--retry-base`, `--retry-max` | Resend on rate limit, overload, server error or connection failure, with doubling jittered backoff |
 
-The error budget trips before the spend cap on purpose. An agent stuck on failures is wasting money
-long before it has spent much. Sessions under ten thousand prompt tokens are never judged.
+The error budget is designed to catch a stuck agent long before a spend cap would, because an agent
+looping on failures wastes money before it has spent much. Note that when both would refuse the same
+request, the spend cap is evaluated first and its message is the one you see. Sessions under ten thousand prompt tokens are never judged.
 
-Retries have one rule worth knowing: a request is only resent when the connection failed to open. If
-any byte has already gone out, it may already have been billed, so it is never resent.
+Retries have two rules worth knowing. A rate limit, overload or server error is retried, because the
+provider answered and said to try again. A **transport** failure is only retried when the connection
+never opened: if any byte of the request has already gone out it may already have been billed, so it
+is not resent. And nothing is ever retried once a byte of the *response* has reached the client.
 
 ### Secrets
 
@@ -143,6 +152,6 @@ While `serve` is running:
 
 - `GET /replay/status` returns per-session totals as JSON: requests, prompt tokens, cached share,
   breaks, prefix changes, list cost, and what each alternative layout would have done.
-- `GET /replay/metrics` exposes the same totals as Prometheus text.
+- `GET /replay/metrics` exposes aggregate totals as Prometheus text. It has no per-session rows.
 
 Both honour the token when one is set, and both refuse browser origins.

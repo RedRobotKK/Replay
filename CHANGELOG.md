@@ -40,7 +40,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Repository scaffold: Go module, `replay` command skeleton with `version` and `help`, Makefile, CI on Linux, macOS, and Windows, golangci-lint, Markdown lint, Dependabot, issue and pull request templates, label set, weekly stale-issue housekeeping.
 - Governance and community documents: Apache 2.0 license and NOTICE (ADR-0005; the scaffold's initial BSL 1.1 draft was replaced before any release), contributing guide, code of conduct, security policy, support guide.
 - `docs/ROADMAP.md`, `docs/maintainers.md`, ADR process with ADR-0001, PRD v4.0.0 and its adversarial review under `docs/`.
-- PRD v5.0.0 (`docs/requirements.md`): replay-first product, two-tier truth labels, provider-sanctioned policy catalog, scoped rehydration, gating spikes, and the release sequence. ADR-0002 to ADR-0004 record the decisions. Red/blue review of the full design under `docs/internal/reviews/`.
+- PRD v5.0.0 (`docs/requirements.md`): replay-first product, two-tier truth labels, provider-sanctioned policy catalog, scoped rehydration, gating spikes, and the release sequence. ADR-0002 to ADR-0004 record the decisions. Red/blue review of the full design under `docs/evidence/`.
 
 ### Fixed
 

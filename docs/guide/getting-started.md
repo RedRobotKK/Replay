@@ -71,9 +71,10 @@ That starts a local proxy on `127.0.0.1:4000`. In the shell that runs your agent
 export ANTHROPIC_BASE_URL=http://127.0.0.1:4000
 ```
 
-Now run your agent as you normally would. The proxy forwards every request and response byte for
-byte, including streaming and cache markers. It never rewrites a body, never removes a header, and
-never stores or logs your credential. What it writes is a ledger: block kinds, sizes, labels,
+Now run your agent as you normally would. By default the proxy forwards every request and response byte for byte, including streaming and
+cache markers, and never stores or logs your credential. Two opt-in features do modify traffic and
+say so: `--mask` rewrites secrets in the body, and `--context-edit-trigger` adds the provider's
+context-management parameter. Both are off unless you turn them on. What it writes is a ledger: block kinds, sizes, labels,
 timings and usage, with no message text, under `~/.replay/ledger` with owner-only permissions.
 
 Then run the same analysis against the ledger instead of the transcripts:

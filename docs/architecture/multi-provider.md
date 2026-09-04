@@ -1,6 +1,6 @@
 # Caching across providers, and what that means for the engine
 
-**Draft, 2026-09-04.** Written after ADR-0007, which this partly corrects.
+**2026-09-04.** Written after ADR-0007, which this partly corrects.
 
 ## The mistake in the current design
 
@@ -106,7 +106,7 @@ dashboard will ever show you, and it is only reachable by replaying real traffic
 
 ## What this changes about ADR-0007
 
-My federated-corpus ADR assumed one learning problem. There are three, and they need different data.
+ADR-0007 assumed one learning problem. There are three, and they need different data.
 
 **Explicit:** learn breakpoint placement. Needs sessions with varied structure. Depth helps.
 
@@ -138,9 +138,9 @@ diverge. The order that respects that:
    assumptions that are currently invisible.
 4. **Then** generalise the corpus per mechanism family.
 
-## What I am not certain about
+## What is not settled
 
-**Specific published figures for any provider, including the one already implemented.** Minimums,
+**Specific published figures for any provider, including the one already implemented, are not settled here.** Minimums,
 TTLs, granularities, discounts and eligibility rules change on a cadence faster than this document
 will be revised, and several are not documented precisely anywhere.
 
