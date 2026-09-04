@@ -44,7 +44,7 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 	p.Printf("replay doctor\n\n")
 
 	// Transcripts.
-	projects := filepath.Join(home, ".claude", "projects")
+	projects := filepath.Join(claudeConfigDir(home), "projects")
 	files, dirs := countTranscripts(projects)
 	if dirs == 0 {
 		p.Printf("transcripts   none found under %s\n", projects)
@@ -125,4 +125,20 @@ func probeProxy(base string) (bool, string) {
 		return true, "healthy"
 	}
 	return false, fmt.Sprintf("status %d; something other than replay is listening", resp.StatusCode)
+}
+
+// claudeConfigDir resolves where Claude Code keeps its data. CLAUDE_CONFIG_DIR
+// relocates it, and a user who has set it and gets told "none found" concludes
+// Replay does not work rather than that it looked in the wrong place.
+//
+// Two nearby directories are deliberately NOT this one, because both exist on a
+// normal machine and neither holds transcripts:
+//
+//	~/.local/share/claude              the installed binary and versions
+//	~/Library/Application Support/Claude   the desktop app's Electron profile
+func claudeConfigDir(home string) string {
+	if d := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); d != "" {
+		return d
+	}
+	return filepath.Join(home, ".claude")
 }

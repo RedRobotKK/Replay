@@ -249,6 +249,7 @@ Usage:
   replay version                   print build information
 
 Transcripts: Claude Code writes them under ~/.claude/projects/<project>/*.jsonl
+             ($CLAUDE_CONFIG_DIR/projects if you have relocated it)
 Ledger:      replay serve writes ~/.replay/ledger/<session>.jsonl (measured tier)
 `)
 	return err
