@@ -71,7 +71,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	revertAfter := fs.Int("revert-after", proxy.DefaultRevertAfter, "how many sessions must breach the guardrail before the policy is reverted")
 	mask := fs.Bool("mask", false, "EXPERIMENTAL: replace secrets matching the named pattern set with vault placeholders before requests leave the machine, and restore them in responses within -rehydrate-scope (see README)")
 	maskPatterns := fs.String("mask-patterns", "", "file of user-defined patterns for -mask, one per line as name<TAB>regexp")
-	maskEntropy := fs.Bool("mask-entropy", false, "with -mask, also mask runs that look like credentials by shape and entropy (mixed case and digits, "+strconv.Itoa(masking.EntropyMinLength)+" characters or more); reported as pattern "+masking.EntropyPattern)
+	maskEntropy := fs.Bool("mask-entropy", false, "with -mask, also mask runs that look like credentials by shape and entropy. Needs mixed case and digits over "+strconv.Itoa(masking.EntropyMinLength)+" characters, so bare hex and lowercase secrets are NOT caught by shape; those are caught only when a name like TOKEN= or api_key: sits beside them. Reported as pattern "+masking.EntropyPattern)
 	rehydrate := fs.Bool("rehydrate", true, "with -mask, restore placeholders in responses; false leaves them in place to evaluate coverage")
 	project := fs.String("project", "", "with -mask, the directory under which file-edit tool inputs may receive secrets (default: the current directory)")
 	var scopeSpecs []string

@@ -37,6 +37,15 @@ var Patterns = []Pattern{
 	{Name: "jwt", re: regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b`)},
 	{Name: "bearer-token", re: regexp.MustCompile(`(?i)\bbearer\s+([A-Za-z0-9._~+/-]{20,}=*)`), Group: 1},
 	{Name: "url-credential", re: regexp.MustCompile(`\b[a-z][a-z0-9+.-]*://[^\s/:@]+:([^\s/@]{8,})@`), Group: 1},
+	// Hex and lowercase credentials cannot be caught by shape: a 32-character
+	// Twilio token and a 40-character git SHA are the same string to any
+	// entropy test, and the SHA actually scores lower. Masking every hex run
+	// would corrupt the diffs and tool output a coding agent reads all day.
+	// So catch them by the company they keep instead: a name that says the
+	// value is a credential, immediately followed by the value.
+	{Name: "credential-assignment", re: regexp.MustCompile(
+		`(?i)\b[a-z0-9_.-]*(?:token|secret|passwd|password|api[_-]?key|auth|credential)[a-z0-9_.-]*` +
+			`[\\"']{0,2}\s*[:=]\s*[\\"']{0,2}([A-Za-z0-9._~+/=-]{16,})`), Group: 1},
 }
 
 // Match is one detected secret in a text: its byte range and pattern.

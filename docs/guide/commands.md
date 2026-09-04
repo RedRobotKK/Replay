@@ -123,7 +123,13 @@ is not resent. And nothing is ever retried once a byte of the *response* has rea
 |---|---|
 | `--mask`, `--mask-patterns`, `--mask-entropy` | Detect and mask secrets in traffic, using a maintained pattern set, your own patterns, and an optional entropy heuristic |
 
-The README names the patterns covered. It does not claim to catch everything, and neither should you.
+The README names the patterns covered and has a section on what masking does **not** catch. Three
+things worth knowing before you rely on it: bare hex and lowercase secrets are invisible to the
+entropy test by design, because a 32-character Twilio token and a git SHA are the same shape and
+masking every hex run would corrupt the diffs your agent reads; those are caught only when a name
+like `TOKEN=` or `"api_key":` sits beside the value; and if the vault cannot be written, the request
+is forwarded **unmasked** with a `MASKING FAILED` log line that is easy to miss in a backgrounded
+proxy.
 
 ### Access
 

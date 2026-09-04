@@ -521,7 +521,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 func (s *Server) mask(rec *ledger.Record, body []byte) []byte {
 	out, report, err := s.cfg.Masker.Mask(body)
 	if err != nil {
-		s.cfg.Logger.Printf("mask session=%s: body not masked: %v", short(rec.SessionID), err)
+		s.cfg.Logger.Printf("MASKING FAILED session=%s: the request was forwarded UNMASKED, including any secret already matched: %v", short(rec.SessionID), err)
 		return body
 	}
 	if report.Total() > 0 {

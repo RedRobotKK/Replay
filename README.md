@@ -223,3 +223,29 @@ or a [discussion](https://github.com/RedRobotKK/Replay/discussions). For anythin
 ## License
 
 Open source under the [Apache License 2.0](LICENSE). See [`NOTICE`](NOTICE) for attribution. The decision is recorded in [ADR-0005](docs/adr/0005-apache-2-license.md).
+
+## What masking does not catch
+
+`--mask` is useful and it is not a guarantee. Three limits, stated plainly because the failure mode
+is silent and the consequence is a leaked credential.
+
+**Hex and lowercase secrets are not caught by shape.** A 32-character Twilio token and a
+40-character git SHA are the same string to any entropy test, and the SHA actually scores *lower*
+(3.63 bits against 3.91). Masking every hex run would corrupt the diffs, checksums and tool output a
+coding agent reads all day, so Replay does not. It catches these by **context** instead: a name that
+says the value is a credential, sitting next to the value, as in `TWILIO_AUTH_TOKEN=…` or
+`"apiKey": "…"`. **A bare hex secret with no name beside it passes through.**
+
+**If the vault cannot be written, the request is forwarded unmasked.** Replay fails open everywhere,
+and masking is not an exception: a full disk or an unwritable vault directory means secrets Replay
+had already matched go to the provider in cleartext. It logs `MASKING FAILED … forwarded UNMASKED`,
+but in a backgrounded `serve` nobody reads that. **If masking must not fail silently for you, do not
+background the proxy.**
+
+**The vault is only as private as its directory.** The key file sits beside the ciphertext. Anyone
+who can read that directory can decrypt it, and nothing is ever evicted, so turning masking on
+converts secrets that were transient in flight into secrets at rest on your machine.
+
+The published precision and recall figures are a statement about the corpus in
+`internal/masking/testdata/`, not about your secrets. **Treat masking as a second layer under
+not-sending-secrets, never as the first.**
