@@ -3,81 +3,216 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/RedRobotKK/Replay/main/install.sh | sh
 #
-# Downloads the latest released binary for this platform, verifies it against the
-# release checksums, and installs it. Falls back to `go install` when no release
-# is published yet. Set REPLAY_BIN_DIR to choose where it lands.
+# Replay sits in the path between your agent and your model provider, so this
+# script is written to be read before it is run. It is short on purpose. It
+# downloads a released binary, verifies it against the release checksums, and
+# refuses to install anything that does not match.
+#
+#   --version <tag>     install a specific release instead of the latest
+#   --bin-dir <dir>     where the binary lands
+#   --dry-run           print what would happen, change nothing
+#   --no-modify-path    never mention or touch shell configuration
+#   --help              this text
+#
+# Environment: REPLAY_VERSION, REPLAY_BIN_DIR, NO_COLOR.
+
 set -eu
 
 REPO="RedRobotKK/Replay"
 BIN="replay"
+VERSION="${REPLAY_VERSION:-}"
 BIN_DIR="${REPLAY_BIN_DIR:-}"
+DRY_RUN=0
+MODIFY_PATH=1
 
-say() { printf '%s\n' "$*" >&2; }
-die() { say "install: $*"; exit 1; }
-need() { command -v "$1" >/dev/null 2>&1 || die "this installer needs $1"; }
+# ---------------------------------------------------------------- presentation
+# Colour only when stdout is a terminal that wants it. Piped into a file or a
+# log, this prints clean text with no escape codes.
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-dumb}" != "dumb" ]; then
+  C_ACCENT=$(printf '\033[38;5;44m'); C_OK=$(printf '\033[38;5;71m')
+  C_WARN=$(printf '\033[38;5;179m'); C_ERR=$(printf '\033[38;5;167m')
+  C_DIM=$(printf '\033[2m');         C_B=$(printf '\033[1m'); C_0=$(printf '\033[0m')
+else
+  C_ACCENT=; C_OK=; C_WARN=; C_ERR=; C_DIM=; C_B=; C_0=
+fi
 
-need uname
-if command -v curl >/dev/null 2>&1; then fetch() { curl -fsSL "$1"; }; dl() { curl -fsSL -o "$2" "$1"; }
-elif command -v wget >/dev/null 2>&1; then fetch() { wget -qO- "$1"; }; dl() { wget -qO "$2" "$1"; }
-else die "this installer needs curl or wget"; fi
+step()  { printf '%s→%s %s\n'  "$C_ACCENT" "$C_0" "$*" >&2; }
+ok()    { printf '%s✓%s %s\n'  "$C_OK"     "$C_0" "$*" >&2; }
+info()  { printf '  %s%s%s\n'  "$C_DIM"    "$*"   "$C_0" >&2; }
+warn()  { printf '%s!%s %s\n'  "$C_WARN"   "$C_0" "$*" >&2; }
+die()   { printf '%s✗%s %s\n'  "$C_ERR"    "$C_0" "$*" >&2; exit 1; }
+run()   { if [ "$DRY_RUN" -eq 1 ]; then info "would run: $*"; else "$@"; fi; }
 
+usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --version)        VERSION="${2:-}"; shift 2 ;;
+    --version=*)      VERSION="${1#*=}"; shift ;;
+    --bin-dir)        BIN_DIR="${2:-}"; shift 2 ;;
+    --bin-dir=*)      BIN_DIR="${1#*=}"; shift ;;
+    --dry-run)        DRY_RUN=1; shift ;;
+    --no-modify-path) MODIFY_PATH=0; shift ;;
+    -h|--help)        usage ;;
+    *)                die "unknown option: $1. Try --help." ;;
+  esac
+done
+
+# ------------------------------------------------------------------- downloader
+if command -v curl >/dev/null 2>&1; then
+  fetch() { curl -fsSL --proto '=https' --tlsv1.2 "$1"; }
+  save()  { curl -fsSL --proto '=https' --tlsv1.2 -o "$2" "$1"; }
+elif command -v wget >/dev/null 2>&1; then
+  fetch() { wget -qO- "$1"; }
+  save()  { wget -qO "$2" "$1"; }
+else
+  die "curl or wget is required."
+fi
+
+# ------------------------------------------------------------------- platform
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 arch=$(uname -m)
 case "$arch" in
-  x86_64|amd64) arch=amd64 ;;
+  x86_64|amd64)  arch=amd64 ;;
   aarch64|arm64) arch=arm64 ;;
-  *) die "unsupported architecture: $arch" ;;
+  *) die "unsupported architecture: $arch. Open an issue and say what you are on." ;;
 esac
 case "$os" in
-  linux|darwin) ;;
-  *) die "unsupported OS: $os. On Windows use the release archive or 'go install'." ;;
+  linux)  ;;
+  darwin) ;;
+  msys*|mingw*|cygwin*)
+    die "Windows is not handled by this script. Use the release archive, or: go install github.com/$REPO/cmd/$BIN@latest" ;;
+  *) die "unsupported OS: $os." ;;
 esac
 
+# musl and glibc are not interchangeable, and a binary built for one fails on the
+# other with an error that does not name the cause. uv and rustup both check this.
+libc=""
+if [ "$os" = linux ]; then
+  if command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi musl; then
+    libc=musl
+  else
+    libc=gnu
+  fi
+fi
+
+step "Replay installer"
+info "platform  ${os}/${arch}${libc:+ (${libc})}"
+
+# ------------------------------------------------------------------ where to
 if [ -z "$BIN_DIR" ]; then
-  if [ -w /usr/local/bin ] 2>/dev/null; then BIN_DIR=/usr/local/bin
+  if [ -d /usr/local/bin ] && [ -w /usr/local/bin ]; then BIN_DIR=/usr/local/bin
   else BIN_DIR="$HOME/.local/bin"; fi
 fi
-mkdir -p "$BIN_DIR"
+info "install   ${BIN_DIR}/${BIN}"
 
-tag=$(fetch "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null \
-      | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1 || true)
-
-if [ -z "${tag:-}" ]; then
-  say "No published release yet."
-  if command -v go >/dev/null 2>&1; then
-    say "Building from source with go install."
-    GOBIN="$BIN_DIR" go install "github.com/$REPO/cmd/$BIN@latest"
-  else
-    die "no release to download and Go is not installed. Install Go, or wait for the first tag."
-  fi
-else
-  ver=${tag#v}
-  archive="${BIN}_${ver}_${os}_${arch}.tar.gz"
-  base="https://github.com/$REPO/releases/download/$tag"
-  tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-  say "Downloading $BIN $tag for $os/$arch."
-  dl "$base/$archive" "$tmp/$archive" || die "no build published for $os/$arch in $tag"
-
-  if dl "$base/checksums.txt" "$tmp/checksums.txt" 2>/dev/null; then
-    if command -v sha256sum >/dev/null 2>&1; then sum=$(sha256sum "$tmp/$archive" | cut -d' ' -f1)
-    elif command -v shasum >/dev/null 2>&1; then sum=$(shasum -a 256 "$tmp/$archive" | cut -d' ' -f1)
-    else sum=""; say "No sha256 tool found, skipping checksum verification."; fi
-    if [ -n "$sum" ]; then
-      grep -q "$sum" "$tmp/checksums.txt" || die "checksum mismatch for $archive. Not installing."
-      say "Checksum verified."
-    fi
-  else
-    say "Could not fetch checksums.txt, skipping verification."
-  fi
-
-  tar -xzf "$tmp/$archive" -C "$tmp"
-  install -m 0755 "$tmp/$BIN" "$BIN_DIR/$BIN" 2>/dev/null || { cp "$tmp/$BIN" "$BIN_DIR/$BIN"; chmod 0755 "$BIN_DIR/$BIN"; }
+# ------------------------------------------------------- what is already here
+previous=""
+if command -v "$BIN" >/dev/null 2>&1; then
+  previous=$("$BIN" version 2>/dev/null | head -1 || echo "unknown version")
+  info "existing  ${previous} at $(command -v "$BIN")"
 fi
 
-say ""
-say "Installed to $BIN_DIR/$BIN"
-case ":$PATH:" in
-  *":$BIN_DIR:"*) ;;
-  *) say "Add it to your PATH:  export PATH=\"$BIN_DIR:\$PATH\"" ;;
-esac
-say "Next:  $BIN doctor"
+# ------------------------------------------------------------------- version
+if [ -z "$VERSION" ]; then
+  step "Resolving the latest release"
+  VERSION=$(fetch "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null \
+            | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1 || true)
+fi
+
+# ----------------------------------------------------- no release yet: source
+if [ -z "${VERSION:-}" ]; then
+  warn "No release is published yet."
+  if command -v go >/dev/null 2>&1; then
+    info "Building from source instead. This takes a minute."
+    run mkdir -p "$BIN_DIR"
+    if [ "$DRY_RUN" -eq 0 ]; then
+      GOBIN="$BIN_DIR" go install "github.com/$REPO/cmd/$BIN@latest" \
+        || die "go install failed. The error above is from Go, not from this script."
+      ok "Built and installed to ${BIN_DIR}/${BIN}"
+    else
+      info "would run: GOBIN=$BIN_DIR go install github.com/$REPO/cmd/$BIN@latest"
+    fi
+  else
+    die "There is no release to download and Go is not installed.
+   Install Go from https://go.dev/dl/ and re-run, or wait for the first tagged release."
+  fi
+else
+  ver=${VERSION#v}
+  archive="${BIN}_${ver}_${os}_${arch}.tar.gz"
+  base="https://github.com/$REPO/releases/download/$VERSION"
+  step "Downloading ${BIN} ${VERSION}"
+
+  tmp=$(mktemp -d 2>/dev/null || mktemp -d -t replay)
+  trap 'rm -rf "$tmp"' EXIT INT TERM
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "would download ${base}/${archive}"
+    info "would verify against ${base}/checksums.txt"
+    info "would install to ${BIN_DIR}/${BIN}"
+  else
+    save "$base/$archive" "$tmp/$archive" \
+      || die "No build for ${os}/${arch} in ${VERSION}.
+   Check https://github.com/$REPO/releases/tag/$VERSION for what was published."
+
+    # A checksum that is merely "usually checked" is not checked. If the file is
+    # reachable and a hashing tool exists, a mismatch stops the install.
+    if save "$base/checksums.txt" "$tmp/checksums.txt" 2>/dev/null; then
+      if command -v sha256sum >/dev/null 2>&1; then sum=$(sha256sum "$tmp/$archive" | cut -d' ' -f1)
+      elif command -v shasum >/dev/null 2>&1; then sum=$(shasum -a 256 "$tmp/$archive" | cut -d' ' -f1)
+      else sum=""; fi
+      if [ -n "$sum" ]; then
+        grep -q "$sum" "$tmp/checksums.txt" \
+          || die "Checksum mismatch for ${archive}. Nothing was installed.
+   Expected one of the hashes in ${base}/checksums.txt, got ${sum}."
+        ok "Checksum verified"
+      else
+        warn "No sha256 tool found, so the download was not verified."
+      fi
+    else
+      warn "checksums.txt could not be fetched, so the download was not verified."
+    fi
+
+    tar -xzf "$tmp/$archive" -C "$tmp" || die "Could not unpack ${archive}."
+    [ -f "$tmp/$BIN" ] || die "The archive did not contain a ${BIN} binary."
+    mkdir -p "$BIN_DIR"
+    install -m 0755 "$tmp/$BIN" "$BIN_DIR/$BIN" 2>/dev/null \
+      || { cp "$tmp/$BIN" "$BIN_DIR/$BIN" && chmod 0755 "$BIN_DIR/$BIN"; } \
+      || die "Could not write to ${BIN_DIR}. Re-run with --bin-dir <somewhere writable>."
+    ok "Installed ${BIN} ${VERSION}"
+  fi
+fi
+
+[ "$DRY_RUN" -eq 1 ] && { info "Dry run. Nothing was changed."; exit 0; }
+
+# --------------------------------------------------------------------- PATH
+# Say the truth about PATH rather than editing a shell rc behind someone's back.
+on_path=0
+case ":$PATH:" in *":$BIN_DIR:"*) on_path=1 ;; esac
+if [ "$on_path" -eq 0 ] && [ "$MODIFY_PATH" -eq 1 ]; then
+  case "${SHELL##*/}" in
+    zsh)  rc="~/.zshrc" ;;
+    bash) rc="~/.bashrc" ;;
+    fish) rc="~/.config/fish/config.fish" ;;
+    *)    rc="your shell profile" ;;
+  esac
+  warn "${BIN_DIR} is not on your PATH, so the ${BIN} command will not be found yet."
+  if [ "${SHELL##*/}" = fish ]; then
+    printf '  %sfish_add_path %s%s\n' "$C_B" "$BIN_DIR" "$C_0" >&2
+  else
+    printf '  %secho '\''export PATH="%s:$PATH"'\'' >> %s%s\n' "$C_B" "$BIN_DIR" "$rc" "$C_0" >&2
+  fi
+  info "then open a new shell, or: export PATH=\"$BIN_DIR:\$PATH\""
+fi
+
+# -------------------------------------------------------------------- finish
+printf '\n' >&2
+if [ -n "$previous" ]; then
+  info "replaced  ${previous}"
+fi
+printf '%sNext:%s  %s doctor%s   %s# what Replay can see on this machine%s\n' \
+  "$C_B" "$C_0" "$C_ACCENT$C_B" "$C_0" "$C_DIM" "$C_0" >&2
+printf '        %s%s ~/.claude/projects/<project>/%s   %s# read a session you already paid for%s\n' \
+  "$C_ACCENT$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
+printf '\n%sDocs%s https://github.com/%s#readme   %sUninstall%s rm %s/%s\n' \
+  "$C_DIM" "$C_0" "$REPO" "$C_DIM" "$C_0" "$BIN_DIR" "$BIN" >&2
