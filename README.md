@@ -31,7 +31,7 @@ Replay addresses each one locally, without changing how the agent works.
 | `replay corpus` | Calibration summary across every session in a directory, as Markdown with no paths or content, for reporting how well Replay understands your sessions |
 | `replay serve` | Local proxy: byte-for-byte passthrough that records what the provider charged, so the three commands above run on measured data (policies and guards come later) |
 
-Every number is labeled *estimated* (from transcripts) or *measured* (from the wire), with the calibration that justifies it. Release sequence, gates, and what is deliberately deferred: [`docs/ROADMAP.md`](docs/ROADMAP.md). Full requirements: [`docs/prd/replay-prd-v5.0.0.md`](docs/prd/replay-prd-v5.0.0.md).
+Every number is labeled *estimated* (from transcripts) or *measured* (from the wire), with the calibration that justifies it. Release sequence, gates, and what is deliberately deferred: [`docs/ROADMAP.md`](docs/ROADMAP.md). Full requirements: [`docs/requirements.md`](docs/requirements.md).
 
 ## Install
 
@@ -94,7 +94,7 @@ The roadmap gate for the first release is calibration on twenty real sessions. I
 
 ```sh
 make build
-./bin/replay corpus ~/.claude/projects > docs/reviews/calibration-corpus-$(date +%F).md
+./bin/replay corpus ~/.claude/projects > docs/internal/reviews/calibration-corpus-$(date +%F).md
 ```
 
 Open it, check that nothing in it identifies your projects, and commit it on a branch. The report also judges calibration per model with the newest sessions on their own, so a provider rule change shows up as "provider behavior changed" rather than as a silent drift in the numbers, and it bounds the minimum cacheable prefix from your usage next to what the rules file says. `replay learn` scores no alternatives for a model reported that way.
@@ -118,7 +118,7 @@ What the proxy does and does not do:
 - Fails open: if anything inside Replay's own bookkeeping fails, the bytes still flow. If the provider is unreachable you get a 502 that says how to bypass Replay.
 - Off switch: `REPLAY_DISABLED=1` refuses to start; unsetting `ANTHROPIC_BASE_URL` bypasses it entirely.
 
-Added latency, measured on 2026-09-03 with a 46KB request against a local fake provider on a 4-core Xeon, 300 requests after warm-up: p50 48µs, p99 98µs on top of the round trip. Provider latency is three orders of magnitude larger. The method is in [`docs/reviews/proxy-latency-2026-09-03.md`](docs/reviews/proxy-latency-2026-09-03.md).
+Added latency, measured on 2026-09-03 with a 46KB request against a local fake provider on a 4-core Xeon, 300 requests after warm-up: p50 48µs, p99 98µs on top of the round trip. Provider latency is three orders of magnitude larger. The method is in [`docs/evidence/proxy-latency-2026-09-03.md`](docs/evidence/proxy-latency-2026-09-03.md).
 
 While it runs, every response's cache read is checked against the expectation from the previous request, and a break is logged the moment it happens with the tokens re-billed and the likely cause. Because the proxy hashes the tool definitions and system prompt of every request, a break caused by a changed prefix is named with certainty, which a transcript can only infer.
 
@@ -197,9 +197,9 @@ make help     # all targets
 - [`docs/ROADMAP.md`](docs/ROADMAP.md): what ships when, and why
 - [`docs/adr/`](docs/adr/): architecture decision records
 - [`docs/architecture/`](docs/architecture/): system design
-- [`docs/prd/replay-prd-v5.0.0.md`](docs/prd/replay-prd-v5.0.0.md): current requirements; earlier versions kept as history
-- [`docs/reviews/`](docs/reviews/): design reviews
-- [`docs/HOUSEKEEPING.md`](docs/HOUSEKEEPING.md): how this repository is run
+- [`docs/requirements.md`](docs/requirements.md): current requirements; earlier versions kept as history
+- [`docs/internal/reviews/`](docs/evidence/): design reviews
+- [`docs/maintainers.md`](docs/maintainers.md): how this repository is run
 
 ## Contributing
 

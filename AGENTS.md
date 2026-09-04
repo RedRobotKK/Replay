@@ -42,7 +42,7 @@ cmd/replay/          command entry point
 internal/           private packages (version, later: proxy, masking, spend, dashboard)
 docs/adr/           architecture decision records
 docs/architecture/  system design
-docs/prd/           product requirement documents (history)
-docs/reviews/       design reviews
+docs/internal/prd/           product requirement documents (history)
+docs/internal/reviews/       design reviews
 .github/            CI, templates, labels, housekeeping automation
 ```

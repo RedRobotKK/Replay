@@ -1,6 +1,6 @@
 # Roadmap
 
-What ships in each release, the gate for each, and what is deliberately deferred. The requirements behind every line are in [`prd/replay-prd-v5.0.0.md`](prd/replay-prd-v5.0.0.md); the decisions are in [`adr/`](adr/).
+What ships in each release, the gate for each, and what is deliberately deferred. The requirements behind every line are in [`prd/replay-prd-v5.0.0.md`](requirements.md); the decisions are in [`adr/`](adr/).
 
 The sequence is chosen so the first release costs nothing to run, works for every user regardless of how they authenticate, and produces the output that gets the project noticed. Items are **proposed** until the owner approves PRD v5.
 
@@ -9,7 +9,7 @@ The sequence is chosen so the first release costs nothing to run, works for ever
 | Spike | Question | Pass condition |
 |-------|----------|----------------|
 | 1 | Do Claude Code transcripts carry per-message usage with cache read and write counts? | Present on 20 real sessions across two client versions. **Status:** confirmed on 11 real sessions across two client versions (2.1.258, 2.1.259); 20 independent sessions still needed |
-| 2 | Does the replay engine reproduce as-run cache reads and writes? | At least 95 percent of turns across 20 sessions, mismatches explained. **Status:** 99.00% (398/402 turns) across 11 real sessions, every mismatch located and classified ([corpus](reviews/calibration-corpus-2026-09-03.md)); 20 independent sessions still needed |
+| 2 | Does the replay engine reproduce as-run cache reads and writes? | At least 95 percent of turns across 20 sessions, mismatches explained. **Status:** 99.00% (398/402 turns) across 11 real sessions, every mismatch located and classified ([corpus](evidence/calibration-corpus-2026-09-03.md)); 20 independent sessions still needed |
 | 3 | Does Claude Code honor a base URL override under subscription authentication, within the provider's terms? | Documented answer with a source. **Status: passed.** The LLM gateway docs state that `ANTHROPIC_BASE_URL` without a gateway credential keeps the subscription login active and routes requests through the gateway; a local gateway is a documented configuration. See `architecture/proxy-protocol.md` |
 | 4 | Does adding the context-editing parameter from a proxy leave Claude Code's behavior intact? | A ten-turn session completes with the parameter present |
 | 5 | Does scoped rehydration hold under adversarial content? | Adversarial corpus never reaches a shell or network tool input |

@@ -39,8 +39,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Release automation: GoReleaser builds for Linux, macOS, and Windows on amd64 and arm64 from a pushed tag, with a software bill of materials and Sigstore keyless signing of the checksum file; the workflow refuses tags that are not on `main`.
 - Repository scaffold: Go module, `replay` command skeleton with `version` and `help`, Makefile, CI on Linux, macOS, and Windows, golangci-lint, Markdown lint, Dependabot, issue and pull request templates, label set, weekly stale-issue housekeeping.
 - Governance and community documents: Apache 2.0 license and NOTICE (ADR-0005; the scaffold's initial BSL 1.1 draft was replaced before any release), contributing guide, code of conduct, security policy, support guide.
-- `docs/ROADMAP.md`, `docs/HOUSEKEEPING.md`, ADR process with ADR-0001, PRD v4.0.0 and its adversarial review under `docs/`.
-- PRD v5.0.0 (`docs/prd/replay-prd-v5.0.0.md`): replay-first product, two-tier truth labels, provider-sanctioned policy catalog, scoped rehydration, gating spikes, and the release sequence. ADR-0002 to ADR-0004 record the decisions. Red/blue review of the full design under `docs/reviews/`.
+- `docs/ROADMAP.md`, `docs/maintainers.md`, ADR process with ADR-0001, PRD v4.0.0 and its adversarial review under `docs/`.
+- PRD v5.0.0 (`docs/requirements.md`): replay-first product, two-tier truth labels, provider-sanctioned policy catalog, scoped rehydration, gating spikes, and the release sequence. ADR-0002 to ADR-0004 record the decisions. Red/blue review of the full design under `docs/internal/reviews/`.
 
 ### Fixed
 
@@ -49,7 +49,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Changed
 
 - `replay <transcript|dir>` runs the replay analysis without naming the subcommand, so the tool is no longer `replay replay <path>`. A first argument that names something on disk is taken as the analysis's own argument; a subcommand name always wins, a leading flag is never a path, and a mistyped command is still an error rather than a silent path. `replay replay <path>` keeps working.
-- First calibration corpus on real traffic ([`docs/reviews/calibration-corpus-2026-09-03.md`](docs/reviews/calibration-corpus-2026-09-03.md)): 11 real sessions, 402 compared turns, 99.00% of provider cache reads reproduced, every session above the 95% threshold and every mismatch classified. Spikes 1 and 2 now have real evidence across two client versions; the corpus is one project on one machine, so the twenty-session half of the gate is still open.
+- First calibration corpus on real traffic ([`docs/evidence/calibration-corpus-2026-09-03.md`](docs/evidence/calibration-corpus-2026-09-03.md)): 11 real sessions, 402 compared turns, 99.00% of provider cache reads reproduced, every session above the 95% threshold and every mismatch classified. Spikes 1 and 2 now have real evidence across two client versions; the corpus is one project on one machine, so the twenty-session half of the gate is still open.
 
 - **The project is now Replay** (was Buffy). This renames everything a user touches: the binary and module path (`github.com/RedRobotKK/Replay/cmd/replay`), the state directory (`~/.buffy` becomes `~/.replay`), the endpoints (`/replay/status`, `/replay/metrics`), every metric name (`replay_*`), the headers (`x-replay-token`, `x-replay-override`, `x-replay-warning`), the environment variables (`REPLAY_DISABLED`, `REPLAY_NO_POLICY`, `REPLAY_TOKEN`, `REPLAY_UPSTREAM`), and the masking placeholder prefix (`REPLAY_SECRET_`). Nothing is migrated: move `~/.buffy` to `~/.replay` by hand if you were running the old name, and note that placeholders in an existing vault carry the old prefix and will no longer be recognised. Done before any tagged release, so no published artifact is affected.
 
