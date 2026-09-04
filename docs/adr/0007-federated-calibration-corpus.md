@@ -4,6 +4,7 @@
 - **Date:** 2026-09-04
 - **Supersedes:** nothing
 - **Related:** ADR-0002 (replay engine and truth tiers), ADR-0006 (learning selection)
+- **Partly corrected by:** [`architecture/multi-provider.md`](../architecture/multi-provider.md), which shows this ADR assumed one learning problem where there are three
 
 ## Context
 
