@@ -171,9 +171,12 @@ else
       elif command -v shasum >/dev/null 2>&1; then sum=$(shasum -a 256 "$tmp/$archive" | cut -d' ' -f1)
       else sum=""; fi
       if [ -n "$sum" ]; then
-        grep -q "$sum" "$tmp/checksums.txt" \
-          || die "Checksum mismatch for ${archive}. Nothing was installed.
-   Expected one of the hashes in ${base}/checksums.txt, got ${sum}."
+        # Bind the digest to THIS filename. An unanchored grep would accept the
+        # hash of any file listed in checksums.txt.
+        want=$(awk -v f="$archive" '$2 == f || $2 == "*" f { print $1; exit }' "$tmp/checksums.txt")
+        [ -n "$want" ] || die "checksums.txt does not list ${archive}. Nothing was installed."
+        [ "$want" = "$sum" ] || die "Checksum mismatch for ${archive}. Nothing was installed.
+   checksums.txt says ${want}, the download hashes to ${sum}."
         ok "Checksum verified"
       elif [ "$ALLOW_UNVERIFIED" -eq 1 ]; then
         warn "No sha256 tool found. Installing unverified because --no-verify was passed."
