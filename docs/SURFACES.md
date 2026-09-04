@@ -33,8 +33,16 @@ found by scanning a real install, and confusing them is the likely support quest
 
 ## 2. Network
 
-**Outbound, in normal use: exactly one host — the provider you configured.** Default
-`https://api.anthropic.com`, overridable with `REPLAY_UPSTREAM`.
+**Outbound, in normal use: the provider you configured, plus one local health probe.** Default
+provider `https://api.anthropic.com`, overridable with `REPLAY_UPSTREAM`.
+
+**A correction to an earlier version of this page**, found by re-checking rather than by reading it
+back: the claim "exactly one host" was wrong. `replay doctor` issues a `GET` to
+`$ANTHROPIC_BASE_URL/replay/healthz` to find out whether a Replay proxy is already running
+(`cmd/replay/doctor.go:114`). That is normally loopback, and it sends no credential, reads at most
+64 bytes and times out. **But the host comes from an environment variable**, so if you have pointed
+`ANTHROPIC_BASE_URL` at a remote gateway, `doctor` will probe that remote host. Small, and it was
+not on the map.
 
 | Direction | Endpoint | When | Status |
 |---|---|---|---|
@@ -45,6 +53,7 @@ found by scanning a real install, and confusing them is the likely support quest
 | in | `/replay/status` | JSON per-session totals. `Origin` and `Sec-Fetch-Mode` refused | **Verified** |
 | in | `/replay/metrics` | Prometheus text, aggregate only | Read |
 | in | `/replay/healthz` | **no origin check, no token check** | **Verified as a gap** |
+| out | `$ANTHROPIC_BASE_URL/replay/healthz` | `doctor` only, probing for a running proxy. No credential, 64-byte read, timeout | **Verified**, and missing from the first version of this page |
 
 **Known gaps here, all recorded in the security review:** `/replay/status` and `/replay/metrics` are
 **unauthenticated unless `--token` is set**, so any local process can read model names, token counts
@@ -62,6 +71,22 @@ Read: `ANTHROPIC_BASE_URL`, `REPLAY_UPSTREAM`, `REPLAY_DISABLED`, `REPLAY_TOKEN`
 any auth environment variable anywhere in the source. **Verified by grep and by sending a real-shaped
 key through and inspecting the log, the ledger, the metrics labels and the 502 body.** It cannot log
 what it does not read.
+
+## 3b. Process
+
+| Surface | What | Status |
+|---|---|---|
+| `SIGINT`, `SIGTERM` | `serve` only, for graceful shutdown (`cmd/replay/serve.go:148`) | Read |
+| stdout, stderr | Reports and log lines. The log is where the `MASKING FAILED` warning goes | **Verified** |
+| exit codes | Non-zero on refusal or error | Read |
+
+**Absences worth stating, because each is checkable in one command and each removes a whole class of
+question.** In all non-test code there is **no `exec.Command` anywhere**: Replay never shells out, so
+there is no command-injection surface. There is no `os.Setenv`, so it never mutates the environment
+of anything it starts. No `os.Symlink`. No `os.TempDir` in the binary, so no predictable-path temp
+file and no symlink-attack surface there. No `filepath.Walk`, so it cannot wander outside the
+directory it was handed. Every write in the tool resolves under `~/.replay` or a directory the user
+named.
 
 ## 4. What a stranger sees
 
