@@ -244,8 +244,8 @@ printf '\n' >&2
 if [ -n "$previous" ]; then
   info "replaced  ${previous}"
 fi
-printf '%sNext:%s  %s doctor%s   %s# what Replay can see on this machine%s\n' \
-  "$C_B" "$C_0" "$C_ACCENT$C_B" "$C_0" "$C_DIM" "$C_0" >&2
+printf '%sNext:%s  %s%s doctor%s   %s# what Replay can see on this machine%s\n' \
+  "$C_B" "$C_0" "$C_ACCENT$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
 printf '        %s%s ~/.claude/projects/<project>/%s   %s# read a session you already paid for%s\n' \
   "$C_ACCENT$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
 # Discovery, not consent. Naming the command is the installer's job; deciding
