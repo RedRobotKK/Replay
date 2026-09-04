@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 Conventions for agents (and humans) working in this repository. Read fully before changing anything.
 

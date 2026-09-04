@@ -33,14 +33,35 @@ Replay addresses each one locally, without changing how the agent works.
 
 Every number is labeled *estimated* (from transcripts) or *measured* (from the wire), with the calibration that justifies it. Release sequence, gates, and what is deliberately deferred: [`docs/ROADMAP.md`](docs/ROADMAP.md). Full requirements: [`docs/prd/replay-prd-v5.0.0.md`](docs/prd/replay-prd-v5.0.0.md).
 
-## Quick start
-
-No proxy, no configuration, no trust required. Build from source until the first release is tagged:
+## Install
 
 ```sh
-make build
-./bin/replay doctor                                  # what is on this machine, and what to run next
-./bin/replay ~/.claude/projects/<your-project>/
+curl -fsSL https://raw.githubusercontent.com/RedRobotKK/Replay/main/install.sh | sh
+```
+
+Downloads the released binary for your platform and verifies it against the release checksums before
+installing. Falls back to building from source when no release is tagged. Set `REPLAY_BIN_DIR` to
+choose where it lands. Read the script first if you would rather not pipe to a shell; it is short.
+
+With Go already installed:
+
+```sh
+go install github.com/RedRobotKK/Replay/cmd/replay@latest
+```
+
+Or from a clone:
+
+```sh
+make build && ./bin/replay doctor
+```
+
+## Quick start
+
+No proxy, no configuration, no trust required.
+
+```sh
+replay doctor                                        # what is on this machine, and what to run next
+replay ~/.claude/projects/<your-project>/
 ```
 
 Real output from a Claude Code session, on the session in which Replay itself was written:

@@ -25,4 +25,4 @@ The offline analysis (`replay`, `blame`, `diff`, `redact`) is implemented; see [
  provider (api.anthropic.com, api.openai.com, ...)
 ```
 
-Invariants every component must hold are listed in the repository `CLAUDE.md` under "Non-negotiables".
+Invariants every component must hold are listed in the repository `AGENTS.md` under "Non-negotiables".
