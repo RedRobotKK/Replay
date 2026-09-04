@@ -30,6 +30,29 @@ Four properties, and the design fails if any one is missing.
 
 ### 1. It is a command a person runs, never a default and never a prompt
 
+**Daniel proposed asking at install, since we control the installer. Three reasons it lands one step
+away, and one reason he is right anyway.**
+
+`curl | sh` has no terminal. Stdin is the pipe from curl, so a prompt cannot read at all without
+grabbing `/dev/tty`, which breaks CI and unattended installs and reads as a dark pattern in the one
+file people audit line by line on launch day.
+
+**Consent at install is consent to data that does not exist yet.** The user has not run the tool, has
+no corpus, and has never seen the report. Agreeing to an unseen payload is precisely what property 3
+exists to prevent.
+
+Homebrew is the worked example: analytics on by default, years of argument, eventual reversal.
+
+**But the underlying point stands and it is the strongest objection to this ADR.** A command nobody
+is prompted to run is a command most people never run, and "read the docs" is not a distribution
+plan. So the installer takes the half of the job it can do honestly: **discovery, not consent.** Its
+last lines name the command, state that Replay makes no network request except to the configured
+provider, and stop. Deciding happens later, with the report on screen.
+
+`install.sh --corpus-opt-in` exists for the other case: someone who has already read this and wants
+to say yes once, non-interactively, across a fleet. It writes a config file and sends nothing;
+`replay corpus --submit` is still the only thing that transmits.
+
 No first-run question, no opt-out, no config flag that quietly enables it, no "anonymous usage
 statistics" checkbox during install. **The only way a byte leaves is that someone typed
 `replay corpus --submit` and confirmed.**

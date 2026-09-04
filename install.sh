@@ -12,6 +12,9 @@
 #   --bin-dir <dir>     where the binary lands
 #   --dry-run           print what would happen, change nothing
 #   --no-modify-path    never mention or touch shell configuration
+#   --corpus-opt-in     agree now to share calibration reports. Off unless you
+#                       pass it. It writes a file; it sends nothing, ever. You
+#                       still run `replay corpus --submit` to send anything.
 #   --help              this text
 #
 # Environment: REPLAY_VERSION, REPLAY_BIN_DIR, NO_COLOR.
@@ -24,6 +27,7 @@ VERSION="${REPLAY_VERSION:-}"
 BIN_DIR="${REPLAY_BIN_DIR:-}"
 DRY_RUN=0
 MODIFY_PATH=1
+CORPUS_OPT_IN=0
 
 # ---------------------------------------------------------------- presentation
 # Colour only when stdout is a terminal that wants it. Piped into a file or a
@@ -53,6 +57,7 @@ while [ $# -gt 0 ]; do
     --bin-dir=*)      BIN_DIR="${1#*=}"; shift ;;
     --dry-run)        DRY_RUN=1; shift ;;
     --no-modify-path) MODIFY_PATH=0; shift ;;
+    --corpus-opt-in)  CORPUS_OPT_IN=1; shift ;;
     -h|--help)        usage ;;
     *)                die "unknown option: $1. Try --help." ;;
   esac
@@ -205,6 +210,20 @@ if [ "$on_path" -eq 0 ] && [ "$MODIFY_PATH" -eq 1 ]; then
   info "then open a new shell, or: export PATH=\"$BIN_DIR:\$PATH\""
 fi
 
+# ------------------------------------------------------------------- corpus
+# There is no prompt here on purpose. `curl | sh` has no terminal to answer
+# one, and consent given before the tool has ever run is consent to a payload
+# the person has not seen. This flag exists for people who have already read
+# the docs and want to say yes once, non-interactively, for a fleet.
+if [ "$CORPUS_OPT_IN" -eq 1 ]; then
+  cfg_dir="${XDG_CONFIG_HOME:-$HOME/.config}/replay"
+  mkdir -p "$cfg_dir"
+  printf 'corpus_opt_in = true\n# Written by install.sh --corpus-opt-in on %s\n# Delete this file to withdraw. Nothing is sent until you run: replay corpus --submit\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$cfg_dir/config.toml"
+  ok "Corpus contribution enabled in ${cfg_dir}/config.toml"
+  info "Still nothing is sent until you run: ${BIN} corpus --submit"
+fi
+
 # -------------------------------------------------------------------- finish
 printf '\n' >&2
 if [ -n "$previous" ]; then
@@ -214,5 +233,14 @@ printf '%sNext:%s  %s doctor%s   %s# what Replay can see on this machine%s\n' \
   "$C_B" "$C_0" "$C_ACCENT$C_B" "$C_0" "$C_DIM" "$C_0" >&2
 printf '        %s%s ~/.claude/projects/<project>/%s   %s# read a session you already paid for%s\n' \
   "$C_ACCENT$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
+# Discovery, not consent. Naming the command is the installer's job; deciding
+# is the user's, later, with the report in front of them.
+if [ "$CORPUS_OPT_IN" -eq 0 ]; then
+  printf '\n%sReplay makes no network request except to the provider you configured.%s\n' \
+    "$C_DIM" "$C_0" >&2
+  printf '%sTo help calibrate it against real traffic:%s %s%s corpus%s%s shows what your own\nsessions look like and sends nothing.%s %s%s corpus --submit%s%s offers to.%s\n' \
+    "$C_DIM" "$C_0" "$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" "$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
+fi
+
 printf '\n%sDocs%s https://github.com/%s#readme   %sUninstall%s rm %s/%s\n' \
   "$C_DIM" "$C_0" "$REPO" "$C_DIM" "$C_0" "$BIN_DIR" "$BIN" >&2
