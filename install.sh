@@ -50,7 +50,26 @@ warn()  { printf '%s!%s %s\n'  "$C_WARN"   "$C_0" "$*" >&2; }
 die()   { printf '%s✗%s %s\n'  "$C_ERR"    "$C_0" "$*" >&2; exit 1; }
 run()   { if [ "$DRY_RUN" -eq 1 ]; then info "would run: $*"; else "$@"; fi; }
 
-usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
+usage() {
+  # Not a self-read: under `curl | sh` there is no script file to read from.
+  cat <<'USAGE'
+Replay installer.
+
+  curl -fsSL https://redrobot.jp/Replay/install.sh | sh
+
+  --version <tag>     install a specific release instead of the latest
+  --bin-dir <dir>     where the binary lands
+  --dry-run           print what would happen, change nothing
+  --no-modify-path    never mention or touch shell configuration
+  --no-verify         install even if the download cannot be verified
+  --corpus-opt-in     agree now to share calibration reports. Sends nothing.
+  --help              this text
+
+Environment: REPLAY_VERSION, REPLAY_BIN_DIR, NO_COLOR.
+Source: https://github.com/RedRobotKK/Replay
+USAGE
+  exit 0
+}
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -152,7 +171,11 @@ else
   base="https://github.com/$REPO/releases/download/$VERSION"
   step "Downloading ${BIN} ${VERSION}"
 
+  # A private umask for the download: the archive lands here before it is
+  # verified, and nothing else on the machine needs to read it.
+  old_umask=$(umask); umask 077
   tmp=$(mktemp -d 2>/dev/null || mktemp -d -t replay)
+  umask "$old_umask"
   trap 'rm -rf "$tmp"' EXIT INT TERM
 
   if [ "$DRY_RUN" -eq 1 ]; then
@@ -178,6 +201,33 @@ else
         [ "$want" = "$sum" ] || die "Checksum mismatch for ${archive}. Nothing was installed.
    checksums.txt says ${want}, the download hashes to ${sum}."
         ok "Checksum verified"
+
+        # The release signs checksums.txt with Sigstore keyless signing. If
+        # cosign is here, check it: a checksum fetched from the same origin as
+        # the archive proves the download is intact, not that it is genuine.
+        if command -v cosign >/dev/null 2>&1; then
+          if save "$base/checksums.txt.pem" "$tmp/checksums.txt.pem" 2>/dev/null &&
+             save "$base/checksums.txt.sig" "$tmp/checksums.txt.sig" 2>/dev/null; then
+            if cosign verify-blob \
+                 --certificate "$tmp/checksums.txt.pem" \
+                 --signature "$tmp/checksums.txt.sig" \
+                 --certificate-identity-regexp "https://github.com/$REPO/.*" \
+                 --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+                 "$tmp/checksums.txt" >/dev/null 2>&1; then
+              ok "Signature verified (Sigstore, built by CI from the tag)"
+            elif [ "$ALLOW_UNVERIFIED" -eq 1 ]; then
+              warn "Signature did NOT verify. Continuing because --no-verify was passed."
+            else
+              die "Signature verification FAILED for checksums.txt. Nothing was installed.
+   The checksums may be intact but they were not signed by this project's CI."
+            fi
+          else
+            info "no signature published for ${VERSION}; checksum only"
+          fi
+        else
+          info "cosign not installed, so the signature was not checked. Checksums only."
+          info "To verify provenance: https://github.com/${REPO}#install"
+        fi
       elif [ "$ALLOW_UNVERIFIED" -eq 1 ]; then
         warn "No sha256 tool found. Installing unverified because --no-verify was passed."
       else
