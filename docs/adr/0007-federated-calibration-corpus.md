@@ -4,6 +4,7 @@
 - **Date:** 2026-09-04
 - **Supersedes:** nothing
 - **Related:** ADR-0002 (replay engine and truth tiers), ADR-0006 (learning selection)
+- **Amended by:** ADR-0008 (corpus at launch), which resolves the circularity in "no aggregation before the twenty-session gate": a public release is the only way to reach twenty sessions
 - **Partly corrected by:** [`architecture/multi-provider.md`](../architecture/multi-provider.md), which shows this ADR assumed one learning problem where there are three
 
 ## Context
