@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+title: Replay
+message: If you use Replay in research or writing, please cite it.
+type: software
+authors:
+  - given-names: Daniel
+    family-names: Saito
+    affiliation: Red Robot K.K.
+    website: "https://redrobot.jp"
+repository-code: "https://github.com/RedRobotKK/Replay"
+url: "https://redrobot.jp"
+abstract: >-
+  A local tool that reproduces an LLM provider's prompt caching turn by turn,
+  shows which turn broke the cache and what it cost, and scores alternative
+  context layouts against what actually ran. Runs entirely on the user's machine.
+keywords:
+  - llm
+  - prompt-caching
+  - ai-agents
+  - observability
+  - developer-tools
+license: Apache-2.0

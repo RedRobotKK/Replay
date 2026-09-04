@@ -197,13 +197,23 @@ make help     # all targets
 - [`docs/ROADMAP.md`](docs/ROADMAP.md): what ships when, and why
 - [`docs/adr/`](docs/adr/): architecture decision records
 - [`docs/architecture/`](docs/architecture/): system design
-- [`docs/requirements.md`](docs/requirements.md): current requirements; earlier versions kept as history
-- [`docs/internal/reviews/`](docs/evidence/): design reviews
+- [`docs/guide/`](docs/guide/): getting started, every command, and troubleshooting
+- [`docs/evidence/`](docs/evidence/): the measurements behind the claims above
+- [`docs/requirements.md`](docs/requirements.md): current requirements, with build status
 - [`docs/maintainers.md`](docs/maintainers.md): how this repository is run
 
 ## Contributing
 
 Read [`CONTRIBUTING.md`](CONTRIBUTING.md) first. Bugs and features go through the issue templates. Security reports go through [`SECURITY.md`](SECURITY.md), never a public issue.
+
+## Who maintains this
+
+Replay is built and maintained by **Daniel Saito** at [Red Robot K.K.](https://redrobot.jp), a
+studio in Tokyo working on production AI, data platforms and security.
+
+The quickest way to reach me about Replay is an [issue](https://github.com/RedRobotKK/Replay/issues)
+or a [discussion](https://github.com/RedRobotKK/Replay/discussions). For anything else,
+[redrobot.jp](https://redrobot.jp) or [LinkedIn](https://www.linkedin.com/in/danielsaito/).
 
 ## License
 
