@@ -1,0 +1,66 @@
+event: message_start
+data: {"type":"message_start","message":{"model":"claude-opus-5","id":"msg_011CekgfARTA4i353qfsxVwW","type":"message","role":"assistant","content":[],"stop_reason":null,"stop_sequence":null,"stop_details":null,"usage":{"input_tokens":2,"cache_creation_input_tokens":174935,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":174935},"output_tokens":2,"service_tier":"standard","inference_geo":"not_available"}}           }
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}        }
+
+event: ping
+data: {"type": "ping"}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"","estimated_tokens":50}          }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"","estimated_tokens":150}       }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"","estimated_tokens":100}             }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"","estimated_tokens":null}           }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"CAISggcKpgEIERgCKkAAM48hBlI/hahxnddDRdhfdtWkQSUkGJNr+Z9Y+/BprZ7C1bmuP5tJ25dNCR20MzZtucqWW3u4qug6LkkvoZKGMg1jbGF1ZGUtb3B1cy01OAFCCHRoaW5raW5nWiQwNDA0ZWQ5Ni04ZjdhLTQ2MzEtYTU0MC01Y2NjOWNkNjUxNThyECj/POQAC3nmZmFg6OscZauIAQGoAdCh8dQGsAECEgzXi+3bqCLW0z2BPbgaDPujos7hNxuYVpxPMCIw8hfP05yuIN7n+Zseiugl8NflAymgCVRGtBBB1lFjasEP//Dk3zOUqtZ/+eeGkQECKogF72quEfVd9meI1on5mcAGN6ip9SnfB9mYrnrVCjLiIwhssxTrdc3rewCWLzoVHftmqDa2JNy0W0ZPZrPP0tluFv2jzcVVAJ2p9frJxpvV6sxcY5N8MAcOu/AnXdQ/X/CnmuhdadMAfpVdfLgEptr31Dy0upV97Fk9KON3J7gEa2HZ00sp1hwyGgJhblwdGKmuyL6peCktApxItMIPH1hgPHJAnXX2lu0hK6rkUaR9CdywntCJroGW5u2UUovXc4obeghFZFfvCS5UsJtlY3CaTTmB76Lk3bw+wdfQi0PQbPHbxkuLRngfoQpvDLuReBf7/ZEEvmX2YnySLTT9wW2jtRKHoXFNa69SQYUxJwfLZag70IchGzCaoRWeHLFrsStEA/9WYkQk7oDoH9iMbSHz0If4PHptVxobieum5bZA/FoatqiPRBGbrs+NOI0tnEotNvnIqHfbSWwkQOznFG7vDwDsLxpnrTugER3KUnEsRhdGmRgc5YqoM+mdcbo9vUDfVtgOKAnt11yXxQiCZzCZkWS44KKv/VN0emAOZbEaGnECd9bCktE6E8k3nOtoTVPJbVBURSN12iX/g6EFGy3P4LCj44+VAEcPqV/vWN0hQf71bZZqhduFOFG/puAD+q4dJ0AloTsAwijM7o3g4KZK5cUi3XZYUQmmjy/4Rmfg7bpl/VG2C+s46zA+6ntFyZZGq4QCJ6qXeJdgaTOwzMJII27A3Cdtl63Mc0PTmvPU649V+crLwKL8h4/YmAXUgYg66Z2asq1ujNzO6B4SVD8tT/Kwv86UqpM4biClr/yCiT2rub2QMWK9Tjpbh5Dh4I/hzCa2tH8zLtVEoxZZAPppB8h/0ybs8NO9GAE="} }
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0             }
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}           }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"**They meet at 5:00 PM.**\n\n## Reasoning\n\n**Step 1 — Head"}               }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":" start (3pm → 4pm)**\n\nTrain A runs alone for 1 hour:\n\n$$60 \\text{ mph} \\times 1 \\text{ h} = 60 \\text{ miles}$$\n\nRemaining gap at 4pm: $200 - 60"} }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":" = 140$ miles.\n\n**Step 2 — Closing speed after 4pm**\n\nMoving toward each other, the gap shrinks at the sum of their speeds:\n\n$$60 + 80 = 140 \\text{ mph}$$\n\n**Step 3 — Time"}    }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":" to close the gap**\n\n$$t = \\frac{140 \\text{ miles}}{140 \\text{ mph}} = 1 \\text{ hour}$$\n\n1 hour after 4pm → **5:00 PM**.\n\n##"}  }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":" Verification\n\n| Train | Travel time | Distance |\n|---|---|---|\n| A (from 3pm) | 2 h @ 60 mph | 120 mi |\n| B (from 4pm) | 1 h @ 80 mph"}               }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":" | 80 mi |\n| | **Total** | **200 mi** ✓ |\n\nDistances sum exactly to the initial separation, so the meeting point is 120 miles from A's origin (80 from B's).\n\n**"}         }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Algebraic form** (letting $t$ = hours after 3pm):\n\n$$60t + 80(t-1) = 200 \\;\\Rightarrow\\; 140t = 280 \\;\\Rightarrow\\; t = 2"}          }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"$$\n\nTwo hours after 3pm = 5:00 PM. Same answer.\n\nOne note on the framing: since they're on the *same* track heading toward each other, \"meet\" here means collide — 5p"}           }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"m is the impact time, not a passing time."}         }
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":1           }
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null,"stop_details":null},"usage":{"input_tokens":2,"cache_creation_input_tokens":174935,"cache_read_input_tokens":0,"output_tokens":864,"output_tokens_details":{"thinking_tokens":300},"iterations":[{"input_tokens":2,"output_tokens":864,"cache_read_input_tokens":0,"cache_creation_input_tokens":174935,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":174935},"type":"message"}]},"context_management":{"applied_edits":[]}             }
+
+event: message_stop
+data: {"type":"message_stop"       }
+

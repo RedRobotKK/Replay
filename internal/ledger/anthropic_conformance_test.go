@@ -247,3 +247,95 @@ func TestClaudeCodeWireStreams(t *testing.T) {
 		})
 	}
 }
+
+// Streaming tool use and streaming extended thinking, captured 2026-09-05 from
+// a real Claude Code session. Both are wire bodies, so the production parser is
+// on the path and a regression fails these.
+func TestClaudeCodeToolUseStream(t *testing.T) {
+	r := parseWire(t, "stream-tool-use.sse")
+
+	// Exact sizes from the capture, not a > 0 check. A loose bound passed
+	// while input_json_delta accumulation was mutated away entirely, because
+	// content_block_start already contributes some bytes — the same weakness
+	// that let a constant PrefixHash satisfy a non-empty assertion in the
+	// OpenAI suite.
+	wantBytes := map[string]int{"Read": 106, "Bash": 75}
+
+	var tools []string
+	for _, b := range r.Blocks {
+		if b.Kind != "tool_use" {
+			continue
+		}
+		tools = append(tools, b.ToolName)
+		if want, ok := wantBytes[b.ToolName]; ok && b.Bytes != want {
+			t.Errorf("tool call %q recorded %d bytes, want %d. The size comes "+
+				"from input_json_delta frames, and a tool call whose arguments "+
+				"are not accumulated is undersized in `replay blame` once the "+
+				"call is replayed as input", b.ToolName, b.Bytes, want)
+		}
+		// CallKey is what the loop detector compares. Without it, an agent
+		// repeating one call forever is undetectable.
+		if b.CallKey == "" {
+			t.Errorf("tool call %q has no CallKey; loop detection is blind to it",
+				b.ToolName)
+		}
+		if b.ToolUseID == "" {
+			t.Errorf("tool call %q has no tool_use_id to pair with its result",
+				b.ToolName)
+		}
+	}
+	if len(tools) < 2 {
+		t.Errorf("expected two tool calls in this capture, got %v", tools)
+	}
+}
+
+// Extended thinking. The important assertion here is the one that looks like a
+// bug and is not, so that nobody "fixes" it later.
+func TestClaudeCodeThinkingStream(t *testing.T) {
+	r := parseWire(t, "stream-thinking.sse")
+
+	var think *Block
+	for i := range r.Blocks {
+		if r.Blocks[i].Kind == "thinking" {
+			think = &r.Blocks[i]
+		}
+	}
+	if think == nil {
+		t.Fatalf("no thinking block; blocks were %+v", r.Blocks)
+	}
+
+	// The provider withholds the thinking text: every thinking_delta in this
+	// capture carries an EMPTY `thinking` string alongside an estimated_tokens
+	// count, and a separate signature_delta carries 1208 bytes of signature.
+	// So a byte size of zero is not a parsing failure, it is an honest record
+	// of content Replay never saw. Do not "fix" this by counting the
+	// signature: the signature is not tokens the model generated, and the fit
+	// runs on user bytes anyway.
+	if think.Bytes != 0 {
+		t.Errorf("thinking block recorded %d bytes. Every observed thinking_delta "+
+			"carried an empty string, so a non-zero size means something other "+
+			"than model output is being counted — most likely the signature",
+			think.Bytes)
+	}
+
+	// The size that does exist is the token count, and it must survive. The
+	// provider replays these when the block is sent back, so this is the
+	// block's measured input size on the next turn.
+	if r.Usage == nil || r.Usage.ThinkingTokens <= 0 {
+		t.Errorf("thinking tokens missing from usage; that figure is the only " +
+			"size signal for a block whose text is withheld")
+	}
+}
+
+func parseWire(t *testing.T, name string) Response {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", "anthropic", name))
+	if err != nil {
+		t.Fatalf("fixture %s: %v", name, err)
+	}
+	var p StreamParser
+	if _, err := p.Write(b); err != nil {
+		t.Fatalf("%s: %v", name, err)
+	}
+	return p.Result()
+}

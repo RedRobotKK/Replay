@@ -9,6 +9,10 @@ Two kinds of file, and the difference is the point:
 | Kind | Files | Parsed by the test? |
 |---|---|---|
 | **Wire bodies** | `stream-*.sse` | **Yes** — through `StreamParser`, so a parser regression fails the test |
+
+Wire fixtures: `stream-no-cache`, `stream-cache-read-and-write`, `stream-tool-use`
+(Read and Bash, with `input_json_delta`), and `stream-thinking` (extended thinking
+with `thinking_delta` and `signature_delta`).
 | Ledger records | `*.json` | No — already parsed; these check the recorded shape only |
 
 **The `.json` records cannot catch a parser bug**, and that was found the hard way:
@@ -54,3 +58,29 @@ the most common shape in a long session.
 `A4` no field is negative · `A5` the ledger holds no message text.
 
 A1 and A2 are verified falsifiable by mutation against the wire fixtures.
+
+## Extended thinking: zero bytes is correct, not a bug
+
+`stream-thinking.sse` produces a thinking block of **0 bytes** against **300 thinking
+tokens**, and that is the right record. Every `thinking_delta` in the capture carries
+an **empty** `thinking` string beside an `estimated_tokens` count; the text is
+withheld. A separate `signature_delta` carries 1,208 bytes of cryptographic
+signature.
+
+So there is nothing to count, and a zero is an honest record of content Replay never
+saw rather than a parsing failure. **Do not "fix" it by counting the signature** — a
+signature is not tokens the model generated, and the byte-to-token fit runs on user
+bytes, so a zero-byte assistant block never enters it.
+
+The size that does exist is the token count, which is captured. `Usage.ThinkingTokens`
+is documented as the block's measured input size for the turn the block is sent back
+on, and that is the figure `replay blame` needs.
+
+## A weak assertion that let a mutation through
+
+The tool-use test first asserted only that a tool call's byte size was above zero.
+Deleting `input_json_delta` accumulation entirely **left it green**, because
+`content_block_start` already contributes bytes. It now asserts the captured sizes
+exactly — Read 106, Bash 75 — which is the same lesson as the constant `PrefixHash`
+satisfying a non-empty check in the OpenAI suite: a bound that anything plausible
+passes is not a test.
