@@ -415,7 +415,7 @@ type TrialStatus struct {
 func (s *stats) status() Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := Status{UptimeSeconds: int64(time.Since(s.started).Seconds()), Requests: map[string]int{}, PriceTable: cachemodel.PriceTableVersion, Rules: cachemodel.RulesVersion}
+	out := Status{UptimeSeconds: int64(time.Since(s.started).Seconds()), Requests: map[string]int{}, PriceTable: cachemodel.PriceTableVersion, Rules: cachemodel.RulesVersionInEffect()}
 	for k, v := range s.requests {
 		out.Requests[k] = v
 	}

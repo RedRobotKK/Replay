@@ -299,3 +299,27 @@ func TestGraduate(t *testing.T) {
 		t.Fatal("no arms means no trial report")
 	}
 }
+
+// A policy file records the rules it was learned under so a later run can
+// refuse to use it once those rules change. That check read the compiled
+// constant, so it could never fire in the one case it exists for: a provider
+// changing its numbers and the user installing a corrected rules document.
+func TestPolicyFileRecordsTheRulesActuallyInEffect(t *testing.T) {
+	restore := cachemodel.Override(&cachemodel.Rules{
+		Schema:  cachemodel.RulesSchema,
+		Version: "anthropic-9999-01-01",
+		Models:  []cachemodel.ModelRule{{Match: "opus-5", MinPrefix: 1024}},
+	})
+	defer restore()
+
+	res := Result{Schema: PolicyFileSchema, Rules: cachemodel.RulesVersionInEffect()}
+	if res.Rules != "anthropic-9999-01-01" {
+		t.Fatalf("a policy file stamped %q was learned under %q",
+			res.Rules, cachemodel.RulesVersionInEffect())
+	}
+	// And a file stamped with the old rules must be refused under the new ones.
+	stale := Result{Schema: PolicyFileSchema, Rules: cachemodel.RulesVersion}
+	if stale.Rules == cachemodel.RulesVersionInEffect() {
+		t.Fatal("the fixture does not represent a rules change")
+	}
+}

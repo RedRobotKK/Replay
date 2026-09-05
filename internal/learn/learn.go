@@ -276,7 +276,7 @@ func selectFrom(candidates []Candidate, scores []SessionScore, found int, opts O
 	if opts.MinSessions <= 0 {
 		opts.MinSessions = DefaultMinSessions
 	}
-	res := Result{Schema: PolicyFileSchema, Generated: now.UTC(), Rules: cachemodel.RulesVersion}
+	res := Result{Schema: PolicyFileSchema, Generated: now.UTC(), Rules: cachemodel.RulesVersionInEffect()}
 	res.Sessions.Found = found
 	res.Sessions.Calibrated = len(scores)
 	for _, s := range scores {
@@ -448,8 +448,8 @@ func (r Result) SelectionFor(sessionType string) (*Candidate, string) {
 	switch {
 	case r.Schema != PolicyFileSchema:
 		return nil, fmt.Sprintf("policy file schema %d is not %d; run replay learn again", r.Schema, PolicyFileSchema)
-	case r.Rules != cachemodel.RulesVersion:
-		return nil, fmt.Sprintf("policy file was learned under rules %q, current rules are %q; run replay learn again", r.Rules, cachemodel.RulesVersion)
+	case r.Rules != cachemodel.RulesVersionInEffect():
+		return nil, fmt.Sprintf("policy file was learned under rules %q, current rules are %q; run replay learn again", r.Rules, cachemodel.RulesVersionInEffect())
 	}
 	c := r.Selected
 	if sessionType != "" {
