@@ -126,6 +126,24 @@ else
   bad "install.sh missing"
 fi
 
+# The install route's analytics are compiled in, not read at runtime:
+# import.meta.env.PUBLIC_POSTHOG_KEY is inlined at BUILD time, so if the key is
+# absent when the site is built, `if (!key) return` becomes unconditional and
+# the whole capture body is dead-code eliminated. The route still serves the
+# script, the deploy still succeeds, and nothing is ever recorded. That is what
+# happened until 2026-09-05, and it is invisible from outside.
+SITE_CHUNK=$(ls ../RedRobot.jp/dist/_worker.js/chunks/install.sh_*.mjs 2>/dev/null | head -1)
+if [ -n "$SITE_CHUNK" ]; then
+  if grep -q posthog "$SITE_CHUNK"; then
+    ok "install analytics survived the site build"
+  else
+    bad "install analytics were compiled out" \
+      "PUBLIC_POSTHOG_KEY was missing at build time; the capture body is gone. Set it in RedRobot.jp/.env and rebuild"
+  fi
+else
+  warn "site not built" "cannot check whether install analytics survived the build"
+fi
+
 VEND=../RedRobot.jp/src/vendor/replay-install.sh
 if [ -f "$VEND" ]; then
   if [ "$(shasum -a 256 install.sh | cut -d' ' -f1)" = "$(shasum -a 256 "$VEND" | cut -d' ' -f1)" ]; then
