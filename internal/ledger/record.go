@@ -10,6 +10,7 @@
 package ledger
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
@@ -130,6 +131,13 @@ type Message struct {
 type Response struct {
 	Blocks []Block `json:"blocks,omitempty"`
 	Usage  *Usage  `json:"usage,omitempty"`
+	// RawUsage is the provider's own usage object, verbatim and unparsed.
+	//
+	// Usage above keeps the fields this build knows are load-bearing, which
+	// makes it lossy by construction. A field nobody knew mattered is exactly
+	// what a later calibration needs, and it can only come from a payload
+	// stored before anyone knew to ask. See internal/usage.
+	RawUsage json.RawMessage `json:"raw_usage,omitempty"`
 	// AppliedEdits and ClearedInputTokens report the provider's own
 	// context edits on this response: how many it applied and how many
 	// prompt tokens they removed. They are the applied policy's measured
