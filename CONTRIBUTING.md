@@ -44,4 +44,11 @@ Docs live in `docs/` and are linted in CI. Every document opens with one sentenc
 
 ## License of contributions
 
-By contributing you agree that your contribution is licensed under the [Apache License 2.0](LICENSE), as its Section 5 provides. No separate contributor agreement is required.
+Your contribution is licensed under the [Apache License 2.0](LICENSE), as its Section 5
+provides. That has not changed and there is no plan to change it.
+
+A first pull request also needs a one-line sign-off on the [CLA](CLA.md). You keep your
+copyright and you can reuse your own work anywhere; what you grant is the right to relicense
+it, so the project's licensing stays a decision rather than an accident. The reason it is
+worth a moment of your time is that the option expires silently: once a contribution lands
+that cannot be relicensed, the terms are fixed for good, whatever anyone later decides.
