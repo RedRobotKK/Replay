@@ -164,13 +164,29 @@ if command -v "$BIN" >/dev/null 2>&1; then
 fi
 
 # ------------------------------------------------------------------- version
+RESOLVED=unknown
 if [ -z "$VERSION" ]; then
   step "Resolving the latest release"
-  VERSION=$(fetch "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null \
-            | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1 || true)
+  # Distinguish "there is no release" from "we could not ask". Swallowing that
+  # difference meant one rate-limited API call (the unauthenticated GitHub limit
+  # is 60/hr per IP, routinely hit on CI and behind shared NAT) silently dropped
+  # every verification below, and said something untrue while doing it.
+  if api=$(fetch "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null); then
+    RESOLVED=ok
+    VERSION=$(printf '%s' "$api" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+  else
+    RESOLVED=failed
+  fi
 fi
 
 # ----------------------------------------------------- no release yet: source
+if [ -z "${VERSION:-}" ] && [ "$RESOLVED" = failed ]; then
+  die "Could not reach the GitHub releases API, so the latest version is unknown.
+     This script will not quietly fall back to an unverified source build: that
+     would skip the checksum and signature checks you ran it for.
+     Retry, or pass --version <tag> to install a specific release."
+fi
+
 if [ -z "${VERSION:-}" ]; then
   warn "No release is published yet."
   if command -v go >/dev/null 2>&1; then
@@ -243,8 +259,13 @@ else
               die "Signature verification FAILED for checksums.txt. Nothing was installed.
    The checksums may be intact but they were not signed by this project's CI."
             fi
+          elif [ "$ALLOW_UNVERIFIED" -eq 1 ]; then
+            warn "No signature published for ${VERSION}. Continuing because --no-verify was passed."
           else
-            info "no signature published for ${VERSION}; checksum only"
+            die "No Sigstore signature was published for ${VERSION}, and cosign is
+     installed to check one. Every release this project's CI builds is signed, so
+     a missing signature means these assets are not the ones CI produced.
+     Nothing was installed. Pass --no-verify to install without this check."
           fi
         else
           info "cosign not installed, so the signature was not checked. Checksums only."
