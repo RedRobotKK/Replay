@@ -293,17 +293,47 @@ else
     tar -xzf "$tmp/$archive" -C "$tmp" "$BIN" || die "Could not unpack ${BIN} from ${archive}."
     [ ! -L "$tmp/$BIN" ] || die "${archive} contains a symlink where ${BIN} should be. Nothing was installed."
     [ -f "$tmp/$BIN" ] || die "The archive did not contain a ${BIN} binary."
-    mkdir -p "$BIN_DIR"
-    install -m 0755 "$tmp/$BIN" "$BIN_DIR/$BIN" 2>/dev/null \
-      || { cp "$tmp/$BIN" "$BIN_DIR/$BIN" && chmod 0755 "$BIN_DIR/$BIN"; } \
+    # The guidance below is only reachable if mkdir is allowed to fail. Under
+    # `set -e` a bare `mkdir -p` on an unwritable parent kills the script here,
+    # and the user gets `Permission denied` instead of the sentence written to
+    # tell them what to do about it.
+    mkdir -p "$BIN_DIR" 2>/dev/null \
+      || die "Could not create ${BIN_DIR}. Re-run with --bin-dir <somewhere writable>."
+    # Land beside the destination, not on it.
+    #
+    # Whatever is already at $BIN_DIR/$BIN is, as far as this script knows, a
+    # working install. Overwriting it before the new binary has been proved to
+    # run means a failed upgrade takes the user's working copy with it: a
+    # wrong-architecture download, an interrupted copy, a full disk, and they
+    # are left with nothing where they started with something. Removing the
+    # broken file afterwards is not a fix — it just makes the loss tidy.
+    #
+    # So install to a sibling, run it there, and only then move it into place.
+    # The final mv is atomic within a filesystem, so there is no window where
+    # the destination holds a half-written file.
+    staged="$BIN_DIR/.$BIN.new.$$"
+    install -m 0755 "$tmp/$BIN" "$staged" 2>/dev/null \
+      || { cp "$tmp/$BIN" "$staged" && chmod 0755 "$staged"; } \
       || die "Could not write to ${BIN_DIR}. Re-run with --bin-dir <somewhere writable>."
     # Run it once before claiming success. Everything above verifies the bytes
     # that arrived; none of it proves the result executes here. A binary for the
     # wrong architecture, a chmod that did not take, a libc mismatch the platform
     # check missed: each installs cleanly, fails on first use, and would have
     # been reported as "Installed" either way.
-    "$BIN_DIR/$BIN" version >/dev/null 2>&1 || die \
-      "Installed to ${BIN_DIR}/${BIN}, but it does not run here. Run '${BIN_DIR}/${BIN} version' to see why, then 'rm ${BIN_DIR}/${BIN}'."
+    if ! "$staged" version >/dev/null 2>&1; then
+      # It does not run. Discard the staged copy and leave whatever was already
+      # installed exactly as it was — the user keeps the working binary they
+      # had, and nothing that cannot run reaches their PATH.
+      why=$("$staged" version 2>&1 | head -3 || true)
+      rm -f "$staged"
+      [ -n "$why" ] && info "$why"
+      if [ -x "$BIN_DIR/$BIN" ]; then
+        die "Downloaded ${BIN} ${VERSION}, but it does not run on this machine. Nothing was changed; your existing ${BIN_DIR}/${BIN} is untouched."
+      fi
+      die "Downloaded ${BIN} ${VERSION}, but it does not run on this machine. Nothing was installed."
+    fi
+    mv -f "$staged" "$BIN_DIR/$BIN" \
+      || { rm -f "$staged"; die "Could not move ${BIN} into ${BIN_DIR}. Nothing was changed."; }
 
     ok "Installed ${BIN} ${VERSION}"
   fi
