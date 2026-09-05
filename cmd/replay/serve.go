@@ -125,13 +125,19 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	// A day cap that resets on restart is worse than no cap, because the
+	// operator believes it, and a crash or a machine sleep is exactly what
+	// happens during the overnight run the cap exists to bound.
+	spend := proxy.NewSpendGuard(proxy.SpendLimits{SessionTokens: *maxSession, DayTokens: *maxDay, SessionUSD: *maxSessionUSD, DayUSD: *maxDayUSD})
+	spend.LoadState(dir)
+
 	srv, err := proxy.New(proxy.Config{
 		Listen:      *listen,
 		Upstream:    target,
 		Token:       *token,
 		Store:       store,
 		Logger:      log.New(stderr, "replay ", log.LstdFlags),
-		Spend:       proxy.NewSpendGuard(proxy.SpendLimits{SessionTokens: *maxSession, DayTokens: *maxDay, SessionUSD: *maxSessionUSD, DayUSD: *maxDayUSD}),
+		Spend:       spend,
 		Loops:       proxy.LoopLimits{Warn: *loopWarn, Block: *loopBlock},
 		Breaker:     proxy.NewBreaker(proxy.BreakerSettings{Failures: *breakerFailures, Cooldown: *breakerCooldown}),
 		ContextEdit: contextEdit,
@@ -166,6 +172,9 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		}
 		_, _ = fmt.Fprintf(stdout, "replay serve listening on http://%s -> %s\nledger: %s\n\nPoint your agent at it:\n  export ANTHROPIC_BASE_URL=http://%s\n\nThen analyze measured data with:\n  replay replay %s\n\nStop with Ctrl-C. Disable without uninstalling: %s=1.\n", addr, target, dir, addr, dir, envDisabled)
 	}()
+	// Persist on the way out, so an ordinary restart does not hand the next
+	// process a clean slate for a cap the operator set hours ago.
+	defer spend.SaveState(dir)
 	return srv.ListenAndServe(ctx)
 }
 

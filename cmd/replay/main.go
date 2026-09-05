@@ -65,6 +65,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return runStatusline(args[1:], stdout, stderr)
 	case "cost":
 		return runCost(args[1:], stdout, stderr)
+	case "route":
+		return runRoute(args[1:], stdout, stderr)
 	case "context":
 		return runContext(args[1:], stdout, stderr)
 	case "advise":
@@ -116,15 +118,50 @@ func namesAPath(arg string) bool {
 // a command with a space-separated string flag: hoisting would move the flag
 // and leave its value behind as a path. `replay rules --update <src>` is such a
 // command and parses its arguments directly.
-func hoistFlags(args []string) []string {
+// hoistFlagsFor lets flags appear after the path, which the flag package
+// will not do on its own, and knows which flags take a value.
+//
+// The flag package stops parsing at the first argument that is not a flag, so
+// `replay route dir --to m2` would leave --to unparsed. Hoisting fixes that,
+// but hoisting a flag while leaving its value behind is worse than not
+// hoisting at all: the value silently becomes a path, and the command fails
+// on a file nobody named. That was a real defect on every value-taking flag
+// placed after a path, --to, --top and --compare among them.
+//
+// Booleans are the exception and must not swallow the next argument: `--json
+// dir` means two things, not one flag with the value "dir". The FlagSet knows
+// which is which, so ask it rather than keeping a list here that drifts.
+func hoistFlagsFor(fs *flag.FlagSet, args []string) []string {
+	takesValue := func(name string) bool {
+		name = strings.TrimLeft(name, "-")
+		f := fs.Lookup(name)
+		if f == nil {
+			return false
+		}
+		b, ok := f.Value.(interface{ IsBoolFlag() bool })
+		return !ok || !b.IsBoolFlag()
+	}
+
 	flags := make([]string, 0, len(args))
 	paths := make([]string, 0, len(args))
-	for _, a := range args {
-		if strings.HasPrefix(a, "-") && a != "-" {
-			flags = append(flags, a)
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			// Everything after the terminator is a path by definition,
+			// including something that looks like a flag.
+			paths = append(paths, args[i:]...)
+			break
+		}
+		if !strings.HasPrefix(a, "-") || a == "-" {
+			paths = append(paths, a)
 			continue
 		}
-		paths = append(paths, a)
+		flags = append(flags, a)
+		// --name=value carries its own value; --name does not.
+		if !strings.Contains(a, "=") && takesValue(a) && i+1 < len(args) {
+			i++
+			flags = append(flags, args[i])
+		}
 	}
 	return append(flags, paths...)
 }
@@ -133,7 +170,7 @@ func runReport(args []string, stdout, stderr io.Writer, write func(*analysis.Lan
 	fs := flag.NewFlagSet("report", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	dollars := fs.Bool("dollars", false, "add a list-price cost column (first-party rates, dated price table)")
-	if err := fs.Parse(hoistFlags(args)); err != nil {
+	if err := fs.Parse(hoistFlagsFor(fs, args)); err != nil {
 		return errUsage
 	}
 	if fs.NArg() == 0 {
@@ -304,6 +341,7 @@ Usage:
   replay statusline                live spend and what the cache misses cost, for Claude Code's status line
   replay cost   <dir...>           cost per task, the share nobody chose, and --compare <date> for before/after
   replay context <transcript|dir>  what entered a session's context, by tool
+  replay route <dir> --to <model>  what switching models would change, structurally
   replay redact <transcript>       strip content, keep structure and usage (for bug reports)
   replay serve [flags]             local proxy: byte-for-byte passthrough, records a ledger
   replay version                   print build information

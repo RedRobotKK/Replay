@@ -115,7 +115,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	perTask := fs.Bool("per-task", false, "list every priced session, most expensive first")
 	since := fs.String("compare", "", "split at this date (YYYY-MM-DD) and report cost per task before and after")
 	predicted := fs.Float64("predicted", 0, "with --compare, the fractional change you predicted (e.g. -0.2 for a 20% saving)")
-	if err := fs.Parse(hoistFlags(args)); err != nil {
+	if err := fs.Parse(hoistFlagsFor(fs, args)); err != nil {
 		return errUsage
 	}
 	if fs.NArg() == 0 {

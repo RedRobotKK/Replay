@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -206,5 +208,60 @@ func TestDollarCapOnAnUnpricedModelIsReportedNotSilentlyIgnored(t *testing.T) {
 	}
 	if msg := h.Check("s2"); msg == "" {
 		t.Fatal("the cap should have fired at $25 of $20")
+	}
+}
+
+// A daily cap that resets when the proxy restarts is worse than no cap,
+// because the user believes it. The overnight runaway is the exact threat the
+// day cap exists to stop, and a crash, a machine sleep, or a routine restart
+// silently removes the protection they configured.
+func TestDayCapSurvivesARestart(t *testing.T) {
+	dir := t.TempDir()
+
+	first := NewSpendGuard(SpendLimits{DayUSD: 10})
+	first.LoadState(dir)
+	first.Record("s1", 500_000, 7.50)
+	if msg := first.Check("s1"); msg != "" {
+		t.Fatalf("fixture: $7.50 of $10 should not refuse yet: %q", msg)
+	}
+	first.SaveState(dir)
+
+	// The process dies and comes back. The day's spend must come back with it.
+	second := NewSpendGuard(SpendLimits{DayUSD: 10})
+	second.LoadState(dir)
+	second.Record("s2", 200_000, 3.00) // takes the day to $10.50
+	if msg := second.Check("s2"); msg == "" {
+		t.Fatal("the day cap did not survive the restart: $10.50 of $10 was allowed")
+	}
+}
+
+// State from a previous day must not carry over, or the first session of a new
+// day inherits yesterday's spend and is refused immediately.
+func TestPersistedStateFromAnotherDayIsDiscarded(t *testing.T) {
+	dir := t.TempDir()
+	g := NewSpendGuard(SpendLimits{DayUSD: 10})
+	g.now = func() time.Time { return time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC) }
+	g.LoadState(dir)
+	g.Record("s1", 0, 50) // way over
+	g.SaveState(dir)
+
+	next := NewSpendGuard(SpendLimits{DayUSD: 10})
+	next.now = func() time.Time { return time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC) }
+	next.LoadState(dir)
+	if msg := next.Check("s1"); msg != "" {
+		t.Fatalf("yesterday's spend leaked into today: %q", msg)
+	}
+}
+
+// Persistence must never be the reason a request fails.
+func TestSpendStateFailsOpenOnAnUnreadableFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, spendStateFile), []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	g := NewSpendGuard(SpendLimits{DayUSD: 10})
+	g.LoadState(dir) // must not panic, must not error out
+	if msg := g.Check("s1"); msg != "" {
+		t.Fatalf("a corrupt state file must not refuse traffic: %q", msg)
 	}
 }

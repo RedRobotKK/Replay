@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -281,24 +283,27 @@ func TestChooseTTLRefusesWhenTheLargestSessionsDisagree(t *testing.T) {
 	}
 }
 
-// hoistFlags moves flags ahead of paths, which silently breaks any flag that
-// takes a space-separated value: the flag moves and its value is left behind to
-// be read as a path. `replay rules --update <file> --dry-run` hit exactly that,
-// consuming "--dry-run" as the filename.
-func TestHoistFlagsIsOnlySafeForBooleanFlags(t *testing.T) {
-	got := hoistFlags([]string{"--update", "rules.json", "--dry-run"})
-	// This is the documented, and dangerous, behaviour. The test exists so the
-	// hazard is visible to whoever reaches for this helper next.
-	want := []string{"--update", "--dry-run", "rules.json"}
-	if strings.Join(got, " ") != strings.Join(want, " ") {
-		t.Fatalf("got %v, want %v", got, want)
+// The hazard this used to pin: hoisting moved a flag ahead of the paths and
+// left its value behind to be read as one. `replay rules --update <file>
+// --dry-run` consumed "--dry-run" as the filename. hoistFlagsFor asks the
+// FlagSet which flags take a value, so the pair travels together.
+func TestHoistingKeepsAStringFlagWithItsValue(t *testing.T) {
+	fs := flag.NewFlagSet("rules", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	update := fs.String("update", "", "")
+	dry := fs.Bool("dry-run", false, "")
+	if err := fs.Parse(hoistFlagsFor(fs, []string{"--update", "rules.json", "--dry-run"})); err != nil {
+		t.Fatalf("parse: %v", err)
 	}
-	// And the command that has such a flag must not use it.
-	// Match a call, not the word: the file names the helper in a comment
-	// explaining why it does not use it, and an assertion that cannot tell the
-	// difference would fail on its own documentation.
-	src := string(mustRead(t, "rules.go"))
-	if strings.Contains(src, "hoistFlags(") {
-		t.Fatal("rules.go takes a string flag and must parse its arguments directly")
+	if *update != "rules.json" {
+		t.Fatalf("--update took %q, the old defect took the next flag", *update)
+	}
+	if !*dry {
+		t.Fatal("--dry-run was swallowed as a value")
+	}
+	// And the value-blind helper must stay gone rather than linger as a
+	// loaded gun for the next command that takes a flag with a value.
+	if src := string(mustRead(t, "main.go")); strings.Contains(src, "func hoistFlags(") {
+		t.Fatal("the value-blind hoistFlags is back; every value-taking flag after a path breaks again")
 	}
 }

@@ -26,7 +26,7 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	asJSON := fs.Bool("json", false, "emit the attribution as JSON")
 	top := fs.Int("top", 12, "how many rows to print")
-	if err := fs.Parse(hoistFlags(args)); err != nil {
+	if err := fs.Parse(hoistFlagsFor(fs, args)); err != nil {
 		return errUsage
 	}
 	if fs.NArg() == 0 {

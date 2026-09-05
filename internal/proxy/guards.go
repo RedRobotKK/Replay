@@ -1,7 +1,10 @@
 package proxy
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -312,4 +315,68 @@ func (b *Breaker) Observe(retryable bool) {
 // overload code.
 func IsRetryableStatus(status int) bool {
 	return status == 429 || (status >= 500 && status <= 599)
+}
+
+// spendStateFile holds the day's running total beside the ledger.
+//
+// Without it a daily cap resets whenever the proxy restarts, which is the
+// protection silently disappearing for the exact threat it exists to stop: an
+// agent looping overnight through a crash, a machine sleep, or a routine
+// restart. A cap that resets is worse than no cap, because the operator
+// believes it.
+const spendStateFile = "spend-day.json"
+
+type spendState struct {
+	Day    string  `json:"day"`
+	Tokens int     `json:"tokens"`
+	USD    float64 `json:"usd"`
+}
+
+// LoadState restores today's running total. Anything unreadable, unparseable,
+// or from another day is discarded: yesterday's spend leaking into today would
+// refuse the first session of the morning.
+func (g *SpendGuard) LoadState(dir string) {
+	if g == nil || dir == "" {
+		return
+	}
+	body, err := os.ReadFile(filepath.Join(dir, spendStateFile))
+	if err != nil {
+		return
+	}
+	var st spendState
+	if json.Unmarshal(body, &st) != nil {
+		return
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if st.Day != g.now().UTC().Format("2006-01-02") {
+		return
+	}
+	g.day = st.Day
+	g.dayUsed = spend{tokens: st.Tokens, usd: st.USD}
+}
+
+// SaveState persists today's running total. A write failure is ignored on
+// purpose: bookkeeping must never be the reason a request fails.
+func (g *SpendGuard) SaveState(dir string) {
+	if g == nil || dir == "" {
+		return
+	}
+	g.mu.Lock()
+	// An idle proxy has no day recorded yet. Stamp today rather than skip the
+	// write: a restart that loses the marker is how a cap silently starts over.
+	if g.day == "" {
+		g.day = g.now().UTC().Format("2006-01-02")
+	}
+	st := spendState{Day: g.day, Tokens: g.dayUsed.tokens, USD: g.dayUsed.usd}
+	g.mu.Unlock()
+	body, err := json.Marshal(st)
+	if err != nil {
+		return
+	}
+	_ = os.MkdirAll(dir, 0o700)
+	tmp := filepath.Join(dir, spendStateFile+".tmp")
+	if os.WriteFile(tmp, body, 0o600) == nil {
+		_ = os.Rename(tmp, filepath.Join(dir, spendStateFile))
+	}
 }

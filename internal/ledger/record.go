@@ -43,6 +43,13 @@ type Record struct {
 	// request, empty when the bytes went through unchanged.
 	Policy string `json:"policy,omitempty"`
 	Status int    `json:"status"`
+	// Refusal names the guard that answered this request locally, when one
+	// did. Counts and thresholds only, never content. Added as an optional
+	// field on purpose: SchemaVersion gates which records a reader accepts, so
+	// bumping it would discard every existing ledger rather than extend it.
+	Refusal string `json:"refusal,omitempty"`
+	// RefusalReason is the guard message: counts and thresholds, never content.
+	RefusalReason string `json:"refusal_reason,omitempty"`
 	// Masked counts the secrets the proxy replaced with placeholders in
 	// this request, by pattern name. Never a secret or a placeholder.
 	Masked map[string]int `json:"masked,omitempty"`
