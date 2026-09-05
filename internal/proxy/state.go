@@ -500,12 +500,26 @@ type Status struct {
 	// Requests["refused"]; this names which guard did it, which is the part a
 	// person needs to act on.
 	Refusals map[string]int `json:"refusals,omitempty"`
+	// Caps says which spend limits are configured, so a reader that cannot
+	// see serve's flags, `replay doctor` over HTTP for instance, can tell
+	// whether a blind dollar cap is already covered by a token one.
+	Caps CapStatus `json:"caps"`
 	// CostUSD and DayCostUSD are list-price cost since start and for the
 	// current UTC day.
 	CostUSD    float64 `json:"cost_usd"`
 	DayCostUSD float64 `json:"day_cost_usd"`
 	// Trial reports the live trial of a learned policy, when one runs.
 	Trial TrialStatus `json:"trial"`
+}
+
+// CapStatus is which spend limits are set, not their values. The values are
+// the operator's business and a status endpoint is a thing other software
+// reads; whether a limit exists is what a diagnostic needs.
+type CapStatus struct {
+	SessionTokens bool `json:"session_tokens,omitempty"`
+	DayTokens     bool `json:"day_tokens,omitempty"`
+	SessionUSD    bool `json:"session_usd,omitempty"`
+	DayUSD        bool `json:"day_usd,omitempty"`
 }
 
 // TrialStatus is the trial's arms and guardrail state.

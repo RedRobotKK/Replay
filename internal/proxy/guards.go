@@ -380,3 +380,17 @@ func (g *SpendGuard) SaveState(dir string) {
 		_ = os.Rename(tmp, filepath.Join(dir, spendStateFile))
 	}
 }
+
+// Configured reports which caps are set, for a diagnostic that cannot see the
+// flags. It reports existence and never a value.
+func (g *SpendGuard) Configured() CapStatus {
+	if g == nil {
+		return CapStatus{}
+	}
+	return CapStatus{
+		SessionTokens: g.limits.SessionTokens > 0,
+		DayTokens:     g.limits.DayTokens > 0,
+		SessionUSD:    g.limits.SessionUSD > 0,
+		DayUSD:        g.limits.DayUSD > 0,
+	}
+}

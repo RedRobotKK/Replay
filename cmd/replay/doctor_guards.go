@@ -53,9 +53,21 @@ func guardLines(st proxy.Status) []string {
 		out = append(out,
 			"WARNING: a dollar cap is set, but some traffic could not be priced, so the",
 			"         cap is not being applied to it. An agent looping on an unpriced",
-			"         model can run up a real bill without ever reaching your limit.",
-			"         Cap tokens as well: --max-day-tokens or --max-session-tokens count",
-			"         whether or not a model can be priced.",
+			"         model can run up a real bill without ever reaching your limit.")
+		// Telling somebody to add a cap they already have is noise, and noise
+		// in a warning is how a warning stops being read. A token cap counts
+		// whether or not a model can be priced, so when one is running it is
+		// already catching the loop this warning is about.
+		if st.Caps.DayTokens || st.Caps.SessionTokens {
+			out = append(out,
+				"         Your token cap already covers this: token counters accumulate",
+				"         whether or not a model can be priced, so the loop is still caught.")
+		} else {
+			out = append(out,
+				"         Cap tokens as well: --max-day-tokens or --max-session-tokens count",
+				"         whether or not a model can be priced.")
+		}
+		out = append(out,
 			"         Then `replay rules --update <file|URL>` so the model has a price.")
 	}
 	return out

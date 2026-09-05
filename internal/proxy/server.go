@@ -359,6 +359,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	// contributes nothing to the running total, so the cap never fires and the
 	// operator silently has no cap on that traffic.
 	st.SpendCapNotEnforced = s.cfg.Spend.CapNotEnforced()
+	st.Caps = s.cfg.Spend.Configured()
 	_ = json.NewEncoder(w).Encode(st)
 }
 

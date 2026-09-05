@@ -271,7 +271,10 @@ Browser-originated requests are refused regardless.
 While `serve` is running:
 
 - `GET /replay/status` returns per-session totals as JSON: requests, prompt tokens, cached share,
-  breaks, prefix changes, list cost, and what each alternative layout would have done.
+  breaks, prefix changes, list cost, and what each alternative layout would have done. It
+  also reports `caps`, which spend limits are configured, as booleans rather than values, so a
+  diagnostic that cannot see `serve`'s flags can tell whether a blind dollar cap is already
+  covered by a token one.
 - `GET /replay/metrics` exposes aggregate totals as Prometheus text. It has no per-session rows.
 
 Both honour the token when one is set, and both refuse browser origins.

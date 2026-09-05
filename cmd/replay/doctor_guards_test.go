@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -70,5 +71,53 @@ func TestRefusalsWithoutABreakdownAreStillReported(t *testing.T) {
 	got := strings.Join(guardLines(proxy.Status{Requests: map[string]int{"refused": 3}}), "\n")
 	if !strings.Contains(got, "3") {
 		t.Fatalf("a refusal count with no breakdown was dropped:\n%s", got)
+	}
+}
+
+// Telling somebody to add a token cap they already have is noise, and noise in
+// a warning is how a warning stops being read. When a dollar cap is blind but a
+// token cap is running, the token cap is already catching the runaway loop the
+// warning is about, and the honest advice is different.
+func TestTheWarningKnowsWhenATokenCapAlreadyCoversIt(t *testing.T) {
+	blindWithTokens := proxy.Status{
+		Requests:            map[string]int{"2xx": 10},
+		SpendCapNotEnforced: true,
+		Caps:                proxy.CapStatus{DayUSD: true, DayTokens: true},
+	}
+	got := strings.Join(guardLines(blindWithTokens), "\n")
+	if !strings.Contains(got, "WARNING") {
+		t.Fatalf("the dollar cap is still blind, so it still warns:\n%s", got)
+	}
+	if strings.Contains(got, "Cap tokens as well") {
+		t.Fatalf("a token cap is already running; do not tell them to add one:\n%s", got)
+	}
+	if !strings.Contains(got, "already") {
+		t.Fatalf("it must say the token cap is covering this:\n%s", got)
+	}
+
+	// And with no token cap, the ten-second fix is still the first thing said.
+	blindNoTokens := proxy.Status{
+		Requests:            map[string]int{"2xx": 10},
+		SpendCapNotEnforced: true,
+		Caps:                proxy.CapStatus{DayUSD: true},
+	}
+	got = strings.Join(guardLines(blindNoTokens), "\n")
+	if !strings.Contains(got, "--max-day-tokens") {
+		t.Fatalf("with no token cap the flag must be named:\n%s", got)
+	}
+}
+
+// Which caps are configured has to reach the doctor, which reads the status
+// endpoint over HTTP and cannot see serve's flags.
+func TestStatusReportsWhichCapsAreConfigured(t *testing.T) {
+	var st proxy.Status
+	if err := json.Unmarshal([]byte(`{"caps":{"day_usd":true,"session_tokens":true}}`), &st); err != nil {
+		t.Fatal(err)
+	}
+	if !st.Caps.DayUSD || !st.Caps.SessionTokens {
+		t.Fatalf("caps did not survive the wire: %+v", st.Caps)
+	}
+	if st.Caps.DayTokens || st.Caps.SessionUSD {
+		t.Fatalf("unset caps must stay false: %+v", st.Caps)
 	}
 }
