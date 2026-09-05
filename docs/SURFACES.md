@@ -166,7 +166,7 @@ Listed because a surface map that only contains what we checked is a marketing d
 matrix are all configured and none has run. The installer's release path was proven against a **fake**
 release served locally, not a real one.
 
-**The proxy has never run against the real provider.** Roadmap spike 4 says so. Every measured-tier
+**The proxy has now run against the real provider, once.** [Spike 4](evidence/spike-4-real-provider-2026-09-05.md), 2026-09-05: a ten-turn session completed intact with the context-editing parameter applied, and the ledger carried no credential and no message content. The provider applied zero context edits on that session, so the parameter is accepted and not yet shown to do anything. The guards, retries and provider-error handling were still not exercised, because nothing failed. Roadmap spike 4 says so. Every measured-tier
 figure and every guard has been exercised against a fake upstream. `--context-edit-trigger` in
 particular sends a provider parameter that has never been sent to that provider.
 

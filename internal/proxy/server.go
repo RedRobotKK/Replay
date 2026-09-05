@@ -385,7 +385,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 	ok, probe, wait := s.cfg.Breaker.Allow()
 	if !ok {
-		s.refuse(w, refusalCircuitOpen, fmt.Sprintf("the provider has been failing; Replay is holding requests for %s so the agent stops burning retries", wait.Round(time.Second)), wait)
+		s.refuseSession(w, r.Header.Get(HeaderSessionID), refusalCircuitOpen, fmt.Sprintf("the provider has been failing; Replay is holding requests for %s so the agent stops burning retries", wait.Round(time.Second)), wait)
 		return
 	}
 	// A half-open probe that never reaches an outcome (refused below, or
@@ -799,14 +799,14 @@ func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Recor
 	override := r.Header.Get(HeaderOverride)
 	if reason := s.cfg.Spend.Check(rec.SessionID); reason != "" {
 		if override == "" {
-			s.refuse(w, refusalSpendCap, reason+". Raise the cap, start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
+			s.refuseSession(w, rec.SessionID, refusalSpendCap, reason+". Raise the cap, start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
 			return false
 		}
 		s.cfg.Logger.Printf("spend cap overridden for session=%s: %s", short(rec.SessionID), override)
 	}
 	if reason := s.cfg.ErrorBudget.Check(s.stats.errorTokens(rec.SessionID)); reason != "" {
 		if override == "" {
-			s.refuse(w, refusalErrorBudget, reason+". Look at what is failing (replay replay on the ledger names it), start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
+			s.refuseSession(w, rec.SessionID, refusalErrorBudget, reason+". Look at what is failing (replay replay on the ledger names it), start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
 			return false
 		}
 		s.cfg.Logger.Printf("error budget overridden for session=%s: %s", short(rec.SessionID), override)
@@ -814,7 +814,7 @@ func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Recor
 	v := DetectLoop(rec.Prompt, s.cfg.Loops)
 	switch {
 	case v.Block && override == "":
-		s.refuse(w, refusalLoop, fmt.Sprintf("the same %s call was just made %d times in a row; Replay stopped the loop. Send %s with a reason to proceed once.", v.Label, v.Repeats, HeaderOverride), 0)
+		s.refuseSession(w, rec.SessionID, refusalLoop, fmt.Sprintf("the same %s call was just made %d times in a row; Replay stopped the loop. Send %s with a reason to proceed once.", v.Label, v.Repeats, HeaderOverride), 0)
 		return false
 	case v.Block:
 		s.cfg.Logger.Printf("loop block overridden for session=%s: %s", short(rec.SessionID), override)
@@ -858,6 +858,30 @@ func listCost(u ledger.Usage, model string) float64 {
 
 // refuse answers a request locally in the provider's error shape so any
 // client that understands provider errors shows the message to the user.
+// refuseSession is refuse with attribution: the same local answer, plus one log
+// line naming the guard, the session and the numbers.
+//
+// A guard firing was previously invisible. The counter reached /replay/metrics
+// and nothing else, so the observable behaviour of a guard saving somebody
+// money overnight was that the request log stopped and the agent showed a
+// provider-shaped error. This is the durable half of that fix; the ledger
+// record is the other.
+//
+// It deliberately does not touch the circuit breaker. refusalCircuitOpen is a
+// 503 and IsRetryableStatus covers 500-599, so feeding a refusal to
+// Breaker.Observe would re-arm the cooldown on every request an open circuit
+// refuses, and the circuit would never close.
+func (s *Server) refuseSession(w http.ResponseWriter, sessionID string, kind refusal, message string, retryAfter time.Duration) {
+	if s.cfg.Logger != nil {
+		id := short(sessionID)
+		if id == "" {
+			id = "unattributed"
+		}
+		s.cfg.Logger.Printf("REFUSED %s session=%s %s", kind.counter, id, message)
+	}
+	s.refuse(w, kind, message, retryAfter)
+}
+
 func (s *Server) refuse(w http.ResponseWriter, kind refusal, message string, retryAfter time.Duration) {
 	s.stats.refused(kind.counter)
 	w.Header().Set("Content-Type", "application/json")
