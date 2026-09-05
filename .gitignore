@@ -29,3 +29,7 @@ node_modules/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# `go build -o ./replay`, which scripts/preflight.sh itself produces. Without
+# this, one `git add -A` commits a 10 MB binary.
+/replay

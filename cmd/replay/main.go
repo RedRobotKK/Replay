@@ -35,8 +35,24 @@ func main() {
 	LoadInstalledRules(os.Stderr)
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, "replay:", err)
-		os.Exit(1)
+		os.Exit(exitCode(err))
 	}
+}
+
+// exitCode maps an error to a process exit status.
+//
+// 2 means "this resource wants paying", which is a decision for whoever holds
+// the wallet rather than a fault, and an agent needs to tell it from a broken
+// URL without parsing prose. Everything else is 1.
+//
+// It is a function rather than a few lines inside main so that the mapping can
+// be tested: main() calls os.Exit, which no test can observe.
+func exitCode(err error) int {
+	var pay *paymentRequiredError
+	if errors.As(err, &pay) {
+		return 2
+	}
+	return 1
 }
 
 func run(args []string, stdout, stderr io.Writer) error {

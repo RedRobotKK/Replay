@@ -40,6 +40,18 @@ const fundingAddressBTC = "3HzfvNb1iKjeKsRMgMSttP1oqJzyHULhGu"
 // Bitcoin-shaped string in the documentation must be one of these.
 var fundingAddresses = map[string]string{
 	"0x585ef883e750694E4ba1463bc20820e9C4fBF369": "USDC on Avalanche C-Chain",
+	// The x402 receiving wallet. It is separate from the donation addresses on
+	// purpose: donations are gifts, and this one takes payments for a product,
+	// so keeping them apart keeps the accounting honest and lets either be
+	// rotated without disturbing the other. EIP-55 verified 2026-09-05.
+	"0x2733E9BE752848D578937fDB6029D7c739dc89Cb": "x402 receiving wallet, USDC on Base",
+	// Not a destination — the USDC token contract on Base, which the x402
+	// terms name as the asset. It is pinned for the same reason as the
+	// destinations: a buyer who pays the right address in the wrong token has
+	// still lost the money, and swapping a token contract for a worthless
+	// lookalike is the same attack wearing different clothes. Canonical
+	// Circle USDC on Base, EIP-55 verified 2026-09-05.
+	"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913": "USDC token contract, the asset rather than a destination, on Base",
 	"0xdaC0fCFa02b20aF55e6e34e931fB169a0C8Ddb98": "cbBTC on Base",
 	"3HzfvNb1iKjeKsRMgMSttP1oqJzyHULhGu":         "BTC on Bitcoin",
 	// Solana carries no checksum, so this one is pinned and nothing else can

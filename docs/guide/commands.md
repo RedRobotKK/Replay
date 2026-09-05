@@ -100,6 +100,10 @@ network call.
 It will not price a model that is not in the price table, and when its own figure exceeds what the
 session actually cost, the two disagree and it shows the cause without the number.
 
+`--no-color` never emits ANSI escape codes. Colour is already suppressed when the output is not a
+terminal; this is for the case where it is a terminal and the escapes are still unwanted — a status
+line rendered into a bar that shows them literally, or a log that keeps them.
+
 ### `replay rules`
 
 Shows the provider rules in effect and where they came from, or installs a dated document.
@@ -142,6 +146,59 @@ than confirmed, separately from any disagreement, because absence of evidence is
 difference.
 
 This is the one command that reaches the network on your behalf, and it does so only when typed.
+
+```sh
+replay rules --export > rules.json             # the compiled table, as a document
+```
+
+`--export` writes the table compiled into this binary in the format `--update` installs. Two uses. An
+air-gapped machine can be handed a document without running the binary that generates one. And it is
+what makes "the free tier is complete" checkable rather than a claim: the free feed published at
+`https://redrobot.jp/Replay/rules/free.json` is this output, so anyone can diff it against the paid
+feed and see exactly what the money buys.
+
+Any installed override is deliberately ignored — exporting whatever happened to be installed would
+publish one machine's local state as though it were the product.
+
+#### When a feed asks to be paid
+
+A rules feed may answer `402 Payment Required` with machine-readable terms
+([x402](https://x402.org)). Replay reads those terms, prints them, and installs nothing:
+
+```sh
+replay rules --update https://redrobot.jp/Replay/rules/latest.json
+replay rules --update https://... --x402-json   # the same terms, as JSON
+```
+
+**Replay will not pay, and cannot.** It holds no key and contains no code that can sign a
+transaction; a test fails the build if any appears. Two reasons. A binary people install with
+`curl | sh` onto machines holding provider credentials must not also be a wallet, because that turns
+every supply-chain risk into a wallet compromise. And paying is a decision rather than a step: an
+agent pays from a wallet its operator funded and budgeted, and that operator authorised the agent,
+not this tool.
+
+So the flow for an agent with a wallet is to fetch the document itself and install it from a file:
+
+```sh
+replay rules --update ./rules.json
+```
+
+`--x402-json` prints the seller's terms as JSON — amount, network, payee, asset — alongside an
+explicit `"paid": false`, so a spending policy can decide. The command exits **2**, distinct from
+`1`, so a script can tell "this resource costs money" from "this is broken" without parsing prose.
+Nothing is blocked either way: the compiled rules are complete and every command works on them.
+
+`--update`, `--export` and `--check-prices` each do a different thing and are
+refused together rather than silently preferring one. `replay rules --update
+<url> --export` used to exit 0 with a price table on stdout, having fetched and
+installed nothing — a script reading that as a successful update would be wrong
+and never find out.
+
+A redirect from `https` to plain `http` is refused mid-chain, not just on the
+URL you typed, and the provenance recorded in the installed document names the
+address the bytes actually came from rather than the one you asked for.
+
+The reasoning is [ADR-0013](../adr/0013-x402-rules-feed.md).
 
 ### `replay serve`
 
@@ -211,6 +268,14 @@ Scores candidate context layouts from your own history and selects one. It refus
 alternatives for any model whose calibration looks unreliable, which is the point: a recommendation
 built on a session the engine does not understand is worse than no recommendation.
 
+`--min-sessions` is how many sessions with evidence a candidate needs before it can be selected
+(default 5). Raising it is the conservative direction: fewer selections, each on more evidence.
+Lowering it lets a layout be chosen on a handful of sessions, which is how a recommendation ends up
+describing last Tuesday rather than how you work.
+
+`--out` names the policy file written on selection (default `~/.replay/policy.json`); `--out -`
+writes none and prints only.
+
 ### `replay redact <transcript.jsonl>`
 
 Writes a redacted copy of a transcript to standard output. Use it before attaching a transcript to a
@@ -232,6 +297,14 @@ below ten sessions rather than dressing up a guess, and refuses a sample with no
 fence over identical sessions sits on the typical session and would refuse ordinary work. Print-only:
 it cannot be combined with `--apply`, because a spend cap the tool set for you is a refusal you did
 not choose.
+
+`--apply` proposes the one setting the evidence can decide and shows the diff; on its own it only
+describes the change, and `--yes` is what actually writes it. Two steps rather than one because a
+tool editing your settings unasked is a different thing from a tool suggesting an edit.
+
+`--out` names the advice file that tracks whether a suggestion was later borne out
+(default `~/.replay/advice.json`). Pass `--out -` to keep no state, which makes each run independent
+and gives up the `verified` / `not verified` follow-up that the tracking exists for.
 
 ### `replay route <dir> --to <model>`
 
@@ -290,7 +363,7 @@ A refusal arrives as a provider-shaped error your agent will show you. Send
 |---|---|
 | `--error-budget 0.3` | Refuse the next request once that share of a session's prompt tokens carried error content: failed tools, failed edits, repeated identical calls, overflow notices |
 | `--loop-warn`, `--loop-block` | Count how many times in a row the agent has made the same tool call with the same input, then warn or refuse |
-| `--breaker-failures` | Open a circuit after consecutive provider failures and answer locally with `Retry-After` until the cooldown passes |
+| `--breaker-failures`, `--breaker-cooldown` | Open a circuit after consecutive provider failures and answer locally with `Retry-After` until the cooldown passes (default 30s) |
 | `--retries`, `--retry-base`, `--retry-max` | Resend on rate limit, overload, server error or connection failure, with doubling jittered backoff |
 
 The error budget is designed to catch a stuck agent long before a spend cap would, because an agent
@@ -307,6 +380,9 @@ is not resent. And nothing is ever retried once a byte of the *response* has rea
 | Flag | What it does |
 |---|---|
 | `--mask`, `--mask-patterns`, `--mask-entropy` | Detect and mask secrets in traffic, using a maintained pattern set, your own patterns, and an optional entropy heuristic |
+| `--rehydrate` | With `--mask`, restore placeholders in responses. On by default. Turning it **off** leaves the placeholders in place, which is how you evaluate coverage: whatever the agent then trips over was masked, and whatever still works was not |
+| `--project` | With `--mask`, the directory under which file-edit tool inputs may receive real secrets. Defaults to the current directory. It is the boundary that stops a rehydrated secret being written into a file outside the project you are working in |
+| `--rehydrate-scope` | With `--mask`, where a pattern's secrets may be restored, as `name=dest[,dest]` with `dest` one of `text`, `edit`, `tool:NAME` or `none`. `name=*` sets the default (`text,edit`). Repeatable. Narrowing a scope keeps a secret out of destinations that persist it — a file write, a named tool — while still letting the agent read it in conversation |
 
 The README names the patterns covered and has a section on what masking does **not** catch. Three
 things worth knowing before you rely on it: bare hex and lowercase secrets are invisible to the
@@ -321,6 +397,7 @@ proxy.
 | Flag | What it does |
 |---|---|
 | `--listen` | Address to bind. Loopback only |
+| `--upstream` | Provider base URL. Default `https://api.anthropic.com`. This is how the proxy is pointed at an OpenAI-compatible provider, or at another proxy, and it is the only setting that changes where your traffic goes — so it is worth reading twice |
 | `--token`, or `REPLAY_TOKEN` | Require `x-replay-token` on every request |
 | `--ledger` | Where ledger files are written. Default `~/.replay/ledger`, owner-only |
 

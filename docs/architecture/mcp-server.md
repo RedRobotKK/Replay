@@ -15,7 +15,7 @@ The CLI stays the product. This is a second front door onto the same engine.
 
 ## The measurement that shapes everything
 
-```
+```text
 full corpus, 86 sessions, 1.3 GB     17.4 s
 one project directory, 11 sessions   13.3 s
 one session file, 336 MB              4.3 s

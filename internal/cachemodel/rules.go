@@ -169,8 +169,14 @@ func activeRow(model string) (ModelRule, bool) {
 	if override == nil {
 		return ModelRule{}, false
 	}
+	// lookup() lowercases before matching the compiled table; this did not,
+	// so an installed feed correcting a price was silently ignored for
+	// `Claude-Sonnet-5` or `anthropic/CLAUDE-SONNET-5` while reports still
+	// cited the feed's version. A paid correction that applies to some
+	// spellings of a model id and not others is worse than none.
+	lower := strings.ToLower(model)
 	for _, m := range override.Models {
-		if strings.Contains(model, m.Match) {
+		if strings.Contains(lower, strings.ToLower(m.Match)) {
 			return m, true
 		}
 	}

@@ -80,7 +80,6 @@ Everything runs on your machine. No API calls are spent on analysis. Nothing lea
 
 </div>
 
-
 ### Sharing what you find
 
 `replay cost <dir> --share` prints a block designed to be posted:
@@ -425,7 +424,8 @@ replay ~/.claude/projects/<your-project>/
 | `replay context <transcript\|dir>` | What entered a session's context, by tool, ranked by size. `--json` for a dashboard |
 | `replay cost --compare <date>` | Cost per task before and after a date, with the task volume on both sides. `--predicted` judges a forecast against what actually happened |
 | `replay statusline` | Live spend, cache health, and what the misses are costing, in Claude Code's status line. `--install` prints the settings snippet |
-| `replay rules [--update <src>]` | Show the provider rules in effect and where they came from, or install a dated document. `--dry-run` validates without installing |
+| `replay rules [--update <src>]` | Show the provider rules in effect and where they came from, or install a dated document. `--dry-run` validates without installing. `--export` writes the compiled table as an installable document |
+| `replay rules --update <url>` | If the feed answers `402 Payment Required`, the terms are printed and nothing is installed — Replay holds no wallet and cannot pay. `--x402-json` emits the terms as JSON and exits 2 |
 | `replay rules --check-prices` | Compare the compiled price table against an independent published database and report where they differ. The only command that reaches the network on your behalf; it reports, and never installs |
 | `replay redact <file>` | Strip content, keep structure and usage, for bug reports |
 | `replay serve` | Local proxy: byte-for-byte passthrough, records a ledger |

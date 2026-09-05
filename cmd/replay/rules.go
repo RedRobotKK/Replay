@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -16,6 +17,17 @@ import (
 )
 
 const rulesFileName = "rules.json"
+
+// rulesTransport is the round tripper used to fetch a rules document. Nil, the
+// zero value, means http.DefaultTransport, which is what every real run uses.
+// Tests point it at a local server so the 402 path can be exercised over TLS
+// without reaching the network.
+//
+// swapTransport, which writes it, lives in rules_seam_test.go. An earlier
+// version kept it here on the reasoning that the variable should have exactly
+// one writer — which it still does, while no longer shipping a mutation entry
+// point in the binary.
+var rulesTransport http.RoundTripper
 
 // rulesPath is where a loaded rules document lives, beside the ledger.
 func rulesPath() (string, error) {
@@ -53,6 +65,8 @@ func runRules(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	update := fs.String("update", "", "install a rules document from a file path or https URL")
 	dryRun := fs.Bool("dry-run", false, "with --update, validate and describe the change without installing it")
+	export := fs.Bool("export", false, "write the compiled rules as an installable JSON document to stdout; this is the free tier, complete")
+	x402JSON := fs.Bool("x402-json", false, "with --update, if the feed asks for payment, print its terms as JSON instead of prose; replay never pays")
 	checkPrices := fs.Bool("check-prices", false, "compare the compiled price table against an independent published database and report where they differ; never changes anything")
 	// Not hoistFlags: --update takes a value, and reordering would separate a
 	// flag from its argument. This command has no positional arguments, so
@@ -61,6 +75,25 @@ func runRules(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
+	// Mutually exclusive, and said so rather than silently preferring one.
+	// `replay rules --update <url> --export` used to exit 0 with a price table
+	// on stdout having fetched and installed nothing, so a script or an agent
+	// could read success where no update happened.
+	chosen := 0
+	for _, on := range []bool{*export, *checkPrices, *update != ""} {
+		if on {
+			chosen++
+		}
+	}
+	if chosen > 1 {
+		return fmt.Errorf("--update, --export and --check-prices each do a different thing; pick one: %w", errUsage)
+	}
+	if *export {
+		if *dryRun {
+			return fmt.Errorf("--dry-run applies to --update, not --export: %w", errUsage)
+		}
+		return exportRules(stdout)
+	}
 	if *checkPrices {
 		return runCheckPrices(stdout)
 	}
@@ -72,7 +105,7 @@ func runRules(args []string, stdout, stderr io.Writer) error {
 	if *update == "" {
 		return describeRules(path, stdout)
 	}
-	return updateRules(*update, path, stdout, *dryRun)
+	return updateRules(*update, path, stdout, *dryRun, *x402JSON)
 }
 
 func describeRules(path string, stdout io.Writer) error {
@@ -104,9 +137,19 @@ func describeRules(path string, stdout io.Writer) error {
 // except to the provider you configured. That promise survives because this
 // only happens when a person types the URL: there is no background refresh, no
 // check-for-updates on startup, and no default source.
-func updateRules(src, path string, stdout io.Writer, dryRun bool) error {
+func updateRules(src, path string, stdout io.Writer, dryRun bool, x402JSON bool) error {
 	body, from, err := fetchRules(src)
 	if err != nil {
+		// A feed that asks to be paid is not a failure of this tool. Report
+		// the terms on stdout, where whatever holds the wallet can read them,
+		// and exit 2 so a script can tell "pay for this" from "it broke".
+		var pay *paymentRequiredError
+		if errors.As(err, &pay) {
+			if werr := pay.Write(stdout, x402JSON); werr != nil {
+				return werr
+			}
+			return err
+		}
 		return err
 	}
 
@@ -169,12 +212,45 @@ func fetchRules(src string) ([]byte, string, error) {
 			return nil, "", err
 		}
 		req.Header.Set("user-agent", "replay-rules")
-		client := &http.Client{Timeout: 30 * time.Second}
+		client := &http.Client{
+			Timeout:   30 * time.Second,
+			Transport: rulesTransport,
+			// The scheme check above runs once, on the URL the user typed. Go
+			// follows redirects by default and will follow one across schemes,
+			// so an https URL that 302s to plain http was fetched in cleartext
+			// and installed — while the stored document recorded the original
+			// https address, so every later report asserted TLS that never
+			// happened. Refusing here makes the promise hold for the whole
+			// chain rather than only its first hop.
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if req.URL.Scheme != "https" {
+					return fmt.Errorf("refusing a redirect to plain http: %s", req.URL.Redacted())
+				}
+				if len(via) >= 10 {
+					return errors.New("too many redirects")
+				}
+				return nil
+			},
+		}
 		resp, err := client.Do(req)
 		if err != nil {
 			return nil, "", fmt.Errorf("fetch rules: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
+		if resp.StatusCode == http.StatusPaymentRequired {
+			// A paid feed. Read the terms and report them; do not pay. There
+			// is no wallet in this binary and no code that can sign — see
+			// docs/adr/0013-x402-rules-feed.md.
+			body, rerr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+			if rerr != nil {
+				return nil, "", fmt.Errorf("fetch rules: %s asked for payment, and its terms could not be read: %w", src, rerr)
+			}
+			terms, perr := cachemodel.ParsePaymentRequired(body)
+			if perr != nil {
+				return nil, "", fmt.Errorf("fetch rules: %s returned 402 Payment Required but %w", src, perr)
+			}
+			return nil, "", &paymentRequiredError{Resource: src, Terms: terms}
+		}
 		if resp.StatusCode != http.StatusOK {
 			return nil, "", fmt.Errorf("fetch rules: %s returned %s", src, resp.Status)
 		}
@@ -182,7 +258,14 @@ func fetchRules(src string) ([]byte, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
-		return body, src, nil
+		// The URL the bytes actually came from, not the one that was typed.
+		// After a redirect these differ, and provenance that names the wrong
+		// origin is worse than none: it is confidently wrong.
+		final := src
+		if resp.Request != nil && resp.Request.URL != nil {
+			final = resp.Request.URL.Redacted()
+		}
+		return body, final, nil
 	}
 	body, err := os.ReadFile(src)
 	if err != nil {
@@ -190,4 +273,55 @@ func fetchRules(src string) ([]byte, string, error) {
 	}
 	abs, _ := filepath.Abs(src)
 	return body, strings.TrimSpace(abs), nil
+}
+
+// paymentRequiredError reports that a rules feed asked to be paid.
+//
+// It is an error because no rules were installed, not because anything went
+// wrong. `replay rules --update` exits 2 for it, distinct from 1, so an agent
+// with a funded wallet can tell "this costs money" from "this is broken"
+// without parsing prose.
+type paymentRequiredError struct {
+	Resource string
+	Terms    cachemodel.PaymentRequired
+}
+
+func (e *paymentRequiredError) Error() string {
+	return fmt.Sprintf("%s asks to be paid before it will serve rules; replay holds no wallet and will not pay", e.Resource)
+}
+
+// Write renders the demand: prose for a person, JSON for a spending policy.
+//
+// The JSON is the server's own terms plus the resource they apply to, and
+// nothing this tool inferred. `paid: false` is stated rather than implied,
+// because a machine reading this needs to know the transfer has not happened.
+func (e *paymentRequiredError) Write(out io.Writer, asJSON bool) error {
+	if !asJSON {
+		_, err := io.WriteString(out, e.Terms.Explain(e.Resource))
+		return err
+	}
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(struct {
+		Resource string                     `json:"resource"`
+		Paid     bool                       `json:"paid"`
+		PaidBy   string                     `json:"paid_by"`
+		Terms    cachemodel.PaymentRequired `json:"payment_required"`
+	}{
+		Resource: e.Resource,
+		Paid:     false,
+		PaidBy:   "nothing: replay holds no wallet and has no code that can sign a transaction",
+		Terms:    e.Terms,
+	})
+}
+
+// exportRules writes the compiled table as a document that `--update` accepts.
+//
+// This is what makes "the free tier is complete" a checkable statement instead
+// of a claim: the published free feed is this output, so anyone can diff it
+// against the paid one and see exactly what the money buys.
+func exportRules(stdout io.Writer) error {
+	enc := json.NewEncoder(stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(cachemodel.ExportRules())
 }

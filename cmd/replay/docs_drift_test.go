@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -57,5 +58,75 @@ func TestGuideCoversEveryCommand(t *testing.T) {
 		t.Errorf("commands the binary offers and the guide never mentions: %v.\n"+
 			"The guide is advertised as covering every subcommand, so a gap here is a "+
 			"promise broken rather than a nicety missed", missing)
+	}
+}
+
+// Every flag a subcommand accepts must appear in the command guide.
+//
+// The sibling test above covers commands, and that is why two flags added on
+// 2026-09-05 — `rules --export` and `rules --x402-json` — reached a green suite
+// undocumented: a user-visible surface with no documentation is invisible, and
+// nothing failed. A flag is as user-visible as a command.
+//
+// PASS: every flag printed by `replay <cmd> --help` appears somewhere in
+// docs/guide/commands.md.
+// FAIL: any flag missing, which is a surface a reader cannot discover.
+func TestGuideCoversEveryFlag(t *testing.T) {
+	guide, err := os.ReadFile(filepath.Join("..", "..", "docs", "guide", "commands.md"))
+	if err != nil {
+		t.Fatalf("the command guide must exist for this to mean anything: %v", err)
+	}
+	text := string(guide)
+
+	var out, errb bytes.Buffer
+	_ = run([]string{"--help"}, &out, &errb)
+	var commands []string
+	for _, line := range strings.Split(out.String(), "\n") {
+		f := strings.Fields(strings.TrimSpace(line))
+		if len(f) < 2 || f[0] != "replay" || strings.HasPrefix(f[1], "<") || strings.HasPrefix(f[1], "-") {
+			continue
+		}
+		commands = append(commands, f[1])
+	}
+	if len(commands) < 10 {
+		t.Fatalf("parsed only %d commands from --help; the parser has drifted, not the docs", len(commands))
+	}
+
+	var missing []string
+	seen := map[string]bool{}
+	for _, cmd := range commands {
+		var h, he bytes.Buffer
+		_ = run([]string{cmd, "--help"}, &h, &he)
+		for _, line := range strings.Split(h.String()+he.String(), "\n") {
+			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "-") {
+				continue
+			}
+			flag := strings.Fields(line)[0]
+			flag = strings.TrimSuffix(strings.TrimSuffix(flag, ","), "=")
+			if len(flag) < 3 || seen[cmd+flag] {
+				continue
+			}
+			seen[cmd+flag] = true
+			// Anchored, because the obvious form is not a check.
+			// `strings.Contains(text, "--"+bare) || strings.Contains(text,
+			// "-"+bare)` reduces to the second clause — "--x" contains "-x" —
+			// so it passed for any flag that is a substring of another flag or
+			// of any hyphenated word in the prose. A new `--json` would have
+			// been considered documented because `--x402-json` appears.
+			//
+			// A flag is documented when the guide names it as a token: at a
+			// word boundary, and not immediately followed by more flag
+			// characters.
+			bare := strings.TrimLeft(flag, "-")
+			documented := regexp.MustCompile(`(^|[^-\w])--?` + regexp.QuoteMeta(bare) + `($|[^-\w])`).MatchString(text)
+			if !documented {
+				missing = append(missing, cmd+" "+flag)
+			}
+		}
+	}
+	if len(missing) > 0 {
+		t.Errorf("flags with no entry in docs/guide/commands.md:\n  %s",
+			strings.Join(missing, "\n  "))
 	}
 }

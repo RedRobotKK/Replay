@@ -155,6 +155,31 @@ else
   warn "site checkout not found" "cannot compare the vendored installer"
 fi
 
+# The published free rules feed is a second copy of the price table. Drift is
+# silent in the worst way: the URL keeps serving numbers the binary no longer
+# agrees with, and every check on both sides stays green. Same failure shape as
+# the vendored installer above, so it gets the same treatment.
+FEED=../RedRobot.jp/src/vendor/replay-rules-free.json
+if [ -f "$FEED" ]; then
+  # Always rebuild. `[ -x ./replay ] || go build` short-circuits when a binary
+  # is already sitting there, so a stale one from an earlier session compares
+  # its own old table against the feed and reports agreement. That is the exact
+  # failure this check exists to catch, one level up: on 2026-09-05 it passed
+  # against a binary half an hour older than the source it was vouching for.
+  if go build -o ./replay ./cmd/replay 2>/dev/null; then
+    if ./replay rules --export | diff -q - "$FEED" >/dev/null 2>&1; then
+      ok "published free rules feed matches the binary"
+    else
+      bad "published rules feed has drifted" \
+        "(cd ../RedRobot.jp && REPLAY_BIN=../Replay-clean/replay npm run vendor:rules)"
+    fi
+  else
+    bad "could not build replay to check the rules feed" "go build ./cmd/replay"
+  fi
+else
+  warn "site checkout not found" "cannot compare the published rules feed"
+fi
+
 group "4. Licence and distribution"
 
 for f in LICENSE NOTICE CLA.md CONTRIBUTING.md CITATION.cff; do
