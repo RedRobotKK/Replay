@@ -433,7 +433,11 @@ studio in Tokyo working on production AI, data platforms and security.
 
 The quickest way to reach me about Replay is an [issue](https://github.com/RedRobotKK/Replay/issues)
 or a [discussion](https://github.com/RedRobotKK/Replay/discussions). For anything else,
-[redrobot.jp](https://redrobot.jp) or [LinkedIn](https://www.linkedin.com/in/danielsaito/).
+[redrobot.jp](https://redrobot.jp), [LinkedIn](https://www.linkedin.com/in/danielsaito/) or
+[X](https://x.com/saitodaniel).
+
+Replay is free and the source is all here, so there is nothing to buy. If it found a cache break
+that was costing you real money, there is a [tip jar](https://buymeacoffee.com/saitodaniel).
 
 ## License
 

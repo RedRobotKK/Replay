@@ -1,0 +1,12 @@
+# Shows a Sponsor button at the top of the repository.
+#
+# GitHub Sponsors takes no cut, which is why it leads. An account only appears
+# once it has completed Sponsors onboarding at github.com/sponsors/accounts;
+# until then it is simply ignored, so this is safe to ship ahead of either one.
+# saitodaniel is the maker, RedRobotKK is the studio that owns this repository.
+github: [saitodaniel, RedRobotKK]
+
+# Kept in step with BMC_HANDLE in the landing page at
+# RedRobot.jp/src/pages/Replay/index.astro, so the button here and the one on
+# redrobot.jp/Replay point at the same place.
+buy_me_a_coffee: saitodaniel
