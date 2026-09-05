@@ -75,6 +75,17 @@ func (c Claim) Status() ClaimStatus {
 	if o == nil || (o.UpperBound == nil && o.LowerBound == nil) {
 		return StatusUntested
 	}
+	// No published figure, so there is nothing to agree with or refute.
+	//
+	// This matters most for a model that did not exist when the binary
+	// shipped: the table has no entry, Documented is zero, and the arithmetic
+	// below would read "0 <= lowerBound" as a contradiction — announcing that
+	// the provider's figure was refuted when the provider never published one.
+	// The measurement is still real and the bounds are still reported; what is
+	// absent is a verdict, because a verdict needs two figures.
+	if c.Documented == 0 {
+		return StatusUntested
+	}
 	// A single counterexample is enough, either side.
 	if o.UpperBound != nil && c.Documented > *o.UpperBound {
 		return StatusContradicted

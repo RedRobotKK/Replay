@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Rules are the provider's published numbers, as a dated document rather than
@@ -29,6 +30,15 @@ type Rules struct {
 	Source    string      `json:"source,omitempty"`
 	FetchedAt string      `json:"fetchedAt,omitempty"`
 	Models    []ModelRule `json:"models"`
+	// AccountDiscount is a negotiated rate multiplier the operator states,
+	// between 0 and 1 exclusive. Zero means none.
+	//
+	// Replay cannot observe this. A committed-spend or enterprise rate is
+	// private and never appears on the wire, so the only honest options are to
+	// ignore it or to let the account holder declare it — and ignoring it
+	// overstates every figure for anyone who has one. Declaring it changes the
+	// document's price tier to `declared`.
+	AccountDiscount float64 `json:"accountDiscount,omitempty"`
 }
 
 // ModelRule is one row of the table: what a model id matches, its caching
@@ -44,6 +54,125 @@ type ModelRule struct {
 	// cacheable prefix alongside what replaying real traffic bounded it to.
 	// Optional: a row without one behaves exactly as before.
 	MinPrefixClaim *Claim `json:"minPrefixClaim,omitempty"`
+	// EffectiveFrom and EffectiveUntil bound when this row applies, as
+	// YYYY-MM-DD. Both empty means always, which is every row written before
+	// dated pricing existed.
+	//
+	// A vendor promotion is a pricing event, not a fact about traffic: the
+	// ledger records tokens and timings, and those do not change because
+	// someone ran a sale. So a promotion is a dated row here, and a request is
+	// priced by the rules in effect at ITS OWN timestamp. Without that, a
+	// report spanning the end of a promotion prices the whole period at one
+	// rate and is wrong on one side of the boundary whichever rate it picks.
+	EffectiveFrom  string `json:"effectiveFrom,omitempty"`
+	EffectiveUntil string `json:"effectiveUntil,omitempty"`
+}
+
+// windowContains reports whether this row applies at t.
+//
+// The window is inclusive at both ends and interpreted in UTC. A row with no
+// dates applies always.
+func (m ModelRule) windowContains(t time.Time) bool {
+	from, until, err := m.window()
+	if err != nil {
+		return false
+	}
+	if from != nil && t.Before(*from) {
+		return false
+	}
+	if until != nil && t.After(*until) {
+		return false
+	}
+	return true
+}
+
+// window parses the row's dates. The end date is taken as the last instant of
+// that day, so "until 2026-09-30" includes the whole of the 30th — which is
+// what a person writing a promotion end date means.
+func (m ModelRule) window() (from, until *time.Time, err error) {
+	if m.EffectiveFrom != "" {
+		t, perr := time.Parse("2006-01-02", m.EffectiveFrom)
+		if perr != nil {
+			return nil, nil, fmt.Errorf("effectiveFrom %q is not YYYY-MM-DD", m.EffectiveFrom)
+		}
+		from = &t
+	}
+	if m.EffectiveUntil != "" {
+		t, perr := time.Parse("2006-01-02", m.EffectiveUntil)
+		if perr != nil {
+			return nil, nil, fmt.Errorf("effectiveUntil %q is not YYYY-MM-DD", m.EffectiveUntil)
+		}
+		end := t.Add(24*time.Hour - time.Nanosecond)
+		until = &end
+	}
+	return from, until, nil
+}
+
+// dated reports whether the row carries any window at all.
+func (m ModelRule) dated() bool { return m.EffectiveFrom != "" || m.EffectiveUntil != "" }
+
+// PriceAt returns the price for a model at a moment in time.
+//
+// A dated row wins over an undated one while it is in effect, so a promotion
+// beats the base rate inside its window and the base rate returns after it.
+// Ordering is by specificity rather than file position: a figure that depends
+// on which line came first is not a figure anyone should act on, and validate
+// refuses two windows that cover the same instant for the same model.
+//
+// AccountDiscount, when the operator has stated one, is applied last. It is a
+// negotiated rate that is invisible on the wire, so PriceTier reports
+// `declared` and no reader mistakes it for something measured.
+func (r *Rules) PriceAt(model string, t time.Time) (Price, bool) {
+	if r == nil {
+		return Price{}, false
+	}
+	lower := strings.ToLower(model)
+	var fallback *ModelRule
+	for i := range r.Models {
+		m := r.Models[i]
+		if !strings.Contains(lower, strings.ToLower(m.Match)) {
+			continue
+		}
+		if !m.windowContains(t) {
+			continue
+		}
+		if m.dated() {
+			return r.applyDiscount(priceOf(m)), m.Priced
+		}
+		if fallback == nil {
+			fallback = &r.Models[i]
+		}
+	}
+	if fallback == nil {
+		return Price{}, false
+	}
+	return r.applyDiscount(priceOf(*fallback)), fallback.Priced
+}
+
+func priceOf(m ModelRule) Price {
+	return Price{InputPerMTok: m.InputPerMTok, OutputPerMTok: m.OutputPerMTok, ReadMult: m.ReadMult}
+}
+
+func (r *Rules) applyDiscount(p Price) Price {
+	if r.AccountDiscount <= 0 || r.AccountDiscount >= 1 {
+		return p
+	}
+	p.InputPerMTok *= r.AccountDiscount
+	p.OutputPerMTok *= r.AccountDiscount
+	return p
+}
+
+// PriceTier names how much weight a dollar figure from this document deserves.
+//
+// `declared` when an account discount has been stated: a negotiated rate is
+// private, invisible on the wire, and cannot be checked by anyone but the
+// account holder. It is applied because the operator asked for it, and
+// labelled because nobody else can verify it.
+func (r *Rules) PriceTier() string {
+	if r != nil && r.AccountDiscount > 0 && r.AccountDiscount < 1 {
+		return "declared"
+	}
+	return "documented"
 }
 
 // RulesSchema is the only document shape this build will load. A file that
@@ -85,7 +214,47 @@ func (r *Rules) validate() error {
 	if len(r.Models) == 0 {
 		return errors.New("no model rows: a rules file with nothing in it would silently disable pricing")
 	}
+	if r.AccountDiscount < 0 || r.AccountDiscount >= 1 {
+		return fmt.Errorf("accountDiscount is %v; it is a multiplier strictly between 0 and 1, and a value outside that "+
+			"is far more likely to be a typo than a deal — a negative one turns spend into savings", r.AccountDiscount)
+	}
+	// Two dated rows covering the same instant for the same model make the
+	// price depend on file order. A figure that depends on which line came
+	// first is not one anyone should act on, so it is refused rather than
+	// resolved by a rule nobody would guess.
+	for i, a := range r.Models {
+		if !a.dated() {
+			continue
+		}
+		af, au, err := a.window()
+		if err != nil {
+			return fmt.Errorf("model %d (%s): %w", i, a.Match, err)
+		}
+		if af != nil && au != nil && au.Before(*af) {
+			return fmt.Errorf("model %d (%s): effectiveUntil %s is before effectiveFrom %s", i, a.Match, a.EffectiveUntil, a.EffectiveFrom)
+		}
+		for j := i + 1; j < len(r.Models); j++ {
+			b := r.Models[j]
+			if !b.dated() || !strings.EqualFold(a.Match, b.Match) {
+				continue
+			}
+			bf, bu, berr := b.window()
+			if berr != nil {
+				return fmt.Errorf("model %d (%s): %w", j, b.Match, berr)
+			}
+			if windowsOverlap(af, au, bf, bu) {
+				return fmt.Errorf("models %d and %d both price %q over the same dates; "+
+					"overlapping windows make the price depend on file order", i, j, a.Match)
+			}
+		}
+	}
+
 	for i, m := range r.Models {
+		if m.dated() {
+			if _, _, err := m.window(); err != nil {
+				return fmt.Errorf("model %d (%s): %w", i, m.Match, err)
+			}
+		}
 		switch {
 		case strings.TrimSpace(m.Match) == "":
 			return fmt.Errorf("model %d: match is empty, so it would match every model", i)
@@ -181,4 +350,16 @@ func activeRow(model string) (ModelRule, bool) {
 		}
 	}
 	return ModelRule{}, false
+}
+
+// windowsOverlap reports whether two half-open-ended windows share an instant.
+// A nil bound is unbounded on that side.
+func windowsOverlap(aFrom, aUntil, bFrom, bUntil *time.Time) bool {
+	if aUntil != nil && bFrom != nil && aUntil.Before(*bFrom) {
+		return false
+	}
+	if bUntil != nil && aFrom != nil && bUntil.Before(*aFrom) {
+		return false
+	}
+	return true
 }

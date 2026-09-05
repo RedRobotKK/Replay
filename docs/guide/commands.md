@@ -160,6 +160,74 @@ feed and see exactly what the money buys.
 Any installed override is deliberately ignored — exporting whatever happened to be installed would
 publish one machine's local state as though it were the product.
 
+```sh
+replay rules --measure ~/.replay/ledger > measured.json
+```
+
+`--measure` reads a ledger and emits a rules document carrying what the wire
+actually showed about each model's caching floor, alongside what the provider
+documents. It is the content of a maintained feed, and it answers a question no
+price page does.
+
+The evidence is asymmetric, and only one direction is sound from what the
+ledger records today. A **cold** cache write — one with no cache read — proves
+the floor is at or below the number of tokens written, because with no prior
+entry what was written is what was cached. That figure is exact.
+
+A **warm** write proves nothing about the floor. `cache_creation_input_tokens`
+counts the tokens written by that request, not the size of the cached prefix, so
+a turn that reads 20,000 cached tokens and writes 118 more has a 20,118-token
+prefix. Reading the 118 as a prefix size errs downward every time, which is the
+direction that manufactures contradictions: on this repository's own ledger it
+reported opus-5 caching a 118-token prefix and therefore refuting a documented
+floor of 512. Warm writes are discarded.
+
+A **lower** bound is not derivable at all yet. It would need the prompt size at
+the breakpoint for a marked request that cached nothing, and the proxy records
+how many `cache_control` markers a request carried but never where they sat. So
+claims come back `unverified` rather than `consistent`: an upper bound over an
+open interval agrees with the documented figure without confirming it.
+
+Only the proxy can answer this. Transcripts do not record what the provider
+cached, so `--measure` needs sessions that went through `replay serve`.
+
+#### Promotions, and rates only you can see
+
+A vendor promotion is a pricing event, not a fact about traffic. The ledger
+records tokens, cache reads and writes, and timings — none of which change
+because someone ran a sale — so **a promotion never rewrites the ledger.** It is
+a dated row in a rules document, and each request is priced by the rules in
+effect at *its own* timestamp:
+
+```json
+{ "match": "opus-5", "inputPerMTok": 2.5, "outputPerMTok": 12.5,
+  "effectiveFrom": "2026-09-01", "effectiveUntil": "2026-09-30" }
+```
+
+A dated row wins over an undated one while it is in effect, and the base rate
+returns afterwards. Dates are inclusive and interpreted in UTC, so a promotion
+ending on the 30th covers the whole of the 30th. Without this, a report
+spanning the end of a promotion prices the entire period at one rate and is
+wrong on one side of the boundary whichever rate it picks.
+
+Two windows covering the same dates for the same model are **refused at load**,
+not resolved. It would make the price depend on which line came first, and a
+figure that depends on file order is not one to act on.
+
+A negotiated account rate is different again: it is private, never appears on
+the wire, and Replay cannot observe it. Ignoring it overstates every figure for
+anyone who has one, so it can be stated instead:
+
+```json
+{ "accountDiscount": 0.85 }
+```
+
+The document's price tier then becomes **`declared`** rather than `documented`.
+The discount is applied because you asked for it, and labelled because nobody
+else can verify it. A multiplier outside 0 to 1 is refused — a negative one
+would turn spend into savings, and both are far more likely to be a typo than a
+deal.
+
 #### When a feed asks to be paid
 
 A rules feed may answer `402 Payment Required` with machine-readable terms

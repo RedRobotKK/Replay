@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"net/http"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/ledger"
 )
 
 const rulesFileName = "rules.json"
@@ -65,6 +67,7 @@ func runRules(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	update := fs.String("update", "", "install a rules document from a file path or https URL")
 	dryRun := fs.Bool("dry-run", false, "with --update, validate and describe the change without installing it")
+	measure := fs.String("measure", "", "read a ledger directory and emit a rules document carrying what the wire showed about each model's caching floor")
 	export := fs.Bool("export", false, "write the compiled rules as an installable JSON document to stdout; this is the free tier, complete")
 	x402JSON := fs.Bool("x402-json", false, "with --update, if the feed asks for payment, print its terms as JSON instead of prose; replay never pays")
 	checkPrices := fs.Bool("check-prices", false, "compare the compiled price table against an independent published database and report where they differ; never changes anything")
@@ -80,13 +83,16 @@ func runRules(args []string, stdout, stderr io.Writer) error {
 	// on stdout having fetched and installed nothing, so a script or an agent
 	// could read success where no update happened.
 	chosen := 0
-	for _, on := range []bool{*export, *checkPrices, *update != ""} {
+	for _, on := range []bool{*export, *checkPrices, *update != "", *measure != ""} {
 		if on {
 			chosen++
 		}
 	}
 	if chosen > 1 {
-		return fmt.Errorf("--update, --export and --check-prices each do a different thing; pick one: %w", errUsage)
+		return fmt.Errorf("--update, --export, --measure and --check-prices each do a different thing; pick one: %w", errUsage)
+	}
+	if *measure != "" {
+		return measureRules(*measure, stdout)
 	}
 	if *export {
 		if *dryRun {
@@ -324,4 +330,103 @@ func exportRules(stdout io.Writer) error {
 	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(cachemodel.ExportRules())
+}
+
+// measureRules reads a ledger and emits a rules document carrying claims.
+//
+// This is the content of the maintained feed, and the reason it is worth
+// paying for. The compiled table records what a provider documents; running
+// this over real traffic records what the wire showed. Those answer different
+// questions, and only the second one works on a model that did not exist when
+// the binary shipped.
+//
+// The document it writes is installable by `--update` like any other, and its
+// claims are derived rather than declared: the loader refuses a file that
+// tries to state a verdict, so a `status` field written by hand is rejected.
+func measureRules(dir string, stdout io.Writer) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("read ledger directory: %w", err)
+	}
+
+	// The machine identity is what makes breadth meaningful: one machine
+	// agreeing with a documented figure says much less than several do, and
+	// the claim records both. A hostname is not needed and not collected — a
+	// stable local identifier is enough to count distinct sources, and it
+	// never leaves unless the operator publishes the document.
+	machine := machineTag()
+
+	var evidence []cachemodel.PrefixEvidence
+	var files, skipped int
+	for _, e := range entries {
+		path := filepath.Join(dir, e.Name())
+		if e.IsDir() || !ledger.IsLedgerFile(path) {
+			continue
+		}
+		records, dropped, rerr := ledger.ReadRecords(path)
+		if rerr != nil {
+			// One unreadable file must not lose the rest of the evidence.
+			skipped++
+			continue
+		}
+		files++
+		skipped += dropped
+		evidence = append(evidence, ledger.EvidenceFrom(records, machine)...)
+	}
+
+	claims := cachemodel.MeasureClaims(evidence)
+	if len(claims) == 0 {
+		return fmt.Errorf("no cache writes in %d ledger file(s) under %s, so there is nothing measured to publish. "+
+			"Run traffic through `replay serve` first: transcripts cannot answer this, because only the proxy sees what the provider cached", files, dir)
+	}
+
+	doc := cachemodel.ExportRules()
+	doc.Version = doc.Version + "+measured-" + time.Now().UTC().Format("2006-01-02")
+	doc.Source = "measured from " + dir
+	doc.FetchedAt = time.Now().UTC().Format(time.RFC3339)
+
+	// Attach a claim to every row the evidence covers. Rows with no evidence
+	// keep no claim rather than an empty one: "untested" is the honest state
+	// and it is what the absence already says.
+	for i := range doc.Models {
+		for _, model := range cachemodel.MeasuredModels(claims) {
+			if !strings.Contains(strings.ToLower(model), strings.ToLower(doc.Models[i].Match)) {
+				continue
+			}
+			c := claims[model]
+			doc.Models[i].MinPrefixClaim = &c
+			break
+		}
+	}
+
+	enc := json.NewEncoder(stdout)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(doc); err != nil {
+		return err
+	}
+
+	// The summary goes to stderr in the JSON case elsewhere in this file; here
+	// the document is the whole point of stdout, so the count is a comment the
+	// caller can ignore. Written to stderr so `--measure > rules.json` stays
+	// valid JSON.
+	fmt.Fprintf(os.Stderr, "measured %d model(s) from %d ledger file(s); %d record(s) skipped\n",
+		len(claims), files, skipped)
+	return nil
+}
+
+// machineTag is a stable per-machine identifier used only to count distinct
+// sources of evidence. It is derived from the ledger key path rather than from
+// a hostname, so it identifies the installation and not the computer.
+func machineTag() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "unknown"
+	}
+	return fmt.Sprintf("%08x", fnvString(home))
+}
+
+func fnvString(s string) uint32 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(s))
+	return h.Sum32()
 }
