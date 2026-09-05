@@ -91,6 +91,13 @@ func (r *Rules) validate() error {
 			return fmt.Errorf("model %d (%s): a negative price would make waste look like savings", i, m.Match)
 		case m.Priced && m.InputPerMTok == 0 && m.OutputPerMTok == 0:
 			return fmt.Errorf("model %d (%s): marked priced with no price, which would report every session as free", i, m.Match)
+		case m.Priced && m.ReadMult == 0:
+			// PriceFor passes ReadMult straight through, so zero here prices
+			// every cache read at nothing, while EffectiveTokens keeps using
+			// the compiled multiple. Two figures from one usage record,
+			// disagreeing by the whole read term. Refuse rather than let a
+			// dollar column quietly become fiction.
+			return fmt.Errorf("model %d (%s): priced with readMult 0, which would price every cache read at zero", i, m.Match)
 		case m.ReadMult < 0 || m.ReadMult > 1:
 			return fmt.Errorf("model %d (%s): readMult %.3f is outside 0..1; a cache read costing more than a fresh one is not a rule, it is a typo", i, m.Match, m.ReadMult)
 		}

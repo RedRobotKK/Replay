@@ -121,3 +121,36 @@ func TestOverrideAppliesToLookupsAndIsReversible(t *testing.T) {
 		t.Fatalf("version not restored: %q", got)
 	}
 }
+
+// A rules file could make cache reads free in the dollar column.
+//
+// validate rejected readMult below 0 and above 1 but accepted exactly 0, and
+// PriceFor passed that straight through, while ReadMultiplierFor guarded with
+// `r.ReadMult > 0` and fell back to the compiled table. So a file that priced a
+// model and omitted readMult (an optional field) produced two figures from the
+// same usage that disagreed by the entire cache-read term: CostUSD charged $0
+// for every read while EffectiveTokens charged the compiled multiplier. On a
+// 90% cached session that is most of the bill, and the report still cited the
+// rules file by name.
+func TestPricedModelCannotHaveAFreeCacheRead(t *testing.T) {
+	_, err := LoadRules(writeRules(t, `{
+	  "schema": "replay.rules.v1",
+	  "version": "anthropic-2026-09-15",
+	  "models": [{"match": "opus-5", "minPrefix": 1024, "inputPerMTok": 5, "outputPerMTok": 25, "priced": true}]
+	}`))
+	if err == nil {
+		t.Fatal("a priced model with no readMult must be refused: it prices every cache read at zero")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "readmult") {
+		t.Fatalf("the refusal must name the field: %v", err)
+	}
+
+	// An unpriced row may omit it: nothing reads the dollar column for it.
+	if _, err := LoadRules(writeRules(t, `{
+	  "schema": "replay.rules.v1",
+	  "version": "v",
+	  "models": [{"match": "some-model", "minPrefix": 1024}]
+	}`)); err != nil {
+		t.Fatalf("an unpriced row without readMult is fine: %v", err)
+	}
+}
