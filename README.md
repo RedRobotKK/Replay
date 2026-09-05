@@ -96,7 +96,10 @@ Everything runs on your machine. No API calls are spent on analysis. Nothing lea
   Not a forecast of savings. Tokens already billed twice
   because a prompt cache broke and nothing said so.
 
-  Measure yours:  github.com/RedRobotKK/Replay
+  Measure yours:
+    curl -fsSL "https://redrobot.jp/replay.sh?src=card" | sh
+
+  Source:  github.com/RedRobotKK/Replay
   ────────────────────────────────────────────────────
 ```
 

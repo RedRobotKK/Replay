@@ -22,7 +22,19 @@ import (
 // which is exactly what makes it worth comparing — and comparison is the only
 // mechanism by which a number like this travels.
 
-const shareRepo = "github.com/RedRobotKK/Replay"
+const (
+	shareRepo = "github.com/RedRobotKK/Replay"
+	// The card is read as a screenshot, so the next step has to be runnable
+	// from what is on the screen. src=card separates installs that came from a
+	// posted card from the scanner traffic that moves the download count on its
+	// own, which is otherwise indistinguishable.
+	// The URL is quoted, and it must stay quoted. zsh is the default shell on
+	// macOS and treats a bare ? as a glob; with no file matching it, zsh does
+	// not pass the word through as bash does — it aborts with "no matches
+	// found" before curl ever runs. An unquoted install line on a card that is
+	// posted publicly would fail for most of the people who tried it.
+	shareInstall = `curl -fsSL "https://redrobot.jp/replay.sh?src=card" | sh`
+)
 
 // shareCard renders a paste-ready summary, or the empty string when there is
 // nothing measured enough to stand behind. Refusing beats posting zeros that
@@ -52,7 +64,12 @@ func shareCard(s costSummary, breaks int) string {
 	b.WriteString("\n")
 	b.WriteString("  Not a forecast of savings. Tokens already billed twice\n")
 	b.WriteString("  because a prompt cache broke and nothing said so.\n\n")
-	b.WriteString("  Measure yours:  " + shareRepo + "\n")
+	b.WriteString("  Measure yours:\n")
+	b.WriteString("    " + shareInstall + "\n\n")
+	// A bare pipe-into-shell with no verifiable source is the shape of a
+	// malicious paste. Naming the repo beside it gives a reader somewhere to
+	// check before running it, which they should.
+	b.WriteString("  Source:  " + shareRepo + "\n")
 	b.WriteString(line + "\n")
 	return b.String()
 }
