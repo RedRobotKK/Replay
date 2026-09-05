@@ -1,0 +1,851 @@
+{
+ "cache": {
+  "outcome": "reproduced"
+ },
+ "effort": "high",
+ "latency_ms": 2986,
+ "model": "claude-opus-5",
+ "path": "/v1/messages",
+ "prefix_hash": "prefix-28d4014ef6b5ee97",
+ "prompt": {
+  "cache_control": 3,
+  "context_edits": true,
+  "messages": [
+   {
+    "blocks": [
+     {
+      "bytes": 7165,
+      "kind": "text",
+      "label": "user text"
+     },
+     {
+      "bytes": 535,
+      "kind": "text",
+      "label": "user text"
+     },
+     {
+      "bytes": 22,
+      "kind": "text",
+      "label": "user text"
+     }
+    ],
+    "role": "user"
+   },
+   {
+    "blocks": [
+     {
+      "bytes": 15677,
+      "kind": "text",
+      "label": "user text"
+     }
+    ],
+    "role": "system"
+   }
+  ],
+  "system_bytes": 9281,
+  "tool_bytes": 395349,
+  "tool_count": 189,
+  "tools": [
+   {
+    "bytes": 3055,
+    "name": "Agent"
+   },
+   {
+    "bytes": 2663,
+    "name": "Bash"
+   },
+   {
+    "bytes": 3427,
+    "name": "CronCreate"
+   },
+   {
+    "bytes": 296,
+    "name": "CronDelete"
+   },
+   {
+    "bytes": 191,
+    "name": "CronList"
+   },
+   {
+    "bytes": 8102,
+    "name": "DesignSync"
+   },
+   {
+    "bytes": 837,
+    "name": "Edit"
+   },
+   {
+    "bytes": 3903,
+    "name": "EnterWorktree"
+   },
+   {
+    "bytes": 2368,
+    "name": "ExitWorktree"
+   },
+   {
+    "bytes": 1074,
+    "name": "ListAgents"
+   },
+   {
+    "bytes": 564,
+    "name": "ListMcpResourcesTool"
+   },
+   {
+    "bytes": 7439,
+    "name": "Monitor"
+   },
+   {
+    "bytes": 1459,
+    "name": "NotebookEdit"
+   },
+   {
+    "bytes": 1674,
+    "name": "PushNotification"
+   },
+   {
+    "bytes": 1445,
+    "name": "Read"
+   },
+   {
+    "bytes": 781,
+    "name": "ReadMcpResourceDirTool"
+   },
+   {
+    "bytes": 487,
+    "name": "ReadMcpResourceTool"
+   },
+   {
+    "bytes": 3514,
+    "name": "RemoteTrigger"
+   },
+   {
+    "bytes": 1857,
+    "name": "ReportFindings"
+   },
+   {
+    "bytes": 4506,
+    "name": "ScheduleWakeup"
+   },
+   {
+    "bytes": 4605,
+    "name": "SendMessage"
+   },
+   {
+    "bytes": 1720,
+    "name": "Skill"
+   },
+   {
+    "bytes": 1421,
+    "name": "TaskOutput"
+   },
+   {
+    "bytes": 723,
+    "name": "TaskStop"
+   },
+   {
+    "bytes": 785,
+    "name": "WaitForMcpServers"
+   },
+   {
+    "bytes": 653,
+    "name": "WebFetch"
+   },
+   {
+    "bytes": 711,
+    "name": "WebSearch"
+   },
+   {
+    "bytes": 5173,
+    "name": "Workflow"
+   },
+   {
+    "bytes": 553,
+    "name": "Write"
+   },
+   {
+    "bytes": 309,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__d1_database_create"
+   },
+   {
+    "bytes": 249,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__d1_database_delete"
+   },
+   {
+    "bytes": 243,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__d1_database_get"
+   },
+   {
+    "bytes": 306,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__d1_database_query"
+   },
+   {
+    "bytes": 301,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__d1_databases_list"
+   },
+   {
+    "bytes": 321,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__hyperdrive_config_delete"
+   },
+   {
+    "bytes": 1135,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__hyperdrive_config_edit"
+   },
+   {
+    "bytes": 335,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__hyperdrive_config_get"
+   },
+   {
+    "bytes": 550,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__hyperdrive_configs_list"
+   },
+   {
+    "bytes": 303,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__kv_namespace_create"
+   },
+   {
+    "bytes": 290,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__kv_namespace_delete"
+   },
+   {
+    "bytes": 659,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__kv_namespace_get"
+   },
+   {
+    "bytes": 383,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__kv_namespace_update"
+   },
+   {
+    "bytes": 891,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__kv_namespaces_list"
+   },
+   {
+    "bytes": 240,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__migrate_pages_to_workers_guide"
+   },
+   {
+    "bytes": 271,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__r2_bucket_create"
+   },
+   {
+    "bytes": 241,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__r2_bucket_delete"
+   },
+   {
+    "bytes": 257,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__r2_bucket_get"
+   },
+   {
+    "bytes": 746,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__r2_buckets_list"
+   },
+   {
+    "bytes": 741,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__search_cloudflare_documentation"
+   },
+   {
+    "bytes": 293,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__workers_get_worker"
+   },
+   {
+    "bytes": 351,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__workers_get_worker_code"
+   },
+   {
+    "bytes": 270,
+    "name": "mcp__claude_ai_Cloudflare_Developer_Platform__workers_list"
+   },
+   {
+    "bytes": 2952,
+    "name": "mcp__claude_ai_dot__create_review_link"
+   },
+   {
+    "bytes": 376,
+    "name": "mcp__claude_ai_dot__get_feedback"
+   },
+   {
+    "bytes": 527,
+    "name": "mcp__claude_ai_dot__list_projects"
+   },
+   {
+    "bytes": 989,
+    "name": "mcp__claude_ai_Gmail__apply_sensitive_message_label"
+   },
+   {
+    "bytes": 858,
+    "name": "mcp__claude_ai_Gmail__apply_sensitive_thread_label"
+   },
+   {
+    "bytes": 3204,
+    "name": "mcp__claude_ai_Gmail__create_draft"
+   },
+   {
+    "bytes": 4690,
+    "name": "mcp__claude_ai_Gmail__create_label"
+   },
+   {
+    "bytes": 269,
+    "name": "mcp__claude_ai_Gmail__delete_label"
+   },
+   {
+    "bytes": 1268,
+    "name": "mcp__claude_ai_Gmail__forward"
+   },
+   {
+    "bytes": 1690,
+    "name": "mcp__claude_ai_Gmail__get_draft"
+   },
+   {
+    "bytes": 2876,
+    "name": "mcp__claude_ai_Gmail__get_message"
+   },
+   {
+    "bytes": 2793,
+    "name": "mcp__claude_ai_Gmail__get_thread"
+   },
+   {
+    "bytes": 998,
+    "name": "mcp__claude_ai_Gmail__label_message"
+   },
+   {
+    "bytes": 1092,
+    "name": "mcp__claude_ai_Gmail__label_thread"
+   },
+   {
+    "bytes": 2617,
+    "name": "mcp__claude_ai_Gmail__list_drafts"
+   },
+   {
+    "bytes": 499,
+    "name": "mcp__claude_ai_Gmail__list_labels"
+   },
+   {
+    "bytes": 382,
+    "name": "mcp__claude_ai_Gmail__mark_message_spam"
+   },
+   {
+    "bytes": 624,
+    "name": "mcp__claude_ai_Gmail__mark_thread_spam"
+   },
+   {
+    "bytes": 2124,
+    "name": "mcp__claude_ai_Gmail__reply"
+   },
+   {
+    "bytes": 6358,
+    "name": "mcp__claude_ai_Gmail__search_threads"
+   },
+   {
+    "bytes": 4225,
+    "name": "mcp__claude_ai_Gmail__send_message"
+   },
+   {
+    "bytes": 590,
+    "name": "mcp__claude_ai_Gmail__trash_message"
+   },
+   {
+    "bytes": 608,
+    "name": "mcp__claude_ai_Gmail__trash_thread"
+   },
+   {
+    "bytes": 881,
+    "name": "mcp__claude_ai_Gmail__unlabel_message"
+   },
+   {
+    "bytes": 837,
+    "name": "mcp__claude_ai_Gmail__unlabel_thread"
+   },
+   {
+    "bytes": 390,
+    "name": "mcp__claude_ai_Gmail__unmark_message_spam"
+   },
+   {
+    "bytes": 375,
+    "name": "mcp__claude_ai_Gmail__unmark_thread_spam"
+   },
+   {
+    "bytes": 393,
+    "name": "mcp__claude_ai_Gmail__untrash_message"
+   },
+   {
+    "bytes": 378,
+    "name": "mcp__claude_ai_Gmail__untrash_thread"
+   },
+   {
+    "bytes": 3949,
+    "name": "mcp__claude_ai_Gmail__update_draft"
+   },
+   {
+    "bytes": 4220,
+    "name": "mcp__claude_ai_Gmail__update_label"
+   },
+   {
+    "bytes": 917,
+    "name": "mcp__claude_ai_Gmail__update_message_labels"
+   },
+   {
+    "bytes": 6279,
+    "name": "mcp__claude_ai_Google_Calendar__create_event"
+   },
+   {
+    "bytes": 691,
+    "name": "mcp__claude_ai_Google_Calendar__delete_event"
+   },
+   {
+    "bytes": 455,
+    "name": "mcp__claude_ai_Google_Calendar__get_event"
+   },
+   {
+    "bytes": 532,
+    "name": "mcp__claude_ai_Google_Calendar__list_calendars"
+   },
+   {
+    "bytes": 2579,
+    "name": "mcp__claude_ai_Google_Calendar__list_events"
+   },
+   {
+    "bytes": 1097,
+    "name": "mcp__claude_ai_Google_Calendar__respond_to_event"
+   },
+   {
+    "bytes": 497,
+    "name": "mcp__claude_ai_Google_Calendar__search_events"
+   },
+   {
+    "bytes": 1212,
+    "name": "mcp__claude_ai_Google_Calendar__suggest_time"
+   },
+   {
+    "bytes": 5440,
+    "name": "mcp__claude_ai_Google_Calendar__update_event"
+   },
+   {
+    "bytes": 982,
+    "name": "mcp__claude_ai_Google_Drive__copy_file"
+   },
+   {
+    "bytes": 2147,
+    "name": "mcp__claude_ai_Google_Drive__create_file"
+   },
+   {
+    "bytes": 969,
+    "name": "mcp__claude_ai_Google_Drive__download_file_content"
+   },
+   {
+    "bytes": 495,
+    "name": "mcp__claude_ai_Google_Drive__get_file_metadata"
+   },
+   {
+    "bytes": 288,
+    "name": "mcp__claude_ai_Google_Drive__get_file_permissions"
+   },
+   {
+    "bytes": 924,
+    "name": "mcp__claude_ai_Google_Drive__list_recent_files"
+   },
+   {
+    "bytes": 2171,
+    "name": "mcp__claude_ai_Google_Drive__read_file_content"
+   },
+   {
+    "bytes": 2069,
+    "name": "mcp__claude_ai_Google_Drive__search_files"
+   },
+   {
+    "bytes": 711,
+    "name": "mcp__claude_ai_Google_Drive__share_file"
+   },
+   {
+    "bytes": 341,
+    "name": "mcp__claude_ai_Google_Drive__trash_file"
+   },
+   {
+    "bytes": 780,
+    "name": "mcp__claude_ai_Google_Drive__update_file"
+   },
+   {
+    "bytes": 4052,
+    "name": "mcp__claude_ai_HubSpot__discover_hubspot_schema"
+   },
+   {
+    "bytes": 3820,
+    "name": "mcp__claude_ai_HubSpot__get_aeo_metrics"
+   },
+   {
+    "bytes": 5678,
+    "name": "mcp__claude_ai_HubSpot__get_campaign_attribution_reports"
+   },
+   {
+    "bytes": 3294,
+    "name": "mcp__claude_ai_HubSpot__get_content_analytics_report"
+   },
+   {
+    "bytes": 671,
+    "name": "mcp__claude_ai_HubSpot__get_conversation_channel_metadata"
+   },
+   {
+    "bytes": 1176,
+    "name": "mcp__claude_ai_HubSpot__get_crm_objects"
+   },
+   {
+    "bytes": 7612,
+    "name": "mcp__claude_ai_HubSpot__get_marketing_email_analytics"
+   },
+   {
+    "bytes": 2437,
+    "name": "mcp__claude_ai_HubSpot__get_organization_details"
+   },
+   {
+    "bytes": 1053,
+    "name": "mcp__claude_ai_HubSpot__get_properties"
+   },
+   {
+    "bytes": 2784,
+    "name": "mcp__claude_ai_HubSpot__get_user_details"
+   },
+   {
+    "bytes": 1931,
+    "name": "mcp__claude_ai_HubSpot__import-claude-design-from-url"
+   },
+   {
+    "bytes": 3022,
+    "name": "mcp__claude_ai_HubSpot__manage_aeo_prompts"
+   },
+   {
+    "bytes": 3147,
+    "name": "mcp__claude_ai_HubSpot__manage_aeo_recommendations"
+   },
+   {
+    "bytes": 9500,
+    "name": "mcp__claude_ai_HubSpot__manage_blog_post"
+   },
+   {
+    "bytes": 6079,
+    "name": "mcp__claude_ai_HubSpot__manage_campaign_objects"
+   },
+   {
+    "bytes": 4838,
+    "name": "mcp__claude_ai_HubSpot__manage_crm_objects"
+   },
+   {
+    "bytes": 18883,
+    "name": "mcp__claude_ai_HubSpot__manage_landing_page"
+   },
+   {
+    "bytes": 28837,
+    "name": "mcp__claude_ai_HubSpot__manage_marketing_email"
+   },
+   {
+    "bytes": 2671,
+    "name": "mcp__claude_ai_HubSpot__manage_onboarding"
+   },
+   {
+    "bytes": 1381,
+    "name": "mcp__claude_ai_HubSpot__manage_saved_reports"
+   },
+   {
+    "bytes": 3238,
+    "name": "mcp__claude_ai_HubSpot__query_crm_data"
+   },
+   {
+    "bytes": 4980,
+    "name": "mcp__claude_ai_HubSpot__read_campaign_data"
+   },
+   {
+    "bytes": 626,
+    "name": "mcp__claude_ai_HubSpot__render_asset"
+   },
+   {
+    "bytes": 7614,
+    "name": "mcp__claude_ai_HubSpot__search_conversations"
+   },
+   {
+    "bytes": 10010,
+    "name": "mcp__claude_ai_HubSpot__search_crm_objects"
+   },
+   {
+    "bytes": 1390,
+    "name": "mcp__claude_ai_HubSpot__search_owners"
+   },
+   {
+    "bytes": 2497,
+    "name": "mcp__claude_ai_HubSpot__search_properties"
+   },
+   {
+    "bytes": 3433,
+    "name": "mcp__claude_ai_HubSpot__show_feedback_form"
+   },
+   {
+    "bytes": 3662,
+    "name": "mcp__claude_ai_HubSpot__submit_feedback"
+   },
+   {
+    "bytes": 692,
+    "name": "mcp__claude_ai_HubSpot__tool_guidance"
+   },
+   {
+    "bytes": 239,
+    "name": "mcp__claude_ai_LunarCrush__auth"
+   },
+   {
+    "bytes": 357,
+    "name": "mcp__claude_ai_LunarCrush__creator"
+   },
+   {
+    "bytes": 864,
+    "name": "mcp__claude_ai_LunarCrush__creator_posts"
+   },
+   {
+    "bytes": 806,
+    "name": "mcp__claude_ai_LunarCrush__creator_time_series"
+   },
+   {
+    "bytes": 3018,
+    "name": "mcp__claude_ai_LunarCrush__cryptocurrencies"
+   },
+   {
+    "bytes": 425,
+    "name": "mcp__claude_ai_LunarCrush__fetch"
+   },
+   {
+    "bytes": 1032,
+    "name": "mcp__claude_ai_LunarCrush__keyword_posts"
+   },
+   {
+    "bytes": 981,
+    "name": "mcp__claude_ai_LunarCrush__keyword_time_series"
+   },
+   {
+    "bytes": 925,
+    "name": "mcp__claude_ai_LunarCrush__list"
+   },
+   {
+    "bytes": 253,
+    "name": "mcp__claude_ai_LunarCrush__post"
+   },
+   {
+    "bytes": 390,
+    "name": "mcp__claude_ai_LunarCrush__search"
+   },
+   {
+    "bytes": 1748,
+    "name": "mcp__claude_ai_LunarCrush__stocks"
+   },
+   {
+    "bytes": 409,
+    "name": "mcp__claude_ai_LunarCrush__topic"
+   },
+   {
+    "bytes": 986,
+    "name": "mcp__claude_ai_LunarCrush__topic_posts"
+   },
+   {
+    "bytes": 1295,
+    "name": "mcp__claude_ai_LunarCrush__topic_time_series"
+   },
+   {
+    "bytes": 1550,
+    "name": "mcp__claude_ai_Otter_ai__otter_fetch"
+   },
+   {
+    "bytes": 616,
+    "name": "mcp__claude_ai_Otter_ai__otter_get_user_info"
+   },
+   {
+    "bytes": 5661,
+    "name": "mcp__claude_ai_Otter_ai__otter_search"
+   },
+   {
+    "bytes": 2520,
+    "name": "mcp__claude_ai_Upwork__upwork__boost_profile"
+   },
+   {
+    "bytes": 1764,
+    "name": "mcp__claude_ai_Upwork__upwork__confirm_attachment_upload"
+   },
+   {
+    "bytes": 3382,
+    "name": "mcp__claude_ai_Upwork__upwork__confirm_preview"
+   },
+   {
+    "bytes": 2427,
+    "name": "mcp__claude_ai_Upwork__upwork__find_jobs"
+   },
+   {
+    "bytes": 1547,
+    "name": "mcp__claude_ai_Upwork__upwork__find_saved_jobs"
+   },
+   {
+    "bytes": 1628,
+    "name": "mcp__claude_ai_Upwork__upwork__get_account"
+   },
+   {
+    "bytes": 2460,
+    "name": "mcp__claude_ai_Upwork__upwork__get_agency"
+   },
+   {
+    "bytes": 575,
+    "name": "mcp__claude_ai_Upwork__upwork__get_freelancer_dashboard"
+   },
+   {
+    "bytes": 2467,
+    "name": "mcp__claude_ai_Upwork__upwork__get_freelancer_financials"
+   },
+   {
+    "bytes": 2462,
+    "name": "mcp__claude_ai_Upwork__upwork__get_messages"
+   },
+   {
+    "bytes": 652,
+    "name": "mcp__claude_ai_Upwork__upwork__get_preview"
+   },
+   {
+    "bytes": 2450,
+    "name": "mcp__claude_ai_Upwork__upwork__get_profile"
+   },
+   {
+    "bytes": 525,
+    "name": "mcp__claude_ai_Upwork__upwork__get_tool_help"
+   },
+   {
+    "bytes": 783,
+    "name": "mcp__claude_ai_Upwork__upwork__get_upload_status"
+   },
+   {
+    "bytes": 173,
+    "name": "mcp__claude_ai_Upwork__upwork__list_accounts"
+   },
+   {
+    "bytes": 2460,
+    "name": "mcp__claude_ai_Upwork__upwork__list_contracts"
+   },
+   {
+    "bytes": 2442,
+    "name": "mcp__claude_ai_Upwork__upwork__list_freelancer_proposals"
+   },
+   {
+    "bytes": 1038,
+    "name": "mcp__claude_ai_Upwork__upwork__list_milestones"
+   },
+   {
+    "bytes": 2435,
+    "name": "mcp__claude_ai_Upwork__upwork__list_offers"
+   },
+   {
+    "bytes": 1532,
+    "name": "mcp__claude_ai_Upwork__upwork__manage_proposals"
+   },
+   {
+    "bytes": 2388,
+    "name": "mcp__claude_ai_Upwork__upwork__respond_to_offer"
+   },
+   {
+    "bytes": 1960,
+    "name": "mcp__claude_ai_Upwork__upwork__save_job"
+   },
+   {
+    "bytes": 2458,
+    "name": "mcp__claude_ai_Upwork__upwork__send_message"
+   },
+   {
+    "bytes": 938,
+    "name": "mcp__claude_ai_Upwork__upwork__set_tool_mode"
+   },
+   {
+    "bytes": 1205,
+    "name": "mcp__claude_ai_Upwork__upwork__set_tool_permission"
+   },
+   {
+    "bytes": 2274,
+    "name": "mcp__claude_ai_Upwork__upwork__start_attachment_upload"
+   },
+   {
+    "bytes": 524,
+    "name": "mcp__claude_ai_Upwork__upwork__store_uploaded_files"
+   },
+   {
+    "bytes": 1250,
+    "name": "mcp__claude_ai_Upwork__upwork__submit_milestones"
+   },
+   {
+    "bytes": 1313,
+    "name": "mcp__claude_ai_Upwork__upwork__update_profile"
+   },
+   {
+    "bytes": 1882,
+    "name": "mcp__claude_ai_v0__createChat"
+   },
+   {
+    "bytes": 272,
+    "name": "mcp__claude_ai_v0__getChat"
+   },
+   {
+    "bytes": 405,
+    "name": "mcp__claude_ai_v0__getPreview"
+   },
+   {
+    "bytes": 500,
+    "name": "mcp__claude_ai_v0__import-claude-design-from-url"
+   },
+   {
+    "bytes": 741,
+    "name": "mcp__claude_ai_v0__listChats"
+   },
+   {
+    "bytes": 549,
+    "name": "mcp__claude_ai_v0__listMessages"
+   },
+   {
+    "bytes": 5553,
+    "name": "mcp__claude_ai_v0__resolveTask"
+   },
+   {
+    "bytes": 1573,
+    "name": "mcp__claude_ai_v0__sendChatMessage"
+   }
+  ]
+ },
+ "request_id": "req_011Cekg749HUrwau39tLs33V",
+ "response": {
+  "blocks": [
+   {
+    "bytes": 2,
+    "kind": "text",
+    "label": "assistant text"
+   }
+  ],
+  "raw_usage": {
+   "cache_creation_input_tokens": 182022,
+   "cache_read_input_tokens": 0,
+   "input_tokens": 2,
+   "iterations": [
+    {
+     "cache_creation": {
+      "ephemeral_1h_input_tokens": 182022,
+      "ephemeral_5m_input_tokens": 0
+     },
+     "cache_creation_input_tokens": 182022,
+     "cache_read_input_tokens": 0,
+     "input_tokens": 2,
+     "output_tokens": 4,
+     "type": "message"
+    }
+   ],
+   "output_tokens": 4,
+   "output_tokens_details": {
+    "thinking_tokens": 0
+   }
+  },
+  "usage": {
+   "cache_creation_input_tokens": 182022,
+   "cache_read_input_tokens": 0,
+   "ephemeral_1h_input_tokens": 182022,
+   "input_tokens": 2,
+   "output_tokens": 4
+  }
+ },
+ "schema": 2,
+ "session_id": "54109f87-2911-4ba8-b7a6-8de3649e3d9a",
+ "status": 200,
+ "stream": true,
+ "ts": "2026-09-05T10:19:18.691071-07:00"
+}

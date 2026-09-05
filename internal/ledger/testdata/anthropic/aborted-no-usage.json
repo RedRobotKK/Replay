@@ -1,0 +1,32 @@
+{
+ "effort": "high",
+ "latency_ms": 1933,
+ "model": "claude-opus-5",
+ "path": "/v1/messages",
+ "prefix_hash": "prefix-7af111550158d070",
+ "prompt": {
+  "cache_control": 0,
+  "messages": [
+   {
+    "blocks": [
+     {
+      "bytes": 225,
+      "kind": "text",
+      "label": "user text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "system_bytes": 3209,
+  "tool_bytes": 0,
+  "tool_count": 0
+ },
+ "request_id": "req_011Cekfmqn7RjkUYg6nykNrW",
+ "response": {},
+ "schema": 2,
+ "session_id": "eeadd191-1adf-4756-8c8c-c996db007763",
+ "status": 200,
+ "stream": true,
+ "ts": "2026-09-05T10:14:58.082646-07:00"
+}

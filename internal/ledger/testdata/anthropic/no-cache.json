@@ -1,0 +1,68 @@
+{
+ "effort": "high",
+ "latency_ms": 2461,
+ "model": "claude-opus-5",
+ "path": "/v1/messages",
+ "prefix_hash": "prefix-7af111550158d070",
+ "prompt": {
+  "cache_control": 0,
+  "messages": [
+   {
+    "blocks": [
+     {
+      "bytes": 225,
+      "kind": "text",
+      "label": "user text"
+     }
+    ],
+    "role": "user"
+   }
+  ],
+  "system_bytes": 3209,
+  "tool_bytes": 0,
+  "tool_count": 0
+ },
+ "request_id": "req_011CekfwX3GZgH1nkPyeVda8",
+ "response": {
+  "blocks": [
+   {
+    "bytes": 28,
+    "kind": "text",
+    "label": "assistant text"
+   }
+  ],
+  "raw_usage": {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "input_tokens": 1172,
+   "iterations": [
+    {
+     "cache_creation": {
+      "ephemeral_1h_input_tokens": 0,
+      "ephemeral_5m_input_tokens": 0
+     },
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "input_tokens": 1172,
+     "output_tokens": 13,
+     "type": "message"
+    }
+   ],
+   "output_tokens": 13,
+   "output_tokens_details": {
+    "thinking_tokens": 0
+   }
+  },
+  "usage": {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "input_tokens": 1172,
+   "output_tokens": 13
+  }
+ },
+ "schema": 2,
+ "session_id": "464bb8ef-219b-4d07-b64a-45ed2833dff6",
+ "status": 200,
+ "stream": true,
+ "ts": "2026-09-05T10:17:09.352775-07:00"
+}
