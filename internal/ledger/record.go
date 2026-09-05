@@ -50,6 +50,18 @@ type Record struct {
 	Refusal string `json:"refusal,omitempty"`
 	// RefusalReason is the guard message: counts and thresholds, never content.
 	RefusalReason string `json:"refusal_reason,omitempty"`
+	// Trimmed counts blocks a destructive transform removed content from, by
+	// tool name. Nothing writes it yet: the live trimmer does not ship, and
+	// this is the landing place so that when one is built its effect is on
+	// the record from the first request rather than added afterwards.
+	//
+	// BodyHashBefore and BodyHashAfter bracket any such transform. They are
+	// what makes "the proxy forwards bytes unchanged" checkable rather than
+	// promised: equal hashes are the proof, and a live trimmer would be the
+	// first policy that could not produce them.
+	Trimmed        map[string]int `json:"trimmed,omitempty"`
+	BodyHashBefore string         `json:"body_hash_before,omitempty"`
+	BodyHashAfter  string         `json:"body_hash_after,omitempty"`
 	// Masked counts the secrets the proxy replaced with placeholders in
 	// this request, by pattern name. Never a secret or a placeholder.
 	Masked map[string]int `json:"masked,omitempty"`

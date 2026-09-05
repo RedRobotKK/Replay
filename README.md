@@ -430,6 +430,13 @@ All off unless you set them (see `replay serve -h`):
 - `--loop-warn` and `--loop-block` count how many times in a row the agent has just made the same tool
   call with the same input, and add a warning header or refuse the request. A repeated command earlier
   in the session never counts; only the current run does. `x-replay-override` passes a block once.
+- `replay trim <dir> --cap <bytes>` scores a per-block byte cap on tool output against your own
+  sessions, offline. It reports the saving in dollars at cache-read prices, because a resent byte
+  is a cache read and pricing it as fresh input overstates by about ten times, and it runs a harm
+  probe asking whether the agent later needed what the cap removed: a later `Edit` whose
+  `old_string` sat only in the removed region, a re-read of the same path, a quote of a removed
+  line. The probe is a lower bound and prints its own blind spots. Nothing is trimmed and no
+  request is touched; the live trimmer does not ship.
 - `replay doctor` prints a **guards** block: how many requests were refused and by which guard,
   what today has cost at list price, and a loud warning when a dollar cap is configured but some
   traffic could not be priced, because then the cap is not being applied to that traffic and you

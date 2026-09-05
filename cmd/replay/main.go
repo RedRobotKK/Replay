@@ -65,6 +65,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return runStatusline(args[1:], stdout, stderr)
 	case "cost":
 		return runCost(args[1:], stdout, stderr)
+	case "trim":
+		return runTrim(args[1:], stdout, stderr)
 	case "route":
 		return runRoute(args[1:], stdout, stderr)
 	case "context":
@@ -343,6 +345,7 @@ Usage:
   replay cost   <dir...>           cost per task, the share nobody chose, and --compare <date> for before/after
   replay context <transcript|dir>  what entered a session's context, by tool
   replay route <dir> --to <model>  what switching models would change, structurally
+  replay trim <dir> --cap <bytes>  what a byte cap on tool output would have saved, and cost
   replay redact <transcript>       strip content, keep structure and usage (for bug reports)
   replay serve [flags]             local proxy: byte-for-byte passthrough, records a ledger
   replay version                   print build information
