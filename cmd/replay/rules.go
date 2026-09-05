@@ -56,8 +56,8 @@ func runRules(args []string, stdout, stderr io.Writer) error {
 	// Not hoistFlags: --update takes a value, and reordering would separate a
 	// flag from its argument. This command has no positional arguments, so
 	// there is nothing to hoist past.
-	if err := fs.Parse(args); err != nil {
-		return errUsage
+	if err := parseArgs(fs, args, stdout); err != nil {
+		return err
 	}
 	path, err := rulesPath()
 	if err != nil {

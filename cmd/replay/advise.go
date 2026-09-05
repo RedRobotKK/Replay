@@ -41,8 +41,8 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 	// Print-only on purpose, and so not accepted alongside --apply: a spend
 	// cap the tool wrote for you is a refusal you did not choose.
 	guards := fs.Bool("guards", false, "suggest spend caps from your own session spread (print-only, never written)")
-	if err := fs.Parse(hoistFlagsFor(fs, args)); err != nil {
-		return errUsage
+	if err := parseArgs(fs, args, stdout); err != nil {
+		return err
 	}
 	if fs.NArg() == 0 {
 		return fmt.Errorf("one or more transcript or ledger directories are required: %w", errUsage)
@@ -87,7 +87,16 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 	}
 	suggestions := advisor.Suggest(obs)
 
-	p := analysis.NewPrinter(stdout)
+	// With --json, stdout belongs to the machine. The human report still gets
+	// written — it is useful beside the JSON — but on stderr, so that
+	// `advise --apply --json --out - | jq` works. Emitting 43KB of prose ahead
+	// of the document on the same stream made --json unusable for the one
+	// audience it exists for.
+	prose := stdout
+	if *asJSON {
+		prose = stderr
+	}
+	p := analysis.NewPrinter(prose)
 	p.Printf("Sessions: %d found, %d calibrated. Predictions assume the target is halved; shares are of prompt tokens, the scale-free metric.\n\n", len(files), len(obs))
 	if len(suggestions) == 0 {
 		p.Printf("No token source above %.0f%% of prompt tokens in any session.\n", advisor.MinShare*100)
@@ -111,7 +120,16 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 	if err := p.Err(); err != nil {
 		return err
 	}
+	// "-" means do not write a file. It does not mean skip the work: this
+	// return used to sit above the --apply dispatch below, so
+	// `advise --apply --json --out -` printed prose, emitted no JSON and
+	// exited 0. That is the obvious agent-safe invocation — do not touch my
+	// disk, give me JSON — and it was the one combination that silently did
+	// nothing.
 	if *out == "-" {
+		if *apply {
+			return applySettings(reports, stdout, *yes, *asJSON)
+		}
 		return nil
 	}
 	path := *out
@@ -132,7 +150,7 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 	if err := os.WriteFile(path, append(data, '\n'), adviceFileMode); err != nil {
 		return fmt.Errorf("write advice file: %w", err)
 	}
-	if _, err := fmt.Fprintf(stdout, "Advice file: %s\n", path); err != nil {
+	if _, err := fmt.Fprintf(prose, "Advice file: %s\n", path); err != nil {
 		return err
 	}
 	if *apply {

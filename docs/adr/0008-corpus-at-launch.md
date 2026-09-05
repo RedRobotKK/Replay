@@ -1,6 +1,6 @@
 # ADR-0008: Collecting a corpus from a public launch without shipping telemetry
 
-- **Status:** Proposed
+- **Status:** Proposed. **Not implemented** — see the implementation note of 2026-09-05 at the foot of this record
 - **Date:** 2026-09-04
 - **Amends:** ADR-0007 (federated calibration corpus)
 - **Related:** [`architecture/multi-provider.md`](../architecture/multi-provider.md)
@@ -131,6 +131,27 @@ The value of k. Whether `--show-aggregate` is worth building before there is an 
 And whether the endpoint should exist at all at v0.1, or whether submission should be a pull request
 against `docs/evidence/` for the first cohort, which is slower, harder to game, and requires no
 server to run or defend.
+
+## Implementation note 2026-09-05
+
+**None of "what ships at v0.1" shipped.** `replay corpus <dir>` shipped exactly as described — a
+local Markdown report over transcript directories, no network — and that half of the argument holds.
+The rest did not: `corpus` defines no flags, so neither `--submit` nor `--show-aggregate` exists,
+and `replay corpus --submit` exits with `flag provided but not defined: -submit`. There is no
+endpoint to send to and no published aggregate to fetch.
+
+`install.sh --corpus-opt-in` does exist and still writes
+`${XDG_CONFIG_HOME:-~/.config}/replay/corpus-consent.toml`. It records an intention and nothing
+reads it, which makes it, for now, a file that consents to a mechanism that was never built.
+
+The installer's closing lines and the README have been corrected accordingly. They no longer name a
+submit command, and they say the thing this ADR was reaching for in a stronger form than the ADR
+could: **the released binary makes no network request at all**, except the proxy forwarding your own
+traffic to the provider you configured. "Nothing is sent until you run `--submit`" understated it,
+and any claim that undersells a privacy property is still an inaccurate claim.
+
+The reasoning above stands as the standard a future build has to meet. It is a decision record, not
+a feature list.
 
 ---
 

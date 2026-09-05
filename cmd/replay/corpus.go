@@ -43,8 +43,8 @@ func (r corpusRow) matchRate() float64 {
 func runCorpus(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("corpus", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	if err := fs.Parse(hoistFlagsFor(fs, args)); err != nil {
-		return errUsage
+	if err := parseArgs(fs, args, stdout); err != nil {
+		return err
 	}
 	if fs.NArg() == 0 {
 		return fmt.Errorf("one or more transcript directories are required: %w", errUsage)
@@ -200,7 +200,8 @@ func prefixID(id string) string {
 //
 // Dropping the directory is not enough. Claude Code names a transcript after
 // its session UUID, so the bare filename is still an identifier, and this list
-// is part of the payload `replay corpus --submit` transmits. Analysed rows are
+// is part of the report ADR-0007 designed for submission. Nothing transmits it:
+// `corpus` defines no flags and no submit path was built. Analysed rows are
 // already shortened by prefixID; skipped ones were not, which quietly
 // contradicted this report's own promise of "a session id prefix, never a
 // path".

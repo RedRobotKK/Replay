@@ -117,8 +117,8 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	since := fs.String("compare", "", "split at this date (YYYY-MM-DD) and report cost per task before and after")
 	predicted := fs.Float64("predicted", 0, "with --compare, the fractional change you predicted (e.g. -0.2 for a 20% saving)")
 	share := fs.Bool("share", false, "print a paste-ready summary: the avoidable rate and the task spread, with no spend total, no paths and no project names")
-	if err := fs.Parse(hoistFlagsFor(fs, args)); err != nil {
-		return errUsage
+	if err := parseArgs(fs, args, stdout); err != nil {
+		return err
 	}
 	if fs.NArg() == 0 {
 		return fmt.Errorf("one or more transcript directories are required: %w", errUsage)

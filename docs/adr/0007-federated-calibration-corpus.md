@@ -1,6 +1,6 @@
 # ADR-0007: Improving the cache model from many machines
 
-- **Status:** Proposed
+- **Status:** Proposed. **Not implemented** — see the implementation note of 2026-09-05 at the foot of this record
 - **Date:** 2026-09-04
 - **Supersedes:** nothing
 - **Related:** ADR-0002 (replay engine and truth tiers), ADR-0006 (learning selection)
@@ -131,6 +131,24 @@ worse for the tool but not dishonest.
 **Open.** The value of k. Whether contribution belongs in the CLI at all, or should stay a pull
 request against `docs/evidence/` where the review is a human reading a diff, which is slower and
 harder to game.
+
+## Implementation note 2026-09-05
+
+**Nothing in this record was built.** `replay corpus` takes one or more transcript directories and
+defines no flags at all, so `replay corpus --submit` does not print a payload and does not ask: it
+exits with `flag provided but not defined: -submit`. There is no corpus endpoint, no aggregate, and
+no k-anonymity threshold in force, because there is nothing yet to threshold.
+
+The decision above is therefore a design for a mechanism that does not exist, and it is recorded
+here as one. It is not a description of the shipped tool, and prose elsewhere in this repository
+that cited `--submit` as the one thing that transmits has been corrected: the accurate claim is the
+stronger one. **The released binary makes no network request at all**, except the proxy forwarding
+your own traffic to the provider you configured. Nothing is opt-in because there is nothing to opt
+into.
+
+Whether to build the flag is still open, and section 2 above is the constraint any build would have
+to satisfy. Until then this record is a plan, and the surface map
+([`../SURFACES.md`](../SURFACES.md)) is the description of what exists.
 
 ---
 

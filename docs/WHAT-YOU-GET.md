@@ -47,12 +47,22 @@ rather than on somebody's marketing claim.
 
 ## What Replay reads, and what it never reads
 
-It reads **the transcripts your agent already wrote**. It does **not** read `settings.json`,
-`CLAUDE.md`, `.mcp.json` or any other configuration. That boundary is deliberate: `settings.json` can
-hold environment variables and credentials, and **a tool that reads your config to advise you on your
-config has to be trusted with it.**
+It reads **the transcripts your agent already wrote**. On every default invocation it does **not**
+read `settings.json`, `CLAUDE.md`, `.mcp.json` or any other configuration. That boundary is
+deliberate: `settings.json` can hold environment variables and credentials, and **a tool that reads
+your config to advise you on your config has to be trusted with it.**
 
-Everything below is derived from sessions alone.
+**There is exactly one exception, and it is a flag you type.** `replay advise --apply` reads
+`~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`) to find the current
+`promptCacheTtl`, and with `--yes` writes that one key back, after copying the existing file to a
+timestamped `.bak-…` sibling and refusing outright if the file is not valid JSON. That key is the
+whole of what it reads and the whole of what it writes; `CLAUDE.md` and `.mcp.json` it never opens
+at all. The exception is narrow on purpose: `--apply` is the case where you asked for a change to
+your config rather than for advice about it, and a tool that offers to make the change has to read
+what is there first. Without the flag, `advise` prints its plan and writes only its own
+`~/.replay/advice.json`.
+
+Everything else below is derived from sessions alone.
 
 ## What you get
 

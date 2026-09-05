@@ -334,7 +334,7 @@ What running this actually costs you, measured rather than asserted.
 | **Tokens spent by Replay** | Zero. It is a passthrough, so your agent's calls are the only calls |
 | **Latency added by the proxy** | **~1.7ms p50** on a 45KB request, measured against an instant local provider so nothing hides in it. A real round trip is hundreds of milliseconds to minutes, so this is a rounding error of the request it sits inside. The 48µs first published here was the difference of two noisy percentiles and could not have detected otherwise ([method and correction](docs/evidence/proxy-latency-2026-09-03.md)) |
 | **Disk** | A ledger of block kinds, sizes, timings and usage counts. No message text, paths hashed, owner-only |
-| **Telemetry** | None. No account, no install-time question, no first-run prompt. `replay corpus --submit` is the only thing that ever transmits, it prints the exact payload, and it waits for you |
+| **Telemetry** | None, and nothing to opt out of. No account, no install-time question, no first-run prompt. **The binary makes no network request at all**, except the proxy forwarding your own traffic to the provider you configured. There is no submit command and no corpus endpoint: contribution was designed ([ADR-0007](docs/adr/0007-federated-calibration-corpus.md), [ADR-0008](docs/adr/0008-corpus-at-launch.md)) and is not built. [Every outbound surface, including `doctor`'s probe for an already-running proxy](docs/SURFACES.md) |
 | **Licence obligations** | Apache 2.0. No copyleft, no attribution beyond [`NOTICE`](NOTICE) |
 
 ## 🎯 Why

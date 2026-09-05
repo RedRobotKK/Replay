@@ -43,18 +43,36 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		return printUsage(stdout)
 	}
+	err := dispatch(args, stdout, stderr)
+	if errors.Is(err, errHelpShown) {
+		// The usage text is already on stdout. Nothing went wrong.
+		return nil
+	}
+	return err
+}
+
+func dispatch(args []string, stdout, stderr io.Writer) error {
 	switch args[0] {
 	case "version", "--version", "-v":
+		if wantsHelp(args[1:]) {
+			fmt.Fprint(stdout, "Usage of version:\n"+
+				"  replay version\n\n"+
+				"Prints the version, the commit and the build date. Takes no flags.\n"+
+				"A source build reports \"dev (unknown, built unknown)\": the real\n"+
+				"values are injected at release time, so an agent that built from\n"+
+				"source cannot confirm which release it has.\n")
+			return errHelpShown
+		}
 		_, err := fmt.Fprintln(stdout, "replay", version.String())
 		return err
 	case "help", "--help", "-h":
 		return printUsage(stdout)
 	case "replay":
-		return runReport(args[1:], stdout, stderr, (*analysis.LaneReport).WriteReplay)
+		return runReport("replay", args[1:], stdout, stderr, (*analysis.LaneReport).WriteReplay)
 	case "blame":
-		return runReport(args[1:], stdout, stderr, func(r *analysis.LaneReport, w io.Writer) error { return r.WriteBlame(w, defaultBlameLimit) })
+		return runReport("blame", args[1:], stdout, stderr, func(r *analysis.LaneReport, w io.Writer) error { return r.WriteBlame(w, defaultBlameLimit) })
 	case "diff":
-		return runReport(args[1:], stdout, stderr, (*analysis.LaneReport).WriteDiff)
+		return runReport("diff", args[1:], stdout, stderr, (*analysis.LaneReport).WriteDiff)
 	case "corpus":
 		return runCorpus(args[1:], stdout, stderr)
 	case "doctor":
@@ -86,7 +104,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		// argument instead. A subcommand name always wins, so a directory
 		// called "serve" still needs the explicit "replay replay serve".
 		if namesAPath(args[0]) {
-			return runReport(args, stdout, stderr, (*analysis.LaneReport).WriteReplay)
+			return runReport("replay", args, stdout, stderr, (*analysis.LaneReport).WriteReplay)
 		}
 		// The usage text is a courtesy on the error path; the error that
 		// matters is the unknown command.
@@ -168,12 +186,15 @@ func hoistFlagsFor(fs *flag.FlagSet, args []string) []string {
 	return append(flags, paths...)
 }
 
-func runReport(args []string, stdout, stderr io.Writer, write func(*analysis.LaneReport, io.Writer) error) error {
-	fs := flag.NewFlagSet("report", flag.ContinueOnError)
+// name is the command the user actually typed. Three commands share this
+// body, and a flagset called "report" printed "Usage of report:" for a command
+// nobody can invoke by that name.
+func runReport(name string, args []string, stdout, stderr io.Writer, write func(*analysis.LaneReport, io.Writer) error) error {
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	dollars := fs.Bool("dollars", false, "add a list-price cost column (first-party rates, dated price table)")
-	if err := fs.Parse(hoistFlagsFor(fs, args)); err != nil {
-		return errUsage
+	if err := parseArgs(fs, args, stdout); err != nil {
+		return err
 	}
 	if fs.NArg() == 0 {
 		return fmt.Errorf("a transcript file or directory is required: %w", errUsage)
@@ -316,6 +337,17 @@ func transcriptFiles(paths []string) ([]string, error) {
 }
 
 func runRedact(args []string, stdout io.Writer) error {
+	// redact reads its argument as a path and parses no flags, so without this
+	// `redact --help` was opened as a filename and reported
+	// "open --help: no such file or directory".
+	if wantsHelp(args) {
+		fmt.Fprint(stdout, "Usage of redact:\n"+
+			"  replay redact <transcript.jsonl> > redacted.jsonl\n\n"+
+			"Rewrites a transcript with message text removed, keeping block kinds,\n"+
+			"sizes and usage counts, so a session can be shared without its content.\n"+
+			"Takes one path and writes to stdout. No flags.\n")
+		return errHelpShown
+	}
 	if len(args) != 1 {
 		return fmt.Errorf("usage: replay redact <transcript.jsonl> > redacted.jsonl: %w", errUsage)
 	}

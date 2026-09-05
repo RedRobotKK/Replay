@@ -161,8 +161,8 @@ func runStatusline(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	noColour := fs.Bool("no-color", false, "never emit ANSI escape codes")
 	install := fs.Bool("install", false, "print the settings.json snippet that wires this in")
-	if err := fs.Parse(args); err != nil {
-		return errUsage
+	if err := parseArgs(fs, args, stdout); err != nil {
+		return err
 	}
 	if *install {
 		_, err := fmt.Fprintf(stdout, `Add this to %s:

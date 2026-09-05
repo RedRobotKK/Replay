@@ -36,8 +36,8 @@ func runTrim(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	capBytes := fs.Int("cap", defaultTrimCap, "per-block byte cap to score")
 	asJSON := fs.Bool("json", false, "emit the plan as JSON")
-	if err := fs.Parse(hoistFlagsFor(fs, args)); err != nil {
-		return errUsage
+	if err := parseArgs(fs, args, stdout); err != nil {
+		return err
 	}
 	if fs.NArg() == 0 {
 		return fmt.Errorf("a transcript file or directory is required: %w", errUsage)

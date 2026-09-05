@@ -26,8 +26,8 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	asJSON := fs.Bool("json", false, "emit the attribution as JSON")
 	top := fs.Int("top", 12, "how many rows to print")
-	if err := fs.Parse(hoistFlagsFor(fs, args)); err != nil {
-		return errUsage
+	if err := parseArgs(fs, args, stdout); err != nil {
+		return err
 	}
 	if fs.NArg() == 0 {
 		return fmt.Errorf("a transcript file or directory is required: %w", errUsage)

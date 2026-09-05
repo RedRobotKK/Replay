@@ -15,8 +15,9 @@
 #   --no-verify         install even if the checksum cannot be verified. Off by
 #                       default: an unverifiable download aborts.
 #   --corpus-opt-in     agree now to share calibration reports. Off unless you
-#                       pass it. It writes a file; it sends nothing, ever. You
-#                       still run `replay corpus --submit` to send anything.
+#                       pass it. It writes a file and sends nothing, ever, and
+#                       no command in this release sends it either: sharing is
+#                       designed (ADR-0007, ADR-0008) and not built.
 #   --help              this text
 #
 # Environment: REPLAY_VERSION, REPLAY_BIN_DIR, NO_COLOR.
@@ -346,10 +347,10 @@ if [ "$CORPUS_OPT_IN" -eq 1 ]; then
   if [ -L "$cfg_dir/corpus-consent.toml" ]; then
     die "${cfg_dir}/corpus-consent.toml is a symlink. Nothing was written."
   fi
-  printf 'corpus_opt_in = true\n# Written by install.sh --corpus-opt-in on %s\n# Delete this file to withdraw. Nothing is sent until you run: replay corpus --submit\n' \
+  printf 'corpus_opt_in = true\n# Written by install.sh --corpus-opt-in on %s\n# Delete this file to withdraw. Nothing is sent: no command in this release transmits it.\n' \
     "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$cfg_dir/corpus-consent.toml"
   ok "Corpus contribution enabled in ${cfg_dir}/corpus-consent.toml"
-  info "Still nothing is sent until you run: ${BIN} corpus --submit"
+  info "Nothing is sent: no command in this release transmits it."
 fi
 
 # -------------------------------------------------------------------- finish
@@ -361,13 +362,13 @@ printf '%sNext:%s  %s%s doctor%s   %s# what Replay can see on this machine%s\n' 
   "$C_B" "$C_0" "$C_ACCENT$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
 printf '        %s%s ~/.claude/projects/<project>/%s   %s# read a session you already paid for%s\n' \
   "$C_ACCENT$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
-# Discovery, not consent. Naming the command is the installer's job; deciding
-# is the user's, later, with the report in front of them.
+# Discovery, not consent. Naming the local report is the installer's job. There
+# is no submission path to point at: the binary sends nothing anywhere.
 if [ "$CORPUS_OPT_IN" -eq 0 ]; then
   printf '\n%sReplay makes no network request except to the provider you configured.%s\n' \
     "$C_DIM" "$C_0" >&2
-  printf '%sTo help calibrate it against real traffic:%s %s%s corpus%s%s shows what your own\nsessions look like and sends nothing.%s %s%s corpus --submit%s%s offers to.%s\n' \
-    "$C_DIM" "$C_0" "$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" "$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
+  printf '%sTo see how well it is calibrated on your own traffic:%s %s%s corpus%s%s shows what\nyour sessions look like, on this machine, and sends nothing anywhere.%s\n' \
+    "$C_DIM" "$C_0" "$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
 fi
 
 # Said once, at the only moment the person is definitely reading, and never

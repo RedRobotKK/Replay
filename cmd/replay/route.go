@@ -38,8 +38,8 @@ func runRoute(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	asJSON := fs.Bool("json", false, "emit the topology as JSON")
 	to := fs.String("to", "", "the model to consider switching to")
-	if err := fs.Parse(hoistFlagsFor(fs, args)); err != nil {
-		return errUsage
+	if err := parseArgs(fs, args, stdout); err != nil {
+		return err
 	}
 	if *to == "" {
 		return fmt.Errorf("--to <model> is required: %w", errUsage)

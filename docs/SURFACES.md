@@ -19,6 +19,7 @@ of the document.
 | `~/.replay/vault/`, `.vault-key` | write | Only with `--mask`. AES-256-GCM, key file alongside | **Verified**: a reviewer decrypted it in five lines of Python. The key file is the whole boundary |
 | `~/.replay/.pins`, `.revert` | write | Per-session policy decisions, persisted so a restart cannot change a session's mind | Read |
 | `~/.replay/policy.json` | **read and write** | `learn` writes it; **the proxy reads it at each new session's first request** (`server.go:763`), so anything that can write this file changes the parameters sent to the provider. Listed as write-only in the first version | Read |
+| `$CLAUDE_CONFIG_DIR/settings.json`, else `~/.claude/settings.json` | **read, and write with `advise --apply --yes`** | The one configuration file Replay touches, and only when you pass the flag. It reads the current `promptCacheTtl`, and `--yes` writes that single key back after copying the file to a timestamped `.bak-…` sibling; a file that is not valid JSON is refused untouched (`cmd/replay/apply.go`). **Missing from the first version of this table**, which is why [`WHAT-YOU-GET.md`](WHAT-YOU-GET.md) claimed a boundary wider than the code holds | Read |
 | `~/.replay/advice.json` | write | `advise` output. **Contains raw tool names and file base names** taken from your transcripts | Read |
 | `~/.replay/vault/vault.tmp` | write | Fixed-path temp file, rewritten per newly-seen secret. The §3b claim of "no predictable-path temp file" was true of `os.TempDir` and wrong as a conclusion | Read |
 | `$GOMODCACHE`, `$GOCACHE` | write | **Only via the installer's `go install` fallback**, which is the only path available today. Hundreds of MB | Read |
@@ -74,7 +75,7 @@ not on the map.
 |---|---|---|---|
 | out | the configured provider | every proxied request, byte for byte | **Verified** against a fake upstream |
 | out | `api.github.com`, `github.com` | **installer only**, never the binary | **Verified** |
-| out | corpus endpoint | **only** `replay corpus --submit`, after showing the payload | Not built yet |
+| out | corpus endpoint | **None. There is no such request, and no flag that could make one.** `corpus` takes directories and defines zero flags, so `replay corpus --submit` exits with `flag provided but not defined: -submit`. The submission path in ADR-0007 and ADR-0008 is a design, not a build | **Verified absent** |
 | in | `127.0.0.1:4000` `/` | the proxy itself. Loopback enforced at construction | **Verified**: a non-loopback `-listen` refuses to start |
 | in | `/replay/status` | JSON per-session totals. `Origin` and `Sec-Fetch-Mode` refused | **Verified** |
 | in | `/replay/metrics` | Prometheus text, aggregate only | Read |

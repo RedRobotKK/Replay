@@ -30,8 +30,8 @@ const (
 func runDoctor(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	if err := fs.Parse(args); err != nil {
-		return errUsage
+	if err := parseArgs(fs, args, stdout); err != nil {
+		return err
 	}
 	p := analysis.NewPrinter(stdout)
 	home, err := os.UserHomeDir()

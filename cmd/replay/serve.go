@@ -80,8 +80,8 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		return nil
 	})
 	policyFile := fs.String("policy-file", "", "EXPERIMENTAL: apply the context-edit candidate selected by replay learn (usually ~/.replay/policy.json), read at each session's first request; an explicit -context-edit-trigger wins; a session keeps its first decision whatever the file does later")
-	if err := fs.Parse(args); err != nil {
-		return errUsage
+	if err := parseArgs(fs, args, stdout); err != nil {
+		return err
 	}
 	noPolicy := os.Getenv(envNoPolicy) != ""
 	contextEdit, err := contextEditFromFlags(*editTrigger, *editKeep, noPolicy)

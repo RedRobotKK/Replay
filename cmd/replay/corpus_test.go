@@ -2,7 +2,8 @@ package main
 
 import "testing"
 
-// The corpus report is the payload `replay corpus --submit` transmits, and its
+// The corpus report is the payload ADR-0007 designed for submission — never
+// sent, because no submit path was built — and its
 // own header promises "a session id prefix, never a path, project name, or
 // content". The "Sessions not analyzed" list broke that promise: it scrubbed
 // the directory but kept the filename, which for Claude Code is the full

@@ -30,8 +30,8 @@ func runLearn(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	out := fs.String("out", "", "policy file to write (default ~/.replay/policy.json; \"-\" for none)")
 	minSessions := fs.Int("min-sessions", learn.DefaultMinSessions, "sessions with evidence a candidate needs before it can be selected")
-	if err := fs.Parse(hoistFlagsFor(fs, args)); err != nil {
-		return errUsage
+	if err := parseArgs(fs, args, stdout); err != nil {
+		return err
 	}
 	if fs.NArg() == 0 {
 		return fmt.Errorf("one or more transcript or ledger directories are required: %w", errUsage)
