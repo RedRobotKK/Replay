@@ -276,6 +276,44 @@ While `serve` is running:
 
 Both honour the token when one is set, and both refuse browser origins.
 
+### The metrics
+
+Twenty-one series. Thirteen carry no label; the eight that do are labelled by a bounded
+operational category. **None is labelled by session or by model**, deliberately: a session
+label is an unbounded, short-lived identifier, which multiplies cardinality in the scraper
+and puts session ids in front of anything that can read the endpoint. The per-session view
+is `/replay/status`, which you ask for.
+
+| Metric | Type | Label | Counts |
+|---|---|---|---|
+| `replay_requests_total` | counter | `class` | Requests handled, by outcome class |
+| `replay_prompt_tokens_total` | counter | — | Prompt tokens the provider processed |
+| `replay_cache_read_tokens_total` | counter | — | Prompt tokens served from cache |
+| `replay_cache_write_tokens_total` | counter | — | Prompt tokens written to cache |
+| `replay_cached_share` | gauge | — | Cache reads over prompt tokens |
+| `replay_cache_break_total` | counter | `cause` | Cache reads that fell short, by cause |
+| `replay_cost_usd_total` | counter | — | List-price cost since start |
+| `replay_cost_usd_day` | gauge | — | List-price cost for the current UTC day. A gauge because it resets at midnight, and a counter that resets makes every `rate()` wrong |
+| `replay_cost_unpriced_requests_total` | counter | — | Requests the rules could not price. Independent of the doctor's unenforced-cap warning, which also needs a dollar cap configured |
+| `replay_unparsed_requests_total` | counter | — | Requests on a path this build cannot read. **Excludes** `/v1/chat/completions`, which is read |
+| `replay_unmasked_requests_total` | counter | — | Requests the masker does not cover. This is what `/v1/chat/completions` increments |
+| `replay_refused_total` | counter | `guard` | Requests refused locally, by guard |
+| `replay_upstream_errors_total` | counter | `status` | Provider responses with an error status |
+| `replay_retries_total` | counter | — | Requests resent after a retryable failure |
+| `replay_held_total` | counter | — | Requests held behind a sibling with the same prefix |
+| `replay_held_milliseconds_total` | counter | — | Time spent in that hold |
+| `replay_masked_total` | counter | `pattern` | Secrets replaced, by pattern name. Never a secret or a placeholder |
+| `replay_rehydrated_total` | counter | `destination` | Placeholders restored, by destination |
+| `replay_rehydration_denied_total` | counter | `destination` | Placeholders left in place, by destination |
+| `replay_policy_applied_total` | counter | `policy` | Requests carrying a Replay-added parameter |
+| `replay_request_latency_seconds` | summary | — | Request received to response finished |
+
+The token, cache and break counters are lifetime totals. They were once summed over the
+live session map, which evicts past 256 sessions, so they under-reported by whatever had
+been dropped and could fall between two scrapes; a falling counter reads to Prometheus as
+a reset, which makes every `rate()` over it wrong on a busy machine and right on an idle
+one. Fixed 2026-09-05.
+
 ---
 
 [Guide](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)
