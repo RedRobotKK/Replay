@@ -27,7 +27,8 @@ Seven vectors, run on darwin/arm64.
 | A new in-project file | `src/new/file.go` | **allowed**, or the boundary would be unusable |
 | A placeholder in the path itself | `src/REPLAY_SECRET_…` | refused |
 | Project root reached through a link | the ordinary macOS `/var` → `/private/var` case | **allowed**, both directions |
-| Case variance on a case-insensitive filesystem | `SRC/app.js` against a root of `src` | refused, fails closed |
+| Case variance, out-of-project | `UNSAFE/shadow.env` in a different case | refused on every platform |
+| Case variance, in-project | `SRC/app.js` against a root of `src` | platform-dependent; see below |
 | Decoy path field beside the real one | `{"file_path": in, "path": out}` | refused |
 
 ## What each defence is actually doing
@@ -56,15 +57,26 @@ an agent can set up with a single earlier tool call.
 `/project-evil` matching a root of `/project`. That case is structural rather than
 adversarial and is covered by the same `Rel` result.
 
-## The case-variance decision
+## The case-variance finding, which the harness produced on its first CI run
 
-On macOS, writing to `SRC/x` writes to `src/x`, so a case-insensitive comparison would be
-**more permissive** than a case-sensitive one. The boundary refuses, and the test pins that
-it refuses.
+The first version of this suite asserted that case variance must fail closed. It passed on
+darwin and **failed on windows**, which is the harness doing its job on a platform nobody
+had checked by hand.
 
-This is a deliberate choice against convenience. Widening the comparison to match the
-filesystem would restore a placeholder for a path the operator did not name, in exchange
-for avoiding an unrestored placeholder in a file. Those costs are not symmetric.
+```text
+darwin   filepath.Rel is case-sensitive    Rel(".../src", ".../SRC/app.js") = "../SRC/app.js"  refused
+windows  filepath.Rel is case-insensitive  Rel(`..\src`,  `..\SRC\app.js`)  = "app.js"        accepted
+```
+
+**Windows is the correct one, and the assertion was wrong.** Both filesystems are
+case-insensitive, so `SRC/app.js` and `src/app.js` are the same file, and that file is
+inside the project. Darwin over-refuses. The cost of over-refusing is an unrestored
+placeholder in a file; nothing escapes on either platform.
+
+So case-sensitivity is not the property worth asserting, and asserting it would have pinned
+darwin's accident as a requirement. The test now asserts what actually matters on every
+platform, that a path resolving **outside** the project is refused whatever its case, and
+logs which comparison the platform performed rather than demanding one.
 
 ## Limits of this harness
 

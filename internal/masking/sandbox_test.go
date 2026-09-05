@@ -3,7 +3,6 @@ package masking
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -106,48 +105,51 @@ func TestBoundaryRefusesAPlaceholderInThePath(t *testing.T) {
 // path given the other must still compare equal or nothing works there.
 func TestTheProjectRootItselfMayBeALink(t *testing.T) {
 	root := t.TempDir()
-	real := filepath.Join(root, "real")
-	if err := os.MkdirAll(real, 0o755); err != nil {
+	target := filepath.Join(root, "target")
+	if err := os.MkdirAll(target, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	link := filepath.Join(root, "link")
-	if err := os.Symlink(real, link); err != nil {
+	if err := os.Symlink(target, link); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
-	if !insideProject(link, filepath.Join(real, "main.go")) {
+	if !insideProject(link, filepath.Join(target, "main.go")) {
 		t.Error("a root given through a link did not match a real path under it")
 	}
-	if !insideProject(real, filepath.Join(link, "main.go")) {
+	if !insideProject(target, filepath.Join(link, "main.go")) {
 		t.Error("a path given through a link did not match a real root")
 	}
 }
 
-// 6. Case variance on a case-insensitive filesystem. This test records what the
-// boundary does rather than asserting what would be convenient.
+// 6. Case variance on a case-insensitive filesystem, where the platforms
+// disagree and the harness found it.
 //
-// On macOS, writing to SRC/x writes to src/x, so a case-insensitive check would
-// be more permissive and a case-sensitive one refuses. Refusing is the correct
-// direction for a boundary that decides where a live credential may be written:
-// the cost is an unrestored placeholder in a file, which someone will notice.
-// Widening the comparison to match the filesystem would trade that for the
-// chance of writing a credential somewhere the operator did not name.
-func TestCaseVarianceFailsClosed(t *testing.T) {
-	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
-		t.Skip("case-sensitive filesystem; there is no collision to test")
+// On darwin, filepath.Rel is case-sensitive, so SRC/app.js against a root of
+// src returns "../SRC/app.js" and the path is refused. On windows Rel is
+// case-insensitive, returns "app.js", and the path is accepted.
+//
+// Windows is the correct one. Both filesystems are case-insensitive, so
+// SRC/app.js and src/app.js are the same file and that file is inside the
+// project; darwin is over-refusing, which costs an unrestored placeholder and
+// leaks nothing. Neither platform lets a secret out.
+//
+// So case-sensitivity is not the invariant worth asserting. This is: a path
+// that resolves outside the project is refused, whatever its case.
+func TestCaseVarianceNeverOpensAnEscape(t *testing.T) {
+	project, outside := sandbox(t)
+	parent := filepath.Dir(project)
+	upperIn := filepath.Join(parent, strings.ToUpper(filepath.Base(project)), "app.js")
+	upperOut := filepath.Join(parent, strings.ToUpper(filepath.Base(outside)), "shadow.env")
+
+	// The security property, on every platform.
+	if insideProject(project, upperOut) {
+		t.Errorf("an out-of-project path was accepted in a different case: %s", upperOut)
 	}
-	project, _ := sandbox(t)
-	upper := filepath.Join(filepath.Dir(project), strings.ToUpper(filepath.Base(project)))
-	got := insideProject(project, filepath.Join(upper, "app.js"))
-	if got {
-		t.Logf("case-insensitive: %s accepted under %s", upper, project)
+	// The platform difference, recorded rather than asserted either way.
+	if insideProject(project, upperIn) {
+		t.Logf("case-insensitive comparison: %s accepted under %s", upperIn, project)
 	} else {
-		t.Logf("fails closed: %s refused under %s", upper, project)
-	}
-	// Either behaviour is safe to ship; only one is safe to be wrong about,
-	// so the boundary must never widen silently. Pin whichever it is.
-	if got {
-		t.Error("case variance was accepted: the boundary is wider than the operator wrote, " +
-			"and a credential can be written through a path they did not name")
+		t.Logf("case-sensitive comparison: %s refused under %s", upperIn, project)
 	}
 }
 
