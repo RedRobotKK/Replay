@@ -214,6 +214,7 @@ replay ~/.claude/projects/<your-project>/
 | `replay diff <dir>` | Locate and classify every cache break |
 | `replay corpus <dir...>` | Calibration summary across sessions, as Markdown. No paths, no content |
 | `replay advise <dir...>` | Turn the largest token sources into suggestions with predicted savings |
+| `replay advise --apply <dir...>` | Propose the one setting evidence can decide, show the diff, and refuse when the evidence does not support a single answer. `--yes` writes it, `--json` emits it for an agent |
 | `replay learn <dir...>` | Re-score the policy catalog, select one with held-out checks |
 | `replay doctor` | What Replay can see on this machine, and what to do next |
 | `replay redact <file>` | Strip content, keep structure and usage, for bug reports |
