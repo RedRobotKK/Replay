@@ -147,6 +147,16 @@ func markControl(stores map[string]*ledger.Store, dir string, session *transcrip
 
 // writePolicyFile renders the result as indented JSON, owner-only.
 func writePolicyFile(path string, res learn.Result) error {
+	// Refuse to truncate a file this tool did not write. -out takes an
+	// arbitrary path, and a mistyped one used to destroy its target at exit 0
+	// with no backup and no warning. A file that already parses as a policy
+	// file is ours to replace; anything else is somebody's data.
+	if existing, err := os.ReadFile(path); err == nil {
+		var prev learn.Result
+		if json.Unmarshal(existing, &prev) != nil || prev.Schema != learn.PolicyFileSchema {
+			return fmt.Errorf("%s exists and is not a policy file, so it will not be overwritten", path)
+		}
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create policy directory: %w", err)
 	}

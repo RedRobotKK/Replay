@@ -284,7 +284,12 @@ else
    Nothing was installed. Re-run with --no-verify to accept an unverified binary."
     fi
 
-    tar -xzf "$tmp/$archive" -C "$tmp" || die "Could not unpack ${archive}."
+    # Extract only the binary, and only if the archive's entry for it is a
+    # regular file. A member that is a symlink named `replay` would otherwise be
+    # followed by the `-f` test below and installed as a 0755 executable holding
+    # whatever it pointed at on this machine.
+    tar -xzf "$tmp/$archive" -C "$tmp" "$BIN" || die "Could not unpack ${BIN} from ${archive}."
+    [ ! -L "$tmp/$BIN" ] || die "${archive} contains a symlink where ${BIN} should be. Nothing was installed."
     [ -f "$tmp/$BIN" ] || die "The archive did not contain a ${BIN} binary."
     mkdir -p "$BIN_DIR"
     install -m 0755 "$tmp/$BIN" "$BIN_DIR/$BIN" 2>/dev/null \
