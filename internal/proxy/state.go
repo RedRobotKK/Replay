@@ -129,9 +129,19 @@ type stats struct {
 	// current UTC day, which dayStamp names. Sourced here rather than from
 	// SpendGuard because the guard only records when a cap is configured, and
 	// the question "what did today cost" is not conditional on having set one.
-	costUSD    float64
-	dayCostUSD float64
-	dayStamp   string
+	// Lifetime token counters. These were once summed over the live session
+	// map, which evicts past maxSessions, so they under-reported by whatever
+	// had been evicted and could fall between scrapes. A Prometheus counter
+	// that decreases is read as a reset, and every rate() over it is then
+	// wrong. Accumulated here instead, once per request, so they only ever
+	// climb.
+	promptTokens int
+	cacheReads   int
+	cacheWrites  int
+	breaksTotal  int
+	costUSD      float64
+	dayCostUSD   float64
+	dayStamp     string
 	// unpriced counts requests whose model the rules could not price. They
 	// contribute nothing to the totals, so without this the totals would read
 	// as complete when they are not.
@@ -202,6 +212,7 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 			out.Deficit = expected - cur.CacheRead
 			out.Cause = s.breakCause(st, rec, prefixChanged)
 			st.breaks++
+			s.breaksTotal++
 			s.breakCauses[out.Cause]++
 		}
 	}
@@ -209,6 +220,9 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 	before := st.tally.CostUSD
 	st.tally.Add(cur, rec.Model)
 	s.addCost(st.tally.CostUSD - before)
+	s.promptTokens += cur.PromptTotal()
+	s.cacheReads += cur.CacheRead
+	s.cacheWrites += cur.CacheCreation
 	if rec.Policy != "" {
 		st.applied++
 		s.policyApplied++
@@ -547,14 +561,11 @@ func (s *stats) status() Status {
 func (s *stats) metrics() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var total analysis.Tally
-	breaks := 0
-	for _, st := range s.sessions {
-		total.PromptTokens += st.tally.PromptTokens
-		total.Reads += st.tally.Reads
-		total.Writes += st.tally.Writes
-		breaks += st.breaks
-	}
+	// Lifetime totals, not a walk of the live session map: that map evicts,
+	// and a counter must never fall. CachedShare is still a ratio of the two
+	// lifetime figures.
+	total := analysis.Tally{PromptTokens: s.promptTokens, Reads: s.cacheReads, Writes: s.cacheWrites}
+	breaks := s.breaksTotal
 	var b []byte
 	line := func(format string, args ...any) { b = fmt.Appendf(b, format+"\n", args...) }
 	line("# HELP replay_requests_total Requests handled, by outcome class.")
