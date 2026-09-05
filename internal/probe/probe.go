@@ -99,7 +99,7 @@ func New(cfg Config) *Search {
 // them: the interval is within the resolution, the probe budget is spent, or
 // the answers have contradicted each other.
 func (s *Search) Next() int {
-	if s.contradicted || s.nonDeterministic {
+	if s.contradicted || s.nonDeterministic || !s.usableRange() {
 		return 0
 	}
 	if s.cfg.MaxProbes > 0 && s.probes >= s.cfg.MaxProbes {
@@ -129,12 +129,12 @@ func (s *Search) Next() int {
 			mid += dither
 		}
 	}
-	if mid <= s.lo {
-		mid = s.lo + 1
-	}
-	if mid >= s.hi {
-		mid = s.hi - 1
-	}
+	// No clamp here. The stop condition above already returned unless hi-lo
+	// exceeds stopWidth, which is at least one, so the midpoint of an interval
+	// at least two wide is strictly interior — and the dither only applies
+	// when it stays inside. Clamps guarding that could never execute: dead
+	// code shaped like a safety check, which is the thing ADR-0014 is about.
+	// TestB19 asserts the invariant across the sweep space instead.
 	s.pending = mid
 	return mid
 }
@@ -233,8 +233,56 @@ func (s *Search) StoppedEarly() bool { return s.stoppedEarly }
 // the run — and it is more interesting than the number would have been.
 func (s *Search) Contradicted() bool { return s.contradicted }
 
-// Probes is how many billable requests the search has consumed.
+// Probes is how many billable requests have decided something. An
+// inconclusive probe is not counted: it cost money and taught nothing, and
+// counting it would make the budget look spent on progress that did not happen.
 func (s *Search) Probes() int { return s.probes }
+
+// usableRange reports whether the configured bounds can contain a floor.
+// An inverted, empty or negative range is refused rather than searched: a
+// bisection over it converges confidently on a number with nothing under it.
+func (s *Search) usableRange() bool {
+	return s.cfg.Min >= 0 && s.cfg.Max > s.cfg.Min
+}
+
+// AffordableDecisions is how many bisection steps the probe budget actually
+// buys, which is not MaxProbes.
+//
+// Every confirmation is a billable request, so Confirm multiplies against the
+// budget: nine probes at three confirmations each is three decisions. A caller
+// who does not know that authorises a budget which cannot reach the resolution
+// they asked for, and finds out from an invoice.
+func (s *Search) AffordableDecisions() int {
+	if s.cfg.MaxProbes <= 0 {
+		return 0
+	}
+	return s.cfg.MaxProbes / s.cfg.Confirm
+}
+
+// BudgetTooSmall reports a budget that cannot reach the requested resolution,
+// before any money is spent.
+//
+// Bisection needs about log2(range/resolution) decisions. If the budget affords
+// fewer, the search will stop early with a bracket wider than asked for — which
+// is fine, and worth knowing in advance rather than after paying for it.
+func (s *Search) BudgetTooSmall() bool {
+	if s.cfg.MaxProbes <= 0 || !s.usableRange() {
+		return false
+	}
+	span := s.cfg.Max - s.cfg.Min
+	target := s.cfg.Resolution
+	if s.cfg.RelativeResolution > 0 {
+		target = int(float64(s.cfg.Max) * s.cfg.RelativeResolution)
+	}
+	if target < 1 {
+		target = 1
+	}
+	needed := 0
+	for w := span; w > target; w /= 2 {
+		needed++
+	}
+	return s.AffordableDecisions() < needed
+}
 
 // Granularity is the block size cache writes appear to land on, inferred as
 // the greatest common divisor of the sizes actually cached.
@@ -263,9 +311,6 @@ func (s *Search) Granularity() int {
 func gcd(a, b int) int {
 	for b != 0 {
 		a, b = b, a%b
-	}
-	if a < 0 {
-		return -a
 	}
 	return a
 }

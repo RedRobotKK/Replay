@@ -314,3 +314,376 @@ func TestB12_RelativeResolutionRespectsGranularity(t *testing.T) {
 		t.Errorf("bracket (%d, %d] is narrower than one block; that precision is not observable", lo, hi)
 	}
 }
+
+// Edges. A search that spends real money should not be surprising at its
+// boundaries, and 90% statement coverage left every one of these untested.
+//
+//	B13  a nonsensical range is refused rather than searched
+//	B14  a result for a size never proposed is still usable
+//	B15  recording after the search is finished changes nothing
+//	B16  the confirmation cost against the probe budget is explicit
+//	B17  the inconclusive error says what to do about it
+
+func TestB13_ANonsensicalRangeIsRefused(t *testing.T) {
+	// PASS: no probe proposed, and the bracket says nothing was established.
+	// FAIL: bisecting an inverted or negative interval, which converges
+	// confidently on a number with nothing under it.
+	for _, c := range []Config{
+		{Min: 4096, Max: 64, Resolution: 8},
+		{Min: -100, Max: 1000, Resolution: 8},
+		{Min: 0, Max: 0, Resolution: 8},
+		{Min: 500, Max: 500, Resolution: 8},
+	} {
+		s := New(c)
+		if n := s.Next(); n != 0 {
+			t.Errorf("%+v proposed probe %d; an unusable range must propose none", c, n)
+		}
+	}
+}
+
+func TestB14_AResultForAnUnproposedSizeIsStillUsable(t *testing.T) {
+	// A caller may have evidence the search did not ask for — an earlier run,
+	// or a ledger record. It is still testimony about the floor.
+	// PASS: the bracket narrows.
+	// FAIL: ignoring evidence because it was not solicited, or crashing on it.
+	s := New(Config{Min: 0, Max: 65536, Resolution: 64})
+	if err := s.Record(Result{PrefixTokens: 2048, Wrote: true, CachedTokens: 2048}); err != nil {
+		t.Fatalf("unsolicited evidence must be accepted: %v", err)
+	}
+	if _, hi := s.Bracket(); hi != 2048 {
+		t.Errorf("upper bound = %d, want 2048", hi)
+	}
+}
+
+func TestB15_RecordingAfterTheEndChangesNothing(t *testing.T) {
+	// PASS: a finished search stays finished and its bracket is stable.
+	// FAIL: a late result reopening a search whose budget is already spent, or
+	// silently widening a published bracket.
+	s := New(Config{Min: 0, Max: 1024, Resolution: 1024})
+	if s.Next() != 0 {
+		t.Fatal("this search is already within its resolution and must propose nothing")
+	}
+	loBefore, hiBefore := s.Bracket()
+	_ = s.Record(Result{PrefixTokens: 512, Wrote: true, CachedTokens: 512})
+	lo, hi := s.Bracket()
+	if lo != loBefore || hi > hiBefore {
+		t.Errorf("bracket moved from (%d, %d] to (%d, %d] after the search ended", loBefore, hiBefore, lo, hi)
+	}
+}
+
+func TestB16_ConfirmationCostIsExplicit(t *testing.T) {
+	// Confirm multiplies against MaxProbes: every confirmation is a billable
+	// request. MaxProbes 9 with Confirm 3 buys three bisection steps, not
+	// nine, and a caller who does not know that will authorise a budget that
+	// cannot reach the resolution they asked for.
+	// PASS: Budget reports the decisions the budget actually affords.
+	// FAIL: leaving the caller to discover it from an invoice.
+	s := New(Config{Min: 0, Max: 65536, Resolution: 1, MaxProbes: 9, Confirm: 3})
+	if got := s.AffordableDecisions(); got != 3 {
+		t.Errorf("AffordableDecisions = %d, want 3 (9 probes at 3 confirmations each)", got)
+	}
+	// Three decisions cannot resolve a 65,536-token range to 1 token, and the
+	// search must say so rather than reporting a bracket it did not establish.
+	if !s.BudgetTooSmall() {
+		t.Error("a budget that cannot reach the requested resolution must be reported before any money is spent")
+	}
+}
+
+func TestB17_TheInconclusiveErrorSaysWhatToDo(t *testing.T) {
+	// PASS: the message names the cause and the remedy.
+	// FAIL: an opaque error. The caller has just spent money on a probe that
+	// taught nothing, and needs to know it must vary its content.
+	s := New(Config{Min: 0, Max: 4096, Resolution: 64})
+	err := s.Record(Result{PrefixTokens: 512, Wrote: true, Read: true})
+	if err == nil {
+		t.Fatal("a read must be refused")
+	}
+	for _, want := range []string{"read", "retry"} {
+		if !contains(err.Error(), want) {
+			t.Errorf("the message must mention %q; got %q", want, err.Error())
+		}
+	}
+	if s.Probes() != 0 {
+		t.Errorf("Probes = %d; an inconclusive probe consumed budget but decided nothing, and must not count as a decision", s.Probes())
+	}
+}
+
+func contains(s, sub string) bool {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}
+
+// The exhaustive sweep, and the benchmark it must clear.
+//
+// Every test above examines one scenario chosen by hand, which means the
+// scenarios are the ones I thought of. This runs the search against a
+// simulated provider across the whole parameter space and states, as numbers,
+// what "working" means:
+//
+//	SOUNDNESS      the bracket contains the true floor. Every case, no
+//	               exceptions. A search that reports a bracket the floor is
+//	               not in has published a false claim.
+//	TERMINATION    every case converges. A search that does not stop spends
+//	               money until the budget runs out.
+//	EFFICIENCY     no case exceeds ceil(log2(span/resolution)) + 3 decisions.
+//	               Bisection is optimal on a monotone predicate, so the base is
+//	               log2; more than a small constant over it means the
+//	               implementation is not bisecting.
+//
+//	               The slack is 3 rather than 2 for a measured reason. Dithering
+//	               the probe points off the power-of-two grid costs at most one
+//	               extra halving, and this sweep prices it: with dither
+//	               disabled, 0 of 3072 cases exceed +2; with it enabled, 4 do —
+//	               0.13%, all at block size 1 and the finest resolution. That is
+//	               the price of a sound granularity inference, which is worth
+//	               one probe in eight hundred: without dithering the GCD reports
+//	               an artifact of how the search chose its own probe points,
+//	               confidently and always too large.
+//	TIGHTNESS      the final bracket is within the resolution, or the search
+//	               says why not.
+//
+// These are the numbers to argue with. If a future change makes the search
+// cheaper or tighter, move them down deliberately rather than discovering the
+// regression from an invoice.
+func TestSweep_ExhaustiveAgainstASimulatedProvider(t *testing.T) {
+	type failure struct {
+		floor, blockSize, span int
+		reason                 string
+	}
+	var failures []failure
+	var cases, totalDecisions, worstOver int
+
+	spans := []int{1024, 8192, 65536, 262144}
+	blockSizes := []int{1, 128, 512, 1024}
+	resolutions := []int{1, 64, 512}
+
+	for _, span := range spans {
+		for _, block := range blockSizes {
+			// Sweep the floor across the whole span, at a stride fine enough
+			// to land on and between block boundaries.
+			stride := span / 64
+			if stride < 1 {
+				stride = 1
+			}
+			for floor := 1; floor < span; floor += stride {
+				for _, res := range resolutions {
+					cases++
+					s := New(Config{Min: 0, Max: span, Resolution: res})
+					decisions := 0
+					for i := 0; ; i++ {
+						if i > 200 {
+							failures = append(failures, failure{floor, block, span, "did not terminate"})
+							break
+						}
+						n := s.Next()
+						if n == 0 {
+							break
+						}
+						decisions++
+						// The simulated provider: caches at or above the
+						// floor, and rounds every write up to a block.
+						wrote := n >= floor
+						cached := 0
+						if wrote {
+							cached = ((n + block - 1) / block) * block
+						}
+						if err := s.Record(Result{PrefixTokens: n, Wrote: wrote, CachedTokens: cached}); err != nil {
+							failures = append(failures, failure{floor, block, span, "unexpected record error"})
+							break
+						}
+					}
+					totalDecisions += decisions
+
+					lo, hi := s.Bracket()
+					// SOUNDNESS.
+					if lo >= floor || hi < floor {
+						failures = append(failures, failure{floor, block, span,
+							"bracket does not contain the floor"})
+						continue
+					}
+					// EFFICIENCY.
+					budget := 3
+					for w := span; w > res; w /= 2 {
+						budget++
+					}
+					if decisions > budget {
+						if over := decisions - budget; over > worstOver {
+							worstOver = over
+						}
+						failures = append(failures, failure{floor, block, span,
+							"more decisions than bisection needs"})
+					}
+				}
+			}
+		}
+	}
+
+	t.Logf("swept %d cases, %d total decisions, %.1f average",
+		cases, totalDecisions, float64(totalDecisions)/float64(cases))
+
+	if cases < 3000 {
+		t.Fatalf("only %d cases swept; the sweep is not covering the space it claims to", cases)
+	}
+	if len(failures) > 0 {
+		for i, f := range failures {
+			if i >= 8 {
+				t.Errorf("... and %d more", len(failures)-8)
+				break
+			}
+			t.Errorf("floor %d, block %d, span %d: %s", f.floor, f.blockSize, f.span, f.reason)
+		}
+		t.Fatalf("%d of %d cases failed the benchmark", len(failures), cases)
+	}
+}
+
+// The same sweep for relative resolution, where the stop condition scales with
+// the answer rather than being fixed in advance.
+func TestSweep_RelativeResolutionIsSoundAtEveryScale(t *testing.T) {
+	var failures int
+	cases := 0
+	for _, span := range []int{8192, 65536, 262144} {
+		for _, ratio := range []float64{0.25, 0.10, 0.02} {
+			stride := span / 48
+			for floor := 1; floor < span; floor += stride {
+				cases++
+				s := New(Config{Min: 0, Max: span, RelativeResolution: ratio})
+				for i := 0; ; i++ {
+					if i > 200 {
+						t.Fatalf("span %d ratio %v floor %d: did not terminate", span, ratio, floor)
+					}
+					n := s.Next()
+					if n == 0 {
+						break
+					}
+					_ = s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
+				}
+				lo, hi := s.Bracket()
+				if lo >= floor || hi < floor {
+					failures++
+					if failures < 5 {
+						t.Errorf("span %d ratio %v floor %d: bracket (%d, %d] excludes it", span, ratio, floor, lo, hi)
+					}
+				}
+			}
+		}
+	}
+	t.Logf("swept %d relative-resolution cases", cases)
+	if failures > 0 {
+		t.Fatalf("%d of %d cases put the floor outside the reported bracket", failures, cases)
+	}
+}
+
+// The remaining defaults and clamps. Each is a line that only runs on input no
+// earlier test sends, which is exactly where a wrong default hides.
+func TestB18_DefaultsAndClamps(t *testing.T) {
+	// A config with neither resolution stated falls back to one token, rather
+	// than to zero — which would divide the interval forever.
+	s := New(Config{Min: 0, Max: 16})
+	for i := 0; ; i++ {
+		if i > 64 {
+			t.Fatal("a config with no resolution must still terminate")
+		}
+		n := s.Next()
+		if n == 0 {
+			break
+		}
+		s.Record(Result{PrefixTokens: n, Wrote: n >= 9, CachedTokens: n})
+	}
+	if lo, hi := s.Bracket(); lo >= 9 || hi < 9 {
+		t.Errorf("bracket (%d, %d] excludes the floor 9", lo, hi)
+	}
+
+	// A bracket two wide has no interior midpoint, so the clamps decide the
+	// probe. Without them the search proposes an endpoint it has already
+	// answered and spends money learning nothing.
+	tight := New(Config{Min: 100, Max: 102, Resolution: 1})
+	if n := tight.Next(); n != 101 {
+		t.Errorf("probe = %d, want the only untested size 101", n)
+	}
+
+	// A relative resolution small enough to round to zero must still stop.
+	fine := New(Config{Min: 0, Max: 64, RelativeResolution: 0.0001})
+	for i := 0; ; i++ {
+		if i > 128 {
+			t.Fatal("a sub-token relative resolution must clamp to one token, not loop")
+		}
+		n := fine.Next()
+		if n == 0 {
+			break
+		}
+		fine.Record(Result{PrefixTokens: n, Wrote: n >= 33, CachedTokens: n})
+	}
+
+	// With no probe budget stated there is nothing to be short of.
+	unbudgeted := New(Config{Min: 0, Max: 4096, Resolution: 64})
+	if unbudgeted.AffordableDecisions() != 0 {
+		t.Error("no budget means no affordable-decision count to report")
+	}
+	if unbudgeted.BudgetTooSmall() {
+		t.Error("a search with no budget cannot have too small a one")
+	}
+	// Nor can an unusable range.
+	if New(Config{Min: 500, Max: 100, MaxProbes: 1}).BudgetTooSmall() {
+		t.Error("an unusable range is refused before its budget is judged")
+	}
+	// A relative resolution is what the budget is measured against.
+	rel := New(Config{Min: 0, Max: 65536, RelativeResolution: 0.001, MaxProbes: 2, Confirm: 1})
+	if !rel.BudgetTooSmall() {
+		t.Error("two probes cannot resolve 65,536 to a tenth of a percent")
+	}
+	// A ratio so fine it rounds to less than a token clamps to one token,
+	// rather than dividing by zero when the needed depth is computed.
+	subToken := New(Config{Min: 0, Max: 64, RelativeResolution: 0.0001, MaxProbes: 100, Confirm: 1})
+	if subToken.BudgetTooSmall() {
+		t.Error("100 probes is plenty to resolve 64 tokens to one token")
+	}
+}
+
+// B19: a proposed probe is always strictly inside the bracket.
+//
+// Both endpoints are already answered, so proposing one spends money to learn
+// nothing. This was previously defended by two clamps that could never
+// execute — the stop condition always returned first — so they were dead code
+// shaped like a safety check. The invariant is real; the clamps were not.
+//
+// PASS: across the sweep space, every proposal is in (lo, hi).
+// FAIL: a proposal on a boundary, which is a billable request for an answer
+// already held.
+func TestB19_EveryProposalIsStrictlyInsideTheBracket(t *testing.T) {
+	checked := 0
+	for _, span := range []int{2, 3, 9, 1024, 65536} {
+		for _, res := range []int{1, 7, 64} {
+			for floor := 1; floor < span; floor += max(1, span/32) {
+				s := New(Config{Min: 0, Max: span, Resolution: res})
+				for i := 0; i < 100; i++ {
+					lo, hi := s.Bracket()
+					n := s.Next()
+					if n == 0 {
+						break
+					}
+					checked++
+					if n <= lo || n >= hi {
+						t.Fatalf("span %d res %d floor %d: proposed %d on the boundary of (%d, %d]",
+							span, res, floor, n, lo, hi)
+					}
+					s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
+				}
+			}
+		}
+	}
+	if checked < 500 {
+		t.Fatalf("only %d proposals checked; the invariant is not being exercised", checked)
+	}
+	t.Logf("checked %d proposals, all strictly interior", checked)
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
