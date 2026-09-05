@@ -105,6 +105,7 @@ func renderCost(s costSummary, unpriced int) string {
 	if unpriced > 0 {
 		fmt.Fprintf(&b, "\n%d further sessions were read but not priced, because their model is not in\nthe price table. They are excluded rather than counted as free.\n", unpriced)
 	}
+	b.WriteString(tipLine(s.AvoidableUSD))
 	return b.String()
 }
 
