@@ -335,6 +335,7 @@ Usage:
   replay diff   <transcript|dir>   locate and classify every cache break
   replay corpus <dir...>           calibration summary across many sessions, as Markdown (no paths or content)
   replay advise <dir...>           turn the largest token sources across sessions into suggestions with predicted savings, tracked to closure
+  replay advise <dir> --guards     spend caps from your own session spread, print-only
   replay learn  <dir...>           re-score the policy catalog over all sessions, select one with held-out checks, write ~/.replay/policy.json
   replay doctor                    what replay can see on this machine and what to do next
   replay rules [--update <src>]    show the provider rules in effect, or install a dated document

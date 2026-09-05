@@ -430,6 +430,14 @@ All off unless you set them (see `replay serve -h`):
 - `--loop-warn` and `--loop-block` count how many times in a row the agent has just made the same tool
   call with the same input, and add a warning header or refuse the request. A repeated command earlier
   in the session never counts; only the current run does. `x-replay-override` passes a block once.
+- `replay doctor` prints a **guards** block: how many requests were refused and by which guard,
+  what today has cost at list price, and a loud warning when a dollar cap is configured but some
+  traffic could not be priced, because then the cap is not being applied to that traffic and you
+  believe you have a limit you do not have.
+- `replay advise <dir> --guards` suggests caps from your own ledger using Tukey's upper fence,
+  `Q3 + 1.5*IQR`, over your session spend. It prints the quartiles and the session count it used,
+  refuses below ten sessions rather than dressing up a guess, and writes nothing: a spend cap the
+  tool set for you is a refusal you did not choose.
 - `--breaker-failures` opens a circuit after consecutive provider failures and answers locally with
   `Retry-After` until the cooldown passes, so the agent stops burning retries against a provider that
   is already saying no. It counts client requests, not attempts: one request that exhausts `--retries`

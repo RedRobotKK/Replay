@@ -65,6 +65,15 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 		p.Printf("proxy         %s=%s\n", envBaseURL, base)
 		if ok, detail := probeProxy(base); ok {
 			p.Printf("              replay is answering there (%s)\n", detail)
+			if st, ok := probeStatus(base); ok {
+				for i, l := range guardLines(st) {
+					if i == 0 {
+						p.Printf("guards        %s\n", l)
+						continue
+					}
+					p.Printf("              %s\n", l)
+				}
+			}
 		} else {
 			p.Printf("              nothing answered at %s%s (%s); the agent will fail until replay serve runs or the variable is unset\n", strings.TrimRight(base, "/"), proxy.HealthPath, detail)
 		}

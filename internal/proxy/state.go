@@ -100,6 +100,7 @@ const maxSessions = 256
 // only and is lost on restart; the ledger is the durable record.
 type stats struct {
 	mu            sync.Mutex
+	now           func() time.Time
 	started       time.Time
 	sessions      map[string]*sessionState
 	requests      map[string]int // by status class: 2xx, 4xx, 5xx, refused
@@ -118,10 +119,22 @@ type stats struct {
 	denied        map[string]int
 	held          int
 	heldMS        int64
+	// costUSD is list-price cost since start; dayCostUSD is the same for the
+	// current UTC day, which dayStamp names. Sourced here rather than from
+	// SpendGuard because the guard only records when a cap is configured, and
+	// the question "what did today cost" is not conditional on having set one.
+	costUSD    float64
+	dayCostUSD float64
+	dayStamp   string
+	// unpriced counts requests whose model the rules could not price. They
+	// contribute nothing to the totals, so without this the totals would read
+	// as complete when they are not.
+	unpriced int
 }
 
 func newStats() *stats {
 	return &stats{
+		now:           time.Now,
 		started:       time.Now(),
 		sessions:      map[string]*sessionState{},
 		requests:      map[string]int{},
@@ -177,7 +190,9 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 		}
 	}
 	st.last, st.lastSeen, st.model, st.prefixHash = cur, rec.Timestamp, rec.Model, rec.PrefixHash
+	before := st.tally.CostUSD
 	st.tally.Add(cur, rec.Model)
+	s.addCost(st.tally.CostUSD - before)
 	if rec.Policy != "" {
 		st.applied++
 		s.policyApplied++
@@ -451,6 +466,14 @@ type Status struct {
 	// SpendCapNotEnforced is true when a dollar cap is configured and at least
 	// one request could not be priced, so that traffic is not capped at all.
 	SpendCapNotEnforced bool `json:"spend_cap_not_enforced,omitempty"`
+	// Refusals counts requests answered locally, by guard. The total is in
+	// Requests["refused"]; this names which guard did it, which is the part a
+	// person needs to act on.
+	Refusals map[string]int `json:"refusals,omitempty"`
+	// CostUSD and DayCostUSD are list-price cost since start and for the
+	// current UTC day.
+	CostUSD    float64 `json:"cost_usd"`
+	DayCostUSD float64 `json:"day_cost_usd"`
 	// Trial reports the live trial of a learned policy, when one runs.
 	Trial TrialStatus `json:"trial"`
 }
@@ -471,6 +494,16 @@ func (s *stats) status() Status {
 		out.Requests[k] = v
 	}
 	out.Trial = TrialStatus{Breached: s.breaches, Reverted: s.revertReason}
+	if len(s.refusedByKind) > 0 {
+		out.Refusals = map[string]int{}
+		for k, v := range s.refusedByKind {
+			out.Refusals[k] = v
+		}
+	}
+	out.CostUSD = s.costUSD
+	if s.now().UTC().Format("2006-01-02") == s.dayStamp {
+		out.DayCostUSD = s.dayCostUSD
+	}
 	for id, st := range s.sessions {
 		switch st.policy {
 		case policy.Control:
@@ -529,6 +562,19 @@ func (s *stats) metrics() string {
 	for _, c := range causes {
 		line(`replay_cache_break_total{cause=%q} %d`, c, s.breakCauses[cachemodel.BreakCause(c)])
 	}
+	dayCost := s.dayCostUSD
+	if s.now().UTC().Format("2006-01-02") != s.dayStamp {
+		dayCost = 0
+	}
+	line("# HELP replay_cost_usd_total List-price cost of all traffic since start.")
+	line("# TYPE replay_cost_usd_total counter")
+	line("replay_cost_usd_total %.6f", s.costUSD)
+	line("# HELP replay_cost_usd_day List-price cost for the current UTC day.")
+	line("# TYPE replay_cost_usd_day gauge")
+	line("replay_cost_usd_day %.6f", dayCost)
+	line("# HELP replay_cost_unpriced_requests_total Requests whose model the rules could not price, so they are in no cost figure.")
+	line("# TYPE replay_cost_unpriced_requests_total counter")
+	line("replay_cost_unpriced_requests_total %d", s.unpriced)
 	line("# HELP replay_upstream_errors_total Provider responses with an error status.")
 	line("# TYPE replay_upstream_errors_total counter")
 	codes := make([]int, 0, len(s.upstreamErrs))
@@ -599,4 +645,36 @@ func sortedKeys(m map[string]int) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// addCost folds one request's list-price cost into the running and UTC-day
+// totals. Callers hold the lock.
+//
+// A zero delta means the rules could not price the model. That is counted
+// rather than added, because a total that silently omits unpriced traffic
+// reads as complete and is not.
+func (s *stats) addCost(delta float64) {
+	if delta <= 0 {
+		s.unpriced++
+		return
+	}
+	stamp := s.now().UTC().Format("2006-01-02")
+	if stamp != s.dayStamp {
+		s.dayStamp, s.dayCostUSD = stamp, 0
+	}
+	s.costUSD += delta
+	s.dayCostUSD += delta
+}
+
+// costs returns list-price cost since start and for the current UTC day.
+//
+// The day figure is rolled on read as well as on write, so a proxy that has
+// been idle across midnight reports today's zero rather than yesterday's spend.
+func (s *stats) costs() (total, day float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.now().UTC().Format("2006-01-02") != s.dayStamp {
+		return s.costUSD, 0
+	}
+	return s.costUSD, s.dayCostUSD
 }

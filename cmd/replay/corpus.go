@@ -43,7 +43,7 @@ func (r corpusRow) matchRate() float64 {
 func runCorpus(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("corpus", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(hoistFlagsFor(fs, args)); err != nil {
 		return errUsage
 	}
 	if fs.NArg() == 0 {

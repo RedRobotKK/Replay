@@ -38,11 +38,17 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 	apply := fs.Bool("apply", false, "propose the one setting this can change for you, and show the diff")
 	yes := fs.Bool("yes", false, "with --apply, write the change instead of only describing it")
 	asJSON := fs.Bool("json", false, "with --apply, emit the plan as JSON for an agent to act on")
-	if err := fs.Parse(args); err != nil {
+	// Print-only on purpose, and so not accepted alongside --apply: a spend
+	// cap the tool wrote for you is a refusal you did not choose.
+	guards := fs.Bool("guards", false, "suggest spend caps from your own session spread (print-only, never written)")
+	if err := fs.Parse(hoistFlagsFor(fs, args)); err != nil {
 		return errUsage
 	}
 	if fs.NArg() == 0 {
 		return fmt.Errorf("one or more transcript or ledger directories are required: %w", errUsage)
+	}
+	if *guards && *apply {
+		return fmt.Errorf("--guards is print-only and cannot be combined with --apply: %w", errUsage)
 	}
 	files, err := transcriptFiles(fs.Args())
 	if err != nil {
@@ -50,6 +56,7 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 	}
 	var obs []advisor.Observation
 	var reports []*analysis.LaneReport
+	var sessionUSD, sessionTokens []float64
 	// The visitor never fails, so the walk cannot either.
 	_ = forEachSession(files, func(_ string, session *transcript.Session, rep *analysis.LaneReport, err error) error {
 		if err != nil {
@@ -60,9 +67,24 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 		}
 		if rep != nil {
 			reports = append(reports, rep)
+			// policies[0] is the session as it actually ran, which is the
+			// same as-run row the proxy scores live, so the cap suggested
+			// here is measured against what the user really spent.
+			if pols := rep.Policies(); len(pols) > 0 {
+				sessionUSD = append(sessionUSD, pols[0].CostUSD)
+				sessionTokens = append(sessionTokens, float64(pols[0].PromptTokens))
+			}
 		}
 		return nil
 	})
+
+	if *guards {
+		p := analysis.NewPrinter(stdout)
+		for _, l := range guardAdviceLines(sessionUSD, sessionTokens) {
+			p.Printf("%s\n", l)
+		}
+		return p.Err()
+	}
 	suggestions := advisor.Suggest(obs)
 
 	p := analysis.NewPrinter(stdout)

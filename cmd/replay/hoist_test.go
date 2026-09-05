@@ -78,3 +78,16 @@ func TestRouteDispatchStripsItsOwnName(t *testing.T) {
 		t.Fatalf("a missing path is a usage error, got %v", err)
 	}
 }
+
+// Every command that takes a path must accept a flag after it. The flag
+// package stops at the first non-flag argument, so without hoisting the flag
+// is silently read as another path and the command fails on a file nobody
+// named. This is the ergonomics half of the value-blind hoisting bug.
+func TestPathTakingCommandsAcceptATrailingFlag(t *testing.T) {
+	for _, f := range []string{"advise.go", "corpus.go", "learn.go", "context.go", "cost.go", "route.go"} {
+		src := string(mustRead(t, f))
+		if strings.Contains(src, "fs.Parse(args)") {
+			t.Errorf("%s takes a path and parses args directly, so `replay <cmd> <path> --flag` fails", f)
+		}
+	}
+}
