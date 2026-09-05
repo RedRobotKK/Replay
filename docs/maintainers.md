@@ -51,3 +51,7 @@ How this repository stays clean enough to be public. Maintainers own these rules
 - [ ] CI green on `main`
 - [ ] README status line still true
 - [ ] `CHANGELOG.md` **Unreleased** reflects merged work
+
+---
+
+[Documentation index](README.md) · [Repository README](../README.md)

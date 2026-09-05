@@ -46,7 +46,7 @@ came from.
 `mcp__<server>__<tool>`, so the server is already in the name, and the ledger already stores each
 name with its byte size. So the advice can become:
 
-```
+```text
   Standing cost of your setup, on every request:
     system prompt + instructions   4,180 tokens
     tool definitions (23 tools)    6,240 tokens
@@ -92,3 +92,7 @@ change over data already in the ledger, and it is the single highest-leverage th
 **And all of it rests on eleven sessions from one machine.** The mechanism is sound; the thresholds
 that would turn "9 tools never called" into "you should disable this" are not calibrated, which is
 why the output above states a fact and leaves the decision alone.
+
+---
+
+[Documentation index](README.md) · [Repository README](../README.md)

@@ -56,7 +56,7 @@ what the last decision cost. That is the gap.
 
 **1. One number, with a breakdown.** `replay` already prints a policy table. Add a line above it:
 
-```
+```text
 Session cost $12.40, of which $3.10 (25%) bought nothing:
   rework            $1.60   failed tools and repeated calls
   cache breaks      $0.90   3 breaks, largest at turn 32
@@ -99,3 +99,7 @@ All five waste categories are computed from **eleven sessions on one machine**. 
 sound; the thresholds that turn a measurement into advice are not calibrated. **Ship the breakdown
 before the advice.** Showing someone where their money went is defensible on eleven sessions.
 Telling them what to change is not.
+
+---
+
+[Documentation index](README.md) · [Repository README](../README.md)

@@ -39,7 +39,7 @@ whole lane. A total tells you what happened; **prediction needs the shape over t
 The data exists — the ledger is already per-request — but the aggregation throws the trajectory away.
 So:
 
-```
+```text
   today   session:  { error_share: 0.22, re_reads: 11, breaks: 3 }
   needed  session:  { turns: [ {t:1, err:0.00, rr:0}, {t:2, err:0.05, rr:0}, … ] }
 ```
@@ -69,7 +69,7 @@ thing you see**, which is the opposite of how telemetry usually works and is the
 Guards are configured today as absolute numbers on the command line, and they default to off because
 nobody has a number. Once a distribution exists the flag should accept a percentile:
 
-```
+```text
   --error-budget 0.3      absolute, what exists now, always available
   --error-budget p90      calibrated, refuses where the worst tenth of sessions sit
 ```
@@ -97,3 +97,7 @@ right for this one.**
 
 **Steps 1 and 2 are worth doing even if nobody ever submits a corpus.** That is the test for whether
 this is a product or a data-collection scheme, and it should stay the test.
+
+---
+
+[Architecture](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

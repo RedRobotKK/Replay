@@ -59,3 +59,7 @@ the resolution is a deliberate choice rather than a bug fix:
 **Findings 5 was fixed on 2026-09-04.** Verification is now fatal unless `--no-verify` is passed, the
 digest is bound to the archive filename, and the README no longer claims more than the script does.
 The rest are open and recorded here rather than quietly carried.
+
+---
+
+[Evidence](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

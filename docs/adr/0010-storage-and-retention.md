@@ -81,3 +81,7 @@ constraints, and this ADR does not bind it.**
 Retention is a decision about someone else's disk, and a default that deletes data is a default that
 will delete something someone wanted. **The window has to be stated in `doctor`, warned about before
 the first prune, and overridable to "never" for anyone who wants the old behaviour.**
+
+---
+
+[Decision records](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

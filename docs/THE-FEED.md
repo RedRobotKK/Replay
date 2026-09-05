@@ -8,7 +8,7 @@ incumbent first is what shows why.
 **LiteLLM's `model_prices_and_context_window.json`: 3,561 models, 27 of them Anthropic, free, no key,
 community-maintained, versioned in git.** One Anthropic row carries:
 
-```
+```text
 input_cost_per_token, output_cost_per_token,
 cache_creation_input_token_cost, cache_creation_input_token_cost_above_1hr,
 cache_read_input_token_cost, prompt_cache_min_tokens,
@@ -100,3 +100,7 @@ in `architecture/multi-provider.md`, fed by the corpus in ADR-0007 and ADR-0009.
 **Eleven sessions on one machine.** Every observation is honest and none is yet strong enough to call
 a vendor wrong. **Publish `unverified` freely and `contradicted` only with a corpus behind it**, or
 the feed becomes exactly the unchecked assertion it exists to correct.
+
+---
+
+[Documentation index](README.md) · [Repository README](../README.md)

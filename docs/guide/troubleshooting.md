@@ -85,3 +85,7 @@ Security problems do not go in a public issue. Read [`SECURITY.md`](../../SECURI
 
 Open an issue with the output of `replay doctor` and `replay version`. Those two answer most of the
 questions a maintainer would otherwise have to ask.
+
+---
+
+[Guide](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

@@ -1,6 +1,6 @@
 # Roadmap
 
-What ships in each release, the gate for each, and what is deliberately deferred. The requirements behind every line are in [`prd/replay-prd-v5.0.0.md`](requirements.md); the decisions are in [`adr/`](adr/).
+What ships in each release, the gate for each, and what is deliberately deferred. The requirements behind every line are in [`requirements.md`](requirements.md); the decisions are in [`adr/`](adr/README.md).
 
 The sequence is chosen so the first release costs nothing to run, works for every user regardless of how they authenticate, and produces the output that gets the project noticed. Items are **proposed** until the owner approves PRD v5.
 
@@ -10,7 +10,7 @@ The sequence is chosen so the first release costs nothing to run, works for ever
 |-------|----------|----------------|
 | 1 | Do Claude Code transcripts carry per-message usage with cache read and write counts? | Present on 20 real sessions across two client versions. **Status:** confirmed on 11 real sessions across two client versions (2.1.258, 2.1.259); 20 independent sessions still needed |
 | 2 | Does the replay engine reproduce as-run cache reads and writes? | At least 95 percent of turns across 20 sessions, mismatches explained. **Status:** 99.00% (398/402 turns) across 11 real sessions, every mismatch located and classified ([corpus](evidence/calibration-corpus-2026-09-03.md)); 20 independent sessions still needed |
-| 3 | Does Claude Code honor a base URL override under subscription authentication, within the provider's terms? | Documented answer with a source. **Status: passed.** The LLM gateway docs state that `ANTHROPIC_BASE_URL` without a gateway credential keeps the subscription login active and routes requests through the gateway; a local gateway is a documented configuration. See `architecture/proxy-protocol.md` |
+| 3 | Does Claude Code honor a base URL override under subscription authentication, within the provider's terms? | Documented answer with a source. **Status: passed.** The LLM gateway docs state that `ANTHROPIC_BASE_URL` without a gateway credential keeps the subscription login active and routes requests through the gateway; a local gateway is a documented configuration. See [`architecture/proxy-protocol.md`](architecture/proxy-protocol.md) |
 | 4 | Does adding the context-editing parameter from a proxy leave Claude Code's behavior intact? | A ten-turn session completes with the parameter present |
 | 5 | Does scoped rehydration hold under adversarial content? | Adversarial corpus never reaches a shell or network tool input |
 
@@ -26,7 +26,7 @@ Read Claude Code transcripts. Reproduce the provider's caching turn by turn, pri
 
 **Status:** implemented for the Anthropic Messages API and tested against a fake provider (byte-exact request and response, incremental flushing, gzip, error passthrough, origin and token checks, no credential in ledger or logs). Not yet exercised against the real provider or a real client session. OpenAI chat completions passthrough works as bytes but its responses are not summarized; retries and provider-error handling are v0.3 with the guards.
 
-**Gate:** spike 3 answered (done); passthrough hash test green (done); added latency p99 published (done: 98µs, see `reviews/proxy-latency-2026-09-03.md`); a real Claude Code session recorded through the proxy with calibration at the measured tier (pending, needs a person at a machine).
+**Gate:** spike 3 answered (done); passthrough hash test green (done); added latency p99 published (done: 98µs, see [`evidence/proxy-latency-2026-09-03.md`](evidence/proxy-latency-2026-09-03.md)); a real Claude Code session recorded through the proxy with calibration at the measured tier (pending, needs a person at a machine).
 
 ## v0.3: policies, dry-run, guards
 
@@ -42,7 +42,7 @@ Nightly local re-scoring, held-out validation, session types, bounded live trial
 
 **Status:** the learning job is implemented as `replay learn` (LN-1, LN-2, LN-4, LN-6 with the metric decision in ADR-0006): catalog re-scoring over all sessions, held-out validation, minimum evidence, margin above noise, paired ties to the simpler policy, intervals in the output, a documented policy file. The proxy reads the policy file at each session's first request and pins the decision on disk (PX-8, `serve --policy-file`). The advisor is implemented as `replay advise` (AD-1 to AD-3): suggestions from the largest token sources with predicted savings on the share of prompt tokens, tracked to closure across sessions. Live trials with automatic revert (LN-5) are implemented on the re-read guardrail: a stable share of new sessions is treated, the rest are controls, and enough breaches revert the policy for new sessions until a newer learning result. Session types (LN-3) are implemented in `learn` on model family and first-prompt size, with one selection per type in the policy file, and the proxy picks by type at a session's first request. Graduation from trial results (DR-2) is implemented in `learn` from the treated and control sessions the trial recorded. Staleness detection (ST-1) is implemented offline: calibration is judged per model with the newest sessions on their own, a model whose newest sessions stopped calibrating is reported as changed provider behavior and has no alternatives scored, and the minimum cacheable prefix is bounded from usage; the lookback window is not refit (ST-2).
 
-**Gate:** synthetic-corpus selection test passes (done); policy file format documented (done: `architecture/policy-file.md`).
+**Gate:** synthetic-corpus selection test passes (done); policy file format documented (done: [`architecture/policy-file.md`](architecture/policy-file.md)).
 
 ## v0.5: secret masking
 
@@ -63,3 +63,7 @@ Vector store, agent-to-agent messaging, virtual filesystem, Rust sidecar, web da
 ## Not goals
 
 Translating between provider API shapes. Replacing server-side compaction or context editing. Any server component. Cursor agent mode.
+
+---
+
+[Documentation index](README.md) · [Repository README](../README.md)

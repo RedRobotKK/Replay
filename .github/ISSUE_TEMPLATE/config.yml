@@ -6,3 +6,6 @@ contact_links:
   - name: Question or discussion
     url: https://github.com/RedRobotKK/Replay/discussions
     about: Ask questions and propose ideas in Discussions.
+  - name: Documentation
+    url: https://github.com/RedRobotKK/Replay/blob/main/docs/README.md
+    about: Guides, troubleshooting, the roadmap, and the evidence behind the claims.

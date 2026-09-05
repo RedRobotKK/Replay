@@ -24,3 +24,7 @@ The fake provider itself dominates both columns; a real provider round trip is h
 - Real provider latency and TLS handshake cost (the upstream connection pool keeps connections warm; the first request pays one handshake).
 - Very large responses near the 16MB buffering cap for non-streaming bodies.
 - Macs and Windows, which run the same code path but were not measured.
+
+---
+
+[Evidence](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

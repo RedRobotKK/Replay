@@ -84,3 +84,7 @@ that ruled out SQLite in ADR-0010 rules this out harder, because the payoff is s
 compute a distance and far too few for it to mean anything, which is the most dangerous amount of
 data to have. **Build the feature vector, use it locally once a user has a few hundred sessions of
 their own, and do not put a similarity claim in front of anyone before then.**
+
+---
+
+[Architecture](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

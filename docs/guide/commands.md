@@ -161,3 +161,7 @@ While `serve` is running:
 - `GET /replay/metrics` exposes aggregate totals as Prometheus text. It has no per-session rows.
 
 Both honour the token when one is set, and both refuse browser origins.
+
+---
+
+[Guide](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

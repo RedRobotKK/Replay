@@ -4,13 +4,46 @@ labels: ["type: bug", "status: triage"]
 body:
   - type: markdown
     attributes:
-      value: Thanks for the report. Precise steps and versions make bugs fixable fast.
+      value: |
+        Thanks for the report. Two things make a bug fixable quickly: the exact steps, and the output
+        of `replay doctor`, which answers most of what a maintainer would otherwise have to ask.
+
+        Attaching a transcript? Run `replay redact session.jsonl > redacted.jsonl` first.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start replay with ...
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: Paste the output, log lines, or error. Redact API keys and any secret before pasting.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+      description: Skip this if it is obvious from the above.
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `replay doctor`
+      description: Optional, and the single most useful thing you can include. It names paths but no content.
+      render: shell
   - type: input
     id: version
     attributes:
       label: Replay version
-      description: Output of `replay version`
-      placeholder: "0.1.0 (abc1234, built 2026-09-02T00:00:00Z)"
+      description: Output of `replay version`. No release is tagged yet, so a source build reporting `dev` is expected.
+      placeholder: "dev (abc1234, built 2026-09-02T00:00:00Z)"
     validations:
       required: true
   - type: input
@@ -24,29 +57,23 @@ body:
     id: client
     attributes:
       label: Agent or client in front of Replay
+      description: Leave blank if the bug is in an offline command and no agent was involved.
       placeholder: "Claude Code 2.1.x / Aider 0.9x / custom"
-  - type: textarea
-    id: steps
+  - type: dropdown
+    id: area
     attributes:
-      label: Steps to reproduce
-      placeholder: |
-        1. Start replay with ...
-        2. Run ...
-        3. Observe ...
-    validations:
-      required: true
-  - type: textarea
-    id: expected
-    attributes:
-      label: Expected behavior
-    validations:
-      required: true
-  - type: textarea
-    id: actual
-    attributes:
-      label: Actual behavior, logs, and errors
-      description: Redact API keys and any secret before pasting.
-      render: shell
+      label: Area
+      description: A best guess is fine. It only steers triage.
+      options:
+        - not sure
+        - proxy and transport (serve)
+        - caching diagnostics (replay, blame, diff)
+        - secret masking
+        - spend and failure guards
+        - learning and advice (learn, advise)
+        - installer and releases
+        - docs
+        - other
   - type: checkboxes
     id: secrets
     attributes:

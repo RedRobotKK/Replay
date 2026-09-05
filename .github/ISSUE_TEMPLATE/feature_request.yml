@@ -2,6 +2,13 @@ name: Feature request
 description: Propose a capability or a change in behavior
 labels: ["type: feature", "status: triage"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Worth a look first: the [roadmap](https://github.com/RedRobotKK/Replay/blob/main/docs/ROADMAP.md)
+        lists what is planned, what is deliberately deferred until someone asks, and what is not a
+        goal. If your idea is on the deferred list, say so here, because "someone asked" is exactly
+        what moves it.
   - type: textarea
     id: problem
     attributes:
@@ -16,19 +23,23 @@ body:
       description: What should happen instead? Sketch the user-facing behavior, not the implementation.
     validations:
       required: true
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: Alternatives considered
   - type: dropdown
     id: area
     attributes:
       label: Area
+      description: A best guess is fine. It only steers triage.
       options:
-        - proxy / transport
-        - caching diagnostics
+        - not sure
+        - proxy and transport (serve)
+        - caching diagnostics (replay, blame, diff)
         - secret masking
-        - spend controls
-        - observability / dashboard
+        - spend and failure guards
+        - learning and advice (learn, advise)
+        - installer and releases
         - docs
         - other
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Including doing nothing, or doing it outside Replay.

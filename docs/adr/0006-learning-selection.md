@@ -38,3 +38,7 @@ The result is a versioned JSON policy file, `~/.replay/policy.json`, that lists 
 **Random or chronological held-out split.** Rejected: a random split changes the answer between runs, and a chronological one confounds the split with drift in the developer's work.
 
 **Unpaired comparison for ties.** Rejected: with session-level variance an order of magnitude above candidate differences, unpaired bands either always overlap or never do, depending on corpus size, not on the candidates.
+
+---
+
+[Decision records](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

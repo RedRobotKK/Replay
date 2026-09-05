@@ -100,3 +100,7 @@ Replay's job is therefore not to tell people they wasted money. **It is to expla
 have already noticed** — the long session that got vague and slow near the end — and attach a
 mechanism to it. **A tool that explains a symptom someone already has is a product. A tool that
 reports a cost they never noticed is a curiosity.**
+
+---
+
+[Documentation index](README.md) · [Repository README](../README.md)

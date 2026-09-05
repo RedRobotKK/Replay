@@ -2,15 +2,15 @@
 
 The execution-ready requirements for Replay, a local tool that shows developers where their coding agent's prompt cache broke, what it cost, what a different context layout would have saved, and then applies the better layout live. This version supersedes v4.0.0 and incorporates every constraint from the two adversarial reviews.
 
-| | |
+| Field | Value |
 |---|---|
 | **Version** | 5.0.0 |
 | **Status** | Current. Build status is recorded per requirement below |
 | **Date** | 2026-09-02 |
 | **Owner** | RedRobotKK (single maintainer) |
-| **Supersedes** | `replay-prd-v4.0.0.md` (kept as history, not edited) |
-| **Inputs** | `../reviews/PRD-v4-adversarial-review.md`, `../reviews/solution-red-blue-review-2026-09-02.md` |
-| **Decisions recorded** | ADR-0001 through ADR-0005 in `../adr/` |
+| **Supersedes** | `replay-prd-v4.0.0.md`, which is in the git history rather than the working tree, where a superseded document cannot be mistaken for a current one |
+| **Inputs** | Two adversarial reviews, `PRD-v4-adversarial-review.md` and `solution-red-blue-review-2026-09-02.md`, both in the git history. The surviving one in the working tree is [Design review, 2026-09-02](design-review-2026-09-02.md) |
+| **Decisions recorded** | ADR-0001 through ADR-0005 in [`adr/`](adr/README.md) |
 
 ---
 
@@ -370,7 +370,7 @@ No public claim is made until all five pass. Spike 3 runs first because its answ
 |-------|----------|----------------|
 | 1 | Do Claude Code transcripts carry per-message usage with cache read and write counts? | Present on 20 real sessions across two client versions. |
 | 2 | Does the replay engine reproduce as-run cache reads and writes? | At least 95 percent of turns across 20 sessions, mismatches explained. |
-| 3 | Does Claude Code honor a base URL override under subscription authentication, and is proxying that traffic within the provider's terms? | Documented answer with a source. **Passed:** the LLM gateway documentation describes exactly this configuration; see `../architecture/proxy-protocol.md`. |
+| 3 | Does Claude Code honor a base URL override under subscription authentication, and is proxying that traffic within the provider's terms? | Documented answer with a source. **Passed:** the LLM gateway documentation describes exactly this configuration; see [`architecture/proxy-protocol.md`](architecture/proxy-protocol.md). |
 | 4 | Does adding the context-editing parameter from a proxy leave Claude Code's behavior intact? | A ten-turn session completes with the parameter present. |
 | 5 | Does scoped rehydration hold under adversarial content? | Adversarial corpus never reaches a shell or network tool input. |
 
@@ -404,12 +404,12 @@ Masking ships last on purpose: it is the feature with the highest consequence of
 
 ## 15. Repository and community practices
 
-These are in force now and are described in `../HOUSEKEEPING.md` and `CONTRIBUTING.md`.
+These are in force now and are described in [`maintainers.md`](maintainers.md) and [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 - `main` is protected: pull requests only, CI green, one review, linear history. Conventional Commits; squash merge; small single-purpose changes.
 - CI runs vet, race tests, build on Linux, macOS, and Windows, golangci-lint, and markdownlint on every pull request.
 - Every design change lands with an ADR. Every user-visible change lands with a changelog entry.
-- Historical documents under `docs/internal/prd/` and `docs/internal/reviews/` are never edited; a new version is added instead.
+- Historical documents are never edited; a new version is added instead, and superseded drafts live in the git history rather than the working tree.
 - Issue and pull request templates, a canonical label set, weekly stale automation, Dependabot, CODEOWNERS.
 - Security reports go through private advisories, never public issues.
 - The README states status truthfully and names the maintainer.
@@ -430,7 +430,6 @@ Apache License 2.0, decided by the owner on 2026-09-02 and recorded in ADR-0005.
 | Provider absorbs the diagnostic natively | Medium | Medium | Cross-client, local what-if and advisor remain; the goal is a tool that is worth using |
 | Single maintainer availability | High | High | Small releases; every step leaves a usable tool; documentation good enough for a second contributor |
 | Masking false negatives create false confidence | Medium | High | Named pattern set, per-session masked report, never claim completeness |
-
 
 ## 19. Open questions
 
@@ -465,3 +464,7 @@ Verified on the review date against current provider documentation. Rules are ve
 - Editing an earlier turn invalidates every later thinking block on the newest models; organizations created on or after 2026-08-31 receive a 400. Server-side compaction and context editing are excluded from that check. Adding, moving, or removing cache markers is also excluded.
 - Thinking blocks must be passed back unchanged.
 - Token counts come from the provider's counting endpoint or from reported usage, never from byte-length heuristics presented as exact.
+
+---
+
+[Documentation index](README.md) · [Repository README](../README.md)

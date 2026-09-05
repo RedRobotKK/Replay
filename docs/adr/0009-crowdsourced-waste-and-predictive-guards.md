@@ -95,3 +95,7 @@ happens next" needs enough sessions that survivorship bias is visible rather tha
 **People who submit a corpus are people whose sessions worked well enough to finish.** That skew is
 inherent, it is not fixable by more data, and any predictive claim has to be stated in front of it
 rather than behind it.
+
+---
+
+[Decision records](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

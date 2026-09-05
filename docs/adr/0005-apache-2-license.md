@@ -23,3 +23,7 @@ The project is licensed under the Apache License, Version 2.0, from this commit 
 **BSL 1.1 as drafted.** Rejected for the reasons above.
 
 **MIT.** Acceptable, but Apache 2.0's explicit patent grant is worth the slightly longer text for a tool that sits in front of API traffic and may attract corporate adopters.
+
+---
+
+[Decision records](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

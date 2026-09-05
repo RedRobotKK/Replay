@@ -76,3 +76,7 @@ where the marginal cost of a token is zero.
 have cost about Y.** That is useful for a team on API billing and close to meaningless for a
 subscriber. **The token cap is the honest primitive; the dollar cap is a convenience built on a
 number nobody publishes in a form a program can read.**
+
+---
+
+[Documentation index](README.md) · [Repository README](../README.md)

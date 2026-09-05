@@ -131,3 +131,7 @@ The value of k. Whether `--show-aggregate` is worth building before there is an 
 And whether the endpoint should exist at all at v0.1, or whether submission should be a pull request
 against `docs/evidence/` for the first cohort, which is slower, harder to game, and requires no
 server to run or defend.
+
+---
+
+[Decision records](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

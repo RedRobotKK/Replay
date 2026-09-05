@@ -71,3 +71,7 @@ Of the rules, one can be bounded from usage alone: the minimum cacheable prefix 
 ## Updating the rules
 
 The rules live in `internal/cachemodel/anthropic.go` as named constants and one model table, with `RulesVersion` and `PriceTableVersion` printed on every report. To update them: change the constant or table row, move the version date, cite the provider document the value comes from in the commit message, and run `replay corpus` on a recent corpus to show calibration back above the threshold. A rules change is a user-visible change and gets a changelog entry.
+
+---
+
+[Architecture](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

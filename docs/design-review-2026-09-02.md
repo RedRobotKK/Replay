@@ -125,3 +125,7 @@ Each spike is a day or less and settles a question the design depends on.
 4. Specify scoped rehydration with a default deny for shell and network tool inputs, and a rehydration log.
 5. Add the five spikes to the roadmap as the gate for v0.1, with spike 3 first because it changes the plan most.
 6. Record the above as ADR-0002 (replay engine and truth tiers), ADR-0003 (policy application constraints), and ADR-0004 (masking and rehydration scope).
+
+---
+
+[Documentation index](README.md) · [Repository README](../README.md)

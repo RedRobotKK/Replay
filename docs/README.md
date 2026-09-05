@@ -1,31 +1,46 @@
 # Documentation
 
-Four kinds of document live here, and which one you want depends on why you came.
+Five kinds of document live here, and which one you want depends on why you came. Every page links
+back to this index.
 
 ## If you are using Replay
 
-| | |
+| Document | What is in it |
 |---|---|
 | [Getting started](guide/getting-started.md) | The first ten minutes. Install, see what Replay can find, read a session you have already paid for |
-| [Commands](guide/commands.md) | Every subcommand, and the flags on `serve` |
+| [Commands](guide/commands.md) | Every subcommand, and every flag on `serve` |
 | [Troubleshooting](guide/troubleshooting.md) | What goes wrong, what it means, and what to do |
 
 ## If you are deciding whether to trust it
 
-| | |
+| Document | What is in it |
 |---|---|
-| [Evidence](evidence/) | The measurements behind the claims in the README. Calibration across real sessions, and the latency the proxy adds |
-| [Architecture](architecture/) | How the replay engine and the proxy work, including the wire protocol |
-| [Decisions](adr/) | Why the design is the way it is. One record per decision, never edited after acceptance |
+| [Evidence](evidence/README.md) | The measurements behind the claims in the README: calibration across real sessions, the latency the proxy adds, and an adversarial security review |
+| [Architecture](architecture/README.md) | How the replay engine and the proxy work, including the wire protocol |
+| [Decisions](adr/README.md) | Why the design is the way it is. One record per decision, never edited after acceptance |
+| [Surfaces](SURFACES.md) | Every file, socket and process Replay touches, each row marked verified, read, or unknown |
 
 ## If you are contributing
 
-| | |
+| Document | What is in it |
 |---|---|
 | [Contributing](../CONTRIBUTING.md) | The whole process, start to finish |
 | [Requirements](requirements.md) | What Replay is meant to do, with the build status of each requirement |
-| [Roadmap](ROADMAP.md) | What ships in each release, and what is deliberately deferred |
+| [Roadmap](ROADMAP.md) | What ships in each release, its gate, and what is deliberately deferred |
 | [Maintainers](maintainers.md) | How the repository is run: branches, reviews, releases, labels |
+
+## If you want to know where this is going
+
+Dated arguments, not commitments. Each one was written to settle a specific question, and the roadmap
+is the only place that says what will actually ship.
+
+| Document | The question it settles |
+|---|---|
+| [Product direction](PRODUCT-DIRECTION.md) | The eight diagnostics already implemented are one waste taxonomy reported as eight unrelated numbers |
+| [What counts as waste](WASTE-DEFINITION.md) | A definition Replay can actually compute, and the two of five categories that survive it |
+| [What you actually get](WHAT-YOU-GET.md) | What pointing Replay at your sessions gives you today, and what it cannot recommend without reading your config |
+| [Token prices](TOKEN-PRICES.md) | Whether a first-party machine-readable price source exists. It does not, which is why the table is hand-maintained and dated |
+| [The feed worth publishing](THE-FEED.md) | Why the useful feed is verification of documented cache behaviour, not prices |
 
 ## If you are curious how it got here
 
@@ -35,3 +50,7 @@ system today. For that, read the architecture.
 
 Earlier drafts are not in the working tree. They are in the git history, where a superseded document
 cannot be mistaken for a current one.
+
+---
+
+[Repository README](../README.md)

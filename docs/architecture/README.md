@@ -1,6 +1,19 @@
 # Architecture
 
-System design as it exists today. Decisions that led here are in [`../adr/`](../adr/).
+System design as it exists today. Decisions that led here are in [`../adr/`](../adr/README.md).
+
+| Document | What it covers |
+|---|---|
+| [Replay engine](replay-engine.md) | How caching is reproduced from a transcript, when alternatives may be scored, and how estimated stays apart from measured |
+| [Proxy protocol](proxy-protocol.md) | What the client sends through a local gateway and what `serve` must preserve, with the source for each fact |
+| [Policy file](policy-file.md) | The format `replay learn` writes and the proxy reads |
+| [Multi-provider caching](multi-provider.md) | How caching differs across providers, and what that forces in the engine |
+| [Predictive design](predictive-design.md) | What the ADR-0009 constraints remove and narrow in the schema |
+| [Rewriting prompts](rewriting-prompts.md) | Where rewriting what the client sends is safe, and where it dismantles the tool |
+| [Vectorising session data](vectorising.md) | Three questions inside "vectorise", measured before deciding |
+
+The last four are dated working notes rather than descriptions of shipped behaviour. The first three
+describe code that exists.
 
 ## Current state
 
@@ -26,3 +39,7 @@ The offline analysis (`replay`, `blame`, `diff`, `redact`) is implemented; see [
 ```
 
 Invariants every component must hold are listed in the repository `AGENTS.md` under "Non-negotiables".
+
+---
+
+[Documentation index](../README.md) · [Repository README](../../README.md)

@@ -22,3 +22,7 @@ Every figure Replay prints carries a truth tier. *Estimated* means derived from 
 **Present one number.** Rejected: the first public debunking would end the project's credibility.
 
 **Require the proxy for any output.** Rejected: transcripts-only replay works for every user, costs nothing, and is the zero-trust first contact the adoption plan depends on.
+
+---
+
+[Decision records](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

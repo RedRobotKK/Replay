@@ -42,3 +42,7 @@ Claude Code requests the one-hour TTL on a subscription within plan usage, and t
 ## Transcripts
 
 Claude Code writes one JSONL file per session under `~/.claude/projects/<project>/`. The entry format is documented as internal and subject to change between versions; the parser therefore counts every line it cannot interpret and never fails silently. The per-message usage fields the parser reads are observed on client 2.1.258 and are not documented as stable.
+
+---
+
+[Architecture](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

@@ -22,3 +22,7 @@ A policy is admissible only if it is one of three kinds: a request parameter the
 **Client-side rewriting with a deterministic render cache.** Rejected: deterministic within a session is not enough when the policy's own inputs (which files are "hot") evolve across turns.
 
 **Enable compaction from the proxy and rewrite responses to hide it.** Rejected: it requires Replay to hold provider state the client does not know about, which is exactly the fragility the transparency principle forbids.
+
+---
+
+[Decision records](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

@@ -18,10 +18,10 @@ of the document.
 | `~/.replay/ledger/.label-key` | write | HMAC key for path labels | Read |
 | `~/.replay/vault/`, `.vault-key` | write | Only with `--mask`. AES-256-GCM, key file alongside | **Verified**: a reviewer decrypted it in five lines of Python. The key file is the whole boundary |
 | `~/.replay/.pins`, `.revert` | write | Per-session policy decisions, persisted so a restart cannot change a session's mind | Read |
-| `~/.replay/policy.json` | **read and write** | `learn` writes it; **the proxy reads it at each new session's first request** (`server.go:763`), so anything that can write this file changes the parameters sent to the provider. Listed as write-only in the first version |
-| `~/.replay/advice.json` | write | `advise` output. **Contains raw tool names and file base names** taken from your transcripts |
-| `~/.replay/vault/vault.tmp` | write | Fixed-path temp file, rewritten per newly-seen secret. The §3b claim of "no predictable-path temp file" was true of `os.TempDir` and wrong as a conclusion |
-| `$GOMODCACHE`, `$GOCACHE` | write | **Only via the installer's `go install` fallback**, which is the only path available today. Hundreds of MB |
+| `~/.replay/policy.json` | **read and write** | `learn` writes it; **the proxy reads it at each new session's first request** (`server.go:763`), so anything that can write this file changes the parameters sent to the provider. Listed as write-only in the first version | Read |
+| `~/.replay/advice.json` | write | `advise` output. **Contains raw tool names and file base names** taken from your transcripts | Read |
+| `~/.replay/vault/vault.tmp` | write | Fixed-path temp file, rewritten per newly-seen secret. The §3b claim of "no predictable-path temp file" was true of `os.TempDir` and wrong as a conclusion | Read |
+| `$GOMODCACHE`, `$GOCACHE` | write | **Only via the installer's `go install` fallback**, which is the only path available today. Hundreds of MB | Read |
 | `${XDG_CONFIG_HOME:-~/.config}/replay/corpus-consent.toml` | write | Only from `install.sh --corpus-opt-in`. Sends nothing | **Verified** |
 | `/usr/local/bin/replay` or `~/.local/bin/replay` | write | The binary, at install | **Verified** end to end |
 
@@ -189,3 +189,7 @@ and 10+15 corpus in `testdata/`. Against the shapes a real developer machine pro
 
 **Concurrency at scale.** Tests are race-clean, and the highest concurrency ever exercised is a
 handful of parallel sub-agents. Behaviour under a large fleet sharing one proxy is untested.
+
+---
+
+[Documentation index](README.md) · [Repository README](../README.md)

@@ -27,3 +27,7 @@ The first release forwards requests byte-for-byte and adds only observation: usa
 **Start with masking, since it is the enterprise ask.** Rejected for ordering, not for merit: masking needs the deterministic rendering and history-binding test harness that the transparent proxy establishes first. It is v0.2.
 
 **Translate OpenAI-shaped requests to Anthropic-shaped ones so one endpoint serves every client.** Rejected: re-rendering the prompt destroys byte stability, which is the one property the whole product depends on.
+
+---
+
+[Decision records](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

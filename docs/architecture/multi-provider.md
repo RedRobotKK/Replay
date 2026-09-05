@@ -52,7 +52,7 @@ own shape and under its own field names. The engine should read one normalised s
 should also keep the provider's own object verbatim, because a field we did not know mattered is
 exactly what tomorrow's calibration needs.
 
-```
+```text
                     ┌─────────────────────────┐
    provider response│  raw usage, kept as-is  │
                     └────────────┬────────────┘
@@ -149,3 +149,7 @@ hardcodes a provider's numbers in compiled constants is wrong on a timescale of 
 proposed here treats every number as a dated claim with an observation attached, which is the only
 form that survives being out of date: it can be **contradicted by evidence** rather than silently
 believed.
+
+---
+
+[Architecture](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

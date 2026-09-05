@@ -131,3 +131,7 @@ worse for the tool but not dishonest.
 **Open.** The value of k. Whether contribution belongs in the CLI at all, or should stay a pull
 request against `docs/evidence/` where the review is a human reading a diff, which is slower and
 harder to game.
+
+---
+
+[Decision records](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

@@ -87,3 +87,7 @@ advice: **name the cause, price it, and leave the decision alone.**
 2. **Extend the advisor to prompt structure**, using cache-break causes already classified.
 3. **Do not put a model in the request path.** If prompt rewriting is genuinely wanted later, it
    belongs in a separate tool that is not also making a byte-for-byte promise.
+
+---
+
+[Architecture](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

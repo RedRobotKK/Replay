@@ -94,3 +94,7 @@ than discovered later.
 **The honest risk.** A user pipes their request bodies through a command of their choosing. If that
 command is careless, their prompts leave the machine and Replay cannot tell. The flag help has to say
 so in those words.
+
+---
+
+[Decision records](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)
