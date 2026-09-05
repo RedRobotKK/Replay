@@ -204,9 +204,9 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	}
 	if *perTask && len(units) > 0 {
 		sort.Slice(units, func(i, j int) bool { return units[i].CostUSD > units[j].CostUSD })
-		fmt.Fprintf(stdout, "\n  %-10s %-24s %8s %10s %10s %7s\n", "session", "model", "requests", "cost", "avoidable", "breaks")
+		_, _ = fmt.Fprintf(stdout, "\n  %-10s %-24s %8s %10s %10s %7s\n", "session", "model", "requests", "cost", "avoidable", "breaks")
 		for _, u := range units {
-			fmt.Fprintf(stdout, "  %-10s %-24s %8d %10s %10s %7d\n", u.ID, u.Model, u.Requests,
+			_, _ = fmt.Fprintf(stdout, "  %-10s %-24s %8d %10s %10s %7d\n", u.ID, u.Model, u.Requests,
 				fmt.Sprintf("$%.2f", u.CostUSD), fmt.Sprintf("$%.2f", u.AvoidableUSD), u.Breaks)
 		}
 	}

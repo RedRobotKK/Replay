@@ -168,7 +168,7 @@ func ScoreTrim(lane *transcript.Lane, fit TokenFit, capBytes int) TrimPlan {
 	for _, key := range order {
 		plan.Harms = append(plan.Harms, probeCut(lane, cuts[key].block, cuts[key].removed, cuts[key].first)...)
 	}
-	plan.Splits = deriveSplits(plan.Harms)
+	plan.Splits = DeriveSplits(plan.Harms)
 	return plan
 }
 
@@ -233,13 +233,11 @@ func probeCut(lane *transcript.Lane, b transcript.Block, removed string, first i
 	return harms
 }
 
-// deriveSplits turns where dependencies landed into a per-tool head/middle/tail
-// weighting. Thirds, because the claim being tested is which end of a block
-// matters, and three buckets answer it without inventing precision.
-// DeriveSplits pools harms already gathered across sessions into per-tool splits.
-func DeriveSplits(harms []TrimHarm) []ToolSplit { return deriveSplits(harms) }
-
-func deriveSplits(harms []TrimHarm) []ToolSplit {
+// DeriveSplits turns where dependencies landed into a per-tool head/middle/tail
+// weighting, over harms from one lane or pooled across sessions. Thirds,
+// because the claim being tested is which end of a block matters, and three
+// buckets answer it without inventing precision.
+func DeriveSplits(harms []TrimHarm) []ToolSplit {
 	byTool := map[string]*ToolSplit{}
 	for _, h := range harms {
 		// Offset < 0 marks a harm with no position. A re-read is the whole

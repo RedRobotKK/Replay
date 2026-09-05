@@ -40,7 +40,7 @@ func LoadInstalledRules(stderr io.Writer) {
 	}
 	r, err := cachemodel.LoadRules(path)
 	if err != nil {
-		fmt.Fprintf(stderr, "replay: ignoring %s: %v\n", path, err)
+		_, _ = fmt.Fprintf(stderr, "replay: ignoring %s: %v\n", path, err)
 		return
 	}
 	if r != nil {
@@ -109,7 +109,7 @@ func updateRules(src, path string, stdout io.Writer, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp.Name())
+	defer func() { _ = os.Remove(tmp.Name()) }()
 	if _, err := tmp.Write(body); err != nil {
 		return err
 	}
