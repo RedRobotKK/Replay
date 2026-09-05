@@ -11,9 +11,12 @@ System design as it exists today. Decisions that led here are in [`../adr/`](../
 | [Predictive design](predictive-design.md) | What the ADR-0009 constraints remove and narrow in the schema |
 | [Rewriting prompts](rewriting-prompts.md) | Where rewriting what the client sends is safe, and where it dismantles the tool |
 | [Vectorising session data](vectorising.md) | Three questions inside "vectorise", measured before deciding |
+| [MCP server](mcp-server.md) | A second front door onto the same engine, for agents rather than people: why tool definitions are the expensive thing rather than memory files, which questions need an index and which do not, what leaves the machine when a tool result reaches a hosted model, and what a review cut |
 
-The last four are dated working notes rather than descriptions of shipped behaviour. The first three
-describe code that exists.
+The last five are dated working notes rather than descriptions of shipped behaviour. The first three
+describe code that exists. Nothing in `mcp-server.md` is built — there is no `replay mcp` command —
+and it is indexed anyway so the reasoning is findable before someone reaches for the convenient
+version of it.
 
 ## Current state
 

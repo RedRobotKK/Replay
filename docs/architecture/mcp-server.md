@@ -1,228 +1,316 @@
-# The MCP server: what it exposes, to whom, and what happens when it is busy
+# MCP server
 
-**2026-09-05. Design, not yet built.** Numbers here were measured on the
-maintainer's machine on that date and are the reason the design looks as it
-does.
+A second front door onto the same engine, for agents rather than people.
+
+**Nothing here is built.** There is no `replay mcp` command. This records the
+design and, more usefully, the measurements that killed the first version of
+it — because the first version was wrong in ways that looked right.
+
+## What the measurements changed
+
+The original draft was written on 2026-09-05 and reviewed the same day. Three
+findings reshaped it. Each is a number, not an opinion.
+
+**The lead was wrong.** The draft's headline was memory hygiene: price every
+`CLAUDE.md` and `MEMORY.md` entry, and say which never earned its place. In one
+real ledger record, on this machine:
+
+```text
+tool definitions   226,829 bytes   133 tools
+system prompt        9,243 bytes
+CLAUDE.md            6,815 bytes
+```
+
+Tool definitions are **33× the memory file**, and unlike memory they are
+already attributable per name (`Prompt.Tools []ToolDef`), with
+`advisor.unusedTools` already pricing tools that were never called. The
+expensive thing was measured, itemised, and sitting in the ledger the whole
+time.
+
+**The founding constraint was measured on an outlier.** "No tool call can do a
+cold read" came from 4.3 seconds to parse one session. That session is 336 MB.
+The distribution across 86 top-level sessions:
+
+```text
+p50    161 KB    0.00 s
+p90    1.4 MB    ~0.05 s
+p99   84.7 MB    ~1.0 s
+max    352 MB     4.24 s
+```
+
+A one-second budget covers 85 of 86 sessions. **Per-session tools need no index
+at all.** Only whole-corpus and whole-project questions do — 16.7 s and 12.6 s
+respectively, both reproduced. The architecture below is narrower as a result.
+
+**The strongest-sounding idea had no data behind it.** Pricing a memory entry
+as "paid once in the cached prefix" versus "re-billed every turn" requires
+knowing where the cache breakpoints sit. Nothing records them. The proxy keeps
+`Prompt.CacheControlCount` — a *count*, incremented and then discarded in
+`summarize.go`.
+
+The marker is not missing from the wire, which makes the fix cheaper than it
+first appears: `transcript.RawBlock` decodes `cache_control` at
+`wire.go:51`, and the domain `transcript.Block` simply does not carry it
+forward. The positions arrive and are dropped. Recording the block index of
+each marker is a small change to a struct and a conversion, not a new capture
+path — but until it happens, the distinction the whole idea rested on is not
+available on either tier, and it surfaces only as a residual with an ±89%
+error bar.
 
 ## Why this exists
 
-Replay's users are increasingly not people at a prompt. Someone runs Claude
-Code, the bill surprises them, and the useful question — *which turn did that,
-and why* — is one the agent should be able to ask directly rather than the human
-remembering a CLI exists and switching windows to use it.
+Replay's users are increasingly not people at a prompt. The bill surprises
+someone, and the useful question — *which turn did that, and why* — is one the
+agent should be able to ask directly.
 
-The CLI stays the product. This is a second front door onto the same engine.
+But a second UI onto post-hoc forensics is not worth the surface area. The CLI
+already does that, better, to a human who applies judgement. **The only things
+worth exposing here are the ones where the consumer is the agent and the agent
+can act on the answer.** That test cuts most of what was proposed, and it is
+applied explicitly at the end.
 
-## The measurement that shapes everything
+## The lead: tool-definition hygiene
 
-```text
-full corpus, 86 sessions, 1.3 GB     17.4 s
-one project directory, 11 sessions   13.3 s
-one session file, 336 MB              4.3 s
-```
+Every MCP server a user connects loads its tool definitions into the system
+prompt, on every request, for the life of the session. Fourteen connected
+servers is a normal number. One or two get used.
 
-**No tool call can do a cold read.** An MCP client will time out, and an agent
-that blocks four seconds on the cheapest possible question is one nobody keeps
-installed. Every design decision below follows from this, and any future change
-that makes a tool read transcripts synchronously undoes the whole thing.
+This is the rare case where Replay knows something nobody else does, the data
+already exists, and the consumer can act:
 
-So: **the server answers from an index, and building the index is a job.**
+| Tool | Answers | Tier |
+|---|---|---|
+| `replay_tool_cost` | Every tool definition by name, its bytes, its share of the prefix, and whether it was called | measured |
+
+Two properties make it worth building first. It is **per-name attributable from
+data already in the ledger**, so it needs no new capture. And it is **the one
+question an agent can act on alone**: disconnecting an unused server is
+reversible, cheap, and needs no judgement about the work.
+
+It has a second, sharper use. Tool definitions live in the *prefix*, so adding,
+removing or renaming a server invalidates the cache for the whole session. That
+makes tool churn both a standing cost and a break cause, and it is why
+`internal/analysis/order.go` treats `ScopeTools` as prefix-rewriting alongside
+the system prompt.
+
+## Prefix-safe ordering
+
+`internal/analysis/order.go`, built 2026-09-05 and the one piece of this design
+that exists.
+
+N prefix-rewriting actions interleaved with appends cost N re-prefills; the same
+N done together cost one. That is the whole optimisation, it is free, and it is
+not obvious.
+
+**It returns arithmetic and a truth tier, never a verdict.** An earlier shape
+answered `would_break(action)` with a boolean. A review argued for cutting it
+and the reasoning holds: a human reading a report applies judgement, but an
+agent calling a boolean mid-flow treats it as a gate, and gates earn trust
+monotonically — ten correct answers buy the eleventh unquestioned. The error
+modes are asymmetric in the direction Replay cannot see. A wrong "safe" costs
+one re-prefill: bounded, and exactly the waste already being paid. A wrong
+"breaks" makes the agent skip a legitimate read, which costs a worse
+engineering outcome — unbounded, silent, and invisible to a tool that measures
+spend rather than success. **The bill would fall while the work got worse, on
+instrumentation incapable of noticing.**
+
+The caller supplies the prefix size and the token counts. Replay does not
+forecast them: the byte-to-token fit carries error bars up to ±159% across
+sessions, and a recommendation driven by that has no business existing. The
+result is labelled `structural` and says so in its own text.
 
 ## Transport: stdio, and not HTTP
 
-The client spawns `replay mcp` and speaks over stdin and stdout. It is not a
-daemon, it opens no port, and it is not always on.
+The client spawns `replay mcp` and speaks over stdin and stdout. Not a daemon,
+no port, not always on.
 
-An HTTP MCP server would be a listening socket on a tool whose entire argument
-is that it runs on your machine and talks to nobody. It would also need auth,
-because a port on localhost is reachable by every process on the box including a
-browser tab. stdio inherits the client's identity and lifetime and needs none of
-that.
+An HTTP server would be a listening socket on a tool whose entire argument is
+that it runs on your machine. It would need auth, because a port on localhost is
+reachable by every process on the box including a browser tab. stdio inherits
+the client's identity and lifetime and needs none of that.
 
-The cost of stdio is that each client gets its own process, and three clients
-would build three indexes. That is why the index lives on disk rather than in
-memory: **the shared state is a file, not a server.**
+## Latency: an index only where one is needed
+
+Revised from the original, which required an index for everything.
+
+| Scope | Cost | Needs an index |
+|---|---|---|
+| One session (p50, 161 KB) | 0.00 s | **no** |
+| One session (p99, 85 MB) | ~1.0 s | no |
+| One session (max, 352 MB) | 4.24 s | it would help |
+| One project (1.0 GB) | 12.6 s | **yes** |
+| Whole corpus (1.3 GB) | 16.7 s | **yes** |
+
+So: **session-scoped tools read the session.** No staleness, no index, no
+apology. Corpus-scoped tools answer from `~/.replay/index`, built by a job.
+
+That split also fixes an incoherence in the original. The session an agent is
+*in* is the one file guaranteed to be growing, so an index-backed answer to
+"what is in my context now" would be a snapshot from before everything that
+prompted the question — confidently wrong in the direction that causes action.
+A session-scoped live read has no such problem and costs nothing at the median.
+
+**The index is shared mutable state, so it is treated as such.** Mode 0600,
+owner verified, and an index that is group- or world-writable is refused rather
+than read: a predictable path under `$HOME` is reachable by every process on
+the box, and unlike a port it survives reboot.
 
 ## Services
 
-Five groups. The split is not by convenience — it is by what each group can do
-to the machine.
+Five groups, split by what each can do to the machine, and mapped onto MCP tool
+annotations so the client can enforce the boundary rather than trusting prose.
 
-### 1. Measure — read-only, always available
+| Group | Tools | Annotation |
+|---|---|---|
+| 1. Measure | `replay_tool_cost`, `replay_blame`, `replay_diff`, `replay_context` | `readOnlyHint: true` |
+| 2. Cost | `replay_session_cost`, `replay_what_changed` | `readOnlyHint: true` |
+| 3. Plan | `replay_order_plan` | `readOnlyHint: true` |
+| 4. Advise | `replay_advise` (read), `replay_learn` | read-only; apply requires `--allow-write` |
+| 5. Health | `replay_health` | `readOnlyHint: true` |
 
-| Tool | Answers |
-|---|---|
-| `replay_cost` | cost per task, and the share that was billed twice |
-| `replay_blame` | what is eating prompt tokens, ranked |
-| `replay_diff` | which turn broke the cache, and the cause |
-| `replay_context` | what entered a session's context, by tool |
-| `replay_route` | what switching model would change, structurally |
-| `replay_trim` | what a byte cap on tool output would have saved |
-
-These read the index. None writes, none reaches the network, and none can be
-made to. They are the default and the only group enabled without a flag.
-
-### 2. Advise — reads by default, writes only when the human said so
-
-| Tool | Effect |
-|---|---|
-| `replay_advise` | suggestions with predicted savings. Read-only |
-| `replay_advise_apply` | **writes `~/.claude/settings.json`** |
-| `replay_learn` | **writes `~/.replay/policy.json`** |
-
-`replay_learn` deserves a sentence of its own. `policy.json` is read by
-`replay serve` at each new session's first request, so a tool that looks like
-analysis silently changes what the proxy sends to the provider. An agent must
-not be able to reach it by default.
-
-Both write tools require `replay mcp --allow-write` and both return the diff
-they would apply before applying it.
-
-### 3. Corpus — reads locally, never sends
-
-| Tool | Effect |
-|---|---|
-| `replay_corpus_report` | the calibration report, as text. Local |
-
-Submission is deliberately absent. Sending a user's data off their machine on an
-agent's initiative is not a thing an agent should be able to do, however good the
-payload is. If submission is ever built it belongs behind a human confirmation in
-a terminal, not behind a tool call an agent can decide to make.
-
-### 4. Live — only when the proxy is already running
-
-| Tool | Answers |
-|---|---|
-| `replay_proxy_status` | spend, caps, breaks so far this session |
-| `replay_proxy_metrics` | the Prometheus series, as structured data |
-
-These read `/replay/status` and `/replay/metrics` from a running `replay serve`.
-If nothing is listening they say so; they never start one. **An agent must not be
-able to stand up a process that intercepts the user's provider traffic.** That is
-a decision a person makes at a terminal, with the flags in front of them.
-
-### 5. Health — how to tell whether to believe any of the above
-
-| Tool | Answers |
-|---|---|
-| `replay_health` | index age, coverage, what is stale, what is running |
-
-Described in full below, because it is the part that makes the rest honest.
-
-## Access: what is on by default, and what is not
-
-| Group | Default | Requires | Never |
-|---|---|---|---|
-| Measure | **on** | — | — |
-| Corpus report | **on** | — | — |
-| Live status | **on**, read-only | a running proxy | starting one |
-| Advise (read) | **on** | — | — |
-| Advise apply, learn | **off** | `--allow-write` | silent application |
-| Corpus submit | — | — | **not exposed** |
-| `serve`, `redact`, `rules --update` | — | — | **not exposed** |
-
-The last row is the one to defend. `serve` starts a long-running interceptor.
-`redact` writes an arbitrary output path. `rules --update` installs a document
-that changes every figure the tool prints. Each is legitimate at a terminal and
-none is something an agent should choose to do on a user's behalf.
+Never exposed, and this is the row to defend: `serve` starts a long-running
+interceptor, `redact` writes an arbitrary path, `rules --update` installs a
+document that changes every figure the tool prints, and corpus submission sends
+a user's data off their machine. Each is legitimate at a terminal. None is
+something an agent should choose on a user's behalf.
 
 **The principle:** an agent may read anything Replay can read, and may change
 nothing without a flag the human typed when they configured the server.
 
-## Always on? No. Busy? Say so, and answer anyway
+## What leaves the machine
 
-The server is spawned per client and exits with it. What persists is
-`~/.replay/index`, and that is where "busy" lives.
+The original design had no section on this, and it is the most important one.
 
-**Three states, and every tool reports which one it answered from:**
+Replay's README says *"Everything runs on your machine. Nothing leaves."* **An
+MCP tool result is uploaded by definition** — every byte returned over stdio
+enters the next request to a hosted model. That is not a bug in the design, it
+is the design, and it has to be stated rather than assumed.
 
-- `fresh` — the index covers every transcript, and no file has changed since it
-  was built. Answers are current.
-- `stale` — the index is usable but N sessions have changed or appeared since.
-  **Answer from it anyway, and say what is missing.** A number from ten minutes
-  ago with its age attached is worth far more than a seventeen-second wait, and
-  an agent can decide whether to refresh.
-- `building` — a refresh is running. Return the previous index with its age, plus
-  progress. Never block, never return nothing.
+Three consequences:
 
-**Refresh is a job, not a call.** `replay_refresh_index` starts it and returns a
-handle immediately. `replay_health` reports progress. Two clients asking at once
-share one build: the second gets the same handle rather than a second scan of
-1.3 GB.
+**Paths are content.** `ToolLabel` keeps 400 runes of tool arguments, which for
+`Read`, `Edit` and `Bash` is the filesystem. Its own comment scopes it to the
+transcript tier, *"where the user's own content may be shown to them"* —
+showing the same string to a hosted model is a different act by the same code.
+`replay context` already collapses to bare tool names via `toolNameOf`. MCP
+results keep that coarsening.
 
-**Incremental by mtime.** A new session costs its own parse, not the corpus's.
-This is what makes `stale` a short state instead of the normal one.
+**Transcripts contain secrets.** Tool output is recorded verbatim: the `cat
+.env` from three weeks ago is in there. The ledger has a masking promise and
+`redact` exists; the transcript tier has neither. Tools reading transcripts
+return structure and counts, never content.
 
-**Scope narrows the work.** `replay_diff` on one session is 4.3 seconds cold and
-should still be a job, but a warm index answers it immediately. Tools take an
-optional session or project scope precisely so an agent can ask a narrow question
-and get a fast answer.
+**Ranking by size is attacker-steerable.** An adversary who gets text into a
+transcript — a fetched issue, a dependency README — controls the one variable a
+cost ranking sorts on. A 40 KB hostile payload is rank one. So ranked results
+carry names and byte counts, not excerpts, and the provenance block carries a
+content-trust field rather than only a staleness one.
+
+**No tool returns a proposed edit.** The original draft's memory feature
+returned a diff for `CLAUDE.md`. Replay does not need write access for that to
+be dangerous: the agent already holds Edit, so a diff arrives wrapped in a
+measurement tool's authority and lands in the file that shapes every future
+session. That is a confused deputy, and the trust boundary the design defends —
+what Replay's process can write — is the wrong one. Reports are tables. If a
+person wants a diff, they run a CLI command and read it.
+
+## Updates: a decision the user makes out loud
+
+The antivirus model is the right frame and its limits are the point. AV vendors
+push definitions silently because a stale signature misses a real attack.
+Replay's threat model is the opposite: **a wrong price table silently changes
+every dollar figure the tool prints, which is worse than a stale one that
+announces its age** — and it already announces it, locally, with no network.
+
+So updates are pull-on-request, never push, and reported rather than applied.
+
+Checking is a network call, and Replay's promise is that it makes none except
+to the provider you configured. That promise is not broken by default and not
+broken by an agent's decision. It is a choice the user records in
+`$XDG_CONFIG_HOME/replay/update-consent.toml`, read by `internal/consent`.
+
+**Three states, not a boolean:**
+
+| State | Meaning |
+|---|---|
+| `Unset` | Nobody has decided. Ask; do not check. |
+| `Granted` | Checking is permitted. |
+| `Declined` | Checking is forbidden, and asking again is rude. |
+
+`Unset` and `Declined` both mean "do not check now", so a boolean merges them —
+and a tool that merges them either nags someone who already said no, or never
+asks someone who was never asked. Only `Granted` opens the gate, and a test
+fails if a second state ever does.
+
+The consent file is refused if it is a symlink, or writable by group or other:
+a grant any process on the box could have written is not this user's decision.
+The parser recognises exactly two sentences and refuses everything else,
+including an affirmative with an unrecognised line beside it — which is the
+realistic shape of an attack on a file like this.
+
+MCP is the right place to surface the question, because `elicitation/create`
+lets the server ask the human directly and the agent can act on the answer.
+What it reports is a version and a digest. What it never does is download.
+
+## This server must not break the prompt cache
+
+Tool definitions live in the system prompt. Every tool this server adds,
+renames or reorders changes that prefix and invalidates the cache for the whole
+session.
+
+A cache-forensics tool that costs a prefix break every time it reconnects is
+self-refuting. So: the tool list is stable and deterministically ordered, tool
+names and descriptions are treated as prefix content and change only in a
+release, and `replay_tool_cost` measures this server alongside every other.
 
 ## Observability
 
 The failure mode to design against is not the server falling over. It is the
-server answering confidently from an index built before the thing the user is
-asking about.
+server answering confidently from an index built before the thing being asked
+about.
 
-**Every response carries its provenance.** Not in a log — in the response:
+**Every response carries its provenance, in the response and not a log** —
+index state and age, session coverage, the truth tier per row rather than one
+flattened tier for the result, and whether any content in it is derived from
+untrusted transcript text.
 
-```json
-{
-  "result": { "medianTaskUsd": 0.65, "avoidableShare": 0.05 },
-  "provenance": {
-    "indexState": "stale",
-    "indexBuiltAt": "2026-09-05T18:22:04Z",
-    "indexAgeSeconds": 4127,
-    "sessionsIndexed": 1395,
-    "sessionsChangedSince": 12,
-    "truthTier": "estimated",
-    "priceTable": "2026-06-24",
-    "rules": "anthropic-2026-09-01"
-  }
-}
-```
+**Staleness has a refusal threshold, not just a label.** The original design
+attached an age and answered anyway, justified by the observation that a model
+will quote a number without its caveat. That justification does not survive its
+own premise: if caveats get dropped, attaching one is not a mitigation. Past a
+threshold the tool returns an error telling the agent to refresh.
 
-This is the truth-tier discipline the CLI already has, applied to a surface where
-the reader is a model. A model will quote a number without its caveat unless the
-caveat is attached to the number, so it is attached to the number.
+Every other surface in Replay refuses rather than guessing — the engine below
+95% per-turn match, `learn` on bad calibration, `advise --guards` below ten
+sessions. This is the one that was going to be the exception.
 
-**`replay_health` answers the questions a human debugging this would ask:**
+## What was cut, and why
 
-| Field | Why |
+| Idea | Verdict |
 |---|---|
-| `indexState`, `builtAt`, `ageSeconds` | is the answer current |
-| `sessionsIndexed` / `sessionsOnDisk` | is the index complete |
-| `sessionsChangedSince` | what would a refresh add |
-| `refreshInProgress`, `refreshProgress` | is it working on it |
-| `lastRefreshDurationMs`, `lastRefreshError` | did the last one fail, and how |
-| `proxyRunning`, `proxyAddr` | are live tools available |
-| `writeEnabled` | can anything here change my machine |
-| `priceTableAgeDays` | are the dollar figures still trustworthy |
-| `toolCalls` by name, and p50/p99 | which tools are used and which are slow |
+| Memory audit, `memory_unused` | **Cut.** No outcome variable exists. A `CLAUDE.md` line that works produces *no event* — its signature is an absence — so a naive detector flags the highest-value entries first. `predictive-design.md` already says it: Replay can measure waste, it cannot measure success. |
+| Memory pricing, cached vs re-billed | **Deferred, and cheaper than it looks.** `RawBlock` already decodes `cache_control`; the domain `Block` drops it. Carrying the marker's block index through is a small change, and it is the single capture that would unlock the whole idea. |
+| `would_break(action)` boolean | **Cut.** Replaced by `replay_order_plan`, which returns a number and a tier. |
+| Agent-initiated corpus submission | **Cut.** An agent cannot give informed consent on a human's behalf, and an agent that has read a hostile page can be made to call it. Stays behind a human confirmation in a terminal. |
+| Autonomous self-tuning loop | **Cut.** Its only observable is spend, so its gradient points at "do less work". `serve --trial-share` already does the controlled version, with randomisation, a guardrail and automatic revert. |
+| `what_changed(since)` | **Kept, but note** it is `replay cost --compare` with an agent as the reader. |
 
-**Logs go to stderr, never stdout.** stdout is the protocol; a stray print
-corrupts the stream. Structured lines, no message text ever, same promise the
-ledger keeps.
-
-**Counters are local and readable.** `~/.replay/mcp-stats.json`, readable by
-`replay doctor`. Nothing is transmitted; the point is that a user can see what
-their agent has been asking, which is a property worth having on a tool that
-sits this close to their work.
+The pattern worth naming: **everything safe was already a CLI command, and the
+two genuinely new surfaces were the two most dangerous.** That is the strongest
+argument against MCP as a frame for most of this value, and the reason this
+document is shorter than the one it replaces.
 
 ## What this does not solve
 
-**An index is a cache, and caches go wrong.** The mtime check catches edits and
-misses a file rewritten with a preserved timestamp. That is rare and the
-consequence is a stale figure with `stale` next to it, which is the failure this
-design is willing to take.
+Aggregation across a team. Everything here is one machine, one user, one file
+on disk. "What is my org spending, by team, by repo" is a different product
+with identity and storage problems that stdio and a local index deliberately do
+not address.
 
-**A well-known MCP server card still does not apply.** That advertises a hosted
-server at a URL. This one is spawned on a laptop and reachable by nobody. If the
-agent-readiness scan is the reason to build something, this is not it.
-
-**The 17-second cold build has to happen once.** First run is slow, and the
-honest thing is to say so during install rather than let the first tool call be
-the surprise.
+Coverage is also narrower than it looks: `replay doctor` counts 86 top-level
+sessions while the corpus holds 1,422 `.jsonl` files — 1,336 are subagent
+transcripts it does not walk, and `advise` does. Any health figure here would
+inherit that inconsistency until it is fixed.
 
 ---
 

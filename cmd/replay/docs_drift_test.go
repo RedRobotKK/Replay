@@ -130,3 +130,92 @@ func TestGuideCoversEveryFlag(t *testing.T) {
 			strings.Join(missing, "\n  "))
 	}
 }
+
+// Every document under docs/ must be linked from somewhere.
+//
+// `docs/architecture/mcp-server.md` was written on 2026-09-05 and linked from
+// nothing: not the architecture index, not the docs index, not the README, and
+// there was no ADR. 229 lines of reasoning that only the person who wrote it
+// could find, which is the same as not having written it — and worse than
+// nothing if someone later implements the convenient version of a decision
+// that was already thought through and rejected here.
+//
+// PASS: every .md under docs/ is referenced by at least one other Markdown
+// file in the repository.
+// FAIL: an orphan, which is a document nobody will read.
+func TestNoOrphanedDocuments(t *testing.T) {
+	root := filepath.Join("..", "..")
+	docs := filepath.Join(root, "docs")
+
+	// Every Markdown file in the repository, as one haystack. Link syntax
+	// varies — relative paths, ../ prefixes, anchors — so this looks for the
+	// filename as a token rather than trying to resolve each link.
+	var corpus strings.Builder
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			if info.Name() == ".git" || info.Name() == "node_modules" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".md") {
+			return nil
+		}
+		b, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return rerr
+		}
+		// A file cannot vouch for itself: a README that mentions its own name
+		// would otherwise make every index self-linking.
+		corpus.WriteString("\x00" + path + "\x00")
+		corpus.Write(b)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := corpus.String()
+
+	var orphans []string
+	err = filepath.Walk(docs, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".md") {
+			return err
+		}
+		name := filepath.Base(path)
+		// An index is reached by its directory, and the ADR template is a
+		// stencil rather than a document.
+		if name == "README.md" || name == "template.md" {
+			return nil
+		}
+		// Count LINKS, not mentions.
+		//
+		// The first version of this counted the filename anywhere in the
+		// corpus, and passed because a sentence in the index happened to name
+		// the file in prose. Prose is not navigation: a reader cannot click
+		// it, and a filename in a paragraph is exactly what an orphan looks
+		// like on the way to being forgotten. So this looks for Markdown link
+		// syntax pointing at the file.
+		own, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return rerr
+		}
+		link := "](" + name
+		elsewhere := strings.Count(text, link) - strings.Count(string(own), link)
+		if elsewhere < 1 {
+			rel, _ := filepath.Rel(root, path)
+			orphans = append(orphans, rel)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(orphans) > 0 {
+		t.Errorf("documents nothing links to, so nobody will find them:\n  %s\n"+
+			"Link each from its section index, or delete it.",
+			strings.Join(orphans, "\n  "))
+	}
+}
