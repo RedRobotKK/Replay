@@ -1,9 +1,12 @@
 # Commands
 
-Ten commands. Most people use three of them.
+Sixteen commands, listed on nineteen lines because three of them have a form worth
+showing separately. Most people use three of them.
 
-Run `replay` with no arguments for the built-in usage text, which is always the authority on flags
-your installed version actually has.
+`replay <command> --help` prints that command's flags to stdout and exits 0, and is always the
+authority on what your installed version actually has — this page can drift, the binary cannot. It
+worked on none of them until 2026-09-05: every subcommand exited 1 with its usage on stderr, and
+`redact --help` tried to open a file called `--help`.
 
 ## The three you will use
 
@@ -41,6 +44,23 @@ so it reports the median and the p90, which is the spread you need before you ca
 The avoidable figure prices tokens the provider re-billed after a cache break: money already spent
 twice, not a projection of what a different layout might save. Sessions whose model is not in the
 price table are excluded and counted, never treated as free.
+
+`--share` prints a block designed to be posted:
+
+```sh
+replay cost ~/.claude/projects/ --share
+```
+
+It carries the avoidable rate, the median and p90 task cost, the session count and the break count —
+and deliberately not the total. A total tells a reader your monthly burn and lets them infer team
+size; it is also the least comparable number in the set, because $3,000 means nothing without
+knowing how many engineers spent it. A rate reads the same from a solo developer and a team of
+fifty. No paths, no project names. The card goes to stdout and its note to stderr, so
+`replay cost <dir> --share | pbcopy` copies exactly what is safe to paste.
+
+A plain `replay cost` run also names the tip jar once, under the figures, when the avoidable amount
+is over $5 — at the one moment the tool has just shown you money you already spent twice. It prints
+a line; it never opens a browser.
 
 ### `replay cost --compare <date>`
 
@@ -101,6 +121,28 @@ model, a negative price, a model marked priced with no price, or a read multiple
 There is no background refresh and no default source. A URL is a network request, and the promise
 that Replay makes none except to your provider survives only because a person has to type it.
 
+```sh
+replay rules --check-prices                   # is the compiled table still right?
+```
+
+`--check-prices` answers the question the date alone cannot. Every dollar Replay prints comes from a
+table compiled into the binary; before this, the only thing the tool could say was how old that
+table was, and age is a prompt to worry rather than information.
+
+It compares against an independent published price database and reports where the two differ. It
+never installs anything. That source is a second observer, not an authority: it can be stale, wrong,
+or describing a different SKU under a similar name, so a disagreement is a prompt to read the
+provider's own page and update the table and its date deliberately — the same shape the rules
+document uses for `documented` against `observed`, for the same reason.
+
+Reseller keys are excluded on purpose. The same model appears under Bedrock and Vertex names at
+different rates, and comparing a first-party table against a reseller's would report a difference
+that is really a different product. A model the source does not name is reported as unchecked rather
+than confirmed, separately from any disagreement, because absence of evidence is not evidence of a
+difference.
+
+This is the one command that reaches the network on your behalf, and it does so only when typed.
+
 ### `replay serve`
 
 Starts the local proxy on `127.0.0.1:4000`. Point your agent at it with
@@ -133,6 +175,35 @@ replay corpus ~/.claude/projects > corpus-report.md
 Open it and check that nothing in it identifies your projects before you share it. It judges
 calibration per model with the newest sessions separated, so a provider changing its behaviour shows
 up as a provider change rather than as silent drift.
+
+### `replay context <transcript|dir>`
+
+What entered a session's context, by tool, ranked by share of content bytes.
+
+```sh
+replay context ~/.claude/projects/some-project/     # ranked attribution
+replay context <transcript> --top 30                # more than the default 12
+replay context <transcript> --json                  # for a script
+```
+
+```text
+Session facfd32e  998k tokens of content entered this context
+
+  mcp__claude-in-chrome__javascript_tool     31.2%   311k  x814  *
+  mcp__claude-in-chrome__computer            27.6%   275k  x634  *
+  assistant                                  21.6%   216k  x643
+  Bash                                        3.6%    36k   x64  *
+```
+
+`blame` ranks what is eating prompt tokens across a whole lane and is the one to reach for when the
+bill is the question. `context` answers a narrower one: for this session, where did the content come
+from. The columns are share of content bytes, the bytes themselves, and how many times that source
+appeared. A `*` marks a figure estimated through the byte-to-token fit rather than measured on the
+wire.
+
+**`--top` truncates silently, including under `--json`.** The default is 12, so a script reading the
+JSON gets twelve rows and no indication that more existed. Pass a larger `--top` when the output is
+being parsed rather than read.
 
 ### `replay learn`
 

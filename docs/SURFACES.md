@@ -46,7 +46,18 @@ found by scanning a real install, and confusing them is the likely support quest
 > **This page has now been wrong twice, in the same section, about the same claim.** Both corrections
 > came from re-checking rather than re-reading. Treat it as a working document, not an assurance.
 
-**Outbound: the provider you configured, unless the environment says otherwise.**
+**Outbound: the provider you configured, unless the environment says otherwise — and, behind one
+explicit flag, a price database.**
+
+**`replay rules --check-prices` fetches `raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json`.**
+Added 2026-09-05. It is the only outbound request the binary makes that is not the operator's own
+traffic to the operator's own provider, it happens only when that flag is typed, and it sends
+nothing: a plain GET whose response is compared against the compiled price table. Nothing is
+installed from it.
+
+Recorded here on the day it shipped, because this section has been wrong twice about exactly this
+claim and the third time would have been the author's own commit twenty minutes after making the
+claim stronger.
 
 **`HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY` silently redirect every upstream request.** The transport
 is built with `Proxy: http.ProxyFromEnvironment` (`internal/proxy/server.go:170`), which reads all six
