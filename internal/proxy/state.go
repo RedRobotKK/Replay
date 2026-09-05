@@ -42,9 +42,17 @@ type sessionState struct {
 	whatIf  []WhatIf
 	context []analysis.ContextEntry
 	reReads analysis.ReReads
-	// errorTokens is the estimated prompt cost of error content carried by
-	// the session so far, from the same analysis replay prints.
-	errorTokens int
+	// errorByLane is the estimated prompt cost of error content carried by
+	// each agent lane, from the same analysis replay prints, keyed by AgentID
+	// with "" for the main loop.
+	//
+	// Per lane rather than one figure because the analysis that produces it
+	// sees one lane at a time, while the denominator it is divided by,
+	// tally.PromptTokens, counts every request of the session. A single field
+	// meant the last lane to rescore decided the numerator and a quiet
+	// sub-agent could erase a busy one. The sum is what the budget wants,
+	// because the sum is scoped like the denominator.
+	errorByLane map[string]int
 	// breached is set once the session's guardrail tripped.
 	breached bool
 	// masked counts secrets replaced in this session's requests;
@@ -196,8 +204,21 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 	return out
 }
 
-// errorTokens returns a session's error-content prompt tokens and its
-// prompt tokens so far, for the error budget.
+// totalErrorTokens sums every lane. Callers hold the lock.
+func (st *sessionState) totalErrorTokens() (n int) {
+	for _, v := range st.errorByLane {
+		n += v
+	}
+	return n
+}
+
+// errorTokens returns a session's error-content prompt tokens and its prompt
+// tokens so far, for the error budget.
+//
+// Both figures cover the whole session. Summing the lanes is the point: the
+// denominator counts every request whatever lane it came from, so a numerator
+// from one lane would be a ratio between two different populations, and the
+// guard that reads it refuses live traffic.
 func (s *stats) errorTokens(sessionID string) (errorTokens, promptTokens int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -205,7 +226,21 @@ func (s *stats) errorTokens(sessionID string) (errorTokens, promptTokens int) {
 	if !ok {
 		return 0, 0
 	}
-	return st.errorTokens, st.tally.PromptTokens
+	return st.totalErrorTokens(), st.tally.PromptTokens
+}
+
+// setLaneErrors records one lane's error-content total. Lanes share the
+// session's state: keying the session map by agent instead would give every
+// sub-agent its own policy pin, which ADR-0003 forbids, and would split the
+// spend cap per agent as well.
+func (s *stats) setLaneErrors(sessionID, agentID string, tokens int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st := s.session(sessionID)
+	if st.errorByLane == nil {
+		st.errorByLane = map[string]int{}
+	}
+	st.errorByLane[agentID] = tokens
 }
 
 // session finds or creates a session's state, evicting the least recently
@@ -326,7 +361,12 @@ func (s *stats) rescore(rec *ledger.Record) (string, analysis.ReReads) {
 	// a session's context is made of, and the proxy is the one place it can be
 	// produced from provider usage rather than from the byte-to-token fit.
 	st.context = analysis.EnteredContext(report.Blame)
-	st.errorTokens = errorTokens
+	if st.errorByLane == nil {
+		st.errorByLane = map[string]int{}
+	}
+	// Replaces this lane's figure rather than adding to it: report.Errors is
+	// that lane's running total, not a delta.
+	st.errorByLane[rec.AgentID] = errorTokens
 	s.mu.Unlock()
 
 	if requests%whatIfLogEvery != 0 || len(rows) < 2 {
@@ -440,7 +480,7 @@ func (s *stats) status() Status {
 				out.Trial.Treated++
 			}
 		}
-		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, Context: st.context, ReReads: st.reReads, WhatIf: st.whatIf, ErrorShare: share(st.errorTokens, st.tally.PromptTokens), Masked: st.masked, Rehydrated: st.rehydrated, RehydrationDenied: st.denied, Held: st.held, HeldMS: st.heldMS})
+		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, Context: st.context, ReReads: st.reReads, WhatIf: st.whatIf, ErrorShare: share(st.totalErrorTokens(), st.tally.PromptTokens), Masked: st.masked, Rehydrated: st.rehydrated, RehydrationDenied: st.denied, Held: st.held, HeldMS: st.heldMS})
 	}
 	sort.Slice(out.Sessions, func(i, j int) bool { return out.Sessions[i].LastSeen.After(out.Sessions[j].LastSeen) })
 	return out
