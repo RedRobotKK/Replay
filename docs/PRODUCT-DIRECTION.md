@@ -1,0 +1,101 @@
+# The measurement layer for context engineering
+
+**2026-09-04.** A product direction, written after auditing what Replay already computes. It proposes
+almost no new measurement: the argument is that the most valuable thing here is already being
+calculated and is being reported as something smaller than it is.
+
+## The observation
+
+Everyone measures **tokens**. Dashboards, billing pages, a dozen wrappers. Tokens are the input to
+the question nobody answers, which is: **how much of that bought nothing?**
+
+Replay already computes the answer and calls it cache diagnostics.
+
+| Signal in the code today | What it actually measures |
+|---|---|
+| `error_share` | The share of a session's spend that went to failed tools, failed edits and repeated identical calls. **Money that bought nothing** |
+| `re_reads` | File reads that repeated a path already in context. **The agent forgot something you had already paid to tell it** |
+| `cache_breaks`, `prefix_changes` | Re-billing caused by a layout that shifted. **Mechanical waste** |
+| `unused-tools` | Tool definitions carried on every single request and never once called. **Rent on capability you did not use** |
+| `hot-file` | The same file read over and over |
+| `first-turn-content` | Content loaded at turn one and never referenced |
+| `large-results` | Tool results that dwarf what was done with them |
+| `held_ms` | Parallel sub-agents each paying the cache write for the same prefix. **The cost of fanning out** |
+
+**That is a waste taxonomy, and it is already implemented.** What is missing is that it is presented
+as eight unrelated diagnostics rather than one number with a breakdown.
+
+## The direction
+
+**Stop reporting what a session cost. Report what it wasted, and in which of five ways.**
+
+1. **Mechanical** — the cache broke. Fix the layout. Replay already advises here.
+2. **Rework** — the agent failed and retried. `error_share`.
+3. **Forgetting** — it re-read what it already had. `re_reads`.
+4. **Over-provisioning** — tools and context carried and never used. `unused-tools`,
+   `first-turn-content`.
+5. **Fan-out** — parallel siblings each paying to write the same cache. `held_ms`.
+
+Each has a different fix, and that is the whole point. A cost dashboard tells you the number is big.
+**A waste breakdown tells you which of five things to do about it**, and four of those five have
+nothing to do with caching.
+
+## Why this is the differentiator, in one line
+
+**Nobody else can compute it.** A billing page sees totals. A wrapper sees its own calls. Replay sees
+the **turn-by-turn reconstruction of a real session, with the provider's own usage numbers attached
+and a calibration figure saying how much to trust them.** Rework, forgetting and fan-out waste are
+only visible from there.
+
+The field has moved from prompt engineering to context engineering in about eighteen months, and
+**there is no measurement layer for it.** People are making context decisions — what to load, when to
+compact, when to start fresh, how many sub-agents to run — on instinct, because nothing tells them
+what the last decision cost. That is the gap.
+
+## What to build, in order
+
+**1. One number, with a breakdown.** `replay` already prints a policy table. Add a line above it:
+
+```
+Session cost $12.40, of which $3.10 (25%) bought nothing:
+  rework            $1.60   failed tools and repeated calls
+  cache breaks      $0.90   3 breaks, largest at turn 32
+  forgetting        $0.40   11 re-reads of 4 files
+  unused tools      $0.20   9 of 23 definitions never called
+```
+
+Every figure here already exists. This is presentation, not new measurement, and it is the single
+highest-leverage change available.
+
+**2. The compaction question, which nobody has data for.** Replay can see the turn where a session
+stopped benefiting from its own history: where re-reads climb, where the cached share stops paying
+for the prefix it carries. **"You should have started a fresh session around turn 40"** is a claim
+only this tool can make, and it is the decision agent users make most often and most blindly.
+
+**3. Fan-out economics.** `--hold-siblings` exists because parallel sub-agents all pay the cache
+write. That is a measured finding about a pattern the whole industry is adopting right now, and
+almost nobody knows it. **"Your six sub-agents cost 4.2x one agent, not 6x, and here is why"** is
+publishable on its own.
+
+**4. Cross-session, not per-session.** `advise` already aggregates. The habits are the target, not
+the session: the file you always load and never use, the tool nobody calls, the instruction block
+that breaks the cache every Monday because it has a date in it.
+
+## What not to build
+
+**Not a dashboard.** The audience runs a terminal and the data is local. A web UI adds a server, a
+privacy question and a support burden, in exchange for charts nobody needs.
+
+**Not autonomous optimisation.** `replay learn` already selects policies, and it refuses when
+calibration is weak. That restraint is the product's credibility. **Advice a person acts on beats
+changes a tool makes quietly**, especially in a request path.
+
+**Not a score out of 100.** A single quality grade invites gaming and hides the breakdown, and the
+breakdown is the useful part.
+
+## The honest constraint
+
+All five waste categories are computed from **eleven sessions on one machine**. The taxonomy is
+sound; the thresholds that turn a measurement into advice are not calibrated. **Ship the breakdown
+before the advice.** Showing someone where their money went is defensible on eleven sessions.
+Telling them what to change is not.
