@@ -14,11 +14,14 @@ of the document.
 | Path | Direction | What | Status |
 |---|---|---|---|
 | `$CLAUDE_CONFIG_DIR/projects/*/*.jsonl`, else `~/.claude/projects/…` | read | Agent transcripts. Never modified | **Verified** |
-| `~/.replay/ledger/<session>.jsonl` | write | Block kinds, sizes, timings, usage. No message text. `0600` in a `0700` directory | **Verified** by inspecting a record produced from a request stuffed with secrets |
+| `~/.replay/ledger/<session>.jsonl` | write | **Message text is genuinely never written** and that was verified against a request stuffed with secrets. But "block kinds, sizes, timings, usage" understated it: records also carry the request `path`, `session_id` and `agent_id` from client headers, the provider's `request_id`, `model`, `effort`, **and tool names verbatim** — `SanitizeLabel` runs on read, not on write. `0600` **at creation only** | **Verified**, and the description corrected |
 | `~/.replay/ledger/.label-key` | write | HMAC key for path labels | Read |
 | `~/.replay/vault/`, `.vault-key` | write | Only with `--mask`. AES-256-GCM, key file alongside | **Verified**: a reviewer decrypted it in five lines of Python. The key file is the whole boundary |
 | `~/.replay/.pins`, `.revert` | write | Per-session policy decisions, persisted so a restart cannot change a session's mind | Read |
-| `~/.replay/policy.json`, advice file | write | `learn` and `advise` output | Read |
+| `~/.replay/policy.json` | **read and write** | `learn` writes it; **the proxy reads it at each new session's first request** (`server.go:763`), so anything that can write this file changes the parameters sent to the provider. Listed as write-only in the first version |
+| `~/.replay/advice.json` | write | `advise` output. **Contains raw tool names and file base names** taken from your transcripts |
+| `~/.replay/vault/vault.tmp` | write | Fixed-path temp file, rewritten per newly-seen secret. The §3b claim of "no predictable-path temp file" was true of `os.TempDir` and wrong as a conclusion |
+| `$GOMODCACHE`, `$GOCACHE` | write | **Only via the installer's `go install` fallback**, which is the only path available today. Hundreds of MB |
 | `${XDG_CONFIG_HOME:-~/.config}/replay/corpus-consent.toml` | write | Only from `install.sh --corpus-opt-in`. Sends nothing | **Verified** |
 | `/usr/local/bin/replay` or `~/.local/bin/replay` | write | The binary, at install | **Verified** end to end |
 
@@ -33,8 +36,25 @@ found by scanning a real install, and confusing them is the likely support quest
 
 ## 2. Network
 
-**Outbound, in normal use: the provider you configured, plus one local health probe.** Default
-provider `https://api.anthropic.com`, overridable with `REPLAY_UPSTREAM`.
+> **This page has now been wrong twice, in the same section, about the same claim.** Both corrections
+> came from re-checking rather than re-reading. Treat it as a working document, not an assurance.
+
+**Outbound: the provider you configured, unless the environment says otherwise.**
+
+**`HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY` silently redirect every upstream request.** The transport
+is built with `Proxy: http.ProxyFromEnvironment` (`internal/proxy/server.go:170`), which reads all six
+spellings of those variables. **No Replay flag mentions this and nothing in the code or docs did until
+now.** An independent reviewer demonstrated it: with `HTTPS_PROXY` set to an unreachable host, a
+request to `api.anthropic.com` failed at `proxyconnect tcp` and never reached the provider.
+
+**Two consequences worth stating plainly.** For an `https://` upstream the intermediary sees CONNECT
+metadata only. But **if `REPLAY_UPSTREAM` is `http://`, the full request and its credential headers go
+in plaintext to whatever `HTTP_PROXY` names.** `doctor` inherits the same behaviour through
+`http.DefaultClient`.
+
+This is standard Go behaviour and arguably correct — a corporate proxy is exactly how many people
+reach a provider at all. **It is listed here because "the outbound host is the one you configured"
+was not true**, and a document whose purpose is completeness has to say so.
 
 **A correction to an earlier version of this page**, found by re-checking rather than by reading it
 back: the claim "exactly one host" was wrong. `replay doctor` issues a `GET` to
@@ -63,9 +83,15 @@ can fingerprint that Replay is running.
 
 ## 3. Environment
 
-Read: `ANTHROPIC_BASE_URL`, `REPLAY_UPSTREAM`, `REPLAY_DISABLED`, `REPLAY_TOKEN`,
-`REPLAY_NO_POLICY`, `CLAUDE_CONFIG_DIR`, `XDG_CONFIG_HOME`, `NO_COLOR`, `REPLAY_VERSION`,
-`REPLAY_BIN_DIR`.
+**A second correction: the first version of this section conflated the binary and the installer.**
+
+**Read by the binary:** `ANTHROPIC_BASE_URL`, `REPLAY_UPSTREAM`, `REPLAY_DISABLED`, `REPLAY_TOKEN`,
+`REPLAY_NO_POLICY`, `CLAUDE_CONFIG_DIR`, **`HOME`** (via `os.UserHomeDir`, and it decides where the
+ledger, the vault and both key files land), and **`HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY`** through
+`http.ProxyFromEnvironment`.
+
+**Read by `install.sh` only, and by no Go file:** `NO_COLOR`, `XDG_CONFIG_HOME`, `REPLAY_VERSION`,
+`REPLAY_BIN_DIR`. Verified: zero occurrences of any of the four in `cmd/` or `internal/`.
 
 **Never read: any credential variable.** There is no reference to `Authorization`, `x-api-key`, or
 any auth environment variable anywhere in the source. **Verified by grep and by sending a real-shaped
@@ -93,7 +119,7 @@ named.
 | Surface | Status |
 |---|---|
 | Repository, README, docs, ADRs, evidence | **Verified** by an adversarial claims audit; 6 false and 9 partial claims found and fixed |
-| `install.sh`, piped to a shell | **Verified** end to end: happy path installs, tampered archive refuses, runs under dash/sh/ksh/zsh |
+| `install.sh`, piped to a shell | **Verified against a FAKE release.** The download-and-verify path works and a tampered archive is refused, but **no real release exists, so today every user takes the `go install` fallback instead** — which contacts `proxy.golang.org` and `sum.golang.org`, writes hundreds of MB to `$GOMODCACHE` and `$GOCACHE`, and performs **none** of the checksum or signature verification. The verified path is not the reachable one |
 | GitHub Actions | **Verified**: all 15 were floating tags, now SHA-pinned |
 | Release artefacts, checksums, Sigstore signatures | Read. **Never exercised** — no release is tagged |
 | Issue templates, SECURITY.md, Discussions | **Verified**: Discussions was linked and disabled; now enabled |
@@ -111,6 +137,26 @@ engine's assumption that more caching is better.
 `internal/transcript` (1,100), `internal/ledger` (957) and `internal/cachemodel` (267).
 
 ---
+
+## Weaknesses found by the independent pass, not yet fixed
+
+- **`replay_rehydrated_total{destination=…}` and the denied counter carry model-supplied tool names**
+  on `/replay/metrics`, which is unauthenticated unless `--token` is set. **Same tool-name disclosure
+  class as the redacted-fixture problem**, on an endpoint any local process can read. Unbounded
+  cardinality too.
+- **No `O_EXCL` anywhere, and no write re-checks permissions.** Every key and state file is written
+  through a pre-existing symlink if one is there, and an existing file keeps its existing mode.
+- **`loadOrCreateKey` silently overwrites on any read failure.** A permission-denied read rotates the
+  label key, or replaces the vault key and orphans the vault.
+- **No file locking at all.** Two `replay serve` instances on one ledger directory rely entirely on
+  `O_APPEND` atomicity; the mutex in `store.go` is per-process.
+- **`isLoopback` accepts the literal string `localhost` without resolving it**, so that one input
+  trusts `/etc/hosts`.
+- **Log injection into stderr** via `r.URL.Path`, already percent-decoded by `net/url`, at
+  `server.go:500`. Neighbouring sites sanitise; this one does not.
+- **Client-visible egress not previously listed:** the loop-guard refusal body and the
+  `x-replay-warning` response header carry the raw tool name; the 502 body carries the full upstream
+  URL.
 
 ## What is genuinely unknown
 
