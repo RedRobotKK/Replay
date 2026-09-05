@@ -132,13 +132,13 @@ func trimSummaryLine(savedUSD, savedInputUSD, ratio float64) string {
 // line is a way the numbers above would otherwise mislead.
 func writeTrimNotes(w io.Writer) {
 	for _, l := range analysis.ProbeBlindSpots() {
-		fmt.Fprintf(w, "%s\n", l)
+		_, _ = fmt.Fprintf(w, "%s\n", l)
 	}
-	fmt.Fprintf(w, "\nThis does NOT delay auto-compaction. /v1/messages/count_tokens is not\n"+
+	_, _ = fmt.Fprintf(w, "\nThis does NOT delay auto-compaction. /v1/messages/count_tokens is not\n"+
 		"trimmed and the client's own accounting keeps using untrimmed sizes, so a\n"+
 		"trimmed session hits the compaction threshold at the same point. If you want\n"+
 		"a longer session, this is not the lever.\n")
-	fmt.Fprintf(w, "\nTry --context-edit-trigger first. It is provider-sanctioned, excluded from\n"+
+	_, _ = fmt.Fprintf(w, "\nTry --context-edit-trigger first. It is provider-sanctioned, excluded from\n"+
 		"the history-binding check, invalidates the cache only from the earliest\n"+
 		"cleared block, and the provider reports what it did. Trimming beats it only\n"+
 		"for a few enormous results, which is exactly what the figures above are for.\n")
