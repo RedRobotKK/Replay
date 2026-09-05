@@ -1,11 +1,30 @@
-# Replay
+<div align="center">
 
-**Replay shows you the turn your coding agent's prompt cache broke, what it cost, and what a better
-context layout would have saved, on sessions you have already paid for.**
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/wordmark-dark.svg">
+  <img alt="Replay — prompt cache, measured" src=".github/assets/wordmark-light.svg" width="820">
+</picture>
+
+<br>
+
+**See the turn your coding agent's prompt cache broke, what it cost, and what a better context
+layout would have saved. On sessions you have already paid for.**
 
 [![CI](https://github.com/RedRobotKK/Replay/actions/workflows/ci.yml/badge.svg)](https://github.com/RedRobotKK/Replay/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/RedRobotKK/Replay)](https://goreportcard.com/report/github.com/RedRobotKK/Replay)
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-d41424)](LICENSE)
+[![Go](https://img.shields.io/badge/go-1.24-00ADD8)](go.mod)
+[![Dependencies](https://img.shields.io/badge/dependencies-none-2ea043)](go.mod)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux-6e7681)](#install)
+
+[Install](#install) · [What it prints](#what-it-prints) · [Commands](#commands) · [Docs](docs/) · [Evidence](docs/evidence/) · [Roadmap](docs/ROADMAP.md)
+
+```sh
+curl -fsSL https://redrobot.jp/replay.sh | sh
+```
+
+</div>
+
+---
 
 It reads the transcripts your agent already writes, reproduces the provider's caching turn by turn,
 and only then scores alternatives. Later, as a local proxy, it applies the better layout live using
@@ -20,6 +39,43 @@ Everything runs on your machine. No API calls are spent on analysis. Nothing lea
 > has been exercised against a fake provider, not yet against the real one. Follow
 > [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
+## Works with
+
+Stated as a boundary rather than a row of logos, because the two paths support different things.
+
+| | Offline, from transcripts | Live, through the proxy |
+|---|---|---|
+| **What it needs** | Files your agent already wrote | `ANTHROPIC_BASE_URL` pointed at `127.0.0.1` |
+| **Clients** | Claude Code (the only transcript format parsed today) | Any client that can be pointed at a local base URL |
+| **Figures** | `estimated`, inferred from transcript bytes | `measured`, read off the wire |
+| **Costs an API call** | No | No. It is a passthrough; your agent's calls are the only calls |
+
+Other agents and other providers cache by different mechanisms, and pretending one model fits all of
+them would be worse than saying this. The shape a second provider needs is worked out in
+[`docs/architecture/multi-provider.md`](docs/architecture/multi-provider.md).
+
+## How it fits
+
+```mermaid
+flowchart LR
+  A["Coding agent"] -->|"requests"| S["replay serve<br/><i>byte-for-byte passthrough</i>"]
+  S -->|"unchanged"| P["Model provider"]
+  P -->|"response + usage"| S
+  S -->|"unchanged"| A
+  A -.->|"writes anyway"| T["~/.claude/projects<br/><i>transcripts</i>"]
+  S -->|"block kinds, sizes,<br/>timings, usage"| L["~/.replay/ledger"]
+  T --> R["replay"]
+  L --> R
+  R --> O["which turn broke ·<br/>what it cost ·<br/>what would be cheaper"]
+
+  style S stroke-dasharray: 4 3
+```
+
+**What it touches:** transcript files it reads, and a ledger it writes, both owner-only on your
+machine. **What it never touches:** your credential, which appears nowhere in the source, and the
+bytes of your requests, which are forwarded before they are parsed. **What it never does:** make a
+network call to anything except the provider you configured.
+
 ## What it prints
 
 Real output from one Claude Code session, the session in which Replay itself was written. It is a
@@ -27,7 +83,7 @@ paste from a single run, not a summary.
 
 ```text
 Tier: estimated (transcripts only)
-Calibration: reproduced provider cache reads on 77/78 turns (7 read more than predicted: a sibling request extended the prefix); 1 cache breaks
+Calibration: reproduced provider cache reads on 315/319 turns (7 read more than predicted: a sibling request extended the prefix); 4 cache breaks
 Assumption: replayed savings assume the agent would have behaved identically under the alternative layout
 Rules: anthropic-2026-09-01; user-content fit 0.469 tokens/byte ±64% from 34 turns; system prefix 39k (measured from the first request's cache read)
 
@@ -58,6 +114,30 @@ names the table date because prices change and other platforms differ.
 
 How it works: [`docs/architecture/replay-engine.md`](docs/architecture/replay-engine.md).
 
+## Who should not use this yet
+
+- **You need numbers you can put in front of finance today.** The offline tier is `estimated`. Run
+  the proxy for `measured` figures, and read the calibration line before quoting either.
+- **You are not on Claude Code.** Transcript analysis parses one format. The proxy is agnostic; the
+  reader is not.
+- **You want a dashboard or a hosted service.** There is neither. There is no account, no telemetry,
+  and no server: the only network call is your agent's own traffic to your provider.
+- **You want it to change your prompts for you.** It does not. It reports, and the guards that can
+  refuse a request are off unless you turn them on.
+
+## Operational footprint
+
+What running this actually costs you, measured rather than asserted.
+
+| | Cost |
+|---|---|
+| **API calls for analysis** | None. Analysis reads files; it never calls a model |
+| **Tokens spent by Replay** | Zero. It is a passthrough, so your agent's calls are the only calls |
+| **Latency added by the proxy** | **48µs p50, 98µs p99** against a local fake provider, so the figure is the proxy's own overhead and not the network's ([method](docs/evidence/proxy-latency-2026-09-03.md)) |
+| **Disk** | A ledger of block kinds, sizes, timings and usage counts. No message text, paths hashed, owner-only |
+| **Telemetry** | None. No account, no install-time question, no first-run prompt. `replay corpus --submit` is the only thing that ever transmits, it prints the exact payload, and it waits for you |
+| **Licence obligations** | Apache 2.0. No copyleft, no attribution beyond [`NOTICE`](NOTICE) |
+
 ## Why
 
 Coding agents resend the whole conversation on every turn. Three things go wrong quietly:
@@ -72,7 +152,7 @@ Replay addresses each one locally, without changing how the agent works.
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/RedRobotKK/Replay/main/install.sh | sh
+curl -fsSL https://redrobot.jp/replay.sh | sh
 ```
 
 Downloads the released binary for your platform and verifies it against the release checksums.
@@ -124,6 +204,18 @@ replay ~/.claude/projects/<your-project>/
 
 ## Commands
 
+| Command | What it does |
+|---|---|
+| `replay <dir>` | Reproduce caching turn by turn, then score alternative layouts. `--dollars` adds a list-cost column |
+| `replay blame <dir>` | Rank what is eating prompt tokens |
+| `replay diff <dir>` | Locate and classify every cache break |
+| `replay corpus <dir...>` | Calibration summary across sessions, as Markdown. No paths, no content |
+| `replay advise <dir...>` | Turn the largest token sources into suggestions with predicted savings |
+| `replay learn <dir...>` | Re-score the policy catalog, select one with held-out checks |
+| `replay doctor` | What Replay can see on this machine, and what to do next |
+| `replay redact <file>` | Strip content, keep structure and usage, for bug reports |
+| `replay serve` | Local proxy: byte-for-byte passthrough, records a ledger |
+
 | Command | What you get |
 |---------|--------------|
 | `replay <path>` | Reproduces your sessions' caching, prints how well it matched the provider's own numbers, then scores alternative layouts in tokens saved |
@@ -140,6 +232,12 @@ deliberately deferred: [`docs/ROADMAP.md`](docs/ROADMAP.md). Full requirements:
 [`docs/requirements.md`](docs/requirements.md).
 
 ## Measured numbers, with the proxy
+
+Transcripts give you estimated figures. Putting Replay in the request path gives you measured ones, read off the wire, and the ledger it writes holds block kinds, sizes, timings and usage counts, never message text.
+
+<details>
+<summary><b>Read the full proxy walkthrough</b></summary>
+<br>
 
 Transcripts do not contain the system prompt, tool definitions, or cache markers, so figures from
 them are labeled estimated. The proxy sees all of it:
@@ -264,6 +362,8 @@ visible next to its saving in the following record's cache read. Off by default.
 > unchanged, so setting it is safe. Details:
 > [`docs/architecture/proxy-protocol.md`](docs/architecture/proxy-protocol.md).
 
+</details>
+
 ## Learn from your own sessions
 
 ```sh
@@ -295,6 +395,12 @@ sessions show the target shrinking, then applied, then verified or not verified 
 prediction. Written to `~/.replay/advice.json`.
 
 ## Secret masking (experimental)
+
+A second layer, not a guarantee. It is honest about its limits below, and the limits matter more than the feature: a 32-character API token and a 40-character git SHA are the same string to an entropy test, so masking is done by context rather than by shape.
+
+<details>
+<summary><b>Read how masking works, and what it cannot catch</b></summary>
+<br>
 
 ```sh
 replay serve --mask [--project .] [--mask-patterns ~/.replay/patterns.txt] [--rehydrate-scope name=dest,dest]
@@ -380,6 +486,8 @@ converts secrets that were transient in flight into secrets at rest on your mach
 The published precision and recall figures are a statement about the corpus in
 `internal/masking/testdata/`, not about your secrets. **Treat masking as a second layer under
 not-sending-secrets, never as the first.**
+
+</details>
 
 ## Contributing a calibration corpus
 
