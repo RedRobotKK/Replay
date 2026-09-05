@@ -345,7 +345,7 @@ Coordinated disclosure per `SECURITY.md`. An external security review is schedul
 
 ## 12. Observability
 
-Metrics are computed from the provider's usage object, never inferred from bytes, and exposed locally as a Prometheus text endpoint behind the token. **Status:** `/replay/metrics` and `/replay/status` are implemented for the request, token, cache-break, upstream-error, refusal, and latency metrics; policy and rehydration counters arrive with those features.
+Metrics are computed from the provider's usage object, never inferred from bytes, and exposed locally as a Prometheus text endpoint behind the token. **Status, 2026-09-05:** twenty-one series are implemented, including the policy and rehydration counters this once deferred. Three names below drifted or were not built, and the table keeps the requirement's wording so the difference stays visible: `replay_rehydration_total` shipped as `replay_rehydrated_total`; `replay_error_cost_tokens` was never built; and `replay_added_latency_seconds` is **not** what `replay_request_latency_seconds` measures. The requirement asks for the proxy's own overhead, the byte-in to byte-out gap; the implemented summary covers the whole round trip including the provider, so it is dominated by network time. The 48µs and 98µs figures quoted elsewhere come from the latency benchmark, not from this metric.
 
 | Metric | Definition |
 |--------|------------|
