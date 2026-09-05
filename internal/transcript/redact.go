@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -118,8 +119,17 @@ func (rd *redactor) line(obj map[string]any) {
 func (rd *redactor) block(b map[string]any) {
 	for k, v := range b {
 		switch k {
-		case "type", "id", "tool_use_id", "is_error", "name":
+		case "type", "id", "tool_use_id", "is_error":
 			// structural; keep
+		case "name":
+			// A tool name is structural and analysis needs it, but an MCP
+			// tool name carries the server that provided it, which is a
+			// third party and sometimes a raw connector UUID. Hash the
+			// server segment only: the shape and the grouping survive, the
+			// identity does not.
+			if str, ok := v.(string); ok {
+				b[k] = rd.toolName(str)
+			}
 		case "input":
 			b[k] = rd.input(v)
 		case "content":
@@ -234,4 +244,17 @@ func (rd *redactor) filler(s string) string {
 		sb.WriteString(seed)
 	}
 	return sb.String()[:n]
+}
+
+// mcpToolName matches an MCP tool: mcp__<server>__<tool>.
+var mcpToolName = regexp.MustCompile(`^mcp__(.+?)__(.+)$`)
+
+// toolName leaves a built-in tool name alone and redacts the server segment
+// of an MCP tool name. Built-ins are the same for everyone; the server is not.
+func (rd *redactor) toolName(name string) string {
+	m := mcpToolName.FindStringSubmatch(name)
+	if m == nil {
+		return name
+	}
+	return "mcp__s_" + rd.digest(m[1])[:HashedLabelBytes] + "__" + m[2]
 }
