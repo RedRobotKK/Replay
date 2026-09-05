@@ -354,7 +354,12 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	// A failed write means the reader went away; nothing to do.
-	_ = json.NewEncoder(w).Encode(s.stats.status())
+	st := s.stats.status()
+	// A dollar cap that cannot be applied is worth reporting: an unpriced model
+	// contributes nothing to the running total, so the cap never fires and the
+	// operator silently has no cap on that traffic.
+	st.SpendCapNotEnforced = s.cfg.Spend.CapNotEnforced()
+	_ = json.NewEncoder(w).Encode(st)
 }
 
 func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {

@@ -92,15 +92,18 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		*policyFile = ""
 		*mask = false
 	}
+	// The kill switch comes first. Building the masker creates the vault key on
+	// disk, so checking afterwards meant REPLAY_DISABLED=1 still wrote a file
+	// before refusing to start, which is not what a kill switch means.
+	if os.Getenv(envDisabled) != "" {
+		return errDisabled
+	}
 	masker, rehydrator, err := maskingFromFlags(*mask, *maskPatterns, *rehydrate, *project, scopeSpecs)
 	if err != nil {
 		return err
 	}
 	if masker != nil {
 		masker.Entropy = *maskEntropy
-	}
-	if os.Getenv(envDisabled) != "" {
-		return errDisabled
 	}
 	// The environment value is applied after parsing so it never appears
 	// as a default in the usage text.

@@ -128,3 +128,19 @@ func TestCostAndSimulatedUsage(t *testing.T) {
 		t.Fatal("write multiplier does not follow TTL")
 	}
 }
+
+// An unknown model fell back to a read multiple of 0.10 while the current tier
+// is 0.025, a 4x overstatement that entered every effective-token figure and was
+// labelled measured rather than estimated. The bias has a direction: overstating
+// what a cache read costs systematically inflates the apparent value of
+// cache-preserving policies against cache-clearing ones, which is exactly the
+// comparison this tool exists to make.
+func TestUnknownModelDoesNotGetAFabricatedReadMultiple(t *testing.T) {
+	unknown := ReadMultiplierFor("a-model-nobody-has-heard-of")
+	newest := ReadMultiplierFor("fable-5-1")
+	if unknown > newest*2 {
+		t.Fatalf("an unknown model is charged %.4f per cached token while the current tier is %.4f; "+
+			"a fallback that overstates by %.1fx is a fabricated number, not a conservative one",
+			unknown, newest, unknown/newest)
+	}
+}

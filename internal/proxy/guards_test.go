@@ -178,3 +178,33 @@ func TestErrorBudgetJudgesOnlyLargeSessions(t *testing.T) {
 		t.Fatal("off must pass everything")
 	}
 }
+
+// A dollar cap on a model the price table does not know never fires: listCost
+// returns 0, the running total never grows, and `used >= limit` is never true.
+// The user asked for a cap and silently got none. Failing closed would block
+// traffic over a missing price, which this proxy does not do, so the guard has
+// to be able to say that the cap it was given is not being enforced.
+func TestDollarCapOnAnUnpricedModelIsReportedNotSilentlyIgnored(t *testing.T) {
+	g := NewSpendGuard(SpendLimits{SessionUSD: 20})
+	if g.CapNotEnforced() {
+		t.Fatal("nothing has happened yet")
+	}
+	// Tokens were spent, but the model could not be priced.
+	g.Record("s1", 500_000, 0)
+	if !g.CapNotEnforced() {
+		t.Fatal("a dollar cap that cannot be enforced must be reportable, not silent")
+	}
+	if msg := g.Check("s1"); msg != "" {
+		t.Fatalf("the cap must not fire on an unpriceable session: %q", msg)
+	}
+
+	// A priced session behaves exactly as before.
+	h := NewSpendGuard(SpendLimits{SessionUSD: 20})
+	h.Record("s2", 500_000, 25)
+	if h.CapNotEnforced() {
+		t.Fatal("a priced session enforces its cap normally")
+	}
+	if msg := h.Check("s2"); msg == "" {
+		t.Fatal("the cap should have fired at $25 of $20")
+	}
+}

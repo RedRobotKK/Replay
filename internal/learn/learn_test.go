@@ -323,3 +323,25 @@ func TestPolicyFileRecordsTheRulesActuallyInEffect(t *testing.T) {
 		t.Fatal("the fixture does not represent a rules change")
 	}
 }
+
+// Evidence was gated on `saving == 0`, exact float equality. A candidate whose
+// simulated saving is a rounding artefact — 1e-9 effective tokens — therefore
+// counted as full evidence on every session, and with low variance its
+// confidence interval sits above zero and it gets selected. The suite could not
+// see this because the test for the gate fed a literal 0.0 and confirmed only
+// that zero equals zero.
+func TestJudgeIgnoresSavingsTooSmallToBeReal(t *testing.T) {
+	scores := make([]SessionScore, 0, 40)
+	for i := 0; i < 40; i++ {
+		scores = append(scores, SessionScore{
+			Saving:  map[string]float64{"noise": 1e-9},
+			Cached:  map[string]float64{"noise": 0},
+			AsRun:   analysis.Tally{PromptTokens: 1_000_000, EffectiveTokens: 1_000_000},
+			Holdout: i%4 == 0,
+		})
+	}
+	v := judge(Candidate{Name: "noise"}, scores, Options{})
+	if v.Sessions != 0 {
+		t.Fatalf("a saving of 1e-9 counted as evidence on %d sessions", v.Sessions)
+	}
+}

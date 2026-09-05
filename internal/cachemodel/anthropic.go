@@ -85,7 +85,20 @@ var modelTable = []modelRow{
 	{"haiku", minPrefixStandard, Price{}, false},
 }
 
-var unknownModel = modelRow{minPrefix: minPrefixStandard, price: Price{ReadMult: ReadMultiplier}}
+// unknownModel is what an unrecognised model id falls back to.
+//
+// The read multiple matters more than it looks. It is not displayed like the
+// dollar column, which is simply suppressed when a model is unpriced; it enters
+// EffectiveTokens, which the policy comparison is decided on and which reports
+// label measured rather than estimated. Falling back to the older 0.10 tier
+// while current models read at 0.025 overstated the cost of every cached token
+// fourfold, and the bias has a direction: it inflates the apparent value of
+// cache-preserving policies against cache-clearing ones.
+//
+// The newest tier is the conservative choice here, because understating what a
+// cache read costs understates the benefit of keeping the cache, which is the
+// claim this tool would otherwise be making on its own behalf.
+var unknownModel = modelRow{minPrefix: minPrefixStandard, price: Price{ReadMult: readMultiplierNewest}}
 
 func lookup(model string) modelRow {
 	m := strings.ToLower(model)

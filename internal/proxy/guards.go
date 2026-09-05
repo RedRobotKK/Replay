@@ -45,11 +45,28 @@ type SpendGuard struct {
 	day     string
 	dayUsed spend
 	now     func() time.Time
+	// unpriceable records that a dollar cap was configured and at least one
+	// request could not be priced. Such a request adds nothing to the running
+	// total, so the cap can never be reached and the user silently has no cap
+	// at all. Refusing traffic over a missing price is not this proxy's
+	// behaviour, so the guard has to be able to say so instead.
+	unpriceable bool
 }
 
 // NewSpendGuard builds a guard; a zero limits value disables it.
 func NewSpendGuard(limits SpendLimits) *SpendGuard {
 	return &SpendGuard{limits: limits, session: map[string]*spend{}, now: time.Now}
+}
+
+// CapNotEnforced reports that a dollar cap is configured but at least one
+// request could not be priced, so the cap is not being applied to that traffic.
+func (g *SpendGuard) CapNotEnforced() bool {
+	if g == nil {
+		return false
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.unpriceable
 }
 
 // Enabled reports whether any cap is set.
@@ -64,6 +81,9 @@ func (g *SpendGuard) Record(sessionID string, tokens int, usd float64) {
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if usd <= 0 && tokens > 0 && (g.limits.SessionUSD > 0 || g.limits.DayUSD > 0) {
+		g.unpriceable = true
+	}
 	g.rollDay()
 	st, ok := g.session[sessionID]
 	if !ok {

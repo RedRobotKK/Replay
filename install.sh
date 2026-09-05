@@ -73,9 +73,9 @@ USAGE
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --version)        VERSION="${2:-}"; shift 2 ;;
+    --version)       [ $# -ge 2 ] || die "--version needs a value."; VERSION="$2"; shift 2 ;;
     --version=*)      VERSION="${1#*=}"; shift ;;
-    --bin-dir)        BIN_DIR="${2:-}"; shift 2 ;;
+    --bin-dir)       [ $# -ge 2 ] || die "--bin-dir needs a value."; BIN_DIR="$2"; shift 2 ;;
     --bin-dir=*)      BIN_DIR="${1#*=}"; shift ;;
     --dry-run)        DRY_RUN=1; shift ;;
     --no-modify-path) MODIFY_PATH=0; shift ;;
@@ -331,6 +331,12 @@ if [ "$CORPUS_OPT_IN" -eq 1 ]; then
   mkdir -p "$cfg_dir"
   # A dedicated file, because '>' on config.toml would silently truncate any
   # other settings the user already had there.
+  # Refuse to follow a symlink here. The reasoning below about not truncating
+  # an existing config does not survive one: a link planted at this path would
+  # redirect the write to whatever it points at.
+  if [ -L "$cfg_dir/corpus-consent.toml" ]; then
+    die "${cfg_dir}/corpus-consent.toml is a symlink. Nothing was written."
+  fi
   printf 'corpus_opt_in = true\n# Written by install.sh --corpus-opt-in on %s\n# Delete this file to withdraw. Nothing is sent until you run: replay corpus --submit\n' \
     "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$cfg_dir/corpus-consent.toml"
   ok "Corpus contribution enabled in ${cfg_dir}/corpus-consent.toml"

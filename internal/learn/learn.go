@@ -326,13 +326,32 @@ func selectFrom(candidates []Candidate, scores []SessionScore, found int, opts O
 
 // judge scores one candidate against the rules that do not depend on
 // other candidates.
+// minMeaningfulShare is the floor below which a simulated saving is treated as
+// arithmetic noise rather than evidence, as a share of the session's own scale.
+//
+// Relative, not absolute: savings are in effective tokens, so the same figure
+// means something different on a session of a hundred tokens and one of three
+// hundred million. One part per million is far below anything a person would
+// act on and far above the rounding that makes a policy identical to as-run
+// score a few billionths rather than exactly zero.
+const minMeaningfulShare = 1e-6
+
 func judge(c Candidate, scores []SessionScore, opts Options) Verdict {
 	v := Verdict{Candidate: c}
 	var train, holdout []float64
 	var cachedDelta float64
 	for _, s := range scores {
 		saving, ok := s.Saving[c.Name]
-		if !ok || saving == 0 {
+		// Not `saving == 0`. Replaying an equivalent policy does not reproduce
+		// as-run bit for bit, so a candidate that changes nothing still shows a
+		// saving of a few billionths of a token. Exact equality let that count
+		// as full evidence on every session, and a tight interval around noise
+		// is still an interval above zero.
+		scale := s.AsRun.EffectiveTokens
+		if scale <= 0 {
+			scale = float64(s.AsRun.PromptTokens)
+		}
+		if !ok || math.Abs(saving) < minMeaningfulShare*scale {
 			continue
 		}
 		v.Estimated = v.Estimated || s.Estimated[c.Name]

@@ -5,7 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,6 +72,16 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 	if os.Getenv(envDisabled) != "" {
 		p.Printf("              %s is set: serve will refuse to start\n", envDisabled)
 	}
+	// REPLAY_UPSTREAM redirects every request the proxy forwards, and it is
+	// read as a flag default, so it does not show up as an override anywhere
+	// either. The one command whose job is to say what Replay can see here has
+	// to be able to see a hijacked upstream.
+	if up := strings.TrimSpace(os.Getenv(envUpstream)); up != "" {
+		p.Printf("              %s is set: every forwarded request goes to %s\n", envUpstream, up)
+		if !strings.HasPrefix(up, "https://") {
+			p.Printf("              WARNING: that upstream is not https, so your provider credential would travel in clear text\n")
+		}
+	}
 
 	// Ledger.
 	n := countFiles(ledgerDir, "*.jsonl")
@@ -109,6 +121,13 @@ func countFiles(dir, pattern string) int {
 
 // probeProxy asks the health endpoint and reports what answered.
 func probeProxy(base string) (bool, string) {
+	// Only loopback. This probe is a GET to whatever the environment names, so
+	// without this check `ANTHROPIC_BASE_URL=http://internal.corp/admin` turns
+	// the one command whose job is "what can Replay see here" into a request
+	// generator pointed at somebody's network.
+	if !isLoopbackURL(base) {
+		return false, "not probed: only a loopback address is contacted, and this is not one"
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), doctorTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(base, "/")+proxy.HealthPath, nil)
@@ -141,4 +160,18 @@ func claudeConfigDir(home string) string {
 		return d
 	}
 	return filepath.Join(home, ".claude")
+}
+
+// isLoopbackURL reports whether a base URL names this machine.
+func isLoopbackURL(base string) bool {
+	u, err := url.Parse(strings.TrimSpace(base))
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := u.Hostname()
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }

@@ -400,6 +400,9 @@ type Status struct {
 	Sessions      []SessionSummary `json:"sessions"`
 	PriceTable    string           `json:"price_table"`
 	Rules         string           `json:"rules"`
+	// SpendCapNotEnforced is true when a dollar cap is configured and at least
+	// one request could not be priced, so that traffic is not capped at all.
+	SpendCapNotEnforced bool `json:"spend_cap_not_enforced,omitempty"`
 	// Trial reports the live trial of a learned policy, when one runs.
 	Trial TrialStatus `json:"trial"`
 }

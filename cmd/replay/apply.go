@@ -243,8 +243,16 @@ func heaviestDecile(obs []ttlObservation) string {
 		return ""
 	}
 	sorted := append([]ttlObservation(nil), obs...)
-	sort.Slice(sorted, func(i, j int) bool {
-		return math.Min(sorted[i].Short, sorted[i].Long) > math.Min(sorted[j].Short, sorted[j].Long)
+	// Stable, and with a tiebreak: this ordering decides the decile boundary,
+	// which decides whether the tool edits somebody's settings file. An
+	// unstable sort could shuffle ties between runs and flip that decision on
+	// identical input.
+	sort.SliceStable(sorted, func(i, j int) bool {
+		mi, mj := math.Min(sorted[i].Short, sorted[i].Long), math.Min(sorted[j].Short, sorted[j].Long)
+		if mi != mj {
+			return mi > mj
+		}
+		return sorted[i].Short > sorted[j].Short
 	})
 	var short, long float64
 	for _, o := range sorted[:len(sorted)/10] {
@@ -258,14 +266,4 @@ func heaviestDecile(obs []ttlObservation) string {
 		return "5m"
 	}
 	return "1h"
-}
-
-func ttlFromPolicyName(name string) (string, bool) {
-	switch name {
-	case "ttl-5m0s":
-		return "5m", true
-	case "ttl-1h0m0s":
-		return "1h", true
-	}
-	return "", false
 }
