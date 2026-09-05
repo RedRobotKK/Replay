@@ -24,6 +24,7 @@
 set -eu
 
 REPO="RedRobotKK/Replay"
+COFFEE="https://buymeacoffee.com/saitodaniel"
 BIN="replay"
 VERSION="${REPLAY_VERSION:-}"
 BIN_DIR="${REPLAY_BIN_DIR:-}"
@@ -368,6 +369,16 @@ if [ "$CORPUS_OPT_IN" -eq 0 ]; then
   printf '%sTo help calibrate it against real traffic:%s %s%s corpus%s%s shows what your own\nsessions look like and sends nothing.%s %s%s corpus --submit%s%s offers to.%s\n' \
     "$C_DIM" "$C_0" "$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" "$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
 fi
+
+# Said once, at the only moment the person is definitely reading, and never
+# again: Replay has no account and phones nothing home, so there is no second
+# opportunity and no nag. Tied to a real number rather than a general appeal,
+# because the corpus that makes the tool's figures measured rather than guessed
+# was paid for out of pocket.
+printf '\n%sReplay is free, Apache 2.0, and funded by nobody. The 1363-session corpus\nbehind its numbers cost about $2856 in API spend to gather.%s\n' \
+  "$C_DIM" "$C_0" >&2
+printf '%sIf it saves you more than it cost you to install:%s %s%s%s\n' \
+  "$C_DIM" "$C_0" "$C_ACCENT$C_B" "$COFFEE" "$C_0" >&2
 
 printf '\n%sDocs%s https://github.com/%s#readme   %sUninstall%s rm %s/%s\n' \
   "$C_DIM" "$C_0" "$REPO" "$C_DIM" "$C_0" "$BIN_DIR" "$BIN" >&2
