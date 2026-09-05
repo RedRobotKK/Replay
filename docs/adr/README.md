@@ -19,6 +19,7 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | [0011](0011-opt-in-request-rewriting.md) | Opt-in request rewriting | Proposed |
 | [0012](0012-dual-licensing-deferred.md) | Dual licensing considered and declined; the CLA stays | Accepted |
 | [0013](0013-x402-rules-feed.md) | Sell a maintained rules feed over x402; the binary never holds a key | Accepted |
+| [0014](0014-checks-must-be-able-to-fail.md) | A check must be able to fail, and reachability is asserted mechanically | Accepted |
 
 ---
 
