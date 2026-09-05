@@ -10,6 +10,7 @@ back to this index.
 | [Getting started](guide/getting-started.md) | The first ten minutes. Install, see what Replay can find, read a session you have already paid for |
 | [Commands](guide/commands.md) | Every subcommand, and every flag on `serve` |
 | [Troubleshooting](guide/troubleshooting.md) | What goes wrong, what it means, and what to do |
+| [Alerting](guide/alerting.md) | Prometheus expressions for `/replay/metrics`, and the two thresholds you should derive from your own data rather than copy |
 
 ## If you are deciding whether to trust it
 

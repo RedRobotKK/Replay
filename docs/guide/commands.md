@@ -308,6 +308,8 @@ is `/replay/status`, which you ask for.
 | `replay_policy_applied_total` | counter | `policy` | Requests carrying a Replay-added parameter |
 | `replay_request_latency_seconds` | summary | — | Request received to response finished |
 
+Expressions for alerting on these are in [alerting.md](alerting.md).
+
 The token, cache and break counters are lifetime totals. They were once summed over the
 live session map, which evicts past 256 sessions, so they under-reported by whatever had
 been dropped and could fall between two scrapes; a falling counter reads to Prometheus as
