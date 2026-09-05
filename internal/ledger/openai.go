@@ -48,7 +48,47 @@ func SummarizeOpenAIRequest(body []byte, _ *Labeler) (RequestSummary, error) {
 	if len(req.Blocks) > 0 {
 		sum.Prompt.SystemBytes = req.Blocks[0].Bytes
 	}
+
+	// PrefixHash and SessionHash are not decoration. The proxy falls back to
+	// SessionHash when the client sends no session header, which every
+	// OpenAI-compatible client does because the header it looks for is Claude
+	// Code's own; leaving it empty meant the ledger record was dropped and the
+	// log line still looked correct. The sibling gate keys on PrefixHash, and
+	// an empty key makes unrelated requests queue behind each other.
+	//
+	// Hashed from block structure rather than text, because this parser never
+	// holds message content and is not going to start. Two sessions whose
+	// system prompt and first message match in kind and size to the byte will
+	// collide; that is a real limit of hashing shape instead of content, and a
+	// far smaller error than writing nothing at all.
+	if len(req.Blocks) > 0 {
+		sum.PrefixHash = hashOf("prefix-", blockIdentity(req.Blocks[0]))
+		if len(req.Blocks) > 1 {
+			sum.SessionHash = hashOf("session-",
+				blockIdentity(req.Blocks[0]), blockIdentity(req.Blocks[1]))
+		} else {
+			sum.SessionHash = hashOf("session-", blockIdentity(req.Blocks[0]))
+		}
+	}
 	return sum, nil
+}
+
+// blockIdentity renders a block's structure, never its text, as the bytes a
+// hash is taken over.
+func blockIdentity(b transcript.Block) json.RawMessage {
+	id := struct {
+		Kind  string `json:"kind"`
+		Bytes int    `json:"bytes"`
+		Name  string `json:"name,omitempty"`
+	}{Kind: b.Kind, Bytes: b.Bytes, Name: b.ToolName}
+	out, err := json.Marshal(id)
+	if err != nil {
+		// The struct above has no unmarshalable field, so this cannot fire;
+		// returning empty keeps the hash defined rather than panicking in a
+		// request path.
+		return json.RawMessage("{}")
+	}
+	return out
 }
 
 // openAIResponse is the reply, decoded only as far as the ledger needs.

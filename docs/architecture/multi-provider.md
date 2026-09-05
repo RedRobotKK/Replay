@@ -131,7 +131,7 @@ Steps 1 and 2 are built and step 3 is built against a stub.
 |---|---|
 | 1. Normalise the usage record, keep the raw payload | **Done.** `internal/usage` holds the engine's own vocabulary and one concrete adapter; `ledger.Record.RawUsage` keeps the provider's object unparsed. No `Provider` interface, per the rule below |
 | 2. Rules as a dated document with `documented` and `observed` per field | **Done.** `cachemodel.Claim` pairs the two and derives the verdict; a file that writes its own `status` is refused. JSON rather than the YAML sketched here, because `go.mod` is 45 bytes and a parser is a dependency |
-| 3. A second provider | **Partly.** `/v1/chat/completions` is read, guarded and ledgered, streaming included. **Verified against a stub, never against a live OpenAI-compatible provider** |
+| 3. A second provider | **Partly.** `/v1/chat/completions` is read, guarded and ledgered, streaming included. First live run on 2026-09-05 against a local Ollama endpoint: passthrough, usage parsing and streaming all correct, and it **found a defect no stub could** (see below). Still unverified against a provider that reports cached tokens |
 | 4. Generalise the corpus per mechanism family | Not started |
 
 **The thing this document got most right is the counting trap, which it did not
@@ -142,6 +142,28 @@ correct for one and double-counts the cache for the other, and the error grows
 with the hit rate, so it is largest on exactly the sessions this tool exists for.
 `usage.FromInclusive` subtracts and `Validate` refuses a record whose parts do
 not add up.
+
+### What the first live run found, 2026-09-05
+
+Pointed at a local Ollama endpoint — an OpenAI-compatible server, and the same shape as an
+NVIDIA NIM gateway — three of four things worked and the fourth was silently broken.
+
+`SummarizeOpenAIRequest` set neither `SessionHash` nor `PrefixHash`. The proxy's documented
+fallback is to use `SessionHash` as the session identity when a client sends no session
+header, and the header it looks for is `x-claude-code-session-id` — Claude Code's own, which
+no OpenAI-compatible client sends. So **every request from Cursor, Grok or any generic client
+was read, guarded, priced, logged with correct figures, and then dropped without a ledger
+record.** `replay cost` over that traffic would have reported nothing while the proxy's log
+looked perfectly healthy.
+
+`PrefixHash` had the same omission and a second consequence: `--hold-siblings` keys on it, so
+an empty value collapses every unrelated request onto one gate key and serialises them.
+
+**A stub could not have caught this.** The tests supplied a session header because the
+Anthropic path always has one, so the fallback was never exercised. The bug lived in the gap
+between what the tests sent and what a real client sends, which is the only place this class
+of bug can live. Fixed test-first; the hashes are taken over block structure rather than text,
+so the ledger's promise not to hold message content is unchanged.
 
 **What step 3 still cannot answer without live traffic**: whether a cache write
 is distinguishable in that response shape at all, whether the write penalty is
