@@ -37,6 +37,19 @@ func TestDoctorShoutsWhenADollarCapIsNotEnforced(t *testing.T) {
 	if !strings.Contains(got, "not being applied") {
 		t.Fatalf("the warning must say what is actually wrong, got:\n%s", got)
 	}
+	// Naming the flag beats describing it. The reader is being told their
+	// protection is not running; the next thing they need is the exact thing
+	// to type, not a category of thing to look for.
+	for _, want := range []string{"--max-day-tokens", "--max-session-tokens", "replay rules --update"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("the warning must name %q so it can be acted on, got:\n%s", want, got)
+		}
+	}
+	// And it must say why tokens work where dollars do not, or the advice
+	// reads as an arbitrary substitution.
+	if !strings.Contains(got, "whether or not") && !strings.Contains(got, "regardless") {
+		t.Fatalf("the warning must say why a token cap still applies, got:\n%s", got)
+	}
 }
 
 // Silence is a report too: a user who has configured guards wants to know they

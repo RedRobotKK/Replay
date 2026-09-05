@@ -52,8 +52,11 @@ func guardLines(st proxy.Status) []string {
 		// limit they do not have, which is worse than having set none.
 		out = append(out,
 			"WARNING: a dollar cap is set, but some traffic could not be priced, so the",
-			"         cap is not being applied to it. Check `replay rules` covers every",
-			"         model in use, or cap on tokens instead, which always applies.")
+			"         cap is not being applied to it. An agent looping on an unpriced",
+			"         model can run up a real bill without ever reaching your limit.",
+			"         Cap tokens as well: --max-day-tokens or --max-session-tokens count",
+			"         whether or not a model can be priced.",
+			"         Then `replay rules --update <file|URL>` so the model has a price.")
 	}
 	return out
 }
