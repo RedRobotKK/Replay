@@ -631,6 +631,144 @@ not-sending-secrets, never as the first.**
 
 </details>
 
+## Forensics, guardrails, and cache inversion
+
+Three offline commands and four local guards. The commands read the ledger and
+nothing else; the guards answer requests locally rather than forwarding them.
+
+### Cache-read inversion (`replay route`)
+
+A price list compares input tokens. Your bill does not, once most of your
+prompt is a cache read: a model that costs more per input token can be cheaper
+per turn if its cache-read multiple is better, and the crossover is a real
+number you can compute.
+
+```bash
+replay route <ledger-or-transcripts> --to <model>
+```
+
+On the development corpus, 8,083 turns at a 99.6% hit rate:
+
+```
+                            claude-opus-5  claude-fable-5-1
+cache read multiple                 0.100             0.025
+break-even trim, 5m                 91.8%             97.7%
+break-even trim, 1h                 94.8%             98.6%
+
+Cache-read inversion at a 95.24% cached share: claude-fable-5-1 is cheaper
+per turn above it, claude-opus-5 below.
+
+sigma (tokenizer dilation, claude-opus-5 -> claude-fable-5-1): unmeasured
+Dollar figures are suppressed.
+```
+
+**Read that carefully, because it is two claims and only one of them is
+measured.** The 95.24% boundary is structural: it comes from read multiples and
+the price ratio, no token count enters it, so no tokenizer can move it. Whether
+*your* traffic sits above that line is measured. What it would actually cost in
+dollars is **not**, and the command refuses to say.
+
+The missing piece is sigma, the ratio between two tokenizers on the same
+content. Absolute cross-model figures need it, and it is measured from both
+sides of the wire or it does not exist here. There is no default of 1.0 and no
+constant on a rate card, because at a 99% cached share this comparison breaks
+even at sigma = 1.0627, so a plausible-looking 1.15 would not be a safety
+margin. It would be the deciding vote, cast by a number nobody measured.
+
+Run both models over comparable work and the dollar figures fill themselves in.
+
+### Trim auditing (`replay trim`)
+
+Offline scoring for a per-block byte cap on tool output, plus a probe asking
+whether the agent later needed what the cap would have removed.
+
+```bash
+replay trim <ledger-or-transcripts> --cap 16384
+```
+
+Over 197 real sessions:
+
+```
+79 blocks over the cap, 9.46M prompt tokens once resending is counted.
+Worth $4.70 at cache-read prices, which is what a resent byte costs.
+Priced as fresh input it would read $46.99, 10.0x larger and wrong.
+Harm probe: 73 cases where the agent later needed removed content.
+```
+
+**$4.70 is the whole prize, and it is why the live trimmer does not exist.**
+Building one means surviving three problems: Go's `json.Marshal` HTML-escapes
+`<`, `>` and `&`, so decode-cut-re-marshal returns a block up to six times the
+cap on HTML, JSX, XML and git conflict markers, which destroys the idempotence
+the design rested on; un-trimming a block previously sent trimmed is itself a
+history edit, so a restart without the flag or a changed cap corrupts a live
+session; and trimming before masking cuts a secret into a prefix matching no
+pattern, forwarded in clear, under an operator reading "0 secrets masked".
+
+Ten minutes of measurement against real data answered that, rather than
+months of building it and finding out.
+
+The harm probe is a **lower bound** and prints its own blind spots: `Write` has
+no `old_string`, line numbers carried into a later `Read` are invisible to it,
+and removing test failures produces *fewer* later edits, which it would score as
+a saving rather than as damage.
+
+Use `--context-edit-trigger` instead. It is provider-sanctioned, invalidates the
+cache only from the earliest cleared block, and the provider reports what it
+did.
+
+### The four guards
+
+```
+client request
+      |
+      v
+  spend cap ---------- over budget? ---> 400, locally
+  error budget ------- too much error? -> 400, locally
+  loop detector ------ same call again? -> 400, locally
+  circuit breaker ---- provider failing? -> 503, locally
+      |
+      v
+  upstream (with --retries and backoff)
+```
+
+Every refusal is logged with the session and the numbers, and appended to the
+ledger, so a guard that saved you money overnight is something you can read back
+rather than a gap where the request log stopped.
+
+- **Spend caps**, per session and per UTC day, in tokens or dollars. The day
+  counter is persisted, because a daily cap that resets on restart is the
+  protection disappearing for exactly the threat it exists to stop.
+- **Error budget**, which counts every agent lane of a session against that
+  session's own prompt tokens. Both sides of that ratio cover the same traffic;
+  a quiet sub-agent cannot erase a busy one's errors.
+- **Loop detector**, on the current run of identical tool calls only.
+- **Circuit breaker**, which counts *client requests*, not attempts. One request
+  that exhausts `--retries` is one failure, so the two flags do not multiply the
+  count — but they do multiply the time, and `--breaker-failures 5` opens after
+  five slow requests rather than five quick ones.
+
+Policy trials are scoped per policy: breach counters and the reverted flag are
+keyed by the policy's parameters and its generation timestamp, so a breach
+gathered against one trigger never reverts another, and reverting one policy
+never disarms the guardrail for the next one.
+
+### Diagnostics
+
+```bash
+replay doctor                              # guards block: refusals, today's cost, warnings
+replay advise <ledger-or-transcripts> --guards   # caps from your own spread
+```
+
+`doctor` shouts when a dollar cap is configured but some traffic could not be
+priced, because then the cap is not being applied and you believe you have a
+limit you do not have.
+
+`advise --guards` derives caps with Tukey's upper fence, `Q3 + 1.5*IQR`, over
+your own sessions, and prints the quartiles and the session count behind them.
+It refuses below ten sessions rather than dressing up a guess, and it writes
+nothing: it cannot be combined with `--apply`, because a spend cap the tool set
+for you is a refusal you did not choose.
+
 ## Contributing a calibration corpus
 
 The roadmap gate for the first release is calibration on twenty real sessions. If you have Claude Code
