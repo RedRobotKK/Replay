@@ -1,0 +1,1 @@
+{"error":{"message":"The supported API model names are deepseek-v4-pro, deepseek-v4-flash, and deepseek-v4-flash-vision-exp, but you passed does-not-exist.","type":"invalid_request_error","param":null,"code":"invalid_request_error"}}
