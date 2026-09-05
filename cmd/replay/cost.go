@@ -90,7 +90,7 @@ func percentile(sorted []float64, p float64) float64 {
 	return sorted[i]
 }
 
-func renderCost(s costSummary, unpriced int) string {
+func renderCost(s costSummary, unpriced int, out io.Writer) string {
 	var b strings.Builder
 	if s.Tasks == 0 {
 		fmt.Fprintf(&b, "No session could be priced. %d were read but their model is not in the price table.\n", unpriced)
@@ -105,7 +105,7 @@ func renderCost(s costSummary, unpriced int) string {
 	if unpriced > 0 {
 		fmt.Fprintf(&b, "\n%d further sessions were read but not priced, because their model is not in\nthe price table. They are excluded rather than counted as free.\n", unpriced)
 	}
-	b.WriteString(tipLine(s.AvoidableUSD))
+	b.WriteString(tipLine(s.AvoidableUSD, out))
 	return b.String()
 }
 
@@ -221,7 +221,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	if _, err := io.WriteString(stdout, renderCost(s, unpriced)); err != nil {
+	if _, err := io.WriteString(stdout, renderCost(s, unpriced, stdout)); err != nil {
 		return err
 	}
 	if *perTask && len(units) > 0 {

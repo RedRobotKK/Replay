@@ -26,7 +26,7 @@ func TestTipLine(t *testing.T) {
 		{"large finding", 4000, true, ""},
 	}
 	for _, c := range cases {
-		got := tipLine(c.avoidable)
+		got := tipLineFor(c.avoidable, false)
 		if (got != "") != c.want {
 			t.Errorf("%s: line=%q, want shown=%v. %s", c.name, got, c.want, c.why)
 		}
@@ -89,10 +89,50 @@ func TestTipLine(t *testing.T) {
 
 // Nothing in this line may look like an invoice, a total, or an obligation.
 func TestTipLineIsNotABill(t *testing.T) {
-	line := tipLine(152.40)
+	line := tipLineFor(152.40, false)
 	for _, banned := range []string{"owe", "due", "invoice", "please pay", "must"} {
 		if strings.Contains(strings.ToLower(line), banned) {
 			t.Errorf("the tip line reads as a demand (%q): %q", banned, line)
 		}
+	}
+}
+
+// A terminal hyperlink is an escape sequence, and an escape sequence in a file
+// or a pipe is corruption. `replay cost > report.txt` and `| grep` have to keep
+// working, so the link is only emitted when stdout is genuinely a terminal.
+func TestTipLinkOnlyHyperlinksATerminal(t *testing.T) {
+	const esc = "\x1b]8;;"
+
+	plain := tipLineFor(147.73, false)
+	if strings.Contains(plain, "\x1b") {
+		t.Errorf("escape bytes reached a non-terminal writer: %q", plain)
+	}
+	if !strings.Contains(plain, shareCoffee) {
+		t.Errorf("the plain form lost the URL: %q", plain)
+	}
+
+	linked := tipLineFor(147.73, true)
+	if !strings.Contains(linked, esc) {
+		t.Errorf("a terminal got no hyperlink: %q", linked)
+	}
+	// The visible text must still be the URL itself. A terminal that does not
+	// understand OSC 8 shows the label, and a reader who wants to copy the
+	// address should find an address rather than the words "click here".
+	if !strings.Contains(linked, esc+"https://"+shareCoffee) {
+		t.Errorf("the hyperlink target is not the coffee URL: %q", linked)
+	}
+	if !strings.Contains(linked, shareCoffee+"\x1b]8;;\x1b\\") {
+		t.Errorf("the visible label is not the URL, so it cannot be copied: %q", linked)
+	}
+}
+
+// Stripped of escapes, the two forms must say exactly the same thing. A
+// terminal reader and a log reader should not be given different asks.
+func TestTipLinkSaysTheSameThingBothWays(t *testing.T) {
+	strip := regexp.MustCompile(`\x1b]8;;[^\x1b]*\x1b\\`)
+	linked := strip.ReplaceAllString(tipLineFor(147.73, true), "")
+	if linked != tipLineFor(147.73, false) {
+		t.Errorf("the hyperlinked form differs once escapes are removed:\n  %q\n  %q",
+			linked, tipLineFor(147.73, false))
 	}
 }

@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"math"
+	"os"
 )
 
 // The ask, at the one moment it is relevant.
@@ -45,8 +47,31 @@ const (
 )
 
 // tipLine returns the line to print under a cost report, or "" when the finding
-// does not earn one.
-func tipLine(avoidableUSD float64) string {
+// does not earn one. It hyperlinks the address when the destination is a
+// terminal that can render one.
+func tipLine(avoidableUSD float64, out io.Writer) string {
+	return tipLineFor(avoidableUSD, canHyperlink(out))
+}
+
+// canHyperlink reports whether OSC 8 is worth emitting. A file, a pipe or a
+// dumb terminal gets plain text: an escape sequence in `replay cost > out.txt`
+// is corruption, not a convenience.
+func canHyperlink(out io.Writer) bool {
+	f, ok := out.(*os.File)
+	if !ok {
+		return false
+	}
+	if os.Getenv("TERM") == "dumb" || os.Getenv("TERM") == "" {
+		return false
+	}
+	st, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return st.Mode()&os.ModeCharDevice != 0
+}
+
+func tipLineFor(avoidableUSD float64, hyperlink bool) string {
 	if avoidableUSD < tipFloorUSD {
 		return ""
 	}
@@ -65,11 +90,17 @@ func tipLine(avoidableUSD float64) string {
 	if coffees == 1 {
 		unit = "coffee"
 	}
+	// OSC 8. The visible label is the URL itself, so a terminal that ignores
+	// the sequence still shows an address a reader can copy.
+	link := shareCoffee
+	if hyperlink {
+		link = "\x1b]8;;https://" + shareCoffee + "\x1b\\" + shareCoffee + "\x1b]8;;\x1b\\"
+	}
 	return fmt.Sprintf(
 		"\nReplay found $%.2f you had already paid for once. It is free, and the\n"+
 			"measurements behind it are not. If it was worth %d %s of that back, that\n"+
 			"is what keeps it maintained: %s\n",
-		avoidableUSD, coffees, unit, shareCoffee)
+		avoidableUSD, coffees, unit, link)
 }
 
 const shareCoffee = "buymeacoffee.com/saitodaniel"
