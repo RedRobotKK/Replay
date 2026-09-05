@@ -40,6 +40,10 @@ Cost per task, across 1363 sessions priced at list rates (anthropic-2026-09-01).
   avoidable      $152.94  (5% of the total)
 ```
 
+That run is from 2026-09-05 and is the same corpus as
+[`docs/evidence/`](docs/evidence/). It grows, so the totals move; the rate and the
+median do not. Point it at your own sessions rather than trusting these figures.
+
 Five percent of that bill was paid twice, because a prompt cache broke and nobody was told. The
 median task cost 65 cents and the p90 cost $2.30, which is the spread you need before you can price
 a feature, a customer, or an agent that runs unattended. High growth hides bad unit economics until
@@ -731,14 +735,18 @@ whether the agent later needed what the cap would have removed.
 replay trim <ledger-or-transcripts> --cap 16384
 ```
 
-Over 197 real sessions:
+Over 197 real sessions, on 2026-09-05:
 
 ```text
 79 blocks over the cap, 9.46M prompt tokens once resending is counted.
 Worth $4.70 at cache-read prices, which is what a resent byte costs.
-Priced as fresh input it would read $46.99, 10.0x larger and wrong.
+Priced as fresh input it would read $47.00, 10.0x larger and wrong.
 Harm probe: 73 cases where the agent later needed removed content.
 ```
+
+The corpus grows, so run it on yours rather than trusting the cents here. The
+ratio is the durable part: a resent byte is a cache read, and pricing it as
+fresh input overstates by about ten times whatever the totals are.
 
 **$4.70 is the whole prize, and it is why the live trimmer does not exist.**
 Building one means surviving three problems: Go's `json.Marshal` HTML-escapes
