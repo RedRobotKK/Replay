@@ -40,6 +40,25 @@ Everything runs on your machine. No API calls are spent on analysis. Nothing lea
 > has been exercised against a fake provider, not yet against the real one. Follow
 > [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
+## Live, while you can still do something about it
+
+Claude Code tells you what a session has cost. It cannot tell you how much of
+that was avoidable, because it does not price cache misses. Replay does, on the
+JSON Claude Code already hands a status line, in about 6ms per render:
+
+```text
+$18.40  cache 91%  $3.10 avoidable  tools changed
+```
+
+```sh
+replay statusline --install   # prints the settings.json snippet
+```
+
+It opens no files and makes no network call: it is arithmetic on data the client
+already computed, priced with the rules document above. When the figure it
+computes exceeds what the session actually cost, the two disagree and it shows
+the cause without the number, because the one to doubt is ours.
+
 ## Works with
 
 Stated as a boundary rather than a row of logos, because the two paths support different things.
@@ -217,6 +236,7 @@ replay ~/.claude/projects/<your-project>/
 | `replay advise --apply <dir...>` | Propose the one setting evidence can decide, show the diff, and refuse when the evidence does not support a single answer. `--yes` writes it, `--json` emits it for an agent |
 | `replay learn <dir...>` | Re-score the policy catalog, select one with held-out checks |
 | `replay doctor` | What Replay can see on this machine, and what to do next |
+| `replay statusline` | Live spend, cache health, and what the misses are costing, in Claude Code's status line. `--install` prints the settings snippet |
 | `replay rules [--update <src>]` | Show the provider rules in effect and where they came from, or install a dated document. `--dry-run` validates without installing |
 | `replay redact <file>` | Strip content, keep structure and usage, for bug reports |
 | `replay serve` | Local proxy: byte-for-byte passthrough, records a ledger |
