@@ -217,6 +217,7 @@ replay ~/.claude/projects/<your-project>/
 | `replay advise --apply <dir...>` | Propose the one setting evidence can decide, show the diff, and refuse when the evidence does not support a single answer. `--yes` writes it, `--json` emits it for an agent |
 | `replay learn <dir...>` | Re-score the policy catalog, select one with held-out checks |
 | `replay doctor` | What Replay can see on this machine, and what to do next |
+| `replay rules [--update <src>]` | Show the provider rules in effect and where they came from, or install a dated document. `--dry-run` validates without installing |
 | `replay redact <file>` | Strip content, keep structure and usage, for bug reports |
 | `replay serve` | Local proxy: byte-for-byte passthrough, records a ledger |
 

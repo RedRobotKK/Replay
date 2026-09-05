@@ -102,12 +102,18 @@ func lookup(model string) modelRow {
 
 // MinCacheablePrefix returns the minimum cacheable prefix for a model id.
 func MinCacheablePrefix(model string) int {
+	if row, ok := activeRow(model); ok {
+		return row.MinPrefix
+	}
 	return lookup(model).minPrefix
 }
 
 // PriceFor returns the list price for a model id, and false when the model
 // is not in the table. Callers print no dollar figure in that case.
 func PriceFor(model string) (Price, bool) {
+	if r, ok := activeRow(model); ok {
+		return Price{InputPerMTok: r.InputPerMTok, OutputPerMTok: r.OutputPerMTok, ReadMult: r.ReadMult}, r.Priced
+	}
 	row := lookup(model)
 	return row.price, row.priced
 }
@@ -115,6 +121,9 @@ func PriceFor(model string) (Price, bool) {
 // ReadMultiplierFor returns the cache-read multiple for a model, falling
 // back to the standard multiple for unknown models.
 func ReadMultiplierFor(model string) float64 {
+	if r, ok := activeRow(model); ok && r.ReadMult > 0 {
+		return r.ReadMult
+	}
 	return lookup(model).price.ReadMult
 }
 

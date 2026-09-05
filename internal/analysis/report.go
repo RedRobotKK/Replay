@@ -148,7 +148,7 @@ func (r *LaneReport) header(p *Printer) {
 	case r.Fit.UnseenPrefix.Measured > 0:
 		prefix = "measured from the first request's cache read"
 	}
-	p.Printf("Rules: %s; user-content fit %.3f tokens/byte ±%.0f%% from %d turns; system prefix %s (%s)\n", cachemodel.RulesVersion, r.Fit.TokensPerByte, r.Fit.RelativeError*100, r.Fit.Turns, formatTokens(r.Fit.UnseenPrefix.Total()), prefix)
+	p.Printf("Rules: %s; user-content fit %.3f tokens/byte ±%.0f%% from %d turns; system prefix %s (%s)\n", cachemodel.RulesVersionInEffect(), r.Fit.TokensPerByte, r.Fit.RelativeError*100, r.Fit.Turns, formatTokens(r.Fit.UnseenPrefix.Total()), prefix)
 	if r.Session.Skipped > 0 {
 		p.Printf("Note: %d transcript lines were not conversation content and were skipped\n", r.Session.Skipped)
 	}

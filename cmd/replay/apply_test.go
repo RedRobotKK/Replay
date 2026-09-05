@@ -280,3 +280,25 @@ func TestChooseTTLRefusesWhenTheLargestSessionsDisagree(t *testing.T) {
 		}
 	}
 }
+
+// hoistFlags moves flags ahead of paths, which silently breaks any flag that
+// takes a space-separated value: the flag moves and its value is left behind to
+// be read as a path. `replay rules --update <file> --dry-run` hit exactly that,
+// consuming "--dry-run" as the filename.
+func TestHoistFlagsIsOnlySafeForBooleanFlags(t *testing.T) {
+	got := hoistFlags([]string{"--update", "rules.json", "--dry-run"})
+	// This is the documented, and dangerous, behaviour. The test exists so the
+	// hazard is visible to whoever reaches for this helper next.
+	want := []string{"--update", "--dry-run", "rules.json"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	// And the command that has such a flag must not use it.
+	// Match a call, not the word: the file names the helper in a comment
+	// explaining why it does not use it, and an assertion that cannot tell the
+	// difference would fail on its own documentation.
+	src := string(mustRead(t, "rules.go"))
+	if strings.Contains(src, "hoistFlags(") {
+		t.Fatal("rules.go takes a string flag and must parse its arguments directly")
+	}
+}

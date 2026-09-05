@@ -28,6 +28,11 @@ var errUsage = errors.New("invalid usage")
 const defaultBlameLimit = 20
 
 func main() {
+	// Rules first: every figure any command prints is built on them, so a
+	// command must not run under the compiled defaults when a document has
+	// been installed. `rules --update` validates through the same loader, so
+	// nothing installable can fail here.
+	LoadInstalledRules(os.Stderr)
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, "replay:", err)
 		os.Exit(1)
@@ -54,6 +59,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return runCorpus(args[1:], stdout, stderr)
 	case "doctor":
 		return runDoctor(args[1:], stdout, stderr)
+	case "rules":
+		return runRules(args[1:], stdout, stderr)
 	case "advise":
 		return runAdvise(args[1:], stdout, stderr)
 	case "learn":
@@ -97,9 +104,12 @@ func namesAPath(arg string) bool {
 // Putting the flag last is the form people reach for, the form README shows,
 // and the form the CLI's own usage text shows, so it has to work.
 //
-// A path is anything that is not a flag. Values that belong to a flag are not
-// separated from it here: only boolean flags exist on this path today, and
-// `--flag=value` keeps its value attached.
+// A path is anything that is not a flag. Values that belong to a flag are NOT
+// separated from it here, so this is only safe for flag sets whose flags are
+// all boolean, or whose values are written as `--flag=value`. Do not use it on
+// a command with a space-separated string flag: hoisting would move the flag
+// and leave its value behind as a path. `replay rules --update <src>` is such a
+// command and parses its arguments directly.
 func hoistFlags(args []string) []string {
 	flags := make([]string, 0, len(args))
 	paths := make([]string, 0, len(args))
@@ -284,6 +294,7 @@ Usage:
   replay advise <dir...>           turn the largest token sources across sessions into suggestions with predicted savings, tracked to closure
   replay learn  <dir...>           re-score the policy catalog over all sessions, select one with held-out checks, write ~/.replay/policy.json
   replay doctor                    what replay can see on this machine and what to do next
+  replay rules [--update <src>]    show the provider rules in effect, or install a dated document
   replay redact <transcript>       strip content, keep structure and usage (for bug reports)
   replay serve [flags]             local proxy: byte-for-byte passthrough, records a ledger
   replay version                   print build information
