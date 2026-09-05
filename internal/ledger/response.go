@@ -25,6 +25,13 @@ func ParseResponse(body []byte) Response {
 	if msg.Usage != nil {
 		u := msg.Usage.Usage()
 		resp.Usage = &u
+		// Keep the provider's own usage object, as the OpenAI path does. This
+		// path never did, so a field this build does not declare was dropped
+		// silently — the exact defect fixed for the other provider on
+		// 2026-09-05 and left standing here, on the primary path, where the
+		// 1363-session corpus comes from. Anthropic has already added fields
+		// once (the ephemeral 5m/1h split) and will again.
+		resp.RawUsage = rawUsageBytes(body)
 	}
 	resp.AppliedEdits, resp.ClearedInputTokens = msg.ContextManagement.totals()
 	return resp
@@ -59,8 +66,13 @@ type StreamParser struct {
 	blocks  []Block
 	usage   transcript.WireUsage
 	seen    bool
-	edits   int
-	cleared int
+	// rawUsage keeps the provider's own usage bytes. A stream merges usage
+	// across message_start and message_delta, so this holds the last frame
+	// that carried one — the final accounting, which is the one a later
+	// calibration would read.
+	rawUsage json.RawMessage
+	edits    int
+	cleared  int
 }
 
 // Write feeds response bytes. It never returns an error: the stream must
@@ -95,6 +107,7 @@ func (s *StreamParser) line(l []byte) {
 	if !bytes.HasPrefix(l, dataPrefix) {
 		return
 	}
+	payload := bytes.TrimPrefix(l, dataPrefix)
 	var ev struct {
 		Type    string `json:"type"`
 		Index   int    `json:"index"`
@@ -111,7 +124,7 @@ func (s *StreamParser) line(l []byte) {
 		Usage             *transcript.WireUsage `json:"usage"`
 		ContextManagement *contextManagement    `json:"context_management"`
 	}
-	if err := json.Unmarshal(bytes.TrimPrefix(l, dataPrefix), &ev); err != nil {
+	if err := json.Unmarshal(payload, &ev); err != nil {
 		return
 	}
 	// The provider reports applied edits on the message; the stream may
@@ -125,6 +138,9 @@ func (s *StreamParser) line(l []byte) {
 		if ev.Message != nil && ev.Message.Usage != nil {
 			s.usage = *ev.Message.Usage
 			s.seen = true
+			if raw := messageUsageBytes(payload); raw != nil {
+				s.rawUsage = raw
+			}
 		}
 	case "content_block_start":
 		if ev.ContentBlock != nil {
@@ -142,6 +158,9 @@ func (s *StreamParser) line(l []byte) {
 			// refreshed input accounting; take every non-zero field.
 			merge(&s.usage, ev.Usage)
 			s.seen = true
+			if raw := rawUsageBytes(payload); raw != nil {
+				s.rawUsage = raw
+			}
 		}
 	}
 }
@@ -181,6 +200,7 @@ func (s *StreamParser) Result() Response {
 	if s.seen {
 		u := s.usage.Usage()
 		resp.Usage = &u
+		resp.RawUsage = s.rawUsage
 	}
 	return resp
 }
@@ -188,4 +208,16 @@ func (s *StreamParser) Result() Response {
 // IsEventStream reports whether a content type denotes server-sent events.
 func IsEventStream(contentType string) bool {
 	return strings.HasPrefix(strings.ToLower(contentType), "text/event-stream")
+}
+
+// messageUsageBytes lifts the usage object out of a message_start frame, where
+// it sits under "message", without interpreting it.
+func messageUsageBytes(payload []byte) json.RawMessage {
+	var env struct {
+		Message json.RawMessage `json:"message"`
+	}
+	if err := json.Unmarshal(payload, &env); err != nil || len(env.Message) == 0 {
+		return nil
+	}
+	return rawUsageBytes(env.Message)
 }
