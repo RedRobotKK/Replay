@@ -7,8 +7,7 @@
 
 <br>
 
-**See the turn your coding agent's prompt cache broke, what it cost, and what a better context
-layout would have saved. On sessions you have already paid for.**
+**Unit economics for agentic work. What one task costs, and the share of it nobody chose to spend.**
 
 [![CI](https://github.com/RedRobotKK/Replay/actions/workflows/ci.yml/badge.svg)](https://github.com/RedRobotKK/Replay/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-d41424)](LICENSE)
@@ -16,7 +15,7 @@ layout would have saved. On sessions you have already paid for.**
 [![Dependencies](https://img.shields.io/badge/dependencies-none-2ea043)](go.mod)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux-6e7681)](#install)
 
-[Install](#install) · [What it prints](#what-it-prints) · [Commands](#commands) · [Docs](docs/) · [Evidence](docs/evidence/) · [Roadmap](docs/ROADMAP.md)
+[Install](#install) · [Cost per task](#cost-per-task) · [What it prints](#what-it-prints) · [Commands](#commands) · [Docs](docs/) · [Evidence](docs/evidence/) · [Roadmap](docs/ROADMAP.md)
 
 ```sh
 curl -fsSL https://redrobot.jp/replay.sh | sh
@@ -25,6 +24,26 @@ curl -fsSL https://redrobot.jp/replay.sh | sh
 </div>
 
 ---
+
+Your provider reports spend. Your dashboard reports spend. Neither reports **cost per task**, or
+what share of that cost was waste, because working it out means replaying each session against the
+provider's caching rules. That is what this does.
+
+```text
+$ replay cost ~/.claude/projects/
+
+Cost per task, across 1363 sessions priced at list rates (anthropic-2026-09-01).
+
+  total          $2850.77
+  median task    $0.65
+  p90 task       $2.30
+  avoidable      $152.94  (5% of the total)
+```
+
+Five percent of that bill was paid twice, because a prompt cache broke and nobody was told. The
+median task cost 65 cents and the p90 cost $2.30, which is the spread you need before you can price
+a feature, a customer, or an agent that runs unattended. High growth hides bad unit economics until
+it doesn't.
 
 It reads the transcripts your agent already writes, reproduces the provider's caching turn by turn,
 and only then scores alternatives. Later, as a local proxy, it applies the better layout live using
@@ -39,6 +58,24 @@ Everything runs on your machine. No API calls are spent on analysis. Nothing lea
 > count is met many times over. `serve` is a byte-for-byte passthrough proxy that records a derived-data ledger; it
 > has been exercised against a fake provider, not yet against the real one. Follow
 > [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+## Cost per task
+
+```sh
+replay cost ~/.claude/projects/            # the summary above
+replay cost --per-task ~/.claude/projects/ # every session, most expensive first
+replay cost --json ~/.claude/projects/     # for a dashboard, or an agent
+```
+
+The unit is one session, because a session is the closest thing a transcript has to a task.
+
+**No mean.** One forty-hour session drags an average somewhere no real task lives, and a person
+planning against "average task: $12" is planning against a number that describes none of their work.
+The median and the p90 are what the conversation actually needs.
+
+**Avoidable is not a forecast.** It prices the tokens a provider re-billed because a cache broke:
+money already spent twice, not a projection of what a different layout might save. Sessions whose
+model is not in the price table are excluded and counted, never treated as free.
 
 ## Live, while you can still do something about it
 
@@ -236,6 +273,7 @@ replay ~/.claude/projects/<your-project>/
 | `replay advise --apply <dir...>` | Propose the one setting evidence can decide, show the diff, and refuse when the evidence does not support a single answer. `--yes` writes it, `--json` emits it for an agent |
 | `replay learn <dir...>` | Re-score the policy catalog, select one with held-out checks |
 | `replay doctor` | What Replay can see on this machine, and what to do next |
+| `replay cost <dir...>` | Cost per task across sessions, and the share of it nobody chose. `--per-task` lists them, `--json` emits them |
 | `replay statusline` | Live spend, cache health, and what the misses are costing, in Claude Code's status line. `--install` prints the settings snippet |
 | `replay rules [--update <src>]` | Show the provider rules in effect and where they came from, or install a dated document. `--dry-run` validates without installing |
 | `replay redact <file>` | Strip content, keep structure and usage, for bug reports |
