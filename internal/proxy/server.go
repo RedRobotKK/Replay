@@ -381,7 +381,10 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 	start := time.Now()
 	messages := isMessages(r.URL.Path)
-	if !messages && r.Method == http.MethodPost {
+	openai := isChatCompletions(r.URL.Path)
+	// readable is a body this build can summarise, guard and ledger.
+	readable := messages || openai
+	if !readable && r.Method == http.MethodPost {
 		// A POST somewhere else is a client sending real work down a path
 		// this build cannot read. It is forwarded unchanged, and everything
 		// Replay offers is inert for it, so say so rather than let the
@@ -420,10 +423,22 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		body = s.mask(&rec, body)
 		setBody(r, body)
 	}
+	if openai && s.cfg.Masker != nil && !s.cfg.NoPolicy {
+		// The masker walks the Messages body shape. This family's body is
+		// different and it is not masked. Saying so matters more here than
+		// anywhere: the path is now read, guarded and ledgered, so the
+		// NOT PARSED warning no longer fires and nothing else would tell the
+		// operator that --mask is not running on this traffic.
+		s.noteUnmasked(r.URL.Path)
+	}
 
 	summarized := false
-	if messages && len(body) > 0 {
-		if sum, err := ledger.SummarizeRequest(body, s.cfg.Store.Labeler()); err == nil {
+	if readable && len(body) > 0 {
+		summarize := ledger.SummarizeRequest
+		if openai {
+			summarize = ledger.SummarizeOpenAIRequest
+		}
+		if sum, err := summarize(body, s.cfg.Store.Labeler()); err == nil {
 			rec.RequestSummary = sum
 			summarized = true
 		}
@@ -433,18 +448,20 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		if !s.guard(w, r, &rec) {
 			return
 		}
-		body = s.applyPolicy(r, &rec, body, summarized)
-		setBody(r, body)
+		if messages {
+			body = s.applyPolicy(r, &rec, body, summarized)
+			setBody(r, body)
+		}
 	}
 	r, retries := withRetryCounter(r)
 
-	tap := &responseTap{ResponseWriter: w}
+	tap := &responseTap{ResponseWriter: w, openai: openai}
 	if messages && s.cfg.Rehydrator != nil && !s.cfg.NoPolicy {
 		tap.rehydrate = &rehydration{rh: s.cfg.Rehydrator}
 		r = r.WithContext(context.WithValue(r.Context(), tapKey{}, tap))
 		r.Header.Del(headerAcceptEncoding)
 	}
-	if messages && summarized {
+	if readable && summarized {
 		// Wait behind a sibling with the same prefix, then lead for the
 		// ones behind this request until its response begins.
 		release, waited := s.siblings.enter(r.Context(), rec.PrefixHash)
@@ -476,7 +493,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		rec.Retries = retries.n
 		rec.LatencyMS = time.Since(start).Milliseconds()
 		rec.RequestID = tap.Header().Get("request-id")
-		if messages {
+		if readable {
 			rec.Response = tap.result()
 			if u := rec.Response.Usage; u != nil {
 				s.cfg.Spend.Record(rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output, listCost(*u, rec.Model))
@@ -486,13 +503,13 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			s.noteRehydration(&rec, tap.rehydrate)
 		}
 		rec.Cache = s.stats.observe(&rec)
-		if messages && rec.SessionID != "" {
+		if readable && rec.SessionID != "" {
 			if err := s.cfg.Store.Append(rec); err != nil {
 				s.cfg.Logger.Printf("ledger write failed: %v", err)
 			}
 		}
 		whatIf, guardrail := "", ""
-		if messages && rec.SessionID != "" && rec.Response.Usage != nil {
+		if readable && rec.SessionID != "" && rec.Response.Usage != nil {
 			var rr analysis.ReReads
 			whatIf, rr = s.stats.rescore(&rec)
 			if edit, generated, ok := s.stats.trialSession(rec.SessionID); ok && s.cfg.Trial.breached(rr) {
@@ -833,10 +850,25 @@ func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Recor
 
 // isMessages reports whether a path is the Messages endpoint proper (not
 // count_tokens), which is the only one whose responses carry usage.
-const messagesPath = "/v1/messages"
+const (
+	messagesPath        = "/v1/messages"
+	chatCompletionsPath = "/v1/chat/completions"
+)
 
 func isMessages(path string) bool {
 	return strings.HasSuffix(path, messagesPath)
+}
+
+// isChatCompletions reports the OpenAI-compatible endpoint, which Cursor,
+// DeepSeek, Grok and OpenAI itself all speak.
+//
+// It is read but not rewritten. Policy application stays off for this family:
+// ADR-0003 admits a parameter the client left unset, and this provider caches
+// automatically with no breakpoint to place and no TTL to choose, so there is
+// no admissible policy to apply. Observation and guards are the whole of what
+// Replay offers here, and that is stated rather than left to be discovered.
+func isChatCompletions(path string) bool {
+	return strings.HasSuffix(path, chatCompletionsPath)
 }
 
 // refusal is one way Replay answers a request itself instead of forwarding
@@ -960,6 +992,10 @@ func usageSummary(u *ledger.Usage) string {
 // parser fed on the side. For event streams the parser consumes lines as
 // they pass; for JSON responses the body is buffered up to the cap.
 type responseTap struct {
+	// openai selects the OpenAI-compatible response parser. The two shapes
+	// report usage differently enough that guessing from the body would be a
+	// heuristic where the request path already knows the answer.
+	openai bool
 	http.ResponseWriter
 	// upstreamFailed is set by the error handler when no response arrived.
 	upstreamFailed bool
@@ -1039,6 +1075,9 @@ func (t *responseTap) result() ledger.Response {
 		_, _ = sp.Write(body) // StreamParser.Write never fails
 		return sp.Result()
 	}
+	if t.openai {
+		return ledger.ParseOpenAIResponse(body)
+	}
 	return ledger.ParseResponse(body)
 }
 
@@ -1065,4 +1104,20 @@ func (s *Server) noteUnparsed(path string) {
 	s.cfg.Logger.Printf("NOT PARSED %s: Replay forwards this path unchanged and cannot read it. "+
 		"No ledger record, no spend cap, no error budget, no loop detection and no secret masking apply to it. "+
 		"Only %s is understood by this build.", path, messagesPath)
+}
+
+// noteUnmasked warns that secret masking does not cover a path, once per path.
+//
+// This is the narrower sibling of noteUnparsed and exists for the same reason.
+// Once /v1/chat/completions became readable it stopped being announced as
+// unparsed, and masking still does not understand its body shape. An operator
+// who ran with --mask would have had every reason to think secrets were being
+// redacted on that traffic. A gap that used to be announced and quietly stops
+// being announced is worse than one that never was.
+func (s *Server) noteUnmasked(path string) {
+	if !s.stats.noteUnmasked(path) || s.cfg.Logger == nil {
+		return
+	}
+	s.cfg.Logger.Printf("NOT MASKED %s: this path is read, guarded and ledgered, but --mask "+
+		"understands only %s, so secrets in this traffic are forwarded in clear.", path, messagesPath)
 }

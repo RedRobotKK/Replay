@@ -140,6 +140,8 @@ type stats struct {
 	// Everything Replay does hangs off parsing, so these requests were
 	// forwarded with every guard and the masker inert.
 	unparsed map[string]int
+	// unmasked counts requests on paths the masker does not understand.
+	unmasked map[string]int
 }
 
 func newStats() *stats {
@@ -153,6 +155,7 @@ func newStats() *stats {
 		refusedByKind: map[string]int{},
 		breaches:      map[string]int{},
 		unparsed:      map[string]int{},
+		unmasked:      map[string]int{},
 		reverted:      map[string]bool{},
 		masked:        map[string]int{},
 		rehydrated:    map[string]int{},
@@ -599,6 +602,13 @@ func (s *stats) metrics() string {
 	for _, v := range s.unparsed {
 		unparsed += v
 	}
+	unmasked := 0
+	for _, v := range s.unmasked {
+		unmasked += v
+	}
+	line("# HELP replay_unmasked_requests_total Requests on a path the secret masker does not understand, forwarded without masking.")
+	line("# TYPE replay_unmasked_requests_total counter")
+	line("replay_unmasked_requests_total %d", unmasked)
 	line("# HELP replay_unparsed_requests_total Requests forwarded on a path this build cannot read, so no guard, masker or ledger applied to them.")
 	line("# TYPE replay_unparsed_requests_total counter")
 	line("replay_unparsed_requests_total %d", unparsed)
@@ -727,4 +737,17 @@ func (s *stats) unparsedTotal() (n int) {
 		n += v
 	}
 	return n
+}
+
+// noteUnmasked records a request the masker did not cover, reporting whether
+// this is the first time that path has been seen.
+func (s *stats) noteUnmasked(path string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.unmasked == nil {
+		s.unmasked = map[string]int{}
+	}
+	first := s.unmasked[path] == 0
+	s.unmasked[path]++
+	return first
 }

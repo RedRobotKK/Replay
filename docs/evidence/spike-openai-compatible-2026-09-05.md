@@ -54,8 +54,22 @@ masker too.
 
 ## What shipped from the spike
 
-Not the OpenAI request path. That is still step three and still needs design.
-What shipped is the honesty fix, which was small:
+**Update, same day: the request path was then built.** The section below records
+what the spike found before it. Re-running the identical test afterwards:
+
+```
+--max-session-tokens 200, three OpenAI-shaped requests
+attempt 1 -> 200      ledgered, usage input=100 read=50 output=20, raw kept
+attempt 2 -> 200      ledgered
+attempt 3 -> 400      REFUSED spend_cap: 340 of 200 tokens
+```
+
+The cap bites, the records are written, and the usage is converted out of
+inclusive counting rather than copied. Masking still does not cover this shape,
+so a second warning was added for exactly that, because the path is no longer
+announced as unparsed and the gap would otherwise have gone quiet.
+
+The honesty fix that shipped first, and still applies to every other path:
 
 - `noteUnparsed` warns once per path, naming the path and every protection that
   is inert for it. Once per path rather than per request, because a line on

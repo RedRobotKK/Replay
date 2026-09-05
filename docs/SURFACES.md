@@ -85,14 +85,15 @@ can fingerprint that Replay is running.
 
 | Surface | Status |
 |---|---|
-| `POST …/v1/messages` | **Verified** end to end against the real provider (spike 4). Parsed, guarded, masked, ledgered |
-| **Any other POST path**, including `/v1/chat/completions` and `/v1/responses` | **Forwarded unchanged and NOT read.** No ledger record, no spend cap, no error budget, no loop detection, **no secret masking**. Measured, not assumed: a `--max-session-tokens 1` cap refused none of three OpenAI-shaped requests. Since 2026-09-05 the proxy warns once per path and counts `replay_unparsed_requests_total`. See `evidence/spike-openai-compatible-2026-09-05.md` |
-| OpenAI-compatible provider support | **Not built.** Cursor, DeepSeek and Grok all reach Replay through this shape, so they are currently in the row above |
+| `POST …/v1/messages` | **Verified** end to end against the real provider (spike 4). Parsed, guarded, masked, ledgered, policy applied |
+| `POST …/v1/chat/completions` | **Read, guarded and ledgered since 2026-09-05.** Usage is converted out of inclusive counting, the raw payload is kept, and the spend cap, error budget and loop detector all apply. **NOT masked**: `--mask` walks the Messages body shape only, and the proxy warns once per path (`NOT MASKED`) and counts `replay_unmasked_requests_total`. **No policy applied**, deliberately: this family caches automatically, so there is no breakpoint to place and no TTL to choose, and ADR-0003 admits only a parameter the client left unset. **Verified against a stub, not against any live OpenAI-compatible provider** |
+| **Any other POST path**, e.g. `/v1/responses` | **Forwarded unchanged and NOT read.** No ledger record, no guard, no masking. The proxy warns once per path (`NOT PARSED`) and counts `replay_unparsed_requests_total` |
 
-**This surface is expected to change.** Step 3 of `architecture/multi-provider.md`
-adds an OpenAI-compatible request path, at which point the second row narrows and
-the third goes away. Until then the warning is the contract: Replay says what it
-cannot see rather than letting a running proxy imply protection.
+**This surface is expected to change.** The chat/completions row is verified
+against a stub only. What a real provider reports, whether a cache write is even
+distinguishable in that shape, and whether streaming carries usage the same way
+are all open. Until each is measured, the warnings are the contract: Replay says
+what it cannot see rather than letting a running proxy imply protection.
 
 
 ## 3. Environment
