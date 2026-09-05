@@ -26,6 +26,81 @@ Tells you what Replay can see on this machine: transcript directories, whether a
 set, whether a proxy is running, whether a ledger exists. It ends by naming the next command worth
 running. Start here when something is not behaving.
 
+### `replay cost`
+
+The unit-economics view: what one task cost, and the share of it nobody chose.
+
+```sh
+replay cost ~/.claude/projects/            # the summary
+replay cost --per-task ~/.claude/projects/ # every session, most expensive first
+replay cost --json ~/.claude/projects/     # for a dashboard, or an agent
+```
+
+There is deliberately no mean. One very long session drags an average somewhere no real task lives,
+so it reports the median and the p90, which is the spread you need before you can price a feature.
+The avoidable figure prices tokens the provider re-billed after a cache break: money already spent
+twice, not a projection of what a different layout might save. Sessions whose model is not in the
+price table are excluded and counted, never treated as free.
+
+### `replay cost --compare <date>`
+
+The only measurement here that a provider invoice could contradict, which is what makes it the one
+worth running.
+
+```sh
+replay cost --compare 2026-08-25 ~/.claude/projects/
+replay cost --compare 2026-08-25 --predicted -0.2 ~/.claude/projects/
+```
+
+It splits sessions at the date and reports cost **per task** on each side. Per task, because total
+spend also falls when you simply do less work, and that is how a report like this most easily
+misleads. Task volume is printed on both sides so you can judge the mix yourself, and a swing beyond
+40 percent warns that the two periods are not comparable work. Fewer than ten tasks on a side prints
+no figure at all.
+
+`--predicted` grades a forecast against what happened. The band is wide, because this is an estimate
+compared against real spend, and symmetric, because badly beating a prediction is also a failed
+prediction: it means the model does not understand the effect it claims.
+
+This is list price against transcripts, not your invoice. It says so in its own output.
+
+### `replay statusline`
+
+Live spend, cache health, and what the misses are costing, in Claude Code's status line.
+
+```sh
+replay statusline --install   # prints the settings.json snippet
+```
+
+Claude Code already reports what a session has cost. What it cannot report is how much of that was
+avoidable, because it counts cache misses in tokens and does not price them. This does, on the JSON
+Claude Code already hands a status line, in about 6ms per render. It opens no files and makes no
+network call.
+
+It will not price a model that is not in the price table, and when its own figure exceeds what the
+session actually cost, the two disagree and it shows the cause without the number.
+
+### `replay rules`
+
+Shows the provider rules in effect and where they came from, or installs a dated document.
+
+```sh
+replay rules                                  # what is in effect now
+replay rules --update ./rules.json            # install from a file
+replay rules --update https://... --dry-run   # validate without installing
+```
+
+Provider numbers change faster than release cycles. Compiled in, a change means a binary release and
+every report is quietly wrong until it ships. Loaded from `~/.replay/rules.json`, the same correction
+is a download, and every report names the rules that produced it.
+
+Loading is strict, because a stale rules file announces itself in the version string and a wrong one
+does not. It refuses an unknown schema, a missing version, an empty match that would match every
+model, a negative price, a model marked priced with no price, or a read multiple outside 0 to 1.
+
+There is no background refresh and no default source. A URL is a network request, and the promise
+that Replay makes none except to your provider survives only because a person has to type it.
+
 ### `replay serve`
 
 Starts the local proxy on `127.0.0.1:4000`. Point your agent at it with

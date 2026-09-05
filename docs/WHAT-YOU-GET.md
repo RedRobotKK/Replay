@@ -1,7 +1,47 @@
-# What you actually get from pointing Replay at your sessions
+# What you actually get
 
-**2026-09-04.** Written to answer two blunt questions: what does a user get, and does it recommend
-settings. The second answer is better than expected, and it turns on something already in the ledger.
+**Updated 2026-09-05, after measuring a full month and then measuring whether the measurement was
+worth anything.**
+
+## Who this is for, stated plainly
+
+**It pays for itself if you are billed per token and run agents heavily.** Metered API, Bedrock or
+Vertex, with a key you can see the invoice for. That is where a broken cache costs *you* money, and
+where a cost-per-task figure changes a decision.
+
+**It does not pay for itself on a flat seat.** Claude Max, Team, Copilot, Cursor: a broken prompt
+cache costs the subscriber nothing. The provider absorbs it. You may still want the numbers out of
+curiosity or to argue for a better setup, but there is no bill to reduce.
+
+**It is worth an afternoon if you are about to run agents unattended.** The median and p90 task cost
+are the inputs to any forecast of what an autonomous agent will spend, and almost nobody has them.
+
+## What it actually found, on one real month
+
+| | |
+|---|---:|
+| Sessions | 1,363 |
+| Spend at list rates | $2,850.77 |
+| Median task | $0.65 |
+| p90 task | $2.30 |
+| Cache breaks located and classified | 731 |
+| Re-billed because a cache broke | $152.94 (5.4%) |
+| Turns reproduced against real bills | 26,571 of 27,302 (97.32%) |
+
+## What that is worth, honestly
+
+**5.4% is what was detected, not what is recoverable.** Some breaks have legitimate causes: the file
+genuinely changed, compaction fired, the model was switched on purpose. A realistic recovery rate
+puts the true figure nearer 2 to 3 percent.
+
+**It is the fourth lever, not the first.** A committed-spend discount is worth 15 to 30 percent for
+one email. Routing cheap turns to a cheaper model is worth 30 to 60 percent of a large share of
+traffic. Trimming the always-on context is worth 5 to 15 percent and is free. Cache forensics comes
+after all three, and it is the only one that asks you to install something.
+
+If you are looking for the biggest saving available to you, run those three first. This tool will
+still be here, and it will tell you whether the fourth lever is worth pulling on your own data
+rather than on somebody's marketing claim.
 
 ## What Replay reads, and what it never reads
 

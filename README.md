@@ -51,7 +51,7 @@ only mechanisms the provider itself sanctions, and keeps improving from your own
 Everything runs on your machine. No API calls are spent on analysis. Nothing leaves.
 
 > [!NOTE]
-> **Status: v0.1.1 released, v0.2 in development.** `replay`, `blame`, `diff`, and
+> **Status: v0.1.2 released, v0.2 in development.** `replay`, `blame`, `diff`, and
 > `redact` work offline on Claude Code transcripts and have been calibrated against **1363 real
 > sessions** across many unrelated projects, reproducing 26571 of 27302 turns (97.32%). They are all
 > from one machine, so the roadmap's independence requirement is not met even though its session
