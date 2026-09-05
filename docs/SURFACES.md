@@ -23,7 +23,7 @@ of the document.
 | `~/.replay/vault/vault.tmp` | write | Fixed-path temp file, rewritten per newly-seen secret. The §3b claim of "no predictable-path temp file" was true of `os.TempDir` and wrong as a conclusion | Read |
 | `$GOMODCACHE`, `$GOCACHE` | write | **Only via the installer's `go install` fallback**, which is the only path available today. Hundreds of MB | Read |
 | `${XDG_CONFIG_HOME:-~/.config}/replay/corpus-consent.toml` | write | Only from `install.sh --corpus-opt-in`. Sends nothing | **Verified** |
-| `/usr/local/bin/replay` or `~/.local/bin/replay` | write | The binary, at install | **Verified** end to end |
+| `/usr/local/bin/replay` or `~/.local/bin/replay` | write | The binary, at install. Since 2026-09-05 the installer runs `replay version` before reporting success, so a binary that lands but cannot execute fails the install instead of being announced as one | **Verified** end to end |
 
 **Adjacent directories that exist on a normal machine and are NOT Replay's business.** Both were
 found by scanning a real install, and confusing them is the likely support question:

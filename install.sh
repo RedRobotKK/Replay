@@ -295,6 +295,14 @@ else
     install -m 0755 "$tmp/$BIN" "$BIN_DIR/$BIN" 2>/dev/null \
       || { cp "$tmp/$BIN" "$BIN_DIR/$BIN" && chmod 0755 "$BIN_DIR/$BIN"; } \
       || die "Could not write to ${BIN_DIR}. Re-run with --bin-dir <somewhere writable>."
+    # Run it once before claiming success. Everything above verifies the bytes
+    # that arrived; none of it proves the result executes here. A binary for the
+    # wrong architecture, a chmod that did not take, a libc mismatch the platform
+    # check missed: each installs cleanly, fails on first use, and would have
+    # been reported as "Installed" either way.
+    "$BIN_DIR/$BIN" version >/dev/null 2>&1 || die \
+      "Installed to ${BIN_DIR}/${BIN}, but it does not run here. Run '${BIN_DIR}/${BIN} version' to see why, then 'rm ${BIN_DIR}/${BIN}'."
+
     ok "Installed ${BIN} ${VERSION}"
   fi
 fi
