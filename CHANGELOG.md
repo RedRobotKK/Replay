@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-09-05
+
+A minor release rather than a patch: it adds a second provider path.
+
+### Added
+
+- **OpenAI-compatible requests are read, guarded and ledgered.** `/v1/chat/completions` is parsed, streaming included, so the spend cap, error budget and loop detector apply to Cursor, DeepSeek and Grok traffic. This family reports no usage on a stream unless the client sets `stream_options.include_usage`, and clients do not, so Replay sets it when the client left it unset (ADR-0003's first admissible kind). **Verified against a test stub and never against a live provider**, and secret masking does not cover this path; the proxy warns about both at runtime and counts `replay_unmasked_requests_total`.
+- **A normalised usage record** (`internal/usage`) with the provider's own payload kept verbatim on the ledger. Anthropic counts exclusively and OpenAI inclusively, so an adapter that copies rather than subtracts double-counts the cache by an amount that grows with the hit rate; `FromInclusive` subtracts and `Validate` refuses a record whose parts do not add up.
+- **Rules documents carry claims**: what a provider documents beside what replaying real traffic showed, with the verdict derived from the two. A file that writes its own `status` is refused. `contradicted` is the value no provider dashboard will show you.
+- **Cost on `/replay/metrics`**: `replay_cost_usd_total`, `replay_cost_usd_day`, and a count of traffic the rules could not price. The endpoint carried no cost figure at all before.
+- `replay doctor` reports which guards fired, what today cost, and warns when a dollar cap cannot be applied to some traffic, naming `--max-day-tokens` as the fix rather than describing it.
+- `replay route`, `replay trim` and `replay advise --guards`, and [an alerting guide](docs/guide/alerting.md) for the twenty-one metrics.
+
+### Fixed
+
+- **Four counters were summed over a session map that evicts** past 256 sessions, so they lost whatever had been dropped and could fall between scrapes. Prometheus reads a falling counter as a reset, so every `rate()` over them was wrong on a busy machine and right on an idle one. Measured: 2,688,000 prompt tokens reported against 8,064,000 observed.
+- **The error budget divided one agent lane's errors by every lane's tokens.** A quiet sub-agent rescoring after a busy one dropped the numerator to zero, so the guard stopped seeing the errors it exists to catch.
+- **Policy trial breaches were counted process-wide**, so evidence gathered against one trigger reverted a different one; and the reverted flag was global, so reverting any policy disarmed the guardrail for every policy after it.
+- **The installer verified the download and never the result.** It now runs the binary before reporting that it installed one.
+- Flag hoisting was value-blind and separated a flag from its value, breaking every value-taking flag placed after a path.
+
+### Changed
+
+- CI is green for the first time since before v0.1.0.
+
 ## [Unreleased]
 
 ### Added
