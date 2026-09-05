@@ -8,6 +8,9 @@ fact; a new measurement gets a new file.
 |---|---|---|
 | [Calibration corpus, 2026-09-03](calibration-corpus-2026-09-03.md) | How well the replay engine reproduces the provider's own cache reads | 398 of 402 turns across 11 sessions, all from this repository's own development on one machine |
 | [Proxy added latency, 2026-09-03](proxy-latency-2026-09-03.md) | What `replay serve` adds to a request, against a local fake provider | p50 48µs, p99 98µs |
+| [Spike: OpenAI-compatible path, 2026-09-05](spike-openai-compatible-2026-09-05.md) | What the proxy does with a request it was not built for | It forwarded it correctly and applied nothing: a one-token spend cap refused none of three requests. Led to the warnings, then to the path being built |
+| [Spike: Cursor, 2026-09-05](spike-cursor-2026-09-05.md) | Whether Cursor is a transcript problem or a provider problem | A provider problem. Cursor stores 29,665 message rows and **zero** cache fields, so the transcript path could never produce cache forensics |
+| [Spike 4: the real provider, 2026-09-05](spike-4-real-provider-2026-09-05.md) | Whether the proxy works against the real provider at all | Ten turns, all 200, 1,816,417 prompt tokens measured, zero credentials and zero message content in the ledger |
 | [Adversarial security review, 2026-09-04](security-review-2026-09-04.md) | An external reviewer reading the code and running the proxy end to end | Five findings open, one fixed, and what was verified to hold |
 
 > [!IMPORTANT]

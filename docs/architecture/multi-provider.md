@@ -123,6 +123,34 @@ a decision the user might regret, rather than a saving they missed.
 ADR-0007's k-anonymity and robust-statistics rules still hold. Its assumption that one aggregate
 improves one model does not.
 
+## Status, 2026-09-05
+
+Steps 1 and 2 are built and step 3 is built against a stub.
+
+| Step | State |
+|---|---|
+| 1. Normalise the usage record, keep the raw payload | **Done.** `internal/usage` holds the engine's own vocabulary and one concrete adapter; `ledger.Record.RawUsage` keeps the provider's object unparsed. No `Provider` interface, per the rule below |
+| 2. Rules as a dated document with `documented` and `observed` per field | **Done.** `cachemodel.Claim` pairs the two and derives the verdict; a file that writes its own `status` is refused. JSON rather than the YAML sketched here, because `go.mod` is 45 bytes and a parser is a dependency |
+| 3. A second provider | **Partly.** `/v1/chat/completions` is read, guarded and ledgered, streaming included. **Verified against a stub, never against a live OpenAI-compatible provider** |
+| 4. Generalise the corpus per mechanism family | Not started |
+
+**The thing this document got most right is the counting trap, which it did not
+name.** Anthropic counts exclusively: `input_tokens` is the uncached remainder.
+OpenAI counts inclusively: `prompt_tokens` already contains `cached_tokens`. An
+adapter that copies the provider's input figure into a normalised "fresh" is
+correct for one and double-counts the cache for the other, and the error grows
+with the hit rate, so it is largest on exactly the sessions this tool exists for.
+`usage.FromInclusive` subtracts and `Validate` refuses a record whose parts do
+not add up.
+
+**What step 3 still cannot answer without live traffic**: whether a cache write
+is distinguishable in that response shape at all, whether the write penalty is
+genuinely zero (if it is, the break-even trim inequality's numerator goes
+negative and the advice inverts), and what a non-OpenAI implementation of the
+same API actually reports. Those are claims for step 2's machinery to check, not
+numbers to hardcode. See `SURFACES.md` and
+`evidence/spike-openai-compatible-2026-09-05.md`.
+
 ## Sequencing, and the honest constraint
 
 **Do not build the abstraction first.** A provider interface with one implementation is a guess about

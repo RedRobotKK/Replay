@@ -155,6 +155,46 @@ Aggregates across sessions and suggests changes worth making, then tracks whethe
 later borne out. Each suggestion is `pending`, `verified` or `not verified` on a subsequent run.
 Unlike `blame`, this one does look across sessions.
 
+`replay advise <dir> --guards` suggests spend caps from your own session spread using Tukey's upper
+fence, `Q3 + 1.5*IQR`. It prints the quartiles, the median and the session count behind them, refuses
+below ten sessions rather than dressing up a guess, and refuses a sample with no spread, because a
+fence over identical sessions sits on the typical session and would refuse ordinary work. Print-only:
+it cannot be combined with `--apply`, because a spend cap the tool set for you is a refusal you did
+not choose.
+
+### `replay route <dir> --to <model>`
+
+What switching models would change, in two halves, only one of which it will answer without evidence.
+
+The structural half prints unconditionally: break-even trim thresholds and the cache-read inversion
+boundary, built from read multiples, write penalties and a price ratio. No token count enters them,
+so no tokenizer can move them. Above the inversion boundary a model that costs more per input token
+can be cheaper per turn, because its cache-read multiple is better.
+
+The dollar half needs sigma, the ratio between two tokenizers on the same content, and sigma is
+measured from both sides of your ledger or the figure is suppressed. There is no fallback of 1.0 and
+no constant on a rate card: at a 99% cached share a comparison can break even at sigma = 1.0627, so a
+plausible-looking 1.15 would not be a safety margin, it would be the deciding vote cast by a number
+nobody measured.
+
+### `replay trim <dir> --cap <bytes>`
+
+What a per-block byte cap on tool output would have saved, and what it would have cost you.
+
+Savings are priced as cache reads, which is what a resent byte is, with the fresh-input figure printed
+beside it and the ratio between them, because a token-share report implies the larger number and it is
+about ten times too big. The harm probe then asks, for every region the cap would remove, whether the
+agent later depended on it: a later `Edit` whose `old_string` sat only in the removed part, a re-read
+of the same path, a quote of a removed line.
+
+The probe is a **lower bound** and prints its own blind spots. `Write` has no `old_string`, line
+numbers carried into a later `Read` are invisible to it, and removing test failures produces *fewer*
+later edits, which it would score as a saving rather than as damage.
+
+Nothing is trimmed and no request is touched. The live trimmer does not exist, and this command is
+how that was decided: on the development corpus the whole prize was $4.70.
+
+
 ### `replay version`
 
 Version and build commit.
