@@ -47,7 +47,7 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 			return nil
 		}
 		if printed > 0 {
-			fmt.Fprintln(stdout)
+			_, _ = fmt.Fprintln(stdout)
 		}
 		printed++
 
@@ -71,23 +71,23 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 		for _, r := range rows {
 			total += r.Tokens
 		}
-		fmt.Fprintf(stdout, "%s\nSession %s  %s tokens of content entered this context\n\n",
+		_, _ = fmt.Fprintf(stdout, "%s\nSession %s  %s tokens of content entered this context\n\n",
 			path, prefixID(session.ID), formatCount(total))
 		for i, r := range rows {
 			if i >= *top {
-				fmt.Fprintf(stdout, "  ... and %d more\n", len(rows)-*top)
+				_, _ = fmt.Fprintf(stdout, "  ... and %d more\n", len(rows)-*top)
 				break
 			}
 			mark := ""
 			if r.Estimated {
 				mark = " *"
 			}
-			fmt.Fprintf(stdout, "  %-*s %5.1f%%  %10s  x%-5d%s\n",
+			_, _ = fmt.Fprintf(stdout, "  %-*s %5.1f%%  %10s  x%-5d%s\n",
 				analysis.MaxContextLabel, r.Label, r.Share*100, formatCount(r.Tokens), r.Occurrences, mark)
 		}
 		gap := analysis.MeasureGap(rep.Lane, total)
-		fmt.Fprintf(stdout, "\n  * estimated through the byte-to-token fit; everything else is provider usage.\n")
-		fmt.Fprintf(stdout, "\n  %s\n", gap.Note())
+		_, _ = fmt.Fprintf(stdout, "\n  * estimated through the byte-to-token fit; everything else is provider usage.\n")
+		_, _ = fmt.Fprintf(stdout, "\n  %s\n", gap.Note())
 		return nil
 	})
 }

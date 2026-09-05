@@ -18,7 +18,7 @@ this machine, tables `ItemTable`, `cursorDiskKV`, `composerHeaders`. Messages ar
 
 Every one carries usage, and the usage is this:
 
-```
+```text
 tokenCount = { inputTokens, outputTokens }
 ```
 
@@ -94,7 +94,9 @@ automatic, with no separate write charge, and reads at roughly half price.
 
 That inverts the trimming advice. The break-even share is
 
-    gamma > (w - alpha) / (f + w - alpha)
+```text
+gamma > (w - alpha) / (f + w - alpha)
+```
 
 and with no write penalty the numerator goes negative: there is nothing to win
 back, so trimming is not a trade-off at all. The advice Replay gives today is

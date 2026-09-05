@@ -87,7 +87,7 @@ func TestADeclaredStatusIsRefused(t *testing.T) {
 		Schema: RulesSchema, Version: "test-2026-09-05",
 		Models: []ModelRule{{
 			Match: "m", MinPrefix: 512,
-			MinPrefixClaim: &Claim{Documented: 512, Status_: "consistent"},
+			MinPrefixClaim: &Claim{Documented: 512, DeclaredStatus: "consistent"},
 		}},
 	}).validate()
 	if err == nil {

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -144,6 +145,14 @@ func TestApplyCreatesSettingsWhenAbsent(t *testing.T) {
 	info, err := os.Stat(p)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// Windows has no POSIX permission model: Go's Chmod there toggles only the
+	// read-only bit, so a file created 0600 reports 0666 and this cannot hold.
+	// Skipped rather than weakened, because the assertion is the security
+	// property on the platforms that have one, and pretending Windows enforces
+	// it would be worse than saying it does not.
+	if runtime.GOOS == "windows" {
+		t.Skip("file permissions are not POSIX on this platform; see docs/SURFACES.md")
 	}
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("settings must be owner-only, got %v", info.Mode().Perm())

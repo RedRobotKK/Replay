@@ -109,9 +109,9 @@ func ProbeBlindSpots() []string {
 // Blocks are identified by their first appearance; a lane resends the whole
 // history every turn, so the cost of a block is its size times the number of
 // requests that carried it, and that product is what trimming would save.
-func ScoreTrim(lane *transcript.Lane, fit TokenFit, cap int) TrimPlan {
-	plan := TrimPlan{CapBytes: cap, Estimated: true}
-	if lane == nil || cap <= 0 {
+func ScoreTrim(lane *transcript.Lane, fit TokenFit, capBytes int) TrimPlan {
+	plan := TrimPlan{CapBytes: capBytes, Estimated: true}
+	if lane == nil || capBytes <= 0 {
 		return plan
 	}
 
@@ -127,13 +127,13 @@ func ScoreTrim(lane *transcript.Lane, fit TokenFit, cap int) TrimPlan {
 	for i, req := range lane.Requests {
 		for _, msg := range req.Context {
 			for _, b := range msg.Blocks {
-				if b.Kind != transcript.KindToolResult || b.Text == "" || len(b.Text) <= cap {
+				if b.Kind != transcript.KindToolResult || b.Text == "" || len(b.Text) <= capBytes {
 					continue
 				}
 				key := b.Label + "\x00" + b.Text[:min(64, len(b.Text))]
 				c, ok := cuts[key]
 				if !ok {
-					c = &cut{block: b, removed: b.Text[cap:], first: i}
+					c = &cut{block: b, removed: b.Text[capBytes:], first: i}
 					cuts[key], order = c, append(order, key)
 				}
 				c.carried++
@@ -236,7 +236,7 @@ func probeCut(lane *transcript.Lane, b transcript.Block, removed string, first i
 // deriveSplits turns where dependencies landed into a per-tool head/middle/tail
 // weighting. Thirds, because the claim being tested is which end of a block
 // matters, and three buckets answer it without inventing precision.
-// DeriveSplits is deriveSplits over harms already pooled across sessions.
+// DeriveSplits pools harms already gathered across sessions into per-tool splits.
 func DeriveSplits(harms []TrimHarm) []ToolSplit { return deriveSplits(harms) }
 
 func deriveSplits(harms []TrimHarm) []ToolSplit {

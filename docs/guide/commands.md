@@ -194,7 +194,6 @@ later edits, which it would score as a saving rather than as damage.
 Nothing is trimmed and no request is touched. The live trimmer does not exist, and this command is
 how that was decided: on the development corpus the whole prize was $4.70.
 
-
 ### `replay version`
 
 Version and build commit.

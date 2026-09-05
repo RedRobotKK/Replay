@@ -59,7 +59,7 @@ type Claim struct {
 	Observed   *Observation `json:"observed,omitempty"`
 	// Status_ exists only to catch a file that tries to declare a verdict.
 	// validate refuses any document that sets it. Read Status() instead.
-	Status_ string `json:"status,omitempty"`
+	DeclaredStatus string `json:"status,omitempty"`
 }
 
 // Status derives the verdict.
@@ -155,8 +155,8 @@ func (c Claim) evidence() string {
 // validate refuses a claim that cannot be true or that tries to assert its own
 // verdict.
 func (c *Claim) validate(field string) error {
-	if c.Status_ != "" {
-		return fmt.Errorf("%s: the file declares status %q, but a status is derived from the observation and never written; remove it", field, c.Status_)
+	if c.DeclaredStatus != "" {
+		return fmt.Errorf("%s: the file declares status %q, but a status is derived from the observation and never written; remove it", field, c.DeclaredStatus)
 	}
 	if c.Documented < 0 {
 		return fmt.Errorf("%s: documented value is negative", field)

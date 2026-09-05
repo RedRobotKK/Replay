@@ -13,7 +13,7 @@ this is a real path a user can take now.
 
 ## Result: it works, and that is the problem
 
-```
+```text
 POST /v1/chat/completions  ->  HTTP 200, correct body forwarded
 log: status=200 ms=1 session= model= usage=none
 ledger: no record written
@@ -57,7 +57,7 @@ masker too.
 **Update, same day: the request path was then built.** The section below records
 what the spike found before it. Re-running the identical test afterwards:
 
-```
+```text
 --max-session-tokens 200, three OpenAI-shaped requests
 attempt 1 -> 200      ledgered, usage input=100 read=50 output=20, raw kept
 attempt 2 -> 200      ledgered
@@ -77,7 +77,7 @@ The honesty fix that shipped first, and still applies to every other path:
 - `replay_unparsed_requests_total` on `/replay/metrics`, so the condition is
   watchable rather than only greppable.
 
-```
+```text
 NOT PARSED /v1/chat/completions: Replay forwards this path unchanged and cannot
 read it. No ledger record, no spend cap, no error budget, no loop detection and
 no secret masking apply to it. Only /v1/messages is understood by this build.

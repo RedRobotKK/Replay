@@ -42,7 +42,8 @@ const (
 	MechanismRentedCache = "rented_cache"
 )
 
-// Provider names. One entry, because one is what has been observed.
+// ProviderAnthropic is the only provider name so far, because one is what has
+// been observed.
 const ProviderAnthropic = "anthropic"
 
 // Record is one request's cost in the engine's own vocabulary.

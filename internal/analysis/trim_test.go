@@ -118,7 +118,7 @@ func TestHarmProbeFindsALaterReReadOfATrimmedPath(t *testing.T) {
 // The third signal: the assistant quoted a line that only existed in the
 // removed region.
 func TestHarmProbeFindsAQuoteOfARemovedLine(t *testing.T) {
-	secret := "the answer is fourty-two and nothing else"
+	secret := "the answer is forty-two and nothing else"
 	lane := laneOf(
 		toolResult("Bash", "test", body("run", "middle", secret)),
 		assistantText("I see that "+secret+" so we are done"),

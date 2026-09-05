@@ -34,6 +34,12 @@ found by scanning a real install, and confusing them is the likely support quest
 - `~/.claude/history.jsonl` — prompt history, a `{"display":…}` record, **not a session**. The glob
   stays scoped to `projects/<project>` so the parser is never handed it.
 
+> **Owner-only permissions are POSIX-only.** Everything above created `0600` is created `0600` on
+> macOS and Linux. Windows has no POSIX permission model, and Go's `Chmod` there toggles only the
+> read-only bit, so the same files report `0666`. The README says "owner-only" without qualifying
+> the platform; on Windows that protection is not enforced by the filesystem and you should treat
+> `~/.replay` as readable by any process running as you.
+
 ## 2. Network
 
 > **This page has now been wrong twice, in the same section, about the same claim.** Both corrections
@@ -94,7 +100,6 @@ against a stub only. What a real provider reports, whether a cache write is even
 distinguishable in that shape, and whether streaming carries usage the same way
 are all open. Until each is measured, the warnings are the contract: Replay says
 what it cannot see rather than letting a running proxy imply protection.
-
 
 ## 3. Environment
 

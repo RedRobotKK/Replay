@@ -34,7 +34,7 @@ const defaultTrimCap = 16384
 func runTrim(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("trim", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	cap := fs.Int("cap", defaultTrimCap, "per-block byte cap to score")
+	capBytes := fs.Int("cap", defaultTrimCap, "per-block byte cap to score")
 	asJSON := fs.Bool("json", false, "emit the plan as JSON")
 	if err := fs.Parse(hoistFlagsFor(fs, args)); err != nil {
 		return errUsage
@@ -42,7 +42,7 @@ func runTrim(args []string, stdout, stderr io.Writer) error {
 	if fs.NArg() == 0 {
 		return fmt.Errorf("a transcript file or directory is required: %w", errUsage)
 	}
-	if *cap <= 0 {
+	if *capBytes <= 0 {
 		return fmt.Errorf("--cap must be positive: %w", errUsage)
 	}
 	files, err := transcriptFiles(fs.Args())
@@ -51,14 +51,14 @@ func runTrim(args []string, stdout, stderr io.Writer) error {
 	}
 
 	var total analysis.TrimPlan
-	total.CapBytes = *cap
+	total.CapBytes = *capBytes
 	sessions, scored := 0, 0
 	_ = forEachSession(files, func(_ string, _ *transcript.Session, rep *analysis.LaneReport, err error) error {
 		if err != nil || rep == nil || rep.Lane == nil {
 			return nil
 		}
 		sessions++
-		plan := analysis.ScoreTrim(rep.Lane, rep.Fit, *cap)
+		plan := analysis.ScoreTrim(rep.Lane, rep.Fit, *capBytes)
 		if plan.Blocks == 0 {
 			return nil
 		}
@@ -86,7 +86,7 @@ func runTrim(args []string, stdout, stderr io.Writer) error {
 	}
 
 	p := analysis.NewPrinter(stdout)
-	p.Printf("Scoring a %d-byte cap on tool results over %d session(s).\n\n", *cap, sessions)
+	p.Printf("Scoring a %d-byte cap on tool results over %d session(s).\n\n", *capBytes, sessions)
 	if total.Blocks == 0 {
 		p.Printf("No tool result exceeded the cap. Nothing to trim, and nothing to weigh.\n")
 		return p.Err()

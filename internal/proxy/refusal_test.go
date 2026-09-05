@@ -154,8 +154,13 @@ func TestRefusalRecordCarriesNoContent(t *testing.T) {
 // Recording must never be the reason a request fails, and most configs have no
 // store at all.
 func TestRefusalRecordingIsOptional(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("a config with no store and no logger panicked: %v", r)
+		}
+	}()
 	s := &Server{cfg: Config{}, stats: newStats()}
-	s.recordRefusal("s1", "m", refusalLoop, "loop") // no store, no logger, must not panic
+	s.recordRefusal("s1", "m", refusalLoop, "loop")
 }
 
 func readLedgerLines(t *testing.T, dir string) [][]byte {
