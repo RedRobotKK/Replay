@@ -80,6 +80,36 @@ Everything runs on your machine. No API calls are spent on analysis. Nothing lea
 
 </div>
 
+
+### Sharing what you find
+
+`replay cost <dir> --share` prints a block designed to be posted:
+
+```text
+  ────────────────────────────────────────────────────
+
+  5% of my agent spend was paid twice.
+
+    sessions      1384      median task   $0.65
+    cache breaks  729       p90 task      $2.29
+
+  Not a forecast of savings. Tokens already billed twice
+  because a prompt cache broke and nothing said so.
+
+  Measure yours:  github.com/RedRobotKK/Replay
+  ────────────────────────────────────────────────────
+```
+
+**It leaves out the spend total on purpose.** A total tells a reader your monthly burn and
+lets them infer team size and runway, which is the figure a company would regret posting. It
+is also the least interesting number here, because it is not comparable: $3,000 means nothing
+without knowing how many engineers spent it. **A rate reads the same from a solo developer and
+a team of fifty**, which is what makes it worth comparing at all.
+
+No paths, no project names, no session contents. The card goes to stdout and the accompanying
+note to stderr, so `replay cost <dir> --share | pbcopy` copies exactly what is safe to paste
+and nothing else.
+
 > [!TIP]
 > Every figure carries a **truth tier**. `measured` came off the wire. `estimated` used the
 > byte-to-token fit and says so. `structural` is dimensionless and survives a change of tokenizer.
@@ -384,7 +414,7 @@ replay ~/.claude/projects/<your-project>/
 | `replay advise --apply <dir...>` | Propose the one setting evidence can decide, show the diff, and refuse when the evidence does not support a single answer. `--yes` writes it, `--json` emits it for an agent |
 | `replay learn <dir...>` | Re-score the policy catalog, select one with held-out checks |
 | `replay doctor` | What Replay can see on this machine, and what to do next |
-| `replay cost <dir...>` | Cost per task across sessions, and the share of it nobody chose. `--per-task` lists them, `--json` emits them |
+| `replay cost <dir...>` | Cost per task across sessions, and the share of it nobody chose. `--per-task` lists them, `--json` emits them, `--share` prints a card that is safe to post |
 | `replay context <transcript\|dir>` | What entered a session's context, by tool, ranked by size. `--json` for a dashboard |
 | `replay cost --compare <date>` | Cost per task before and after a date, with the task volume on both sides. `--predicted` judges a forecast against what actually happened |
 | `replay statusline` | Live spend, cache health, and what the misses are costing, in Claude Code's status line. `--install` prints the settings snippet |

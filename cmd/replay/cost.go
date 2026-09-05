@@ -115,6 +115,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	perTask := fs.Bool("per-task", false, "list every priced session, most expensive first")
 	since := fs.String("compare", "", "split at this date (YYYY-MM-DD) and report cost per task before and after")
 	predicted := fs.Float64("predicted", 0, "with --compare, the fractional change you predicted (e.g. -0.2 for a 20% saving)")
+	share := fs.Bool("share", false, "print a paste-ready summary: the avoidable rate and the task spread, with no spend total, no paths and no project names")
 	if err := fs.Parse(hoistFlagsFor(fs, args)); err != nil {
 		return errUsage
 	}
@@ -185,6 +186,26 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	}
 
 	s := summarise(units)
+
+	// --share short-circuits every other rendering. A card that also printed
+	// the full report would defeat its own purpose: the point is that what is
+	// on screen is exactly what is safe to paste.
+	if *share {
+		breaks := 0
+		for _, u := range units {
+			breaks += u.Breaks
+		}
+		card := shareCard(s, breaks)
+		if card == "" {
+			return fmt.Errorf("nothing measured enough to share: %d priced sessions", s.Tasks)
+		}
+		if _, err := io.WriteString(stdout, card); err != nil {
+			return err
+		}
+		_, err := io.WriteString(stderr, shareNote())
+		return err
+	}
+
 	if *asJSON {
 		sort.Slice(units, func(i, j int) bool { return units[i].CostUSD > units[j].CostUSD })
 		out := map[string]any{"schema": "replay.cost.v1", "summary": s, "unpriced": unpriced}

@@ -343,6 +343,7 @@ Usage:
   replay rules [--update <src>]    show the provider rules in effect, or install a dated document
   replay statusline                live spend and what the cache misses cost, for Claude Code's status line
   replay cost   <dir...>           cost per task, the share nobody chose, and --compare <date> for before/after
+  replay cost   <dir> --share      the same, as a card that is safe to post: a rate, no total, no paths
   replay context <transcript|dir>  what entered a session's context, by tool
   replay route <dir> --to <model>  what switching models would change, structurally
   replay trim <dir> --cap <bytes>  what a byte cap on tool output would have saved, and cost
