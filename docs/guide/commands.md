@@ -406,6 +406,74 @@ later edits, which it would score as a saving rather than as damage.
 Nothing is trimmed and no request is touched. The live trimmer does not exist, and this command is
 how that was decided: on the development corpus the whole prize was $4.70.
 
+### `replay probe --model <id>`
+
+Measures where a model's prompt cache actually starts, by sending requests
+designed to find out.
+
+This is the only command that originates a billable request. Everything else
+reads files or forwards what an agent already sent; this creates traffic with
+your credential and spends your money. So it **plans by default and sends
+nothing**, and `--execute` is what makes it run:
+
+```sh
+replay probe --model claude-opus-5                 # what it would do, and what it would cost
+replay probe --model claude-opus-5 --execute       # actually send them
+```
+
+The key is read from `ANTHROPIC_API_KEY` in the environment and is never a
+flag. A credential on a command line is recorded in shell history and visible
+in the process table to every other user on the machine. `ANTHROPIC_BASE_URL`
+is honoured, so probes can be sent through `replay serve` and land in the
+ledger.
+
+**Why this exists.** Ordinary traffic never sends a small prompt with a cache
+breakpoint on it — nobody caches a 600-token prefix by accident. Passive
+measurement across a real ledger produced one loose bound from four sessions:
+floor at most 36,635, which agrees with a documented 512 and confirms nothing.
+The evidence that would tighten it has to be made on purpose.
+
+**How it works.** A probe is one request carrying a cache breakpoint at a known
+prefix size. If the provider writes a cache entry the floor is at or below that
+size; if it writes nothing the floor is above it. Bisect. Each probe's content
+is unique, because repeated content caches on the first probe and is then
+*read* by every later one — and a read tests nothing, so the run would cost
+full price and learn nothing.
+
+| Flag | What it does |
+|---|---|
+| `--model` | The model to measure. Required |
+| `--min`, `--max` | Bracket where the floor could be. Defaults 0 and 65536 |
+| `--resolution` | How narrow a bracket is narrow enough, in tokens. Default 512 |
+| `--relative` | Stop within this fraction of the answer instead of a fixed width. `--relative 0.1` is "within ten percent", which is the same statement at every scale — 128 tokens is a quarter of 512 and two thousandths of 65,536 |
+| `--max-probes` | How many billable requests the run may make. Default 16 |
+| `--confirm` | Agreeing answers required before a boundary is believed. Default 2 |
+| `--execute` | Actually send them. Without it, only the plan is printed |
+
+**`--confirm` multiplies against `--max-probes`.** Every confirmation is a
+billable request, so 16 probes at 2 confirmations buys 8 bisection decisions,
+not 16. The plan says how many decisions the budget affords, and warns before
+anything is sent if that cannot reach the resolution asked for.
+
+**What it reports is a bracket, not a value.** The floor is above one size and
+at or below another; the exact value inside that gap was never tested, and
+naming it would claim precision the probes did not buy. Two results are not
+brackets at all and are reported as findings in their own right: a prefix that
+cached at one size and failed at a larger one, and a prefix that cached on one
+request and not the next. Neither is averaged away — a floor that holds
+sometimes is not a floor, and that is the most interesting thing a run can
+find.
+
+It also infers **block granularity** from the greatest common divisor of the
+sizes actually cached, and stops bisecting below it: if writes land on
+1024-token blocks then no floor between multiples of 1024 is observable, and
+probing for it spends money distinguishing sizes the provider treats as the
+same. Probe points are deliberately offset from the power-of-two grid, because
+a clean bisection proposes 32768, 16384, 8192, whose divisor is an artifact of
+the search rather than a fact about the provider.
+
+Feed the result into a rules document with `replay rules --measure`.
+
 ### `replay version`
 
 Version and build commit.

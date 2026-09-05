@@ -93,6 +93,8 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 		return runCorpus(args[1:], stdout, stderr)
 	case "doctor":
 		return runDoctor(args[1:], stdout, stderr)
+	case "probe":
+		return runProbe(args[1:], stdout, stderr)
 	case "rules":
 		return runRules(args[1:], stdout, stderr)
 	case "statusline":
@@ -388,6 +390,7 @@ Usage:
   replay advise <dir> --guards     spend caps from your own session spread, print-only
   replay learn  <dir...>           re-score the policy catalog over all sessions, select one with held-out checks, write ~/.replay/policy.json
   replay doctor                    what replay can see on this machine and what to do next
+  replay probe --model <id>        measure a model's caching floor on purpose; plans by default, --execute sends
   replay rules [--update <src>]    show the provider rules in effect, or install a dated document
   replay statusline                live spend and what the cache misses cost, for Claude Code's status line
   replay cost   <dir...>           cost per task, the share nobody chose, and --compare <date> for before/after
