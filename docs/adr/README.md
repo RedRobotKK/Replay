@@ -17,6 +17,7 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | [0009](0009-crowdsourced-waste-and-predictive-guards.md) | Crowdsource the waste taxonomy, not the cache model | Proposed |
 | [0010](0010-storage-and-retention.md) | Where waste data lives, and what gets thrown away | Proposed |
 | [0011](0011-opt-in-request-rewriting.md) | Opt-in request rewriting | Proposed |
+| [0012](0012-dual-licensing-deferred.md) | Dual licensing considered and declined; the CLA stays | Accepted |
 
 ---
 
