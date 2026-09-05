@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // The ask, at the one moment it is relevant.
 //
@@ -28,9 +31,17 @@ const (
 	// The suggestion is a small share of what was found, and capped. Somebody
 	// who discovers four thousand dollars of re-billed tokens is not being
 	// asked for four hundred of them.
-	tipShare  = 0.02
-	tipMinUSD = 3.00
-	tipMaxUSD = 25.00
+	tipShare = 0.02
+
+	// Buy Me a Coffee sells whole coffees at a fixed price and cannot pre-fill
+	// a custom amount from a URL, so the suggestion has to be a figure the page
+	// will actually offer. Checked against the live page on 2026-09-05:
+	// coffee_price 5.0000 USD. Suggesting $3 named an amount that does not
+	// exist there, which is a small thing that makes the whole line look
+	// careless.
+	tipUnitUSD = 5
+	tipMinUSD  = 5.00
+	tipMaxUSD  = 25.00
 )
 
 // tipLine returns the line to print under a cost report, or "" when the finding
@@ -39,17 +50,26 @@ func tipLine(avoidableUSD float64) string {
 	if avoidableUSD < tipFloorUSD {
 		return ""
 	}
-	suggested := avoidableUSD * tipShare
+	// Round up to a whole coffee: rounding down would suggest less than the
+	// share, and the page cannot sell a fraction of one anyway.
+	units := int(math.Ceil(avoidableUSD * tipShare / float64(tipUnitUSD)))
+	suggested := float64(units * tipUnitUSD)
 	if suggested < tipMinUSD {
 		suggested = tipMinUSD
 	}
 	if suggested > tipMaxUSD {
 		suggested = tipMaxUSD
 	}
+	coffees := int(suggested) / tipUnitUSD
+	unit := "coffees"
+	if coffees == 1 {
+		unit = "coffee"
+	}
 	return fmt.Sprintf(
-		"\nReplay found $%.2f you had already paid for once. It is free and funded by\n"+
-			"nobody; if it was worth about $%.0f of that back, %s\n",
-		avoidableUSD, suggested, shareCoffee)
+		"\nReplay found $%.2f you had already paid for once. It is free, and the\n"+
+			"measurements behind it are not. If it was worth %d %s of that back, that\n"+
+			"is what keeps it maintained: %s\n",
+		avoidableUSD, coffees, unit, shareCoffee)
 }
 
 const shareCoffee = "buymeacoffee.com/saitodaniel"
