@@ -122,10 +122,14 @@ and nothing else.
 
 > [!TIP]
 > **This is free and stays free.** The measurements behind it are not: the corpus above is
-> 1363 real sessions and about $2,851 of the maintainer's own API spend, and the next
-> provider needs the same again. If Replay found a cache break that was costing you real
+> ~1,400 real sessions and about $2,900 of the maintainer's own API spend as of
+> 2026-09-05, and the next provider needs the same again. The corpus grows while he
+> works, so that total moves; the median and the five percent share do not. If Replay found a cache break that was costing you real
 > money, [the tip jar](https://buymeacoffee.com/saitodaniel) is how the R&D gets paid for.
 > There is nothing to buy and nothing gated.
+>
+> Crypto, on four chains, with the networks named and every address
+> checksum-verified and pinned by a test: [FUNDING.md](FUNDING.md).
 
 ## 🔍 What is filling your context
 
