@@ -281,8 +281,8 @@ How it works: [`docs/architecture/replay-engine.md`](docs/architecture/replay-en
   The proxy is a different answer and a better one, but it is **not** agnostic, and an earlier
   version of this line said it was. It understands two request shapes: `/v1/messages`, verified end
   to end against the real provider, and `/v1/chat/completions`, which Cursor, DeepSeek and Grok
-  speak and which has had one live run, against a local Ollama endpoint on 2026-09-05, but not
-  yet against a provider that reports cached tokens. **Anything else is forwarded byte for byte
+  speak and which is **verified against live DeepSeek** on 2026-09-05 across chat, streaming, a
+  cache hit and the reasoner, with the token invariant holding on every one. **Anything else is forwarded byte for byte
   with every guard, the ledger and the masker inert.** That was silent until v0.2.0; it now warns
   once per path and counts `replay_unparsed_requests_total`. Secret masking does not cover
   `/v1/chat/completions` either, and the proxy says so at runtime rather than letting you assume it.

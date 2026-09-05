@@ -122,9 +122,15 @@ func ParseOpenAIResponse(body []byte) Response {
 	if raw.Usage != nil {
 		u := raw.Usage.Usage()
 		out.Usage = &u
-		if m, err := json.Marshal(raw.Usage); err == nil {
-			out.RawUsage = m
-		}
+		// Keep the provider's bytes, not a re-marshalling of our own struct.
+		// Round-tripping through a typed value silently drops every field the
+		// type does not declare, which is exactly the set worth keeping: live
+		// DeepSeek reports prompt_cache_hit_tokens and prompt_cache_miss_tokens
+		// beside the OpenAI-shaped prompt_tokens_details, and both were
+		// discarded here until 2026-09-05. RawUsage is documented as verbatim
+		// and unparsed, and the design note gives the reason — a field we did
+		// not know mattered is what tomorrow's calibration needs.
+		out.RawUsage = rawUsageBytes(body)
 	}
 	for _, c := range raw.Choices {
 		if c.Message.Content != "" {
@@ -135,4 +141,19 @@ func ParseOpenAIResponse(body []byte) Response {
 		}
 	}
 	return out
+}
+
+// rawUsageBytes lifts the "usage" object out of a response body without
+// interpreting it. It returns nil when the body is not an object with a usage
+// member, in which case the caller simply has no raw copy.
+func rawUsageBytes(body []byte) json.RawMessage {
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return nil
+	}
+	u, ok := envelope["usage"]
+	if !ok || len(u) == 0 || string(u) == "null" {
+		return nil
+	}
+	return u
 }

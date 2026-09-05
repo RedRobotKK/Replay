@@ -131,7 +131,7 @@ Steps 1 and 2 are built and step 3 is built against a stub.
 |---|---|
 | 1. Normalise the usage record, keep the raw payload | **Done.** `internal/usage` holds the engine's own vocabulary and one concrete adapter; `ledger.Record.RawUsage` keeps the provider's object unparsed. No `Provider` interface, per the rule below |
 | 2. Rules as a dated document with `documented` and `observed` per field | **Done.** `cachemodel.Claim` pairs the two and derives the verdict; a file that writes its own `status` is refused. JSON rather than the YAML sketched here, because `go.mod` is 45 bytes and a parser is a dependency |
-| 3. A second provider | **Partly.** `/v1/chat/completions` is read, guarded and ledgered, streaming included. First live run on 2026-09-05 against a local Ollama endpoint: passthrough, usage parsing and streaming all correct, and it **found a defect no stub could** (see below). Still unverified against a provider that reports cached tokens |
+| 3. A second provider | **Done.** `/v1/chat/completions` is read, guarded and ledgered, streaming included. First live run on 2026-09-05 against a local Ollama endpoint: passthrough, usage parsing and streaming all correct, and it **found a defect no stub could** (see below). Verified against live DeepSeek on 2026-09-05 across all four surfaces: chat non-streaming, a second call that hits cache, streaming, and the reasoner. Every invariant held |
 | 4. Generalise the corpus per mechanism family | Not started |
 
 **The thing this document got most right is the counting trap, which it did not
@@ -164,6 +164,31 @@ Anthropic path always has one, so the fallback was never exercised. The bug live
 between what the tests sent and what a real client sends, which is the only place this class
 of bug can live. Fixed test-first; the hashes are taken over block structure rather than text,
 so the ledger's promise not to hold message content is unchanged.
+
+### The DeepSeek run, 2026-09-05
+
+The question `usage.FromInclusive` exists to answer — whether OpenAI's inclusive
+`prompt_tokens` is correctly reduced by the cached figure rather than double-counted — is
+now answered with real numbers rather than a stub's.
+
+| Surface | Provider sent | Replay recorded |
+|---|---|---|
+| `deepseek-chat`, second call | `prompt_tokens 14008`, `cached_tokens 13952` | fresh **56**, read **13952** |
+| `deepseek-chat`, streaming | same | same |
+| `deepseek-reasoner` | `reasoning_tokens 8` | `thinking_tokens 8` |
+
+56 + 13952 = 14008. **The subtraction is correct and the invariant holds on every surface**,
+including the reasoning model, whose `completion_tokens_details.reasoning_tokens` maps to the
+engine's thinking tokens without special-casing.
+
+**It also caught a second defect, and this one only a live provider could produce.** DeepSeek
+reports `prompt_cache_hit_tokens` and `prompt_cache_miss_tokens` alongside the OpenAI-shaped
+`prompt_tokens_details`. `RawUsage` is documented as "the provider's own usage object,
+verbatim and unparsed", and this document's own argument for keeping it is that *a field we
+did not know mattered is exactly what tomorrow's calibration needs*. It was being
+re-marshalled from the typed struct, so both of those fields — textbook instances of the
+thing the promise was made about — were silently discarded. A stub can never catch this,
+because a stub only ever sends the fields the parser already knows.
 
 **What step 3 still cannot answer without live traffic**: whether a cache write
 is distinguishable in that response shape at all, whether the write penalty is
