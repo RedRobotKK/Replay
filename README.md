@@ -234,8 +234,18 @@ How it works: [`docs/architecture/replay-engine.md`](docs/architecture/replay-en
 
 - **You need numbers you can put in front of finance today.** The offline tier is `estimated`. Run
   the proxy for `measured` figures, and read the calibration line before quoting either.
-- **You are not on Claude Code.** Transcript analysis parses one format. The proxy is agnostic; the
-  reader is not.
+- **You are not on Claude Code, and you want the offline reader.** Transcript analysis parses one
+  format: Claude Code's JSONL. Nothing else is read from disk. Cursor, for instance, keeps its
+  sessions in SQLite and records no cache accounting at all, so a reader for it could report spend
+  and never waste.
+
+  The proxy is a different answer and a better one, but it is **not** agnostic, and an earlier
+  version of this line said it was. It understands two request shapes: `/v1/messages`, verified end
+  to end against the real provider, and `/v1/chat/completions`, which Cursor, DeepSeek and Grok
+  speak and which is verified against a test stub only. **Anything else is forwarded byte for byte
+  with every guard, the ledger and the masker inert.** That was silent until v0.2.0; it now warns
+  once per path and counts `replay_unparsed_requests_total`. Secret masking does not cover
+  `/v1/chat/completions` either, and the proxy says so at runtime rather than letting you assume it.
 - **You want a dashboard or a hosted service.** There is neither. There is no account, no telemetry,
   and no server: the only network call is your agent's own traffic to your provider.
 - **You want it to change your prompts for you.** It does not. It reports, and the guards that can
