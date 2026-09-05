@@ -20,6 +20,7 @@ package usage
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/transcript"
@@ -145,4 +146,67 @@ func (r Record) CachedShare() float64 {
 		return 0
 	}
 	return float64(r.CachedRead) / float64(r.Prompt)
+}
+
+// InclusiveCounts is how a provider reports when its prompt figure already
+// contains the cached tokens.
+type InclusiveCounts struct {
+	// Prompt is the provider's total, cache included.
+	Prompt int
+	// Cached is the part of Prompt that was served from cache.
+	Cached int
+	// Written is cache the provider says it wrote, where it reports one at
+	// all. Implicit-prefix providers do not.
+	Written   int
+	Output    int
+	Reasoning int
+}
+
+// FromInclusive normalises a provider that counts inclusively.
+//
+// This exists because the same word means different things across providers
+// and that difference is a live bug class, not a curiosity. Anthropic counts
+// exclusively: input_tokens is the uncached remainder with the cache reported
+// beside it. OpenAI counts inclusively: prompt_tokens already contains
+// cached_tokens. An adapter that copies the provider's "input" number into
+// Fresh is right for one and double-counts the cache for the other, and the
+// error is largest on exactly the sessions that cache best, which are the ones
+// anyone using this tool cares most about.
+//
+// Fresh is therefore a subtraction, and Validate refuses the result if it does
+// not add up.
+func FromInclusive(provider, mechanism, model string, at time.Time, c InclusiveCounts, raw json.RawMessage) Record {
+	fresh := c.Prompt - c.Cached - c.Written
+	if fresh < 0 {
+		fresh = 0
+	}
+	return Record{
+		Provider:    provider,
+		Model:       model,
+		At:          at,
+		Mechanism:   mechanism,
+		Prompt:      c.Prompt,
+		Fresh:       fresh,
+		CachedRead:  c.Cached,
+		CachedWrite: c.Written,
+		Output:      c.Output,
+		Reasoning:   c.Reasoning,
+		Raw:         raw,
+	}
+}
+
+// Validate reports a record whose parts do not add up to its prompt.
+//
+// Every figure downstream divides by Prompt, so a record that fails this is not
+// slightly wrong, it is wrong in the denominator of the cached share, the
+// break-even threshold and the cost.
+func (r Record) Validate() error {
+	if sum := r.Fresh + r.CachedRead + r.CachedWrite; sum != r.Prompt {
+		return fmt.Errorf("usage does not add up: fresh %d + read %d + write %d = %d, but prompt is %d (a provider counting inclusively must be converted, not copied)",
+			r.Fresh, r.CachedRead, r.CachedWrite, sum, r.Prompt)
+	}
+	if r.CachedWrite5m+r.CachedWrite1h > r.CachedWrite {
+		return fmt.Errorf("TTL split %d+%d exceeds the total write %d", r.CachedWrite5m, r.CachedWrite1h, r.CachedWrite)
+	}
+	return nil
 }

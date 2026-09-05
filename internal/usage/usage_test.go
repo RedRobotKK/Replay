@@ -142,3 +142,73 @@ func TestLedgerCarriesTheRawPayload(t *testing.T) {
 		t.Fatalf("an unparsed field was lost: %s", rec.Response.RawUsage)
 	}
 }
+
+// The trap that eats normalisation layers, and the reason Prompt is an
+// invariant here rather than a copied field.
+//
+// Anthropic counts EXCLUSIVELY: input_tokens is the uncached remainder, with
+// cache_read_input_tokens and cache_creation_input_tokens reported beside it.
+// OpenAI counts INCLUSIVELY: prompt_tokens already contains cached_tokens.
+// An adapter that copies the provider's "input" figure into Fresh is correct
+// for one and double-counts the cache for the other. Langfuse shipped exactly
+// this bug (langfuse#12306).
+func TestInclusiveCountingMustBeConvertedNotCopied(t *testing.T) {
+	// 100 fresh + 50 cached. Anthropic says input=100, cache_read=50.
+	excl := FromAnthropic(transcript.Usage{Input: 100, CacheRead: 50}, "m", at(), nil)
+
+	// An inclusive provider reports prompt=150, cached=50 for the same work.
+	// Fresh is the subtraction; getting it wrong inflates the prompt by the
+	// cache, which is largest on exactly the sessions that cache best.
+	incl := FromInclusive(ProviderAnthropic, MechanismImplicitPrefix, "m", at(),
+		InclusiveCounts{Prompt: 150, Cached: 50, Output: 0}, nil)
+
+	if incl.Prompt != excl.Prompt {
+		t.Fatalf("the same work must normalise to the same prompt: inclusive %d, exclusive %d", incl.Prompt, excl.Prompt)
+	}
+	if incl.Fresh != 100 || incl.CachedRead != 50 {
+		t.Fatalf("inclusive counts were copied rather than converted: fresh %d, read %d", incl.Fresh, incl.CachedRead)
+	}
+	if err := incl.Validate(); err != nil {
+		t.Fatalf("converted record fails its own identity: %v", err)
+	}
+}
+
+// Validate is the guard: no record may claim a prompt that its parts do not
+// add up to, whoever built it.
+func TestValidateCatchesADoubleCountedCache(t *testing.T) {
+	// The real bug shape: Prompt is taken correctly from the inclusive
+	// provider (150), but Fresh is copied from that same total instead of
+	// being the subtraction, so the cache is counted in both. The parts now
+	// exceed the whole.
+	//
+	// Note what this does NOT catch: an adapter that also derives Prompt as
+	// the sum is internally consistent at 200 and still wrong. The identity
+	// is a guard against inconsistency, not a proof of correctness, and only
+	// the adapter doing the subtraction gets that right. Hence FromInclusive.
+	bad := Record{Prompt: 150, Fresh: 150, CachedRead: 50}
+	if err := bad.Validate(); err == nil {
+		t.Fatal("a record whose parts exceed its prompt was accepted")
+	}
+	good := Record{Prompt: 150, Fresh: 100, CachedRead: 50}
+	if err := good.Validate(); err != nil {
+		t.Fatalf("a consistent record was rejected: %v", err)
+	}
+}
+
+// A provider that charges nothing to write the cache changes the trimming
+// answer completely: with no write penalty there is nothing to win back, so
+// the break-even share collapses. Recording the write multiplier with the
+// measurement is what lets the engine notice.
+func TestFreeCacheWritesAreRepresentable(t *testing.T) {
+	r := FromInclusive("some-provider", MechanismImplicitPrefix, "m", at(),
+		InclusiveCounts{Prompt: 1000, Cached: 900, Output: 10}, nil)
+	if r.CachedWrite != 0 {
+		t.Fatalf("an implicit-prefix provider reports no separate write: %d", r.CachedWrite)
+	}
+	if r.Fresh != 100 {
+		t.Fatalf("fresh %d", r.Fresh)
+	}
+	if err := r.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}
