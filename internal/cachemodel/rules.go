@@ -40,6 +40,10 @@ type ModelRule struct {
 	OutputPerMTok float64 `json:"outputPerMTok,omitempty"`
 	ReadMult      float64 `json:"readMult,omitempty"`
 	Priced        bool    `json:"priced,omitempty"`
+	// MinPrefixClaim carries what the provider documents about the minimum
+	// cacheable prefix alongside what replaying real traffic bounded it to.
+	// Optional: a row without one behaves exactly as before.
+	MinPrefixClaim *Claim `json:"minPrefixClaim,omitempty"`
 }
 
 // RulesSchema is the only document shape this build will load. A file that
@@ -100,6 +104,11 @@ func (r *Rules) validate() error {
 			return fmt.Errorf("model %d (%s): priced with readMult 0, which would price every cache read at zero", i, m.Match)
 		case m.ReadMult < 0 || m.ReadMult > 1:
 			return fmt.Errorf("model %d (%s): readMult %.3f is outside 0..1; a cache read costing more than a fresh one is not a rule, it is a typo", i, m.Match, m.ReadMult)
+		}
+		if m.MinPrefixClaim != nil {
+			if err := m.MinPrefixClaim.validate(fmt.Sprintf("model %d (%s) minPrefixClaim", i, m.Match)); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

@@ -81,9 +81,16 @@ func describeRules(path string, stdout io.Writer) error {
 			cachemodel.RulesVersion, path)
 		return err
 	}
-	_, err = fmt.Fprintf(stdout, "rules      %s\nfile       %s\nmodels     %d\nprovenance %s\n",
-		r.Version, path, len(r.Models), r.Provenance())
-	return err
+	if _, err = fmt.Fprintf(stdout, "rules      %s\nfile       %s\nmodels     %d\nprovenance %s\n\nclaims     what the provider documents, against what replaying traffic showed\n",
+		r.Version, path, len(r.Models), r.Provenance()); err != nil {
+		return err
+	}
+	for _, l := range claimLines(r.Models) {
+		if _, err := fmt.Fprintln(stdout, l); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // updateRules installs a rules document.
