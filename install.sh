@@ -124,6 +124,28 @@ if [ "$os" = linux ]; then
   fi
 fi
 
+# A short decode of the wordmark: glyphs settle left to right into REPLAY.
+# Terminal only. A pipe, a log, CI and NO_COLOR all get plain text and no
+# delay, because an installer people are told to read should not also be a
+# thing that misbehaves when it is not being watched.
+banner() {
+  { [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-dumb}" != dumb ]; } || return 0
+  w=REPLAY; g='#%@&$*+=-<>/|01'; i=0
+  while [ "$i" -le 6 ]; do
+    out=$(printf '%.*s' "$i" "$w"); j=$i
+    while [ "$j" -lt 6 ]; do
+      k=$(( (i * 7 + j * 11 + 3) % 15 + 1 ))
+      out="$out$(printf %s "$g" | cut -c"$k")"
+      j=$((j + 1))
+    done
+    printf '\r  %s%s%s' "$C_ACCENT$C_B" "$out" "$C_0"
+    sleep 0.04 2>/dev/null || true
+    i=$((i + 1))
+  done
+  printf '   %sprompt cache, measured%s\n\n' "$C_DIM" "$C_0"
+}
+
+banner
 step "Replay installer"
 info "platform  ${os}/${arch}${libc:+ (${libc})}"
 
