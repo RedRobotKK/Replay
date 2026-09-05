@@ -10,3 +10,9 @@ github: [saitodaniel, RedRobotKK]
 # RedRobot.jp/src/pages/Replay/index.astro, so the button here and the one on
 # redrobot.jp/Replay point at the same place.
 buy_me_a_coffee: saitodaniel
+
+# Belt and braces. The two GitHub Sponsors accounts above are ignored until each
+# completes onboarding at github.com/sponsors/accounts, which needs identity and
+# payout details only the account holder can give. Until then this custom entry
+# is what actually puts a Sponsor button on the repository.
+custom: ["https://buymeacoffee.com/saitodaniel"]

@@ -17,6 +17,8 @@
 
 [Install](#install) · [Cost per task](#cost-per-task) · [What it prints](#what-it-prints) · [Commands](#commands) · [Docs](docs/) · [Evidence](docs/evidence/) · [Roadmap](docs/ROADMAP.md)
 
+[![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-support%20the%20work-d41424)](https://buymeacoffee.com/saitodaniel)
+
 ```sh
 curl -fsSL https://redrobot.jp/replay.sh | sh
 ```
@@ -84,6 +86,13 @@ Everything runs on your machine. No API calls are spent on analysis. Nothing lea
 > Nothing is printed without one.
 
 ---
+
+> [!TIP]
+> **This is free and stays free.** The measurements behind it are not: the corpus above is
+> 1,382 real sessions and about $2,856 of the maintainer's own API spend, and the next
+> provider needs the same again. If Replay found a cache break that was costing you real
+> money, [the tip jar](https://buymeacoffee.com/saitodaniel) is how the R&D gets paid for.
+> There is nothing to buy and nothing gated.
 
 ## 🔍 What is filling your context
 
