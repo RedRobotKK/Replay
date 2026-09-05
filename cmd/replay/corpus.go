@@ -195,10 +195,21 @@ func prefixID(id string) string {
 	return id
 }
 
-// scrubPath keeps an error message useful without leaking a directory.
+// scrubPath keeps an error message useful without leaking a directory or a
+// session identifier.
+//
+// Dropping the directory is not enough. Claude Code names a transcript after
+// its session UUID, so the bare filename is still an identifier, and this list
+// is part of the payload `replay corpus --submit` transmits. Analysed rows are
+// already shortened by prefixID; skipped ones were not, which quietly
+// contradicted this report's own promise of "a session id prefix, never a
+// path".
 func scrubPath(msg string) string {
 	if i := strings.LastIndex(msg, "/"); i >= 0 {
-		return msg[i+1:]
+		msg = msg[i+1:]
+	}
+	if i := strings.Index(msg, ".jsonl"); i > 0 {
+		return prefixID(msg[:i]) + msg[i+len(".jsonl"):]
 	}
 	return msg
 }

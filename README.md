@@ -32,10 +32,11 @@ only mechanisms the provider itself sanctions, and keeps improving from your own
 Everything runs on your machine. No API calls are spent on analysis. Nothing leaves.
 
 > [!NOTE]
-> **Status: v0.1 and v0.2 in development, no release tagged yet.** `replay`, `blame`, `diff`, and
-> `redact` work offline on Claude Code transcripts and have been calibrated against 11 real sessions
-> so far, all from this repository's own development; the 20-session corpus the roadmap requires is
-> still pending. `serve` is a byte-for-byte passthrough proxy that records a derived-data ledger; it
+> **Status: v0.1.1 released, v0.2 in development.** `replay`, `blame`, `diff`, and
+> `redact` work offline on Claude Code transcripts and have been calibrated against **1363 real
+> sessions** across many unrelated projects, reproducing 26571 of 27302 turns (97.32%). They are all
+> from one machine, so the roadmap's independence requirement is not met even though its session
+> count is met many times over. `serve` is a byte-for-byte passthrough proxy that records a derived-data ledger; it
 > has been exercised against a fake provider, not yet against the real one. Follow
 > [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
@@ -106,8 +107,10 @@ editing would have cost more, not less, for this session shape.
 
 Every figure is labeled **estimated** (inferred from transcripts) or **measured** (read off the
 wire), with the calibration that justifies it. The aggregate across every session measured so far is
-in [`docs/evidence/`](docs/evidence/), which reports 398 of 402 turns reproduced across 11 sessions
-and is candid that those sessions are this repository's own.
+in [`docs/evidence/`](docs/evidence/), which reports **26571 of 27302 turns reproduced across 1363
+sessions (97.32%)**, names the 429 sessions that fell below the 95% threshold rather than dropping
+them, and is candid that every session came from one machine. For one model it reports that provider
+behaviour changed and declines to score alternatives at all.
 
 Add `--dollars` for a list-price column computed from a dated first-party price table; the output
 names the table date because prices change and other platforms differ.

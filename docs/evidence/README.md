@@ -11,7 +11,7 @@ fact; a new measurement gets a new file.
 | [Adversarial security review, 2026-09-04](security-review-2026-09-04.md) | An external reviewer reading the code and running the proxy end to end | Five findings open, one fixed, and what was verified to hold |
 
 > [!IMPORTANT]
-> The calibration corpus is 11 sessions from one machine, not the twenty independent sessions the
+> The calibration corpus is 1363 sessions from one machine, not the independent sessions the
 > [roadmap](../ROADMAP.md) gate asks for. It is published because an under-powered measurement stated
 > plainly is worth more than a claim with nothing behind it.
 
