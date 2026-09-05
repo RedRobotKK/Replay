@@ -12,7 +12,7 @@ two of the four objections and does not answer the other two, so the design has 
 | Objection | Does opt-in solve it? |
 |---|---|
 | Breaks "forwards byte for byte" | **Yes**, the claim becomes "by default", which is already true of `--mask` and `--context-edit-trigger` |
-| A model in the request path costs the 48µs headline | **Yes**, you only pay it if you turn it on |
+| A model in the request path costs the sub-millisecond overhead headline | **Yes**, you only pay it if you turn it on |
 | No verification path | **No.** Has to be designed |
 | Cannot fail open | **No.** Has to be designed |
 
@@ -53,7 +53,7 @@ same rule masking and the policy path already follow.
 
 `--rewrite-command <cmd>` pipes the request body through a command **the user chose**. If they want a
 model, they bring it, pay for it and accept its latency. **Replay ships no rewriter and embeds no
-model**, so the 48µs figure stays true of Replay and the user owns whatever they added.
+model**, so the proxy's own overhead figure stays true of Replay and the user owns whatever they added.
 
 **And this is the answer to the verification objection.** Replay cannot measure answer quality, but
 it can measure whether a rewrite made things *worse* in ways it already tracks:

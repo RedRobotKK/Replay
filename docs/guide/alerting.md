@@ -101,7 +101,7 @@ The second is a ratio rather than a count, so it survives a change in your traff
 
 `replay_request_latency_seconds` measures the **whole round trip including the provider**, so
 it is dominated by network and model time and tells you almost nothing about Replay. The
-proxy's own overhead is 48µs at the median and 98µs at p99, measured against a local stub; it
+proxy's own overhead is about 1.7ms at the median against an instant local stub; it
 is not in this metric. See [`requirements.md`](../requirements.md) section 12, which records
 that the requirement asked for proxy overhead and the implementation measures something else.
 

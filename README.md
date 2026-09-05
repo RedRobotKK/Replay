@@ -89,7 +89,7 @@ Everything runs on your machine. No API calls are spent on analysis. Nothing lea
 
 > [!TIP]
 > **This is free and stays free.** The measurements behind it are not: the corpus above is
-> 1,382 real sessions and about $2,856 of the maintainer's own API spend, and the next
+> 1363 real sessions and about $2,851 of the maintainer's own API spend, and the next
 > provider needs the same again. If Replay found a cache break that was costing you real
 > money, [the tip jar](https://buymeacoffee.com/saitodaniel) is how the R&D gets paid for.
 > There is nothing to buy and nothing gated.
@@ -298,7 +298,7 @@ What running this actually costs you, measured rather than asserted.
 |---|---|
 | **API calls for analysis** | None. Analysis reads files; it never calls a model |
 | **Tokens spent by Replay** | Zero. It is a passthrough, so your agent's calls are the only calls |
-| **Latency added by the proxy** | **48µs p50, 98µs p99** against a local fake provider, so the figure is the proxy's own overhead and not the network's ([method](docs/evidence/proxy-latency-2026-09-03.md)) |
+| **Latency added by the proxy** | **~1.7ms p50** on a 45KB request, measured against an instant local provider so nothing hides in it. A real round trip is hundreds of milliseconds to minutes, so this is a rounding error of the request it sits inside. The 48µs first published here was the difference of two noisy percentiles and could not have detected otherwise ([method and correction](docs/evidence/proxy-latency-2026-09-03.md)) |
 | **Disk** | A ledger of block kinds, sizes, timings and usage counts. No message text, paths hashed, owner-only |
 | **Telemetry** | None. No account, no install-time question, no first-run prompt. `replay corpus --submit` is the only thing that ever transmits, it prints the exact payload, and it waits for you |
 | **Licence obligations** | Apache 2.0. No copyleft, no attribution beyond [`NOTICE`](NOTICE) |
@@ -441,9 +441,14 @@ What the proxy does and does not do:
 - **Has an off switch.** `REPLAY_DISABLED=1` refuses to start; unsetting `ANTHROPIC_BASE_URL`
   bypasses it entirely.
 
-Added latency, measured on 2026-09-03 with a 46KB request against a local fake provider on a 4-core
-Xeon, 300 requests after warm-up: **p50 48µs, p99 98µs** on top of the round trip. Provider latency
-is three orders of magnitude larger. The method is in
+Added latency, measured with a 45KB request against an instant local provider, 300 requests after
+warm-up: **~1.7ms p50** on top of the round trip. Provider latency is two to three orders of
+magnitude larger, so the overhead is a rounding error of the request it sits inside.
+
+A figure of 48µs was published here first and is wrong — not because the proxy got slower, but
+because it was the difference between two separately-measured percentiles whose jitter was far
+larger than the quantity being measured. Regenerate it yourself with `go test ./internal/proxy -run
+'^$' -bench BenchmarkAddedLatency`; the method and the correction are in
 [`docs/evidence/proxy-latency-2026-09-03.md`](docs/evidence/proxy-latency-2026-09-03.md).
 
 <details>
