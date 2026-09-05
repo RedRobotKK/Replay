@@ -81,6 +81,20 @@ and per-session list-price dollars. There is **no `Host` header validation**; th
 defence rests on `Origin` being present. And `/replay/healthz` answers cross-origin, so a web page
 can fingerprint that Replay is running.
 
+### Provider surface, and what this build does not read
+
+| Surface | Status |
+|---|---|
+| `POST …/v1/messages` | **Verified** end to end against the real provider (spike 4). Parsed, guarded, masked, ledgered |
+| **Any other POST path**, including `/v1/chat/completions` and `/v1/responses` | **Forwarded unchanged and NOT read.** No ledger record, no spend cap, no error budget, no loop detection, **no secret masking**. Measured, not assumed: a `--max-session-tokens 1` cap refused none of three OpenAI-shaped requests. Since 2026-09-05 the proxy warns once per path and counts `replay_unparsed_requests_total`. See `evidence/spike-openai-compatible-2026-09-05.md` |
+| OpenAI-compatible provider support | **Not built.** Cursor, DeepSeek and Grok all reach Replay through this shape, so they are currently in the row above |
+
+**This surface is expected to change.** Step 3 of `architecture/multi-provider.md`
+adds an OpenAI-compatible request path, at which point the second row narrows and
+the third goes away. Until then the warning is the contract: Replay says what it
+cannot see rather than letting a running proxy imply protection.
+
+
 ## 3. Environment
 
 **A second correction: the first version of this section conflated the binary and the installer.**

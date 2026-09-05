@@ -136,6 +136,10 @@ type stats struct {
 	// contribute nothing to the totals, so without this the totals would read
 	// as complete when they are not.
 	unpriced int
+	// unparsed counts requests on paths this build cannot read, by path.
+	// Everything Replay does hangs off parsing, so these requests were
+	// forwarded with every guard and the masker inert.
+	unparsed map[string]int
 }
 
 func newStats() *stats {
@@ -148,6 +152,7 @@ func newStats() *stats {
 		breakCauses:   map[cachemodel.BreakCause]int{},
 		refusedByKind: map[string]int{},
 		breaches:      map[string]int{},
+		unparsed:      map[string]int{},
 		reverted:      map[string]bool{},
 		masked:        map[string]int{},
 		rehydrated:    map[string]int{},
@@ -590,6 +595,13 @@ func (s *stats) metrics() string {
 	line("# HELP replay_cost_unpriced_requests_total Requests whose model the rules could not price, so they are in no cost figure.")
 	line("# TYPE replay_cost_unpriced_requests_total counter")
 	line("replay_cost_unpriced_requests_total %d", s.unpriced)
+	unparsed := 0
+	for _, v := range s.unparsed {
+		unparsed += v
+	}
+	line("# HELP replay_unparsed_requests_total Requests forwarded on a path this build cannot read, so no guard, masker or ledger applied to them.")
+	line("# TYPE replay_unparsed_requests_total counter")
+	line("replay_unparsed_requests_total %d", unparsed)
 	line("# HELP replay_upstream_errors_total Provider responses with an error status.")
 	line("# TYPE replay_upstream_errors_total counter")
 	codes := make([]int, 0, len(s.upstreamErrs))
@@ -692,4 +704,27 @@ func (s *stats) costs() (total, day float64) {
 		return s.costUSD, 0
 	}
 	return s.costUSD, s.dayCostUSD
+}
+
+// noteUnparsed records a request on a path this build cannot read, and reports
+// whether this is the first time that path has been seen.
+func (s *stats) noteUnparsed(path string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.unparsed == nil {
+		s.unparsed = map[string]int{}
+	}
+	first := s.unparsed[path] == 0
+	s.unparsed[path]++
+	return first
+}
+
+// unparsedTotal is every request forwarded without being understood.
+func (s *stats) unparsedTotal() (n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, v := range s.unparsed {
+		n += v
+	}
+	return n
 }

@@ -381,6 +381,13 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 	start := time.Now()
 	messages := isMessages(r.URL.Path)
+	if !messages && r.Method == http.MethodPost {
+		// A POST somewhere else is a client sending real work down a path
+		// this build cannot read. It is forwarded unchanged, and everything
+		// Replay offers is inert for it, so say so rather than let the
+		// operator infer protection from a running proxy.
+		s.noteUnparsed(r.URL.Path)
+	}
 	rec := ledger.Record{Timestamp: start, Path: r.URL.Path, SessionID: r.Header.Get(HeaderSessionID), AgentID: r.Header.Get(HeaderAgentID)}
 
 	ok, probe, wait := s.cfg.Breaker.Allow()
@@ -826,8 +833,10 @@ func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Recor
 
 // isMessages reports whether a path is the Messages endpoint proper (not
 // count_tokens), which is the only one whose responses carry usage.
+const messagesPath = "/v1/messages"
+
 func isMessages(path string) bool {
-	return strings.HasSuffix(path, "/v1/messages")
+	return strings.HasSuffix(path, messagesPath)
 }
 
 // refusal is one way Replay answers a request itself instead of forwarding
@@ -1031,4 +1040,29 @@ func (t *responseTap) result() ledger.Response {
 		return sp.Result()
 	}
 	return ledger.ParseResponse(body)
+}
+
+// noteUnparsed records a request Replay forwarded without understanding, and
+// says so out loud the first time it sees each path.
+//
+// Everything this proxy does hangs off parsing the Messages body: the ledger
+// record, the spend cap, the error budget, the loop detector and the secret
+// masker all sit behind isMessages. A request on any other path is forwarded
+// byte for byte, which is correct, and leaves every one of those inert, which
+// the operator has no way to discover. They configured a cap and believe it is
+// on.
+//
+// That is the failure mode the persisted day counter and CapNotEnforced both
+// exist to prevent: protection that quietly is not there is worse than
+// protection nobody claimed, because the user has stopped watching.
+//
+// It warns once per path rather than per request, because a line on every
+// request is noise an operator learns to scroll past.
+func (s *Server) noteUnparsed(path string) {
+	if !s.stats.noteUnparsed(path) || s.cfg.Logger == nil {
+		return
+	}
+	s.cfg.Logger.Printf("NOT PARSED %s: Replay forwards this path unchanged and cannot read it. "+
+		"No ledger record, no spend cap, no error budget, no loop detection and no secret masking apply to it. "+
+		"Only %s is understood by this build.", path, messagesPath)
 }
