@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -88,11 +89,35 @@ func namesAPath(arg string) bool {
 	return err == nil
 }
 
+// hoistFlags moves flag arguments ahead of paths.
+//
+// Go's flag package stops parsing at the first non-flag argument, so
+// `replay <dir> --dollars` handed "--dollars" to os.Stat and every documented
+// use of the flag failed with "stat --dollars: no such file or directory".
+// Putting the flag last is the form people reach for, the form README shows,
+// and the form the CLI's own usage text shows, so it has to work.
+//
+// A path is anything that is not a flag. Values that belong to a flag are not
+// separated from it here: only boolean flags exist on this path today, and
+// `--flag=value` keeps its value attached.
+func hoistFlags(args []string) []string {
+	flags := make([]string, 0, len(args))
+	paths := make([]string, 0, len(args))
+	for _, a := range args {
+		if strings.HasPrefix(a, "-") && a != "-" {
+			flags = append(flags, a)
+			continue
+		}
+		paths = append(paths, a)
+	}
+	return append(flags, paths...)
+}
+
 func runReport(args []string, stdout, stderr io.Writer, write func(*analysis.LaneReport, io.Writer) error) error {
 	fs := flag.NewFlagSet("report", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	dollars := fs.Bool("dollars", false, "add a list-price cost column (first-party rates, dated price table)")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(hoistFlags(args)); err != nil {
 		return errUsage
 	}
 	if fs.NArg() == 0 {
@@ -194,14 +219,29 @@ func transcriptFiles(paths []string) ([]string, error) {
 			entries = append(entries, entry{path: p, size: info.Size()})
 			continue
 		}
-		matches, err := filepath.Glob(filepath.Join(p, "*.jsonl"))
+		// Claude Code writes ~/.claude/projects/<project>/*.jsonl, so the
+		// directory a person naturally points at is the parent of the
+		// transcripts, not the one holding them. Walk, so both work.
+		err = filepath.WalkDir(p, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			name := d.Name()
+			// Skip dot directories: caches and VCS metadata are not sessions,
+			// and walking them is a way to be slow and wrong at once.
+			if d.IsDir() {
+				if path != p && strings.HasPrefix(name, ".") {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !strings.HasSuffix(name, ".jsonl") {
+				return nil
+			}
+			return add(path)
+		})
 		if err != nil {
 			return nil, err
-		}
-		for _, m := range matches {
-			if err := add(m); err != nil {
-				return nil, err
-			}
 		}
 	}
 	if len(entries) == 0 {

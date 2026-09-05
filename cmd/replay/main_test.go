@@ -162,10 +162,42 @@ func TestPathWithoutASubcommandRunsReplay(t *testing.T) {
 	if explicit.String() != direct {
 		t.Fatal("the implicit and explicit forms must print the same report")
 	}
-	// Flags still reach the analysis.
-	var withFlag bytes.Buffer
-	if err := run([]string{"-dollars", fixture}, &withFlag, &errOut); err == nil {
+	// A leading flag is not a path and must not be taken as one.
+	var leading bytes.Buffer
+	if err := run([]string{"-dollars", fixture}, &leading, &errOut); err == nil {
 		t.Fatal("a leading flag is not a path and must not be taken as one")
+	}
+
+	// ...but the documented form puts the flag after the path, and README,
+	// `replay --help` and the install-with-AI prompt all tell people to run it
+	// that way. Go's flag package stops parsing at the first non-flag argument,
+	// so without hoisting, --dollars was passed to os.Stat and every documented
+	// invocation of it failed with "stat --dollars: no such file or directory".
+	for _, args := range [][]string{
+		{fixture, "--dollars"},
+		{fixture, "-dollars"},
+		{"replay", fixture, "--dollars"},
+		{"blame", fixture, "--dollars"},
+	} {
+		var trailing bytes.Buffer
+		if err := run(args, &trailing, &errOut); err != nil {
+			t.Fatalf("replay %v: %v", args, err)
+		}
+		if trailing.Len() == 0 {
+			t.Fatalf("replay %v printed nothing", args)
+		}
+	}
+
+	// The flag has to actually change the report, not merely be tolerated.
+	var plain, priced bytes.Buffer
+	if err := run([]string{fixture}, &plain, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	if err := run([]string{fixture, "--dollars"}, &priced, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	if plain.String() == priced.String() {
+		t.Fatal("--dollars was accepted but changed nothing in the report")
 	}
 	// A name that is not a command and not a path stays an error.
 	if err := run([]string{"relpay", fixture}, &out, &errOut); err == nil {
@@ -194,5 +226,39 @@ func TestPathWithoutASubcommandRunsReplay(t *testing.T) {
 	}
 	if !strings.Contains(doctorOut.String(), "transcripts") {
 		t.Fatalf("expected doctor output:\n%s", doctorOut.String())
+	}
+}
+
+// Claude Code stores transcripts one level down, as
+// ~/.claude/projects/<project>/*.jsonl, and `replay doctor` reports on exactly
+// that layout. Directory walking used filepath.Glob, which does not recurse, so
+// the obvious first command a new user types, `replay ~/.claude/projects/`,
+// answered "no .jsonl transcripts found" while doctor was reporting sessions in
+// the same place.
+func TestTranscriptFilesFindsNestedProjectDirectories(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "-Users-someone-project")
+	if err := os.MkdirAll(nested, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(nested, "session.jsonl")
+	if err := os.WriteFile(want, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A hidden directory is skipped: caches and VCS metadata are not sessions.
+	hidden := filepath.Join(root, ".cache")
+	if err := os.MkdirAll(hidden, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hidden, "ignore.jsonl"), []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	files, err := transcriptFiles([]string{root})
+	if err != nil {
+		t.Fatalf("walking %s: %v", root, err)
+	}
+	if len(files) != 1 || files[0] != want {
+		t.Fatalf("want exactly [%s], got %v", want, files)
 	}
 }
