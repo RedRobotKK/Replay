@@ -3,4 +3,3 @@ globs:
   - "**/*.md"
 ignores:
   - node_modules/**
-  - docs/internal/prd/replay-prd-v4.0.0.md   # historical; never edited after the fact
