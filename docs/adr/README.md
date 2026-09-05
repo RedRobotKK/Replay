@@ -14,3 +14,4 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | [0006](0006-learning-selection.md) | Learning selection | Accepted |
 | [0007](0007-federated-calibration-corpus.md) | Improving the cache model from many machines | Proposed |
 | [0008](0008-corpus-at-launch.md) | Collecting a corpus from a public launch without shipping telemetry | Proposed |
+| [0009](0009-crowdsourced-waste-and-predictive-guards.md) | Crowdsource the waste taxonomy, not the cache model | Proposed |
