@@ -36,7 +36,9 @@ puts the true figure nearer 2 to 3 percent.
 
 **It is the fourth lever, not the first.** A committed-spend discount is worth 15 to 30 percent for
 one email. Routing cheap turns to a cheaper model is worth 30 to 60 percent of a large share of
-traffic. Trimming the always-on context is worth 5 to 15 percent and is free. Cache forensics comes
+traffic. Trimming the always-on context is worth 5 to 15 percent, and it is not free: what you
+cut has to be written to the cache again at 1.25x or 2x, so on a warm prefix it only
+pays once you are removing most of the prompt rather than a slice of it. Cache forensics comes
 after all three, and it is the only one that asks you to install something.
 
 If you are looking for the biggest saving available to you, run those three first. This tool will

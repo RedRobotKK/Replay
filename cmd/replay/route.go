@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -76,6 +77,10 @@ func runRoute(args []string, stdout, stderr io.Writer) error {
 type modelCorpus struct {
 	fits  map[string]analysis.TokenFit
 	turns map[string]int
+	// usage is each model's summed provider-reported usage. It is what the
+	// projection is applied to, so it is measured on both counts: the tokens
+	// came off the wire and so did sigma.
+	usage map[string]transcript.Usage
 	hits  int
 	total int
 }
@@ -115,7 +120,7 @@ func (c modelCorpus) busiest() string {
 // that reason; what makes sigma trustworthy is that both sides came off the
 // wire, not that this pooling is optimal.
 func gatherByModel(files []string) (modelCorpus, error) {
-	c := modelCorpus{fits: map[string]analysis.TokenFit{}, turns: map[string]int{}}
+	c := modelCorpus{fits: map[string]analysis.TokenFit{}, turns: map[string]int{}, usage: map[string]transcript.Usage{}}
 	sumTPB := map[string]float64{}
 	sumErr := map[string]float64{}
 
@@ -132,12 +137,18 @@ func gatherByModel(files []string) (modelCorpus, error) {
 		sumErr[model] += rep.Fit.RelativeError * w
 		c.turns[model] += rep.Fit.Turns
 
+		u := c.usage[model]
 		for _, req := range rep.Lane.Requests {
 			c.total++
 			if req.Usage.CacheRead > 0 {
 				c.hits++
 			}
+			u.Input += req.Usage.Input
+			u.CacheCreation += req.Usage.CacheCreation
+			u.CacheRead += req.Usage.CacheRead
+			u.Output += req.Usage.Output
 		}
+		c.usage[model] = u
 		return nil
 	})
 	if err != nil {
@@ -167,11 +178,16 @@ type routeReport struct {
 	// the two ways round are opposite advice.
 	WinsAbove string            `json:"wins_above,omitempty"`
 	Dilation  analysis.Dilation `json:"dilation"`
-	// Dollars is nil whenever sigma is unmeasured. There is no estimate here
-	// and no default of 1.0: an absolute cross-family figure without a
-	// measured sigma is a guess with a currency symbol in front of it.
-	Dollars *float64 `json:"dollars,omitempty"`
-	Notes   []string `json:"notes,omitempty"`
+	// Observed is what the source model actually cost over these turns at
+	// list price, and Dollars is what the destination is projected to cost
+	// for the same work. Both are nil whenever sigma is unmeasured: there is
+	// no estimate and no default of 1.0, because an absolute cross-family
+	// figure without a measured sigma is a guess with a currency symbol in
+	// front of it. A projection is also meaningless alone, so the observed
+	// figure it is measured against is always carried beside it.
+	Observed *float64 `json:"observed_usd,omitempty"`
+	Dollars  *float64 `json:"projected_usd,omitempty"`
+	Notes    []string `json:"notes,omitempty"`
 }
 
 func buildRoute(from, to string, c modelCorpus) routeReport {
@@ -206,6 +222,24 @@ func buildRoute(from, to string, c modelCorpus) routeReport {
 	}
 	// The unmeasured case already prints its own reason in full; repeating
 	// it as a note said the same sentence twice.
+	if r.Dilation.Measured && r.From.Known && r.To.Known {
+		u := c.usage[from]
+		pFrom, okF := cachemodel.PriceFor(from)
+		pTo, okT := cachemodel.PriceFor(to)
+		if okF && okT {
+			observed := cachemodel.CostUSD(u, pFrom)
+			// Every token count is scaled by the measured sigma: the same
+			// work, counted by the destination's tokenizer.
+			scaled := transcript.Usage{
+				Input:         scaleTokens(u.Input, r.Dilation.Sigma),
+				CacheCreation: scaleTokens(u.CacheCreation, r.Dilation.Sigma),
+				CacheRead:     scaleTokens(u.CacheRead, r.Dilation.Sigma),
+				Output:        scaleTokens(u.Output, r.Dilation.Sigma),
+			}
+			projected := cachemodel.CostUSD(scaled, pTo)
+			r.Observed, r.Dollars = &observed, &projected
+		}
+	}
 	return r
 }
 
@@ -235,6 +269,16 @@ func (r routeReport) write(w io.Writer) error {
 	p.printf("\nsigma (tokenizer dilation, %s -> %s): ", r.Dilation.From, r.Dilation.To)
 	if r.Dilation.Measured {
 		p.printf("%.4f +/-%.0f%% from %d and %d turns\n", r.Dilation.Sigma, r.Dilation.RelativeError*100, r.Dilation.FromTurns, r.Dilation.ToTurns)
+		if r.Observed != nil && r.Dollars != nil {
+			delta := *r.Dollars - *r.Observed
+			verb := "more"
+			if delta < 0 {
+				delta, verb = -delta, "less"
+			}
+			p.printf("\nOver these turns %s cost $%.2f at list price. The same work on %s\n", r.From.Model, *r.Observed, r.To.Model)
+			p.printf("projects to $%.2f, which is $%.2f %s. Carrying sigma's +/-%.0f%%, so the\n", *r.Dollars, delta, verb, r.Dilation.RelativeError*100)
+			p.printf("figure is a bound to argue with, not an invoice.\n")
+		}
 	} else {
 		p.printf("unmeasured\n")
 		p.printf("Dollar figures are suppressed. %s\n", r.Dilation.Why)
@@ -260,6 +304,12 @@ func (p *printer) printf(format string, args ...any) {
 
 // Model ids run to about sixteen characters, so the columns are cut to fit
 // one rather than truncating every name in the table.
+// scaleTokens applies sigma to one count. Rounded rather than truncated so a
+// projection does not drift systematically low across four fields.
+func scaleTokens(n int, sigma float64) int {
+	return int(math.Round(float64(n) * sigma))
+}
+
 func short12(s string) string {
 	if len(s) <= 16 {
 		return s

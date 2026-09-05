@@ -432,7 +432,12 @@ All off unless you set them (see `replay serve -h`):
   in the session never counts; only the current run does. `x-replay-override` passes a block once.
 - `--breaker-failures` opens a circuit after consecutive provider failures and answers locally with
   `Retry-After` until the cooldown passes, so the agent stops burning retries against a provider that
-  is already saying no.
+  is already saying no. It counts client requests, not attempts: one request that exhausts `--retries`
+  is one failure, because the circuit is observed once on the final outcome. The two flags therefore
+  do not multiply the count, but they do multiply the **time**. With `--retries 3` and backoff, each
+  failure the breaker sees can take several seconds of retrying to arrive, so `--breaker-failures 5`
+  opens after five slow requests rather than five quick ones. If you want the circuit to protect you
+  sooner, lower the failure threshold rather than assuming the retries got you there faster.
 - `--retries` resends a request up to that many times on rate limit, overload, server error, or
   connection failure, with doubling jittered backoff from `--retry-base` capped at `--retry-max`, and
   the provider's `Retry-After` in place of the backoff when it fits under the cap. A retry can only
