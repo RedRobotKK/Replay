@@ -65,6 +65,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return runStatusline(args[1:], stdout, stderr)
 	case "cost":
 		return runCost(args[1:], stdout, stderr)
+	case "context":
+		return runContext(args[1:], stdout, stderr)
 	case "advise":
 		return runAdvise(args[1:], stdout, stderr)
 	case "learn":
@@ -301,6 +303,7 @@ Usage:
   replay rules [--update <src>]    show the provider rules in effect, or install a dated document
   replay statusline                live spend and what the cache misses cost, for Claude Code's status line
   replay cost   <dir...>           cost per task, the share nobody chose, and --compare <date> for before/after
+  replay context <transcript|dir>  what entered a session's context, by tool
   replay redact <transcript>       strip content, keep structure and usage (for bug reports)
   replay serve [flags]             local proxy: byte-for-byte passthrough, records a ledger
   replay version                   print build information

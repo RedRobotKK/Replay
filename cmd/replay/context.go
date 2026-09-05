@@ -1,0 +1,92 @@
+package main
+
+import (
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+
+	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/transcript"
+)
+
+// `replay context` answers what a session's context is made of.
+//
+// Claude Code tells you how full the window is. It does not tell you what is
+// filling it, and that is the question a person acts on: a quarter to a third
+// of a typical prompt is tool output being resent on every turn, and knowing
+// which tool is the difference between a vague intention to "use less context"
+// and a specific one.
+//
+// What it does NOT claim is in the name of the type it prints. See
+// analysis.ContextEntry: the underlying attribution never subtracts, so this is
+// content that entered the context, not content still in it.
+func runContext(args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("context", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	asJSON := fs.Bool("json", false, "emit the attribution as JSON")
+	top := fs.Int("top", 12, "how many rows to print")
+	if err := fs.Parse(hoistFlags(args)); err != nil {
+		return errUsage
+	}
+	if fs.NArg() == 0 {
+		return fmt.Errorf("a transcript file or directory is required: %w", errUsage)
+	}
+	files, err := transcriptFiles(fs.Args())
+	if err != nil {
+		return err
+	}
+
+	printed := 0
+	return forEachSession(files, func(path string, session *transcript.Session, rep *analysis.LaneReport, err error) error {
+		if err != nil || rep == nil {
+			return nil
+		}
+		rows := analysis.EnteredContext(rep.Blame)
+		if len(rows) == 0 {
+			return nil
+		}
+		if printed > 0 {
+			fmt.Fprintln(stdout)
+		}
+		printed++
+
+		if *asJSON {
+			b, err := json.MarshalIndent(map[string]any{
+				"schema":  "replay.context.v1",
+				"session": prefixID(session.ID),
+				"measures": "content that entered this context; the attribution does not " +
+					"subtract cleared or compacted content",
+				"entries": rows,
+			}, "", "  ")
+			if err != nil {
+				return err
+			}
+			_, err = fmt.Fprintf(stdout, "%s\n", b)
+			return err
+		}
+
+		total := 0
+		for _, r := range rows {
+			total += r.Tokens
+		}
+		fmt.Fprintf(stdout, "%s\nSession %s  %s tokens of content entered this context\n\n",
+			path, prefixID(session.ID), formatCount(total))
+		for i, r := range rows {
+			if i >= *top {
+				fmt.Fprintf(stdout, "  ... and %d more\n", len(rows)-*top)
+				break
+			}
+			mark := ""
+			if r.Estimated {
+				mark = " *"
+			}
+			fmt.Fprintf(stdout, "  %-*s %5.1f%%  %10s  x%-5d%s\n",
+				analysis.MaxContextLabel, r.Label, r.Share*100, formatCount(r.Tokens), r.Occurrences, mark)
+		}
+		fmt.Fprintf(stdout, "\n  * estimated through the byte-to-token fit; everything else is provider usage.\n")
+		fmt.Fprintf(stdout, "  Entered, not resident: content cleared by context editing or compaction\n")
+		fmt.Fprintf(stdout, "  is still counted, so this overstates a session that has been compacted.\n")
+		return nil
+	})
+}

@@ -59,6 +59,31 @@ Everything runs on your machine. No API calls are spent on analysis. Nothing lea
 > has been exercised against a fake provider, not yet against the real one. Follow
 > [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
+## What is filling your context
+
+Claude Code tells you how full the window is. It does not tell you what is
+filling it, and that is the part you can act on.
+
+```text
+$ replay context ~/.claude/projects/<project>/session.jsonl
+
+Session fee79714  998k tokens of content entered this context
+
+  Bash                                29.2%    291k  x562  *
+  assistant                           22.8%    228k  x606
+  mcp__claude-in-chrome__computer     17.8%    178k  x276  *
+  Write                                3.6%     36k  x34   *
+```
+
+Ranked by size now, not by cost across the session: a small file read on turn
+one is carried by every later request and dominates a cost ranking while
+occupying almost nothing.
+
+**It measures what entered the context, not what is still in it.** The
+attribution never subtracts, so content cleared by context editing or by
+compaction is still counted, and a compacted session is overstated. The output
+says so every time it runs. That gap is real and is named rather than hidden.
+
 ## Cost per task
 
 ```sh
@@ -274,6 +299,7 @@ replay ~/.claude/projects/<your-project>/
 | `replay learn <dir...>` | Re-score the policy catalog, select one with held-out checks |
 | `replay doctor` | What Replay can see on this machine, and what to do next |
 | `replay cost <dir...>` | Cost per task across sessions, and the share of it nobody chose. `--per-task` lists them, `--json` emits them |
+| `replay context <transcript\|dir>` | What entered a session's context, by tool, ranked by size. `--json` for a dashboard |
 | `replay cost --compare <date>` | Cost per task before and after a date, with the task volume on both sides. `--predicted` judges a forecast against what actually happened |
 | `replay statusline` | Live spend, cache health, and what the misses are costing, in Claude Code's status line. `--install` prints the settings snippet |
 | `replay rules [--update <src>]` | Show the provider rules in effect and where they came from, or install a dated document. `--dry-run` validates without installing |

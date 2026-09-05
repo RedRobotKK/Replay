@@ -40,6 +40,7 @@ type sessionState struct {
 	scoreMu sync.Mutex
 	builder *ledger.SessionBuilder
 	whatIf  []WhatIf
+	context []analysis.ContextEntry
 	reReads analysis.ReReads
 	// errorTokens is the estimated prompt cost of error content carried by
 	// the session so far, from the same analysis replay prints.
@@ -321,6 +322,10 @@ func (s *stats) rescore(rec *ledger.Record) (string, analysis.ReReads) {
 	s.mu.Lock()
 	st.whatIf = rows
 	st.reReads = report.ReReads
+	// Blame was computed and discarded here. It is the only attribution of what
+	// a session's context is made of, and the proxy is the one place it can be
+	// produced from provider usage rather than from the byte-to-token fit.
+	st.context = analysis.EnteredContext(report.Blame)
 	st.errorTokens = errorTokens
 	s.mu.Unlock()
 
@@ -387,7 +392,10 @@ type SessionSummary struct {
 	HeldMS int64 `json:"held_ms,omitempty"`
 	// ReReads is the context-editing guardrail: file reads that repeated a
 	// path already in context, before and after the provider's first clear.
-	ReReads analysis.ReReads `json:"re_reads"`
+	// Context is what entered this session's context, by tool. It does not
+	// subtract cleared or compacted content; see analysis.ContextEntry.
+	Context []analysis.ContextEntry `json:"context,omitempty"`
+	ReReads analysis.ReReads        `json:"re_reads"`
 	// WhatIf scores candidate layouts over the session so far; as-run is
 	// first. Nothing here was sent to the provider.
 	WhatIf []WhatIf `json:"what_if,omitempty"`
@@ -432,7 +440,7 @@ func (s *stats) status() Status {
 				out.Trial.Treated++
 			}
 		}
-		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, ReReads: st.reReads, WhatIf: st.whatIf, ErrorShare: share(st.errorTokens, st.tally.PromptTokens), Masked: st.masked, Rehydrated: st.rehydrated, RehydrationDenied: st.denied, Held: st.held, HeldMS: st.heldMS})
+		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, Context: st.context, ReReads: st.reReads, WhatIf: st.whatIf, ErrorShare: share(st.errorTokens, st.tally.PromptTokens), Masked: st.masked, Rehydrated: st.rehydrated, RehydrationDenied: st.denied, Held: st.held, HeldMS: st.heldMS})
 	}
 	sort.Slice(out.Sessions, func(i, j int) bool { return out.Sessions[i].LastSeen.After(out.Sessions[j].LastSeen) })
 	return out
