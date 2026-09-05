@@ -172,6 +172,7 @@ func (r *LaneReport) WriteReplay(w io.Writer) error {
 	if priced {
 		costHeader = fmt.Sprintf(" %10s", "list cost")
 		costNote = fmt.Sprintf(" list cost uses the first-party price table dated %s; other platforms and discounts differ.", cachemodel.PriceTableVersion)
+		costNote += cachemodel.PriceTableAgeNote(time.Now())
 	} else if r.Dollars {
 		costNote = " no list price is known for this model, so no dollar column."
 	}

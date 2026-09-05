@@ -96,7 +96,7 @@ func renderCost(s costSummary, unpriced int) string {
 		fmt.Fprintf(&b, "No session could be priced. %d were read but their model is not in the price table.\n", unpriced)
 		return b.String()
 	}
-	fmt.Fprintf(&b, "Cost per task, across %d sessions priced at list rates (%s).\n\n", s.Tasks, cachemodel.RulesVersionInEffect())
+	fmt.Fprintf(&b, "%s\n\n", costHeaderLine(s.Tasks))
 	fmt.Fprintf(&b, "  total          $%.2f\n", s.TotalUSD)
 	fmt.Fprintf(&b, "  median task    $%.2f\n", s.MedianUSD)
 	fmt.Fprintf(&b, "  p90 task       $%.2f\n", s.P90USD)
@@ -219,4 +219,15 @@ func sessionTime(rep *analysis.LaneReport) time.Time {
 		return time.Time{}
 	}
 	return rep.Lane.Requests[0].Timestamp
+}
+
+// costHeaderLine names both dated documents, because they are different
+// documents that move independently and only one of them sets the money.
+// This previously cited the rules version beside a dollar total, which reads
+// as the price date: the rules govern what gets cached, the price table
+// governs what that costs, and on 2026-09-05 they were 73 days apart.
+func costHeaderLine(tasks int) string {
+	line := fmt.Sprintf("Cost per task, across %d sessions at list prices dated %s (caching rules %s).",
+		tasks, cachemodel.PriceTableVersion, cachemodel.RulesVersionInEffect())
+	return line + cachemodel.PriceTableAgeNote(time.Now())
 }

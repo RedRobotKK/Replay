@@ -7,6 +7,7 @@
 package cachemodel
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -21,6 +22,34 @@ const RulesVersion = "anthropic-2026-09-01"
 // cites it, because prices change and the figure is only as current as the
 // table.
 const PriceTableVersion = "2026-06-24"
+
+// PriceTableStaleDays is when a price table stops being worth trusting without
+// checking. Sixty days is a judgement, not a provider guarantee: inference
+// prices have moved several times a year, and every move is downward on the
+// headline rate and unpredictable on the cache multiples that Replay's advice
+// actually turns on.
+const PriceTableStaleDays = 60
+
+// PriceTableAgeNote returns a warning when the compiled price table is old
+// enough that the dollar figures derived from it deserve a second look, and
+// the empty string otherwise.
+//
+// Citing the table's date, which Replay already did, tells a reader what was
+// used. It does not tell them it is two months old, and a reader who does not
+// do that subtraction is quietly given a stale number by a tool whose whole
+// argument is that it declines to state figures it cannot stand behind.
+func PriceTableAgeNote(now time.Time) string {
+	table, err := time.Parse("2006-01-02", PriceTableVersion)
+	if err != nil {
+		return ""
+	}
+	days := int(now.UTC().Sub(table) / (24 * time.Hour))
+	if days <= PriceTableStaleDays {
+		return ""
+	}
+	return fmt.Sprintf(" The price table is %d days old; check it against current rates, "+
+		"or install a dated document with `replay rules --update`.", days)
+}
 
 // Cache TTLs offered by the provider.
 const (
