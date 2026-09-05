@@ -34,6 +34,40 @@ tokens, 9,600 cached). That pair is what proves the inclusive-to-exclusive conve
 | `07-reasoner-stream.sse` | reasoner, streaming |
 | `09-request-tool-loop.json` | the agent loop request: tool call and tool result in history |
 | `09-response-tool-loop.json` | its reply |
+| `10-error-401.json` | an auth failure, the shape a rotated or wrong key produces |
+
+There is no surface 8. The numbering follows the order the surfaces were probed
+live and 8 was `/v1/models`, which the proxy passes through and deliberately does
+not ledger, so it has no response fixture to keep.
 
 Asserted by `internal/ledger/provider_conformance_test.go`, which runs in CI with no API
 key and no network. The live equivalent is `scripts/verify-provider.sh`.
+
+## What an audit found here, 2026-09-05
+
+An adversarial audit planted 16 defects in production code. **Six survived**, and the
+suite's stated structure turned out to be inverted from its real one.
+
+- **The counting invariant could not fail.** `Usage()` sets `Input = prompt - cached`,
+  `CacheRead = cached`, and never assigns `CacheCreation`, so `fresh + read + write`
+  is identically `prompt_tokens` for every input including negative ones. 200,000
+  random pairs produced zero violations. Every realistic defect — mis-splitting the
+  prompt rather than breaking the sum — passed it.
+  **Fixed** by checking against `prompt_cache_hit_tokens` and
+  `prompt_cache_miss_tokens`, which the provider derives *separately* from
+  `cached_tokens`. That cross-field redundancy is why these fixtures are worth
+  keeping as bytes rather than as numbers.
+- **The universal checks ran on four surfaces of nine**, streaming among the missing.
+  Now they run on all of them.
+- Two real production bugs surfaced once the tests were hardened: a streamed
+  reasoning model recorded **zero response bytes**, because only `content` deltas
+  were counted and a reasoner streams `reasoning_content`; and an empty
+  `"usage": {}` object produced a **zeroed record**, which enters every average as
+  a free request.
+
+The fixtures themselves came through clean. All ten satisfy
+`prompt_tokens == hit + miss`, `cached_tokens == hit`, and `total == prompt +
+completion` — cross-field redundancy a hand-written fixture almost always gets
+wrong. The one transcription artefact that did survive was a **comment**, not data:
+it cited 14010 and 58, numbers matching no fixture here, sitting directly above the
+line calling itself the most consequential assertion in the file.

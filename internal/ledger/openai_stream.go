@@ -20,10 +20,11 @@ import (
 // stream_options.include_usage. When it is absent this reports no usage at all
 // rather than zero, because zero would tell the spend cap the request was free.
 type OpenAIStreamParser struct {
-	buf   bytes.Buffer
-	usage *transcript.OpenAIUsage
-	raw   json.RawMessage
-	bytes int
+	buf           bytes.Buffer
+	usage         *transcript.OpenAIUsage
+	raw           json.RawMessage
+	thinkingBytes int
+	bytes         int
 }
 
 // Write consumes stream bytes. It never fails; a frame it cannot parse is
@@ -56,6 +57,12 @@ func (p *OpenAIStreamParser) line(line []byte) {
 		Choices []struct {
 			Delta struct {
 				Content string `json:"content"`
+				// Reasoning models stream their thinking here and leave
+				// content null until the visible answer starts. Counting only
+				// Content recorded a streamed reasoner session as zero
+				// response bytes, so every byte-to-token fit downstream read
+				// zero for it. Found on 2026-09-05 by the conformance suite.
+				Reasoning string `json:"reasoning_content"`
 			} `json:"delta"`
 		} `json:"choices"`
 		Usage *transcript.OpenAIUsage `json:"usage"`
@@ -65,6 +72,7 @@ func (p *OpenAIStreamParser) line(line []byte) {
 	}
 	for _, c := range frame.Choices {
 		p.bytes += len(c.Delta.Content)
+		p.thinkingBytes += len(c.Delta.Reasoning)
 	}
 	if frame.Usage != nil {
 		// A later frame wins: the final one carries the totals.
@@ -81,6 +89,12 @@ func (p *OpenAIStreamParser) line(line []byte) {
 // Result is the reply reduced to structure and usage.
 func (p *OpenAIStreamParser) Result() Response {
 	var out Response
+	// Thinking first, because that is the order it arrives in and the order
+	// the provider replays it in when the block is sent back.
+	if p.thinkingBytes > 0 {
+		out.Blocks = append(out.Blocks, Block{Kind: transcript.KindThinking,
+			Label: transcript.LabelAssistantThinking, Bytes: p.thinkingBytes})
+	}
 	if p.bytes > 0 {
 		out.Blocks = append(out.Blocks, Block{Kind: transcript.KindText, Label: transcript.LabelAssistantText, Bytes: p.bytes})
 	}

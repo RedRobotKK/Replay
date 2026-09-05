@@ -96,7 +96,9 @@ type openAIResponse struct {
 	Model   string `json:"model"`
 	Choices []struct {
 		Message struct {
-			Content   string `json:"content"`
+			Content string `json:"content"`
+			// Reasoning models return their thinking alongside the answer.
+			Reasoning string `json:"reasoning_content"`
 			ToolCalls []struct {
 				Function struct {
 					Name string `json:"name"`
@@ -119,6 +121,13 @@ func ParseOpenAIResponse(body []byte) Response {
 		return Response{}
 	}
 	var out Response
+	// An empty or all-zero usage object is not a measurement of nothing, it is
+	// the absence of a measurement. Gateways emit `"usage": {}` on refusal and
+	// content-filter paths, and a zeroed record would enter every average as a
+	// free request. A real completion always has prompt tokens.
+	if raw.Usage != nil && raw.Usage.PromptTokens == 0 && raw.Usage.CompletionTokens == 0 {
+		raw.Usage = nil
+	}
 	if raw.Usage != nil {
 		u := raw.Usage.Usage()
 		out.Usage = &u
@@ -133,6 +142,12 @@ func ParseOpenAIResponse(body []byte) Response {
 		out.RawUsage = rawUsageBytes(body)
 	}
 	for _, c := range raw.Choices {
+		// A reasoning model returns its thinking beside the answer. Dropping
+		// it made the reasoner's response look smaller than it was billed for.
+		if c.Message.Reasoning != "" {
+			out.Blocks = append(out.Blocks, Block{Kind: transcript.KindThinking,
+				Label: transcript.LabelAssistantThinking, Bytes: len(c.Message.Reasoning)})
+		}
 		if c.Message.Content != "" {
 			out.Blocks = append(out.Blocks, Block{Kind: transcript.KindText, Label: transcript.LabelAssistantText, Bytes: len(c.Message.Content)})
 		}
