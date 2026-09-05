@@ -452,6 +452,16 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			body = s.applyPolicy(r, &rec, body, summarized)
 			setBody(r, body)
 		}
+		if openai && !s.cfg.NoPolicy {
+			// Ask for usage on a stream when the client did not. Without it
+			// this family reports none, and every guard below sees a free
+			// request. ADR-0003 kind one: a parameter the client left unset.
+			if out, changed := withUsageReporting(body); changed {
+				body = out
+				setBody(r, body)
+				rec.Policy = "openai-include-usage"
+			}
+		}
 	}
 	r, retries := withRetryCounter(r)
 
@@ -992,6 +1002,7 @@ func usageSummary(u *ledger.Usage) string {
 // parser fed on the side. For event streams the parser consumes lines as
 // they pass; for JSON responses the body is buffered up to the cap.
 type responseTap struct {
+	ostream *ledger.OpenAIStreamParser
 	// openai selects the OpenAI-compatible response parser. The two shapes
 	// report usage differently enough that guessing from the body would be a
 	// heuristic where the request path already knows the answer.
@@ -1020,7 +1031,11 @@ func (t *responseTap) WriteHeader(code int) {
 	ct := t.Header().Get("Content-Type")
 	t.gz = strings.EqualFold(t.Header().Get("Content-Encoding"), "gzip")
 	if ledger.IsEventStream(ct) && !t.gz {
-		t.stream = &ledger.StreamParser{}
+		if t.openai {
+			t.ostream = &ledger.OpenAIStreamParser{}
+		} else {
+			t.stream = &ledger.StreamParser{}
+		}
 	}
 	t.ResponseWriter.WriteHeader(code)
 }
@@ -1033,6 +1048,8 @@ func (t *responseTap) Write(p []byte) (int, error) {
 	// The tap must never affect delivery: parse after forwarding, and stop
 	// buffering rather than grow without bound.
 	switch {
+	case t.ostream != nil:
+		_, _ = t.ostream.Write(p[:n]) // never fails
 	case t.stream != nil:
 		_, _ = t.stream.Write(p[:n]) // StreamParser.Write never fails
 	case t.buffer.Len()+n <= MaxResponseBytes:
@@ -1051,6 +1068,9 @@ func (t *responseTap) Flush() {
 }
 
 func (t *responseTap) result() ledger.Response {
+	if t.ostream != nil {
+		return t.ostream.Result()
+	}
 	if t.stream != nil {
 		return t.stream.Result()
 	}
@@ -1120,4 +1140,37 @@ func (s *Server) noteUnmasked(path string) {
 	}
 	s.cfg.Logger.Printf("NOT MASKED %s: this path is read, guarded and ledgered, but --mask "+
 		"understands only %s, so secrets in this traffic are forwarded in clear.", path, messagesPath)
+}
+
+// withUsageReporting asks the provider to report usage on a streamed
+// OpenAI-compatible response, when the client did not.
+//
+// This family sends no usage object on a stream unless stream_options.
+// include_usage is set, and real clients do not set it: Cursor does not. Without
+// it the spend cap, the error budget and every cost figure see nothing on the
+// only shape those clients actually send, which is the silent-failure mode this
+// proxy exists not to have.
+//
+// It is admissible under ADR-0003's first kind, a request parameter the client
+// left unset. A client that set stream_options keeps its own value, whatever it
+// is. Nothing else in the body is touched, and a body this build cannot parse
+// is returned exactly as it arrived.
+func withUsageReporting(body []byte) ([]byte, bool) {
+	var raw map[string]json.RawMessage
+	if json.Unmarshal(body, &raw) != nil {
+		return body, false
+	}
+	var stream bool
+	if v, ok := raw["stream"]; !ok || json.Unmarshal(v, &stream) != nil || !stream {
+		return body, false
+	}
+	if _, ok := raw["stream_options"]; ok {
+		return body, false
+	}
+	raw["stream_options"] = json.RawMessage(`{"include_usage":true}`)
+	out, err := json.Marshal(raw)
+	if err != nil {
+		return body, false
+	}
+	return out, true
 }
