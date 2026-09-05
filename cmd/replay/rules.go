@@ -53,11 +53,16 @@ func runRules(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	update := fs.String("update", "", "install a rules document from a file path or https URL")
 	dryRun := fs.Bool("dry-run", false, "with --update, validate and describe the change without installing it")
+	checkPrices := fs.Bool("check-prices", false, "compare the compiled price table against an independent published database and report where they differ; never changes anything")
 	// Not hoistFlags: --update takes a value, and reordering would separate a
 	// flag from its argument. This command has no positional arguments, so
 	// there is nothing to hoist past.
 	if err := parseArgs(fs, args, stdout); err != nil {
 		return err
+	}
+
+	if *checkPrices {
+		return runCheckPrices(stdout)
 	}
 	path, err := rulesPath()
 	if err != nil {
