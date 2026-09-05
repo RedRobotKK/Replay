@@ -111,14 +111,20 @@ type stats struct {
 	refusedByKind map[string]int
 	policyApplied int
 	retries       int
-	breaches      int
-	reverted      bool
-	revertReason  string
-	masked        map[string]int
-	rehydrated    map[string]int
-	denied        map[string]int
-	held          int
-	heldMS        int64
+	// breaches and reverted are keyed by the policy the breaching sessions
+	// were actually pinned to. A single counter meant evidence gathered
+	// against one trigger reverted a different one after `replay learn`
+	// wrote a newer file, and a single reverted flag meant that once any
+	// policy had been reverted the guardrail was disarmed for every policy
+	// after it.
+	breaches     map[string]int
+	reverted     map[string]bool
+	revertReason string
+	masked       map[string]int
+	rehydrated   map[string]int
+	denied       map[string]int
+	held         int
+	heldMS       int64
 	// costUSD is list-price cost since start; dayCostUSD is the same for the
 	// current UTC day, which dayStamp names. Sourced here rather than from
 	// SpendGuard because the guard only records when a cap is configured, and
@@ -141,6 +147,8 @@ func newStats() *stats {
 		upstreamErrs:  map[int]int{},
 		breakCauses:   map[cachemodel.BreakCause]int{},
 		refusedByKind: map[string]int{},
+		breaches:      map[string]int{},
+		reverted:      map[string]bool{},
 		masked:        map[string]int{},
 		rehydrated:    map[string]int{},
 		denied:        map[string]int{},
@@ -493,7 +501,14 @@ func (s *stats) status() Status {
 	for k, v := range s.requests {
 		out.Requests[k] = v
 	}
-	out.Trial = TrialStatus{Breached: s.breaches, Reverted: s.revertReason}
+	// Every session that breached, whatever policy it was pinned to. The
+	// revert decision is per-policy; this figure answers "how many sessions
+	// tripped the guardrail", which is a different and legitimate question.
+	breached := 0
+	for _, n := range s.breaches {
+		breached += n
+	}
+	out.Trial = TrialStatus{Breached: breached, Reverted: s.revertReason}
 	if len(s.refusedByKind) > 0 {
 		out.Refusals = map[string]int{}
 		for k, v := range s.refusedByKind {

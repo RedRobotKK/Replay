@@ -81,16 +81,31 @@ func (s *stats) noteBreach(store *ledger.Store, settings TrialSettings, sessionI
 		return ""
 	}
 	st.breached = true
-	s.breaches++
-	line := fmt.Sprintf("guardrail session=%s: re-read rate after clears %.0f%% (%d of %d reads) reached %.0f%%; %d of %d sessions breached", short(sessionID), rr.RateAfterClear()*100, rr.RepeatedAfterClear, rr.ReadsAfterClear, settings.ReReadRate*100, s.breaches, settings.RevertAfter)
-	if s.breaches < settings.RevertAfter || s.reverted {
+	key := policyKey(edit, generated)
+	s.breaches[key]++
+	n := s.breaches[key]
+	line := fmt.Sprintf("guardrail session=%s: re-read rate after clears %.0f%% (%d of %d reads) reached %.0f%%; %d of %d sessions breached", short(sessionID), rr.RateAfterClear()*100, rr.RepeatedAfterClear, rr.ReadsAfterClear, settings.ReReadRate*100, n, settings.RevertAfter)
+	if n < settings.RevertAfter || s.reverted[key] {
 		return line
 	}
-	r := ledger.Revert{Policy: policy.Name, Trigger: edit.TriggerTokens, Keep: edit.KeepLast, Reason: fmt.Sprintf("re-read rate after clears reached %.0f%% on %d sessions", settings.ReReadRate*100, s.breaches), Breached: s.breaches, At: time.Now(), PolicyGenerated: generated}
+	r := ledger.Revert{Policy: policy.Name, Trigger: edit.TriggerTokens, Keep: edit.KeepLast, Reason: fmt.Sprintf("re-read rate after clears reached %.0f%% on %d sessions", settings.ReReadRate*100, n), Breached: n, At: time.Now(), PolicyGenerated: generated}
 	if err := store.SetRevert(r); err != nil {
 		return line + "; revert not persisted: " + err.Error()
 	}
-	s.reverted = true
+	s.reverted[key] = true
 	s.revertReason = r.Reason
 	return line + "; policy " + edit.String() + " reverted for new sessions until replay learn writes a newer file"
+}
+
+// policyKey identifies the exact policy a session was pinned to.
+//
+// The parameters alone are not enough: `replay learn` can write a file with the
+// same trigger and keep-last after a revert, and that is a new decision made on
+// newer evidence, not a continuation of the one that was reverted. The
+// generation timestamp is what separates them.
+func policyKey(edit *policy.ContextEdit, generated time.Time) string {
+	if edit == nil {
+		return "none"
+	}
+	return edit.String() + "@" + generated.UTC().Format(time.RFC3339Nano)
 }
