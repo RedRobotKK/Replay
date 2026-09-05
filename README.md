@@ -55,12 +55,33 @@ Everything runs on your machine. No API calls are spent on analysis. Nothing lea
 > `redact` work offline on Claude Code transcripts and have been calibrated against **1363 real
 > sessions** across many unrelated projects, reproducing 26571 of 27302 turns (97.32%). They are all
 > from one machine, so the roadmap's independence requirement is not met even though its session
-> count is met many times over. `serve` is a byte-for-byte passthrough proxy that records a derived-data ledger; it
-> has been exercised against a fake provider, not yet against the real one. Follow
+> count is met many times over. `serve` is a byte-for-byte passthrough proxy that records a derived-data ledger, **verified against the real provider** on 2026-09-05: ten turns,
+> all 200, 1.8M prompt tokens measured, no credentials and no message text in the ledger. It
+> also reads OpenAI-compatible traffic, which is verified against a test stub only. Follow
 > [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
-## What is filling your context
+<div align="center">
 
+|  | Command | What it answers | Tier |
+|:--:|---|---|:--:|
+| 💵 | `replay cost` | What one task costs, and what share was waste | measured |
+| 🔍 | `replay context` | What filled the context, by tool | measured |
+| 🧭 | `replay route --to <model>` | Whether switching models pays, and where the cache-read inversion sits | structural |
+| ✂️ | `replay trim --cap <n>` | What a byte cap would save, and what it would break | estimated |
+| 🛡️ | `replay advise --guards` | Spend caps derived from your own spread | measured |
+| 🩺 | `replay doctor` | What Replay can see here, and which guards fired | — |
+| 📡 | `replay serve` | The proxy: measured tier, guards, secret masking | measured |
+
+</div>
+
+> [!TIP]
+> Every figure carries a **truth tier**. `measured` came off the wire. `estimated` used the
+> byte-to-token fit and says so. `structural` is dimensionless and survives a change of tokenizer.
+> Nothing is printed without one.
+
+---
+
+## 🔍 What is filling your context
 Claude Code tells you how full the window is. It does not tell you what is
 filling it, and that is the part you can act on.
 
@@ -116,8 +137,9 @@ is what `replay` recommends. Fixing the underlying attribution means teaching it
 to subtract, which is real work and is not done. Until it is, the tool reports
 which of its own numbers it does not fully stand behind.
 
-## Cost per task
+<a id="cost-per-task"></a>
 
+## 💵 Cost per task
 ```sh
 replay cost ~/.claude/projects/            # the summary above
 replay cost --per-task ~/.claude/projects/ # every session, most expensive first
@@ -134,8 +156,7 @@ The median and the p90 are what the conversation actually needs.
 money already spent twice, not a projection of what a different layout might save. Sessions whose
 model is not in the price table are excluded and counted, never treated as free.
 
-## Live, while you can still do something about it
-
+## ⚡ Live, while you can still do something about it
 Claude Code tells you what a session has cost. It cannot tell you how much of
 that was avoidable, because it does not price cache misses. Replay does, on the
 JSON Claude Code already hands a status line, in about 6ms per render:
@@ -153,8 +174,7 @@ already computed, priced with the rules document above. When the figure it
 computes exceeds what the session actually cost, the two disagree and it shows
 the cause without the number, because the one to doubt is ours.
 
-## Works with
-
+## 🔌 Works with
 Stated as a boundary rather than a row of logos, because the two paths support different things.
 
 | | Offline, from transcripts | Live, through the proxy |
@@ -168,8 +188,7 @@ Other agents and other providers cache by different mechanisms, and pretending o
 them would be worse than saying this. The shape a second provider needs is worked out in
 [`docs/architecture/multi-provider.md`](docs/architecture/multi-provider.md).
 
-## How it fits
-
+## 🧩 How it fits
 ```mermaid
 flowchart LR
   A["Coding agent"] -->|"requests"| S["replay serve<br/><i>byte-for-byte passthrough</i>"]
@@ -190,8 +209,9 @@ machine. **What it never touches:** your credential, which appears nowhere in th
 bytes of your requests, which are forwarded before they are parsed. **What it never does:** make a
 network call to anything except the provider you configured.
 
-## What it prints
+<a id="what-it-prints"></a>
 
+## 🖨️ What it prints
 Real output from one Claude Code session, the session in which Replay itself was written. It is a
 paste from a single run, not a summary.
 
@@ -230,8 +250,7 @@ names the table date because prices change and other platforms differ.
 
 How it works: [`docs/architecture/replay-engine.md`](docs/architecture/replay-engine.md).
 
-## Who should not use this yet
-
+## 🚧 Who should not use this yet
 - **You need numbers you can put in front of finance today.** The offline tier is `estimated`. Run
   the proxy for `measured` figures, and read the calibration line before quoting either.
 - **You are not on Claude Code, and you want the offline reader.** Transcript analysis parses one
@@ -251,8 +270,7 @@ How it works: [`docs/architecture/replay-engine.md`](docs/architecture/replay-en
 - **You want it to change your prompts for you.** It does not. It reports, and the guards that can
   refuse a request are off unless you turn them on.
 
-## Operational footprint
-
+## 👣 Operational footprint
 What running this actually costs you, measured rather than asserted.
 
 | | Cost |
@@ -264,8 +282,7 @@ What running this actually costs you, measured rather than asserted.
 | **Telemetry** | None. No account, no install-time question, no first-run prompt. `replay corpus --submit` is the only thing that ever transmits, it prints the exact payload, and it waits for you |
 | **Licence obligations** | Apache 2.0. No copyleft, no attribution beyond [`NOTICE`](NOTICE) |
 
-## Why
-
+## 🎯 Why
 Coding agents resend the whole conversation on every turn. Three things go wrong quietly:
 
 - **You cannot see what a task cost** until the invoice arrives.
@@ -275,8 +292,9 @@ Coding agents resend the whole conversation on every turn. Three things go wrong
 
 Replay addresses each one locally, without changing how the agent works.
 
-## Install
+<a id="install"></a>
 
+## 📦 Install
 ```sh
 curl -fsSL https://redrobot.jp/replay.sh | sh
 ```
@@ -319,8 +337,7 @@ Until then, build from source as above.
 
 </details>
 
-## Quick start
-
+## 🚀 Quick start
 No proxy, no configuration, no trust required.
 
 ```sh
@@ -328,8 +345,9 @@ replay doctor                                        # what is on this machine, 
 replay ~/.claude/projects/<your-project>/
 ```
 
-## Commands
+<a id="commands"></a>
 
+## 🛠️ Commands
 | Command | What it does |
 |---|---|
 | `replay <dir>` | Reproduce caching turn by turn, then score alternative layouts. `--dollars` adds a list-cost column |
@@ -363,8 +381,7 @@ Every flag: [`docs/guide/commands.md`](docs/guide/commands.md). Release sequence
 deliberately deferred: [`docs/ROADMAP.md`](docs/ROADMAP.md). Full requirements:
 [`docs/requirements.md`](docs/requirements.md).
 
-## Measured numbers, with the proxy
-
+## 📡 Measured numbers, with the proxy
 Transcripts give you estimated figures. Putting Replay in the request path gives you measured ones, read off the wire, and the ledger it writes holds block kinds, sizes, timings and usage counts, never message text.
 
 <details>
@@ -516,8 +533,7 @@ visible next to its saving in the following record's cache read. Off by default.
 
 </details>
 
-## Learn from your own sessions
-
+## 🧠 Learn from your own sessions
 ```sh
 replay learn ~/.claude/projects/* ~/.replay/ledger
 ```
@@ -531,8 +547,7 @@ difference ([ADR-0006](docs/adr/0006-learning-selection.md)). The verdicts and t
 ([`docs/architecture/policy-file.md`](docs/architecture/policy-file.md)). On a small corpus the honest
 answer is "none", and that is what it says. Reads files only; never the network.
 
-## Get told what to change
-
+## 💡 Get told what to change
 ```sh
 replay advise ~/.claude/projects/* ~/.replay/ledger
 ```
@@ -546,8 +561,7 @@ then as tokens across the corpus. Suggestions are tracked to closure: pending un
 sessions show the target shrinking, then applied, then verified or not verified against the
 prediction. Written to `~/.replay/advice.json`.
 
-## Secret masking (experimental)
-
+## 🔐 Secret masking (experimental)
 A second layer, not a guarantee. It is honest about its limits below, and the limits matter more than the feature: a 32-character API token and a 40-character git SHA are the same string to an entropy test, so masking is done by context rather than by shape.
 
 <details>
@@ -613,7 +627,11 @@ rehydration off with the policies.
 
 </details>
 
-### What masking does not catch
+<details>
+<summary><b>🔓 What masking does not catch</b></summary>
+
+<a id="what-masking-does-not-catch"></a>
+
 
 `--mask` is useful and it is not a guarantee. Three limits, stated plainly because the failure mode
 is silent and the consequence is a leaked credential.
@@ -641,8 +659,9 @@ not-sending-secrets, never as the first.**
 
 </details>
 
-## Forensics, guardrails, and cache inversion
+</details>
 
+## ⚖️ Forensics, guardrails, and cache inversion
 Three offline commands and four local guards. The commands read the ledger and
 nothing else; the guards answer requests locally rather than forwarding them.
 
@@ -779,8 +798,7 @@ It refuses below ten sessions rather than dressing up a guess, and it writes
 nothing: it cannot be combined with `--apply`, because a spend cap the tool set
 for you is a refusal you did not choose.
 
-## Contributing a calibration corpus
-
+## 📊 Contributing a calibration corpus
 The roadmap gate for the first release is calibration on twenty real sessions. If you have Claude Code
 transcripts, this produces a report that contains no paths, project names, or content:
 
@@ -795,8 +813,7 @@ as "provider behavior changed" rather than as a silent drift in the numbers, and
 cacheable prefix from your usage next to what the rules file says. `replay learn` scores no
 alternatives for a model reported that way.
 
-## Documentation
-
+## 📚 Documentation
 Start at [`docs/`](docs/README.md), which is indexed by why you came.
 
 | Where | What is there |
@@ -809,7 +826,8 @@ Start at [`docs/`](docs/README.md), which is indexed by why you came.
 | [`docs/requirements.md`](docs/requirements.md) | Current requirements, with build status |
 | [`docs/maintainers.md`](docs/maintainers.md) | How this repository is run |
 
-## Development
+<details>
+<summary><b>🧪 Development</b></summary>
 
 Requires Go 1.24+, [golangci-lint](https://golangci-lint.run/) v2, and Node 22+ (Markdown lint only).
 
@@ -819,13 +837,13 @@ make build    # ./bin/replay
 make help     # all targets
 ```
 
-## Contributing
+</details>
 
+## 🤝 Contributing
 Read [`CONTRIBUTING.md`](CONTRIBUTING.md) first. Bugs and features go through the issue templates.
 Security reports go through [`SECURITY.md`](SECURITY.md), never a public issue.
 
-## Who maintains this
-
+## 🤖 Who maintains this
 Replay is built and maintained by **Daniel Saito** at [Red Robot K.K.](https://redrobot.jp), a
 studio in Tokyo working on production AI, data platforms and security.
 
@@ -837,7 +855,6 @@ or a [discussion](https://github.com/RedRobotKK/Replay/discussions). For anythin
 Replay is free and the source is all here, so there is nothing to buy. If it found a cache break
 that was costing you real money, there is a [tip jar](https://buymeacoffee.com/saitodaniel).
 
-## License
-
+## 📄 License
 Open source under the [Apache License 2.0](LICENSE). See [`NOTICE`](NOTICE) for attribution. The
 decision is recorded in [ADR-0005](docs/adr/0005-apache-2-license.md).
