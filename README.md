@@ -274,6 +274,7 @@ replay ~/.claude/projects/<your-project>/
 | `replay learn <dir...>` | Re-score the policy catalog, select one with held-out checks |
 | `replay doctor` | What Replay can see on this machine, and what to do next |
 | `replay cost <dir...>` | Cost per task across sessions, and the share of it nobody chose. `--per-task` lists them, `--json` emits them |
+| `replay cost --compare <date>` | Cost per task before and after a date, with the task volume on both sides. `--predicted` judges a forecast against what actually happened |
 | `replay statusline` | Live spend, cache health, and what the misses are costing, in Claude Code's status line. `--install` prints the settings snippet |
 | `replay rules [--update <src>]` | Show the provider rules in effect and where they came from, or install a dated document. `--dry-run` validates without installing |
 | `replay redact <file>` | Strip content, keep structure and usage, for bug reports |

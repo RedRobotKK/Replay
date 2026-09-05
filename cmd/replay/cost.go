@@ -7,6 +7,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
@@ -25,12 +26,13 @@ import (
 // has to a task.
 
 type costUnit struct {
-	ID           string  `json:"session"`
-	Model        string  `json:"model"`
-	Requests     int     `json:"requests"`
-	CostUSD      float64 `json:"costUsd"`
-	AvoidableUSD float64 `json:"avoidableUsd"`
-	Breaks       int     `json:"breaks"`
+	ID           string    `json:"session"`
+	Model        string    `json:"model"`
+	Requests     int       `json:"requests"`
+	CostUSD      float64   `json:"costUsd"`
+	AvoidableUSD float64   `json:"avoidableUsd"`
+	Breaks       int       `json:"breaks"`
+	At           time.Time `json:"at"`
 }
 
 type costSummary struct {
@@ -111,6 +113,8 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	asJSON := fs.Bool("json", false, "emit the figures as JSON")
 	perTask := fs.Bool("per-task", false, "list every priced session, most expensive first")
+	since := fs.String("compare", "", "split at this date (YYYY-MM-DD) and report cost per task before and after")
+	predicted := fs.Float64("predicted", 0, "with --compare, the fractional change you predicted (e.g. -0.2 for a 20% saving)")
 	if err := fs.Parse(hoistFlags(args)); err != nil {
 		return errUsage
 	}
@@ -146,6 +150,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			return nil
 		}
 		u := costUnit{
+			At:       sessionTime(rep),
 			ID:       prefixID(session.ID),
 			Model:    model,
 			Requests: asRun.Requests,
@@ -165,6 +170,19 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		units = append(units, u)
 		return nil
 	})
+
+	// The before/after comparison is the only test here that could be
+	// contradicted by a provider invoice, which makes it the only one worth
+	// much. Everything else measures the engine against its own model.
+	if *since != "" {
+		cut, err := time.Parse("2006-01-02", *since)
+		if err != nil {
+			return fmt.Errorf("--compare wants a date like 2026-09-01: %w", err)
+		}
+		before, after := splitAt(units, cut.UTC())
+		_, err = io.WriteString(stdout, renderCompare(compare(before, after), *predicted))
+		return err
+	}
 
 	s := summarise(units)
 	if *asJSON {
@@ -193,4 +211,12 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		}
 	}
 	return nil
+}
+
+// sessionTime is when a session ran, taken from its first request.
+func sessionTime(rep *analysis.LaneReport) time.Time {
+	if rep == nil || rep.Lane == nil || len(rep.Lane.Requests) == 0 {
+		return time.Time{}
+	}
+	return rep.Lane.Requests[0].Timestamp
 }
