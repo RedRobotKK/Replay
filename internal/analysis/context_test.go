@@ -113,3 +113,50 @@ func TestEnteredContextHandlesNothing(t *testing.T) {
 		t.Fatalf("a rebill-only session attributes nothing, got %+v", got)
 	}
 }
+
+// The gap is not a disclaimer, it is a measurement.
+//
+// Blame never subtracts, so an attribution overstates any session where content
+// left the context. Rather than warn on every session and be ignored, detect
+// the sessions where it actually happened: the provider reports what it cleared
+// on the request itself, and this tool already reads those fields elsewhere.
+func TestEvictionIsDetectedNotAssumed(t *testing.T) {
+	clean := ContextGap{}
+	if clean.Overstated() {
+		t.Fatal("a session where nothing was cleared is not overstated")
+	}
+	if !strings.Contains(clean.Note(), "nothing was cleared") {
+		t.Fatalf("a clean session should say so plainly: %q", clean.Note())
+	}
+
+	edited := ContextGap{ClearedTokens: 120_000, ContextEdits: 3, AttributedTokens: 400_000}
+	if !edited.Overstated() {
+		t.Fatal("a session with cleared tokens IS overstated and must say so")
+	}
+	note := edited.Note()
+	for _, want := range []string{"120k", "3", "overstat"} {
+		if !strings.Contains(note, want) {
+			t.Fatalf("the note must quantify the gap; %q is missing %q", note, want)
+		}
+	}
+	// The share is of the attributed total, which is the number being corrected.
+	if s := edited.OverstatedShare(); s < 0.29 || s > 0.31 {
+		t.Fatalf("120k cleared against 400k attributed is ~30%%, got %v", s)
+	}
+}
+
+// A compacted session is the worst case: the attribution can exceed the window
+// several times over, and saying "roughly 30%" would itself be a guess.
+func TestCompactionIsCalledOutSeparately(t *testing.T) {
+	g := ContextGap{Compactions: 2, AttributedTokens: 900_000}
+	if !g.Overstated() {
+		t.Fatal("a compacted session is overstated")
+	}
+	if !strings.Contains(g.Note(), "compact") {
+		t.Fatalf("compaction must be named: %q", g.Note())
+	}
+	// No cleared-token count is reported for compaction, so no share is claimed.
+	if g.OverstatedShare() != 0 {
+		t.Fatalf("compaction gives no measured size, so no share may be quoted; got %v", g.OverstatedShare())
+	}
+}

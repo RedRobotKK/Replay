@@ -2,8 +2,11 @@ package analysis
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // ContextEntry is one tool's share of what entered a session's context.
@@ -122,4 +125,115 @@ func safeLabel(s string) string {
 		return string(out[:MaxContextLabel-1]) + "…"
 	}
 	return string(out)
+}
+
+// ContextGap measures how much an attribution overstates a session, rather than
+// warning that it might.
+//
+// Blame never subtracts, so every attribution is an upper bound. Warning about
+// that on every session teaches a reader to skip the warning. The provider
+// reports what it cleared on the request itself, so the sessions where the gap
+// is real can be named, sized, and separated from the sessions where the
+// attribution is exact.
+type ContextGap struct {
+	// ClearedTokens is what the provider reported removing.
+	ClearedTokens int
+	// ContextEdits is how many times it did so.
+	ContextEdits int
+	// Compactions counts history rewrites, which report no size.
+	Compactions int
+	// AttributedTokens is the total this gap applies to.
+	AttributedTokens int
+}
+
+// Overstated reports whether content is known to have left this context.
+func (g ContextGap) Overstated() bool {
+	return g.ClearedTokens > 0 || g.ContextEdits > 0 || g.Compactions > 0
+}
+
+// OverstatedShare is the measured overstatement as a share of the attributed
+// total, and zero when nothing measurable is available. Compaction reports no
+// size, so a compacted session returns zero rather than a guess.
+func (g ContextGap) OverstatedShare() float64 {
+	if g.ClearedTokens <= 0 || g.AttributedTokens <= 0 {
+		return 0
+	}
+	return float64(g.ClearedTokens) / float64(g.AttributedTokens)
+}
+
+// Note is the one line a reader needs about how far to trust the figures.
+func (g ContextGap) Note() string {
+	if !g.Overstated() {
+		return "Complete: nothing was cleared or compacted in this session, so every " +
+			"block counted here is still in the context."
+	}
+	var b strings.Builder
+	b.WriteString("OVERSTATED: content left this context and the attribution above does not subtract it.")
+	if g.ClearedTokens > 0 {
+		b.WriteString(" The provider cleared ")
+		b.WriteString(shortCount(g.ClearedTokens))
+		b.WriteString(" tokens over ")
+		b.WriteString(plural(g.ContextEdits, "context edit"))
+		if s := g.OverstatedShare(); s > 0 {
+			b.WriteString(", so these figures overstate by at least ")
+			b.WriteString(percent(s))
+		}
+		b.WriteString(".")
+	} else if g.ContextEdits > 0 {
+		b.WriteString(" The provider applied ")
+		b.WriteString(plural(g.ContextEdits, "context edit"))
+		b.WriteString(" without reporting a size.")
+	}
+	if g.Compactions > 0 {
+		b.WriteString(" The history was compacted ")
+		b.WriteString(plural(g.Compactions, "time"))
+		b.WriteString(", which reports no size at all, so the overstatement cannot be measured.")
+	}
+	return b.String()
+}
+
+func shortCount(n int) string {
+	switch {
+	case n >= 1_000_000:
+		return strconv.FormatFloat(float64(n)/1e6, 'f', 1, 64) + "M"
+	case n >= 1_000:
+		return strconv.Itoa(n/1000) + "k"
+	}
+	return strconv.Itoa(n)
+}
+
+func percent(f float64) string {
+	return strconv.Itoa(int(f*100+0.5)) + "%"
+}
+
+func plural(n int, word string) string {
+	if n == 1 {
+		return "1 " + word
+	}
+	return strconv.Itoa(n) + " " + word + "s"
+}
+
+// MeasureGap reads what the provider reported clearing across a lane.
+//
+// The fields have been on transcript.Request all along and rereads.go already
+// consumes them; the attribution never did, which is precisely why it
+// overstates without knowing it.
+func MeasureGap(lane *transcript.Lane, attributed int) ContextGap {
+	g := ContextGap{AttributedTokens: attributed}
+	if lane == nil {
+		return g
+	}
+	prev := 0
+	for i, r := range lane.Requests {
+		g.ClearedTokens += r.ClearedTokens
+		g.ContextEdits += r.AppliedEdits
+		// A prompt that shrank between turns is history leaving the context by
+		// some route the provider did not report: compaction, a rewind, or a
+		// resume. The size is not recoverable, only the fact.
+		if cur := r.Usage.PromptTotal(); i > 0 && prev > 0 && cur < prev {
+			g.Compactions++
+		}
+		prev = r.Usage.PromptTotal()
+	}
+	return g
 }

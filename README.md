@@ -79,10 +79,42 @@ Ranked by size now, not by cost across the session: a small file read on turn
 one is carried by every later request and dominates a cost ranking while
 occupying almost nothing.
 
+### The gap, measured rather than disclaimed
+
 **It measures what entered the context, not what is still in it.** The
-attribution never subtracts, so content cleared by context editing or by
-compaction is still counted, and a compacted session is overstated. The output
-says so every time it runs. That gap is real and is named rather than hidden.
+attribution never subtracts, so anything the provider cleared, or that
+compaction removed, is still counted.
+
+A warning printed on every session is a warning nobody reads. So the sessions
+where the gap is real are detected and sized, and the sessions where the figures
+are exact say so:
+
+```text
+Complete: nothing was cleared or compacted in this session, so every block
+counted here is still in the context.
+```
+
+```text
+OVERSTATED: content left this context and the attribution above does not
+subtract it. The provider cleared 120k tokens over 3 context edits, so these
+figures overstate by at least 30%.
+```
+
+```text
+OVERSTATED: ... The history was compacted 1 time, which reports no size at
+all, so the overstatement cannot be measured.
+```
+
+Three states, and the third is the important one: when the size is not
+recoverable, no percentage is quoted. A measured overstatement is reported as a
+number; an unmeasurable one is reported as unmeasurable rather than estimated
+into something that looks like a number.
+
+**The awkward part, said plainly:** the sessions most likely to be overstated
+are the ones that took this tool's own leading advice, because context editing
+is what `replay` recommends. Fixing the underlying attribution means teaching it
+to subtract, which is real work and is not done. Until it is, the tool reports
+which of its own numbers it does not fully stand behind.
 
 ## Cost per task
 

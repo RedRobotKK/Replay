@@ -58,6 +58,7 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 				"measures": "content that entered this context; the attribution does not " +
 					"subtract cleared or compacted content",
 				"entries": rows,
+				"gap":     analysis.MeasureGap(rep.Lane, sumTokens(rows)),
 			}, "", "  ")
 			if err != nil {
 				return err
@@ -84,9 +85,17 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 			fmt.Fprintf(stdout, "  %-*s %5.1f%%  %10s  x%-5d%s\n",
 				analysis.MaxContextLabel, r.Label, r.Share*100, formatCount(r.Tokens), r.Occurrences, mark)
 		}
+		gap := analysis.MeasureGap(rep.Lane, total)
 		fmt.Fprintf(stdout, "\n  * estimated through the byte-to-token fit; everything else is provider usage.\n")
-		fmt.Fprintf(stdout, "  Entered, not resident: content cleared by context editing or compaction\n")
-		fmt.Fprintf(stdout, "  is still counted, so this overstates a session that has been compacted.\n")
+		fmt.Fprintf(stdout, "\n  %s\n", gap.Note())
 		return nil
 	})
+}
+
+func sumTokens(rows []analysis.ContextEntry) int {
+	n := 0
+	for _, r := range rows {
+		n += r.Tokens
+	}
+	return n
 }
