@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/probe"
@@ -36,6 +38,7 @@ func runProbe(args []string, stdout, stderr io.Writer) error {
 	candidates := fs.String("candidates", "512,1024,2048,4096", "plausible floors to test before searching between them; empty to disable")
 	prior := fs.Int("prior", 0, "a documented floor to test first; 0 uses the compiled table's figure for the model, and -1 disables it")
 	confirm := fs.Int("confirm", 2, "agreeing answers required before a boundary is believed")
+	record := fs.String("record", "", "append the reading to a measurement series (default ~/.replay/measurements.jsonl; \"-\" for none)")
 	execute := fs.Bool("execute", false, "actually send the probes; without this, only the plan is printed")
 	yes := fs.Bool("yes", false, "with --execute, skip the confirmation. For scripts that meant it")
 	if err := parseArgs(fs, args, stdout); err != nil {
@@ -108,6 +111,21 @@ func runProbe(args []string, stdout, stderr io.Writer) error {
 	s, err := r.Run(cfg, *model)
 	if s != nil {
 		reportProbe(stdout, s)
+		reportProvenance(stdout, *model, r.Provenance())
+
+		// Store it. A reading that exists only in a terminal is not a series,
+		// and the series is the part that cannot be reconstructed later: a
+		// floor is a fact anyone can copy the day it is published, while "it
+		// changed on this date" needs someone to have been measuring before
+		// the change.
+		if path := seriesPath(*record); path != "" {
+			reading := probe.ReadingFrom(*model, cachemodel.DocumentedMinPrefix(*model), s, r.Provenance(), *confirm)
+			if werr := probe.AppendReading(path, reading); werr != nil {
+				fmt.Fprintf(stderr, "the reading could not be recorded: %v\n", werr)
+			} else {
+				fmt.Fprintf(stdout, "\nrecorded to %s\n", path)
+			}
+		}
 	}
 	return err
 }
@@ -183,4 +201,50 @@ func confirmSpend(in io.Reader, out io.Writer, what string, yes bool) bool {
 	}
 	fmt.Fprintf(out, "\nNot confirmed, so nothing was sent. Only \"yes\" proceeds; pass --yes to run unattended.\n")
 	return false
+}
+
+// reportProvenance says what actually answered, which is not what was asked.
+//
+// A floor measured against `claude-opus-5` is a floor measured against
+// whatever snapshot that alias resolved to, on whatever tier, routed wherever.
+// Two readings taken a month apart are only comparable if each says which. A
+// dated series with no provenance is a list of numbers.
+func reportProvenance(out io.Writer, asked string, p probe.Provenance) {
+	fmt.Fprintf(out, "\nmeasured\n")
+	fmt.Fprintf(out, "  asked for    %s\n", asked)
+	if p.ResolvedModel != "" {
+		fmt.Fprintf(out, "  answered by  %s\n", p.ResolvedModel)
+	} else {
+		fmt.Fprintf(out, "  answered by  (the provider did not name a snapshot)\n")
+	}
+	if p.ServiceTier != "" {
+		fmt.Fprintf(out, "  tier         %s\n", p.ServiceTier)
+	}
+	if p.Geo != "" {
+		fmt.Fprintf(out, "  geography    %s\n", p.Geo)
+	}
+	fmt.Fprintf(out, "  taken        %s\n", time.Now().UTC().Format(time.RFC3339))
+	if p.Mixed {
+		fmt.Fprintf(out, "\n  More than one snapshot, tier or geography answered this run, so the\n"+
+			"  bracket above has more than one subject in it. Treat it as two partial\n"+
+			"  readings rather than one measurement, and repeat with a pinned model id.\n")
+	}
+	if p.ResolvedModel != "" && p.ResolvedModel != asked {
+		fmt.Fprintf(out, "\n  %s is an alias. Pin %s to make this reading reproducible.\n", asked, p.ResolvedModel)
+	}
+}
+
+// seriesPath resolves where a reading is stored, or "" when recording is off.
+func seriesPath(flagValue string) string {
+	if flagValue == "-" {
+		return ""
+	}
+	if flagValue != "" {
+		return flagValue
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".replay", "measurements.jsonl")
 }

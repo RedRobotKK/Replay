@@ -451,6 +451,7 @@ full price and learn nothing.
 | `--candidates` | Plausible floors to test before searching between them. Defaults to `512,1024,2048,4096`; empty disables it |
 | `--prior` | A documented floor to test before searching. Defaults to the compiled table's figure for the model; `-1` disables it |
 | `--execute` | Actually send them. Without it, only the plan is printed |
+| `--record` | Append the reading to a measurement series. Defaults to `~/.replay/measurements.jsonl`; `-` disables it |
 
 **`--confirm` multiplies against `--max-probes`.** Every confirmation is a
 billable request, so 16 probes at 2 confirmations buys 8 bisection decisions,
@@ -504,6 +505,29 @@ because the tokenizer merges the run.
 
 The ratio is learned from the first probe rather than assumed, so a model whose
 tokenizer differs corrects itself, and every probe still verifies its own size.
+
+**Every run is recorded, and that is the point.** A caching floor is a fact
+anyone can copy the day it is published. *"The floor changed on this date"* can
+only be produced by someone who was measuring before the change, and it cannot
+be backfilled at any price. The series is append-only JSON Lines, owner-only,
+oldest first, and never rewritten.
+
+Each line carries what was asked for, what actually answered, the service tier
+and geography, the bracket, the documented figure at the time, and a **method
+version**. That last field matters more than it looks: the method changed four
+times on 2026-09-05 and every change moved the numbers — sizing the prefix by
+estimate rather than by the provider's own count, measuring the whole request
+rather than the cacheable prefix, English filler rather than varied CJK, and
+reading a warm cache write as a prefix size. Readings taken either side of any
+of those are not comparable, and a bare number does not say so. A series that
+silently mixes methods cannot tell a change in the world from a change in the
+instrument, which is the one question it exists to answer.
+
+A run that did not establish a bracket records its outcome —
+`non-deterministic`, `contradicted`, `stalled`, `budget-exhausted`,
+`mixed-provenance` — and no bounds. Storing an untouched search range as though
+it were a measurement is how a series stops being able to tell a result from a
+failure.
 
 Feed the result into a rules document with `replay rules --measure`.
 

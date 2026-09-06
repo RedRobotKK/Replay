@@ -510,3 +510,64 @@ func TestR13_ARunCutShortByRequestsSaysSo(t *testing.T) {
 			"otherwise it reports the full range as a measured bracket")
 	}
 }
+
+// R14: what answered is recorded, not just what was asked.
+//
+// A run measured `claude-opus-5`, which is an alias. Nothing recorded which
+// snapshot it resolved to, which tier served it, or from which geography — so
+// the measurement is not reproducible and cannot be checked against a routing
+// or tier difference. The API returns all three and the probe discarded them.
+//
+// This is the difference between a number and a record. A dated series only
+// has value if each entry says what it measured.
+//
+// PASS: the resolved model, service tier and geography are captured from the
+// response and reported.
+// FAIL: publishing a floor against an alias, with no way to tell later whether
+// two readings measured the same thing.
+func TestR14_ProvenanceIsCaptured(t *testing.T) {
+	r, _, _ := newRunner(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		_, _ = w.Write([]byte(`{"model":"claude-opus-5-20261101",
+			"usage":{"input_tokens":10,"cache_creation_input_tokens":1024,"cache_read_input_tokens":0,
+			         "service_tier":"standard","inference_geo":"us"}}`))
+	})
+	if _, err := r.Run(Config{Min: 0, Max: 4096, Resolution: 256, MaxProbes: 8, Confirm: 1}, "claude-opus-5"); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+	p := r.Provenance()
+	if p.ResolvedModel != "claude-opus-5-20261101" {
+		t.Errorf("resolved model = %q, want the snapshot the alias answered as", p.ResolvedModel)
+	}
+	if p.ServiceTier != "standard" {
+		t.Errorf("service tier = %q, want standard", p.ServiceTier)
+	}
+	if p.Geo != "us" {
+		t.Errorf("geo = %q, want us", p.Geo)
+	}
+}
+
+// R15: a run served by more than one snapshot or tier says so.
+//
+// PASS: mixed provenance is reported rather than silently taking the last.
+// FAIL: a single value implying one thing answered throughout, when a routing
+// change mid-run means the bracket has two different subjects in it.
+func TestR15_MixedProvenanceIsReported(t *testing.T) {
+	n := 0
+	r, _, _ := newRunner(t, func(w http.ResponseWriter, _ *http.Request) {
+		n++
+		w.Header().Set("content-type", "application/json")
+		// Switch after the first response: the run below stalls quickly
+		// because the reported cached size is constant, so a later switch
+		// would never be reached.
+		model := "claude-opus-5-20261101"
+		if n > 1 {
+			model = "claude-opus-5-20261201"
+		}
+		_, _ = fmt.Fprintf(w, `{"model":%q,"usage":{"input_tokens":10,"cache_creation_input_tokens":%d,"cache_read_input_tokens":0,"service_tier":"standard"}}`, model, 4096/n)
+	})
+	_, _ = r.Run(Config{Min: 0, Max: 65536, Resolution: 64, MaxProbes: 12, Confirm: 1}, "claude-opus-5")
+	if !r.Provenance().Mixed {
+		t.Error("two snapshots answered one run; a reading that does not say so implies a single subject it did not have")
+	}
+}

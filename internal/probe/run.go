@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -51,6 +52,9 @@ type Runner struct {
 	overhead    int
 	overheadSet bool
 
+	// seen records what actually answered, per field.
+	seenModel, seenTier, seenGeo map[string]bool
+
 	// tokensPerRune is learned from the first sizing and reused.
 	//
 	// Sizing used to be a search — build, count, adjust, repeat — which was
@@ -61,6 +65,57 @@ type Runner struct {
 	// because another model or a future tokenizer may differ, and every probe
 	// still verifies the result.
 	tokensPerRune float64
+}
+
+// Provenance is what answered a run, as opposed to what was asked for.
+//
+// A floor measured against `claude-opus-5` is a floor measured against whatever
+// snapshot that alias resolved to at the time, on whatever tier and in
+// whatever geography the request was routed to. Without those recorded, two
+// readings cannot be compared and neither can be reproduced — which is the
+// whole value of a dated series.
+type Provenance struct {
+	ResolvedModel string
+	ServiceTier   string
+	Geo           string
+	// Mixed is true when more than one snapshot, tier or geography answered a
+	// single run. The bracket then has more than one subject in it.
+	Mixed bool
+}
+
+// Provenance reports what answered, after a run.
+func (r *Runner) Provenance() Provenance {
+	p := Provenance{
+		ResolvedModel: soleValue(r.seenModel),
+		ServiceTier:   soleValue(r.seenTier),
+		Geo:           soleValue(r.seenGeo),
+	}
+	p.Mixed = len(r.seenModel) > 1 || len(r.seenTier) > 1 || len(r.seenGeo) > 1
+	return p
+}
+
+// soleValue returns the single observed value, or a joined list when several
+// were seen — never one of them silently standing for the rest.
+func soleValue(seen map[string]bool) string {
+	if len(seen) == 0 {
+		return ""
+	}
+	out := make([]string, 0, len(seen))
+	for v := range seen {
+		out = append(out, v)
+	}
+	sort.Strings(out)
+	return strings.Join(out, ", ")
+}
+
+func (r *Runner) note(seen *map[string]bool, v string) {
+	if v == "" {
+		return
+	}
+	if *seen == nil {
+		*seen = map[string]bool{}
+	}
+	(*seen)[v] = true
 }
 
 // Overhead is the measured non-prefix cost of a request, available after a run.
@@ -380,10 +435,13 @@ func (r *Runner) probe(model string, prefixTokens int) (Result, error) {
 	}
 
 	var parsed struct {
+		Model string `json:"model"`
 		Usage *struct {
-			Input         int `json:"input_tokens"`
-			CacheCreation int `json:"cache_creation_input_tokens"`
-			CacheRead     int `json:"cache_read_input_tokens"`
+			ServiceTier   string `json:"service_tier"`
+			Geo           string `json:"inference_geo"`
+			Input         int    `json:"input_tokens"`
+			CacheCreation int    `json:"cache_creation_input_tokens"`
+			CacheRead     int    `json:"cache_read_input_tokens"`
 			// The per-TTL breakdown. This API reports a write here as well as,
 			// or instead of, the flat field, and the rest of this repository
 			// already parses it.
@@ -405,6 +463,10 @@ func (r *Runner) probe(model string, prefixTokens int) (Result, error) {
 	if parsed.Usage == nil || parsed.Usage.Input <= 0 {
 		return Result{}, fmt.Errorf("the provider's answer carried no usage, so it says nothing about caching")
 	}
+	r.note(&r.seenModel, parsed.Model)
+	r.note(&r.seenTier, parsed.Usage.ServiceTier)
+	r.note(&r.seenGeo, parsed.Usage.Geo)
+
 	created := parsed.Usage.CacheCreation
 	if split := parsed.Usage.CacheCreationSplit.Ephemeral5m + parsed.Usage.CacheCreationSplit.Ephemeral1h; split > created {
 		created = split
