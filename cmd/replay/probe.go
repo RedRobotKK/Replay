@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
@@ -22,7 +23,7 @@ import (
 func runProbe(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("probe", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	model := fs.String("model", "", "model id to measure, for example claude-opus-5")
+	model := fs.String("model", "", "model id to measure; repeat with commas to measure several at once")
 	minTok := fs.Int("min", 0, "smallest prefix size the floor could be")
 	maxTok := fs.Int("max", 65536, "largest prefix size the floor could be")
 	resolution := fs.Int("resolution", 512, "how narrow a bracket is narrow enough, in tokens")
@@ -32,6 +33,7 @@ func runProbe(args []string, stdout, stderr io.Writer) error {
 	// default budget must clear its own default resolution, or the first thing
 	// every user sees is the tool warning about a configuration it chose.
 	maxProbes := fs.Int("max-probes", 16, "how many billable requests this run may make")
+	candidates := fs.String("candidates", "512,1024,2048,4096", "plausible floors to test before searching between them; empty to disable")
 	prior := fs.Int("prior", 0, "a documented floor to test first; 0 uses the compiled table's figure for the model, and -1 disables it")
 	confirm := fs.Int("confirm", 2, "agreeing answers required before a boundary is believed")
 	execute := fs.Bool("execute", false, "actually send the probes; without this, only the plan is printed")
@@ -54,7 +56,21 @@ func runProbe(args []string, stdout, stderr io.Writer) error {
 		seed = 0
 	}
 
+	var cands []int
+	for _, part := range strings.Split(*candidates, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		n, err := strconv.Atoi(part)
+		if err != nil || n <= 0 {
+			return fmt.Errorf("--candidates takes positive whole numbers: %q: %w", part, errUsage)
+		}
+		cands = append(cands, n)
+	}
+
 	cfg := probe.Config{
+		Candidates:         cands,
 		Prior:              seed,
 		Min:                *minTok,
 		Max:                *maxTok,

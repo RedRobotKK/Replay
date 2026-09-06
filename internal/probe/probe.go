@@ -42,6 +42,17 @@ type Config struct {
 	RelativeResolution float64
 	// MaxProbes caps the spend. Zero means the resolution decides.
 	MaxProbes int
+	// Candidates are plausible answers to test before searching between them.
+	//
+	// Every documented floor in this table is a power of two, and a new model
+	// almost certainly lands on one too. Testing the list directly is O(1) in
+	// the size of the range where bisection is O(log n) — and the range for an
+	// undocumented model has to be wide, which is exactly when that matters.
+	//
+	// They remain hypotheses. Answers from candidate probes narrow the bracket
+	// like any other, so a model that breaks the pattern is still measured; it
+	// just costs the few probes spent finding that out.
+	Candidates []int
 	// Prior is a documented figure to test before searching. Zero means none.
 	//
 	// A published minimum is a hypothesis, and the cheapest experiment tests
@@ -92,6 +103,7 @@ type Search struct {
 	writes           []int
 	nonDeterministic bool
 	stalled          bool
+	cachedAt         map[int]bool
 }
 
 // New starts a search.
@@ -102,7 +114,7 @@ func New(cfg Config) *Search {
 	if cfg.Confirm < 1 {
 		cfg.Confirm = 1
 	}
-	return &Search{cfg: cfg, lo: cfg.Min, hi: cfg.Max, answers: map[int][]bool{}}
+	return &Search{cfg: cfg, lo: cfg.Min, hi: cfg.Max, answers: map[int][]bool{}, cachedAt: map[int]bool{}}
 }
 
 // Next proposes the next prefix size to probe, or zero when the search is done.
@@ -135,10 +147,29 @@ func (s *Search) Next() int {
 	// Any run with a negative lower bound and no documented figure terminated
 	// immediately and reported a bracket it never probed. Found by chasing a
 	// mutant that looked equivalent and was not.
-	if !s.priorDone && s.cfg.Prior > 0 && s.cfg.Prior > s.lo && s.cfg.Prior < s.hi {
+	if !s.priorDone && s.cfg.Prior > 0 && s.cfg.Prior > s.lo && s.cfg.Prior < s.hi && !s.confirmed(s.cfg.Prior) {
 		s.pending = s.cfg.Prior
 		return s.cfg.Prior
 	}
+	// A confirmed plausible answer gets its lower side tested too.
+	//
+	// "The floor is 2048" predicts two things: 2048 caches, and the size just
+	// below it does not. Confirming only the first leaves the whole region
+	// beneath to bisect — 1024 to 2048 is ten more decisions — while the
+	// second settles it in one. This generalises what the prior already did:
+	// any candidate that turns out to be the smallest caching size gets the
+	// same treatment, because it is the same hypothesis.
+	// Only once no candidate is left inside the bracket. Testing below 4096
+	// while 2048 and 1024 are still untried spends probes narrowing around an
+	// answer that a later candidate is about to displace.
+	if c := s.smallestCachingCandidate(); c > 0 && s.nextCandidate() == 0 {
+		below := c - s.stopWidth()
+		if below > s.lo && below < s.hi && !s.confirmed(below) {
+			s.pending = below
+			return below
+		}
+	}
+
 	// Keyed on the prior having been answered, not on the bracket.
 	//
 	// Comparing hi to the prior looked equivalent and was not: hi comes from
@@ -160,6 +191,14 @@ func (s *Search) Next() int {
 			s.pending = below
 			return below
 		}
+	}
+
+	// Then the plausible answers, nearest the middle of what is left first, so
+	// each one that is refuted still halves the remaining space rather than
+	// shaving an end off it.
+	if c := s.nextCandidate(); c > 0 && !s.confirmed(c) {
+		s.pending = c
+		return c
 	}
 
 	// Midpoint, dithered off the power-of-two grid.
@@ -202,8 +241,38 @@ func (s *Search) Next() int {
 	// when it stays inside. Clamps guarding that could never execute: dead
 	// code shaped like a safety check, which is the thing ADR-0014 is about.
 	// TestB19 asserts the invariant across the sweep space instead.
+	// Never pay twice for an answer already held.
+	//
+	// With the provider reporting a cached size larger than the prefix asked
+	// for, the bracket can still contain a size that was already probed, and
+	// the midpoint — or the dither — can land back on it. The answer would be
+	// identical and the request would be billed again. Step off it.
+	for i := 0; s.confirmed(mid) && i < 64; i++ {
+		if mid+1 < s.hi {
+			mid++
+			continue
+		}
+		if mid-1 > s.lo {
+			mid--
+			continue
+		}
+		// Nowhere left inside the bracket that has not been asked.
+		return 0
+	}
+
 	s.pending = mid
 	return mid
+}
+
+// confirmed reports a size that has already been asked its full quota.
+//
+// This is the single place a repeat is prevented, and it replaced two separate
+// bookkeeping maps — one tracking which candidates had been tried, another
+// which had had their lower side probed. Once every proposal path consults
+// this, neither could change behaviour: a mutation removing either left the
+// suite green, which is the definition of a guard that is not guarding.
+func (s *Search) confirmed(n int) bool {
+	return len(s.answers[n]) >= s.cfg.Confirm
 }
 
 // Record takes the answer to a probe.
@@ -245,6 +314,10 @@ func (s *Search) Record(r Result) error {
 	// 3, one probe at 512 changed nothing, the prior branch stopped proposing
 	// it, and the search jumped to 1027 — testing the documented figure once
 	// and then ignoring what it said.
+	if r.Wrote {
+		s.cachedAt[r.PrefixTokens] = true
+	}
+
 	if r.PrefixTokens == s.cfg.Prior {
 		s.priorDone = true
 	} else if s.priorDone && r.PrefixTokens < s.cfg.Prior {
@@ -444,3 +517,53 @@ func gcd(a, b int) int {
 // repeats. The premise of the search — that there is one floor — has failed,
 // and that is a finding rather than an error to retry past.
 func (s *Search) NonDeterministic() bool { return s.nonDeterministic }
+
+// nextCandidate returns the untried candidate closest to the middle of the
+// remaining bracket, or zero when none is left inside it.
+//
+// Middle-first rather than in list order: a candidate at the edge of the
+// bracket removes almost nothing when it is refuted, while one near the middle
+// halves the space either way. That is what keeps a wrong candidate cheap, and
+// it is why testing a list of plausible answers is not a gamble — every probe
+// buys at least what a bisection probe would have bought.
+func (s *Search) nextCandidate() int {
+	best, bestGap := 0, 1<<30
+	mid := s.lo + (s.hi-s.lo)/2
+	for _, c := range s.cfg.Candidates {
+		if c <= s.lo || c >= s.hi {
+			continue
+		}
+		if gap := abs2(c - mid); gap < bestGap {
+			best, bestGap = c, gap
+		}
+	}
+	return best
+}
+
+func abs2(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
+// smallestCachingCandidate is the smallest plausible answer confirmed to
+// cache, or zero if none has. It is the one whose lower side is worth testing:
+// larger ones are already ruled out as the floor.
+//
+// The prior counts as a candidate here. It is the same hypothesis — a
+// published figure and a round number are both guesses at where the boundary
+// sits — and treating them alike removes a special case rather than adding one.
+func (s *Search) smallestCachingCandidate() int {
+	best := 0
+	consider := func(c int) {
+		if c > 0 && s.cachedAt[c] && (best == 0 || c < best) {
+			best = c
+		}
+	}
+	for _, c := range s.cfg.Candidates {
+		consider(c)
+	}
+	consider(s.cfg.Prior)
+	return best
+}

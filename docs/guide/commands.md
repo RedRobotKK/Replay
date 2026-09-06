@@ -448,6 +448,7 @@ full price and learn nothing.
 | `--relative` | Stop within this fraction of the answer instead of a fixed width. `--relative 0.1` is "within ten percent", which is the same statement at every scale — 128 tokens is a quarter of 512 and two thousandths of 65,536 |
 | `--max-probes` | How many billable requests the run may make. Default 16 |
 | `--confirm` | Agreeing answers required before a boundary is believed. Default 2 |
+| `--candidates` | Plausible floors to test before searching between them. Defaults to `512,1024,2048,4096`; empty disables it |
 | `--prior` | A documented floor to test before searching. Defaults to the compiled table's figure for the model; `-1` disables it |
 | `--execute` | Actually send them. Without it, only the plan is printed |
 
@@ -472,6 +473,16 @@ probing for it spends money distinguishing sizes the provider treats as the
 same. Probe points are deliberately offset from the power-of-two grid, because
 a clean bisection proposes 32768, 16384, 8192, whose divisor is an artifact of
 the search rather than a fact about the provider.
+
+**It tests the plausible answers before the space between them.** Every
+documented floor in the table is a power of two, and a new model almost
+certainly lands on one too. Testing that list directly is O(1) in the size of
+the range where bisection is O(log n) — which matters most for an undocumented
+model, where the search window has to be wide. Candidates are tried nearest the
+middle of the remaining bracket first, so one that is refuted still halves the
+space rather than shaving an end off it, and the answers they give narrow the
+bracket like any other. A model that breaks the pattern is still measured
+correctly; it costs the few probes spent finding that out.
 
 **It tests the documented figure first.** A published minimum is a hypothesis,
 and the cheapest experiment tests the hypothesis rather than bisecting the space

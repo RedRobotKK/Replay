@@ -1041,3 +1041,136 @@ func TestB27_AnUnusableRangeEstablishesNothing(t *testing.T) {
 		}
 	}
 }
+
+// B28: plausible values are tested before the space between them is searched.
+//
+// Every documented floor in this table is a power of two — 512, 1024, 2048,
+// 4096 — and a new model almost certainly lands on one too. Bisection ignores
+// that and pays log2(range) to rediscover it. Testing the candidates directly
+// is O(1) in the size of the range: a handful of probes characterises a model
+// however wide the search window is.
+//
+// It stays a hypothesis, not an assumption. If no candidate holds, the answers
+// those probes gave still narrow the bracket and the bisection continues from
+// there, so a model that breaks the pattern costs a few probes and is still
+// measured correctly.
+//
+// PASS: candidates are proposed first, in an order that halves the remaining
+// space, and a floor that IS a candidate resolves in far fewer decisions than
+// bisecting the range.
+// FAIL: probing midpoints while holding a list of the likely answers.
+func TestB28_CandidatesAreTestedBeforeTheSpaceBetweenThem(t *testing.T) {
+	candidates := []int{512, 1024, 2048, 4096}
+
+	for _, floor := range candidates {
+		s := New(Config{Min: 0, Max: 65536, Resolution: 4, Candidates: candidates})
+		decisions := 0
+		for i := 0; ; i++ {
+			if i > 64 {
+				t.Fatalf("floor %d: did not converge", floor)
+			}
+			n := s.Next()
+			if n == 0 {
+				break
+			}
+			decisions++
+			s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
+		}
+		lo, hi := s.Bracket()
+		if lo >= floor || hi < floor {
+			t.Errorf("floor %d: bracket (%d, %d] excludes it", floor, lo, hi)
+		}
+		// Bisecting 0..65536 to a resolution of 4 needs fourteen decisions.
+		// Knowing the answer is one of four numbers should cost a fraction.
+		if decisions > 6 {
+			t.Errorf("floor %d: %d decisions; a blind bisection of this range needs 14 and there are only 4 candidates", floor, decisions)
+		}
+	}
+}
+
+// B29: a model that breaks the pattern is still measured correctly.
+//
+// PASS: a floor that is not a candidate is still bracketed, at a cost close to
+// a blind search.
+// FAIL: converging on the nearest candidate, which would turn a prior into an
+// answer — the failure mode that makes priors dangerous rather than useful.
+func TestB29_ANonCandidateFloorIsStillFound(t *testing.T) {
+	for _, floor := range []int{700, 1500, 3000} {
+		s := New(Config{Min: 0, Max: 65536, Resolution: 4, Candidates: []int{512, 1024, 2048, 4096}})
+		decisions := 0
+		for i := 0; ; i++ {
+			if i > 64 {
+				t.Fatalf("floor %d: did not converge", floor)
+			}
+			n := s.Next()
+			if n == 0 {
+				break
+			}
+			decisions++
+			s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
+		}
+		lo, hi := s.Bracket()
+		if lo >= floor || hi < floor {
+			t.Errorf("floor %d: bracket (%d, %d] excludes it — a candidate was believed over the evidence", floor, lo, hi)
+		}
+		if decisions > 20 {
+			t.Errorf("floor %d: %d decisions; testing four candidates first must not cost more than a few probes", floor, decisions)
+		}
+	}
+}
+
+// B30: no size is ever asked more times than Confirm.
+//
+// Two mutants survived the decision-count assertions in B28 and B29 because
+// both merely waste probes: re-proposing a candidate already answered, and
+// re-issuing the below-probe because it was never marked done. Both still
+// converge, so a budget assertion with slack in it cannot see them — and each
+// wasted probe is a billable request against someone's provider.
+//
+// The invariant is exact rather than budgeted: a size is asked until it is
+// confirmed, and then never again.
+//
+// PASS: every size probed appears exactly Confirm times, or once if the search
+// ended before confirming it.
+// FAIL: any repeat beyond that, which is money spent re-asking a settled
+// question.
+func TestB30_NoSizeIsAskedMoreThanConfirmTimes(t *testing.T) {
+	for _, confirm := range []int{1, 2, 3} {
+		for _, floor := range []int{512, 2048, 700, 33000} {
+			s := New(Config{
+				Min: 0, Max: 65536, Resolution: 4, Confirm: confirm,
+				Candidates: []int{512, 1024, 2048, 4096}, Prior: 1024,
+			})
+			seen := map[int]int{}
+			for i := 0; ; i++ {
+				if i > 200 {
+					t.Fatalf("confirm %d floor %d: did not converge", confirm, floor)
+				}
+				n := s.Next()
+				if n == 0 {
+					break
+				}
+				seen[n]++
+				// The provider reports a LARGER cached size than the prefix
+				// asked for — 512 requested came back as 514 cached in the
+				// live runs — which leaves the requested size still inside the
+				// bracket. A fixture using CachedTokens == n hides exactly the
+				// repeats this test exists to catch.
+				cached := 0
+				if n >= floor {
+					cached = n + 2
+				}
+				s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: cached})
+			}
+			for size, count := range seen {
+				if count > confirm {
+					t.Errorf("confirm %d floor %d: size %d asked %d times, want at most %d — the extra requests are billable",
+						confirm, floor, size, count, confirm)
+				}
+			}
+			if lo, hi := s.Bracket(); lo >= floor || hi < floor {
+				t.Errorf("confirm %d floor %d: bracket (%d, %d] excludes it", confirm, floor, lo, hi)
+			}
+		}
+	}
+}
