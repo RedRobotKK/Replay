@@ -345,12 +345,22 @@ func (s *Search) BudgetTooSmall() bool {
 // can express — if writes land on 512-token blocks, no floor between multiples
 // of 512 is observable, and bisecting past that buys only billable requests.
 func (s *Search) Granularity() int {
-	// Fewer than three writes is not an inference, it is a coincidence. One
-	// write's GCD is itself, which would report a 32,768-token "block size"
+	// Three DISTINCT sizes, not three writes.
+	//
+	// One write's GCD is itself, which would report a 32,768-token block size
 	// from a single large probe — and because the stop width is floored by
-	// granularity, that halts the search immediately on its own first answer.
-	// Zero means unknown, and callers treat unknown as no constraint.
-	if len(s.writes) < 3 {
+	// granularity, that halts the search on its own first answer. Requiring
+	// three writes was not enough: with Confirm at 3, the same size recorded
+	// three times gives a GCD of that size. A live opus-5 run stopped after
+	// three probes reporting "1029-token blocks", which was one measurement
+	// repeated, not a divisor.
+	//
+	// Repeats carry no divisor information. Only distinct sizes do.
+	distinct := map[int]struct{}{}
+	for _, w := range s.writes {
+		distinct[w] = struct{}{}
+	}
+	if len(distinct) < 3 {
 		return 0
 	}
 	g := s.writes[0]

@@ -2,6 +2,9 @@ package probe
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -23,9 +26,34 @@ import (
 //	R5  the run stops at the authorised number of requests
 //	R6  a provider error ends the run rather than being counted as evidence
 
+// newRunner wires a Runner to a test server.
+//
+// The counting endpoint is answered here rather than in each test. Sizing the
+// probe prefix by measurement means every probe consults it, and a test about
+// budgets or credentials should not have to reimplement a tokenizer to say
+// what it is about. A test that cares about counting supplies its own handler
+// for the path, which this defers to.
 func newRunner(t *testing.T, h http.HandlerFunc) (*Runner, *httptest.Server, *bytes.Buffer) {
 	t.Helper()
-	srv := httptest.NewServer(h)
+	wrapped := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if strings.HasSuffix(req.URL.Path, "/count_tokens") {
+			var body struct {
+				System []struct {
+					Text string `json:"text"`
+				} `json:"system"`
+			}
+			_ = json.NewDecoder(req.Body).Decode(&body)
+			n := 0
+			if len(body.System) > 0 {
+				n = len(body.System[0].Text) / tokensPerProbeChar
+			}
+			w.Header().Set("content-type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"input_tokens":%d}`, n)
+			return
+		}
+		h(w, req)
+	})
+	srv := httptest.NewServer(wrapped)
 	t.Cleanup(srv.Close)
 	var out bytes.Buffer
 	return &Runner{
@@ -226,5 +254,118 @@ func TestR8_ATransportFailureDoesNotLeakTheCredential(t *testing.T) {
 	}
 	if strings.Contains(err.Error()+out.String(), "SECRETVALUE") {
 		t.Errorf("the credential leaked into a transport error: %v", err)
+	}
+}
+
+// R9: the prefix is sized by measurement, not by an approximation.
+//
+// The first live runs stalled: the search asks for n tokens built from a
+// chars-per-token guess, the prefix becomes some other size, and the upper
+// bound can never fall below whatever it actually became. Four models stalled
+// at brackets ~170 tokens wide and a budget of 40 probes changed nothing,
+// because the budget was never the constraint.
+//
+// The provider will count tokens for us. Sizing the filler against that closes
+// the gap, and both bounds become real tokens rather than one measured and one
+// guessed.
+//
+// PASS: the built prefix counts within tolerance of the size requested, and
+// the counting endpoint is consulted.
+// FAIL: shipping a prefix whose size nobody checked, which is what made the
+// brackets un-narrowable.
+func TestR9_ThePrefixIsSizedByCounting(t *testing.T) {
+	var counted, sent int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		if strings.HasSuffix(req.URL.Path, "/count_tokens") {
+			counted++
+			var body struct {
+				System []struct{ Text string } `json:"system"`
+			}
+			_ = json.NewDecoder(req.Body).Decode(&body)
+			// A deliberately unhelpful ratio: 7 characters per token, so an
+			// implementation assuming 4 lands nowhere near the target.
+			n := 0
+			if len(body.System) > 0 {
+				n = len(body.System[0].Text) / 7
+			}
+			_, _ = fmt.Fprintf(w, `{"input_tokens":%d}`, n)
+			return
+		}
+		sent++
+		_, _ = w.Write([]byte(`{"usage":{"input_tokens":10,"cache_creation_input_tokens":1000,"cache_read_input_tokens":0}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	r := &Runner{BaseURL: srv.URL, APIKey: "k", Client: srv.Client(), Out: io.Discard}
+	got, _, err := r.sizedFiller("claude-opus-5", 1000)
+	if err != nil {
+		t.Fatalf("sizing failed: %v", err)
+	}
+	if counted == 0 {
+		t.Fatal("the provider's token count was never consulted; the size is still a guess")
+	}
+	// Within 2% of the target, at a ratio the caller did not know in advance.
+	if n := len(got) / 7; n < 980 || n > 1020 {
+		t.Errorf("built a prefix of about %d tokens, want ~1000; the sizing did not converge", n)
+	}
+}
+
+// R10: sizes are reported as the cacheable prefix, not the whole request.
+//
+// The breakpoint sits on the system block, so the prefix that has to clear the
+// provider's minimum is the system block alone — but a token count covers the
+// whole request, including the user message and the envelope. On this API that
+// is 7 tokens, and it is the difference between a result that reads as a
+// contradiction and one that confirms the documentation to the token: a
+// 519-token request has a 512-token prefix, which is exactly the documented
+// minimum for opus-5, and it caches, while a 512-token request has a 505-token
+// prefix and does not.
+//
+// PASS: the run measures the overhead once and reports prefix sizes net of it.
+// FAIL: reporting request sizes against a documented prefix minimum, which
+// compares two different quantities and makes every model look wrong by a
+// constant.
+func TestR10_SizesAreTheCacheablePrefix(t *testing.T) {
+	const overhead = 7
+	var probed []int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		var body struct {
+			System []struct {
+				Text string `json:"text"`
+			} `json:"system"`
+		}
+		_ = json.NewDecoder(req.Body).Decode(&body)
+		sysTokens := 0
+		if len(body.System) > 0 {
+			sysTokens = len(body.System[0].Text) / tokensPerProbeChar
+		}
+		if strings.HasSuffix(req.URL.Path, "/count_tokens") {
+			// The whole request, as the real endpoint reports it.
+			_, _ = fmt.Fprintf(w, `{"input_tokens":%d}`, sysTokens+overhead)
+			return
+		}
+		probed = append(probed, sysTokens)
+		_, _ = fmt.Fprintf(w, `{"usage":{"input_tokens":10,"cache_creation_input_tokens":%d,"cache_read_input_tokens":0}}`, sysTokens)
+	}))
+	t.Cleanup(srv.Close)
+
+	r := &Runner{BaseURL: srv.URL, APIKey: "k", Client: srv.Client(), Out: io.Discard}
+	s, err := r.Run(Config{Min: 0, Max: 2048, Resolution: 64, MaxProbes: 20, Confirm: 1}, "claude-opus-5")
+	if err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+	if len(probed) == 0 {
+		t.Fatal("nothing was probed")
+	}
+	// Every probe's system block must be sized to the target, not to the
+	// target minus the overhead.
+	_, hi := s.Bracket()
+	if hi > 2048 {
+		t.Errorf("upper bound %d exceeds the search range; sizes are not net of overhead", hi)
+	}
+	if r.Overhead() != overhead {
+		t.Errorf("overhead measured as %d, want %d", r.Overhead(), overhead)
 	}
 }

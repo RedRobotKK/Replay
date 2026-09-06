@@ -36,6 +36,39 @@ type Runner struct {
 	APIKey string
 	Client *http.Client
 	Out    io.Writer
+
+	// overhead is the tokens a request carries outside the system block: the
+	// user message and the envelope. Measured once per run.
+	//
+	// It matters more than its size suggests. The cache breakpoint sits on the
+	// system block, so the prefix that must clear the provider's minimum is
+	// that block alone — but the counting endpoint reports the whole request.
+	// On this API the gap is 7 tokens, and it is the difference between a
+	// result that reads as a contradiction and one that confirms the
+	// documentation exactly: a 519-token request carries a 512-token prefix,
+	// which is precisely the documented minimum for opus-5 and does cache,
+	// while a 512-token request carries 505 and does not.
+	overhead    int
+	overheadSet bool
+}
+
+// Overhead is the measured non-prefix cost of a request, available after a run.
+func (r *Runner) Overhead() int { return r.overhead }
+
+// measureOverhead counts a request with no system block at all.
+func (r *Runner) measureOverhead(model string) error {
+	if r.overheadSet {
+		return nil
+	}
+	n, err := r.countBody(map[string]any{
+		"model":    model,
+		"messages": []map[string]any{{"role": "user", "content": "."}},
+	})
+	if err != nil {
+		return err
+	}
+	r.overhead, r.overheadSet = n, true
+	return nil
 }
 
 // tokensPerProbeChar approximates how many characters make a token. Probe
@@ -107,8 +140,142 @@ func wroteWord(w bool) string {
 	return "not cached"
 }
 
+// countTokens asks the provider how many tokens a prefix actually is.
+//
+// The counting endpoint is separate from inference and is not billed for the
+// tokens it counts, so this costs a round trip rather than money.
+func (r *Runner) countTokens(model, text string) (int, error) {
+	return r.countBody(map[string]any{
+		"model":    model,
+		"system":   []map[string]any{{"type": "text", "text": text}},
+		"messages": []map[string]any{{"role": "user", "content": "."}},
+	})
+}
+
+func (r *Runner) countBody(payload map[string]any) (int, error) {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return 0, err
+	}
+	req, err := http.NewRequest(http.MethodPost, strings.TrimRight(r.BaseURL, "/")+"/v1/messages/count_tokens", bytes.NewReader(body))
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("content-type", "application/json")
+	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("x-api-key", r.APIKey)
+
+	client := r.Client
+	if client == nil {
+		client = &http.Client{Timeout: 60 * time.Second}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("token count request failed")
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+	if err != nil {
+		return 0, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("the provider answered %d when asked to count tokens", resp.StatusCode)
+	}
+	var parsed struct {
+		InputTokens int `json:"input_tokens"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return 0, fmt.Errorf("the token count could not be read")
+	}
+	return parsed.InputTokens, nil
+}
+
+// sizedFiller builds prefix content the provider counts as the requested size.
+//
+// The first live runs stalled because the size was a guess: the search asked
+// for n tokens built from a chars-per-token approximation, the prefix became
+// some other size, and the upper bound could never fall below whatever it
+// actually became. Four models stalled at brackets about 170 tokens wide, and
+// raising the budget from 20 probes to 40 changed nothing — the budget was
+// never the constraint.
+//
+// Measuring closes that gap. A few counting round trips per probe cost no
+// tokens and turn both bounds into real ones.
+func (r *Runner) sizedFiller(model string, target int) (string, int, error) {
+	// Start from the approximation, then correct against the provider's own
+	// count. Two or three iterations reach the target for any tokenizer,
+	// because each correction scales by the observed ratio rather than
+	// assuming one.
+	if err := r.measureOverhead(model); err != nil {
+		return "", 0, err
+	}
+	best, bestTokens, bestGap := "", 0, 1<<30
+	chars := target * tokensPerProbeChar
+	var text string
+	for i := 0; i < 40; i++ {
+		text = fillerOfChars(chars)
+		total, err := r.countTokens(model, text)
+		if err != nil {
+			return "", 0, err
+		}
+		// Net of the envelope: the target is the size of the cacheable prefix,
+		// not of the request that carries it.
+		got := total - r.overhead
+		if got <= 0 {
+			return "", 0, fmt.Errorf("the provider counted the probe prefix as no tokens")
+		}
+		if gap := abs(got - target); gap < bestGap {
+			best, bestTokens, bestGap = text, got, gap
+		}
+		if got == target {
+			return text, got, nil
+		}
+		// Scale to get close, then step a word at a time to land exactly.
+		//
+		// Exactly, not approximately. A tolerance of one percent is five
+		// tokens at this scale, which is wider than the resolution the search
+		// is asking for — and because each attempt regenerates the nonce, two
+		// confirmations of the same target were different sizes. That produced
+		// a "non-deterministic boundary" at 507 tokens on opus-5 which was
+		// this function's noise, not the provider's behaviour.
+		if got < target-8 || got > target+8 {
+			chars = chars * target / got
+		} else if got < target {
+			chars += 3
+		} else {
+			chars -= 3
+		}
+		if chars < 1 {
+			chars = 1
+		}
+	}
+	// Not every token count is reachable: tokens span several characters, so a
+	// tokenizer may step 512 to 515 with nothing in between. Rather than fail,
+	// probe at the closest size that exists and report THAT — the search does
+	// not need the size it asked for, it needs to know the size it got.
+	if best == "" {
+		return "", 0, fmt.Errorf("could not build a probe prefix near %d tokens", target)
+	}
+	return best, bestTokens, nil
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
 // probe sends one request with a breakpoint at the given prefix size.
 func (r *Runner) probe(model string, prefixTokens int) (Result, error) {
+	filler, actual, err := r.sizedFiller(model, prefixTokens)
+	if err != nil {
+		return Result{}, err
+	}
+	// The size that was actually sent, not the one asked for. The search
+	// bisects on what exists rather than on what it requested, which is what
+	// keeps both bounds denominated in measured tokens.
+	prefixTokens = actual
 	body, err := json.Marshal(map[string]any{
 		"model":      model,
 		"max_tokens": 1,
@@ -117,7 +284,7 @@ func (r *Runner) probe(model string, prefixTokens int) (Result, error) {
 			// Unique every time. Repeated content caches on the first probe
 			// and is READ by every later one, and a read tests nothing — the
 			// run would learn nothing while costing full price.
-			"text":          probeFiller(prefixTokens),
+			"text":          filler,
 			"cache_control": map[string]string{"type": "ephemeral"},
 		}},
 		"messages": []map[string]any{{"role": "user", "content": "."}},
@@ -180,15 +347,35 @@ func (r *Runner) probe(model string, prefixTokens int) (Result, error) {
 // The random prefix is the load-bearing part. Identical content would cache on
 // the first probe and be read by every later one, and a read establishes
 // nothing about the floor — the run would cost full price and learn nothing.
-func probeFiller(tokens int) string {
+// fillerOfChars builds probe content of a given length in RUNES.
+//
+// The body is varied CJK ideographs rather than English words, which is a
+// meaningful optimisation rather than a curiosity. Measured against this API:
+// English "filler " repeated is about 3.4 characters per token, so a character
+// is a blunt dial and the reachable token counts are sparse. Varied Han
+// characters count at almost exactly 2 tokens each — 200 runes to 420 tokens,
+// 201 to 422, 202 to 424 — perfectly linear, so one rune moves the size by a
+// known and constant amount.
+//
+// Varied is the load-bearing word. A REPEATED character compresses: "あ" a
+// hundred times counts 60 tokens, and the hundred-and-first adds nothing at
+// all, because the tokenizer merges the run. A probe built from repeats cannot
+// be sized at all near the boundary.
+//
+// The nonce keeps every probe unique, so no probe can read an earlier probe's
+// cache entry.
+func fillerOfChars(chars int) string {
 	nonce := make([]byte, 16)
 	_, _ = rand.Read(nonce)
 	var b strings.Builder
 	b.WriteString("replay probe ")
 	b.WriteString(hex.EncodeToString(nonce))
 	b.WriteString(" ")
-	for b.Len() < tokens*tokensPerProbeChar {
-		b.WriteString("filler ")
+
+	// A stride coprime with the block size walks the range without repeating
+	// adjacent characters, so nothing merges.
+	for i := 0; b.Len() < chars; i++ {
+		b.WriteRune(rune(0x4E00 + (i*7919)%20000))
 	}
 	return b.String()
 }
