@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -38,14 +39,29 @@ func runProbe(args []string, stdout, stderr io.Writer) error {
 	candidates := fs.String("candidates", "512,1024,2048,4096", "plausible floors to test before searching between them; empty to disable")
 	prior := fs.Int("prior", 0, "a documented floor to test first; 0 uses the compiled table's figure for the model, and -1 disables it")
 	confirm := fs.Int("confirm", 2, "agreeing answers required before a boundary is believed")
+	trend := fs.Bool("trend", false, "read the recorded series and report what has changed; sends nothing")
+	maxAge := fs.Duration("max-age", 0, "skip probing when a reading for this model is younger than this, and print it instead")
 	record := fs.String("record", "", "append the reading to a measurement series (default ~/.replay/measurements.jsonl; \"-\" for none)")
 	execute := fs.Bool("execute", false, "actually send the probes; without this, only the plan is printed")
 	yes := fs.Bool("yes", false, "with --execute, skip the confirmation. For scripts that meant it")
 	if err := parseArgs(fs, args, stdout); err != nil {
 		return err
 	}
+	if *trend {
+		return reportTrend(seriesPath(*record), stdout)
+	}
 	if *model == "" {
 		return fmt.Errorf("a model is required: replay probe --model claude-opus-5: %w", errUsage)
+	}
+	// A reading already in the series answers the question a probe would, and
+	// a probe costs real money at the provider.
+	if *maxAge > 0 {
+		if r, ok := probe.RecentReading(seriesPath(*record), *model, *maxAge); ok {
+			fmt.Fprintf(stdout, "%s was measured %s: floor above %d, at most %d tokens.\n"+
+				"Nothing was sent. Drop --max-age to measure it again.\n",
+				r.Model, r.TakenAt, r.Above, r.AtMost)
+			return nil
+		}
 	}
 
 	// A published figure is a hypothesis worth testing before searching the
@@ -247,4 +263,79 @@ func seriesPath(flagValue string) string {
 		return ""
 	}
 	return filepath.Join(home, ".replay", "measurements.jsonl")
+}
+
+// reportTrend reads the series and says what has provably changed.
+//
+// The pressure on a dated measurement is always toward finding news in it, so
+// this declines to find any it cannot support. A change is reported only when
+// two brackets cannot both describe one floor; brackets that merely differ are
+// both consistent with nothing having happened.
+func reportTrend(path string, out io.Writer) error {
+	readings, err := probe.LoadSeries(path)
+	if err != nil {
+		return err
+	}
+	if len(readings) == 0 {
+		fmt.Fprintf(out, "No readings yet at %s.\n\n"+
+			"A series is worth exactly what has accumulated in it, and nothing can be\n"+
+			"backfilled: a floor is a fact anyone can copy today, while the date it\n"+
+			"changed needs someone to have been measuring beforehand. Take the first\n"+
+			"reading with:\n\n  replay probe --model claude-opus-5 --execute\n", path)
+		return nil
+	}
+
+	latest := map[string]probe.Reading{}
+	count := map[string]int{}
+	for _, r := range readings {
+		count[r.Model]++
+		if cur, ok := latest[r.Model]; !ok || r.TakenAt > cur.TakenAt {
+			latest[r.Model] = r
+		}
+	}
+	models := make([]string, 0, len(latest))
+	for m := range latest {
+		models = append(models, m)
+	}
+	sort.Strings(models)
+
+	fmt.Fprintf(out, "%d reading(s) at %s\n\n", len(readings), path)
+	for _, m := range models {
+		r := latest[m]
+		switch {
+		case r.Outcome != "":
+			fmt.Fprintf(out, "  %-28s %-16s  %d reading(s), last %s\n", m, r.Outcome, count[m], r.TakenAt[:10])
+		default:
+			bracket := fmt.Sprintf("(%d, %d]", r.Above, r.AtMost)
+			doc := ""
+			if r.Documented > 0 {
+				doc = fmt.Sprintf("  documented %d", r.Documented)
+			}
+			fmt.Fprintf(out, "  %-28s %-16s%s  %d reading(s), last %s\n", m, bracket, doc, count[m], r.TakenAt[:10])
+		}
+	}
+
+	changes := probe.Changes(readings)
+	fmt.Fprintf(out, "\n")
+	if len(changes) == 0 {
+		fmt.Fprintf(out, "No floor has provably moved. A change is only reported when two brackets\n"+
+			"cannot both be true; brackets that merely differ are both consistent with\n"+
+			"nothing having happened.\n")
+	} else {
+		fmt.Fprintf(out, "Changed:\n")
+		for _, c := range changes {
+			fmt.Fprintf(out, "  %s  (%d, %d] -> (%d, %d]  by %s\n",
+				c.Model, c.FromAbove, c.FromAtMost, c.ToAbove, c.ToAtMost, c.At[:10])
+		}
+		fmt.Fprintf(out, "\nThe date is when the change was first observed, not when it happened.\n")
+	}
+
+	if breaks := probe.MethodBreaks(readings); len(breaks) > 0 {
+		fmt.Fprintf(out, "\nThe instrument changed between readings, so numbers either side are not\n"+
+			"comparable and no change is drawn across them:\n")
+		for _, b := range breaks {
+			fmt.Fprintf(out, "  %s  %s -> %s  at %s\n", b.Model, b.From, b.To, b.At[:10])
+		}
+	}
+	return nil
 }

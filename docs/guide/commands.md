@@ -451,6 +451,8 @@ full price and learn nothing.
 | `--candidates` | Plausible floors to test before searching between them. Defaults to `512,1024,2048,4096`; empty disables it |
 | `--prior` | A documented floor to test before searching. Defaults to the compiled table's figure for the model; `-1` disables it |
 | `--execute` | Actually send them. Without it, only the plan is printed |
+| `--trend` | Read the recorded series and report what has provably changed. Sends nothing |
+| `--max-age` | Skip probing when a reading for this model is younger than this, and print it instead. `--max-age 24h` makes a daily schedule idempotent |
 | `--record` | Append the reading to a measurement series. Defaults to `~/.replay/measurements.jsonl`; `-` disables it |
 
 **`--confirm` multiplies against `--max-probes`.** Every confirmation is a
@@ -522,6 +524,30 @@ reading a warm cache write as a prefix size. Readings taken either side of any
 of those are not comparable, and a bare number does not say so. A series that
 silently mixes methods cannot tell a change in the world from a change in the
 instrument, which is the one question it exists to answer.
+
+`replay probe --trend` reads it back:
+
+```sh
+replay probe --trend
+```
+
+**A change is reported only when two brackets cannot both be true.** Brackets
+that merely differ are both consistent with one unchanged floor, and calling
+that movement is how a series manufactures news. The date given is when a
+change was first *observed*, never when it happened — the series can only bound
+that from above.
+
+**Readings taken with different methods are never compared,** and the break is
+printed instead. A difference across a method change says something about the
+instrument, not the provider, and that is the one confusion a series exists to
+prevent.
+
+`--max-age` is the other half. Probing costs real money, so a scheduled daily
+run with `--max-age 24h` measures once and then reports the stored reading
+rather than paying again. The conditions for reuse are deliberately narrow —
+same model, same method version, a clean bracket, inside the window — because a
+reading that does not meet all four would silently freeze the series at
+whatever it last saw, which is worse than paying for the probe.
 
 A run that did not establish a bracket records its outcome —
 `non-deterministic`, `contradicted`, `stalled`, `budget-exhausted`,
