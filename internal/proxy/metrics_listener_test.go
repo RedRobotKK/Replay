@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -242,6 +243,13 @@ func TestMT6_TheMetricsListenerMayBeASocket(t *testing.T) {
 	info, err := os.Lstat(msock)
 	if err != nil {
 		t.Fatalf("no metrics socket: %v", err)
+	}
+	if runtime.GOOS == "windows" {
+		// No Unix mode bits here: Go synthesises 0666 for any writable
+		// file, so this would assert against a value the platform never
+		// set. Skipped rather than loosened to something that passes
+		// everywhere and checks nothing.
+		t.Skip("file permissions are not mode bits on this platform")
 	}
 	if perm := info.Mode().Perm(); perm != 0o600 {
 		t.Errorf("metrics socket is %04o, want 0600", perm)
