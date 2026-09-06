@@ -190,7 +190,7 @@ func TestQ6_QuotaReachesTheLedger(t *testing.T) {
 // credential-shaped header beside it so the allowlist is exercised end to end.
 type quotaUpstream struct{}
 
-func (q *quotaUpstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (q *quotaUpstream) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("request-id", "req_quota_1")
 	w.Header().Set("anthropic-ratelimit-tokens-limit", "80000")
 	w.Header().Set("anthropic-ratelimit-tokens-remaining", "42500")

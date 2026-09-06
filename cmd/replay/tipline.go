@@ -46,13 +46,6 @@ const (
 	tipMaxUSD  = 25.00
 )
 
-// tipLine returns the line to print under a cost report, or "" when the finding
-// does not earn one. It hyperlinks the address when the destination is a
-// terminal that can render one.
-func tipLine(avoidableUSD float64, out io.Writer) string {
-	return tipLineFor(avoidableUSD, canHyperlink(out))
-}
-
 // canHyperlink reports whether OSC 8 is worth emitting. A file, a pipe or a
 // dumb terminal gets plain text: an escape sequence in `replay cost > out.txt`
 // is corruption, not a convenience.

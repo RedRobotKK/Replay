@@ -51,22 +51,22 @@ func runCheckPrices(stdout io.Writer) error {
 	}
 	res := cachemodel.CheckPrices(obs)
 
-	fmt.Fprintf(stdout, "Price table %s, compared against an independent database of %d first-party models.\n\n",
+	_, _ = fmt.Fprintf(stdout, "Price table %s, compared against an independent database of %d first-party models.\n\n",
 		res.TableVersion, len(obs))
 
 	if len(res.Disagreements) == 0 {
-		fmt.Fprintf(stdout, "  No disagreement on %d models.\n", len(res.Compared))
+		_, _ = fmt.Fprintf(stdout, "  No disagreement on %d models.\n", len(res.Compared))
 	} else {
-		fmt.Fprintf(stdout, "  %d disagreement(s) across %d compared models:\n\n", len(res.Disagreements), len(res.Compared))
+		_, _ = fmt.Fprintf(stdout, "  %d disagreement(s) across %d compared models:\n\n", len(res.Disagreements), len(res.Compared))
 		for _, d := range res.Disagreements {
-			fmt.Fprintf(stdout, "    %-14s %-7s  ours $%7.2f   theirs $%7.2f   per Mtok   (%s)\n",
+			_, _ = fmt.Fprintf(stdout, "    %-14s %-7s  ours $%7.2f   theirs $%7.2f   per Mtok   (%s)\n",
 				d.Model, d.Field, d.Ours, d.Theirs, d.SourceKey)
 		}
 	}
 	if len(res.Unmatched) > 0 {
-		fmt.Fprintf(stdout, "\n  Not named by that source, so unchecked rather than confirmed: %v\n", res.Unmatched)
+		_, _ = fmt.Fprintf(stdout, "\n  Not named by that source, so unchecked rather than confirmed: %v\n", res.Unmatched)
 	}
-	fmt.Fprintf(stdout, "\nThis is a second observer, not an authority. It can be stale or describe a\n"+
+	_, _ = fmt.Fprintf(stdout, "\nThis is a second observer, not an authority. It can be stale or describe a\n"+
 		"different SKU under a similar name, so nothing here is installed automatically.\n"+
 		"A disagreement is a prompt to check the provider's own page and, if it is\n"+
 		"real, to update the table and its date deliberately.\n")
