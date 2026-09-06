@@ -25,7 +25,7 @@ import (
 // PASS: every home-derived variable points inside the directory the test owns.
 // FAIL: one of them was left pointing at the real machine.
 func TestFrozenFD4_IsolateHomeRedirectsEveryHomeVariableOnEveryPlatform(t *testing.T) {
-	real, err := os.UserHomeDir()
+	machineHome, err := os.UserHomeDir()
 	if err != nil {
 		t.Fatalf("cannot read the real home to compare against: %v", err)
 	}
@@ -51,8 +51,8 @@ func TestFrozenFD4_IsolateHomeRedirectsEveryHomeVariableOnEveryPlatform(t *testi
 				"USERPROFILE was not, and the tests read the runner's own home",
 				name, got, owned)
 		}
-		if got == real {
-			t.Errorf("%s still names the real home %q", name, real)
+		if got == machineHome {
+			t.Errorf("%s still names the real home %q", name, machineHome)
 		}
 	}
 
