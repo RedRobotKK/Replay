@@ -204,20 +204,31 @@ first estimator returning exactly 1.00 whether the true ratio was 12.5 or 1.0.
 
 ## Platform support: macOS and Linux only
 
-**Replay is not supported on Windows, and it has never been tested there.**
+**The Windows job passes, and Replay is still not supported on Windows.**
+Those are not in tension, and the gap between them is the point.
 
-That is a stronger statement than "we have not got to it", and it is the honest
-one. The CI matrix has listed a Windows job for a long time and that job has
-never run a single test: it failed earlier, at `go vet`, on a helper that only
-existed in a file tagged `//go:build unix`. The compile error was fixed on
-2026-09-06, and the first test run it ever produced failed fourteen tests.
+The CI matrix listed a Windows job for a long time that never ran a single
+test: it failed at `go vet` on a helper in a file tagged `//go:build unix`.
+The compile error was fixed on 2026-09-06 and the first real run failed
+fourteen tests. All fourteen are fixed and the job has since passed.
 
-Several of those are not portability chores. `TestS5_TheFileIsOwnerOnly` and
-`TestU2_PermissionMustBeExplicit` assert Unix file-mode semantics that Windows
-does not have, and the guarantees they check are guarantees this tool makes
-about your ledger and your masking vault. Until there is a Windows story for
-those, a Windows build would be a binary that runs while quietly not keeping
-its promises. That is worse than not shipping one.
+Two of them were real defects rather than portability chores, and both were
+found only because that job finally ran. The consent gate read Unix
+permission bits, which Windows does not have: Go synthesises `0666` for any
+writable file, so the gate refused every consent file a user had just written
+and **a Windows user could not opt into the corpus or grant update consent at
+all**. Separately, the spend table evicted by wall-clock timestamp, which is
+least-recently-used only if the clock can separate two records; under a coarse
+clock it silently became evict-anything, and that was true on every platform.
+
+What green does not mean is supported. `Decision.OwnershipChecked` is `false`
+on Windows, because the check cannot run there and says so rather than
+implying a guarantee it never made. The tests that assert Unix mode semantics
+now skip on Windows with the reason stated, which is honest and is not the
+same as passing. So a Windows build would still be a binary that reads your
+consent decision without being able to verify the file is yours. Until there
+is a real ownership story on that platform, that is not a promise worth
+shipping.
 
 **macOS and Linux are tested on every push**, with `go vet` and
 `go test -race`. WSL works, because it is Linux.
@@ -228,7 +239,7 @@ The project's governing rule is [ADR-0014](docs/adr/0014-checks-must-be-able-to-
 is not evidence until it has been observed to fail.** Roughly twenty defects in a single day shared
 one shape — a verification that could not fail — so the rule is now mechanical.
 
-`internal/mutation` keeps **52 real past defects frozen as re-runnable mutants** (M1 to M52), each
+`internal/mutation` keeps **73 real past defects frozen as re-runnable mutants** (M1 to M73), each
 with the named test that must catch it. `go test -tags mutation ./internal/mutation/` re-applies them
 all.
 It has already caught a false kill (a mutant the compiler rejected, scored as caught), a test that
@@ -246,6 +257,7 @@ Start at [`docs/`](docs/README.md), indexed by why you came. Highlights:
 - [What you get](docs/WHAT-YOU-GET.md) — and the three levers worth more than this one
 - [Surfaces](docs/SURFACES.md) — every file and endpoint touched
 - [Evidence](docs/evidence/) — dated measurements, including the corrections
+- [Open design questions](docs/design/README.md) — written up before a decision, not after
 - [ADRs](docs/adr/) — the decisions, including the ones that were reversed
 
 ## Contributing
