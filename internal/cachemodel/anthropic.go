@@ -30,6 +30,23 @@ const PriceTableVersion = "2026-06-24"
 // actually turns on.
 const PriceTableStaleDays = 60
 
+// PriceTableCheckedAt is when the table was last verified against an
+// independent database, and it is a different fact from PriceTableVersion.
+//
+// The version is when the provider's own page was read. A check against a
+// second observer does not move it — the tool says so itself when reporting a
+// comparison: "This is a second observer, not an authority." Bumping the fetch
+// date on somebody else's agreement would claim a source that was not read.
+//
+// But with one date a table that is old and correct is indistinguishable from
+// one nobody has looked at. On 2026-09-06 the 2026-06-24 table was compared
+// against 28 first-party models and disagreed with none of the 11 it covers.
+// That is worth saying, and it is the heartbeat a reader needs to tell a
+// maintained document from an abandoned one.
+//
+// Move it only when a check has actually been run.
+const PriceTableCheckedAt = "2026-09-06"
+
 // PriceTableAgeNote returns a warning when the compiled price table is old
 // enough that the dollar figures derived from it deserve a second look, and
 // the empty string otherwise.
@@ -39,6 +56,17 @@ const PriceTableStaleDays = 60
 // do that subtraction is quietly given a stale number by a tool whose whole
 // argument is that it declines to state figures it cannot stand behind.
 func PriceTableAgeNote(now time.Time) string {
+	return PriceTableAgeNoteAt(now, PriceTableCheckedAt)
+}
+
+// PriceTableAgeNoteAt reports the table's age, given when it was last checked.
+//
+// Two clocks, because "old" and "unverified" are different problems and only
+// one of them is the reader's. An old table that was checked this week is
+// fine; an old table nobody has looked at is the one that needs the warning.
+// A check older than the stale window counts for nothing, or writing the field
+// once would silence the notice forever.
+func PriceTableAgeNoteAt(now time.Time, checkedAt string) string {
 	table, err := time.Parse("2006-01-02", PriceTableVersion)
 	if err != nil {
 		return ""
@@ -46,6 +74,13 @@ func PriceTableAgeNote(now time.Time) string {
 	days := int(now.UTC().Sub(table) / (24 * time.Hour))
 	if days <= PriceTableStaleDays {
 		return ""
+	}
+	if checked, cerr := time.Parse("2006-01-02", strings.TrimSpace(checkedAt)); cerr == nil {
+		since := int(now.UTC().Sub(checked) / (24 * time.Hour))
+		if since >= 0 && since <= PriceTableStaleDays {
+			return fmt.Sprintf(" The price table is dated %s and was checked against an "+
+				"independent database %d day(s) ago with no disagreement.", PriceTableVersion, since)
+		}
 	}
 	return fmt.Sprintf(" The price table is %d days old; check it against current rates, "+
 		"or install a dated document with `replay rules --update`.", days)

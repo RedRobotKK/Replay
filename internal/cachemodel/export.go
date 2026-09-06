@@ -50,6 +50,7 @@ func ExportRules() Rules {
 		// served from. A reader checking a price needs the provider's page.
 		Source:    "https://www.anthropic.com/pricing",
 		FetchedAt: PriceTableVersion + "T00:00:00Z",
+		CheckedAt: PriceTableCheckedAt,
 		Models:    models,
 	}
 }

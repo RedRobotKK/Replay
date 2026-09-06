@@ -24,11 +24,16 @@ import (
 // The compiled table stays as the fallback, so a machine that has never run
 // `replay rules --update` behaves exactly as before.
 type Rules struct {
-	Schema    string      `json:"schema"`
-	Version   string      `json:"version"`
-	Provider  string      `json:"provider,omitempty"`
-	Source    string      `json:"source,omitempty"`
-	FetchedAt string      `json:"fetchedAt,omitempty"`
+	Schema    string `json:"schema"`
+	Version   string `json:"version"`
+	Provider  string `json:"provider,omitempty"`
+	Source    string `json:"source,omitempty"`
+	FetchedAt string `json:"fetchedAt,omitempty"`
+	// CheckedAt is when this table was last verified against an independent
+	// database. Distinct from FetchedAt, which is when the provider's own page
+	// was read: a second observer agreeing does not mean the source was
+	// re-read. Optional, and older readers ignore it.
+	CheckedAt string      `json:"checkedAt,omitempty"`
 	Models    []ModelRule `json:"models"`
 	// AccountDiscount is a negotiated rate multiplier the operator states,
 	// between 0 and 1 exclusive. Zero means none.
