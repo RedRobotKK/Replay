@@ -97,6 +97,10 @@ type Config struct {
 	PolicyFile string
 	// Trial bounds how a learned policy is tried live (LN-5).
 	Trial TrialSettings
+	// PreFlight is the operator's ceiling on the tokens a changed prefix may
+	// re-lay. The zero value warns and never refuses, which is the default:
+	// a ceiling nobody set must not refuse anybody's request.
+	PreFlight analysis.PolicyState
 	// NoPolicy turns every live policy off, including one a persisted pin
 	// would otherwise restore (PX-6). It also turns masking off.
 	NoPolicy bool
@@ -941,7 +945,7 @@ func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Recor
 	case v.Warn:
 		w.Header().Set(HeaderWarning, fmt.Sprintf("loop: the same %s call was just made %d times in a row", v.Label, v.Repeats))
 	}
-	return true
+	return s.preFlight(w, rec, override)
 }
 
 // isMessages reports whether a path is the Messages endpoint proper (not
@@ -981,6 +985,7 @@ var (
 	refusalSpendCap    = refusal{http.StatusBadRequest, "replay_spend_cap", "spend_cap"}
 	refusalLoop        = refusal{http.StatusBadRequest, "replay_loop", "loop"}
 	refusalErrorBudget = refusal{http.StatusBadRequest, "replay_error_budget", "error_budget"}
+	refusalPreFlight   = refusal{http.StatusBadRequest, "replay_preflight_deficit", "preflight_deficit"}
 )
 
 // listCost prices one request's usage at list price, zero for a model
