@@ -26,6 +26,52 @@ measurement.** A draft rendered `BLIND (N=8)`, taking the sample size from one
 capture session and pinning it into a live display, where it would still read 8
 after a thousand turns. Live surfaces show live values or they show nothing.
 
+## What PostHog's CLI actually does
+
+The brief said "inspired by the PostHog CLI installer". An earlier version of
+this document designed to a description of it rather than to the thing, and
+said so. That was the wrong way round, so here is the audit.
+
+Source: [PostHog/posthog/cli](https://github.com/PostHog/posthog/tree/master/cli).
+Rust. The dependencies that decide how it looks are
+`ratatui 0.29`, `crossterm 0.28`, `inquire 0.7`, `colored 3.0` and `clap 4.5`.
+
+**The interactive surface is one command, not the whole CLI.** `src/experimental/tui/`
+holds two files and 402 lines, a query browser, marked experimental. Everything
+else in that CLI prints plain command output. PostHog did not turn their tool
+into a dashboard; they scoped one screen to one job and left the rest as lines.
+
+That is the finding worth taking. It is also an argument for the build order at
+the end of this document: the non-TTY path is not a fallback bolted on later,
+it is what the tool mostly is.
+
+**They do use box-drawing borders.** `Block::bordered()` with
+`BorderType::Rounded`, and `Borders::ALL` on the inner panels. So the rule below
+is not "PostHog avoids these characters".
+
+**What they do not do is count cells themselves.** Column widths are
+`Constraint::Fill(1)`, handed to ratatui, and `unicode-width` is in their
+lockfile. The framework owns display-width measurement; the application never
+pads a string to a column. That is why borders are safe there and would not be
+safe in a hand-formatted Go printf.
+
+So there are two coherent answers to the width problem, and only one of them is
+available to us today:
+
+| Approach | Who measures width | Borders |
+|---|---|---|
+| PostHog | the framework, via `unicode-width` | box-drawing, safely |
+| **This design** | **us, in `fmt.Sprintf`** | **ASCII only** |
+
+Adopting a width-measuring layer would let us draw borders too. That is a real
+option and it is not this build.
+
+**Not verified:** how `unicode-width` resolves East Asian Ambiguous in a
+CJK-configured terminal. Its default treats ambiguous as one cell, which matches
+a Western locale rather than a CJK one, so a bordered ratatui app may have the
+same exposure. Checking that needs a CJK terminal and was not done. Nothing in
+this design rests on the answer.
+
 ## The width constraint, measured
 
 Box-drawing characters are the wrong charset for this, and the reason is not
@@ -42,8 +88,10 @@ measured 78 cells against 79 for every border, because one header cell lost its
 padding space. The design claimed "borders never shear" and the artifact
 demonstrating it did.
 
-**So: ASCII and whitespace only.** No box-drawing, no emoji, no glyph outside
-printable ASCII in any frame element. Verified at 0 ambiguous-width characters
+**So: ASCII and whitespace only, because we pad by hand.** No box-drawing, no
+emoji, no glyph outside printable ASCII in any frame element. The constraint
+follows from the formatter, not from the characters being bad in themselves:
+give the layout a width-measuring layer and the constraint lifts. Verified at 0 ambiguous-width characters
 and one consistent width across all rows.
 
 ```text
@@ -251,7 +299,9 @@ static rate-limit headers are not a fault.
 1. The width-safe column formatter, with a test that fails on any
    ambiguous-width character and on any row whose display width differs from
    the header's.
-2. The non-TTY path, first, so the fallback is never an afterthought.
+2. The non-TTY path, first, so the fallback is never an afterthought. PostHog's
+   CLI is plain output everywhere except one experimental screen, which is the
+   ratio to expect here too.
 3. States 1, 2, 6 and 15. The blind path and the unenforced cap are the reason
    this surface earns its place.
 4. Settings, states 16 to 23.
