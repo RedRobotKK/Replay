@@ -158,11 +158,20 @@ func syntheticSession(sessionID string, n int) []ledger.Record {
 // serve twice as many requests. A ratio survives a slow or busy machine in a
 // way "must finish in N ms" does not.
 //
-// Measured on an M1 Pro on 2026-09-06, doubling the session length cost 3.62x
-// at 50->100 and 3.79x at 100->200. Quadratic is 4x. The bound is set at 6x:
-// loose enough that noise and a slower machine do not fail it, tight enough
-// that a regression to cubic, which would be 8x, does. It is a smoke alarm,
-// not a stopwatch.
+// The first version compared 100 against 200 with a 6x bound, reasoning that
+// quadratic is 4x per doubling and cubic is 8x, so 6x sat between them. It
+// measured 3.51x locally and 6.55x on CI, and went red on correct code within
+// the hour. One doubling does not separate the two hypotheses by enough to
+// survive a contended runner, where the larger workload suffers more than the
+// smaller one for reasons that have nothing to do with the algorithm.
+//
+// So it compares 100 against 400 instead. Over a 4x growth in length quadratic
+// predicts 16x and cubic predicts 64x, which is two doublings of headroom
+// rather than one. The bound is 32x, the geometric midpoint, and CI noise at
+// the level that produced 6.55x against an expected 4x lands nowhere near it.
+//
+// The lesson is the repository's own, from the comment on BenchmarkAddedLatency:
+// a check that cries wolf gets muted, and a muted check is not a check.
 //
 // If this fails, the likely cause is that rescore started doing more per
 // request than walk the lane once, or that AnalyzeLane grew a nested walk.
@@ -196,7 +205,7 @@ func TestRescore_SessionCostDoesNotGrowWorseThanQuadratic(t *testing.T) {
 		return best
 	}
 
-	small, large := cost(100), cost(200)
+	small, large := cost(100), cost(400)
 	if small <= 0 {
 		t.Fatal("the 100-request session was not measurable, so this test cannot fail")
 	}
@@ -212,9 +221,10 @@ func TestRescore_SessionCostDoesNotGrowWorseThanQuadratic(t *testing.T) {
 	}
 
 	ratio := float64(large) / float64(small)
-	t.Logf("100 requests: %v, 200 requests: %v, ratio %.2fx (quadratic is 4x)", small, large, ratio)
-	if ratio > 6 {
-		t.Errorf("doubling the session length cost %.2fx (%v -> %v), over the 6x bound. "+
+	t.Logf("100 requests: %v, 400 requests: %v, ratio %.2fx (quadratic predicts 16x, cubic 64x)",
+		small, large, ratio)
+	if ratio > 32 {
+		t.Errorf("quadrupling the session length cost %.2fx (%v -> %v), over the 32x bound. "+
 			"rescore re-walks the whole lane on every request, so this path is already "+
 			"quadratic across a session; worse than that means a nested walk was added. "+
 			"Nothing else catches it: the client never waits for rescore, so "+
