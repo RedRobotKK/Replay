@@ -14,8 +14,9 @@ import (
 // has just done something for them, so it is the only place this belongs.
 //
 // It is deliberately NOT a browser tab that opens itself. Replay's standing
-// claim is that it makes no network request except your own traffic to your own
-// provider, and a binary that launches a browser is the kind of thing people
+// claim is that it originates no network request you did not ask for — the
+// proxy forwards your own traffic, and `probe --execute` spends only when you
+// type it — and a binary that launches a browser is the kind of thing people
 // uninstall — rightly. It prints a line. Opening it is the reader's move.
 //
 // The amount is not passed to the payment page either, and that is a fact about

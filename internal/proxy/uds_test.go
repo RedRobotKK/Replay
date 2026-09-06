@@ -87,6 +87,27 @@ func serveUDS(t *testing.T, srv *Server) (context.CancelFunc, chan error) {
 	return cancel, done
 }
 
+// refusalFrom waits for a bind to fail, bounded.
+//
+// Every test below expects the server to REFUSE. If a change lets it bind
+// instead, an unbounded receive blocks until the whole package times out, and
+// the run reports a hang rather than the failure it is — which is what
+// happened: removing the socket-directory check left the frozen-mutant harness
+// stuck for seven minutes on a mutant that should have died in five seconds.
+// A mutant that removes a stop condition must fail, not hang.
+func refusalFrom(t *testing.T, cancel context.CancelFunc, done chan error) error {
+	t.Helper()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(3 * time.Second):
+		cancel()
+		<-done
+		t.Fatal("the server bound instead of refusing; the guard under test is gone")
+		return nil
+	}
+}
+
 func requireUnix(t *testing.T) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -186,8 +207,8 @@ func TestU3_ARefusedSocketDirectory(t *testing.T) {
 		t.Skipf("cannot create a world-writable directory here: %v", err)
 	}
 	srv, _ := udsServer(t, "unix://"+filepath.Join(shared, "p.sock"))
-	_, done := serveUDS(t, srv)
-	err := <-done
+	cancel, done := serveUDS(t, srv)
+	err := refusalFrom(t, cancel, done)
 	if err == nil {
 		t.Fatal("bound a socket in a world-writable directory; another user can replace it " +
 			"and receive the API key")
@@ -212,8 +233,8 @@ func TestU4_ASymlinkAtTheSocketPathIsRefused(t *testing.T) {
 		t.Skipf("cannot create a symlink here: %v", err)
 	}
 	srv, _ := udsServer(t, "unix://"+sock)
-	_, done := serveUDS(t, srv)
-	if err := <-done; err == nil {
+	cancel, done := serveUDS(t, srv)
+	if err := refusalFrom(t, cancel, done); err == nil {
 		t.Fatal("bound through a symlink")
 	} else if !strings.Contains(err.Error(), "symlink") {
 		t.Errorf("the refusal does not say why: %v", err)
@@ -376,8 +397,8 @@ func TestU9_APathTooLongForTheKernelIsRefusedByName(t *testing.T) {
 	}
 	sock := filepath.Join(dir, "p.sock")
 	srv, _ := udsServer(t, "unix://"+sock)
-	_, done := serveUDS(t, srv)
-	err := <-done
+	cancel, done := serveUDS(t, srv)
+	err := refusalFrom(t, cancel, done)
 	if err == nil {
 		t.Fatal("bound a socket at a path longer than the kernel accepts")
 	}
@@ -406,8 +427,8 @@ func TestU10_ANonSocketAtThePathIsNeverDeleted(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv, _ := udsServer(t, "unix://"+path)
-	_, done := serveUDS(t, srv)
-	if err := <-done; err == nil {
+	cancel, done := serveUDS(t, srv)
+	if err := refusalFrom(t, cancel, done); err == nil {
 		t.Fatal("bound over a regular file")
 	}
 	body, err := os.ReadFile(path)

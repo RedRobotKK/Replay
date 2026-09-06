@@ -463,10 +463,14 @@ single global floor needs several vantage points. So `--contribute` builds a
 file, prints its path, and stops. You read it and decide whether to move it —
 attached to a pull request, or an issue.
 
-The binary has no way to send it. `internal/observation` has no transport and a
-test enforces its import allowlist, which is a stronger promise than a consent
-flow because it does not depend on reasoning about a gate: the released binary
-makes no network request except the proxy, and that stays checkable in one line.
+The contribution path has no way to send it. `internal/observation` has no
+transport and a test enforces its import allowlist, which is a stronger promise
+than a consent flow because it does not depend on reasoning about a gate — there
+is no transmitting code for a future change to reach.
+
+That is a claim about the contribution path, not about the binary. The proxy
+reaches the network by definition, and `probe --execute` originates billable
+requests on your own key. Both are in [SURFACES.md](../SURFACES.md).
 
 It is off until you turn it on. `--contribute` reads
 `${XDG_CONFIG_HOME:-~/.config}/replay/corpus-consent.toml` and refuses unless it

@@ -26,9 +26,10 @@ import (
 // boundary that moves the first time somebody adds a convenient field.
 //
 // The binary does not send. It builds a file and prints its path; a human
-// moves it. That keeps "the released binary makes no network request except
-// the proxy" literally true and auditable in one line, which is a far stronger
-// claim than any consent flow, and O7 is what stops it eroding.
+// moves it. O7 is what stops that eroding. Note the scope: it is a claim about
+// THIS PACKAGE, not the binary — the proxy reaches the network by definition
+// and `probe --execute` originates billable requests. The auditable property
+// is that contribution has no transport to reach, not that nothing does.
 
 // sample is a reading with every field populated, so a test that walks the
 // payload cannot pass by accident on a mostly-empty struct.
@@ -263,9 +264,10 @@ func TestO6_TheTagSaysWhereItCameFrom(t *testing.T) {
 
 // O7: this package cannot make a network call.
 //
-// The claim being protected is "the released binary makes no network request
-// except the proxy". A grep would not survive a reviewer who wanted to get
-// around it, so this walks the imports and refuses anything not on the list.
+// The claim being protected is that CONTRIBUTION has no transport: this
+// package cannot send what it builds. A grep would not survive a reviewer who
+// wanted to get around it, so this walks the imports and refuses anything not
+// on the list.
 // The list is short on purpose: lengthening it should require an argument.
 //
 // PASS: every import is on the allowlist.

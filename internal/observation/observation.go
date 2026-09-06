@@ -1,9 +1,12 @@
 // Package observation builds the file a contributor may choose to submit.
 //
 // It builds a file. It does not send one, and it cannot: the import allowlist
-// in this package's tests refuses every transport, so "the released binary
-// makes no network request except the proxy" stays literally true and stays
-// checkable in one line. That is a stronger promise than any consent flow,
+// in this package's tests refuses every transport. That is a property of THIS
+// PACKAGE, and the distinction matters — the binary as a whole is a proxy and
+// also originates billable requests under `probe --execute`, so a claim that
+// the binary never reaches the network would be false. What is true and worth
+// having is narrower: contribution cannot become a submission by accident,
+// because there is no code here that could send one. That is a stronger promise than any consent flow,
 // because it does not depend on reasoning about a gate. A human reads the file
 // and moves it — a pull request, an issue, an email.
 //

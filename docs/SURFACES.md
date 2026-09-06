@@ -92,6 +92,7 @@ not on the map.
 | in | `/replay/metrics` | Prometheus text, aggregate only | Read |
 | in | `/replay/healthz` | **no origin check, no token check** | **Verified as a gap** |
 | out | `$ANTHROPIC_BASE_URL/replay/healthz` | `doctor` only, probing for a running proxy. No credential, 64-byte read, timeout | **Verified**, and missing from the first version of this page |
+| out | the configured provider, `/v1/messages` and `/v1/messages/count_tokens` | **`probe --execute` only.** The one command that ORIGINATES traffic rather than forwarding it: synthetic, cache-defeating, billable, on your own key. It refuses to run without `--execute`, prints the plan first, and asks for confirmation unless `--yes`. `count_tokens` is unbilled; `/v1/messages` is not | **Verified**, and missing until 2026-09-06 — see the note below |
 
 **Known gaps here, all recorded in the security review:** `/replay/status` and `/replay/metrics` are
 **unauthenticated unless `--token` is set**, so any local process can read model names, token counts
@@ -112,6 +113,17 @@ against a stub only. What a real provider reports, whether a cache write is even
 distinguishable in that shape, and whether streaming carries usage the same way
 are all open. Until each is measured, the warnings are the contract: Replay says
 what it cannot see rather than letting a running proxy imply protection.
+
+**Correction, 2026-09-06.** This page and the README both said the binary makes no network request
+except the proxy and `rules --check-prices`. That stopped being true when `replay probe` was added:
+`internal/probe/run.go` POSTs to `/v1/messages/count_tokens` and `/v1/messages` on the operator's own
+credential, and spends their money. The command was built deliberately and its own tests say so in
+plain words — but neither this inventory nor the README was updated, so the claim drifted from true
+to false without anyone editing it. The row above is the fix.
+
+It is still an opt-in surface in the same sense `rules --check-prices` is: nothing happens without a
+typed `--execute`, the plan is printed before anything is sent, and a confirmation is required unless
+`--yes` is passed. That is the honest version of the claim, and it is what the README says now.
 
 ## 3. Environment
 

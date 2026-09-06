@@ -23,12 +23,16 @@ import (
 // them.
 //
 // The binary does not send it. It writes a file and prints the path, and a
-// person moves it. That is not squeamishness: it keeps "the released binary
-// makes no network request except the proxy" literally true and checkable in
-// one line, which is a stronger and more auditable promise than any consent
-// flow, and it means the person contributing has seen the payload before it
-// leaves. internal/observation has no transport and a test that keeps it that
-// way.
+// person moves it. That is not squeamishness: it means the contributor has
+// seen the payload before it leaves, and it means no future change to a
+// consent gate can turn contribution into transmission, because there is no
+// transmitting code to reach. internal/observation has no transport and a test
+// that keeps it that way.
+//
+// Scope, stated because the README got this wrong for a while: that is a claim
+// about the CONTRIBUTION PATH, not about the binary. The proxy reaches the
+// network by definition, and `probe --execute` originates billable requests on
+// the operator's own key.
 
 // contributorSecretName holds the machine-local secret the contributor tag is
 // derived from. Owner-only: anyone who can read it can compute this machine's

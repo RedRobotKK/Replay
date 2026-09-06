@@ -206,8 +206,7 @@ func TestMT4_NoMetricsListenerByDefault(t *testing.T) {
 func TestMT5_TheMetricsListenerIsLoopbackOnly(t *testing.T) {
 	for _, addr := range []string{"0.0.0.0:0", "192.168.1.10:0", ":0"} {
 		_, _, done, cancel := metricsServer(t, "127.0.0.1:0", addr)
-		err := <-done
-		cancel()
+		err := refusalFrom(t, cancel, done)
 		if err == nil {
 			t.Errorf("bound the metrics listener to %q", addr)
 			continue
