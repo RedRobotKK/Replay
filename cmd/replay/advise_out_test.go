@@ -21,6 +21,9 @@ func TestAdviseOutDashStillApplies(t *testing.T) {
 	dir := t.TempDir()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	// os.UserHomeDir reads USERPROFILE on Windows, so HOME alone
+	// leaves the command pointed at the real home.
+	t.Setenv("USERPROFILE", home)
 
 	// A minimal transcript so advise has something to read.
 	if err := os.WriteFile(filepath.Join(dir, "s.jsonl"), []byte("\n"), 0o600); err != nil {
@@ -57,6 +60,9 @@ func TestAdviseOutDashStillApplies(t *testing.T) {
 func TestAdviseJSONStdoutIsPureJSON(t *testing.T) {
 	dir, home := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
+	// os.UserHomeDir reads USERPROFILE on Windows, so HOME alone
+	// leaves the command pointed at the real home.
+	t.Setenv("USERPROFILE", home)
 	if err := os.WriteFile(filepath.Join(dir, "s.jsonl"), []byte("\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -177,6 +177,7 @@ func TestU5_SymlinkIsRefused(t *testing.T) {
 // PASS: refused when group- or world-writable.
 // FAIL: honouring a grant any process on the box could have written.
 func TestU6_WorldWritableIsRefused(t *testing.T) {
+	requireUnixModeBits(t)
 	dir := t.TempDir()
 	p := write(t, dir, "update_checks = true\n")
 	if err := os.Chmod(p, 0o666); err != nil {

@@ -35,7 +35,7 @@ func main() {
 	// nothing installable can fail here.
 	LoadInstalledRules(os.Stderr)
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "replay:", err)
+		_, _ = fmt.Fprintln(os.Stderr, "replay:", err)
 		os.Exit(exitCode(err))
 	}
 }

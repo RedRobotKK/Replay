@@ -77,7 +77,7 @@ func runCorpus(args []string, stdout, stderr io.Writer) error {
 		if len(roots) == 0 {
 			return fmt.Errorf("one or more transcript directories are required: %w", errUsage)
 		}
-		fmt.Fprintf(stderr, "reading %s\n", roots[0])
+		_, _ = fmt.Fprintf(stderr, "reading %s\n", roots[0])
 		args = append(args, roots...)
 		if err := parseArgs(fs, args, stdout); err != nil {
 			return err
