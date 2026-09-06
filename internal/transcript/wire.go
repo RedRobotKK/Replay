@@ -16,7 +16,16 @@ import (
 // results can be large; the maximum is generous while still refusing
 // pathological input.
 const (
-	scannerInitialBytes = 1 << 20
+	// The starting size, not the ceiling: bufio.Scanner grows on demand up to
+	// maxLineBytes, so a large line still parses.
+	//
+	// This was 1 MB, which made it the single largest allocation site in the
+	// program — 1,431 MB across a 1.35 GB corpus, 28% of every byte the
+	// pipeline allocated, and larger than the median transcript, so for half
+	// the corpus the buffer exceeded the whole file. The longest real line
+	// measured across that corpus is 2.77 MB, far under the cap, so the only
+	// effect of starting big was allocating memory most files never used.
+	scannerInitialBytes = 64 << 10
 	maxLineBytes        = 64 << 20
 )
 

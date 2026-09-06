@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -257,22 +258,77 @@ func runReport(name string, args []string, stdout, stderr io.Writer, write func(
 // result, or the reason it could not be produced, to visit. It stops at
 // the first error visit returns.
 func forEachSession(files []string, visit func(path string, session *transcript.Session, rep *analysis.LaneReport, err error) error) error {
-	for _, f := range files {
-		session, err := loadSession(f)
-		if err != nil {
-			if err := visit(f, nil, nil, err); err != nil {
-				return err
+	// Parsing is around 89% of the work and files are independent, but the
+	// process used 108% of ten cores. Parsing and analysis now run on a pool;
+	// visit still runs serially, in file order.
+	//
+	// The ordering is not a nicety. Corpus rows are sorted with sort.Slice,
+	// which is unstable and keyed only on request count, so the order rows are
+	// APPENDED decides every tie. Handing results to visit as they finish
+	// would quietly change the report; reassembling by file index does not,
+	// and the output is byte-identical across corpus, blame, cost, advise,
+	// trim and route.
+	//
+	// Work is launched only a short way ahead of the cursor. Without that
+	// bound a fast worker could finish file 1400 while visit is still on file
+	// 5, holding a thousand parsed sessions in memory — and the largest single
+	// transcript here is 336 MB.
+	workers := runtime.GOMAXPROCS(0)
+	if workers > 8 {
+		workers = 8
+	}
+	if workers < 1 || len(files) < 2 {
+		workers = 1
+	}
+
+	type result struct {
+		session *transcript.Session
+		rep     *analysis.LaneReport
+		err     error
+	}
+	results := make([]result, len(files))
+	ready := make([]chan struct{}, len(files))
+	for i := range ready {
+		ready[i] = make(chan struct{})
+	}
+
+	sem := make(chan struct{}, workers)
+	launch := func(i int) {
+		go func() {
+			sem <- struct{}{}
+			defer func() { <-sem; close(ready[i]) }()
+			session, err := loadSession(files[i])
+			if err != nil {
+				results[i] = result{err: err}
+				return
 			}
-			continue
-		}
-		lane := analysis.MainLane(session)
-		if lane == nil {
-			if err := visit(f, session, nil, errors.New("no requests")); err != nil {
-				return err
+			lane := analysis.MainLane(session)
+			if lane == nil {
+				results[i] = result{session: session, err: errors.New("no requests")}
+				return
 			}
-			continue
+			results[i] = result{session: session, rep: analysis.AnalyzeLane(session, lane)}
+		}()
+	}
+
+	window := workers * 2
+	next := 0
+	for cursor := 0; cursor < len(files); cursor++ {
+		for next < len(files) && next < cursor+window {
+			launch(next)
+			next++
 		}
-		if err := visit(f, session, analysis.AnalyzeLane(session, lane), nil); err != nil {
+		<-ready[cursor]
+		r := results[cursor]
+		// Release the session before visiting the next file, so the window
+		// bounds live memory rather than merely bounding concurrency.
+		results[cursor] = result{}
+		if err := visit(files[cursor], r.session, r.rep, r.err); err != nil {
+			// Drain the launched goroutines so none outlives this call.
+			for i := cursor + 1; i < next; i++ {
+				<-ready[i]
+				results[i] = result{}
+			}
 			return err
 		}
 	}
