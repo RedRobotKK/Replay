@@ -146,6 +146,12 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 
 	var units []costUnit
 	unpriced := 0
+	// Requests seen in an earlier transcript. A sub-agent lane re-renders its
+	// parent's requests, so the same requestId can appear in several files;
+	// MainLane skips sidechains and absorbs most of that, and the residue is
+	// disclosed rather than silently carried.
+	seenReq := map[string]bool{}
+	duplicated, totalReq := 0, 0
 	_ = forEachSession(files, func(_ string, session *transcript.Session, rep *analysis.LaneReport, err error) error {
 		if err != nil || rep == nil || session == nil {
 			return nil
@@ -156,6 +162,19 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		model := ""
 		if rep.Lane != nil && len(rep.Lane.Requests) > 0 {
 			model = rep.Lane.Requests[0].Model
+		}
+		if rep.Lane != nil {
+			for _, r := range rep.Lane.Requests {
+				if r.ID == "" {
+					continue
+				}
+				totalReq++
+				if seenReq[r.ID] {
+					duplicated++
+					continue
+				}
+				seenReq[r.ID] = true
+			}
 		}
 		var asRun analysis.PolicyResult
 		for _, p := range rep.Policies() {
@@ -225,7 +244,8 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 
 	if *asJSON {
 		sort.Slice(units, func(i, j int) bool { return units[i].CostUSD > units[j].CostUSD })
-		out := map[string]any{"schema": "replay.cost.v1", "summary": s, "unpriced": unpriced}
+		out := map[string]any{"schema": "replay.cost.v1", "summary": s, "unpriced": unpriced,
+			"duplicatedRequests": duplicated, "totalRequests": totalReq}
 		if *perTask {
 			out["tasks"] = units
 		}
@@ -239,6 +259,11 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 
 	if _, err := io.WriteString(stdout, renderCost(s, unpriced, stdout)); err != nil {
 		return err
+	}
+	if note := overlapNote(duplicated, totalReq); note != "" {
+		if _, err := io.WriteString(stdout, note); err != nil {
+			return err
+		}
 	}
 	if *perTask && len(units) > 0 {
 		sort.Slice(units, func(i, j int) bool { return units[i].CostUSD > units[j].CostUSD })
