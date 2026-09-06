@@ -148,6 +148,22 @@ type ContextGap struct {
 	CompactedTokens int
 	// AttributedTokens is the total this gap applies to.
 	AttributedTokens int
+	// LanesTotal, LanesReported and RequestsOmitted describe how much of the
+	// session these figures actually cover.
+	//
+	// Every offline command reports on one lane, the one MainLane picks, so a
+	// session that spawned sub-agents has the rest parsed off disk and
+	// discarded. That is a defensible choice and saying nothing about it is
+	// not: on a real four-lane session the report covered six of twelve
+	// requests and called itself Complete.
+	LanesTotal      int
+	LanesReported   int
+	RequestsOmitted int
+}
+
+// Partial reports whether lanes were left out of these figures.
+func (g ContextGap) Partial() bool {
+	return g.LanesTotal > g.LanesReported && g.LanesReported > 0
 }
 
 // Overstated reports whether content is known to have left this context.
@@ -174,11 +190,30 @@ func (g ContextGap) OverstatedShare() float64 {
 
 // Note is the one line a reader needs about how far to trust the figures.
 func (g ContextGap) Note() string {
-	if !g.Overstated() {
+	if !g.Overstated() && !g.Partial() {
 		return "Complete: nothing was cleared or compacted in this session, so every " +
 			"block counted here is still in the context."
 	}
 	var b strings.Builder
+	if g.Partial() {
+		// Said first and said plainly. A reader who stops here should still
+		// know these figures are not the whole session.
+		b.WriteString("PARTIAL: this is one lane of ")
+		b.WriteString(shortCount(g.LanesTotal))
+		b.WriteString(". ")
+		b.WriteString(plural(g.LanesTotal-g.LanesReported, "sub-agent lane"))
+		if g.RequestsOmitted > 0 {
+			b.WriteString(", carrying ")
+			b.WriteString(plural(g.RequestsOmitted, "request"))
+		}
+		b.WriteString(", are not counted above.")
+		if g.Overstated() {
+			b.WriteString(" ")
+		}
+	}
+	if !g.Overstated() {
+		return b.String()
+	}
 	b.WriteString("OVERSTATED: content left this context and the attribution above does not subtract it.")
 	if g.ClearedTokens > 0 {
 		b.WriteString(" The provider cleared ")
@@ -253,6 +288,19 @@ func plural(n int, word string) string {
 // overstates without knowing it.
 func MeasureGap(session *transcript.Session, lane *transcript.Lane, attributed int) ContextGap {
 	g := ContextGap{AttributedTokens: attributed}
+	// Counted here rather than by the caller: the session and the reported
+	// lane are both already arguments, so asking a caller to supply the
+	// numbers would ask it to remember what this function can see, and one
+	// caller would be updated while three were not.
+	if session != nil && lane != nil {
+		g.LanesTotal = len(session.Lanes)
+		g.LanesReported = 1
+		for _, l := range session.Lanes {
+			if l != lane {
+				g.RequestsOmitted += len(l.Requests)
+			}
+		}
+	}
 	// Recorded compactions beat inferred ones. The client writes the sizes it
 	// dropped, so a prompt that shrank is only evidence when nothing better is
 	// on disk - and until now nothing better was ever read.
