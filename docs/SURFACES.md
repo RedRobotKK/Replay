@@ -92,7 +92,7 @@ not on the map.
 | out | `api.github.com`, `github.com` | **installer only**, never the binary | **Verified** |
 | out | corpus endpoint | **None. There is no such request, and no flag that could make one.** `corpus` takes directories and defines zero flags, so `replay corpus --submit` exits with `flag provided but not defined: -submit`. The submission path in ADR-0007 and ADR-0008 is a design, not a build | **Verified absent** |
 | in | `127.0.0.1:4000` `/` | the proxy itself. Loopback enforced at construction | **Verified**: a non-loopback `-listen` refuses to start |
-| in | `/replay/status` | JSON per-session totals. `Origin` and `Sec-Fetch-Mode` refused | **Verified** |
+| in | `/replay/status` | JSON per-session totals, plus per-lane breakdowns under `context_by_lane`, `re_reads_by_lane` and `what_if_by_lane`. `Origin` and `Sec-Fetch-Mode` refused | **Verified** |
 | in | `/replay/metrics` | Prometheus text, aggregate only | Read |
 | in | `/replay/healthz` | **no origin check, no token check** | **Verified as a gap** |
 | out | `$ANTHROPIC_BASE_URL/replay/healthz` | `doctor` only, probing for a running proxy. No credential, 64-byte read, timeout | **Verified**, and missing from the first version of this page |
@@ -241,3 +241,22 @@ handful of parallel sub-agents. Behaviour under a large fleet sharing one proxy 
 ---
 
 [Documentation index](README.md) · [Repository README](../README.md)
+
+## `/replay/status` gained three keys on 2026-09-06, additively
+
+`context`, `re_reads` and `what_if` used to hold whichever agent lane finished
+last, which made them non-deterministic in any session running sub-agents. They
+now hold the **main loop's own** figures, every time, and the per-lane
+breakdowns arrive beside them as `context_by_lane`, `re_reads_by_lane` and
+`what_if_by_lane`, each keyed by agent ID with `""` for the main loop.
+
+**The old keys kept their shapes on purpose.** This page marks `/replay/status`
+Verified and it carries no schema version, so a consumer has nothing to branch
+on. Turning `context` from an array into an object would have broken every
+reader silently. Anything already parsing these three keys keeps working and
+starts getting a defined answer instead of a racy one.
+
+The ledger's `cache` object also gained `cause_detail`, free text naming what
+changed in a prefix. `cause` stays a bounded vocabulary because it is emitted
+as the `replay_cache_break_total{cause=...}` label; `cause_detail` is never a
+label and can name thirty-four tools.

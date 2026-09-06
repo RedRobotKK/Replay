@@ -813,8 +813,18 @@ func TestPrefixChangeIsNamedAsBreakCause(t *testing.T) {
 	waitLedger(t, dir, 1)
 	postTurn(t, base, growingBody("be verbose", 2))
 	recs := waitLedger(t, dir, 2)
-	if recs[1].Cache == nil || recs[1].Cache.Cause != cachemodel.CausePrefixChange {
-		t.Fatalf("a changed system prompt must be named as the cause: %+v", recs[1].Cache)
+	// The system prompt changed and the tools did not, so the cause names the
+	// system prompt specifically. It used to be the combined "system prompt or
+	// tool definitions changed", which was true of this case and of every
+	// other one, and so told an operator nothing about which to go and look at.
+	if recs[1].Cache == nil || recs[1].Cache.Cause != cachemodel.CauseSystemChanged {
+		t.Fatalf("a changed system prompt must be named as the cause, and named precisely: %+v",
+			recs[1].Cache)
+	}
+	// And the detail says how far it moved, end to end through a real proxy
+	// rather than only in the unit test's fixture.
+	if !strings.Contains(recs[1].Cache.CauseDetail, "system prompt") {
+		t.Fatalf("the break detail must say what changed: %q", recs[1].Cache.CauseDetail)
 	}
 	if recs[0].PrefixHash == "" || recs[0].PrefixHash == recs[1].PrefixHash {
 		t.Fatalf("prefix hashes must be recorded and differ: %q %q", recs[0].PrefixHash, recs[1].PrefixHash)

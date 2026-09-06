@@ -267,11 +267,23 @@ type BreakCause string
 const (
 	CauseTTLExpired   BreakCause = "cache expired (gap longer than the TTL)"
 	CauseModelChanged BreakCause = "model changed between requests"
+	// CausePrefixChange covers a prefix change where BOTH halves moved, or
+	// where the proxy cannot tell them apart. The two below are the specific
+	// cases and should be preferred whenever the request carries enough to
+	// decide, because this string names a cause that mostly did not happen:
+	// across the 30-lane trial of 2026-09-06, system_bytes never moved once
+	// and every real prefix change was the tool SET changing.
 	CausePrefixChange BreakCause = "system prompt or tool definitions changed"
-	CauseEffortChange BreakCause = "effort or thinking setting changed"
-	CauseHistoryEdit  BreakCause = "an earlier message was edited or removed"
-	CauseRerendered   BreakCause = "client re-rendered history after the system prefix (no edit visible in transcript)"
-	CauseUnknown      BreakCause = "prefix diverged inside the message history at an unknown block"
+	// CauseToolsChanged is the tool definitions alone, which is the common
+	// case in practice: an MCP connector finishing its handshake mid-session
+	// drops WaitForMcpServers and appends that connector's whole tool block.
+	CauseToolsChanged BreakCause = "tool definitions changed"
+	// CauseSystemChanged is the system prompt alone, tools untouched.
+	CauseSystemChanged BreakCause = "system prompt changed"
+	CauseEffortChange  BreakCause = "effort or thinking setting changed"
+	CauseHistoryEdit   BreakCause = "an earlier message was edited or removed"
+	CauseRerendered    BreakCause = "client re-rendered history after the system prefix (no edit visible in transcript)"
+	CauseUnknown       BreakCause = "prefix diverged inside the message history at an unknown block"
 )
 
 // ClassifyBreak decides the causes that usage and timing alone can settle.

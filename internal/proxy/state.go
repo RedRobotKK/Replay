@@ -16,13 +16,51 @@ import (
 // sessionState is what the proxy remembers about one client session so it
 // can classify each new cache read the moment the response arrives and
 // score what other layouts would have cost.
+// laneState is one agent lane's comparison state. A lane is the main loop
+// ("") or one sub-agent, and each carries its own prefix, model and usage.
+type laneState struct {
+	// last is the lane's previous usage, which ClassifyRead measures the next
+	// request against.
+	last transcript.Usage
+	// lastSeen is when the lane last sent, used for the TTL comparison.
+	lastSeen time.Time
+	// model is what the lane last ran, used for the model-change cause.
+	model string
+	// prefixHash is the lane's last prefix, used for the prefix-change cause.
+	prefixHash string
+	// tools and systemBytes are what that prefix was made of, kept so a
+	// change can be described rather than merely reported. Names and sizes
+	// only; no content.
+	tools       []transcript.ToolDef
+	systemBytes int
+	// seen is false until the lane's first request, so an opening request is
+	// classified as ReadFirst rather than measured against nothing.
+	seen bool
+}
+
 type sessionState struct {
 	last       transcript.Usage
 	lastSeen   time.Time
 	model      string
 	prefixHash string
-	tally      analysis.Tally
-	breaks     int
+	// lanes holds the per-lane comparison state, keyed by AgentID with "" for
+	// the main loop.
+	//
+	// Every field in it was once a single session-wide slot, and each one
+	// meant a fan-out session compared one lane against another. The last
+	// lane to write decided what the next lane was measured against, so two
+	// lanes with different prefixes manufactured breaks, overruns and model
+	// changes out of nothing on every interleaved request.
+	//
+	// cachemodel's own vocabulary always said lane: ReadFirst is documented
+	// as "the first request in a lane; nothing to compare against", and the
+	// proxy gated it on a session-wide request count.
+	//
+	// This is the same fix as errorByLane below, which carried the lesson
+	// alone for a long time.
+	lanes  map[string]*laneState
+	tally  analysis.Tally
+	breaks int
 	// prefixChanges counts requests whose system prompt or tool definitions
 	// differed from the request before, which a transcript cannot see.
 	prefixChanges int
@@ -39,9 +77,18 @@ type sessionState struct {
 	// holding the proxy-wide lock through a walk of the whole session.
 	scoreMu sync.Mutex
 	builder *ledger.SessionBuilder
-	whatIf  []WhatIf
-	context []analysis.ContextEntry
-	reReads analysis.ReReads
+	// whatIf, context and reReads are keyed by AgentID with "" for the main
+	// loop, for the same reason errorByLane and prefixByLane are.
+	//
+	// rescore analyses ONE lane, the one the finished record belongs to, and
+	// these three held its answer in a single slot. In a fan-out session that
+	// meant the last lane to finish decided what the status endpoint reported
+	// for the whole session, and a quiet sub-agent erased a busy one. That is
+	// the sentence already written against errorByLane below; it was applied
+	// to one field out of four.
+	whatIf  map[string][]WhatIf
+	context map[string][]analysis.ContextEntry
+	reReads map[string]analysis.ReReads
 	// errorByLane is the estimated prompt cost of error content carried by
 	// each agent lane, from the same analysis replay prints, keyed by AgentID
 	// with "" for the main loop.
@@ -201,21 +248,29 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 	cur := *rec.Response.Usage
 	st := s.session(rec.SessionID)
 	var out *ledger.CacheOutcome
-	prefixChanged := st.tally.Requests > 0 && rec.PrefixHash != st.prefixHash
+	// Everything below compares this lane against its own previous request,
+	// never against the session's. See sessionState.lanes.
+	ln := st.lane(rec.AgentID)
+	prefixChanged := ln.seen && rec.PrefixHash != ln.prefixHash
 	if prefixChanged {
 		st.prefixChanges++
 	}
-	if st.tally.Requests > 0 {
-		outcome, expected := cachemodel.ClassifyRead(st.last, cur)
+	if ln.seen {
+		outcome, expected := cachemodel.ClassifyRead(ln.last, cur)
 		out = &ledger.CacheOutcome{Outcome: outcome.String(), Expected: expected}
 		if outcome == cachemodel.ReadBroken {
 			out.Deficit = expected - cur.CacheRead
-			out.Cause = s.breakCause(st, rec, prefixChanged)
+			out.Cause, out.CauseDetail = s.breakCause(ln, rec, prefixChanged)
 			st.breaks++
 			s.breaksTotal++
 			s.breakCauses[out.Cause]++
 		}
 	}
+	// The lane's own comparison state, and the session's own summary state.
+	// The session copies stay for the status endpoint and for LRU eviction;
+	// nothing is classified against them any more.
+	ln.last, ln.lastSeen, ln.model, ln.prefixHash, ln.seen = cur, rec.Timestamp, rec.Model, rec.PrefixHash, true
+	ln.tools, ln.systemBytes = rec.Prompt.Tools, rec.Prompt.SystemBytes
 	st.last, st.lastSeen, st.model, st.prefixHash = cur, rec.Timestamp, rec.Model, rec.PrefixHash
 	before := st.tally.CostUSD
 	st.tally.Add(cur, rec.Model)
@@ -290,6 +345,34 @@ func (s *stats) setLaneErrors(sessionID, agentID string, tokens int) {
 
 // session finds or creates a session's state, evicting the least recently
 // seen ones past maxSessions. Callers hold the lock.
+// lane returns a lane's comparison state, creating it on first sight.
+func (st *sessionState) lane(agentID string) *laneState {
+	if st.lanes == nil {
+		st.lanes = map[string]*laneState{}
+	}
+	ln, ok := st.lanes[agentID]
+	if !ok {
+		ln = &laneState{}
+		st.lanes[agentID] = ln
+	}
+	return ln
+}
+
+// contextFor returns one lane's context breakdown, "" being the main loop.
+func (st *sessionState) contextFor(agentID string) []analysis.ContextEntry {
+	return st.context[agentID]
+}
+
+// reReadsFor returns one lane's re-read figures.
+func (st *sessionState) reReadsFor(agentID string) analysis.ReReads {
+	return st.reReads[agentID]
+}
+
+// whatIfFor returns one lane's candidate-policy scoring.
+func (st *sessionState) whatIfFor(agentID string) []WhatIf {
+	return st.whatIf[agentID]
+}
+
 func (s *stats) session(id string) *sessionState {
 	st, ok := s.sessions[id]
 	if ok {
@@ -348,15 +431,19 @@ func (s *stats) trialSession(sessionID string) (*policy.ContextEdit, time.Time, 
 // breakCause names a break from what the proxy can see. A changed prefix
 // is certain, since the proxy hashed both requests; the usage-and-timing
 // causes come next; the rest is left to the offline diff.
-func (s *stats) breakCause(st *sessionState, rec *ledger.Record, prefixChanged bool) cachemodel.BreakCause {
+func (s *stats) breakCause(ln *laneState, rec *ledger.Record, prefixChanged bool) (cachemodel.BreakCause, string) {
 	if prefixChanged {
-		return cachemodel.CausePrefixChange
+		// The request carries the tool list, so the specific answer is in
+		// hand. Reporting "system prompt or tool definitions changed" while
+		// holding it is the silence this codebase keeps finding.
+		d := diffPrefix(ln.tools, rec.Prompt.Tools, ln.systemBytes, rec.Prompt.SystemBytes)
+		return d.cause(), d.detail()
 	}
-	cause, ok := cachemodel.ClassifyBreak(st.last, *rec.Response.Usage, st.model, rec.Model, rec.Timestamp.Sub(st.lastSeen))
+	cause, ok := cachemodel.ClassifyBreak(ln.last, *rec.Response.Usage, ln.model, rec.Model, rec.Timestamp.Sub(ln.lastSeen))
 	if !ok {
-		return cachemodel.CauseUnknown
+		return cachemodel.CauseUnknown, ""
 	}
-	return cause
+	return cause, ""
 }
 
 // rescore adds the record to the session's analysis shape, simulates the
@@ -400,12 +487,23 @@ func (s *stats) rescore(rec *ledger.Record) (string, analysis.ReReads) {
 		errorTokens += e.PromptTokens.Value
 	}
 	s.mu.Lock()
-	st.whatIf = rows
-	st.reReads = report.ReReads
+	if st.whatIf == nil {
+		st.whatIf = map[string][]WhatIf{}
+	}
+	if st.context == nil {
+		st.context = map[string][]analysis.ContextEntry{}
+	}
+	if st.reReads == nil {
+		st.reReads = map[string]analysis.ReReads{}
+	}
+	// Each replaces this lane's figure rather than adding to it: the report is
+	// that lane's running total, not a delta. Same rule as errorByLane below.
+	st.whatIf[rec.AgentID] = rows
+	st.reReads[rec.AgentID] = report.ReReads
 	// Blame was computed and discarded here. It is the only attribution of what
 	// a session's context is made of, and the proxy is the one place it can be
 	// produced from provider usage rather than from the byte-to-token fit.
-	st.context = analysis.EnteredContext(report.Blame)
+	st.context[rec.AgentID] = analysis.EnteredContext(report.Blame)
 	if st.errorByLane == nil {
 		st.errorByLane = map[string]int{}
 	}
@@ -479,8 +577,23 @@ type SessionSummary struct {
 	// path already in context, before and after the provider's first clear.
 	// Context is what entered this session's context, by tool. It does not
 	// subtract cleared or compacted content; see analysis.ContextEntry.
+	// Context, ReReads and WhatIf report the MAIN LOOP's own figures.
+	//
+	// They used to hold whichever lane finished last, which made them
+	// non-deterministic in any fan-out session. They keep their published
+	// array and object shapes because /replay/status is a documented surface
+	// in docs/SURFACES.md carrying no schema version, so a consumer has
+	// nothing to branch on and a changed shape would break it silently. What
+	// changed is that they now mean something: the main loop, every time.
+	//
+	// The per-lane breakdown arrives beside them, additively.
 	Context []analysis.ContextEntry `json:"context,omitempty"`
-	ReReads analysis.ReReads        `json:"re_reads"`
+	// ContextByLane carries every lane's breakdown keyed by AgentID, with ""
+	// for the main loop. This is the field a fan-out session needs.
+	ContextByLane map[string][]analysis.ContextEntry `json:"context_by_lane,omitempty"`
+	ReReadsByLane map[string]analysis.ReReads        `json:"re_reads_by_lane,omitempty"`
+	WhatIfByLane  map[string][]WhatIf                `json:"what_if_by_lane,omitempty"`
+	ReReads       analysis.ReReads                   `json:"re_reads"`
 	// WhatIf scores candidate layouts over the session so far; as-run is
 	// first. Nothing here was sent to the provider.
 	WhatIf []WhatIf `json:"what_if,omitempty"`
@@ -564,7 +677,7 @@ func (s *stats) status() Status {
 				out.Trial.Treated++
 			}
 		}
-		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, Context: st.context, ReReads: st.reReads, WhatIf: st.whatIf, ErrorShare: share(st.totalErrorTokens(), st.tally.PromptTokens), Masked: st.masked, Rehydrated: st.rehydrated, RehydrationDenied: st.denied, Held: st.held, HeldMS: st.heldMS})
+		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, Context: st.contextFor(""), ContextByLane: st.context, ReReads: st.reReadsFor(""), ReReadsByLane: st.reReads, WhatIf: st.whatIfFor(""), WhatIfByLane: st.whatIf, ErrorShare: share(st.totalErrorTokens(), st.tally.PromptTokens), Masked: st.masked, Rehydrated: st.rehydrated, RehydrationDenied: st.denied, Held: st.held, HeldMS: st.heldMS})
 	}
 	sort.Slice(out.Sessions, func(i, j int) bool { return out.Sessions[i].LastSeen.After(out.Sessions[j].LastSeen) })
 	return out
