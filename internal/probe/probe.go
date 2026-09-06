@@ -80,6 +80,7 @@ type Search struct {
 	// writes are the cached sizes observed, for inferring block granularity.
 	writes           []int
 	nonDeterministic bool
+	stalled          bool
 }
 
 // New starts a search.
@@ -99,7 +100,7 @@ func New(cfg Config) *Search {
 // them: the interval is within the resolution, the probe budget is spent, or
 // the answers have contradicted each other.
 func (s *Search) Next() int {
-	if s.contradicted || s.nonDeterministic || !s.usableRange() {
+	if s.contradicted || s.nonDeterministic || s.stalled || !s.usableRange() {
 		return 0
 	}
 	if s.cfg.MaxProbes > 0 && s.probes >= s.cfg.MaxProbes {
@@ -124,7 +125,21 @@ func (s *Search) Next() int {
 	// count so a run is reproducible.
 	mid := s.lo + (s.hi-s.lo)/2
 	if span := s.hi - s.lo; span > 8 {
-		dither := ditherOffsets[s.probes%len(ditherOffsets)]
+		// Keyed on the bracket, not the probe count.
+		//
+		// The first live run found this: with the offset varying per probe,
+		// every confirmation of the same decision landed on a different size —
+		// 4099, 4091, 4103, 4093 — so the repeat count never reached Confirm
+		// and the bracket never moved. Nine of ten probes bought one decision,
+		// and a probe that did cache at 2044 was discarded as unconfirmed
+		// while the report said "at most 4099".
+		//
+		// Keying on the bracket makes the offset constant for as long as the
+		// decision is unresolved, so confirmations agree on a size, while
+		// still varying between decisions — which is all the granularity
+		// inference needs. 3,072 simulated cases missed this because the sweep
+		// runs Confirm at 1, where a single answer always resolves.
+		dither := ditherOffsets[(s.lo+s.hi)%len(ditherOffsets)]
 		if mid+dither > s.lo && mid+dither < s.hi {
 			mid += dither
 		}
@@ -172,9 +187,24 @@ func (s *Search) Record(r Result) error {
 		return nil
 	}
 
+	beforeLo, beforeHi := s.lo, s.hi
 	if r.Wrote {
-		if r.PrefixTokens < s.hi {
-			s.hi = r.PrefixTokens
+		// The provider's own count, not the size we asked for. Probe filler is
+		// built from a chars-per-token approximation, so the requested size is
+		// an estimate; `cache_creation_input_tokens` is the number of tokens
+		// actually cached. Recording the estimate would make every published
+		// bracket only as good as that approximation — and the first live
+		// fable-5-1 run would have declared a documented 512 refuted on the
+		// strength of a guess.
+		//
+		// There is no equivalent for the lower bound: a request that cached
+		// nothing reports no token count, so that side stays estimated.
+		bound := r.CachedTokens
+		if bound <= 0 {
+			bound = r.PrefixTokens
+		}
+		if bound < s.hi {
+			s.hi = bound
 		}
 	} else if r.PrefixTokens > s.lo {
 		s.lo = r.PrefixTokens
@@ -183,6 +213,22 @@ func (s *Search) Record(r Result) error {
 	// have crossed, no single floor explains them.
 	if s.lo >= s.hi {
 		s.contradicted = true
+		return nil
+	}
+
+	// A confirmed decision that moved neither bound cannot be improved on.
+	//
+	// This happens whenever the provider rounds a prefix up to a block: ask
+	// for 131 tokens against a 128-token block and it caches 256, so the upper
+	// bound stays at 256 while nothing caches below it to move the lower one.
+	// The proposal is a function of the bracket, so the next probe is the same
+	// probe and the answer is the same answer — forever, at full price.
+	//
+	// The bracket is then as tight as the provider's granularity allows, which
+	// is a result rather than a failure, and the search says so instead of
+	// spending the rest of its budget rediscovering it.
+	if s.lo == beforeLo && s.hi == beforeHi {
+		s.stalled = true
 	}
 	return nil
 }
@@ -232,6 +278,12 @@ func (s *Search) StoppedEarly() bool { return s.stoppedEarly }
 // an error — block granularity, a per-account difference, or a change during
 // the run — and it is more interesting than the number would have been.
 func (s *Search) Contradicted() bool { return s.contradicted }
+
+// Stalled reports a bracket that stopped narrowing before reaching the
+// requested resolution, because the provider's own granularity will not
+// express a finer answer. The bracket is valid; it is just as tight as it can
+// get.
+func (s *Search) Stalled() bool { return s.stalled }
 
 // Probes is how many billable requests have decided something. An
 // inconclusive probe is not counted: it cost money and taught nothing, and

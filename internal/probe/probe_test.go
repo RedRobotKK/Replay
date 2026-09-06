@@ -94,11 +94,20 @@ func TestB4_NeverExceedsTheAuthorisedSpend(t *testing.T) {
 	// PASS: the search stops when the next probe would cost more than remains.
 	// FAIL: one probe over. This spends the operator's money at their provider,
 	// and a cap that is approximately respected is not a cap.
+	// Each answer must move a bound, or the search stops because the bracket
+	// stalled rather than because the budget ran out — and this test is about
+	// the budget. Recording the same result repeatedly is a stall by
+	// definition, which is what B22 covers.
 	s := New(Config{Min: 0, Max: 65536, Resolution: 1, MaxProbes: 3})
 	n := 0
-	for s.Next() != 0 {
+	for {
+		p := s.Next()
+		if p == 0 {
+			break
+		}
 		n++
-		s.Record(Result{PrefixTokens: 1000, Wrote: true})
+		// Always caches, so every answer lowers the upper bound.
+		s.Record(Result{PrefixTokens: p, Wrote: true, CachedTokens: p})
 		if n > 10 {
 			t.Fatal("MaxProbes was ignored")
 		}
@@ -310,8 +319,15 @@ func TestB12_RelativeResolutionRespectsGranularity(t *testing.T) {
 		t.Errorf("granularity = %d, want 1024", g)
 	}
 	lo, hi := s.Bracket()
-	if hi-lo < 1024 && hi-lo > 0 {
-		t.Errorf("bracket (%d, %d] is narrower than one block; that precision is not observable", lo, hi)
+	// One block, less the dither. The stop width is floored by granularity, but
+	// the final bracket lands wherever the last dithered probe put it, so it
+	// can sit a few tokens inside a block boundary. Allowing the dither's own
+	// range keeps the assertion about the block size rather than about the
+	// offset table.
+	const maxDither = 11
+	if hi-lo > 0 && hi-lo < 1024-2*maxDither {
+		t.Errorf("bracket (%d, %d] is %d wide, materially narrower than one 1024-token block; that precision is not observable",
+			lo, hi, hi-lo)
 	}
 }
 
@@ -429,20 +445,26 @@ func contains(s, sub string) bool {
 //	               not in has published a false claim.
 //	TERMINATION    every case converges. A search that does not stop spends
 //	               money until the budget runs out.
-//	EFFICIENCY     no case exceeds ceil(log2(span/resolution)) + 3 decisions.
+//	EFFICIENCY     no case exceeds ceil(log2(span/resolution)) + 4 decisions.
 //	               Bisection is optimal on a monotone predicate, so the base is
 //	               log2; more than a small constant over it means the
 //	               implementation is not bisecting.
 //
-//	               The slack is 3 rather than 2 for a measured reason. Dithering
-//	               the probe points off the power-of-two grid costs at most one
-//	               extra halving, and this sweep prices it: with dither
-//	               disabled, 0 of 3072 cases exceed +2; with it enabled, 4 do —
-//	               0.13%, all at block size 1 and the finest resolution. That is
-//	               the price of a sound granularity inference, which is worth
-//	               one probe in eight hundred: without dithering the GCD reports
-//	               an artifact of how the search chose its own probe points,
-//	               confidently and always too large.
+//	               The slack is measured, not chosen. Dithering the probe points
+//	               off the power-of-two grid costs extra halvings, and a sweep
+//	               of the whole space puts the worst case at exactly +4 — one
+//	               instance, span 1024, block 1, resolution 1, floor 625, which
+//	               took 14 decisions against a log2 base of 10. With dither
+//	               disabled nothing exceeds +2.
+//
+//	               That is the price of a sound granularity inference and it is
+//	               worth paying: without dithering, the GCD reports an artifact
+//	               of how the search chose its own probe points rather than a
+//	               fact about the provider, confidently and always too large.
+//
+//	               If a change makes this exceed +4, measure the new worst case
+//	               and move the number deliberately. Widening it to make a red
+//	               test green is how a benchmark stops meaning anything.
 //	TIGHTNESS      the final bracket is within the resolution, or the search
 //	               says why not.
 //
@@ -484,12 +506,21 @@ func TestSweep_ExhaustiveAgainstASimulatedProvider(t *testing.T) {
 							break
 						}
 						decisions++
-						// The simulated provider: caches at or above the
-						// floor, and rounds every write up to a block.
-						wrote := n >= floor
+						// The simulated provider, in one coherent unit.
+						//
+						// The prefix we ask for is an estimate; what the
+						// provider actually sees is that estimate rounded to a
+						// block, and it is THAT size which decides caching and
+						// which the response reports. An oracle that decides
+						// on the requested size but reports the rounded one
+						// mixes two quantities, and the search — which now
+						// takes its upper bound from the reported figure —
+						// then brackets against a floor expressed in the other.
+						actual := ((n + block - 1) / block) * block
+						wrote := actual >= floor
 						cached := 0
 						if wrote {
-							cached = ((n + block - 1) / block) * block
+							cached = actual
 						}
 						if err := s.Record(Result{PrefixTokens: n, Wrote: wrote, CachedTokens: cached}); err != nil {
 							failures = append(failures, failure{floor, block, span, "unexpected record error"})
@@ -499,14 +530,17 @@ func TestSweep_ExhaustiveAgainstASimulatedProvider(t *testing.T) {
 					totalDecisions += decisions
 
 					lo, hi := s.Bracket()
-					// SOUNDNESS.
+					// SOUNDNESS. The lower bound is in requested tokens and the
+					// upper in the provider's reported count, which is the
+					// honest asymmetry: only the write side is measured. The
+					// floor must sit between them.
 					if lo >= floor || hi < floor {
 						failures = append(failures, failure{floor, block, span,
 							"bracket does not contain the floor"})
 						continue
 					}
 					// EFFICIENCY.
-					budget := 3
+					budget := 4
 					for w := span; w > res; w /= 2 {
 						budget++
 					}
@@ -686,4 +720,138 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// B20: confirmations land on the same size, so a decision can be reached.
+//
+// Found by the first live run against a real provider. With the dither keyed
+// on the probe count, every confirmation of one decision landed on a different
+// size, the repeat count never reached Confirm, and nine of ten probes bought
+// a single decision. The sweep missed it entirely because it runs Confirm at
+// 1, where one answer always resolves — a whole parameter left at its default
+// across 3,072 cases.
+//
+// PASS: with Confirm > 1, the search still converges within a bisection budget.
+// FAIL: burning probes on sizes that can never accumulate agreement.
+func TestB20_ConfirmationsAgreeOnASize(t *testing.T) {
+	for _, confirm := range []int{2, 3} {
+		s := New(Config{Min: 0, Max: 8192, Resolution: 256, Confirm: confirm})
+		const floor = 1024
+		sizes := map[int]int{}
+		probes := 0
+		for i := 0; ; i++ {
+			if i > 200 {
+				t.Fatalf("confirm %d: did not converge", confirm)
+			}
+			n := s.Next()
+			if n == 0 {
+				break
+			}
+			probes++
+			sizes[n]++
+			s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
+		}
+		lo, hi := s.Bracket()
+		if lo >= floor || hi < floor {
+			t.Errorf("confirm %d: bracket (%d, %d] excludes the floor %d", confirm, lo, hi, floor)
+		}
+		// Bisecting 8192 to 256 needs 5 decisions; each costs `confirm`
+		// probes. Anything beyond that plus slack means probes are being spent
+		// on sizes that never accumulate agreement.
+		budget := (5 + 2) * confirm
+		if probes > budget {
+			t.Errorf("confirm %d: %d probes for 5 decisions, budget %d — sizes are not repeating",
+				confirm, probes, budget)
+		}
+		// Every size probed must have been asked exactly `confirm` times, or
+		// it was asked once and abandoned.
+		for size, n := range sizes {
+			if n != confirm && n != 1 {
+				t.Errorf("confirm %d: size %d asked %d times, want %d", confirm, size, n, confirm)
+			}
+		}
+	}
+}
+
+// B21: the upper bound uses the provider's own count, not our estimate.
+//
+// Found by the first live runs. The probe builds filler from a chars-per-token
+// approximation, so the size it asked for is a guess — but the response
+// carries `cache_creation_input_tokens`, which IS the number of tokens cached.
+// Recording the guess when the exact figure is in hand makes every published
+// bracket only as good as the approximation, and the first fable-5-1 run would
+// have declared a documented 512 refuted on the strength of an estimate.
+//
+// The asymmetry is real and stays: a request that cached nothing reports no
+// token count, so the lower bound has only the estimate behind it.
+//
+// PASS: the upper bound is the reported cached size; the lower bound is the
+// requested size.
+// FAIL: an upper bound denominated in a quantity nobody measured.
+func TestB21_TheUpperBoundIsTheProvidersOwnCount(t *testing.T) {
+	s := New(Config{Min: 0, Max: 8192, Resolution: 64})
+	// Asked for 1000, and the provider says it actually cached 1177.
+	if err := s.Record(Result{PrefixTokens: 1000, Wrote: true, CachedTokens: 1177}); err != nil {
+		t.Fatal(err)
+	}
+	_, hi := s.Bracket()
+	if hi != 1177 {
+		t.Errorf("upper bound = %d, want 1177: the provider's count, not our estimate of 1000", hi)
+	}
+
+	// A write with no reported count falls back to the estimate, because
+	// something is better than nothing — but only then.
+	s2 := New(Config{Min: 0, Max: 8192, Resolution: 64})
+	_ = s2.Record(Result{PrefixTokens: 1000, Wrote: true})
+	if _, h := s2.Bracket(); h != 1000 {
+		t.Errorf("with no reported count the estimate is all there is; got %d", h)
+	}
+
+	// The lower bound has only the estimate: a request that cached nothing
+	// reports no token count at all.
+	s3 := New(Config{Min: 0, Max: 8192, Resolution: 64})
+	_ = s3.Record(Result{PrefixTokens: 900, Wrote: false})
+	if lo, _ := s3.Bracket(); lo != 900 {
+		t.Errorf("lower bound = %d, want the requested 900", lo)
+	}
+}
+
+// B22: a bracket that cannot narrow further stops, rather than paying to
+// rediscover that.
+//
+// Found by making the sweep's oracle unit-consistent. When a provider rounds a
+// prefix up to a block, asking for 131 tokens against a 128-token block caches
+// 256 — so the upper bound sticks at 256 while nothing caches below it to move
+// the lower one. The proposal is a function of the bracket, so the same probe
+// is proposed and the same answer returned, forever, at full price.
+//
+// PASS: the search stops and reports the stall; the bracket still contains the
+// floor.
+// FAIL: looping, which in production is an unbounded bill for no information.
+func TestB22_AStalledBracketStops(t *testing.T) {
+	const block, floor = 128, 1
+	s := New(Config{Min: 0, Max: 1024, Resolution: 1})
+	probes := 0
+	for i := 0; ; i++ {
+		if i > 100 {
+			t.Fatal("a bracket that cannot narrow must stop, not spend the budget rediscovering it")
+		}
+		n := s.Next()
+		if n == 0 {
+			break
+		}
+		probes++
+		actual := ((n + block - 1) / block) * block
+		_ = s.Record(Result{PrefixTokens: n, Wrote: actual >= floor, CachedTokens: actual})
+	}
+	if !s.Stalled() {
+		t.Error("a search that stopped because the provider's granularity will not express a finer answer must say so")
+	}
+	lo, hi := s.Bracket()
+	if lo >= floor || hi < floor {
+		t.Errorf("bracket (%d, %d] excludes the floor %d", lo, hi, floor)
+	}
+	if probes > 12 {
+		t.Errorf("%d probes before noticing the bracket had stopped moving", probes)
+	}
 }

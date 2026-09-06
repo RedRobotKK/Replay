@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/RedRobotKK/Replay/internal/probe"
 )
@@ -32,6 +33,7 @@ func runProbe(args []string, stdout, stderr io.Writer) error {
 	maxProbes := fs.Int("max-probes", 16, "how many billable requests this run may make")
 	confirm := fs.Int("confirm", 2, "agreeing answers required before a boundary is believed")
 	execute := fs.Bool("execute", false, "actually send the probes; without this, only the plan is printed")
+	yes := fs.Bool("yes", false, "with --execute, skip the confirmation. For scripts that meant it")
 	if err := parseArgs(fs, args, stdout); err != nil {
 		return err
 	}
@@ -65,7 +67,14 @@ func runProbe(args []string, stdout, stderr io.Writer) error {
 			"and visible in the process table")
 	}
 
-	fmt.Fprintf(stdout, "probing %s at %s\n\n", *model, base)
+	// Confirm before spending. The plan is printed first so the answer is
+	// informed rather than reflexive.
+	r.Plan(cfg, *model)
+	if !confirmSpend(os.Stdin, stdout, fmt.Sprintf("%d billable requests to %s", cfg.MaxProbes, base), *yes) {
+		return fmt.Errorf("not confirmed; nothing was sent")
+	}
+
+	fmt.Fprintf(stdout, "\nprobing %s at %s\n\n", *model, base)
 	s, err := r.Run(cfg, *model)
 	if s != nil {
 		reportProbe(stdout, s)
@@ -92,8 +101,20 @@ func reportProbe(out io.Writer, s *probe.Search) {
 	}
 
 	fmt.Fprintf(out, "floor        above %d, at most %d tokens\n", lo, hi)
-	if g := s.Granularity(); g > 0 {
+	if g := s.Granularity(); g > 1 {
 		fmt.Fprintf(out, "granularity  writes land on %d-token blocks (inferred from a GCD, not measured)\n", g)
+	} else if g == 1 {
+		// A GCD of one is the absence of a finding, not a finding of one-token
+		// blocks. Printing it as though a block size had been established
+		// would be a claim the evidence does not support.
+		fmt.Fprintf(out, "granularity  no common block size in what was cached; none inferred\n")
+	}
+	if s.Stalled() {
+		fmt.Fprintf(out, "\nThe bracket stopped narrowing before reaching the resolution asked for,\n"+
+			"and further probes would buy nothing. Two things can cause that and this run\n"+
+			"cannot tell them apart: the provider rounding a prefix up to a block, or the\n"+
+			"gap between the prefix size asked for and the size it actually became. Either\n"+
+			"way the bracket above is as tight as this method reaches.\n")
 	}
 	if s.StoppedEarly() {
 		fmt.Fprintf(out, "\nThe budget ran out before the bracket reached the resolution asked for, so it\n"+
@@ -101,4 +122,35 @@ func reportProbe(out io.Writer, s *probe.Search) {
 	}
 	fmt.Fprintf(out, "\nThis is a bracket, not a value. The exact floor inside it was never tested,\n"+
 		"and reporting a point would claim precision the probes did not buy.\n")
+}
+
+// confirmSpend asks before creating billable traffic.
+//
+// Only the whole word "yes" proceeds. A bare "y" is excluded on purpose: it is
+// one keystroke from a reflex, and this spends the operator's money at their
+// provider. Typing the word is the point of asking.
+//
+// End of input is a refusal, never consent. A pipe, a cron job or a CI step
+// closes stdin immediately, and reading that as agreement would make every
+// unattended invocation spend money. `--yes` is how a script says it meant it,
+// and with it nothing is read and nothing is printed — a script that passed
+// --yes precisely so it would not be asked must not then hang on a read.
+func confirmSpend(in io.Reader, out io.Writer, what string, yes bool) bool {
+	if yes {
+		return true
+	}
+	fmt.Fprintf(out, "\nThis will send %s. Type yes to continue: ", what)
+
+	buf := make([]byte, 64)
+	n, _ := in.Read(buf)
+	answer := strings.ToLower(strings.TrimSpace(string(buf[:n])))
+	if answer == "yes" {
+		return true
+	}
+	if answer == "" {
+		fmt.Fprintf(out, "\nNo answer, so nothing was sent. Pass --yes to run unattended.\n")
+		return false
+	}
+	fmt.Fprintf(out, "\nNot confirmed, so nothing was sent. Only \"yes\" proceeds; pass --yes to run unattended.\n")
+	return false
 }
