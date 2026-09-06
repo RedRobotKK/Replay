@@ -24,18 +24,6 @@ import (
 // lowercased copy is a weaker string and should not be substituted for it.
 const fundingAddress = "0x585ef883e750694E4ba1463bc20820e9C4fBF369"
 
-// The network is part of the address for practical purposes. USDC exists on
-// several chains under the same address, they are not interchangeable, and
-// naming the wrong one loses somebody's money.
-const fundingNetwork = "Avalanche C-Chain"
-
-// Bitcoin, P2SH. Base58Check verified 2026-09-05 with a decoder self-tested on
-// known-good addresses first. Base58 has no 0, O, I or l precisely so that a
-// human transcribing it cannot produce a valid-looking wrong address — but a
-// machine editing a file has no such difficulty, which is why this is pinned
-// too.
-const fundingAddressBTC = "3HzfvNb1iKjeKsRMgMSttP1oqJzyHULhGu"
-
 // Every address published anywhere in this repository. An EVM-shaped or
 // Bitcoin-shaped string in the documentation must be one of these.
 var fundingAddresses = map[string]string{

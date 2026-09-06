@@ -35,7 +35,7 @@ func main() {
 	// nothing installable can fail here.
 	LoadInstalledRules(os.Stderr)
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "replay:", err)
+		_, _ = fmt.Fprintln(os.Stderr, "replay:", err)
 		os.Exit(exitCode(err))
 	}
 }
@@ -100,12 +100,7 @@ func runDefault(stdout, stderr io.Writer) error {
 		// It matters more since the installer began pointing every new user
 		// at bare `replay` as their first command. On a machine that has
 		// never run Claude Code, this branch IS the first impression.
-		if home != "" {
-			fmt.Fprintf(stderr, "No transcripts found in %s\n",
-				filepath.Join(claudeConfigDir(home), "projects"))
-			_, _ = fmt.Fprint(stderr, "Replay reads Claude Code sessions. If you use a different "+
-				"agent, replay serve proxies any of them.\n\n")
-		}
+		explainNoCorpus(home, stderr)
 		return printUsage(stdout)
 	}
 	if err := runCost(nil, stdout, stderr); err != nil {

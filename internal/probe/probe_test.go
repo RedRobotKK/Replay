@@ -154,7 +154,7 @@ func TestB6_ReportsTheBracketNotAPoint(t *testing.T) {
 			break
 		}
 		if err := s.Record(Result{PrefixTokens: n, Wrote: n >= 1000}); err != nil {
-			t.Fatalf("Record: %v", err)
+			t.Fatalf("Record(%d): %v", n, err)
 		}
 	}
 	lo, hi := s.Bracket()
@@ -176,10 +176,10 @@ func TestB7_AContradictoryProviderIsReported(t *testing.T) {
 	// impossible, and reporting a clean number from dirty data.
 	s := New(Config{Min: 0, Max: 4096, Resolution: 64})
 	if err := s.Record(Result{PrefixTokens: 500, Wrote: true}); err != nil {
-		t.Fatalf("Record: %v", err)
+		t.Fatalf("Record(500): %v", err)
 	}
 	if err := s.Record(Result{PrefixTokens: 2000, Wrote: false}); err != nil {
-		t.Fatalf("Record: %v", err)
+		t.Fatalf("Record(2000): %v", err)
 	}
 	if !s.Contradicted() {
 		t.Error("caching at 500 and not at 2000 cannot both hold for one floor; that must be reported")
@@ -201,7 +201,7 @@ func TestB7_AContradictoryProviderIsReported(t *testing.T) {
 func TestB8_BlockGranularityIsInferred(t *testing.T) {
 	s := New(Config{Min: 0, Max: 65536, Resolution: 1})
 	for _, n := range []int{1024, 2048, 512, 4096} {
-		s.Record(Result{PrefixTokens: n, Wrote: true, CachedTokens: n})
+		_ = s.Record(Result{PrefixTokens: n, Wrote: true, CachedTokens: n})
 	}
 	if g := s.Granularity(); g != 512 {
 		t.Errorf("granularity = %d, want 512 (the GCD of the observed writes)", g)
@@ -235,7 +235,7 @@ func TestB9_TheBoundaryIsConfirmed(t *testing.T) {
 			break
 		}
 		seen[n]++
-		s.Record(Result{PrefixTokens: n, Wrote: n >= 1000, CachedTokens: n})
+		_ = s.Record(Result{PrefixTokens: n, Wrote: n >= 1000, CachedTokens: n})
 	}
 	// The last size probed is the decisive one and must have been asked more
 	// than once.
@@ -256,8 +256,8 @@ func TestB9_TheBoundaryIsConfirmed(t *testing.T) {
 // found.
 func TestB10_ANonDeterministicBoundaryIsAFinding(t *testing.T) {
 	s := New(Config{Min: 0, Max: 4096, Resolution: 64, Confirm: 3})
-	s.Record(Result{PrefixTokens: 1024, Wrote: true, CachedTokens: 1024})
-	s.Record(Result{PrefixTokens: 1024, Wrote: false})
+	_ = s.Record(Result{PrefixTokens: 1024, Wrote: true, CachedTokens: 1024})
+	_ = s.Record(Result{PrefixTokens: 1024, Wrote: false})
 	if !s.NonDeterministic() {
 		t.Error("the same prefix caching once and not the next time must be reported, not resolved by vote")
 	}
@@ -290,7 +290,7 @@ func TestB11_ResolutionCanBeRelative(t *testing.T) {
 			if n == 0 {
 				break
 			}
-			s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
+			_ = s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
 		}
 		lo, hi := s.Bracket()
 		if lo >= floor || hi < floor {
@@ -319,7 +319,7 @@ func TestB12_RelativeResolutionRespectsGranularity(t *testing.T) {
 		}
 		// The provider rounds every write up to a 1024-token block.
 		cached := ((n + 1023) / 1024) * 1024
-		s.Record(Result{PrefixTokens: n, Wrote: n >= 4096, CachedTokens: cached})
+		_ = s.Record(Result{PrefixTokens: n, Wrote: n >= 4096, CachedTokens: cached})
 	}
 	if g := s.Granularity(); g != 1024 {
 		t.Errorf("granularity = %d, want 1024", g)
@@ -653,7 +653,7 @@ func TestB18_DefaultsAndClamps(t *testing.T) {
 		if n == 0 {
 			break
 		}
-		s.Record(Result{PrefixTokens: n, Wrote: n >= 9, CachedTokens: n})
+		_ = s.Record(Result{PrefixTokens: n, Wrote: n >= 9, CachedTokens: n})
 	}
 	if lo, hi := s.Bracket(); lo >= 9 || hi < 9 {
 		t.Errorf("bracket (%d, %d] excludes the floor 9", lo, hi)
@@ -732,7 +732,7 @@ func TestB19_EveryProposalIsStrictlyInsideTheBracket(t *testing.T) {
 						t.Fatalf("span %d res %d floor %d: proposed %d on the boundary of (%d, %d]",
 							span, res, floor, n, lo, hi)
 					}
-					s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
+					_ = s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
 				}
 			}
 		}
@@ -741,13 +741,6 @@ func TestB19_EveryProposalIsStrictlyInsideTheBracket(t *testing.T) {
 		t.Fatalf("only %d proposals checked; the invariant is not being exercised", checked)
 	}
 	t.Logf("checked %d proposals, all strictly interior", checked)
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 // B20: confirmations land on the same size, so a decision can be reached.
@@ -777,7 +770,7 @@ func TestB20_ConfirmationsAgreeOnASize(t *testing.T) {
 			}
 			probes++
 			sizes[n]++
-			s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
+			_ = s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
 		}
 		lo, hi := s.Bracket()
 		if lo >= floor || hi < floor {
@@ -916,7 +909,7 @@ func TestB23_ADocumentedPriorIsTestedFirst(t *testing.T) {
 			break
 		}
 		decisions++
-		s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
+		_ = s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
 	}
 	lo, hi := s.Bracket()
 	if lo >= floor || hi < floor {
@@ -948,7 +941,7 @@ func TestB24_AWrongPriorIsRefutedCheaply(t *testing.T) {
 				break
 			}
 			decisions++
-			s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
+			_ = s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
 		}
 		lo, hi := s.Bracket()
 		if lo >= floor || hi < floor {
@@ -975,7 +968,7 @@ func TestB25_TheFollowUpOnlyFiresWhenThePriorCached(t *testing.T) {
 	if first := s.Next(); first != 512 {
 		t.Fatalf("first probe = %d, want the prior 512", first)
 	}
-	s.Record(Result{PrefixTokens: 512, Wrote: false})
+	_ = s.Record(Result{PrefixTokens: 512, Wrote: false})
 
 	next := s.Next()
 	if next <= 512 {
@@ -1037,7 +1030,7 @@ func TestB27_AnUnusableRangeEstablishesNothing(t *testing.T) {
 				break
 			}
 			probes++
-			s.Record(Result{PrefixTokens: n, Wrote: true, CachedTokens: n})
+			_ = s.Record(Result{PrefixTokens: n, Wrote: true, CachedTokens: n})
 		}
 		if probes != 0 {
 			t.Errorf("%+v: made %d probes against a range that cannot contain a floor", c, probes)
@@ -1080,7 +1073,7 @@ func TestB28_CandidatesAreTestedBeforeTheSpaceBetweenThem(t *testing.T) {
 				break
 			}
 			decisions++
-			s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
+			_ = s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
 		}
 		lo, hi := s.Bracket()
 		if lo >= floor || hi < floor {
@@ -1113,7 +1106,7 @@ func TestB29_ANonCandidateFloorIsStillFound(t *testing.T) {
 				break
 			}
 			decisions++
-			s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
+			_ = s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
 		}
 		lo, hi := s.Bracket()
 		if lo >= floor || hi < floor {
@@ -1166,7 +1159,7 @@ func TestB30_NoSizeIsAskedMoreThanConfirmTimes(t *testing.T) {
 				if n >= floor {
 					cached = n + 2
 				}
-				s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: cached})
+				_ = s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: cached})
 			}
 			for size, count := range seen {
 				if count > confirm {
@@ -1198,8 +1191,8 @@ func TestB30_NoSizeIsAskedMoreThanConfirmTimes(t *testing.T) {
 // FAIL: a bare flag, which throws away the only part worth having.
 func TestB31_AnAnomalyKeepsItsEvidence(t *testing.T) {
 	s := New(Config{Min: 0, Max: 4096, Resolution: 4, Confirm: 3})
-	s.Record(Result{PrefixTokens: 510, Wrote: true, CachedTokens: 512})
-	s.Record(Result{PrefixTokens: 510, Wrote: false})
+	_ = s.Record(Result{PrefixTokens: 510, Wrote: true, CachedTokens: 512})
+	_ = s.Record(Result{PrefixTokens: 510, Wrote: false})
 
 	if !s.NonDeterministic() {
 		t.Fatal("disagreement at one size must be reported")

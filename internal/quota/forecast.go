@@ -40,8 +40,8 @@ type Reading struct {
 	Status string
 }
 
-// Forecast is when the binding window runs out, or why it cannot be said.
-type QuotaForecast struct {
+// Projection is when the binding window runs out, or why it cannot be said.
+type Projection struct {
 	Window      string
 	Util        float64
 	RatePerHour float64
@@ -53,8 +53,8 @@ type QuotaForecast struct {
 }
 
 // Forecast projects the binding window forward from observed readings.
-func Forecast(rs []Reading) QuotaForecast {
-	f := QuotaForecast{}
+func Forecast(rs []Reading) Projection {
+	f := Projection{}
 	if len(rs) == 0 {
 		f.Why = "no quota readings yet; run the proxy and the provider supplies them"
 		return f

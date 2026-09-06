@@ -16,3 +16,15 @@ formatters:
   enable:
     - gofmt
     - goimports
+
+issues:
+  # golangci-lint defaults to showing 3 instances of any one issue and 50 per
+  # linter. That is a display cap, not a filter: the run still passes or fails
+  # on everything it found, but a person reading the output sees a fraction of
+  # it. On this repo the default view showed 38 issues and there were 119.
+  #
+  # A backlog was tracked at "37 golangci issues" against that truncated view
+  # for as long as nobody ran it uncapped. Report everything, so the number in
+  # the release criteria is the number that exists.
+  max-same-issues: 0
+  max-issues-per-linter: 0

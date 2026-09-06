@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -129,6 +130,13 @@ func TestS5_TheFileIsOwnerOnly(t *testing.T) {
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if runtime.GOOS == "windows" {
+		// Windows has no Unix mode bits; Go synthesises 0666 for any writable
+		// file. Asserting against that measures the synthetic value, not who
+		// can read the series, so the assertion is skipped rather than
+		// weakened to something that would pass everywhere and check nothing.
+		t.Skip("file permissions are not expressed as mode bits on this platform")
 	}
 	if perm := info.Mode().Perm(); perm&0o077 != 0 {
 		t.Errorf("mode %04o; the series must not be group- or world-readable", perm)

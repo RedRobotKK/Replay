@@ -162,7 +162,7 @@ func TestL6_AWarmWriteIsNotFloorEvidence(t *testing.T) {
 	}
 
 	// A cold write in the same set is still evidence, and is the only one.
-	mixed := append(append([]Record{}, warm...), rec("claude-opus-5", 2048, 0, 1, "s4"))
+	mixed := append(append([]Record(nil), warm...), rec("claude-opus-5", 2048, 0, 1, "s4"))
 	o := cachemodel.MeasureClaims(EvidenceFrom(mixed, "m1"))["claude-opus-5"].Observed
 	if o == nil || o.UpperBound == nil || *o.UpperBound != 2048 {
 		t.Fatalf("the cold write must set the bound; got %+v", o)

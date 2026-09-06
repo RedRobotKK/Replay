@@ -188,7 +188,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		if len(roots) == 0 {
 			return fmt.Errorf("one or more transcript directories are required: %w", errUsage)
 		}
-		fmt.Fprintf(stderr, "reading %s\n", roots[0])
+		_, _ = fmt.Fprintf(stderr, "reading %s\n", roots[0])
 		args = append(args, roots...)
 		if err := parseArgs(fs, args, stdout); err != nil {
 			return err
@@ -313,11 +313,11 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	if err := cache.save(); err != nil {
 		// A slow next run is the whole consequence, so it is mentioned and
 		// never fatal.
-		fmt.Fprintf(stderr, "note: could not write the transcript index (%v); the next run "+
+		_, _ = fmt.Fprintf(stderr, "note: could not write the transcript index (%v); the next run "+
 			"will be a full scan\n", err)
 	}
 	if warm > 0 {
-		fmt.Fprintf(stderr, "%d transcript(s) reused from the index, %d re-read\n", warm, len(files))
+		_, _ = fmt.Fprintf(stderr, "%d transcript(s) reused from the index, %d re-read\n", warm, len(files))
 	}
 
 	// --share short-circuits every other rendering. A card that also printed
