@@ -341,6 +341,13 @@ func TestO8_TheFileIsOwnerOnlyAndNeverOverwrites(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if runtime.GOOS == "windows" {
+			// No Unix mode bits here: Go synthesises 0666 for any writable
+			// file, so this would assert against a value the platform never
+			// set. Skipped rather than loosened to something that passes
+			// everywhere and checks nothing.
+			t.Skip("file permissions are not mode bits on this platform")
+		}
 		if perm := info.Mode().Perm(); perm != 0o600 {
 			t.Errorf("%s is %04o, want 0600", path, perm)
 		}

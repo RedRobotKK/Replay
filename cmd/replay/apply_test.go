@@ -154,6 +154,13 @@ func TestApplyCreatesSettingsWhenAbsent(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("file permissions are not POSIX on this platform; see docs/SURFACES.md")
 	}
+	if runtime.GOOS == "windows" {
+		// No Unix mode bits here: Go synthesises 0666 for any writable
+		// file, so this would assert against a value the platform never
+		// set. Skipped rather than loosened to something that passes
+		// everywhere and checks nothing.
+		t.Skip("file permissions are not mode bits on this platform")
+	}
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("settings must be owner-only, got %v", info.Mode().Perm())
 	}
