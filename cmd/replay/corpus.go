@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -69,7 +70,18 @@ func runCorpus(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if fs.NArg() == 0 {
-		return fmt.Errorf("one or more transcript directories are required: %w", errUsage)
+		// The binary already knows where Claude Code writes. Demanding the
+		// path again is the funnel dying at step one.
+		home, _ := os.UserHomeDir()
+		roots := defaultTranscriptRoots(home)
+		if len(roots) == 0 {
+			return fmt.Errorf("one or more transcript directories are required: %w", errUsage)
+		}
+		fmt.Fprintf(stderr, "reading %s\n", roots[0])
+		args = append(args, roots...)
+		if err := parseArgs(fs, args, stdout); err != nil {
+			return err
+		}
 	}
 	files, err := transcriptFiles(fs.Args())
 	if err != nil {
