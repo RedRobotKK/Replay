@@ -44,6 +44,7 @@ is the only place that says what will actually ship.
 | [What you actually get](WHAT-YOU-GET.md) | What pointing Replay at your sessions gives you today, and what it cannot recommend without reading your config |
 | [Token prices](TOKEN-PRICES.md) | Whether a first-party machine-readable price source exists. It does not, which is why the table is hand-maintained and dated |
 | [The feed worth publishing](THE-FEED.md) | Why the useful feed is verification of documented cache behaviour, not prices |
+| [Open design questions](design/README.md) | Questions written up before a decision, not after. Currently: where live context cost should surface and who consumes it |
 
 ## If you are curious how it got here
 
