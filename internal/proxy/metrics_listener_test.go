@@ -155,7 +155,7 @@ func TestMT3_OnlyReadEndpointsAreExposed(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GET %s: %v", p, err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("GET %s = %d, want 200", p, resp.StatusCode)
 		}
@@ -165,7 +165,7 @@ func TestMT3_OnlyReadEndpointsAreExposed(t *testing.T) {
 		if err != nil {
 			continue
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode == http.StatusOK {
 			t.Errorf("GET %s = 200 on the metrics listener; only the read endpoints belong here", p)
 		}
@@ -255,7 +255,7 @@ func TestMT6_TheMetricsListenerMayBeASocket(t *testing.T) {
 	if err != nil {
 		t.Fatalf("scrape over the socket: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("metrics over the socket = %d", resp.StatusCode)
 	}

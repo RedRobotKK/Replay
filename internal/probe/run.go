@@ -158,10 +158,10 @@ func (r *Runner) Plan(cfg Config, model string) {
 	if cfg.RelativeResolution > 0 {
 		_, _ = fmt.Fprintf(r.Out, "  resolution   within %.1f%% of the answer\n", cfg.RelativeResolution*100)
 	} else {
-		fmt.Fprintf(r.Out, "  resolution   %d tokens\n", cfg.Resolution)
+		_, _ = fmt.Fprintf(r.Out, "  resolution   %d tokens\n", cfg.Resolution)
 	}
-	fmt.Fprintf(r.Out, "  confirm      %d agreeing answers per decision\n", max2(cfg.Confirm, 1))
-	fmt.Fprintf(r.Out, "  budget       %d probe requests\n", cfg.MaxProbes)
+	_, _ = fmt.Fprintf(r.Out, "  confirm      %d agreeing answers per decision\n", max2(cfg.Confirm, 1))
+	_, _ = fmt.Fprintf(r.Out, "  budget       %d probe requests\n", cfg.MaxProbes)
 	if cfg.Prior > 0 {
 		fmt.Fprintf(r.Out, "  testing      the documented %d first, then the size below it\n", cfg.Prior)
 	}

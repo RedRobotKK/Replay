@@ -153,7 +153,9 @@ func TestB6_ReportsTheBracketNotAPoint(t *testing.T) {
 		if n == 0 {
 			break
 		}
-		s.Record(Result{PrefixTokens: n, Wrote: n >= 1000})
+		if err := s.Record(Result{PrefixTokens: n, Wrote: n >= 1000}); err != nil {
+			t.Fatalf("Record: %v", err)
+		}
 	}
 	lo, hi := s.Bracket()
 	if lo == hi {
@@ -173,8 +175,12 @@ func TestB7_AContradictoryProviderIsReported(t *testing.T) {
 	// FAIL: continuing to bisect an interval the answers have already made
 	// impossible, and reporting a clean number from dirty data.
 	s := New(Config{Min: 0, Max: 4096, Resolution: 64})
-	s.Record(Result{PrefixTokens: 500, Wrote: true})
-	s.Record(Result{PrefixTokens: 2000, Wrote: false})
+	if err := s.Record(Result{PrefixTokens: 500, Wrote: true}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	if err := s.Record(Result{PrefixTokens: 2000, Wrote: false}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
 	if !s.Contradicted() {
 		t.Error("caching at 500 and not at 2000 cannot both hold for one floor; that must be reported")
 	}

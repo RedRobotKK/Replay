@@ -103,7 +103,7 @@ func runDefault(stdout, stderr io.Writer) error {
 		if home != "" {
 			fmt.Fprintf(stderr, "No transcripts found in %s\n",
 				filepath.Join(claudeConfigDir(home), "projects"))
-			fmt.Fprint(stderr, "Replay reads Claude Code sessions. If you use a different "+
+			_, _ = fmt.Fprint(stderr, "Replay reads Claude Code sessions. If you use a different "+
 				"agent, replay serve proxies any of them.\n\n")
 		}
 		return printUsage(stdout)

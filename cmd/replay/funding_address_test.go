@@ -60,7 +60,7 @@ var fundingAddresses = map[string]string{
 }
 
 func TestFundingAddressIsPinned(t *testing.T) {
-	roots := []string{"README.md", "FUNDING.md", filepath.Join("docs")}
+	roots := []string{"README.md", "FUNDING.md", "docs"}
 	var found int
 
 	var scan func(string)
