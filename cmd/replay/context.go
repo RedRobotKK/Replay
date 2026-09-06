@@ -86,7 +86,7 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 				analysis.MaxContextLabel, r.Label, r.Share*100, formatCount(r.Tokens), r.Occurrences, mark)
 		}
 		gap := analysis.MeasureGap(session, rep.Lane, total)
-		_, _ = fmt.Fprintf(stdout, "\n  * estimated through the byte-to-token fit; everything else is provider usage.\n")
+		_, _ = fmt.Fprintf(stdout, "\n  %s\n", analysis.FitNote(rep.Fit))
 		_, _ = fmt.Fprintf(stdout, "\n  %s\n", gap.Note())
 		return nil
 	})

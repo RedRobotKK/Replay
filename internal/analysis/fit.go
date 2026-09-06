@@ -250,3 +250,24 @@ const (
 	UnseenPrefixLabel = "system prompt and tool definitions (shared prefix, not in transcript)"
 	InjectedLabel     = "client-injected content on the first turn (attachments, reminders; not in transcript)"
 )
+
+// FitNote explains what an estimated figure was estimated from.
+//
+// The distinction it draws is the whole point. A session with fittable turns
+// measured its own tokens-per-byte ratio, so a Japanese session carries a
+// Japanese ratio and the estimate is grounded in that session's own script. A
+// session with no fittable turn borrowed defaultTokensPerByte, which is an
+// English prose average, and the user is owed that provenance: at 2.29 bytes
+// per character for Japanese against roughly 1.0 for ASCII prose, a constant
+// derived from one does not describe the other.
+//
+// Both cases already printed "estimated", which was true and did not separate
+// a measured ratio from a borrowed one.
+func FitNote(fit TokenFit) string {
+	if fit.Turns > 0 {
+		return "* estimated through the byte-to-token fit; everything else is provider usage."
+	}
+	return "* estimated: this session offered no turn to fit on, so the ratio is a " +
+		"default English prose average and does not describe non-English text. A " +
+		"session with a fittable turn measures its own ratio instead."
+}
