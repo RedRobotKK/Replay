@@ -111,3 +111,36 @@ func TestCM4_SizelessCompactionIsStillCounted(t *testing.T) {
 		t.Error("a record with no preTokens must not claim to be sized")
 	}
 }
+
+// CM-5: a compaction is a PAIR of records, and counts once.
+//
+// The client writes two lines. A boundary - type "system", subtype
+// "compact_boundary", carrying compactMetadata and no message - and then the
+// summary on the next line: type "user", isCompactSummary true, the text in
+// message.content.
+//
+// The parser accepted either marker and appended one Compaction per RECORD, so
+// every compaction was counted twice. Measured on a real session: 2 boundary
+// records and 2 summary records, and `replay context` reported 4 compactions.
+// The overstatement note derived from that count was doubled with it.
+//
+// PASS: one boundary plus its summary is one compaction, carrying the sizes
+// from the boundary.
+// FAIL: two, which is what shipped.
+func TestCM5_ABoundaryAndItsSummaryAreOneCompaction(t *testing.T) {
+	s, err := ParseClaudeCode(strings.NewReader(`
+{"type":"system","subtype":"compact_boundary","uuid":"b1","sessionId":"s","timestamp":"2026-09-06T00:00:00Z","compactMetadata":{"trigger":"auto","preTokens":999029,"postTokens":23218}}
+{"type":"user","uuid":"u1","parentUuid":"b1","sessionId":"s","timestamp":"2026-09-06T00:00:01Z","isCompactSummary":true,"message":{"role":"user","content":"## 1. Primary Request and Intent\nsomething"}}
+{"type":"assistant","uuid":"a1","sessionId":"s","timestamp":"2026-09-06T00:00:02Z","requestId":"r1","message":{"role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":10,"output_tokens":2}}}
+`))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(s.Compactions) != 1 {
+		t.Fatalf("a boundary and its summary are ONE compaction, got %d: %+v",
+			len(s.Compactions), s.Compactions)
+	}
+	if got := s.Compactions[0].PreTokens; got != 999029 {
+		t.Errorf("the pair must carry the boundary's sizes, got PreTokens %d", got)
+	}
+}

@@ -81,6 +81,8 @@ func ParseClaudeCode(r io.Reader) (*Session, error) {
 	}
 
 	session := &Session{Skipped: skipped, Source: SourceTranscript}
+	// sawBoundary pairs a compact_boundary with the summary that follows it.
+	sawBoundary := false
 	for _, l := range lines {
 		if l.SessionID != "" && session.ID == "" {
 			session.ID = l.SessionID
@@ -88,21 +90,34 @@ func ParseClaudeCode(r io.Reader) (*Session, error) {
 		if l.Version != "" && session.ClientVersion == "" {
 			session.ClientVersion = l.Version
 		}
-		// A compaction is recorded either by the marker or by the metadata.
-		// Taking both means a client that drops one of them still reports the
-		// rewrite, which is the failure this parsing exists to fix.
-		if l.IsCompactSummary || l.CompactMetadata != nil {
-			c := Compaction{}
-			if m := l.CompactMetadata; m != nil {
-				c = Compaction{
-					Trigger:           m.Trigger,
-					PreTokens:         m.PreTokens,
-					PostTokens:        m.PostTokens,
-					CumulativeDropped: m.CumulativeDroppedTokens,
-					DurationMS:        m.DurationMS,
-				}
-			}
-			session.Compactions = append(session.Compactions, c)
+		// A compaction is a PAIR of records, not one. The client writes a
+		// boundary - type "system", subtype "compact_boundary", carrying
+		// compactMetadata and no message - and then the summary on the next
+		// line, type "user" with isCompactSummary set and the text in
+		// message.content.
+		//
+		// Accepting either marker independently counted every compaction
+		// twice, and the overstatement note derived from that count was
+		// doubled with it. The boundary is the record that carries the sizes,
+		// so it is the one that counts; a summary is only counted when it
+		// follows no boundary, which is a client that stopped writing them
+		// rather than a compaction that did not happen.
+		switch {
+		case l.CompactMetadata != nil:
+			m := l.CompactMetadata
+			session.Compactions = append(session.Compactions, Compaction{
+				Trigger:           m.Trigger,
+				PreTokens:         m.PreTokens,
+				PostTokens:        m.PostTokens,
+				CumulativeDropped: m.CumulativeDroppedTokens,
+				DurationMS:        m.DurationMS,
+			})
+			sawBoundary = true
+		case l.IsCompactSummary && !sawBoundary:
+			session.Compactions = append(session.Compactions, Compaction{})
+		case l.IsCompactSummary:
+			// Paired with the boundary just seen; already counted.
+			sawBoundary = false
 		}
 	}
 
