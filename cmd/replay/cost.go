@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -99,7 +101,7 @@ func percentile(sorted []float64, p float64) float64 {
 	return sorted[i]
 }
 
-func renderCost(s costSummary, unpriced int, out io.Writer) string {
+func renderCost(s costSummary, unpriced int, out io.Writer, stateDir string) string {
 	var b strings.Builder
 	if s.Tasks == 0 {
 		fmt.Fprintf(&b, "No session could be priced. %d were read but their model is not in the price table.\n", unpriced)
@@ -117,12 +119,34 @@ func renderCost(s costSummary, unpriced int, out io.Writer) string {
 	// tipLine names a coffee count and returns nothing below its floor, so a
 	// modest corpus produced a result and no ask at all. Below the floor the
 	// ask still belongs; it just cannot quote a share of a figure this small.
-	if tip := tipLine(s.AvoidableUSD, out); tip != "" {
+	// The ask is rate-limited to once a month per machine, because reciprocity
+	// is what makes it work and repetition is what destroys it. stateDir empty
+	// means "no state available": ask, rather than fall silent.
+	arm := "A"
+	ask := true
+	if stateDir != "" {
+		arm = tipVariant(tipSeed(stateDir))
+		ask = shouldAsk(stateDir, s.AvoidableUSD, time.Now())
+	}
+	if tip := tipLineArm(arm, s.AvoidableUSD, canHyperlink(out)); ask && tip != "" {
+		if stateDir != "" {
+			noteAsked(stateDir, s.AvoidableUSD, time.Now())
+		}
 		b.WriteString(tip)
 	} else {
 		b.WriteString(supportLine(describeResult("cost"), out))
 	}
 	return b.String()
+}
+
+// tipStateDir is where the ask remembers itself, or "" when there is no home
+// to remember it in.
+func tipStateDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".replay")
 }
 
 func runCost(args []string, stdout, stderr io.Writer) error {
@@ -257,7 +281,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	if _, err := io.WriteString(stdout, renderCost(s, unpriced, stdout)); err != nil {
+	if _, err := io.WriteString(stdout, renderCost(s, unpriced, stdout, tipStateDir())); err != nil {
 		return err
 	}
 	if note := overlapNote(duplicated, totalReq); note != "" {

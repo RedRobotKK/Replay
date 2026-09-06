@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"math"
 	"os"
@@ -73,6 +72,10 @@ func canHyperlink(out io.Writer) bool {
 }
 
 func tipLineFor(avoidableUSD float64, hyperlink bool) string {
+	return tipLineArm("A", avoidableUSD, hyperlink)
+}
+
+func tipLineArm(arm string, avoidableUSD float64, hyperlink bool) string {
 	if avoidableUSD < tipFloorUSD {
 		return ""
 	}
@@ -93,15 +96,12 @@ func tipLineFor(avoidableUSD float64, hyperlink bool) string {
 	}
 	// OSC 8. The visible label is the URL itself, so a terminal that ignores
 	// the sequence still shows an address a reader can copy.
-	link := shareCoffee
+	dest := tipURL(arm)
+	link := dest
 	if hyperlink {
-		link = "\x1b]8;;https://" + shareCoffee + "\x1b\\" + shareCoffee + "\x1b]8;;\x1b\\"
+		link = "\x1b]8;;https://" + dest + "\x1b\\" + dest + "\x1b]8;;\x1b\\"
 	}
-	return fmt.Sprintf(
-		"\nReplay found $%.2f you had already paid for once. It is free, and the\n"+
-			"measurements behind it are not. If it was worth %d %s of that back, that\n"+
-			"is what keeps it maintained: %s\n",
-		avoidableUSD, coffees, unit, link)
+	return tipBody(arm, avoidableUSD, coffees, unit, link)
 }
 
 const shareCoffee = "buymeacoffee.com/saitodaniel"

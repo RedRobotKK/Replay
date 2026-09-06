@@ -118,10 +118,14 @@ func TestTipLinkOnlyHyperlinksATerminal(t *testing.T) {
 	// The visible text must still be the URL itself. A terminal that does not
 	// understand OSC 8 shows the label, and a reader who wants to copy the
 	// address should find an address rather than the words "click here".
-	if !strings.Contains(linked, esc+"https://"+shareCoffee) {
+	if !strings.Contains(linked, esc+"https://"+tipURL("A")) {
 		t.Errorf("the hyperlink target is not the coffee URL: %q", linked)
 	}
-	if !strings.Contains(linked, shareCoffee+"\x1b]8;;\x1b\\") {
+	// The label carries the experiment tag too, deliberately. Showing a clean
+	// label over a tagged target would be a link whose text and destination
+	// disagree, and a reader who copies the visible text would silently leave
+	// the experiment. Transparent beats tidy.
+	if !strings.Contains(linked, tipURL("A")+"\x1b]8;;\x1b\\") {
 		t.Errorf("the visible label is not the URL, so it cannot be copied: %q", linked)
 	}
 }

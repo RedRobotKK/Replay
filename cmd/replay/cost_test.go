@@ -74,7 +74,7 @@ func TestCostSummaryRendersTheActionableNumber(t *testing.T) {
 		{CostUSD: 100, AvoidableUSD: 12},
 		{CostUSD: 50, AvoidableUSD: 3},
 	})
-	out := renderCost(s, 0, io.Discard)
+	out := renderCost(s, 0, io.Discard, "")
 	for _, want := range []string{"$150.00", "10%", "$15.00"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("report is missing %q:\n%s", want, out)
@@ -86,7 +86,7 @@ func TestCostSummaryRendersTheActionableNumber(t *testing.T) {
 // because a cost report that quietly ignores what it could not read is exactly
 // the kind of number this tool exists to distrust.
 func TestCostReportNamesWhatItCouldNotPrice(t *testing.T) {
-	out := renderCost(summarise([]costUnit{{CostUSD: 1}}), 7, io.Discard)
+	out := renderCost(summarise([]costUnit{{CostUSD: 1}}), 7, io.Discard, "")
 	if !strings.Contains(out, "7") {
 		t.Fatalf("the report must say how many sessions it could not price:\n%s", out)
 	}
