@@ -68,9 +68,10 @@ func (s *Server) preFlight(w http.ResponseWriter, rec *ledger.Record, override s
 	// Judged against this lane's own previous request, never the session's.
 	// A fan-out session runs several lanes at once with different tool sets,
 	// so comparing against a session-wide hash refuses lanes that changed
-	// nothing; see sessionState.prefixByLane. The first request in a lane
+	// nothing; see sessionState.lanes. The first request in a lane
 	// establishes its prefix and has nothing to have diverged from.
-	prior, laneSeen := st.prefixByLane[rec.AgentID]
+	ln := st.lane(rec.AgentID)
+	prior, laneSeen := ln.prefixHash, ln.seen
 	if !laneSeen || prior == "" {
 		return true
 	}

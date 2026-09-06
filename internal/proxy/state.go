@@ -16,32 +16,46 @@ import (
 // sessionState is what the proxy remembers about one client session so it
 // can classify each new cache read the moment the response arrives and
 // score what other layouts would have cost.
+// laneState is one agent lane's comparison state. A lane is the main loop
+// ("") or one sub-agent, and each carries its own prefix, model and usage.
+type laneState struct {
+	// last is the lane's previous usage, which ClassifyRead measures the next
+	// request against.
+	last transcript.Usage
+	// lastSeen is when the lane last sent, used for the TTL comparison.
+	lastSeen time.Time
+	// model is what the lane last ran, used for the model-change cause.
+	model string
+	// prefixHash is the lane's last prefix, used for the prefix-change cause.
+	prefixHash string
+	// seen is false until the lane's first request, so an opening request is
+	// classified as ReadFirst rather than measured against nothing.
+	seen bool
+}
+
 type sessionState struct {
 	last       transcript.Usage
 	lastSeen   time.Time
 	model      string
 	prefixHash string
-	// prefixByLane is the last prefix hash seen in each agent lane, keyed by
-	// AgentID with "" for the main loop.
+	// lanes holds the per-lane comparison state, keyed by AgentID with "" for
+	// the main loop.
 	//
-	// Per lane rather than one field for the same reason errorByLane is:
-	// a fan-out session runs several lanes at once and each carries its own
-	// tool set, so a single field means lane A's request decides what lane B
-	// is compared against. Neither lane changed anything and both are counted
-	// as having changed their prefix.
+	// Every field in it was once a single session-wide slot, and each one
+	// meant a fan-out session compared one lane against another. The last
+	// lane to write decided what the next lane was measured against, so two
+	// lanes with different prefixes manufactured breaks, overruns and model
+	// changes out of nothing on every interleaved request.
 	//
-	// The 2026-09-06 trial attributed 3,734,134 re-billed tokens to a changed
-	// prefix through the single-field path. Re-read lane by lane, all thirty
-	// of its sub-agent lanes are internally stable and never change prefix at
-	// all; the three real changes are in the main loop and are MCP connectors
-	// finishing their handshake.
+	// cachemodel's own vocabulary always said lane: ReadFirst is documented
+	// as "the first request in a lane; nothing to compare against", and the
+	// proxy gated it on a session-wide request count.
 	//
-	// prefixHash above is kept as the session's most recent hash, which is
-	// what the status endpoint reports. It is no longer what a break is
-	// judged against.
-	prefixByLane map[string]string
-	tally        analysis.Tally
-	breaks       int
+	// This is the same fix as errorByLane below, which carried the lesson
+	// alone for a long time.
+	lanes  map[string]*laneState
+	tally  analysis.Tally
+	breaks int
 	// prefixChanges counts requests whose system prompt or tool definitions
 	// differed from the request before, which a transcript cannot see.
 	prefixChanges int
@@ -229,28 +243,28 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 	cur := *rec.Response.Usage
 	st := s.session(rec.SessionID)
 	var out *ledger.CacheOutcome
-	// Judged against this lane's own previous request. A lane with no
-	// previous request is establishing its prefix, not changing it.
-	priorPrefix, laneSeen := st.prefixByLane[rec.AgentID]
-	prefixChanged := laneSeen && rec.PrefixHash != priorPrefix
+	// Everything below compares this lane against its own previous request,
+	// never against the session's. See sessionState.lanes.
+	ln := st.lane(rec.AgentID)
+	prefixChanged := ln.seen && rec.PrefixHash != ln.prefixHash
 	if prefixChanged {
 		st.prefixChanges++
 	}
-	if st.prefixByLane == nil {
-		st.prefixByLane = make(map[string]string)
-	}
-	st.prefixByLane[rec.AgentID] = rec.PrefixHash
-	if st.tally.Requests > 0 {
-		outcome, expected := cachemodel.ClassifyRead(st.last, cur)
+	if ln.seen {
+		outcome, expected := cachemodel.ClassifyRead(ln.last, cur)
 		out = &ledger.CacheOutcome{Outcome: outcome.String(), Expected: expected}
 		if outcome == cachemodel.ReadBroken {
 			out.Deficit = expected - cur.CacheRead
-			out.Cause = s.breakCause(st, rec, prefixChanged)
+			out.Cause = s.breakCause(ln, rec, prefixChanged)
 			st.breaks++
 			s.breaksTotal++
 			s.breakCauses[out.Cause]++
 		}
 	}
+	// The lane's own comparison state, and the session's own summary state.
+	// The session copies stay for the status endpoint and for LRU eviction;
+	// nothing is classified against them any more.
+	ln.last, ln.lastSeen, ln.model, ln.prefixHash, ln.seen = cur, rec.Timestamp, rec.Model, rec.PrefixHash, true
 	st.last, st.lastSeen, st.model, st.prefixHash = cur, rec.Timestamp, rec.Model, rec.PrefixHash
 	before := st.tally.CostUSD
 	st.tally.Add(cur, rec.Model)
@@ -325,6 +339,19 @@ func (s *stats) setLaneErrors(sessionID, agentID string, tokens int) {
 
 // session finds or creates a session's state, evicting the least recently
 // seen ones past maxSessions. Callers hold the lock.
+// lane returns a lane's comparison state, creating it on first sight.
+func (st *sessionState) lane(agentID string) *laneState {
+	if st.lanes == nil {
+		st.lanes = map[string]*laneState{}
+	}
+	ln, ok := st.lanes[agentID]
+	if !ok {
+		ln = &laneState{}
+		st.lanes[agentID] = ln
+	}
+	return ln
+}
+
 // contextFor returns one lane's context breakdown, "" being the main loop.
 func (st *sessionState) contextFor(agentID string) []analysis.ContextEntry {
 	return st.context[agentID]
@@ -398,11 +425,11 @@ func (s *stats) trialSession(sessionID string) (*policy.ContextEdit, time.Time, 
 // breakCause names a break from what the proxy can see. A changed prefix
 // is certain, since the proxy hashed both requests; the usage-and-timing
 // causes come next; the rest is left to the offline diff.
-func (s *stats) breakCause(st *sessionState, rec *ledger.Record, prefixChanged bool) cachemodel.BreakCause {
+func (s *stats) breakCause(ln *laneState, rec *ledger.Record, prefixChanged bool) cachemodel.BreakCause {
 	if prefixChanged {
 		return cachemodel.CausePrefixChange
 	}
-	cause, ok := cachemodel.ClassifyBreak(st.last, *rec.Response.Usage, st.model, rec.Model, rec.Timestamp.Sub(st.lastSeen))
+	cause, ok := cachemodel.ClassifyBreak(ln.last, *rec.Response.Usage, ln.model, rec.Model, rec.Timestamp.Sub(ln.lastSeen))
 	if !ok {
 		return cachemodel.CauseUnknown
 	}

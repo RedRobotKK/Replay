@@ -21,7 +21,7 @@ func preFlightFixture(t *testing.T, p analysis.PolicyState, priorHash string) (*
 	if st == nil {
 		t.Fatal("session state was not created; the fixture asserts nothing")
 	}
-	st.prefixByLane = map[string]string{"": priorHash}
+	st.lane("").prefixHash, st.lane("").seen = priorHash, priorHash != ""
 	return s, &buf
 }
 
@@ -188,8 +188,8 @@ func TestPreFlight_OverrideProceedsOnceAndIsLogged(t *testing.T) {
 func TestPreFlight_ASiblingLaneDoesNotTriggerARefusal(t *testing.T) {
 	s, _ := preFlightFixture(t, analysis.PolicyState{CeilingTokens: 1, OptInActive: true}, "hash-main")
 	st := s.stats.session("sess-1")
-	st.prefixByLane["lane-a"] = "hash-a"
-	st.prefixByLane["lane-b"] = "hash-b"
+	st.lane("lane-a").prefixHash, st.lane("lane-a").seen = "hash-a", true
+	st.lane("lane-b").prefixHash, st.lane("lane-b").seen = "hash-b", true
 
 	rec := preFlightRec("hash-a", 400_000, 400_000)
 	rec.AgentID = "lane-a"
