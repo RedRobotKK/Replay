@@ -42,6 +42,7 @@ is the only place that says what will actually ship.
 | [What you actually get](WHAT-YOU-GET.md) | What pointing Replay at your sessions gives you today, and what it cannot recommend without reading your config |
 | [Token prices](TOKEN-PRICES.md) | Whether a first-party machine-readable price source exists. It does not, which is why the table is hand-maintained and dated |
 | [The feed worth publishing](THE-FEED.md) | Why the useful feed is verification of documented cache behaviour, not prices |
+| [The money path](MONEY-PATH.md) | What a subscription could honestly charge for, what stays free forever, and why the unit is a repository rather than a developer |
 
 ## If you are curious how it got here
 
