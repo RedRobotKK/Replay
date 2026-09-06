@@ -494,6 +494,73 @@
         "TestN7_TheCardCarriesTheRouteOnlyWhenObserved"
       ],
       "note": "The route is measured and then not shown. The guard is deliberately an omission rather than a blank label, because an empty field reads as a measurement that came back nothing."
+    },
+    {
+      "id": "M37",
+      "name": "quota-never-captured",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/quota.go",
+      "anchor": "\tvar out map[string]string",
+      "replacement": "\tvar out map[string]string\n\tif true {\n\t\treturn nil\n\t}",
+      "killedBy": [
+        "TestQ1_AnthropicQuotaHeadersAreCaptured",
+        "TestQ6_QuotaReachesTheLedger"
+      ],
+      "note": "The provider's rate-limit headers are the only place a flat-seat subscriber's real budget is visible; every other figure on the record is in dollars they do not spend. Dropping them silently returns the tool to having nothing to say to 80% of its users."
+    },
+    {
+      "id": "M38",
+      "name": "quota-not-wired-to-the-proxy",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/server.go",
+      "anchor": "\t\trec.Quota = quotaFrom(tap.Header())",
+      "replacement": "",
+      "killedBy": [
+        "TestQ6_QuotaReachesTheLedger"
+      ],
+      "note": "Frozen because it is killed by exactly one test. quotaFrom stays green in isolation while the field is never populated in production - the same shape as the payment gate no test imported, where deleting it left 25 of 25 green."
+    },
+    {
+      "id": "M39",
+      "name": "quota-allowlist-becomes-passthrough",
+      "class": "privacy",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/quota.go",
+      "anchor": "\t\t\tif strings.HasPrefix(lower, p) {",
+      "replacement": "\t\t\tif true || strings.HasPrefix(lower, p) {",
+      "killedBy": [
+        "TestQ3_OnlyQuotaHeadersAreCaptured",
+        "TestQ4_NoQuotaHeadersYieldsNothing"
+      ],
+      "note": "Response headers are provider-controlled input and the ledger is append-only. A passthrough writes whatever the provider chose to send - a cookie, a token echo, an identifier - into a file the user later publishes findings from."
+    },
+    {
+      "id": "M40",
+      "name": "openai-quota-family-dropped",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/quota.go",
+      "anchor": "\t\"x-ratelimit-\",",
+      "replacement": "",
+      "killedBy": [
+        "TestQ2_OpenAIQuotaHeadersAreCaptured"
+      ],
+      "note": "The proxy already reads the OpenAI-compatible path. An Anthropic-only prefix leaves that traffic with no quota record while the file still looks complete."
+    },
+    {
+      "id": "M41",
+      "name": "retry-after-dropped",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/quota.go",
+      "anchor": "\t\"retry-after\",",
+      "replacement": "",
+      "killedBy": [
+        "TestQ5_RetryAfterIsCaptured"
+      ],
+      "note": "Every other quota header describes budget remaining. retry-after is the lockout itself - the provider saying the budget is gone and naming the wait. Dropping it leaves the only part of the story the user actually feels with no record."
     }
   ],
   "knownSurvivors": [

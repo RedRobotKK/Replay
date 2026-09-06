@@ -79,6 +79,13 @@ type Record struct {
 	// with the same prefix before forwarding it.
 	HeldMS    int64 `json:"held_ms,omitempty"`
 	LatencyMS int64 `json:"latency_ms"`
+	// Quota is what the provider said this request spent against a rate
+	// limit, taken verbatim from its own response headers and keyed by
+	// header name. Every other figure on this record is denominated in
+	// dollars, which a flat-seat subscriber does not spend; this is the only
+	// place their actual budget is visible. Values are unparsed on purpose -
+	// see quotaFrom in internal/proxy.
+	Quota map[string]string `json:"quota,omitempty"`
 	// Response is the structure of what the provider returned. Usage is
 	// absent on error responses and on endpoints that report none.
 	Response Response `json:"response"`

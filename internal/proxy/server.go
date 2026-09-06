@@ -588,6 +588,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		rec.Retries = retries.n
 		rec.LatencyMS = time.Since(start).Milliseconds()
 		rec.RequestID = tap.Header().Get("request-id")
+		rec.Quota = quotaFrom(tap.Header())
 		if readable {
 			rec.Response = tap.result()
 			if u := rec.Response.Usage; u != nil {
