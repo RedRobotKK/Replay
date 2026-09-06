@@ -58,7 +58,7 @@ func exitCode(err error) int {
 
 func run(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return printUsage(stdout)
+		return runDefault(stdout, stderr)
 	}
 	err := dispatch(args, stdout, stderr)
 	if errors.Is(err, errHelpShown) {
@@ -66,6 +66,37 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return nil
 	}
 	return err
+}
+
+// runDefault is what `replay` on its own does: lead with the finding.
+//
+// The install line is `curl | sh`, and the next thing a person types is the
+// name of the thing they just installed. What that used to print was a list of
+// sixteen commands with `cost` — the one that reports money, and the reason any
+// of this exists — eleventh. A menu is what a tool prints when it does not know
+// what you want, and this one does know: defaultTranscriptRoots finds the
+// transcripts unaided, and `replay doctor` has been reporting on them from that
+// same path all along.
+//
+// The menu stays for the case where there is genuinely nothing to say. A report
+// over no transcripts is not a finding — an empty table and a $0.00 total read
+// as "this tool is broken" rather than "there is nothing here yet" — so an
+// undiscoverable corpus falls back to the list, which is the useful answer
+// there.
+func runDefault(stdout, stderr io.Writer) error {
+	// A home directory that cannot be resolved is the same situation as one
+	// with no transcripts under it: nothing to lead with, so print the list.
+	// defaultTranscriptRoots treats the empty string as "no root" rather than
+	// resolving it against the working directory, which is why the error needs
+	// no separate branch here.
+	home, _ := os.UserHomeDir()
+	if len(defaultTranscriptRoots(home)) == 0 {
+		return printUsage(stdout)
+	}
+	if err := runCost(nil, stdout, stderr); err != nil {
+		return err
+	}
+	return printMoreCommands(stdout)
 }
 
 func dispatch(args []string, stdout, stderr io.Writer) error {
@@ -467,6 +498,23 @@ func runRedact(args []string, stdout io.Writer) error {
 	return transcript.Redact(f, stdout)
 }
 
+// printMoreCommands is the way out of the report a bare `replay` just printed.
+//
+// Leading with one answer is only an improvement if the others stay findable.
+// A reader who wanted `doctor` should not have to already know that `--help`
+// exists, and four lines under the result is a cheaper way to tell them than
+// twenty lines above it.
+func printMoreCommands(w io.Writer) error {
+	_, err := fmt.Fprint(w, `
+More:
+  replay doctor         what replay can see on this machine, and what to do next
+  replay blame <dir>    what is eating your prompt tokens
+  replay diff  <dir>    where the cache broke, and why
+  replay --help         every command
+`)
+	return err
+}
+
 func printUsage(w io.Writer) error {
 	_, err := fmt.Fprint(w, `replay - see where your coding agent's prompt cache broke and what it cost
 
@@ -491,6 +539,9 @@ Usage:
   replay redact <transcript>       strip content, keep structure and usage (for bug reports)
   replay serve [flags]             local proxy: byte-for-byte passthrough, records a ledger
   replay version                   print build information
+
+With no arguments at all, replay reports cost per task across the transcripts it
+finds on this machine, and prints this list only when it finds none.
 
 Transcripts: Claude Code writes them under ~/.claude/projects/<project>/*.jsonl
              ($CLAUDE_CONFIG_DIR/projects if you have relocated it)

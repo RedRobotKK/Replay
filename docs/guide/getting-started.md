@@ -18,6 +18,17 @@ job. Either way, check it landed:
 replay version
 ```
 
+## Get a number out of it
+
+```sh
+replay
+```
+
+With no arguments Replay finds your agent's transcripts, prices what they cost, and reports the share
+of that spend nobody chose. Nothing to configure and nothing to point it at. If it finds no
+transcripts it prints the command list instead, which is the honest answer to a machine with nothing
+on it yet.
+
 ## Find out what Replay can see
 
 ```sh

@@ -10,9 +10,16 @@ worked on none of them until 2026-09-05: every subcommand exited 1 with its usag
 
 ## The three you will use
 
+### `replay`
+
+With no arguments at all, Replay reports cost per task across the transcripts it finds on this
+machine — the same report as `replay cost`, over the directory `replay doctor` already discovers —
+and then names the other commands underneath it. It falls back to the usage list only when there are
+no transcripts to read, because a report over nothing is not a finding.
+
 ### `replay <path>`
 
-The default. Give it a transcript directory or a ledger directory and it reproduces the provider's
+Give it a transcript directory or a ledger directory and it reproduces the provider's
 caching turn by turn, reports how well that reproduction matched the provider's own numbers, then
 scores alternative context layouts against what actually ran.
 
@@ -28,6 +35,11 @@ Add `--dollars` for a list-price column. The output names the date of the price 
 Tells you what Replay can see on this machine: transcript directories, whether a proxy variable is
 set, whether a proxy is running, whether a ledger exists. It ends by naming the next command worth
 running. Start here when something is not behaving.
+
+It reports two transcript figures, because there are two: the number of **sessions**, and the number
+of **transcript files** every other command will read. A session writes one transcript per agent
+lane, so a session that spawned sub-agents contributes several — on the machine this was found on,
+91 sessions and 1494 files. The second figure is printed only when it differs from the first.
 
 ### `replay cost`
 

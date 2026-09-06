@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/url"
@@ -47,12 +48,19 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 
 	// Transcripts.
 	projects := filepath.Join(claudeConfigDir(home), "projects")
-	files, dirs := countTranscripts(projects)
-	if dirs == 0 {
+	c := countTranscripts(projects)
+	if c.projects == 0 {
 		p.Printf("transcripts   none found under %s\n", projects)
 		p.Printf("              run a Claude Code session first, or point replay at another directory\n")
 	} else {
-		p.Printf("transcripts   %d sessions across %d projects under %s\n", files, dirs, projects)
+		p.Printf("transcripts   %d sessions across %d projects under %s\n", c.sessions, c.projects, projects)
+		// Printed only when the two figures differ. "3 transcript files" beside
+		// "3 sessions" is a distinction where there is none, which misleads the
+		// same way as hiding one that exists.
+		if c.lanes > 0 {
+			p.Printf("              %d transcript files in all: a session writes one per agent lane, so\n", c.sessions+c.lanes)
+			p.Printf("              replay cost over this directory reports on every one of them\n")
+		}
 		p.Printf("              next: replay replay %s\n", filepath.Join(projects, "<project>"))
 	}
 
@@ -103,21 +111,84 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 	return p.Err()
 }
 
-func countTranscripts(projects string) (files int, dirs int) {
+// transcriptCounts splits a projects directory into the two things the word
+// "transcript" was covering at once.
+//
+// Claude Code writes one transcript per session at
+// <project>/<sessionId>.jsonl, and one more per sub-agent lane nested beneath
+// it at <project>/<sessionId>/subagents/agent-*.jsonl. On the machine that
+// produced the contradiction this exists to fix, that was 91 sessions and 1403
+// lanes — so `doctor` reported 90 and `cost` reported 1477 over the same
+// directory a second apart, and both were right about different things.
+//
+// doctor happened to print the session count only because its glob was never
+// recursive. That is an accident, and the number it produced described a fifth
+// of one percent of what the next command would read.
+type transcriptCounts struct {
+	sessions int // main-lane transcripts: one per session
+	lanes    int // sub-agent lane transcripts, nested under the session that spawned them
+	projects int
+}
+
+// countTranscripts reports both counts for a projects directory.
+//
+// The walk mirrors transcriptFiles deliberately, dot directories included: the
+// file total is a promise about how much the next command will read, and a
+// promise derived by a second, subtly different walk is exactly how these two
+// numbers drifted apart. The test asserts the two walks agree rather than
+// trusting them to.
+func countTranscripts(projects string) transcriptCounts {
+	var c transcriptCounts
 	entries, err := os.ReadDir(projects)
 	if err != nil {
-		return 0, 0
+		return c
 	}
 	for _, e := range entries {
-		if !e.IsDir() {
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
-		if n := countFiles(filepath.Join(projects, e.Name()), "*.jsonl"); n > 0 {
-			dirs++
-			files += n
+		dir := filepath.Join(projects, e.Name())
+		sessions := countFiles(dir, "*.jsonl")
+		lanes := countNestedTranscripts(dir)
+		if sessions == 0 && lanes == 0 {
+			continue
 		}
+		c.projects++
+		c.sessions += sessions
+		c.lanes += lanes
 	}
-	return files, dirs
+	return c
+}
+
+// countNestedTranscripts counts the transcripts below a project's own level,
+// which is where the sub-agent lanes live.
+func countNestedTranscripts(project string) int {
+	n := 0
+	// A walk error is not fatal. This is a directory listing behind a status
+	// line, and one unreadable subdirectory should make the report undercount,
+	// not make `replay doctor` the command that fails when something is wrong.
+	_ = filepath.WalkDir(project, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if path != project && strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		// A project's own children are the session transcripts; the caller
+		// already has them, and counting them here would put every session in
+		// both figures.
+		if filepath.Dir(path) == project {
+			return nil
+		}
+		if strings.HasSuffix(d.Name(), ".jsonl") {
+			n++
+		}
+		return nil
+	})
+	return n
 }
 
 func countFiles(dir, pattern string) int {

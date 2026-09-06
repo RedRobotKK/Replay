@@ -18,7 +18,12 @@ func TestRunBasicCommands(t *testing.T) {
 		wantErr error
 		wantOut string
 	}{
-		{name: "no args prints usage", args: nil, wantOut: "Usage:"},
+		// No case for a bare `replay` here. It now reports on whatever
+		// transcripts the machine has, so run with nothing to isolate it this
+		// case read the developer's own ~/.claude/projects: 1,491 real
+		// transcripts, several seconds, and an assertion whose answer depended
+		// on whose laptop it was. Both branches are covered in bare_test.go,
+		// each under a HOME the test owns.
 		{name: "version", args: []string{"version"}, wantOut: "replay "},
 		{name: "help", args: []string{"help"}, wantOut: "replay"},
 		{name: "serve honors the kill switch", args: []string{"serve"}, wantErr: errDisabled},

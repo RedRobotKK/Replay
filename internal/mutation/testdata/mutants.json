@@ -9,7 +9,8 @@
     "cost-integral": "The per-request carry count is wrong, so the cost integral is wrong while the count-once figure stays right.",
     "privacy": "A field that must be coarsened, scoped or withheld before it leaves the machine is not.",
     "transport": "A guarantee the transport exists to make - owner-only access, no clobbering, no data loss - is not delivered, while the name of it remains.",
-    "evidence": "A measurement that was never taken is reported as a good one, or a sample is counted in units that overstate its independence."
+    "evidence": "A measurement that was never taken is reported as a good one, or a sample is counted in units that overstate its independence.",
+    "funnel": "The tool holds the answer and hands back a menu. Not a wrong number - a right number nobody reaches, which costs the same as not having measured it."
   },
   "mutants": [
     {
@@ -581,12 +582,12 @@
       "class": "evidence",
       "discovered": "2026-09-06",
       "file": "internal/quota/quota.go",
-      "anchor": "\t\t\tcase d > 0:",
+      "anchor": "\t\t\tcase d >= 0:",
       "replacement": "\t\t\tcase true:",
       "killedBy": [
         "TestQT3_AResetBreaksTheChain"
       ],
-      "note": "When the window resets the counter rises. Pairing across it puts a whole window's budget into the middle of a median as a single negative or enormous sample."
+      "note": "When the window resets the counter rises, so the delta is negative. Re-earned 2026-09-06 after the estimator changed: zero deltas became samples (they are the denominator), so the guard moved from `d > 0` to `d >= 0` and the mutation moved with it. Admitting negatives pairs across the boundary and puts a whole window's budget into the arm as a single enormous sample."
     },
     {
       "id": "M44",
@@ -620,12 +621,12 @@
       "class": "provenance",
       "discovered": "2026-09-06",
       "file": "internal/quota/quota.go",
-      "anchor": "\t\tc.Ratio = c.WriteMedian / c.ReadMedian",
+      "anchor": "\t\tc.Ratio = c.WriteRate / c.ReadRate",
       "replacement": "\t\tc.Ratio = 12.5",
       "killedBy": [
         "TestQT6_ReportsTheMeasuredRatio"
       ],
-      "note": "Returns the BILLING multiple (1.25/0.1) as though it were the measured quota multiple. The entire question is whether the subscription limit behaves like the bill; answering it with the bill is the assumption dressed as the finding."
+      "note": "Returns the BILLING multiple (1.25/0.1) as though it were the measured quota multiple. The entire question is whether a subscription limit behaves like the bill; answering it with the bill is the assumption dressed as the finding. Re-anchored 2026-09-06 when the estimator moved from a median of deltas to an aggregate rate."
     },
     {
       "id": "M47",
@@ -639,6 +640,64 @@
         "TestQT11_TheEstimatorRecoversAKnownRatio"
       ],
       "note": "The most important mutant in this registry, because the mutation IS what the package originally shipped. The subscription counter carries two decimals, so one step is ~475,000 tokens and almost every request moves it by nothing. The signal is the FREQUENCY of movement, so the requests that did not move it are the denominator. Dropping them makes every arm's rate equal one step per average moving request and the ratio comes out 1.000 in EVERY possible world - not noisy, degenerate. It would have reported 'subscriptions do not charge like the bill' with total confidence and no evidence. QT-11 simulates the measured instrument and asserts recovery of two known worlds, 12.5 and 1.0; against the mutant both return 1.00."
+    },
+    {
+      "id": "M48",
+      "name": "doctor-counts-agent-lanes-as-sessions",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/doctor.go",
+      "anchor": "\t\tif filepath.Dir(path) == project {\n\t\t\treturn nil\n\t\t}",
+      "replacement": "\t\tif false && filepath.Dir(path) == project {\n\t\t\treturn nil\n\t\t}",
+      "killedBy": [
+        "TestTC1_SessionsAndAgentLanesAreCountedSeparately",
+        "TestTC2_DoctorReconcilesItsCountWithWhatTheOtherCommandsRead",
+        "TestTC3_DoctorsFileTotalMatchesWhatTranscriptFilesWalks",
+        "TestTC4_NoReconciliationLineWhenThereIsNothingToReconcile"
+      ],
+      "note": "The share-card lesson, recurring in a second place. A session writes one transcript per agent lane, so folding the lanes back into the session figure turns a count of independent sessions into a count of files - which is exactly how the published corpus came to say '1363 sessions' about 78. With the skip removed doctor reports 9 sessions where there are 3, its file total stops matching the walk the other commands do, and the reconciliation line appears on a corpus that has nothing to reconcile."
+    },
+    {
+      "id": "M49",
+      "name": "doctor-never-recurses",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/doctor.go",
+      "anchor": "\t\tlanes := countNestedTranscripts(dir)",
+      "replacement": "\t\tlanes := 0",
+      "killedBy": [
+        "TestTC1_SessionsAndAgentLanesAreCountedSeparately",
+        "TestTC2_DoctorReconcilesItsCountWithWhatTheOtherCommandsRead",
+        "TestTC3_DoctorsFileTotalMatchesWhatTranscriptFilesWalks"
+      ],
+      "note": "This mutation IS what shipped. doctor's glob was never recursive, so it reported '90 sessions across 12 projects' while `replay cost` reported 1477 transcripts over the same directory one second later. Measured on that machine: 91 files at the project level, 1403 sub-agent lanes beneath them. The session figure was right and described 6% of what the next command would read, and nothing on screen told the reader that the two commands were counting different things."
+    },
+    {
+      "id": "M50",
+      "name": "cost-contradicts-its-own-headline",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/cost.go",
+      "anchor": "fmt.Fprintf(&b, \"\\n%d further transcripts were read but not priced",
+      "replacement": "fmt.Fprintf(&b, \"\\n%d further sessions were read but not priced",
+      "killedBy": [
+        "TestTC5_CostCallsUnpricedFilesTranscriptsLikeItsOwnHeadline"
+      ],
+      "note": "The headline was corrected to 'transcripts' on 2026-09-06 for the reason recorded on costHeaderLine, and the two lines beneath it went on saying 'sessions' about the very same files. One page of output using both words for one thing is worse than using the wrong one consistently: a reader reasonably concludes they are two different quantities and tries to reconcile them."
+    },
+    {
+      "id": "M51",
+      "name": "bare-replay-answers-with-a-menu",
+      "class": "funnel",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/main.go",
+      "anchor": "\thome, _ := os.UserHomeDir()\n\tif len(defaultTranscriptRoots(home)) == 0 {\n\t\treturn printUsage(stdout)\n\t}",
+      "replacement": "\thome, _ := os.UserHomeDir()\n\t_ = home\n\tif true {\n\t\treturn printUsage(stdout)\n\t}",
+      "killedBy": [
+        "TestBR1_BareReplayLeadsWithTheCostReport",
+        "TestBR3_BareReplayPointsAtTheOtherCommands"
+      ],
+      "note": "This mutation IS what shipped. The install line is `curl | sh` and the next thing typed is `replay`, which answered with a list of sixteen commands - `cost`, the one that reports money, eleventh. The binary already knew where the transcripts were: defaultTranscriptRoots found them unaided and `replay doctor` had been reporting on them from that path all along. The mutant restores the menu unconditionally, which also removes the report the command-pointer footer hangs under."
     }
   ],
   "knownSurvivors": [

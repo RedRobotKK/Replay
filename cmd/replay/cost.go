@@ -104,7 +104,7 @@ func percentile(sorted []float64, p float64) float64 {
 func renderCost(s costSummary, unpriced int, out io.Writer, stateDir string) string {
 	var b strings.Builder
 	if s.Tasks == 0 {
-		fmt.Fprintf(&b, "No session could be priced. %d were read but their model is not in the price table.\n", unpriced)
+		fmt.Fprintf(&b, "No transcript could be priced. %d were read but their model is not in the price table.\n", unpriced)
 		return b.String()
 	}
 	fmt.Fprintf(&b, "%s\n\n", costHeaderLine(s.Tasks))
@@ -114,7 +114,7 @@ func renderCost(s costSummary, unpriced int, out io.Writer, stateDir string) str
 	fmt.Fprintf(&b, "  avoidable      $%.2f  (%.0f%% of the total)\n", s.AvoidableUSD, s.AvoidableShare*100)
 	fmt.Fprintf(&b, "\nAvoidable is the part nobody chose: tokens re-billed because a prompt cache\nbroke. It is not a forecast of savings, it is what was already spent twice.\n")
 	if unpriced > 0 {
-		fmt.Fprintf(&b, "\n%d further sessions were read but not priced, because their model is not in\nthe price table. They are excluded rather than counted as free.\n", unpriced)
+		fmt.Fprintf(&b, "\n%d further transcripts were read but not priced, because their model is not in\nthe price table. They are excluded rather than counted as free.\n", unpriced)
 	}
 	// tipLine names a coffee count and returns nothing below its floor, so a
 	// modest corpus produced a result and no ask at all. Below the floor the

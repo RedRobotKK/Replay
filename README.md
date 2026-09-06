@@ -10,10 +10,10 @@ prints the number.
 curl -fsSL https://redrobot.jp/replay.sh | sh
 ```
 
-Then, with no proxy, no configuration and no account:
+Then, with no proxy, no configuration, no account and no arguments:
 
 ```sh
-replay cost ~/.claude/projects/
+replay
 ```
 
 ```text
@@ -29,7 +29,12 @@ Avoidable is the part nobody chose: tokens re-billed because a prompt cache
 broke. It is not a forecast of savings, it is what was already spent twice.
 ```
 
-Those are one machine's numbers. Point it at yours.
+Those are one machine's numbers, read from the transcripts Replay found on it. Point it at yours, or
+give it a directory of your own.
+
+`transcripts` counts files, not sessions: a session writes one transcript per agent lane, so a
+session that spawned sub-agents contributes several. `replay doctor` reports both figures side by
+side.
 
 ---
 
@@ -50,8 +55,9 @@ be trusted has to have, and the behaviour that makes it less impressive on first
 ## What it does
 
 ```sh
+replay                             # cost per task across the transcripts on this machine
 replay doctor                      # what is on this machine, and what to run next
-replay cost      ~/.claude/projects/    # cost per task, and what was avoidable
+replay cost      ~/.claude/projects/    # the same report, over a directory you name
 replay context   <session>         # what is filling your context, ranked
 replay blame     <session>         # which content cost the most, carried across turns
 replay diff      <session>         # where the cache broke, and why
