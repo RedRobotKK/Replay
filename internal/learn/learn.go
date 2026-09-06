@@ -89,6 +89,11 @@ type SessionScore struct {
 	// trial.
 	Arm             string
 	CostPerNewToken float64
+	// ErrorShare and ReadsAfterClear are the OUTCOME this session had, and
+	// they travel with the cost so a trial can tell a saving from a
+	// degradation. Both were already computed and joined to nothing.
+	ErrorShare      float64
+	ReadsAfterClear int
 	AsRun           analysis.Tally
 	Saving          map[string]float64
 	Cached          map[string]float64
@@ -121,6 +126,18 @@ func Score(s *transcript.Session, candidates []Candidate) (SessionScore, bool) {
 	if newTokens > 0 {
 		out.CostPerNewToken = asRun.EffectiveTokens / float64(newTokens)
 	}
+	// The outcome, from figures the report already carries. Error content as
+	// a share of prompt tokens, and content the agent fetched again after it
+	// had been cleared - an agent re-reading what it was given is direct
+	// evidence it did not use it.
+	var errTokens float64
+	for _, e := range analysis.ErrorCosts(rep.Calibration, rep.Fit) {
+		errTokens += float64(e.PromptTokens.Value)
+	}
+	if asRun.Tally.PromptTokens > 0 {
+		out.ErrorShare = errTokens / float64(asRun.Tally.PromptTokens)
+	}
+	out.ReadsAfterClear = rep.ReReads.RepeatedAfterClear
 	for _, c := range candidates {
 		var r analysis.PolicyResult
 		switch {
@@ -239,7 +256,7 @@ func trialReport(res Result, scores []SessionScore, opts Options) *TrialReport {
 		if s.Arm == "" {
 			continue
 		}
-		costs = append(costs, ArmCost{SessionID: s.SessionID, Arm: s.Arm, CostPerNewToken: s.CostPerNewToken})
+		costs = append(costs, armCostsOf([]SessionScore{s})...)
 	}
 	if len(costs) == 0 {
 		return nil
