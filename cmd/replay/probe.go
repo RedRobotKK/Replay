@@ -65,7 +65,7 @@ func runProbe(args []string, stdout, stderr io.Writer) error {
 	// a probe costs real money at the provider.
 	if *maxAge > 0 {
 		if r, ok := probe.RecentReading(seriesPath(*record), *model, *maxAge); ok {
-			fmt.Fprintf(stdout, "%s was measured %s: floor above %d, at most %d tokens.\n"+
+			_, _ = fmt.Fprintf(stdout, "%s was measured %s: floor above %d, at most %d tokens.\n"+
 				"Nothing was sent. Drop --max-age to measure it again.\n",
 				r.Model, r.TakenAt, r.Above, r.AtMost)
 			return nil
@@ -115,7 +115,7 @@ func runProbe(args []string, stdout, stderr io.Writer) error {
 
 	if !*execute {
 		r.Plan(cfg, *model)
-		fmt.Fprintf(stdout, "\nNothing was sent. Add --execute to run it.\n")
+		_, _ = fmt.Fprintf(stdout, "\nNothing was sent. Add --execute to run it.\n")
 		return nil
 	}
 	if r.APIKey == "" {
@@ -131,7 +131,7 @@ func runProbe(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("not confirmed; nothing was sent")
 	}
 
-	fmt.Fprintf(stdout, "\nprobing %s at %s\n\n", *model, base)
+	_, _ = fmt.Fprintf(stdout, "\nprobing %s at %s\n\n", *model, base)
 	s, err := r.Run(cfg, *model)
 	if s != nil {
 		reportProbe(stdout, s)
@@ -145,9 +145,9 @@ func runProbe(args []string, stdout, stderr io.Writer) error {
 		if path := seriesPath(*record); path != "" {
 			reading := probe.ReadingFrom(*model, cachemodel.DocumentedMinPrefix(*model), s, r.Provenance(), *confirm)
 			if werr := probe.AppendReading(path, reading); werr != nil {
-				fmt.Fprintf(stderr, "the reading could not be recorded: %v\n", werr)
+				_, _ = fmt.Fprintf(stderr, "the reading could not be recorded: %v\n", werr)
 			} else {
-				fmt.Fprintf(stdout, "\nrecorded to %s\n", path)
+				_, _ = fmt.Fprintf(stdout, "\nrecorded to %s\n", path)
 			}
 		}
 	}
@@ -157,51 +157,51 @@ func runProbe(args []string, stdout, stderr io.Writer) error {
 // reportProbe states what was established, and refuses to state more.
 func reportProbe(out io.Writer, s *probe.Search) {
 	lo, hi := s.Bracket()
-	fmt.Fprintf(out, "\n%d billable decision(s)\n", s.Probes())
+	_, _ = fmt.Fprintf(out, "\n%d billable decision(s)\n", s.Probes())
 
 	if n := s.Inconclusive(); n > 0 {
-		fmt.Fprintf(out, "%d probe(s) read an existing cache entry and decided nothing. They were\n"+
+		_, _ = fmt.Fprintf(out, "%d probe(s) read an existing cache entry and decided nothing. They were\n"+
 			"billed anyway, and that many of them says more about the cache than the floor.\n", n)
 	}
 	for _, a := range s.Anomalies() {
-		fmt.Fprintf(out, "\nanomaly      %s at %d tokens: cached %d time(s), did not cache %d\n",
+		_, _ = fmt.Fprintf(out, "\nanomaly      %s at %d tokens: cached %d time(s), did not cache %d\n",
 			a.Kind, a.Size, a.Wrote, a.DidNotWrite)
 	}
 
 	switch {
 	case s.NonDeterministic():
-		fmt.Fprintf(out, "\nThe same prefix cached on one request and not the next. There is no single\n"+
+		_, _ = fmt.Fprintf(out, "\nThe same prefix cached on one request and not the next. There is no single\n"+
 			"floor to report, and that is the finding: something else is moving the\n"+
 			"boundary — block granularity, a per-account difference, or a change during\n"+
 			"the run. Averaging it would hide the only interesting thing here.\n")
 		return
 	case s.Contradicted():
-		fmt.Fprintf(out, "\nA prefix cached at a size another prefix failed to cache at. No single floor\n"+
+		_, _ = fmt.Fprintf(out, "\nA prefix cached at a size another prefix failed to cache at. No single floor\n"+
 			"explains that, so none is reported.\n")
 		return
 	}
 
-	fmt.Fprintf(out, "floor        above %d, at most %d tokens\n", lo, hi)
+	_, _ = fmt.Fprintf(out, "floor        above %d, at most %d tokens\n", lo, hi)
 	if g := s.Granularity(); g > 1 {
-		fmt.Fprintf(out, "granularity  writes land on %d-token blocks (inferred from a GCD, not measured)\n", g)
+		_, _ = fmt.Fprintf(out, "granularity  writes land on %d-token blocks (inferred from a GCD, not measured)\n", g)
 	} else if g == 1 {
 		// A GCD of one is the absence of a finding, not a finding of one-token
 		// blocks. Printing it as though a block size had been established
 		// would be a claim the evidence does not support.
-		fmt.Fprintf(out, "granularity  no common block size in what was cached; none inferred\n")
+		_, _ = fmt.Fprintf(out, "granularity  no common block size in what was cached; none inferred\n")
 	}
 	if s.Stalled() {
-		fmt.Fprintf(out, "\nThe bracket stopped narrowing before reaching the resolution asked for,\n"+
+		_, _ = fmt.Fprintf(out, "\nThe bracket stopped narrowing before reaching the resolution asked for,\n"+
 			"and further probes would buy nothing. Two things can cause that and this run\n"+
 			"cannot tell them apart: the provider rounding a prefix up to a block, or the\n"+
 			"gap between the prefix size asked for and the size it actually became. Either\n"+
 			"way the bracket above is as tight as this method reaches.\n")
 	}
 	if s.StoppedEarly() {
-		fmt.Fprintf(out, "\nThe budget ran out before the bracket reached the resolution asked for, so it\n"+
+		_, _ = fmt.Fprintf(out, "\nThe budget ran out before the bracket reached the resolution asked for, so it\n"+
 			"is wider than requested. Raise --max-probes to narrow it.\n")
 	}
-	fmt.Fprintf(out, "\nThis is a bracket, not a value. The exact floor inside it was never tested,\n"+
+	_, _ = fmt.Fprintf(out, "\nThis is a bracket, not a value. The exact floor inside it was never tested,\n"+
 		"and reporting a point would claim precision the probes did not buy.\n")
 }
 
@@ -220,7 +220,7 @@ func confirmSpend(in io.Reader, out io.Writer, what string, yes bool) bool {
 	if yes {
 		return true
 	}
-	fmt.Fprintf(out, "\nThis will send %s. Type yes to continue: ", what)
+	_, _ = fmt.Fprintf(out, "\nThis will send %s. Type yes to continue: ", what)
 
 	buf := make([]byte, 64)
 	n, _ := in.Read(buf)
@@ -229,10 +229,10 @@ func confirmSpend(in io.Reader, out io.Writer, what string, yes bool) bool {
 		return true
 	}
 	if answer == "" {
-		fmt.Fprintf(out, "\nNo answer, so nothing was sent. Pass --yes to run unattended.\n")
+		_, _ = fmt.Fprintf(out, "\nNo answer, so nothing was sent. Pass --yes to run unattended.\n")
 		return false
 	}
-	fmt.Fprintf(out, "\nNot confirmed, so nothing was sent. Only \"yes\" proceeds; pass --yes to run unattended.\n")
+	_, _ = fmt.Fprintf(out, "\nNot confirmed, so nothing was sent. Only \"yes\" proceeds; pass --yes to run unattended.\n")
 	return false
 }
 
@@ -243,27 +243,27 @@ func confirmSpend(in io.Reader, out io.Writer, what string, yes bool) bool {
 // Two readings taken a month apart are only comparable if each says which. A
 // dated series with no provenance is a list of numbers.
 func reportProvenance(out io.Writer, asked string, p probe.Provenance) {
-	fmt.Fprintf(out, "\nmeasured\n")
-	fmt.Fprintf(out, "  asked for    %s\n", asked)
+	_, _ = fmt.Fprintf(out, "\nmeasured\n")
+	_, _ = fmt.Fprintf(out, "  asked for    %s\n", asked)
 	if p.ResolvedModel != "" {
-		fmt.Fprintf(out, "  answered by  %s\n", p.ResolvedModel)
+		_, _ = fmt.Fprintf(out, "  answered by  %s\n", p.ResolvedModel)
 	} else {
-		fmt.Fprintf(out, "  answered by  (the provider did not name a snapshot)\n")
+		_, _ = fmt.Fprintf(out, "  answered by  (the provider did not name a snapshot)\n")
 	}
 	if p.ServiceTier != "" {
-		fmt.Fprintf(out, "  tier         %s\n", p.ServiceTier)
+		_, _ = fmt.Fprintf(out, "  tier         %s\n", p.ServiceTier)
 	}
 	if p.Geo != "" {
-		fmt.Fprintf(out, "  geography    %s\n", p.Geo)
+		_, _ = fmt.Fprintf(out, "  geography    %s\n", p.Geo)
 	}
-	fmt.Fprintf(out, "  taken        %s\n", time.Now().UTC().Format(time.RFC3339))
+	_, _ = fmt.Fprintf(out, "  taken        %s\n", time.Now().UTC().Format(time.RFC3339))
 	if p.Mixed {
-		fmt.Fprintf(out, "\n  More than one snapshot, tier or geography answered this run, so the\n"+
+		_, _ = fmt.Fprintf(out, "\n  More than one snapshot, tier or geography answered this run, so the\n"+
 			"  bracket above has more than one subject in it. Treat it as two partial\n"+
 			"  readings rather than one measurement, and repeat with a pinned model id.\n")
 	}
 	if p.ResolvedModel != "" && p.ResolvedModel != asked {
-		fmt.Fprintf(out, "\n  %s is an alias. Pin %s to make this reading reproducible.\n", asked, p.ResolvedModel)
+		_, _ = fmt.Fprintf(out, "\n  %s is an alias. Pin %s to make this reading reproducible.\n", asked, p.ResolvedModel)
 	}
 }
 
@@ -294,7 +294,7 @@ func reportTrend(path string, out io.Writer) error {
 		return err
 	}
 	if len(readings) == 0 {
-		fmt.Fprintf(out, "No readings yet at %s.\n\n"+
+		_, _ = fmt.Fprintf(out, "No readings yet at %s.\n\n"+
 			"A series is worth exactly what has accumulated in it, and nothing can be\n"+
 			"backfilled: a floor is a fact anyone can copy today, while the date it\n"+
 			"changed needs someone to have been measuring beforehand. Take the first\n"+
@@ -316,42 +316,42 @@ func reportTrend(path string, out io.Writer) error {
 	}
 	sort.Strings(models)
 
-	fmt.Fprintf(out, "%d reading(s) at %s\n\n", len(readings), path)
+	_, _ = fmt.Fprintf(out, "%d reading(s) at %s\n\n", len(readings), path)
 	for _, m := range models {
 		r := latest[m]
 		switch {
 		case r.Outcome != "":
-			fmt.Fprintf(out, "  %-28s %-16s  %d reading(s), last %s\n", m, r.Outcome, count[m], r.TakenAt[:10])
+			_, _ = fmt.Fprintf(out, "  %-28s %-16s  %d reading(s), last %s\n", m, r.Outcome, count[m], r.TakenAt[:10])
 		default:
 			bracket := fmt.Sprintf("(%d, %d]", r.Above, r.AtMost)
 			doc := ""
 			if r.Documented > 0 {
 				doc = fmt.Sprintf("  documented %d", r.Documented)
 			}
-			fmt.Fprintf(out, "  %-28s %-16s%s  %d reading(s), last %s\n", m, bracket, doc, count[m], r.TakenAt[:10])
+			_, _ = fmt.Fprintf(out, "  %-28s %-16s%s  %d reading(s), last %s\n", m, bracket, doc, count[m], r.TakenAt[:10])
 		}
 	}
 
 	changes := probe.Changes(readings)
-	fmt.Fprintf(out, "\n")
+	_, _ = fmt.Fprintf(out, "\n")
 	if len(changes) == 0 {
-		fmt.Fprintf(out, "No floor has provably moved. A change is only reported when two brackets\n"+
+		_, _ = fmt.Fprintf(out, "No floor has provably moved. A change is only reported when two brackets\n"+
 			"cannot both be true; brackets that merely differ are both consistent with\n"+
 			"nothing having happened.\n")
 	} else {
-		fmt.Fprintf(out, "Changed:\n")
+		_, _ = fmt.Fprintf(out, "Changed:\n")
 		for _, c := range changes {
-			fmt.Fprintf(out, "  %s  (%d, %d] -> (%d, %d]  by %s\n",
+			_, _ = fmt.Fprintf(out, "  %s  (%d, %d] -> (%d, %d]  by %s\n",
 				c.Model, c.FromAbove, c.FromAtMost, c.ToAbove, c.ToAtMost, c.At[:10])
 		}
-		fmt.Fprintf(out, "\nThe date is when the change was first observed, not when it happened.\n")
+		_, _ = fmt.Fprintf(out, "\nThe date is when the change was first observed, not when it happened.\n")
 	}
 
 	if breaks := probe.MethodBreaks(readings); len(breaks) > 0 {
-		fmt.Fprintf(out, "\nThe instrument changed between readings, so numbers either side are not\n"+
+		_, _ = fmt.Fprintf(out, "\nThe instrument changed between readings, so numbers either side are not\n"+
 			"comparable and no change is drawn across them:\n")
 		for _, b := range breaks {
-			fmt.Fprintf(out, "  %s  %s -> %s  at %s\n", b.Model, b.From, b.To, b.At[:10])
+			_, _ = fmt.Fprintf(out, "  %s  %s -> %s  at %s\n", b.Model, b.From, b.To, b.At[:10])
 		}
 	}
 	return nil

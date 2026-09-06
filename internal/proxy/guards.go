@@ -38,6 +38,11 @@ type spend struct {
 	tokens int
 	usd    float64
 	seen   time.Time
+	// order is the guard's touch counter at the last Record. seen stays for
+	// attribution's staleness filter, which wants a wall-clock instant;
+	// eviction uses this instead, because it needs a total order and the
+	// clock does not always provide one.
+	order uint64
 
 	day       string
 	dayTokens int
@@ -64,6 +69,13 @@ type SpendGuard struct {
 	// at all. Refusing traffic over a missing price is not this proxy's
 	// behaviour, so the guard has to be able to say so instead.
 	unpriceable bool
+	// order increments on every touch and breaks ties that the clock cannot.
+	// Eviction scanned seen alone, which is only least-recently-used if
+	// time.Now can separate two records. On Windows it cannot: its resolution
+	// is coarse enough that a burst lands on one instant, every seen compares
+	// equal, and the victim becomes whichever key Go's randomised map
+	// iteration yields first. A counter has no resolution to run out of.
+	order uint64
 }
 
 // NewSpendGuard builds a guard; a zero limits value disables it.
@@ -101,10 +113,10 @@ func (g *SpendGuard) Record(sessionID string, tokens int, usd float64) {
 	st, ok := g.session[sessionID]
 	if !ok {
 		for len(g.session) >= maxSpendSessions {
-			oldest, oldestSeen := "", time.Time{}
+			oldest, oldestOrder := "", uint64(0)
 			for k, v := range g.session {
-				if oldest == "" || v.seen.Before(oldestSeen) {
-					oldest, oldestSeen = k, v.seen
+				if oldest == "" || v.order < oldestOrder {
+					oldest, oldestOrder = k, v.order
 				}
 			}
 			delete(g.session, oldest)
@@ -113,6 +125,8 @@ func (g *SpendGuard) Record(sessionID string, tokens int, usd float64) {
 		g.session[sessionID] = st
 	}
 	st.seen = g.now()
+	g.order++
+	st.order = g.order
 	// Lazily, so a day roll costs nothing until a session is next seen. A
 	// session never seen again keeps a stale stamp and is filtered out of
 	// attribution by it, rather than needing a sweep.

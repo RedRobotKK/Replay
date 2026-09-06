@@ -158,22 +158,22 @@ func (r *Runner) Plan(cfg Config, model string) {
 	if cfg.RelativeResolution > 0 {
 		_, _ = fmt.Fprintf(r.Out, "  resolution   within %.1f%% of the answer\n", cfg.RelativeResolution*100)
 	} else {
-		fmt.Fprintf(r.Out, "  resolution   %d tokens\n", cfg.Resolution)
+		_, _ = fmt.Fprintf(r.Out, "  resolution   %d tokens\n", cfg.Resolution)
 	}
-	fmt.Fprintf(r.Out, "  confirm      %d agreeing answers per decision\n", max2(cfg.Confirm, 1))
-	fmt.Fprintf(r.Out, "  budget       %d probe requests\n", cfg.MaxProbes)
+	_, _ = fmt.Fprintf(r.Out, "  confirm      %d agreeing answers per decision\n", max2(cfg.Confirm, 1))
+	_, _ = fmt.Fprintf(r.Out, "  budget       %d probe requests\n", cfg.MaxProbes)
 	if cfg.Prior > 0 {
-		fmt.Fprintf(r.Out, "  testing      the documented %d first, then the size below it\n", cfg.Prior)
+		_, _ = fmt.Fprintf(r.Out, "  testing      the documented %d first, then the size below it\n", cfg.Prior)
 	}
 	if d := s.AffordableDecisions(); d > 0 {
-		fmt.Fprintf(r.Out, "  which buys   %d bisection decisions\n", d)
+		_, _ = fmt.Fprintf(r.Out, "  which buys   %d bisection decisions\n", d)
 	}
 	if s.BudgetTooSmall() {
-		fmt.Fprintf(r.Out, "\n  This budget cannot reach that resolution. The run will stop early\n"+
+		_, _ = fmt.Fprintf(r.Out, "\n  This budget cannot reach that resolution. The run will stop early\n"+
 			"  with a wider bracket, which is fine — it is said here so it is not\n"+
 			"  a surprise afterwards.\n")
 	}
-	fmt.Fprintf(r.Out, "\nEach probe is one billable request to your provider, with a cache\n"+
+	_, _ = fmt.Fprintf(r.Out, "\nEach probe is one billable request to your provider, with a cache\n"+
 		"breakpoint at the size being tested and content that has never been sent\n"+
 		"before. Nothing has been sent yet.\n")
 }
@@ -209,10 +209,10 @@ func (r *Runner) Run(cfg Config, model string) (*Search, error) {
 			// Inconclusive: it read an existing entry. The loop will propose
 			// the same size again with fresh content, and the budget already
 			// counted the request.
-			fmt.Fprintf(r.Out, "  %d tokens: inconclusive (read an existing entry), retrying\n", n)
+			_, _ = fmt.Fprintf(r.Out, "  %d tokens: inconclusive (read an existing entry), retrying\n", n)
 			continue
 		}
-		fmt.Fprintf(r.Out, "  %d tokens: %s\n", n, wroteWord(res.Wrote))
+		_, _ = fmt.Fprintf(r.Out, "  %d tokens: %s\n", n, wroteWord(res.Wrote))
 	}
 }
 

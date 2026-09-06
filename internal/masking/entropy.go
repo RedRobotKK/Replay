@@ -179,7 +179,7 @@ func LooksLikeHexSecret(line string, start, length int) bool {
 		return false
 	}
 	for _, c := range line[start : start+length] {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			return false
 		}
 	}

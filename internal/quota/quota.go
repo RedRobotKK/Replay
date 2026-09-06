@@ -209,19 +209,6 @@ type Comparison struct {
 	Why        string
 }
 
-func median(v []int64) float64 {
-	if len(v) == 0 {
-		return 0
-	}
-	s := append([]int64(nil), v...)
-	sort.Slice(s, func(i, j int) bool { return s[i] < s[j] })
-	m := len(s) / 2
-	if len(s)%2 == 1 {
-		return float64(s[m])
-	}
-	return float64(s[m-1]+s[m]) / 2
-}
-
 // Compare reports how much more a cache write costs the limit than a read, per
 // token, or refuses and says which arm is short.
 //

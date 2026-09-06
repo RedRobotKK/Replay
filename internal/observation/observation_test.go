@@ -297,7 +297,7 @@ func TestO7_ThisPackageCannotSend(t *testing.T) {
 						"file and prints its path; it must not be able to send one.", name, path)
 				}
 			}
-			ast.Inspect(file, func(n ast.Node) bool { return true })
+			ast.Inspect(file, func(_ ast.Node) bool { return true })
 		}
 	}
 	// The allowlist must be able to fail: if it admitted a transport, it would
@@ -340,6 +340,13 @@ func TestO8_TheFileIsOwnerOnlyAndNeverOverwrites(t *testing.T) {
 		info, err := os.Stat(path)
 		if err != nil {
 			t.Fatal(err)
+		}
+		if runtime.GOOS == "windows" {
+			// No Unix mode bits here: Go synthesises 0666 for any writable
+			// file, so this would assert against a value the platform never
+			// set. Skipped rather than loosened to something that passes
+			// everywhere and checks nothing.
+			t.Skip("file permissions are not mode bits on this platform")
 		}
 		if perm := info.Mode().Perm(); perm != 0o600 {
 			t.Errorf("%s is %04o, want 0600", path, perm)

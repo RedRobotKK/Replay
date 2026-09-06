@@ -55,7 +55,7 @@ func shortDir(t *testing.T) string {
 
 func udsServer(t *testing.T, sock string) (*Server, func()) {
 	t.Helper()
-	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
@@ -148,7 +148,7 @@ func TestU1_UnixAddressServes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request over the socket: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("health over the socket = %d", resp.StatusCode)
 	}
@@ -286,7 +286,7 @@ func TestU5_ALiveProxyIsNotDisplaced(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the original proxy stopped answering: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
 
 // U6: a stale socket is cleaned up.
@@ -368,7 +368,7 @@ func TestU8_TCPRemainsTheDefaultTransport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request over TCP: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("health over TCP = %d", resp.StatusCode)
 	}

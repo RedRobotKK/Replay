@@ -100,7 +100,7 @@ func TestC5_ThePromptStatesWhatIsBeingSpent(t *testing.T) {
 
 type countingReader struct{ reads int }
 
-func (c *countingReader) Read(p []byte) (int, error) {
+func (c *countingReader) Read(_ []byte) (int, error) {
 	c.reads++
 	return 0, nil
 }

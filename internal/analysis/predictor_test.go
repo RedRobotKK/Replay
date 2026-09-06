@@ -149,8 +149,8 @@ func TestPreFlightDeficit_StraddleIsDetected(t *testing.T) {
 			"Straddles reports that the refusal is not supported, it does not veto it")
 	}
 
-	clear := PolicyState{CeilingTokens: 50000, OptInActive: true}
-	if d.Straddles(clear) {
+	belowBand := PolicyState{CeilingTokens: 50000, OptInActive: true}
+	if d.Straddles(belowBand) {
 		t.Error("a ceiling of 50,000 is well below the band and the refusal is clean")
 	}
 

@@ -115,14 +115,18 @@ func (c modelCorpus) busiest() string {
 // behind it.
 //
 // Pooling means of pooled ratios is coarser than refitting over every turn at
-// once, and the relative error carried here is the same turn-weighted mean
-// rather than a recomputed spread. It is reported as an estimate for exactly
-// that reason; what makes sigma trustworthy is that both sides came off the
-// wire, not that this pooling is optimal.
+// once, and it is reported as an estimate for that reason. What makes sigma
+// trustworthy is that both sides came off the wire.
+//
+// The uncertainty used to be a turn-weighted mean of each session's own
+// relative error. That is an average of within-session noise and does not fall
+// as sessions accumulate, so the pooled figure carried the same band over two
+// sessions as over two hundred. analysis.PoolFits reports the standard error of
+// the pooled ratio instead: how much the sessions disagree with one another,
+// over how many independent sessions there effectively are.
 func gatherByModel(files []string) (modelCorpus, error) {
 	c := modelCorpus{fits: map[string]analysis.TokenFit{}, turns: map[string]int{}, usage: map[string]transcript.Usage{}}
-	sumTPB := map[string]float64{}
-	sumErr := map[string]float64{}
+	samples := map[string][]analysis.FitSample{}
 
 	err := forEachSession(files, func(_ string, _ *transcript.Session, rep *analysis.LaneReport, err error) error {
 		if err != nil || rep == nil || rep.Lane == nil || len(rep.Lane.Requests) == 0 {
@@ -132,9 +136,11 @@ func gatherByModel(files []string) (modelCorpus, error) {
 		if model == "" || rep.Fit.Turns == 0 {
 			return nil
 		}
-		w := float64(rep.Fit.Turns)
-		sumTPB[model] += rep.Fit.TokensPerByte * w
-		sumErr[model] += rep.Fit.RelativeError * w
+		samples[model] = append(samples[model], analysis.FitSample{
+			TokensPerByte: rep.Fit.TokensPerByte,
+			Turns:         rep.Fit.Turns,
+			RelativeError: rep.Fit.RelativeError,
+		})
 		c.turns[model] += rep.Fit.Turns
 
 		u := c.usage[model]
@@ -154,13 +160,8 @@ func gatherByModel(files []string) (modelCorpus, error) {
 	if err != nil {
 		return c, err
 	}
-	for m, turns := range c.turns {
-		w := float64(turns)
-		c.fits[m] = analysis.TokenFit{
-			TokensPerByte: sumTPB[m] / w,
-			RelativeError: sumErr[m] / w,
-			Turns:         turns,
-		}
+	for m := range c.turns {
+		c.fits[m] = analysis.PoolFits(samples[m])
 	}
 	return c, nil
 }

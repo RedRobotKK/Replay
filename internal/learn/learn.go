@@ -134,8 +134,8 @@ func Score(s *transcript.Session, candidates []Candidate) (SessionScore, bool) {
 	for _, e := range analysis.ErrorCosts(rep.Calibration, rep.Fit) {
 		errTokens += float64(e.PromptTokens.Value)
 	}
-	if asRun.Tally.PromptTokens > 0 {
-		out.ErrorShare = errTokens / float64(asRun.Tally.PromptTokens)
+	if asRun.PromptTokens > 0 {
+		out.ErrorShare = errTokens / float64(asRun.PromptTokens)
 	}
 	out.ReadsAfterClear = rep.ReReads.RepeatedAfterClear
 	for _, c := range candidates {

@@ -70,6 +70,13 @@ func (s State) String() string {
 type Decision struct {
 	State State
 	Path  string
+	// OwnershipChecked reports whether this build could verify that nobody
+	// but the owner can write the file. True on platforms with meaningful
+	// permission bits, false on Windows, where the mode Go reports is
+	// synthetic and an ACL check is not available. A caller that treats a
+	// decision as verified must read this first; a false here means the
+	// state was parsed but its provenance was not established.
+	OwnershipChecked bool
 }
 
 // Allowed reports whether a network call may be made. It is the only gate:
@@ -116,10 +123,13 @@ func readDecision(path, key string) (Decision, error) {
 		return d, fmt.Errorf("%s is a symlink; refusing to take a consent decision from a redirected path", path)
 	}
 	// A file any process on the box can write is not this user's decision.
-	if info.Mode().Perm()&0o022 != 0 {
-		return d, fmt.Errorf("%s is writable by group or other (%04o); refusing to treat it as this user's decision",
-			path, info.Mode().Perm())
+	// What "writable by anyone else" means is platform-specific, so the check
+	// lives behind a build tag and reports whether it was able to run.
+	checked, err := ownershipIsExclusive(info, path)
+	if err != nil {
+		return d, err
 	}
+	d.OwnershipChecked = checked
 
 	body, err := os.ReadFile(path)
 	if err != nil {

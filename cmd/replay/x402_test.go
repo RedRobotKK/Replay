@@ -54,7 +54,7 @@ const validDemand = `{
 // demandServer answers every request with the given status and body.
 func demandServer(t *testing.T, status int, body string) *httptest.Server {
 	t.Helper()
-	s := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		w.WriteHeader(status)
 		_, _ = w.Write([]byte(body))
@@ -305,7 +305,9 @@ func TestX402_NoSigningCapability(t *testing.T) {
 		}
 		if info.IsDir() {
 			switch info.Name() {
-			case ".git", "node_modules", "dist", "bin":
+			// .claude holds agent worktrees: full copies of this repo, which
+			// would be walked as if they were source.
+			case ".git", ".claude", "node_modules", "dist", "bin":
 				return filepath.SkipDir
 			}
 			return nil
@@ -430,7 +432,9 @@ func TestX402_ExecIsConfinedToTheMutationHarness(t *testing.T) {
 		}
 		if info.IsDir() {
 			switch info.Name() {
-			case ".git", "node_modules", "dist", "bin":
+			// .claude holds agent worktrees: full copies of this repo, which
+			// would be walked as if they were source.
+			case ".git", ".claude", "node_modules", "dist", "bin":
 				return filepath.SkipDir
 			}
 			return nil
@@ -625,7 +629,7 @@ func TestX402_ManyOptionsAreCapped(t *testing.T) {
 // FAIL: an install, or a success recording an origin the bytes did not come
 // from.
 func TestX402_RedirectToCleartextIsRefused(t *testing.T) {
-	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"schema":"replay.rules.v1","version":"served-over-cleartext","models":[{"match":"x","minPrefix":1}]}`))
 	}))
 	defer plain.Close()
