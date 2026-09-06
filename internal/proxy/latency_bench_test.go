@@ -98,7 +98,7 @@ func sample(b *testing.B, client *http.Client, base string, body []byte, n, warm
 			b.Fatal(err)
 		}
 		_, _ = io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		elapsed := time.Since(start)
 		if i >= warm {
 			out = append(out, elapsed)

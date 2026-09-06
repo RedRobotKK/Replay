@@ -55,7 +55,7 @@ func TestB2_EachAnswerHalvesTheInterval(t *testing.T) {
 		if probes > 32 {
 			t.Fatal("search did not converge; it must halve, not walk")
 		}
-		s.Record(Result{PrefixTokens: n, Wrote: n >= floor})
+		_ = s.Record(Result{PrefixTokens: n, Wrote: n >= floor})
 	}
 	lo, hi := s.Bracket()
 	if lo >= floor || hi < floor {
@@ -82,7 +82,7 @@ func TestB3_StopsAtTheResolutionAsked(t *testing.T) {
 		if n == 0 {
 			break
 		}
-		s.Record(Result{PrefixTokens: n, Wrote: n >= 2000})
+		_ = s.Record(Result{PrefixTokens: n, Wrote: n >= 2000})
 	}
 	lo, hi := s.Bracket()
 	if hi-lo > 512 {
@@ -107,7 +107,7 @@ func TestB4_NeverExceedsTheAuthorisedSpend(t *testing.T) {
 		}
 		n++
 		// Always caches, so every answer lowers the upper bound.
-		s.Record(Result{PrefixTokens: p, Wrote: true, CachedTokens: p})
+		_ = s.Record(Result{PrefixTokens: p, Wrote: true, CachedTokens: p})
 		if n > 10 {
 			t.Fatal("MaxProbes was ignored")
 		}
@@ -205,7 +205,7 @@ func TestB8_BlockGranularityIsInferred(t *testing.T) {
 	// the boundary is not on 512s.
 	s2 := New(Config{Min: 0, Max: 65536, Resolution: 1})
 	for _, n := range []int{1024, 2048, 700} {
-		s2.Record(Result{PrefixTokens: n, Wrote: true, CachedTokens: n})
+		_ = s2.Record(Result{PrefixTokens: n, Wrote: true, CachedTokens: n})
 	}
 	if g := s2.Granularity(); g != 4 {
 		t.Errorf("granularity = %d, want 4 (GCD of 1024, 2048, 700)", g)
@@ -671,7 +671,7 @@ func TestB18_DefaultsAndClamps(t *testing.T) {
 		if n == 0 {
 			break
 		}
-		fine.Record(Result{PrefixTokens: n, Wrote: n >= 33, CachedTokens: n})
+		_ = fine.Record(Result{PrefixTokens: n, Wrote: n >= 33, CachedTokens: n})
 	}
 
 	// With no probe budget stated there is nothing to be short of.
@@ -992,15 +992,15 @@ func TestB25_TheFollowUpOnlyFiresWhenThePriorCached(t *testing.T) {
 // FAIL: an inference from two, which is arithmetic rather than evidence.
 func TestB26_TwoDistinctWritesInferNothing(t *testing.T) {
 	two := New(Config{Min: 0, Max: 65536, Resolution: 1})
-	two.Record(Result{PrefixTokens: 1024, Wrote: true, CachedTokens: 1024})
-	two.Record(Result{PrefixTokens: 2048, Wrote: true, CachedTokens: 2048})
+	_ = two.Record(Result{PrefixTokens: 1024, Wrote: true, CachedTokens: 1024})
+	_ = two.Record(Result{PrefixTokens: 2048, Wrote: true, CachedTokens: 2048})
 	if g := two.Granularity(); g != 0 {
 		t.Errorf("granularity = %d from two sizes; two points always share a divisor and that is not evidence", g)
 	}
 
 	three := New(Config{Min: 0, Max: 65536, Resolution: 1})
 	for _, n := range []int{1024, 2048, 512} {
-		three.Record(Result{PrefixTokens: n, Wrote: true, CachedTokens: n})
+		_ = three.Record(Result{PrefixTokens: n, Wrote: true, CachedTokens: n})
 	}
 	if g := three.Granularity(); g != 512 {
 		t.Errorf("granularity = %d from three distinct sizes, want their GCD 512", g)

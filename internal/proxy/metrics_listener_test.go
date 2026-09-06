@@ -84,7 +84,7 @@ func TestMT1_MetricsAreServedOnTheSecondListener(t *testing.T) {
 	if err != nil {
 		t.Fatalf("scrape: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("metrics = %d", resp.StatusCode)
 	}
@@ -125,7 +125,7 @@ func TestMT2_TheMetricsListenerCannotProxy(t *testing.T) {
 		if err != nil {
 			continue // a refused connection is also a refusal
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode == http.StatusOK {
 			t.Errorf("POST %s on the metrics listener returned 200; this port is a proxy bypass", path)
 		}

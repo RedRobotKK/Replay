@@ -206,7 +206,7 @@ func loadFixtureRecords(t *testing.T) []ledger.Record {
 	if err != nil {
 		t.Fatalf("the shipped fixture must open: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var out []ledger.Record
 	sc := bufio.NewScanner(f)

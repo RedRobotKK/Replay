@@ -49,7 +49,7 @@ func shortDir(t *testing.T) string {
 	if err := os.Chmod(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	return dir
 }
 
@@ -306,7 +306,7 @@ func TestU6_AStaleSocketIsReplaced(t *testing.T) {
 	// Close the listener but leave the file, which is what a killed process
 	// does.
 	ln.(*net.UnixListener).SetUnlinkOnClose(false)
-	ln.Close()
+	_ = ln.Close()
 	if _, err := os.Stat(sock); err != nil {
 		t.Fatalf("the stale socket did not survive the close: %v", err)
 	}
