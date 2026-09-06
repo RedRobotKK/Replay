@@ -117,7 +117,8 @@ func explainNoCorpus(home string, w io.Writer) {
 	roots := candidateTranscriptRoots(home)
 
 	if len(roots) == 0 {
-		p("No home directory could be resolved, so there was nowhere to look.\n\n")
+		p("No transcripts found: no home directory could be resolved, so there was\n")
+		p("nowhere to look.\n\n")
 		p("Point Replay at your sessions directly:\n")
 		p("  replay cost /path/to/projects\n\n")
 		return
@@ -125,13 +126,13 @@ func explainNoCorpus(home string, w io.Writer) {
 
 	switch {
 	case !anyRootExists(roots):
-		p("Claude Code is not installed here, or has never run.\n\n")
+		p("No transcripts found. Claude Code is not installed here, or has never run.\n\n")
 		p("Replay reads its session files and shows what your agent's prompt cache\n")
 		p("cost you: which turns re-billed the whole context, and why.\n\n")
 		p("If you use a different agent, Replay can measure it live instead:\n")
 		p("  replay serve\n\n")
 	default:
-		p("Claude Code is here, but has recorded no sessions yet.\n\n")
+		p("No transcripts found. Claude Code is here, but has recorded no sessions yet.\n\n")
 		p("Run it once, then come back. Replay will show what each task cost and\n")
 		p("where the prompt cache broke.\n\n")
 	}
