@@ -251,7 +251,41 @@ func runReport(name string, args []string, stdout, stderr io.Writer, write func(
 	if failures == len(files) {
 		return fmt.Errorf("no transcript could be analyzed")
 	}
+	// Once per run, not once per session, and only when something was actually
+	// printed. A reader who got nothing is not asked for anything.
+	if printed > 0 {
+		if _, err := io.WriteString(stdout, supportLine(describeResult(name), stdout)); err != nil {
+			return fmt.Errorf("write report: %w", err)
+		}
+	}
 	return nil
+}
+
+// describeResult names, in the reader's terms, what the command just handed
+// them. A specific sentence is both more useful and easier to believe than a
+// generic plea, and it keeps the ask in the same register as the report above
+// it.
+func describeResult(name string) string {
+	switch name {
+	case "context":
+		return "what is filling your context"
+	case "blame":
+		return "what your carried content cost"
+	case "diff":
+		return "where your prompt cache broke, and why"
+	case "trim":
+		return "what trimming would have cost you"
+	case "route":
+		return "what another model would have cost"
+	case "cost":
+		return "what your agent work actually cost"
+	case "advise":
+		return "what to change, taken from your own history"
+	case "learn":
+		return "a policy scored against your own sessions"
+	default:
+		return "your sessions, replayed against the provider's caching rules"
+	}
 }
 
 // forEachSession loads and analyzes every file's main lane and hands each

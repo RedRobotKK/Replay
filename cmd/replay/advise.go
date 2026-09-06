@@ -156,6 +156,9 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 	if *apply {
 		return applySettings(reports, stdout, *yes, *asJSON)
 	}
+	if !*asJSON {
+		_, _ = io.WriteString(stdout, supportLine(describeResult("advise"), stdout))
+	}
 	return nil
 }
 

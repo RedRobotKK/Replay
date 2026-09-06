@@ -123,7 +123,10 @@ func runLearn(args []string, stdout, stderr io.Writer) error {
 	if err := writePolicyFile(path, res); err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(stdout, "Policy file: %s\n", path)
+	if _, err = fmt.Fprintf(stdout, "Policy file: %s\n", path); err != nil {
+		return err
+	}
+	_, err = io.WriteString(stdout, supportLine(describeResult("learn"), stdout))
 	return err
 }
 

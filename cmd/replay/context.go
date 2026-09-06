@@ -38,7 +38,7 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 	}
 
 	printed := 0
-	return forEachSession(files, func(path string, session *transcript.Session, rep *analysis.LaneReport, err error) error {
+	err = forEachSession(files, func(path string, session *transcript.Session, rep *analysis.LaneReport, err error) error {
 		if err != nil || rep == nil {
 			return nil
 		}
@@ -90,6 +90,22 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 		_, _ = fmt.Fprintf(stdout, "\n  %s\n", gap.Note())
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	// Not on --json: a funding line inside machine-readable output is
+	// corruption, and a caller whose parser breaks strips the tool.
+	//
+	// Gated on `printed`, which counts both formats, rather than on a counter
+	// incremented only in the human branch. With the latter the !*asJSON test
+	// was shadowed -- removing it changed nothing, because the JSON path had
+	// already returned without counting -- which is a dead guard by ADR-0014's
+	// standard and would have come back to life the day somebody moved the
+	// increment.
+	if printed > 0 && !*asJSON {
+		_, _ = io.WriteString(stdout, supportLine(describeResult("context"), stdout))
+	}
+	return nil
 }
 
 func sumTokens(rows []analysis.ContextEntry) int {

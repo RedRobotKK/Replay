@@ -89,6 +89,7 @@ func runTrim(args []string, stdout, stderr io.Writer) error {
 	p.Printf("Scoring a %d-byte cap on tool results over %d session(s).\n\n", *capBytes, sessions)
 	if total.Blocks == 0 {
 		p.Printf("No tool result exceeded the cap. Nothing to trim, and nothing to weigh.\n")
+		p.Printf("%s", supportLine(describeResult("trim"), stdout))
 		return p.Err()
 	}
 	p.Printf("%d block(s) over the cap, %s bytes removable, %s prompt tokens once resending is counted.\n",
@@ -115,6 +116,7 @@ func runTrim(args []string, stdout, stderr io.Writer) error {
 	}
 	p.Printf("\n")
 	writeTrimNotes(stdout)
+	_, _ = io.WriteString(stdout, supportLine(describeResult("trim"), stdout))
 	return p.Err()
 }
 

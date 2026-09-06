@@ -105,7 +105,14 @@ func renderCost(s costSummary, unpriced int, out io.Writer) string {
 	if unpriced > 0 {
 		fmt.Fprintf(&b, "\n%d further sessions were read but not priced, because their model is not in\nthe price table. They are excluded rather than counted as free.\n", unpriced)
 	}
-	b.WriteString(tipLine(s.AvoidableUSD, out))
+	// tipLine names a coffee count and returns nothing below its floor, so a
+	// modest corpus produced a result and no ask at all. Below the floor the
+	// ask still belongs; it just cannot quote a share of a figure this small.
+	if tip := tipLine(s.AvoidableUSD, out); tip != "" {
+		b.WriteString(tip)
+	} else {
+		b.WriteString(supportLine(describeResult("cost"), out))
+	}
 	return b.String()
 }
 
