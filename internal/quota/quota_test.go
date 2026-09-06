@@ -423,3 +423,56 @@ func TestQT11_TheEstimatorRecoversAKnownRatio(t *testing.T) {
 func ftoa(f float64) string {
 	return strconv.FormatFloat(f, 'f', 2, 64)
 }
+
+// QT-12: a cache extension is not a cache write.
+//
+// Measured on live traffic 2026-09-06: of 21 requests driven deliberately at
+// the two arms, 14 carried BOTH a cache read and a cache creation, and the
+// shipped rule - Wrote = CacheCreation > 0 - scored every one of them as a
+// write. Zero were classified as reads. The read arm was not merely thin, it
+// was unreachable.
+//
+// The shape is ordinary rather than exotic. A resumed turn reads a 159,434
+// token prefix and extends it by 76 tokens. That is a read with a rounding
+// error attached, and calling it a write puts the cheapest requests in the
+// expensive arm - which biases the ratio toward 1.0, the answer that says
+// "subscriptions do not charge like the bill".
+//
+// So a request joins an arm only when one kind of cached token clearly
+// dominates. Mixed requests are excluded from both rather than assigned,
+// because a request that is 40% write and 60% read carries no clean contrast
+// and averaging it in is how a null gets manufactured.
+//
+// PASS: extension classed as a read, genuine cold write as a write, an even
+// mix excluded entirely.
+// FAIL: any rule that lets a 76-token extension outvote a 159,434-token read.
+func TestQT12_AnExtensionIsNotAWrite(t *testing.T) {
+	mk := func(create, read int) ledger.Record {
+		r := rec(t0, 0, false, "a")
+		r.Response.Usage = &ledger.Usage{Input: 10, CacheCreation: create, CacheRead: read, Output: 5}
+		r.Quota = map[string]string{"anthropic-ratelimit-unified-5h-utilization": "0.20"}
+		return r
+	}
+	for _, c := range []struct {
+		name         string
+		create, read int
+		wantArm      string
+	}{
+		{"resumed turn extending a warm prefix", 76, 159_434, "read"},
+		{"cold session writing the prefix", 158_976, 0, "write"},
+		{"an even mix decides nothing", 80_000, 80_000, "none"},
+	} {
+		arm, ok := classifyArm(mk(c.create, c.read).Response.Usage)
+		got := "none"
+		if ok {
+			got = "read"
+			if arm {
+				got = "write"
+			}
+		}
+		if got != c.wantArm {
+			t.Errorf("%s (create=%d read=%d): classed as %q, want %q",
+				c.name, c.create, c.read, got, c.wantArm)
+		}
+	}
+}

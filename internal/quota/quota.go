@@ -58,6 +58,39 @@ const MinStepsPerArm = 20
 // MinPerArm is retained as the sample-count floor beneath the step floor.
 const MinPerArm = 20
 
+// armDominance is the share of a request's cached tokens that one kind must
+// hold before the request joins that arm.
+//
+// Set high because the contrast is the entire measurement. A resumed turn reads
+// a large prefix and extends it by a few dozen tokens; treating that as a write
+// puts the cheapest requests in the expensive arm and biases the ratio toward
+// 1.0 - which is the answer that says subscriptions do not charge like the
+// bill, arrived at by misclassification rather than by evidence.
+const armDominance = 0.9
+
+// classifyArm reports whether a request belongs to the write arm (true) or the
+// read arm (false), and whether it belongs to either.
+//
+// A request carrying a substantial amount of both is excluded. It carries no
+// clean contrast, and averaging it into one side is how a null is
+// manufactured.
+func classifyArm(u *ledger.Usage) (write bool, ok bool) {
+	if u == nil {
+		return false, false
+	}
+	cached := u.CacheCreation + u.CacheRead
+	if cached == 0 {
+		return false, false
+	}
+	if float64(u.CacheCreation)/float64(cached) >= armDominance {
+		return true, true
+	}
+	if float64(u.CacheRead)/float64(cached) >= armDominance {
+		return false, true
+	}
+	return false, false
+}
+
 // Sample is one request's measured consumption.
 type Sample struct {
 	Limit string
@@ -145,12 +178,13 @@ func Samples(recs []ledger.Record) []Sample {
 			// ratio comes out 1.000 in every possible world.
 			case d >= 0:
 				u := r.Response.Usage
-				var toks int64
-				var wrote bool
-				if u != nil {
-					toks = int64(u.Input + u.CacheCreation + u.CacheRead)
-					wrote = u.CacheCreation > 0
+				wrote, ok := classifyArm(u)
+				if !ok {
+					// Neither arm: a mixed request, or one with no cached
+					// tokens at all. It still advanced the chain above.
+					break
 				}
+				toks := int64(u.Input + u.CacheCreation + u.CacheRead)
 				out = append(out, Sample{Limit: limit, Spent: d, Tokens: toks, Wrote: wrote})
 			case d < 0:
 				// The counter rose: the window reset. Not a negative sample
