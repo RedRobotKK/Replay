@@ -179,15 +179,43 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	var units []costUnit
-	unpriced := 0
 	// Requests seen in an earlier transcript. A sub-agent lane re-renders its
 	// parent's requests, so the same requestId can appear in several files;
 	// MainLane skips sidechains and absorbs most of that, and the residue is
 	// disclosed rather than silently carried.
 	seenReq := map[string]bool{}
 	duplicated, totalReq := 0, 0
-	_ = forEachSession(files, func(_ string, session *transcript.Session, rep *analysis.LaneReport, err error) error {
+
+	// An index over transcripts already understood. Transcripts are
+	// append-only and most never change again, so re-deriving all of them to
+	// learn about the few that grew is a full scan of a table that wanted an
+	// index. Keyed on the price table and rules version as well as file
+	// identity: a figure priced from a table that has since moved is a wrong
+	// number that arrives fast.
+	cache := newCostCache(filepath.Join(tipStateDir(), "cost-index.json"),
+		"replay.cost.v1/"+cachemodel.PriceTableVersion+"/"+cachemodel.RulesVersion)
+	_ = cache.load()
+	var cold []string
+	var units []costUnit
+	for _, f := range files {
+		if u, ids, ok := cache.get(f); ok {
+			units = append(units, u)
+			for _, id := range ids {
+				totalReq++
+				if seenReq[id] {
+					duplicated++
+					continue
+				}
+				seenReq[id] = true
+			}
+			continue
+		}
+		cold = append(cold, f)
+	}
+	warm := len(units)
+	files = cold
+	unpriced := 0
+	_ = forEachSession(files, func(path string, session *transcript.Session, rep *analysis.LaneReport, err error) error {
 		if err != nil || rep == nil || session == nil {
 			return nil
 		}
@@ -198,11 +226,13 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		if rep.Lane != nil && len(rep.Lane.Requests) > 0 {
 			model = rep.Lane.Requests[0].Model
 		}
+		var reqIDs []string
 		if rep.Lane != nil {
 			for _, r := range rep.Lane.Requests {
 				if r.ID == "" {
 					continue
 				}
+				reqIDs = append(reqIDs, r.ID)
 				totalReq++
 				if seenReq[r.ID] {
 					duplicated++
@@ -240,6 +270,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			u.AvoidableUSD = float64(deficit) / 1_000_000 * price.InputPerMTok
 		}
 		units = append(units, u)
+		cache.put(path, u, reqIDs)
 		return nil
 	})
 
@@ -257,6 +288,16 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	}
 
 	s := summarise(units)
+
+	if err := cache.save(); err != nil {
+		// A slow next run is the whole consequence, so it is mentioned and
+		// never fatal.
+		fmt.Fprintf(stderr, "note: could not write the transcript index (%v); the next run "+
+			"will be a full scan\n", err)
+	}
+	if warm > 0 {
+		fmt.Fprintf(stderr, "%d transcript(s) reused from the index, %d re-read\n", warm, len(files))
+	}
 
 	// --share short-circuits every other rendering. A card that also printed
 	// the full report would defeat its own purpose: the point is that what is
