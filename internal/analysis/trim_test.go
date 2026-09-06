@@ -250,3 +250,41 @@ func TestPositionalHarmsStillShapeTheSplit(t *testing.T) {
 		t.Fatal("a later-edit harm carries a real offset and must still derive a split")
 	}
 }
+
+// A block is not evidence against itself.
+//
+// The re-read arm matched any later tool_result with the same tool and path.
+// A lane resends its whole history every turn, so an over-cap block appears in
+// every later request's context - and matched ITSELF. Every block that survived
+// one more turn was recorded as "the agent read it again", which is a fact
+// about the transport, not about the agent.
+//
+// The count this produced was load-bearing. "5,960 cases where the agent later
+// needed removed content" was the number that made a 2,000-byte cap look
+// unaffordable, and it was quoted repeatedly as a reason not to trim. It is the
+// worst direction for a false positive to run: it defended the status quo.
+//
+// PASS: a lane containing exactly one Read reports no re-read.
+// FAIL: a re-read, from a lane where nothing was ever read twice.
+func TestProbeDoesNotCountABlockAgainstItself(t *testing.T) {
+	read := &transcript.Block{
+		Kind: transcript.KindToolResult, Label: "tool result: Read internal/only.go",
+		ToolName: "Read", ToolUseID: "tu_1", Text: body("head", "mid", "tail"),
+	}
+	read.Bytes = len(read.Text)
+	// A second, unrelated block so the lane has later requests for the probe to
+	// walk. Without one there is nothing after `first` and the arm never runs.
+	other := &transcript.Block{
+		Kind: transcript.KindText, Label: transcript.LabelAssistantText, Text: "carrying on",
+	}
+	other.Bytes = len(other.Text)
+
+	res := ScoreTrim(laneOf(read, other), Fit(Calibrate(laneOf(read, other)), false), 2000)
+	for _, h := range res.Harms {
+		if h.Kind == HarmReRead {
+			t.Errorf("re-read reported on a lane with exactly one Read: %+v\n"+
+				"The block matched its own resent copy, so this counts the transport "+
+				"rather than the agent.", h)
+		}
+	}
+}

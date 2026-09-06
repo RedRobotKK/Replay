@@ -215,7 +215,14 @@ func probeCut(lane *transcript.Lane, b transcript.Block, removed string, first i
 						continue
 					}
 					add(HarmLaterEdit, fmt.Sprintf("a later Edit's old_string sits only in the removed part of %s", shortLabel(b.Label)), offsetOf(b.Text, old))
-				case later.Kind == transcript.KindToolResult && path != "" && later.ToolName == b.ToolName && pathOf(later.Label) == path:
+				// A DIFFERENT tool call, not this block's own resent copy. A
+				// lane resends its whole history every turn, so without the
+				// id check every over-cap block that survived one more turn
+				// matched itself and was recorded as evidence the agent read
+				// it again - a fact about the transport, not the agent.
+				case later.Kind == transcript.KindToolResult && path != "" &&
+					later.ToolName == b.ToolName && pathOf(later.Label) == path &&
+					later.ToolUseID != b.ToolUseID:
 					// No offset: the whole block was fetched again, so this
 					// says the block mattered and nothing about where.
 					add(HarmReRead, fmt.Sprintf("%s was read again after the cap would have trimmed it", shortLabel(b.Label)), -1)
