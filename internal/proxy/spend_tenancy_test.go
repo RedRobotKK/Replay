@@ -5,28 +5,25 @@ import (
 	"testing"
 )
 
-// Characterization: the day cap is process-wide, and refuses without saying
-// who spent it.
+// Characterization: the day cap is process-wide. It now says who spent it.
 //
 // This pins current behaviour rather than asserting desired behaviour. On one
 // developer's machine it is correct and cheap - there is one budget because
 // there is one person. Behind a shared proxy the same code makes `--max-day-usd`
 // an organisation-wide cap: the first developer to run a loop consumes the
-// budget, and every other developer is then refused by a message that names no
-// tenant, so an operator reading it has nothing to act on. The guard that makes
-// the product worth buying becomes an outage with no attribution.
+// budget and every other developer is refused.
 //
-// SP-5 through SP-8 in docs/requirements.md specify the fix and ADR-0015 gates
-// it. This test exists so that claim is mechanically checkable instead of
-// merely written down, and so the day it stops being true, the suite says so
-// rather than letting a tenancy change land silently.
+// SP-7 has since landed, so the refusal now names the lane that spent it, and
+// this file asserts both halves at once: the budget is still shared (SP-6 is
+// NOT done, and this is what pins that), and the refusal is attributed (SP-7 IS
+// done, and this is its regression guard). Splitting them would let the first
+// silently stop being true.
 //
-// PASS today: one session exhausts the day cap and an unrelated session is
-// refused, with no identity in the reason.
-// FAIL: the behaviour changed. That is the SP-6 work landing, not a defect -
-// read the message, then replace this test with the two-tenant isolation
-// assertion SP-6 names as its acceptance criterion.
-func TestSpendGuard_DayCapIsProcessWideAndUnattributed(t *testing.T) {
+// PASS today: one session exhausts the day cap, an unrelated session is
+// refused, and the reason names the spender.
+// FAIL on the first assertion: SP-6 landed. Replace this with SP-6's own
+// acceptance criterion - tenant A exhausting its cap refuses A and not B.
+func TestSpendGuard_DayCapIsProcessWideAndAttributed(t *testing.T) {
 	// One cap value, deliberately small, so the arithmetic is not the subject.
 	g := NewSpendGuard(SpendLimits{DayTokens: 100})
 
@@ -49,11 +46,15 @@ func TestSpendGuard_DayCapIsProcessWideAndUnattributed(t *testing.T) {
 			"(tenant A exhausting its cap refuses A and not B).")
 	}
 
-	// The second half, and the one that turns a wrong number into an outage:
-	// the refusal carries no identity, so nobody can be told whose loop did it.
-	if strings.Contains(reason, noisy) {
-		t.Fatalf("the refusal now names the spender, which is SP-7 landing. Update this "+
-			"test to assert attribution rather than its absence. Got: %q", reason)
+	// SP-7: the refusal names the lane that spent the budget, not the one being
+	// refused. Without this an org-wide refusal is an outage with no operator
+	// action attached, and with a solo developer it is still the difference
+	// between "something stopped" and "the indexing lane did it".
+	if !strings.Contains(reason, noisy) {
+		t.Errorf("the refusal does not name the lane that spent the budget (SP-7): %q", reason)
+	}
+	if strings.Contains(reason, quiet) {
+		t.Errorf("the refusal blames the lane being refused rather than the one that spent: %q", reason)
 	}
 	t.Logf("current behaviour, pinned: an unrelated session is refused with %q", reason)
 }

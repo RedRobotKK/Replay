@@ -28,10 +28,20 @@ type SpendLimits struct {
 }
 
 // spend is one counter pair.
+//
+// tokens and usd run for the life of the session; dayTokens and dayUSD are the
+// part of that spent on the UTC day named by day. The two windows are different
+// and SP-7 needs the second: a lane that ran all of yesterday has a large
+// lifetime total and may have spent nothing today, so attributing today's cap
+// on the lifetime figure blames it for a budget it never touched.
 type spend struct {
 	tokens int
 	usd    float64
 	seen   time.Time
+
+	day       string
+	dayTokens int
+	dayUSD    float64
 }
 
 // maxSpendSessions bounds the guard's per-session table; the least
@@ -103,6 +113,14 @@ func (g *SpendGuard) Record(sessionID string, tokens int, usd float64) {
 		g.session[sessionID] = st
 	}
 	st.seen = g.now()
+	// Lazily, so a day roll costs nothing until a session is next seen. A
+	// session never seen again keeps a stale stamp and is filtered out of
+	// attribution by it, rather than needing a sweep.
+	if st.day != g.day {
+		st.day, st.dayTokens, st.dayUSD = g.day, 0, 0
+	}
+	st.dayTokens += tokens
+	st.dayUSD += usd
 	st.tokens += tokens
 	st.usd += usd
 	g.dayUsed.tokens += tokens
@@ -128,11 +146,68 @@ func (g *SpendGuard) Check(sessionID string) string {
 	case g.limits.SessionUSD > 0 && used.usd >= g.limits.SessionUSD:
 		return fmt.Sprintf("session spend cap reached: $%.2f of $%.2f at list price", used.usd, g.limits.SessionUSD)
 	case g.limits.DayTokens > 0 && g.dayUsed.tokens >= g.limits.DayTokens:
-		return fmt.Sprintf("daily spend cap reached: %d of %d tokens", g.dayUsed.tokens, g.limits.DayTokens)
+		return g.attributeDay(fmt.Sprintf("daily spend cap reached: %d of %d tokens",
+			g.dayUsed.tokens, g.limits.DayTokens), false)
 	case g.limits.DayUSD > 0 && g.dayUsed.usd >= g.limits.DayUSD:
-		return fmt.Sprintf("daily spend cap reached: $%.2f of $%.2f at list price", g.dayUsed.usd, g.limits.DayUSD)
+		return g.attributeDay(fmt.Sprintf("daily spend cap reached: $%.2f of $%.2f at list price",
+			g.dayUsed.usd, g.limits.DayUSD), true)
 	}
 	return ""
+}
+
+// dayLeader reports the session that spent the most of today's budget, in the
+// unit that tripped, and whether the surviving sessions account for the whole
+// day total.
+//
+// Completeness is the point. The session table evicts least-recently-seen past
+// maxSpendSessions and discards that session's spend with it, while the day
+// total is untouched, so after enough churn the survivors no longer add up.
+// The largest survivor is then not the largest spender, and naming it would
+// blame a small lane for someone else's overrun. Callers hold the lock.
+func (g *SpendGuard) dayLeader(byUSD bool) (id string, tokens int, usd float64, complete bool) {
+	var accTokens int
+	var accUSD float64
+	var bestTokens int
+	var bestUSD float64
+	for k, st := range g.session {
+		if st.day != g.day {
+			continue
+		}
+		accTokens += st.dayTokens
+		accUSD += st.dayUSD
+		if byUSD {
+			if st.dayUSD > bestUSD {
+				id, bestTokens, bestUSD = k, st.dayTokens, st.dayUSD
+			}
+			continue
+		}
+		if st.dayTokens > bestTokens {
+			id, bestTokens, bestUSD = k, st.dayTokens, st.dayUSD
+		}
+	}
+	// A cent of slack: dollar figures are summed floats, and a rounding
+	// residue is not an accounting gap.
+	complete = accTokens >= g.dayUsed.tokens && accUSD+0.005 >= g.dayUsed.usd
+	return id, bestTokens, bestUSD, complete
+}
+
+// attributeDay appends who spent the day's budget to a day-cap refusal, or says
+// the accounting cannot support a name. Callers hold the lock.
+func (g *SpendGuard) attributeDay(reason string, byUSD bool) string {
+	id, tokens, usd, complete := g.dayLeader(byUSD)
+	if id == "" {
+		// Nothing recorded today under a live session: the spend is real and
+		// entirely unattributable, which is worth saying rather than hiding.
+		return reason + "; no live session accounts for it"
+	}
+	if !complete {
+		return fmt.Sprintf("%s; attribution is partial, the largest session still accounted for "+
+			"holds %d tokens and earlier sessions were dropped", reason, tokens)
+	}
+	if byUSD {
+		return fmt.Sprintf("%s; most of it from session %s ($%.2f)", reason, id, usd)
+	}
+	return fmt.Sprintf("%s; most of it from session %s (%d tokens)", reason, id, tokens)
 }
 
 // rollDay resets the daily counters at UTC midnight. Callers hold the lock.
