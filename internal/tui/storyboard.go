@@ -94,7 +94,7 @@ func Storyboard() []Scene {
 		}, append(hdr,
 			Empty(), Empty(), Empty(), "",
 			"  no requests yet. point a client at the listen address above.", "",
-			"  [s] settings   [q] quit")...)...)
+			Footer(0))...)...)
 
 	add(2, "Active traffic, mixed surfaces",
 		append([]string{
@@ -114,7 +114,7 @@ func Storyboard() []Scene {
 			note(false, "grok /responses is forwarded unread: no ledger record, no cap,"),
 			"      no masking and no loop detection apply to it.",
 			note(false, "openai is parsed against a stub, never verified live."),
-			"", "  [s] settings   [q] quit")...)...)
+			"", Footer(0))...)...)
 
 	add(6, "A path forwarded blind",
 		append([]string{"  traffic"}, append(hdr,
@@ -147,7 +147,7 @@ func Storyboard() []Scene {
 		"", kv("masking", "on"),
 		kv("  patterns", "14"),
 		kv("  NOT covered", "/responses, /v1/chat/completions"),
-		"", "  [esc] back",
+		"", Footer(0),
 	)
 
 	add(22, "Ownership not verified (Windows)",
