@@ -82,7 +82,6 @@ Every input is in the transcripts already on disk: `cache_creation_input_tokens`
 `cache_read_input_tokens`, `sessionId`, `requestId` and `timestamp`. No proxy, no key, no network.
 Deduplicate on `requestId` first or the result is meaningless.
 
-
 ---
 
 ## Correction, same day: most of this number is arithmetic
