@@ -711,6 +711,46 @@
         "TestCC8_AnIndexFromAnOlderShapeIsDiscarded"
       ],
       "note": "The mutation is what shipped for forty minutes. costUnit gained AvoidableTokens and the hand-written schema literal was not bumped, so every entry already on disk deserialized with the field absent: the same binary on the same machine printed 763k tokens warm and 31.4M cold, while the dollar column - already cached - agreed in both, implying $197 per million tokens, which is no model's price. costcache.go promised precisely this guarantee and did not deliver it: 'keyed on a schema string the caller derives from EVERYTHING the figure depends on'. The code version is part of everything. The key now derives from costUnit's own JSON tags, because a constant someone must remember to bump is the same defect with a comment on it."
+    },
+    {
+      "id": "M53",
+      "name": "masker-fails-open-on-vault-error",
+      "class": "privacy",
+      "discovered": "2026-09-06",
+      "file": "internal/masking/mask.go",
+      "anchor": "\t\t\t\tph, vaultErr = BlindPlaceholder, err",
+      "replacement": "\t\t\t\treturn body, nil, err",
+      "killedBy": [
+        "TestMK1_VaultFailureNeverReturnsTheSecret",
+        "TestMK2_TheStreamStillGoesThrough"
+      ],
+      "note": "The mutation is what shipped, and it was security finding 1. Mask returned the ORIGINAL body when the vault could not store a match, abandoning secrets it had ALREADY POSITIVELY IDENTIFIED, and the proxy logged 'the request was forwarded UNMASKED' and forwarded it. Failing open is right for a policy feature and wrong for a redaction: the difference is that the credential leaves the machine. The vault was also a concrete type, so the error branch was unreachable from a test, which is a fair part of why it survived."
+    },
+    {
+      "id": "M54",
+      "name": "blind-placeholder-wears-the-vault-prefix",
+      "class": "privacy",
+      "discovered": "2026-09-06",
+      "file": "internal/masking/mask.go",
+      "anchor": "const BlindPlaceholder = \"[REDACTED_BY_PROXY_ERROR]\"",
+      "replacement": "const BlindPlaceholder = PlaceholderPrefix + \"ERR\"",
+      "killedBy": [
+        "TestMK3_BlindPlaceholderIsDistinctFromAVaultOne"
+      ],
+      "note": "Rehydration looks REPLAY_SECRET_ tokens up in the vault. A blind scrub has no entry, so wearing that prefix makes a later restore report a denial for a secret that was never stored - an error about the wrong thing, which is worse than no error."
+    },
+    {
+      "id": "M55",
+      "name": "hex-judged-by-length-not-proximity",
+      "class": "privacy",
+      "discovered": "2026-09-06",
+      "file": "internal/masking/entropy.go",
+      "anchor": "\t\tif strings.Contains(before, cue) {",
+      "replacement": "\t\tif true || strings.Contains(before, cue) {",
+      "killedBy": [
+        "TestMK4_HexIsJudgedByProximityNotLength"
+      ],
+      "note": "Security finding 2 said the entropy heuristic is blind to lowercase hex, which is true. The obvious fix - flag any lowercase hex run of 32 or more - was measured before it was written: 1,928 such runs in the corpus, of which 848 are 40 characters (git SHAs), 490 are 32 (MD5 or dashless UUID) and 234 are 64. It would redact commit hashes out of prompts and ruin the tool it protects. Only 43 of the 1,928 carry a credential cue within 40 characters, so proximity separates them and length does not."
     }
   ],
   "knownSurvivors": [

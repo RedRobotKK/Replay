@@ -16,9 +16,25 @@ import (
 var untouchedKeys = map[string]bool{"thinking": true, "signature": true, "data": true}
 
 // Masker applies the pattern set to request bodies.
+// placeholderStore is the vault seam.
+//
+// It exists so the FAILURE path is reachable from a test. Before it, the vault
+// was a concrete type, the error branch could not be exercised, and that branch
+// forwarded the secret - which is a fair part of why it shipped.
+type placeholderStore interface {
+	Placeholder(secret, pattern string) (string, error)
+}
+
+// BlindPlaceholder replaces a secret the vault could not store.
+//
+// Deliberately NOT the vault prefix: rehydration looks REPLAY_SECRET_ tokens
+// up, and a blind scrub has no entry, so wearing that prefix would make a
+// later restore report a denial for something that was never stored.
+const BlindPlaceholder = "[REDACTED_BY_PROXY_ERROR]"
+
 type Masker struct {
 	patterns []Pattern
-	vault    *Vault
+	vault    placeholderStore
 	// Entropy adds the heuristic detector for credentials no pattern
 	// names. Off by default: it is a guess by shape, and the README says
 	// what it can and cannot tell apart.
@@ -26,6 +42,14 @@ type Masker struct {
 }
 
 // New builds a masker over the built-in patterns plus user patterns.
+// NewWithVault builds a masker over any placeholder store. Exists so the
+// vault-failure path can be exercised; production uses New.
+func NewWithVault(user []Pattern, v placeholderStore) *Masker {
+	m := New(nil, user)
+	m.vault = v
+	return m
+}
+
 func New(vault *Vault, user []Pattern) *Masker {
 	return &Masker{patterns: append(append([]Pattern(nil), Patterns...), user...), vault: vault}
 }
@@ -73,6 +97,7 @@ func (m *Masker) Mask(body []byte) ([]byte, Report, error) {
 	}
 	report := Report{}
 	var out []byte
+	var vaultErr error
 	last := 0
 	for _, sv := range values {
 		// Match on the literal's inner bytes. Secrets are ASCII and the
@@ -93,7 +118,12 @@ func (m *Masker) Mask(body []byte) ([]byte, Report, error) {
 			}
 			ph, err := m.vault.Placeholder(secret, mt.Pattern)
 			if err != nil {
-				return body, nil, err
+				// Fail SECURE, not open. The mapping cannot be stored, so the
+				// secret cannot be rehydrated later - but it has already been
+				// positively identified, and handing it back would put it on
+				// the wire. Blind-scrub instead: the stream survives, the
+				// credential does not, and the caller still gets the error.
+				ph, vaultErr = BlindPlaceholder, err
 			}
 			out = append(out, body[last:base+mt.Start]...)
 			out = append(out, ph...)
@@ -102,10 +132,10 @@ func (m *Masker) Mask(body []byte) ([]byte, Report, error) {
 		}
 	}
 	if out == nil {
-		return body, report, nil
+		return body, report, vaultErr
 	}
 	out = append(out, body[last:]...)
-	return out, report, nil
+	return out, report, vaultErr
 }
 
 // find runs the patterns and, when enabled, the entropy heuristic on

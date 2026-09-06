@@ -3,6 +3,7 @@ package masking
 import (
 	"bytes"
 	"math"
+	"strings"
 )
 
 // EntropyPattern names matches of the entropy heuristic in reports and
@@ -154,4 +155,39 @@ func shannonBits(b []byte) float64 {
 		bits -= p * math.Log2(p)
 	}
 	return bits
+}
+
+// hexCue is the credential vocabulary that turns a hex run into a secret.
+//
+// The discriminator is proximity, not length or prefix. Length fails because
+// the canonical hash lengths dominate real traffic - 848 git SHAs against 43
+// cued runs in the measured corpus. Prefix fails because a prefixed key is
+// already caught by the pattern matcher, so the entropy detector's blind spot
+// is exactly the hex with no envelope.
+var hexCue = []string{"api_key", "apikey", "api-key", "secret", "token",
+	"password", "passwd", "auth", "bearer", "credential"}
+
+// hexCueWindow is how far before a run the cue may sit. Wide enough for
+// `api_key = "` and its quoting, narrow enough that an unrelated mention of a
+// token earlier in a line does not sweep a commit hash in with it.
+const hexCueWindow = 40
+
+// LooksLikeHexSecret reports whether the run at [start, start+length) in line
+// is lowercase hex introduced by a credential cue.
+func LooksLikeHexSecret(line string, start, length int) bool {
+	if length < 32 || start < 0 || start+length > len(line) {
+		return false
+	}
+	for _, c := range line[start : start+length] {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			return false
+		}
+	}
+	before := strings.ToLower(line[max(0, start-hexCueWindow):start])
+	for _, cue := range hexCue {
+		if strings.Contains(before, cue) {
+			return true
+		}
+	}
+	return false
 }
