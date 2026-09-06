@@ -80,3 +80,53 @@ func TestTV4_VariantBNamesThePersonAndTheCost(t *testing.T) {
 		t.Error("the two arms are identical, so the experiment measures nothing")
 	}
 }
+
+// The coffee comparison only appears when there is a contrast to draw.
+//
+// It exists to make the ask look small next to the waste. At the $5 floor the
+// waste IS the ask, so "you wasted one coffee, spare one coffee" reads as a
+// reproach over a rounding error, which is the opposite of the intent.
+//
+// PASS: silent at the floor, present when the waste is at least three times
+// what is being asked for, and the count is the waste rather than the ask.
+// FAIL: it fires on small findings, or quotes the wrong number.
+func TestTipVariant_TheCoffeeComparisonNeedsAContrast(t *testing.T) {
+	if got := wastedCoffees(6.00, 1); got != 0 {
+		t.Errorf("a $6 finding asking 1 coffee reported %d wasted coffees; at the floor the "+
+			"waste and the ask are the same and saying so is a reproach, not a joke", got)
+	}
+	if got := wastedCoffees(14.99, 1); got != 0 {
+		t.Errorf("just under 3x the ask reported %d; the gate is three times, so that the "+
+			"contrast is real", got)
+	}
+	if got := wastedCoffees(15.00, 1); got != 3 {
+		t.Errorf("at exactly 3x the ask the comparison should fire with 3, got %d", got)
+	}
+	if got := wastedCoffees(4000.00, 5); got != 800 {
+		t.Errorf("$4000 is 800 coffees at $5 each, got %d. The comparison must quote the "+
+			"WASTE; quoting the ask would collapse the contrast it exists for", got)
+	}
+}
+
+// The arms must not both name Daniel.
+//
+// B's experimental variable is a named person rather than a project. Putting
+// the name in a lead shared by both arms would leave the experiment measuring
+// nothing, which is the failure this whole repository keeps finding in other
+// forms: a comparison where both sides are the same.
+//
+// PASS: B names him, A does not.
+// FAIL: the arms stopped differing.
+func TestTipVariant_OnlyBNamesTheMaintainer(t *testing.T) {
+	a := tipLineArm("A", 4000.00, false)
+	b := tipLineArm("B", 4000.00, false)
+	if strings.Contains(a, "Daniel") {
+		t.Errorf("arm A named the maintainer, so the arms no longer differ on it:\n%s", a)
+	}
+	if !strings.Contains(b, "Daniel") {
+		t.Errorf("arm B must name the maintainer; that is its variable:\n%s", b)
+	}
+	if !strings.Contains(a, "instead of the person who wrote this") {
+		t.Errorf("arm A must still say who the coffees went to instead:\n%s", a)
+	}
+}

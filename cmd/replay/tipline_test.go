@@ -54,7 +54,9 @@ func TestTipLine(t *testing.T) {
 		// amount, failing a correctly capped suggestion. Assert the number you
 		// mean, not a number that happens to be nearby.
 		// The line asks in coffees, because that is the unit the page sells.
-		m := regexp.MustCompile(`worth (\d+) coffees?`).FindStringSubmatch(got)
+		// The phrase moved from "worth N coffees of what it found" to "N
+		// coffees back" on 2026-09-06; the number is still what is asserted.
+		m := regexp.MustCompile(`(\d+) coffees? back`).FindStringSubmatch(got)
 		if m == nil {
 			t.Fatalf("%s: cannot find the suggestion in %q", c.name, got)
 		}
@@ -65,7 +67,7 @@ func TestTipLine(t *testing.T) {
 		sug := float64(units * tipUnitUSD)
 		// Singular and plural must agree with the number, or the line reads
 		// like a template that nobody finished.
-		if (units == 1) != strings.Contains(got, "1 coffee of") {
+		if (units == 1) != strings.Contains(got, "1 coffee back") {
 			t.Errorf("%s: %d coffees is written with the wrong plural: %q", c.name, units, got)
 		}
 		// Buy Me a Coffee sells whole coffees at $5 and cannot pre-fill a custom
