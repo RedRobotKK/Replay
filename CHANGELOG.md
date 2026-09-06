@@ -16,7 +16,6 @@ only a build taken from `main` between the two merges carries them.
 **Windows is declared unsupported**, which is a statement of fact rather than a
 change: it has never been tested there. See the README.
 
-
 ### Added
 
 - **The cost report states the waste in tokens as well as dollars, and names who the dollars are for.** The avoidable line carried a dollar figure only, and most of the people who run this hold a flat seat, where a broken cache costs no money at all — so the headline finding was addressed to a minority and read as inapplicable to everyone else. It now prints the re-billed token count beside the dollars and, when there is any, a paragraph saying plainly that on a subscription seat the dollars are list price for somebody else while the tokens are still yours: context the work did not get, and rate-limit budget spent on nothing.
