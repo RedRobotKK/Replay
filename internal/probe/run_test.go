@@ -427,3 +427,86 @@ func TestR11_TheRatioIsLearnedOnceThenApplied(t *testing.T) {
 		t.Errorf("%.1f counting calls per probe after the ratio is known; it should be arithmetic plus a check", perProbe)
 	}
 }
+
+// R12: a response without usage is inconclusive, never "not cached".
+//
+// Found by a red-team review. `Wrote` was `CacheCreation > 0` with no check
+// that usage was present at all, so a 200 with a reshaped or missing usage
+// object read as "this prefix did not cache" — and every such failure pushes
+// the lower bound UP, which is precisely the direction that manufactures a
+// confirmation of a documented figure. A run against a stub returning 200 with
+// no usage reported "floor above 61490" with no error and no caveat.
+//
+// The nested shape matters too: this API reports cache writes split by TTL in
+// `cache_creation.ephemeral_5m_input_tokens` / `_1h_`, and this repository
+// parses that everywhere except here.
+//
+// PASS: a missing usage object ends the run; a nested-only write counts as a
+// write.
+// FAIL: silence read as evidence, in the direction that flatters the claim.
+func TestR12_MissingUsageIsNotEvidence(t *testing.T) {
+	r, _, _ := newRunner(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		// A well-formed message with no usage at all.
+		_, _ = w.Write([]byte(`{"id":"msg_1","type":"message","content":[]}`))
+	})
+	s, err := r.Run(Config{Min: 0, Max: 65536, Resolution: 64, MaxProbes: 6, Confirm: 1}, "m")
+	if err == nil {
+		t.Error("a response with no usage must end the run, not be read as 'did not cache'")
+	}
+	if s != nil {
+		if lo, _ := s.Bracket(); lo != 0 {
+			t.Errorf("lower bound moved to %d on a response that reported nothing", lo)
+		}
+	}
+}
+
+func TestR12b_ANestedTTLWriteCountsAsAWrite(t *testing.T) {
+	// The write is reported only in the per-TTL breakdown, which is a shape
+	// this API really uses.
+	r, _, _ := newRunner(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		_, _ = w.Write([]byte(`{"usage":{"input_tokens":10,"cache_creation_input_tokens":0,
+			"cache_creation":{"ephemeral_5m_input_tokens":900,"ephemeral_1h_input_tokens":124},
+			"cache_read_input_tokens":0}}`))
+	})
+	s, err := r.Run(Config{Min: 0, Max: 4096, Resolution: 256, MaxProbes: 8, Confirm: 1}, "m")
+	if err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+	_, hi := s.Bracket()
+	if hi > 1024 {
+		t.Errorf("upper bound %d; a nested TTL write of 900+124 was not counted as a write", hi)
+	}
+}
+
+// R13: a run cut short by the request cap says so.
+//
+// StoppedEarly is set from the DECISION count, and an inconclusive probe
+// consumes a request without deciding anything. So a provider answering every
+// request with a cache read burns the whole budget and the run reports a full
+// bracket with no caveat at all.
+//
+// PASS: the caveat is set when requests ran out.
+// FAIL: a bracket the run never established, presented without qualification.
+func TestR13_ARunCutShortByRequestsSaysSo(t *testing.T) {
+	calls := 0
+	r, _, _ := newRunner(t, func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.Header().Set("content-type", "application/json")
+		if calls > 40 {
+			w.WriteHeader(500)
+			return
+		}
+		// Always a read: consumes a request, decides nothing.
+		_, _ = w.Write([]byte(`{"usage":{"input_tokens":10,"cache_creation_input_tokens":512,"cache_read_input_tokens":4096}}`))
+	})
+	s, _ := r.Run(Config{Min: 0, Max: 65536, Resolution: 64, MaxProbes: 5, Confirm: 1}, "m")
+	if s == nil {
+		t.Fatal("the search must be returned even when the budget runs out")
+	}
+	if !s.StoppedEarly() {
+		t.Error("a run that spent its whole request budget without deciding anything must be flagged; " +
+			"otherwise it reports the full range as a measured bracket")
+	}
+}

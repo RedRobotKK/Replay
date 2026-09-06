@@ -530,6 +530,28 @@ func TestSweep_ExhaustiveAgainstASimulatedProvider(t *testing.T) {
 					totalDecisions += decisions
 
 					lo, hi := s.Bracket()
+
+					// PROGRESS, asserted first because without it the rest is
+					// vacuous. A Next that returns zero immediately — no
+					// probes, bracket left at its configured (0, span] —
+					// satisfies soundness trivially, satisfies the decision
+					// budget with zero decisions, and terminates by not
+					// starting. A reviewer demonstrated exactly that mutant
+					// passing all four benchmarks.
+					if decisions == 0 {
+						failures = append(failures, failure{floor, block, span, "no probes were made"})
+						continue
+					}
+					// A bracket that did not narrow is only acceptable with a
+					// reason. Coarse granularity is one: with 512-token blocks
+					// in a 1024 span the probes can land in the upper block
+					// and no finer answer exists, which the search reports as
+					// a stall. Silence is not.
+					if hi-lo >= span && !s.Stalled() && !s.Contradicted() && !s.NonDeterministic() {
+						failures = append(failures, failure{floor, block, span, "the bracket never narrowed and no reason was given"})
+						continue
+					}
+
 					// SOUNDNESS. The lower bound is in requested tokens and the
 					// upper in the provider's reported count, which is the
 					// honest asymmetry: only the write side is measured. The
@@ -928,6 +950,94 @@ func TestB24_AWrongPriorIsRefutedCheaply(t *testing.T) {
 		}
 		if decisions > 12 {
 			t.Errorf("floor %d: %d decisions; a wrong prior must cost about one probe, not a restart", floor, decisions)
+		}
+	}
+}
+
+// B25: the prior's follow-up probe only fires when the prior actually cached.
+//
+// A reviewer removed `s.priorCached &&` from that guard and the whole suite
+// stayed green — the exact condition whose comment above it describes a real
+// live-run bug. If the prior did NOT cache, the floor is above it, and probing
+// below it is a request spent on a region already ruled out.
+//
+// PASS: after a prior that did not cache, the next probe is above the prior.
+// FAIL: probing downwards into ground the prior's own answer excluded.
+func TestB25_TheFollowUpOnlyFiresWhenThePriorCached(t *testing.T) {
+	// A floor well above the prior, so the prior does not cache.
+	s := New(Config{Min: 0, Max: 2048, Resolution: 4, Prior: 512, Confirm: 1})
+	if first := s.Next(); first != 512 {
+		t.Fatalf("first probe = %d, want the prior 512", first)
+	}
+	s.Record(Result{PrefixTokens: 512, Wrote: false})
+
+	next := s.Next()
+	if next <= 512 {
+		t.Errorf("after the prior failed to cache, probed %d — at or below a size already known not to cache", next)
+	}
+	if lo, _ := s.Bracket(); lo != 512 {
+		t.Errorf("lower bound = %d, want 512 from the prior's own answer", lo)
+	}
+}
+
+// B26: two distinct writes are not a block size.
+//
+// A reviewer moved the threshold from three distinct sizes to two and nothing
+// failed. Three is the argued number and it needs a test at the boundary, not
+// only at zero: two points always share a divisor, and reporting it as a block
+// size floors the stop width on a coincidence — which is how a live run
+// stopped after three probes claiming "1029-token blocks".
+//
+// PASS: two distinct sizes infer nothing; three infer their GCD.
+// FAIL: an inference from two, which is arithmetic rather than evidence.
+func TestB26_TwoDistinctWritesInferNothing(t *testing.T) {
+	two := New(Config{Min: 0, Max: 65536, Resolution: 1})
+	two.Record(Result{PrefixTokens: 1024, Wrote: true, CachedTokens: 1024})
+	two.Record(Result{PrefixTokens: 2048, Wrote: true, CachedTokens: 2048})
+	if g := two.Granularity(); g != 0 {
+		t.Errorf("granularity = %d from two sizes; two points always share a divisor and that is not evidence", g)
+	}
+
+	three := New(Config{Min: 0, Max: 65536, Resolution: 1})
+	for _, n := range []int{1024, 2048, 512} {
+		three.Record(Result{PrefixTokens: n, Wrote: true, CachedTokens: n})
+	}
+	if g := three.Granularity(); g != 512 {
+		t.Errorf("granularity = %d from three distinct sizes, want their GCD 512", g)
+	}
+}
+
+// B27: an unusable range proposes nothing, and says nothing about a floor.
+//
+// A reviewer made usableRange always true and the suite stayed green. B13
+// checks that Next returns zero, but nothing checked the search does not then
+// report a bracket it never established.
+//
+// PASS: no probes, and the bracket is the configured range rather than a
+// finding.
+// FAIL: bisecting an inverted or empty interval, which converges confidently
+// on a number with no evidence under it.
+func TestB27_AnUnusableRangeEstablishesNothing(t *testing.T) {
+	for _, c := range []Config{
+		{Min: 4096, Max: 64, Resolution: 8},
+		{Min: -100, Max: 1000, Resolution: 8},
+		{Min: 500, Max: 500, Resolution: 8},
+	} {
+		s := New(c)
+		probes := 0
+		for i := 0; i < 20; i++ {
+			n := s.Next()
+			if n == 0 {
+				break
+			}
+			probes++
+			s.Record(Result{PrefixTokens: n, Wrote: true, CachedTokens: n})
+		}
+		if probes != 0 {
+			t.Errorf("%+v: made %d probes against a range that cannot contain a floor", c, probes)
+		}
+		if s.Probes() != 0 {
+			t.Errorf("%+v: reported %d decisions from an unusable range", c, s.Probes())
 		}
 	}
 }

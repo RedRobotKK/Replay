@@ -77,10 +77,9 @@ type Result struct {
 
 // Search is a bisection over prefix sizes.
 type Search struct {
-	cfg         Config
-	priorDone   bool
-	priorCached bool
-	priorBelow  bool
+	cfg        Config
+	priorDone  bool
+	priorBelow bool
 	// lo is the largest size seen NOT to cache; hi the smallest seen to cache.
 	lo, hi       int
 	probes       int
@@ -130,18 +129,32 @@ func (s *Search) Next() int {
 	// blind bisection of 0..2048 needs nine. If either prediction fails the
 	// prior is refuted, the bracket is whatever those answers established, and
 	// the bisection proceeds from there having lost one probe.
-	if !s.priorDone && s.cfg.Prior > s.lo && s.cfg.Prior < s.hi {
+	// Prior > 0, not merely inside the bracket. Zero means "no prior", and
+	// with a negative Min the test `Prior > lo` is satisfied by 0 > -100 — so
+	// Next returned 0, which every caller reads as "the search is finished".
+	// Any run with a negative lower bound and no documented figure terminated
+	// immediately and reported a bracket it never probed. Found by chasing a
+	// mutant that looked equivalent and was not.
+	if !s.priorDone && s.cfg.Prior > 0 && s.cfg.Prior > s.lo && s.cfg.Prior < s.hi {
 		s.pending = s.cfg.Prior
 		return s.cfg.Prior
 	}
-	// Keyed on what the prior's own answer was, not on the bracket.
+	// Keyed on the prior having been answered, not on the bracket.
 	//
-	// Comparing hi to the prior looked equivalent and is not: hi comes from
-	// the provider's reported cached size, which is a few tokens above the
-	// prefix that was requested. The condition never held, so the search
-	// confirmed the documented 512 and then bisected from zero anyway,
-	// throwing away the answer it had just paid three probes for.
-	if !s.priorBelow && s.priorDone && s.priorCached && s.cfg.Prior > 0 {
+	// Comparing hi to the prior looked equivalent and was not: hi comes from
+	// the provider's reported cached size, a few tokens above the prefix that
+	// was requested, so the condition never held. The search confirmed the
+	// documented 512 and then bisected from zero anyway, discarding the answer
+	// it had just paid three probes for.
+	//
+	// There is deliberately no check that the prior CACHED. It would read as a
+	// guard and cannot change anything: if the prior did not cache then lo is
+	// the prior, and `below` is smaller than that, so the interior test on the
+	// next line already rejects it. A reviewer removed such a check and no
+	// test could tell — correctly, because it was equivalent. A condition that
+	// cannot alter behaviour is not a safeguard, it is decoration that a
+	// future reader will trust.
+	if !s.priorBelow && s.priorDone && s.cfg.Prior > 0 {
 		below := s.cfg.Prior - s.stopWidth()
 		if below > s.lo && below < s.hi {
 			s.pending = below
@@ -233,7 +246,7 @@ func (s *Search) Record(r Result) error {
 	// it, and the search jumped to 1027 — testing the documented figure once
 	// and then ignoring what it said.
 	if r.PrefixTokens == s.cfg.Prior {
-		s.priorDone, s.priorCached = true, r.Wrote
+		s.priorDone = true
 	} else if s.priorDone && r.PrefixTokens < s.cfg.Prior {
 		s.priorBelow = true
 	}

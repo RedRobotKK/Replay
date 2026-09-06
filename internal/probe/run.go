@@ -137,6 +137,12 @@ func (r *Runner) Run(cfg Config, model string) (*Search, error) {
 			return s, nil
 		}
 		if cfg.MaxProbes > 0 && sent >= cfg.MaxProbes {
+			// Say so. StoppedEarly is otherwise set from the DECISION count,
+			// and an inconclusive probe spends a request without deciding
+			// anything — so a provider answering every request with a cache
+			// read burns the budget and the run reports the full range as a
+			// measured bracket, unqualified.
+			s.stoppedEarly = true
 			return s, nil
 		}
 		res, err := r.probe(model, n)
@@ -374,19 +380,40 @@ func (r *Runner) probe(model string, prefixTokens int) (Result, error) {
 	}
 
 	var parsed struct {
-		Usage struct {
+		Usage *struct {
+			Input         int `json:"input_tokens"`
 			CacheCreation int `json:"cache_creation_input_tokens"`
 			CacheRead     int `json:"cache_read_input_tokens"`
+			// The per-TTL breakdown. This API reports a write here as well as,
+			// or instead of, the flat field, and the rest of this repository
+			// already parses it.
+			CacheCreationSplit struct {
+				Ephemeral5m int `json:"ephemeral_5m_input_tokens"`
+				Ephemeral1h int `json:"ephemeral_1h_input_tokens"`
+			} `json:"cache_creation"`
 		} `json:"usage"`
 	}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		return Result{}, fmt.Errorf("the provider's answer could not be read as usage")
 	}
+	// Absence is not a measurement.
+	//
+	// Reading a missing or reshaped usage object as "this prefix did not
+	// cache" pushes the lower bound UP, which is exactly the direction that
+	// manufactures a confirmation of a documented figure. A stub returning 200
+	// with no usage produced "floor above 61490" with no error and no caveat.
+	if parsed.Usage == nil || parsed.Usage.Input <= 0 {
+		return Result{}, fmt.Errorf("the provider's answer carried no usage, so it says nothing about caching")
+	}
+	created := parsed.Usage.CacheCreation
+	if split := parsed.Usage.CacheCreationSplit.Ephemeral5m + parsed.Usage.CacheCreationSplit.Ephemeral1h; split > created {
+		created = split
+	}
 	return Result{
 		PrefixTokens: prefixTokens,
-		Wrote:        parsed.Usage.CacheCreation > 0,
+		Wrote:        created > 0,
 		Read:         parsed.Usage.CacheRead > 0,
-		CachedTokens: parsed.Usage.CacheCreation,
+		CachedTokens: created,
 	}, nil
 }
 
