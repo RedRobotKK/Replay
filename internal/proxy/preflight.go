@@ -60,8 +60,7 @@ const tokensPerByte = 0.25
 // provider's error shape, which is the only thing an agent renders to a user.
 func (s *Server) preFlight(w http.ResponseWriter, rec *ledger.Record, override string) bool {
 	policy := s.cfg.PreFlight
-	st := s.stats.session(rec.SessionID)
-	if st == nil || rec.PrefixHash == "" {
+	if rec.PrefixHash == "" {
 		return true
 	}
 
@@ -70,8 +69,11 @@ func (s *Server) preFlight(w http.ResponseWriter, rec *ledger.Record, override s
 	// so comparing against a session-wide hash refuses lanes that changed
 	// nothing; see sessionState.lanes. The first request in a lane
 	// establishes its prefix and has nothing to have diverged from.
-	ln := st.lane(rec.AgentID)
-	prior, laneSeen := ln.prefixHash, ln.seen
+	//
+	// Read through laneSnapshot rather than session(): this runs on the
+	// request goroutine while the bookkeeping goroutine is writing the same
+	// map, and session() both writes and assumes its caller holds the lock.
+	prior, laneSeen := s.stats.laneSnapshot(rec.SessionID, rec.AgentID)
 	if !laneSeen || prior == "" {
 		return true
 	}

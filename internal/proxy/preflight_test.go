@@ -2,9 +2,11 @@ package proxy
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
@@ -202,5 +204,66 @@ func TestPreFlight_ASiblingLaneDoesNotTriggerARefusal(t *testing.T) {
 	}
 	if w.Header().Get(HeaderWarning) != "" {
 		t.Errorf("a stable lane was warned: %q", w.Header().Get(HeaderWarning))
+	}
+}
+
+// The guard must not race the bookkeeping goroutine, and must not create state.
+//
+// preFlight runs on the request goroutine while the deferred bookkeeping for
+// other requests is writing the same session map. Its first version called
+// stats.session(), which WRITES: it creates the entry on a miss, evicts under
+// LRU, and assumes its caller already holds mu. Every other caller does.
+//
+// It shipped. `go test -race` on the merged main caught it, which is the only
+// reason this test exists rather than a postmortem.
+//
+// PASS: concurrent guards and observers, no race, and no session invented for
+// a request that was never observed.
+// FAIL: -race reports a write to the session map from the request path, or the
+// guard fabricated state by looking.
+func TestPreFlight_DoesNotRaceOrCreateSessions(t *testing.T) {
+	s := &Server{
+		cfg:   Config{Logger: log.New(&bytes.Buffer{}, "", 0), PreFlight: analysis.PolicyState{CeilingTokens: 50_000, OptInActive: true}},
+		stats: newStats(),
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			for j := 0; j < 40; j++ {
+				rec := preFlightRec("hash-B", 400_000, 400_000)
+				rec.SessionID = fmt.Sprintf("sess-%d", i%3)
+				rec.AgentID = fmt.Sprintf("lane-%d", j%4)
+				s.preFlight(httptest.NewRecorder(), rec, "")
+			}
+		}(i)
+	}
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			for j := 0; j < 40; j++ {
+				rec := preFlightRec("hash-A", 1000, 1000)
+				rec.SessionID = fmt.Sprintf("sess-%d", i%3)
+				rec.AgentID = fmt.Sprintf("lane-%d", j%4)
+				s.stats.observe(rec)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	// A guard that only ever looked must leave nothing behind.
+	fresh := &Server{cfg: s.cfg, stats: newStats()}
+	rec := preFlightRec("hash-B", 400_000, 400_000)
+	rec.SessionID = "never-observed"
+	if !fresh.preFlight(httptest.NewRecorder(), rec, "") {
+		t.Fatal("a request for an unobserved session was refused")
+	}
+	if len(fresh.stats.sessions) != 0 {
+		t.Errorf("the guard created %d session(s) by looking. A read-only guard that "+
+			"allocates state lets an unobserved request evict a real session under LRU",
+			len(fresh.stats.sessions))
 	}
 }
