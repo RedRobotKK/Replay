@@ -4,71 +4,6 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-### Fixed
-
-- **The proxy compared each agent lane against a different one.** `prefixHash`,
-  `last`, `model`, `lastSeen`, `context`, `re_reads` and `what_if` were
-  session-wide single slots, so in any session running sub-agents each lane was
-  measured against whichever sibling wrote last. This forged cache breaks and
-  overruns, blamed lanes for model changes belonging to siblings, and let a
-  quiet sub-agent erase a busy one's context breakdown. `cachemodel`'s own
-  vocabulary always said lane: `ReadFirst` is documented as "the first request
-  in a lane" and the proxy gated it on a session-wide request count. Now one
-  `laneState` per lane.
-- **Opening a sub-agent lane counted as a cache hit.** An unseen lane's usage is
-  the zero value, so the expected read was 0, an opening request read 0, and the
-  two matched exactly and scored "reproduced". Every sub-agent lane in a fan-out
-  contributed a fabricated hit and inflated the cached share on
-  `/replay/status`. It produced no error and no anomaly, only a better-looking
-  success metric.
-
-### Added
-
-- **A break says which tools changed.** "System prompt or tool definitions
-  changed" covered every prefix change and named a cause that mostly did not
-  happen. Two narrower causes join the vocabulary, `tool definitions changed`
-  and `system prompt changed`, and the new ledger field `cause_detail` names the
-  tools: *"added 39 tool(s): mcp__claude_ai_Calendly__... ; removed 1 tool(s):
-  WaitForMcpServers"*. The break log line also names the lane.
-- **Per-lane breakdowns on `/replay/status`**: `context_by_lane`,
-  `re_reads_by_lane`, `what_if_by_lane`. The existing keys keep their shapes and
-  now mean the main loop specifically.
-- **A pre-flight deficit warning**, off by default. Warns before a changed
-  prefix is re-billed and refuses only against a ceiling the operator set.
-  Consent is config, never a request header. A ceiling inside the estimate's own
-  ±15% band suppresses the refusal rather than deciding it.
-- **A throughput guard for `rescore`**, which re-walks the whole lane per
-  request. Measured at 17.8 ms of proxy CPU for a 200-request session; the guard
-  asserts a growth ratio, so it catches a regression without a fragile
-  wall-clock bound. **The cost is measured, not fixed.**
-
-## [0.3.0] - 2026-09-05
-
-A minor release rather than a patch: it adds a second provider path.
-
-### Added
-
-- **OpenAI-compatible requests are read, guarded and ledgered.** `/v1/chat/completions` is parsed, streaming included, so the spend cap, error budget and loop detector apply to Cursor, DeepSeek and Grok traffic. This family reports no usage on a stream unless the client sets `stream_options.include_usage`, and clients do not, so Replay sets it when the client left it unset (ADR-0003's first admissible kind). **Verified against a test stub and never against a live provider**, and secret masking does not cover this path; the proxy warns about both at runtime and counts `replay_unmasked_requests_total`.
-- **A normalised usage record** (`internal/usage`) with the provider's own payload kept verbatim on the ledger. Anthropic counts exclusively and OpenAI inclusively, so an adapter that copies rather than subtracts double-counts the cache by an amount that grows with the hit rate; `FromInclusive` subtracts and `Validate` refuses a record whose parts do not add up.
-- **Rules documents carry claims**: what a provider documents beside what replaying real traffic showed, with the verdict derived from the two. A file that writes its own `status` is refused. `contradicted` is the value no provider dashboard will show you.
-- **Cost on `/replay/metrics`**: `replay_cost_usd_total`, `replay_cost_usd_day`, and a count of traffic the rules could not price. The endpoint carried no cost figure at all before.
-- `replay doctor` reports which guards fired, what today cost, and warns when a dollar cap cannot be applied to some traffic, naming `--max-day-tokens` as the fix rather than describing it.
-- `replay route`, `replay trim` and `replay advise --guards`, and [an alerting guide](docs/guide/alerting.md) for the twenty-one metrics.
-
-### Fixed
-
-- **Four counters were summed over a session map that evicts** past 256 sessions, so they lost whatever had been dropped and could fall between scrapes. Prometheus reads a falling counter as a reset, so every `rate()` over them was wrong on a busy machine and right on an idle one. Measured: 2,688,000 prompt tokens reported against 8,064,000 observed.
-- **The error budget divided one agent lane's errors by every lane's tokens.** A quiet sub-agent rescoring after a busy one dropped the numerator to zero, so the guard stopped seeing the errors it exists to catch.
-- **Policy trial breaches were counted process-wide**, so evidence gathered against one trigger reverted a different one; and the reverted flag was global, so reverting any policy disarmed the guardrail for every policy after it.
-- **The installer verified the download and never the result.** It now runs the binary before reporting that it installed one.
-- Flag hoisting was value-blind and separated a flag from its value, breaking every value-taking flag placed after a path.
-
-### Changed
-
-- CI is green for the first time since before v0.1.0.
-
-## [Unreleased]
-
 ### Added
 
 - **The cost report states the waste in tokens as well as dollars, and names who the dollars are for.** The avoidable line carried a dollar figure only, and most of the people who run this hold a flat seat, where a broken cache costs no money at all — so the headline finding was addressed to a minority and read as inapplicable to everyone else. It now prints the re-billed token count beside the dollars and, when there is any, a paragraph saying plainly that on a subscription seat the dollars are list price for somebody else while the tokens are still yours: context the work did not get, and rate-limit budget spent on nothing.
@@ -130,17 +65,23 @@ A minor release rather than a patch: it adds a second provider path.
 - Governance and community documents: Apache 2.0 license and NOTICE (ADR-0005; the scaffold's initial BSL 1.1 draft was replaced before any release), contributing guide, code of conduct, security policy, support guide.
 - `docs/ROADMAP.md`, `docs/maintainers.md`, ADR process with ADR-0001, PRD v4.0.0 and its adversarial review under `docs/`.
 - PRD v5.0.0 (`docs/requirements.md`): replay-first product, two-tier truth labels, provider-sanctioned policy catalog, scoped rehydration, gating spikes, and the release sequence. ADR-0002 to ADR-0004 record the decisions. Red/blue review of the full design under `docs/evidence/`.
-
-### Fixed
-
-- **`replay doctor` and `replay cost` reported 90 and 1477 over the same directory, one second apart.** Neither figure was wrong and nothing on screen said they were counting different things. Claude Code writes one transcript per session at `<project>/<sessionId>.jsonl` and one more per sub-agent lane at `<project>/<sessionId>/subagents/agent-*.jsonl`; measured on the machine that produced those two lines, 91 of the first and 1403 of the second. doctor printed the session count only because its glob was never recursive — its number was right, and it described 6% of what the next command would read. doctor now reports both, the session count and the transcript-file total, with the reason they differ, and prints the second only when it differs from the first. The total is asserted against `transcriptFiles`, the walk the other commands actually do, rather than against a literal that could drift away from it. This is the share-card lesson recurring in a second place; M48–M50 are frozen against it.
-- **`replay cost` used both words for one thing inside one page of output.** The headline said "transcripts" and the two lines beneath it said "sessions" about the very same files.
-
-- **The cost total was presented as exact while double-counting a small share of requests.** A sub-agent lane re-renders its parent's requests, so the same request appears in more than one transcript file and was priced once per file. The report now counts distinct request ids alongside the total and discloses the overlap in its own sentence, with the direction of the error stated: measured with the real parser over 1,484 files, 430 of 30,716 requests, 1.4%. Deduplicating silently would have been the wrong fix — the overlap is a real property of how the client writes transcripts, and a reader who does not know it exists cannot judge any per-file figure.
-
-- **The fan-out premium was corrected the same day it was published.** Presented as a measured discovery that parallel cost is superlinear, it is substantially an identity: observed is `1.25 * sum(P_i)` and the counterfactual `1.25 * P_max + 0.1 * P_max * (k-1)`, which divide into an empirical dispersion ratio times `1.25k / (1.25 + 0.1(k-1))`. The second factor holds no data and exceeds 1 for every `k > 1`, so **no corpus can produce a premium below 1** — a quantity that cannot come out low is not evidence. Measured values sit at 88–99% of that ceiling, leaving the dispersion ratio (≈0.9, flat) as the only empirical content. The offered robustness — barely moving across 30–300s grouping windows — was the same error twice, since neither `k` nor the multipliers depend on the window. The cost is real and the number stays; the claim around it changed, on the evidence doc, the site, and `PRODUCT-DIRECTION.md`. The "4.2x" in that document was never measured at all, and is within rounding of the arithmetic ceiling for six lanes (4.29).
-
-- `replay serve` shut down cleanly only when no client held an unused connection. A coding agent keeps pooled connections open without a request on them, and those never become idle, so Ctrl-C waited the full five-second grace period and then exited non-zero with `context deadline exceeded`. Connections with no request in flight are now closed at once, turns in flight still get the grace period, and a turn that outlasts it is closed rather than holding the proxy open. Ctrl-C with a pooled connection open went from 5.006s and exit 1 to 4ms and exit 0.
+- **A break says which tools changed.** "System prompt or tool definitions
+  changed" covered every prefix change and named a cause that mostly did not
+  happen. Two narrower causes join the vocabulary, `tool definitions changed`
+  and `system prompt changed`, and the new ledger field `cause_detail` names the
+  tools: *"added 39 tool(s): mcp__claude_ai_Calendly__... ; removed 1 tool(s):
+  WaitForMcpServers"*. The break log line also names the lane.
+- **Per-lane breakdowns on `/replay/status`**: `context_by_lane`,
+  `re_reads_by_lane`, `what_if_by_lane`. The existing keys keep their shapes and
+  now mean the main loop specifically.
+- **A pre-flight deficit warning**, off by default. Warns before a changed
+  prefix is re-billed and refuses only against a ceiling the operator set.
+  Consent is config, never a request header. A ceiling inside the estimate's own
+  ±15% band suppresses the refusal rather than deciding it.
+- **A throughput guard for `rescore`**, which re-walks the whole lane per
+  request. Measured at 17.8 ms of proxy CPU for a 200-request session; the guard
+  asserts a growth ratio, so it catches a regression without a fragile
+  wall-clock bound. **The cost is measured, not fixed.**
 
 ### Changed
 
@@ -160,3 +101,54 @@ A minor release rather than a patch: it adds a second provider path.
 - Ledger schema 2: records carry provider-named usage fields and a typed break cause. Files written by schema 1 are skipped by the reader rather than misread; delete `~/.replay/ledger` from earlier builds.
 
 [Unreleased]: https://github.com/RedRobotKK/Replay/compare/main...HEAD
+
+### Fixed
+
+- **`replay doctor` and `replay cost` reported 90 and 1477 over the same directory, one second apart.** Neither figure was wrong and nothing on screen said they were counting different things. Claude Code writes one transcript per session at `<project>/<sessionId>.jsonl` and one more per sub-agent lane at `<project>/<sessionId>/subagents/agent-*.jsonl`; measured on the machine that produced those two lines, 91 of the first and 1403 of the second. doctor printed the session count only because its glob was never recursive — its number was right, and it described 6% of what the next command would read. doctor now reports both, the session count and the transcript-file total, with the reason they differ, and prints the second only when it differs from the first. The total is asserted against `transcriptFiles`, the walk the other commands actually do, rather than against a literal that could drift away from it. This is the share-card lesson recurring in a second place; M48–M50 are frozen against it.
+- **`replay cost` used both words for one thing inside one page of output.** The headline said "transcripts" and the two lines beneath it said "sessions" about the very same files.
+
+- **The cost total was presented as exact while double-counting a small share of requests.** A sub-agent lane re-renders its parent's requests, so the same request appears in more than one transcript file and was priced once per file. The report now counts distinct request ids alongside the total and discloses the overlap in its own sentence, with the direction of the error stated: measured with the real parser over 1,484 files, 430 of 30,716 requests, 1.4%. Deduplicating silently would have been the wrong fix — the overlap is a real property of how the client writes transcripts, and a reader who does not know it exists cannot judge any per-file figure.
+
+- **The fan-out premium was corrected the same day it was published.** Presented as a measured discovery that parallel cost is superlinear, it is substantially an identity: observed is `1.25 * sum(P_i)` and the counterfactual `1.25 * P_max + 0.1 * P_max * (k-1)`, which divide into an empirical dispersion ratio times `1.25k / (1.25 + 0.1(k-1))`. The second factor holds no data and exceeds 1 for every `k > 1`, so **no corpus can produce a premium below 1** — a quantity that cannot come out low is not evidence. Measured values sit at 88–99% of that ceiling, leaving the dispersion ratio (≈0.9, flat) as the only empirical content. The offered robustness — barely moving across 30–300s grouping windows — was the same error twice, since neither `k` nor the multipliers depend on the window. The cost is real and the number stays; the claim around it changed, on the evidence doc, the site, and `PRODUCT-DIRECTION.md`. The "4.2x" in that document was never measured at all, and is within rounding of the arithmetic ceiling for six lanes (4.29).
+
+- `replay serve` shut down cleanly only when no client held an unused connection. A coding agent keeps pooled connections open without a request on them, and those never become idle, so Ctrl-C waited the full five-second grace period and then exited non-zero with `context deadline exceeded`. Connections with no request in flight are now closed at once, turns in flight still get the grace period, and a turn that outlasts it is closed rather than holding the proxy open. Ctrl-C with a pooled connection open went from 5.006s and exit 1 to 4ms and exit 0.
+- **The proxy compared each agent lane against a different one.** `prefixHash`,
+  `last`, `model`, `lastSeen`, `context`, `re_reads` and `what_if` were
+  session-wide single slots, so in any session running sub-agents each lane was
+  measured against whichever sibling wrote last. This forged cache breaks and
+  overruns, blamed lanes for model changes belonging to siblings, and let a
+  quiet sub-agent erase a busy one's context breakdown. `cachemodel`'s own
+  vocabulary always said lane: `ReadFirst` is documented as "the first request
+  in a lane" and the proxy gated it on a session-wide request count. Now one
+  `laneState` per lane.
+- **Opening a sub-agent lane counted as a cache hit.** An unseen lane's usage is
+  the zero value, so the expected read was 0, an opening request read 0, and the
+  two matched exactly and scored "reproduced". Every sub-agent lane in a fan-out
+  contributed a fabricated hit and inflated the cached share on
+  `/replay/status`. It produced no error and no anomaly, only a better-looking
+  success metric.
+
+## [0.3.0] - 2026-09-05
+
+A minor release rather than a patch: it adds a second provider path.
+
+### Added
+
+- **OpenAI-compatible requests are read, guarded and ledgered.** `/v1/chat/completions` is parsed, streaming included, so the spend cap, error budget and loop detector apply to Cursor, DeepSeek and Grok traffic. This family reports no usage on a stream unless the client sets `stream_options.include_usage`, and clients do not, so Replay sets it when the client left it unset (ADR-0003's first admissible kind). **Verified against a test stub and never against a live provider**, and secret masking does not cover this path; the proxy warns about both at runtime and counts `replay_unmasked_requests_total`.
+- **A normalised usage record** (`internal/usage`) with the provider's own payload kept verbatim on the ledger. Anthropic counts exclusively and OpenAI inclusively, so an adapter that copies rather than subtracts double-counts the cache by an amount that grows with the hit rate; `FromInclusive` subtracts and `Validate` refuses a record whose parts do not add up.
+- **Rules documents carry claims**: what a provider documents beside what replaying real traffic showed, with the verdict derived from the two. A file that writes its own `status` is refused. `contradicted` is the value no provider dashboard will show you.
+- **Cost on `/replay/metrics`**: `replay_cost_usd_total`, `replay_cost_usd_day`, and a count of traffic the rules could not price. The endpoint carried no cost figure at all before.
+- `replay doctor` reports which guards fired, what today cost, and warns when a dollar cap cannot be applied to some traffic, naming `--max-day-tokens` as the fix rather than describing it.
+- `replay route`, `replay trim` and `replay advise --guards`, and [an alerting guide](docs/guide/alerting.md) for the twenty-one metrics.
+
+### Fixed
+
+- **Four counters were summed over a session map that evicts** past 256 sessions, so they lost whatever had been dropped and could fall between scrapes. Prometheus reads a falling counter as a reset, so every `rate()` over them was wrong on a busy machine and right on an idle one. Measured: 2,688,000 prompt tokens reported against 8,064,000 observed.
+- **The error budget divided one agent lane's errors by every lane's tokens.** A quiet sub-agent rescoring after a busy one dropped the numerator to zero, so the guard stopped seeing the errors it exists to catch.
+- **Policy trial breaches were counted process-wide**, so evidence gathered against one trigger reverted a different one; and the reverted flag was global, so reverting any policy disarmed the guardrail for every policy after it.
+- **The installer verified the download and never the result.** It now runs the binary before reporting that it installed one.
+- Flag hoisting was value-blind and separated a flag from its value, breaking every value-taking flag placed after a path.
+
+### Changed
+
+- CI is green for the first time since before v0.1.0.
