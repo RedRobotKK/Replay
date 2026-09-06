@@ -73,9 +73,23 @@ for the prefix it carries. **"You should have started a fresh session around tur
 only this tool can make, and it is the decision agent users make most often and most blindly.
 
 **3. Fan-out economics.** `--hold-siblings` exists because parallel sub-agents all pay the cache
-write. That is a measured finding about a pattern the whole industry is adopting right now, and
-almost nobody knows it. **"Your six sub-agents cost 4.2x one agent, not 6x, and here is why"** is
-publishable on its own.
+write. The cost is real. The *finding* was not, and this section is kept as written plus this
+correction rather than quietly rewritten, because the mistake is more instructive than the claim.
+
+The premium separates into two factors, `[ sum(P_i) / (k * P_max) ]` and
+`[ 1.25k / (1.25 + 0.1(k-1)) ]`. The second holds no data - it is fixed by the group size and the
+provider's own multipliers, and exceeds 1 for every `k > 1`. So no corpus can produce a premium
+below 1, and the measured 1.68x / 2.56x / 3.34x sit at 88-99% of that ceiling. The only empirical
+quantity is how equal sibling prompts are, about 0.9 and flat. See
+[the correction](evidence/fan-out-premium-2026-09-06.md).
+
+The "4.2x" above was never measured. It was written as an example of a publishable *sentence*, and
+it survived several readings as though it were a number. Note what it is: the arithmetic ceiling for
+six lanes is `1.25*6 / (1.25 + 0.1*5)` = **4.29**. An invented plausible figure landed on the
+identity, which is exactly why an identity is so easy to mistake for a discovery.
+
+The publishable sentence, honestly: **"Six sub-agents are billed about 4.3x one agent, and that
+number is the price list rather than a property of your workload."**
 
 **4. Cross-session, not per-session.** `advise` already aggregates. The habits are the target, not
 the session: the file you always load and never use, the tool nobody calls, the instruction block

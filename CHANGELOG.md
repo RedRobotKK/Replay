@@ -71,6 +71,8 @@ A minor release rather than a patch: it adds a second provider path.
 
 ### Fixed
 
+- **The fan-out premium was corrected the same day it was published.** Presented as a measured discovery that parallel cost is superlinear, it is substantially an identity: observed is `1.25 * sum(P_i)` and the counterfactual `1.25 * P_max + 0.1 * P_max * (k-1)`, which divide into an empirical dispersion ratio times `1.25k / (1.25 + 0.1(k-1))`. The second factor holds no data and exceeds 1 for every `k > 1`, so **no corpus can produce a premium below 1** — a quantity that cannot come out low is not evidence. Measured values sit at 88–99% of that ceiling, leaving the dispersion ratio (≈0.9, flat) as the only empirical content. The offered robustness — barely moving across 30–300s grouping windows — was the same error twice, since neither `k` nor the multipliers depend on the window. The cost is real and the number stays; the claim around it changed, on the evidence doc, the site, and `PRODUCT-DIRECTION.md`. The "4.2x" in that document was never measured at all, and is within rounding of the arithmetic ceiling for six lanes (4.29).
+
 - `replay serve` shut down cleanly only when no client held an unused connection. A coding agent keeps pooled connections open without a request on them, and those never become idle, so Ctrl-C waited the full five-second grace period and then exited non-zero with `context deadline exceeded`. Connections with no request in flight are now closed at once, turns in flight still get the grace period, and a turn that outlasts it is closed rather than holding the proxy open. Ctrl-C with a pooled connection open went from 5.006s and exit 1 to 4ms and exit 0.
 
 ### Changed
