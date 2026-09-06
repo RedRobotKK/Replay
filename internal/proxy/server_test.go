@@ -545,9 +545,15 @@ func TestClientAbortMidStreamIsStillRecorded(t *testing.T) {
 	// Whether the server noticed the disconnect during the copy (abort
 	// panic) or after the upstream returned depends on timing; both paths
 	// go through the same bookkeeping, so only the record is asserted.
-	if !strings.Contains(logs.String(), "session=session-abc") {
-		t.Fatalf("request must be logged: %s", logs.String())
-	}
+	//
+	// The log line is written by a different path from the ledger record, so
+	// waiting for the record says nothing about whether the line has been
+	// emitted yet. Asserting on it immediately after waitLedger was
+	// synchronising on the wrong event: it passed whenever the log happened to
+	// win the race and failed on CI with a present record and an empty buffer.
+	waitFor(t, "the aborted request to be logged", func() bool {
+		return strings.Contains(logs.String(), "session=session-abc")
+	})
 	close(up.release)
 }
 
