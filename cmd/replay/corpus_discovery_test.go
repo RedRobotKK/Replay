@@ -161,3 +161,46 @@ func TestDiscovery_TheEmptyStateKnowsWhichKindOfEmptyItIs(t *testing.T) {
 		t.Errorf("say that the agent is there and the sessions are not:\n%s", b.String())
 	}
 }
+
+// In a container the empty state must not assume Claude Code.
+//
+// Replay gets installed into images that run any CLI agent, and the installer
+// treats that case identically to a laptop. There is no ~/.claude there and
+// there may never be one, because the agent in that image writes no transcripts
+// to disk at all. Telling that operator "Claude Code is not installed here" is
+// answering a question they did not ask.
+//
+// The proxy is the answer for every surface that is not Claude Code, and the
+// surface registry says so: everything except the Messages and chat-completions
+// paths is forwarded, and forwarding still needs the proxy in front of it.
+func TestDiscovery_InAContainerItLeadsWithTheProxy(t *testing.T) {
+	home := t.TempDir()
+	var out bytes.Buffer
+	explainNoCorpusIn(env{containerized: true, claudeOnPath: false}, home, &out)
+	got := out.String()
+
+	if !strings.Contains(got, "replay serve") {
+		t.Errorf("a container with no transcripts must be pointed at the proxy, which "+
+			"works for any CLI agent:\n%s", got)
+	}
+	first := strings.Index(got, "replay serve")
+	installed := strings.Index(got, "not installed")
+	if installed != -1 && installed < first {
+		t.Errorf("the container case leads with a Claude Code diagnosis before the "+
+			"answer that applies to every other agent:\n%s", got)
+	}
+}
+
+// On a laptop with the agent installed, the advice must not change.
+func TestDiscovery_OutsideAContainerTheAdviceIsUnchanged(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".claude", "projects"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	explainNoCorpusIn(env{containerized: false, claudeOnPath: true}, home, &out)
+	if !strings.Contains(out.String(), "no sessions") {
+		t.Errorf("the laptop case must still say the agent is here and the sessions "+
+			"are not:\n%s", out.String())
+	}
+}
