@@ -2,6 +2,46 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **The proxy compared each agent lane against a different one.** `prefixHash`,
+  `last`, `model`, `lastSeen`, `context`, `re_reads` and `what_if` were
+  session-wide single slots, so in any session running sub-agents each lane was
+  measured against whichever sibling wrote last. This forged cache breaks and
+  overruns, blamed lanes for model changes belonging to siblings, and let a
+  quiet sub-agent erase a busy one's context breakdown. `cachemodel`'s own
+  vocabulary always said lane: `ReadFirst` is documented as "the first request
+  in a lane" and the proxy gated it on a session-wide request count. Now one
+  `laneState` per lane.
+- **Opening a sub-agent lane counted as a cache hit.** An unseen lane's usage is
+  the zero value, so the expected read was 0, an opening request read 0, and the
+  two matched exactly and scored "reproduced". Every sub-agent lane in a fan-out
+  contributed a fabricated hit and inflated the cached share on
+  `/replay/status`. It produced no error and no anomaly, only a better-looking
+  success metric.
+
+### Added
+
+- **A break says which tools changed.** "System prompt or tool definitions
+  changed" covered every prefix change and named a cause that mostly did not
+  happen. Two narrower causes join the vocabulary, `tool definitions changed`
+  and `system prompt changed`, and the new ledger field `cause_detail` names the
+  tools: *"added 39 tool(s): mcp__claude_ai_Calendly__... ; removed 1 tool(s):
+  WaitForMcpServers"*. The break log line also names the lane.
+- **Per-lane breakdowns on `/replay/status`**: `context_by_lane`,
+  `re_reads_by_lane`, `what_if_by_lane`. The existing keys keep their shapes and
+  now mean the main loop specifically.
+- **A pre-flight deficit warning**, off by default. Warns before a changed
+  prefix is re-billed and refuses only against a ceiling the operator set.
+  Consent is config, never a request header. A ceiling inside the estimate's own
+  ±15% band suppresses the refusal rather than deciding it.
+- **A throughput guard for `rescore`**, which re-walks the whole lane per
+  request. Measured at 17.8 ms of proxy CPU for a 200-request session; the guard
+  asserts a growth ratio, so it catches a regression without a fragile
+  wall-clock bound. **The cost is measured, not fixed.**
+
 ## [0.3.0] - 2026-09-05
 
 A minor release rather than a patch: it adds a second provider path.
