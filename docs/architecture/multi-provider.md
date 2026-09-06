@@ -151,9 +151,9 @@ NVIDIA NIM gateway — three of four things worked and the fourth was silently b
 `SummarizeOpenAIRequest` set neither `SessionHash` nor `PrefixHash`. The proxy's documented
 fallback is to use `SessionHash` as the session identity when a client sends no session
 header, and the header it looks for is `x-claude-code-session-id` — Claude Code's own, which
-no OpenAI-compatible client sends. So **every request from Cursor, Grok or any generic client
-was read, guarded, priced, logged with correct figures, and then dropped without a ledger
-record.** `replay cost` over that traffic would have reported nothing while the proxy's log
+no OpenAI-compatible client sends. So **every request from Cursor or any other generic
+OpenAI-compatible client was read, guarded, priced, logged with correct figures, and then
+dropped without a ledger record.** `replay cost` over that traffic would have reported nothing while the proxy's log
 looked perfectly healthy.
 
 `PrefixHash` had the same omission and a second consequence: `--hold-siblings` keys on it, so

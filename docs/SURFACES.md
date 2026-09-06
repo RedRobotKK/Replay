@@ -218,8 +218,9 @@ release served locally, not a real one.
 figure and every guard has been exercised against a fake upstream. `--context-edit-trigger` in
 particular sends a provider parameter that has never been sent to that provider.
 
-**Windows is built and never tested.** goreleaser produces the target; nobody has run it there, and
-`install.sh` refuses Windows outright.
+**Windows is not built and has never been tested.** This paragraph said "Windows is built" and named
+goreleaser as producing the target, which stopped being true when the `goos` line dropped it. Nobody
+has run Replay on Windows, `install.sh` refuses it outright, and there is now no archive to install.
 
 **Linux is built and barely tested.** The musl and glibc split is handled in the installer and both
 the tool and the tests have been exercised almost entirely on macOS arm64.

@@ -117,6 +117,10 @@ client's clothes, and it should be sequenced as such:
 2. An OpenAI-compatible request path in the proxy.
 3. Cursor, DeepSeek, Grok and OpenAI then arrive together, because they are one
    piece of work, not four.
+   (Corrected 2026-09-06, left in place rather than rewritten: Grok is not on
+   this wire and never was. Captured off a live session it posts to /responses
+   at cli-chat-proxy.grok.com, which nothing in this build parses. It was on the
+   list here by assumption, which is the thing this spike existed to avoid.)
 
 What ships from this spike is the counting defence, which was cheap and is
 needed by all of them.

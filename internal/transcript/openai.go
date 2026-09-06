@@ -2,8 +2,12 @@ package transcript
 
 import "encoding/json"
 
-// The OpenAI-compatible wire shape, which Cursor, DeepSeek, Grok and OpenAI
-// itself all speak.
+// The OpenAI-compatible wire shape, which Cursor, DeepSeek and OpenAI itself
+// all speak.
+//
+// Grok was listed here too, on an assumption rather than a capture. It posts to
+// /responses at cli-chat-proxy.grok.com, so this adapter never sees its
+// traffic.
 //
 // One difference matters more than all the others put together. This provider
 // counts INCLUSIVELY: prompt_tokens already contains the cached tokens.

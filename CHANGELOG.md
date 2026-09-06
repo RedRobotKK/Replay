@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- **A frozen-defect harness** (`internal/regression`): one register entry per defect this project has found, each carrying what it looked like from outside and what would be true again if it returned. Six of the nine are guarded by a test that has been made to fail on purpose; three are recorded as still live in this tree, because their fixes are on branches that have not merged here, and each of those names a fragment of the defective code that must still be findable — so the row goes red the day the fix lands and asks to be promoted, rather than outliving its subject. Eighteen new mutants are frozen in `internal/mutation/testdata/mutants.json` so the score is reproducible instead of a number in a commit message.
+
+### Fixed
+
+- **Grok is no longer filed under the OpenAI-compatible wire.** A source comment, this changelog and the multi-provider document all grouped it with Cursor, DeepSeek and OpenAI on `/v1/chat/completions`, on an assumption about what such a CLI must send. Captured off a live session it posts to `/responses` at `cli-chat-proxy.grok.com`, which this build forwards and does not parse — so the grouping promised a user a report that comes back empty.
+- **`docs/SURFACES.md` said Windows was built** and named goreleaser as producing the target, after the `goos` line had already dropped it. The document and `.goreleaser.yaml` are now checked against each other in both directions.
+- **`isolateHome` sets `USERPROFILE` as well as `HOME`.** `os.UserHomeDir` reads `USERPROFILE` on Windows, so tests built on that helper ran against the runner's real home and failed as though the product were broken.
+- **golangci-lint reports every issue it finds.** The default `max-same-issues: 3` and `max-issues-per-linter: 50` are display caps, not filters: the run always failed on everything it found, but the backlog was tracked at 38 issues when there were 119.
+
 ## [0.4.0] - 2026-09-06
 
 A minor release. The theme is that the proxy's own instruments were wrong about
@@ -146,7 +157,7 @@ A minor release rather than a patch: it adds a second provider path.
 
 ### Added
 
-- **OpenAI-compatible requests are read, guarded and ledgered.** `/v1/chat/completions` is parsed, streaming included, so the spend cap, error budget and loop detector apply to Cursor, DeepSeek and Grok traffic. This family reports no usage on a stream unless the client sets `stream_options.include_usage`, and clients do not, so Replay sets it when the client left it unset (ADR-0003's first admissible kind). **Verified against a test stub and never against a live provider**, and secret masking does not cover this path; the proxy warns about both at runtime and counts `replay_unmasked_requests_total`.
+- **OpenAI-compatible requests are read, guarded and ledgered.** `/v1/chat/completions` is parsed, streaming included, so the spend cap, error budget and loop detector apply to Cursor and DeepSeek traffic. (This line named Grok until 2026-09-06 and was wrong: Grok posts to /responses at cli-chat-proxy.grok.com, which this build forwards and does not parse.) This family reports no usage on a stream unless the client sets `stream_options.include_usage`, and clients do not, so Replay sets it when the client left it unset (ADR-0003's first admissible kind). **Verified against a test stub and never against a live provider**, and secret masking does not cover this path; the proxy warns about both at runtime and counts `replay_unmasked_requests_total`.
 - **A normalised usage record** (`internal/usage`) with the provider's own payload kept verbatim on the ledger. Anthropic counts exclusively and OpenAI inclusively, so an adapter that copies rather than subtracts double-counts the cache by an amount that grows with the hit rate; `FromInclusive` subtracts and `Validate` refuses a record whose parts do not add up.
 - **Rules documents carry claims**: what a provider documents beside what replaying real traffic showed, with the verdict derived from the two. A file that writes its own `status` is refused. `contradicted` is the value no provider dashboard will show you.
 - **Cost on `/replay/metrics`**: `replay_cost_usd_total`, `replay_cost_usd_day`, and a count of traffic the rules could not price. The endpoint carried no cost figure at all before.
