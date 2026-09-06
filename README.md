@@ -179,6 +179,27 @@ first estimator returning exactly 1.00 whether the true ratio was 12.5 or 1.0.
 - You do not use a coding agent that keeps transcripts. There is nothing to read.
 - You want a savings forecast. Replay reports what was already spent, not what you will save.
 - You want a number without a caveat. Most figures here carry one, because most of them earn one.
+- **You are on Windows.** See below.
+
+## Platform support: macOS and Linux only
+
+**Replay is not supported on Windows, and it has never been tested there.**
+
+That is a stronger statement than "we have not got to it", and it is the honest
+one. The CI matrix has listed a Windows job for a long time and that job has
+never run a single test: it failed earlier, at `go vet`, on a helper that only
+existed in a file tagged `//go:build unix`. The compile error was fixed on
+2026-09-06, and the first test run it ever produced failed fourteen tests.
+
+Several of those are not portability chores. `TestS5_TheFileIsOwnerOnly` and
+`TestU2_PermissionMustBeExplicit` assert Unix file-mode semantics that Windows
+does not have, and the guarantees they check are guarantees this tool makes
+about your ledger and your masking vault. Until there is a Windows story for
+those, a Windows build would be a binary that runs while quietly not keeping
+its promises. That is worse than not shipping one.
+
+**macOS and Linux are tested on every push**, with `go vet` and
+`go test -race`. WSL works, because it is Linux.
 
 ## How the tests work here
 

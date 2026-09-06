@@ -43,6 +43,15 @@ Each line is a gate. A release cannot claim 1.0 with any of them unmet, and
       cover it at all. Shipping it unlabelled implies a parity that does not
       exist.
 
+### Platform
+
+- [ ] **Windows is either supported or the claim is removed from CI.** As of
+      2026-09-06 it is declared unsupported in the README, and the job remains in
+      the matrix as a non-blocking signal of how far away support is. Fourteen
+      tests fail, and the ones that matter assert Unix file-mode semantics that
+      guard the ledger and the masking vault. A Windows binary that runs while
+      not keeping those promises is worse than no Windows binary.
+
 ### Measurement
 
 - [ ] **No headline figure without the instrument that produced it being
