@@ -241,3 +241,85 @@ func TestQT7_ThinEvidenceOnBothArmsStillRefuses(t *testing.T) {
 		t.Errorf("reported a ratio from %d read and %d write samples: %+v", c.ReadN, c.WriteN, c)
 	}
 }
+
+// QT-8: the subscription surface reports utilization, not remaining, and it
+// RISES.
+//
+// Measured on live traffic 2026-09-06. A Claude Code subscription session
+// returns none of the documented API rate-limit headers. It returns instead:
+//
+//	anthropic-ratelimit-unified-5h-utilization      0.2
+//	anthropic-ratelimit-unified-7d-utilization      0.27
+//	anthropic-ratelimit-unified-status              allowed
+//	anthropic-ratelimit-unified-representative-claim five_hour
+//
+// So the flat seat - the whole population this package was written for -
+// reports a fraction of a window consumed, on two windows at once, and the
+// number goes UP. Reading it with the falling-counter logic finds nothing at
+// all and reports "no evidence", which is the worst possible failure here
+// because it is indistinguishable from a provider that sends no quota data.
+//
+// PASS: a rise of 0.01 is a sample, and a fall is treated as a window reset.
+// FAIL: silence on the surface that matters most.
+func TestQT8_UtilizationRisesAndIsStillASample(t *testing.T) {
+	mk := func(at time.Time, util string, wrote bool) ledger.Record {
+		r := rec(at, 0, wrote, "a")
+		r.Quota = map[string]string{"anthropic-ratelimit-unified-5h-utilization": util}
+		return r
+	}
+	got := Samples([]ledger.Record{
+		mk(t0, "0.20", true),
+		mk(t0.Add(time.Second), "0.21", true),
+	})
+	if len(got) != 1 {
+		t.Fatalf("utilization produced %d samples, want 1: %+v", len(got), got)
+	}
+	if got[0].Spent <= 0 {
+		t.Errorf("a rise in utilization must be positive consumption: %+v", got[0])
+	}
+}
+
+// QT-9: utilization falling is a window reset, not negative consumption.
+func TestQT9_FallingUtilizationIsAReset(t *testing.T) {
+	mk := func(at time.Time, util string) ledger.Record {
+		r := rec(at, 0, false, "a")
+		r.Quota = map[string]string{"anthropic-ratelimit-unified-5h-utilization": util}
+		return r
+	}
+	got := Samples([]ledger.Record{
+		mk(t0, "0.98"),
+		mk(t0.Add(time.Second), "0.01"), // the 5h window rolled
+		mk(t0.Add(2*time.Second), "0.02"),
+	})
+	if len(got) != 1 {
+		t.Fatalf("expected 1 sample after the reset, got %d: %+v", len(got), got)
+	}
+}
+
+// QT-10: the resolution limit is reported, not hidden.
+//
+// Utilization arrives at two decimal places, so one step is 1% of a window.
+// Measured live: four requests carrying ~475,000 cache-write tokens moved the
+// 5h figure from 0.20 to 0.21 - a single step. Most individual requests
+// therefore produce a delta of exactly zero, and a median over those says a
+// request costs nothing.
+//
+// PASS: zero-delta pairs are not counted as measured consumption.
+// FAIL: a corpus of honest zeros dragging the median to zero and Compare then
+// refusing on divide-by-zero while claiming the arm was populated.
+func TestQT10_ZeroDeltasAreNotSamples(t *testing.T) {
+	mk := func(at time.Time, util string) ledger.Record {
+		r := rec(at, 0, false, "a")
+		r.Quota = map[string]string{"anthropic-ratelimit-unified-5h-utilization": util}
+		return r
+	}
+	got := Samples([]ledger.Record{
+		mk(t0, "0.20"),
+		mk(t0.Add(time.Second), "0.20"),
+		mk(t0.Add(2*time.Second), "0.20"),
+	})
+	if len(got) != 0 {
+		t.Errorf("unchanged utilization produced %d samples; below the counter's "+
+			"resolution is not the same as free: %+v", len(got), got)
+	}
+}

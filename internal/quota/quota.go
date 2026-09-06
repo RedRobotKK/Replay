@@ -21,11 +21,29 @@ import (
 	"github.com/RedRobotKK/Replay/internal/ledger"
 )
 
-// RemainingHeaders are the response headers that report budget left, in the
-// order preferred when a response carries more than one.
+// RemainingHeaders report budget LEFT, so they fall as it is consumed. These
+// are the documented API-key headers.
 var RemainingHeaders = []string{
 	"anthropic-ratelimit-tokens-remaining",
 	"x-ratelimit-remaining-tokens",
+}
+
+// UtilizationHeaders report the fraction of a window CONSUMED, so they rise.
+//
+// Measured on live traffic 2026-09-06: a Claude Code subscription session
+// returns none of the headers above. It returns this family instead, on two
+// windows at once, with a companion "representative-claim" naming which one is
+// currently binding. The flat seat - the population this package exists for -
+// is only visible here, and reading it with falling-counter logic reports "no
+// evidence", which is indistinguishable from a provider that sends nothing.
+//
+// The values carry two decimal places, so one step is 1% of a window. Four
+// requests totalling roughly 475,000 cache-write tokens moved the five-hour
+// figure from 0.20 to 0.21. Most single requests therefore land below the
+// resolution and produce no sample at all, which is why Compare needs many.
+var UtilizationHeaders = []string{
+	"anthropic-ratelimit-unified-5h-utilization",
+	"anthropic-ratelimit-unified-7d-utilization",
 }
 
 // MinPerArm is how many samples each arm needs before a ratio is reported.
@@ -45,8 +63,10 @@ type Sample struct {
 	Wrote bool
 }
 
-// remaining reads the budget from a record, or reports that it carried none.
-func remaining(r ledger.Record) (string, int64, bool) {
+// reading is one record's quota position, normalised so that it always FALLS
+// as budget is consumed. A utilization fraction is inverted and scaled to parts
+// per million so both families share one comparison.
+func reading(r ledger.Record) (string, int64, bool) {
 	for _, h := range RemainingHeaders {
 		v, ok := r.Quota[h]
 		if !ok {
@@ -59,6 +79,20 @@ func remaining(r ledger.Record) (string, int64, bool) {
 			continue
 		}
 		return h, n, true
+	}
+	for _, h := range UtilizationHeaders {
+		v, ok := r.Quota[h]
+		if !ok {
+			continue
+		}
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			continue
+		}
+		// Inverted: utilization rises, budget-left falls. Scaled so the
+		// two-decimal wire value stays an exact integer rather than picking up
+		// float residue that would read as consumption.
+		return h, int64((1 - f) * 1_000_000), true
 	}
 	return "", 0, false
 }
@@ -83,7 +117,7 @@ func Samples(recs []ledger.Record) []Sample {
 	var prevLimit string
 	var prevVal int64
 	for _, r := range ordered {
-		limit, val, ok := remaining(r)
+		limit, val, ok := reading(r)
 		if !ok {
 			// A request with no reading breaks the chain: pairing across it
 			// would silently fold two requests' spend into one sample.
