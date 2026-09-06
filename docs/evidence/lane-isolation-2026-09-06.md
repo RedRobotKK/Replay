@@ -59,7 +59,7 @@ billed, which is the figure that means something to whoever pays.
 
 ## The cause distribution, and a prediction that could have failed
 
-```
+```text
 3   336,060   tool definitions changed
 0         0   system prompt changed
 0         0   system prompt or tool definitions changed  (combined fallback)
@@ -76,7 +76,7 @@ produced directly by a working instrument.
 
 Every break is an MCP connector's tool block arriving mid-session:
 
-```
+```text
 [157,080] added 3 tool(s): mcp__claude_ai_Otter_ai__otter_fetch,
           otter_get_user_info, otter_search; removed 1 tool(s): WaitForMcpServers
 [140,623] added 39 tool(s): mcp__claude_ai_Calendly__availability-...

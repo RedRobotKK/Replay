@@ -25,7 +25,6 @@
 set -eu
 
 REPO="RedRobotKK/Replay"
-COFFEE="https://buymeacoffee.com/saitodaniel"
 BIN="replay"
 VERSION="${REPLAY_VERSION:-}"
 BIN_DIR="${REPLAY_BIN_DIR:-}"
@@ -388,28 +387,40 @@ printf '\n' >&2
 if [ -n "$previous" ]; then
   info "replaced  ${previous}"
 fi
-printf '%sNext:%s  %s%s doctor%s   %s# what Replay can see on this machine%s\n' \
+# One command, and it is complete. The old second line was
+# `replay ~/.claude/projects/<project>/`, which is not a command: it is a
+# template with a placeholder the reader has to go and resolve before anything
+# happens. Bare `replay` discovers the transcript root itself and says on
+# stderr which one it used, so the first thing a new user runs can be pasted.
+printf '%sNext:%s  %s%s%s   %s# what your agent already spent, and how much was billed twice%s\n' \
   "$C_B" "$C_0" "$C_ACCENT$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
-printf '        %s%s ~/.claude/projects/<project>/%s   %s# read a session you already paid for%s\n' \
+printf '        %s%s doctor%s   %s# if that found nothing, this says why%s\n' \
   "$C_ACCENT$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
 # Discovery, not consent. Naming the local report is the installer's job. There
 # is no submission path to point at: the binary sends nothing anywhere.
 if [ "$CORPUS_OPT_IN" -eq 0 ]; then
-  printf '\n%sReplay makes no network request except to the provider you configured.%s\n' \
-    "$C_DIM" "$C_0" >&2
+  printf '\n%sReplay originates no network request you did not type. The proxy forwards\nyour own traffic; %s rules --check-prices and %s probe --execute are the two\nthat reach out, and only when you run them.%s\n' \
+    "$C_DIM" "$BIN" "$BIN" "$C_0" >&2
   printf '%sTo see how well it is calibrated on your own traffic:%s %s%s corpus%s%s shows what\nyour sessions look like, on this machine, and sends nothing anywhere.%s\n' \
     "$C_DIM" "$C_0" "$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
 fi
 
-# Said once, at the only moment the person is definitely reading, and never
-# again: Replay has no account and phones nothing home, so there is no second
-# opportunity and no nag. Tied to a real number rather than a general appeal,
-# because the corpus that makes the tool's figures measured rather than guessed
-# was paid for out of pocket.
-printf '\n%sReplay is free, Apache 2.0, and funded by nobody. The 1363-session corpus\nbehind its numbers cost about $2851 in API spend to gather.%s\n' \
+# NO ask here, and that is the considered position rather than an omission.
+#
+# cmd/replay/tipvariant.go states the principle it is built on: the tool gives
+# something first, then asks for a small share of it back. It asks only after
+# `cost` has found more than $5 you paid twice, at most once every thirty days,
+# for an amount scaled to the finding. That ask is earned.
+#
+# An ask here is the opposite. At install time the tool has measured nothing,
+# so the only thing it can appeal to is what the corpus cost its author, which
+# answers the author's question and not the reader's. The reader's question is
+# "what is on my machine", and the line above now answers it in one command.
+#
+# The old copy also carried an unsourced $2851, removed 2026-09-06 because it
+# appeared in this file and in no evidence anywhere.
+printf '\n%sFree, Apache 2.0, no account, no telemetry. Calibrated against 78 sessions\nacross 1,450 transcripts on one machine, and every figure says how it was\nobtained.%s\n' \
   "$C_DIM" "$C_0" >&2
-printf '%sIf it saves you more than it cost you to install:%s %s%s%s\n' \
-  "$C_DIM" "$C_0" "$C_ACCENT$C_B" "$COFFEE" "$C_0" >&2
 
 printf '\n%sDocs%s https://github.com/%s#readme   %sUninstall%s rm %s/%s\n' \
   "$C_DIM" "$C_0" "$REPO" "$C_DIM" "$C_0" "$BIN_DIR" "$BIN" >&2

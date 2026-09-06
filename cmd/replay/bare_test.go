@@ -171,3 +171,41 @@ func TestBR5_HelpStillPrintsTheMenuOnAMachineWithTranscripts(t *testing.T) {
 		}
 	}
 }
+
+// BR-4: with nothing found, say where you looked before showing the menu.
+//
+// BR-2 settled that the menu is the right answer when there are no
+// transcripts, and it is. But a menu on its own does not tell a first-time
+// reader WHY they got one. Pasting `replay` and receiving sixteen commands
+// reads as "this needs arguments" or "this is broken", and both are wrong: the
+// tool ran, looked in one specific place, and found nothing there.
+//
+// This matters more since 2026-09-06, when the installer began pointing every
+// new user at bare `replay` as their first command. On a machine that has
+// never run Claude Code, that first impression is this branch.
+//
+// PASS: the path it probed is named, and the reason is one line.
+// FAIL: the menu appears with no explanation, or the path is not named.
+func TestBR4_NothingFoundNamesWhereItLooked(t *testing.T) {
+	home := t.TempDir()
+	isolateHome(t, home)
+	var out, errOut bytes.Buffer
+	if err := run(nil, &out, &errOut); err != nil {
+		t.Fatalf("bare replay with no transcripts: %v (stderr: %s)", err, errOut.String())
+	}
+	got := out.String() + errOut.String()
+
+	if !strings.Contains(got, "projects") {
+		t.Errorf("the output does not name the directory it searched, so a reader whose "+
+			"transcripts live elsewhere cannot tell that is the problem:\n%s", got)
+	}
+	if !strings.Contains(got, "No transcripts") && !strings.Contains(got, "no transcripts") {
+		t.Errorf("the output does not say nothing was found, so the menu reads as a usage "+
+			"error rather than an empty result:\n%s", got)
+	}
+	// The menu must still be there. BR-2's decision stands.
+	if !strings.Contains(out.String(), "Start here:") {
+		t.Errorf("the command list must still print; this adds a line, it does not "+
+			"replace the menu:\n%s", out.String())
+	}
+}
