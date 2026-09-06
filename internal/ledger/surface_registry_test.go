@@ -86,7 +86,7 @@ var surfaces = []Surface{
 		Promote: "already the strongest status available",
 	},
 	{
-		Client: "Cursor, Grok, and other OpenAI-compatible CLIs", Wire: "openai:/v1/chat/completions",
+		Client: "Cursor and other OpenAI-compatible CLIs", Wire: "openai:/v1/chat/completions",
 		Status: StatusStub, Fixture: "",
 		Evidence: "CHANGELOG 0.3.0 and docs/SURFACES.md both say verified against a stub " +
 			"and never against a live OpenAI-compatible provider. Masking does not cover " +
@@ -102,6 +102,20 @@ var surfaces = []Surface{
 			"cache fields, so the transcript path could never produce cache forensics",
 		Promote: "nothing to promote. This is a kill with a measurement behind it, and it " +
 			"is recorded so nobody spends a week rediscovering it",
+	},
+	{
+		Client: "Grok CLI", Wire: "openai:/responses",
+		Status: StatusForwarded, Fixture: "",
+		Evidence: "docs/evidence/wire-families-2026-09-06.md: captured off the wire from a " +
+			"live authenticated session. It posts to /responses at " +
+			"cli-chat-proxy.grok.com, not /v1/chat/completions at api.x.ai, so it was " +
+			"listed on the wrong row until it was measured. It names its own " +
+			"prompt_cache_key in the request body, and its x-ratelimit-remaining-* " +
+			"headers did not move across 8 model calls and ~940KB of responses",
+		Promote: "parse /responses and land a captured fixture. Note that the quota " +
+			"headers are not a route to a live guard on this surface: no live quota " +
+			"state was found on any endpoint, /settings included, so a guard here has " +
+			"to be built from what Replay counts itself",
 	},
 	{
 		Client: "Anything else with a terminal", Wire: "unknown",
