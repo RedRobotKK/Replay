@@ -1,6 +1,7 @@
 package quota
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -203,7 +204,7 @@ func TestQT6_ReportsTheMeasuredRatio(t *testing.T) {
 	}
 }
 
-// QT-7: a handful of samples on BOTH arms is still a refusal.
+// QT-7: a handful of counter steps on BOTH arms is still a refusal.
 //
 // Written because the mutation run caught QT-5 not testing what it claimed.
 // QT-5 supplies writes only, so ReadN is zero and Compare refuses on the
@@ -233,12 +234,13 @@ func TestQT7_ThinEvidenceOnBothArmsStillRefuses(t *testing.T) {
 		t.Fatalf("fixture does not populate both arms (read=%d write=%d), so this "+
 			"test cannot exercise the minimum-evidence guard", c.ReadN, c.WriteN)
 	}
-	if c.ReadMedian <= 0 {
-		t.Fatalf("reads must spend something, or Compare refuses on the divide-by-zero " +
-			"branch and the minimum is still untested")
+	if c.ReadRate <= 0 {
+		t.Fatalf("reads must move the counter, or Compare refuses on the divide-by-zero " +
+			"branch and the minimum-evidence guard is still untested")
 	}
 	if c.Reportable {
-		t.Errorf("reported a ratio from %d read and %d write samples: %+v", c.ReadN, c.WriteN, c)
+		t.Errorf("reported a ratio from %d read and %d write samples, below the step floor: %+v",
+			c.ReadN, c.WriteN, c)
 	}
 }
 
@@ -296,18 +298,22 @@ func TestQT9_FallingUtilizationIsAReset(t *testing.T) {
 	}
 }
 
-// QT-10: the resolution limit is reported, not hidden.
+// QT-10: a request that moved the counter by nothing still counts as observed.
 //
-// Utilization arrives at two decimal places, so one step is 1% of a window.
-// Measured live: four requests carrying ~475,000 cache-write tokens moved the
-// 5h figure from 0.20 to 0.21 - a single step. Most individual requests
-// therefore produce a delta of exactly zero, and a median over those says a
-// request costs nothing.
+// This test asserted the opposite until QT-11 caught it. The reasoning was
+// that a zero delta is not evidence a request was free - true - and the
+// conclusion drawn was to discard the pair, which was wrong and fatal.
 //
-// PASS: zero-delta pairs are not counted as measured consumption.
-// FAIL: a corpus of honest zeros dragging the median to zero and Compare then
-// refusing on divide-by-zero while claiming the arm was populated.
-func TestQT10_ZeroDeltasAreNotSamples(t *testing.T) {
+// Utilization carries two decimals, so one step is 1% of a window and was
+// measured at roughly 475,000 write-equivalent tokens. Almost every individual
+// request therefore moves the counter by nothing. The entire signal is the
+// FREQUENCY of movement, so the requests that did not move it are the
+// denominator. Dropping them leaves each arm at one step per average moving
+// request and the ratio is 1.000 in every possible world.
+//
+// PASS: the pair is observed, carrying zero consumption.
+// FAIL: dropped, which restores the degenerate estimator.
+func TestQT10_ZeroDeltasAreObservedWithZeroConsumption(t *testing.T) {
 	mk := func(at time.Time, util string) ledger.Record {
 		r := rec(at, 0, false, "a")
 		r.Quota = map[string]string{"anthropic-ratelimit-unified-5h-utilization": util}
@@ -318,8 +324,102 @@ func TestQT10_ZeroDeltasAreNotSamples(t *testing.T) {
 		mk(t0.Add(time.Second), "0.20"),
 		mk(t0.Add(2*time.Second), "0.20"),
 	})
-	if len(got) != 0 {
-		t.Errorf("unchanged utilization produced %d samples; below the counter's "+
-			"resolution is not the same as free: %+v", len(got), got)
+	if len(got) != 2 {
+		t.Fatalf("expected both pairs observed, got %d: %+v", len(got), got)
 	}
+	for _, s := range got {
+		if s.Spent != 0 {
+			t.Errorf("unchanged utilization must record zero consumption, not %d: %+v", s.Spent, s)
+		}
+		if s.Tokens <= 0 {
+			t.Errorf("a zero-delta sample still has to carry its tokens, or it is not a "+
+				"denominator: %+v", s)
+		}
+	}
+}
+
+// QT-11: the estimator must recover a known ratio.
+//
+// This is the test the package should have opened with. Simulation of the
+// measured instrument - 1% resolution, one step per ~475,000 write-equivalent
+// tokens - showed the original estimator, median of non-zero deltas, returning
+// exactly 1.00 whether the true ratio was 12.5 or 1.0. Not noisy: DEGENERATE.
+// Observed deltas are integers and almost always exactly 1, so the median of
+// each arm is 1 and the quotient is 1 by construction, for every possible
+// world. A measurement that cannot come out differently is not a measurement,
+// and it would have reported "no, subscriptions do not charge like the bill"
+// with total confidence and no evidence.
+//
+// The replacement is a rate: steps per token, per arm, aggregated. It discards
+// nothing and quantization averages out. In simulation it recovers 12.51 and
+// 0.98 against truths of 12.5 and 1.0.
+//
+// PASS: both worlds recovered within tolerance.
+// FAIL: the arms collapse to the same number again.
+func TestQT11_TheEstimatorRecoversAKnownRatio(t *testing.T) {
+	// One step of the counter, in write-equivalent tokens, from live data.
+	const step = 475_000
+	const prefix = 157_000
+
+	build := func(readWeight float64) []ledger.Record {
+		var recs []ledger.Record
+		at := t0
+		acc, last := 0.0, 0
+		for i := 0; i < 4000; i++ {
+			wrote := i%10 == 0
+			cost := float64(prefix)
+			if !wrote {
+				cost = float64(prefix) * readWeight
+			}
+			acc += cost
+			last = int(acc / step)
+			// Utilization rises one hundredth per step, wrapping is not
+			// exercised here.
+			r := rec(at, 0, wrote, "a")
+			r.Quota = map[string]string{
+				"anthropic-ratelimit-unified-5h-utilization": ftoa(float64(last) / 100),
+			}
+			if wrote {
+				r.Response.Usage.CacheCreation = prefix
+				r.Response.Usage.CacheRead = 0
+			} else {
+				r.Response.Usage.CacheCreation = 0
+				r.Response.Usage.CacheRead = prefix
+			}
+			recs = append(recs, r)
+			at = at.Add(time.Second)
+		}
+		return recs
+	}
+
+	for _, c := range []struct {
+		name       string
+		readWeight float64
+		want       float64
+	}{
+		{"quota mirrors the bill", 0.1 / 1.25, 12.5},
+		{"quota counts raw tokens", 1.0, 1.0},
+	} {
+		smp := Samples(build(c.readWeight))
+		got := Compare(smp)
+		t.Logf("%s: samples=%d readN=%d writeN=%d readRate=%.3e writeRate=%.3e ratio=%.3f why=%q",
+			c.name, len(smp), got.ReadN, got.WriteN, got.ReadRate, got.WriteRate, got.Ratio, got.Why)
+		if !got.Reportable {
+			t.Errorf("%s: refused on a full simulated run: %s", c.name, got.Why)
+			continue
+		}
+		lo, hi := c.want*0.75, c.want*1.25
+		if got.Ratio < lo || got.Ratio > hi {
+			t.Errorf("%s: ratio = %.2f, want near %.2f. If both cases come out at 1.00 the "+
+				"estimator is degenerate again.", c.name, got.Ratio, c.want)
+		}
+	}
+}
+
+// ftoa renders a two-decimal counter reading. The wire carries two decimals;
+// the simulation runs past 1.0 because it models more than one window's worth
+// of traffic, and the estimator is a ratio of rates so the absolute level
+// cancels.
+func ftoa(f float64) string {
+	return strconv.FormatFloat(f, 'f', 2, 64)
 }

@@ -626,6 +626,19 @@
         "TestQT6_ReportsTheMeasuredRatio"
       ],
       "note": "Returns the BILLING multiple (1.25/0.1) as though it were the measured quota multiple. The entire question is whether the subscription limit behaves like the bill; answering it with the bill is the assumption dressed as the finding."
+    },
+    {
+      "id": "M47",
+      "name": "quota-drops-the-denominator",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "internal/quota/quota.go",
+      "anchor": "\t\t\tcase d >= 0:",
+      "replacement": "\t\t\tcase d > 0:",
+      "killedBy": [
+        "TestQT11_TheEstimatorRecoversAKnownRatio"
+      ],
+      "note": "The most important mutant in this registry, because the mutation IS what the package originally shipped. The subscription counter carries two decimals, so one step is ~475,000 tokens and almost every request moves it by nothing. The signal is the FREQUENCY of movement, so the requests that did not move it are the denominator. Dropping them makes every arm's rate equal one step per average moving request and the ratio comes out 1.000 in EVERY possible world - not noisy, degenerate. It would have reported 'subscriptions do not charge like the bill' with total confidence and no evidence. QT-11 simulates the measured instrument and asserts recovery of two known worlds, 12.5 and 1.0; against the mutant both return 1.00."
     }
   ],
   "knownSurvivors": [

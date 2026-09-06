@@ -46,18 +46,28 @@ var UtilizationHeaders = []string{
 	"anthropic-ratelimit-unified-7d-utilization",
 }
 
-// MinPerArm is how many samples each arm needs before a ratio is reported.
+// MinStepsPerArm is how many counter steps each arm needs before a ratio is
+// reported.
 //
-// A declared threshold, not a measured one, and it is deliberately blunt: a
-// median over fewer than twenty points moves with a single outlier, and the
-// figure this produces would be quoted as settled the moment it reached a
-// screen. It bounds embarrassment, not error.
+// Steps, not samples, because steps carry the information. The counter moves in
+// whole hundredths, so a hundred requests that each move it by nothing are a
+// hundred samples and zero evidence. A declared threshold, not a measured one:
+// it bounds embarrassment, not error.
+const MinStepsPerArm = 20
+
+// MinPerArm is retained as the sample-count floor beneath the step floor.
 const MinPerArm = 20
 
 // Sample is one request's measured consumption.
 type Sample struct {
 	Limit string
+	// Spent is the counter movement attributed to this request, in whole
+	// steps of the provider's own resolution.
 	Spent int64
+	// Tokens is the prompt tokens the provider counted for this request.
+	// The estimator is steps per token, so this is the denominator and
+	// without it the measurement is degenerate - see Compare.
+	Tokens int64
 	// Wrote records that the provider reported a cache write on this
 	// response - a break - rather than a read.
 	Wrote bool
@@ -126,9 +136,22 @@ func Samples(recs []ledger.Record) []Sample {
 		}
 		if havePrev && limit == prevLimit {
 			switch d := prevVal - val; {
-			case d > 0:
+			// Zero deltas are kept, with Spent 0. They are not evidence of
+			// consumption, but they ARE the denominator: the signal is the
+			// FREQUENCY with which a request moves a coarse counter, and
+			// dropping the requests that moved it by nothing removes exactly
+			// that. Summing steps over the tokens of only the movers makes
+			// every arm's rate equal one step per average request, and the
+			// ratio comes out 1.000 in every possible world.
+			case d >= 0:
 				u := r.Response.Usage
-				out = append(out, Sample{Limit: limit, Spent: d, Wrote: u != nil && u.CacheCreation > 0})
+				var toks int64
+				var wrote bool
+				if u != nil {
+					toks = int64(u.Input + u.CacheCreation + u.CacheRead)
+					wrote = u.CacheCreation > 0
+				}
+				out = append(out, Sample{Limit: limit, Spent: d, Tokens: toks, Wrote: wrote})
 			case d < 0:
 				// The counter rose: the window reset. Not a negative sample
 				// and not a pairing across the boundary, which would put a
@@ -142,9 +165,10 @@ func Samples(recs []ledger.Record) []Sample {
 
 // Comparison is what the samples say about cache breaks and the limit.
 type Comparison struct {
-	ReadN, WriteN           int
-	ReadMedian, WriteMedian float64
-	// Ratio is write median over read median, and is zero unless Reportable.
+	ReadN, WriteN int
+	// ReadRate and WriteRate are counter steps per prompt token on each arm.
+	ReadRate, WriteRate float64
+	// Ratio is the write rate over the read rate, zero unless Reportable.
 	Ratio float64
 	// Reportable is false when there is not enough evidence on both arms.
 	Reportable bool
@@ -164,38 +188,68 @@ func median(v []int64) float64 {
 	return float64(s[m-1]+s[m]) / 2
 }
 
-// Compare reports the ratio between what a cache write and a cache read spend
-// against the limit, or refuses and says which arm is short.
+// Compare reports how much more a cache write costs the limit than a read, per
+// token, or refuses and says which arm is short.
 //
-// It refuses rather than reporting a wide interval because the output is a
-// single memorable number that will be repeated without its caveat.
+// The estimator is an aggregate RATE - steps per token, summed across each arm -
+// and not a median of per-request deltas. That distinction is the whole
+// correctness of this package.
+//
+// The first version took the median of non-zero deltas, and simulation of the
+// measured instrument showed it returning exactly 1.00 whether the true ratio
+// was 12.5 or 1.0. The counter moves in whole hundredths, so an observed delta
+// is almost always exactly 1; the median of each arm is then 1 and the quotient
+// is 1 in every possible world. It was not noisy, it was degenerate, and it
+// would have reported "subscriptions do not charge like the bill" with total
+// confidence and no evidence behind it. Discarding the zero deltas made it
+// worse, by keeping only the atypically expensive requests on the arm where
+// requests are cheap.
+//
+// Summing steps over summed tokens discards nothing and lets the quantization
+// average out. Against the same simulation it recovers 12.51 and 0.98 for
+// truths of 12.5 and 1.0.
 func Compare(s []Sample) Comparison {
-	var reads, writes []int64
+	var c Comparison
+	var readSteps, writeSteps, readTokens, writeTokens int64
 	for _, x := range s {
-		if x.Wrote {
-			writes = append(writes, x.Spent)
+		if x.Tokens <= 0 {
 			continue
 		}
-		reads = append(reads, x.Spent)
+		if x.Wrote {
+			c.WriteN++
+			writeSteps += x.Spent
+			writeTokens += x.Tokens
+			continue
+		}
+		c.ReadN++
+		readSteps += x.Spent
+		readTokens += x.Tokens
 	}
-	c := Comparison{
-		ReadN: len(reads), WriteN: len(writes),
-		ReadMedian: median(reads), WriteMedian: median(writes),
+	if readTokens > 0 {
+		c.ReadRate = float64(readSteps) / float64(readTokens)
+	}
+	if writeTokens > 0 {
+		c.WriteRate = float64(writeSteps) / float64(writeTokens)
 	}
 	switch {
-	case c.ReadN < MinPerArm && c.WriteN < MinPerArm:
-		c.Why = fmt.Sprintf("not enough evidence on either arm: %d cache-read and %d cache-write "+
-			"samples, %d needed on each", c.ReadN, c.WriteN, MinPerArm)
-	case c.ReadN < MinPerArm:
-		c.Why = fmt.Sprintf("only %d cache-read samples, %d needed; run the proxy over sessions "+
-			"that reuse a warm prefix", c.ReadN, MinPerArm)
-	case c.WriteN < MinPerArm:
-		c.Why = fmt.Sprintf("only %d cache-write samples, %d needed", c.WriteN, MinPerArm)
-	case c.ReadMedian <= 0:
-		c.Why = "cache reads spent nothing measurable against the limit, so a ratio would divide by zero"
+	// Both floors, because Spent is in the counter's OWN units and those
+	// differ by six orders of magnitude between the two header families: a
+	// step of "remaining" is one token, a step of "utilization" is a
+	// hundredth of a window and was measured at roughly 475,000 tokens. A
+	// single threshold cannot serve both. Samples guard the fine counter,
+	// movement guards the coarse one.
+	case c.ReadN < MinPerArm || c.WriteN < MinPerArm:
+		c.Why = fmt.Sprintf("not enough samples: %d cache-read and %d cache-write, %d needed "+
+			"on each", c.ReadN, c.WriteN, MinPerArm)
+	case readSteps < MinStepsPerArm || writeSteps < MinStepsPerArm:
+		c.Why = fmt.Sprintf("not enough counter movement: %d step(s) on the cache-read arm and "+
+			"%d on the cache-write arm, %d needed on each. Requests that moved the counter by "+
+			"nothing are samples, not evidence", readSteps, writeSteps, MinStepsPerArm)
+	case c.ReadRate <= 0:
+		c.Why = "cache reads moved the counter not at all, so a ratio would divide by zero"
 	default:
 		c.Reportable = true
-		c.Ratio = c.WriteMedian / c.ReadMedian
+		c.Ratio = c.WriteRate / c.ReadRate
 	}
 	return c
 }
