@@ -1,6 +1,6 @@
 package tui
 
-// The layout pattern, chosen rather than arrived at.
+// Pattern is the layout this surface uses, chosen rather than arrived at.
 //
 // Stefanie Jane names seven that successful terminal apps fall into, and warns
 // that picking the wrong one is like picking the wrong data structure: every
