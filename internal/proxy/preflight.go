@@ -16,12 +16,23 @@ import (
 //
 // It is narrow on purpose. The only break cause knowable before the wire is a
 // changed prefix, because the prefix hash is computed from what the client just
-// sent and compared with what the session sent last. That is an equality test,
-// not a prediction. It is also the cause worth catching: in the 30-lane trial
-// on 2026-09-06, "system prompt or tool definitions changed" was 34 of 71
-// breaks and 3,734,134 of the 3,778,706 re-billed tokens. The other cause,
-// divergence inside the message history, needs the provider's answer and is not
-// available here.
+// sent and compared with what that lane sent last. That is an equality test,
+// not a prediction. The other cause, divergence inside the message history,
+// needs the provider's answer and is not available here.
+//
+// How much it is worth is smaller than this file first claimed, and the
+// correction is the point. The 2026-09-06 trial appeared to attribute
+// 3,734,134 of 3,778,706 re-billed tokens to a changed prefix, 98.8%. That was
+// the instrument, not the world: the comparison ran against a session-wide
+// hash, so in a fan-out session each lane was judged against whichever sibling
+// wrote last. Re-read lane by lane, 31 of those 34 events never happened. The
+// three real ones total 416,887 tokens, 11.0%, and all three are an MCP
+// connector finishing its handshake in the main loop.
+//
+// So this guard covers about a ninth of that workload's re-billing rather than
+// nearly all of it, and the label below overstates its own cause: across the
+// whole trial, system_bytes never changed once. Every real prefix change was
+// the tool SET changing.
 //
 // The token figure IS a prediction: prefix bytes through a fitted ratio. That
 // is why a ceiling landing inside the estimate's error band suppresses the
@@ -54,11 +65,13 @@ func (s *Server) preFlight(w http.ResponseWriter, rec *ledger.Record, override s
 		return true
 	}
 
-	// First request of a session establishes the prefix; there is nothing to
-	// have diverged from, and treating it as a break would refuse every
-	// session's opening request.
-	prior := st.prefixHash
-	if prior == "" {
+	// Judged against this lane's own previous request, never the session's.
+	// A fan-out session runs several lanes at once with different tool sets,
+	// so comparing against a session-wide hash refuses lanes that changed
+	// nothing; see sessionState.prefixByLane. The first request in a lane
+	// establishes its prefix and has nothing to have diverged from.
+	prior, laneSeen := st.prefixByLane[rec.AgentID]
+	if !laneSeen || prior == "" {
 		return true
 	}
 	diverged := prior != rec.PrefixHash

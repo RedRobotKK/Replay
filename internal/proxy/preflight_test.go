@@ -21,7 +21,7 @@ func preFlightFixture(t *testing.T, p analysis.PolicyState, priorHash string) (*
 	if st == nil {
 		t.Fatal("session state was not created; the fixture asserts nothing")
 	}
-	st.prefixHash = priorHash
+	st.prefixByLane = map[string]string{"": priorHash}
 	return s, &buf
 }
 
@@ -172,5 +172,35 @@ func TestPreFlight_OverrideProceedsOnceAndIsLogged(t *testing.T) {
 	if !strings.Contains(logs.String(), "preflight ceiling overridden") ||
 		!strings.Contains(logs.String(), "reindexing the tool set") {
 		t.Errorf("the override was not logged with its reason:\n%s", logs.String())
+	}
+}
+
+// A pre-flight refusal must be judged against the lane's own prefix.
+//
+// The guard first shipped reading a session-wide hash, so in the fan-out
+// workload it was built for, one lane's request would refuse another lane that
+// had changed nothing. Caught by the composition analysis of the 2026-09-06
+// trial, not by review.
+//
+// PASS: a lane whose own prefix is unchanged is forwarded, whatever the other
+// lanes are carrying.
+// FAIL: a sibling lane's prefix decided this lane's fate.
+func TestPreFlight_ASiblingLaneDoesNotTriggerARefusal(t *testing.T) {
+	s, _ := preFlightFixture(t, analysis.PolicyState{CeilingTokens: 1, OptInActive: true}, "hash-main")
+	st := s.stats.session("sess-1")
+	st.prefixByLane["lane-a"] = "hash-a"
+	st.prefixByLane["lane-b"] = "hash-b"
+
+	rec := preFlightRec("hash-a", 400_000, 400_000)
+	rec.AgentID = "lane-a"
+
+	w := httptest.NewRecorder()
+	if !s.preFlight(w, rec, "") {
+		t.Error("lane-a sent the same prefix it sent last time and was refused. Its siblings " +
+			"carry different tool sets, which is normal in a fan-out session and is not a " +
+			"divergence in this lane")
+	}
+	if w.Header().Get(HeaderWarning) != "" {
+		t.Errorf("a stable lane was warned: %q", w.Header().Get(HeaderWarning))
 	}
 }

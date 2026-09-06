@@ -21,8 +21,27 @@ type sessionState struct {
 	lastSeen   time.Time
 	model      string
 	prefixHash string
-	tally      analysis.Tally
-	breaks     int
+	// prefixByLane is the last prefix hash seen in each agent lane, keyed by
+	// AgentID with "" for the main loop.
+	//
+	// Per lane rather than one field for the same reason errorByLane is:
+	// a fan-out session runs several lanes at once and each carries its own
+	// tool set, so a single field means lane A's request decides what lane B
+	// is compared against. Neither lane changed anything and both are counted
+	// as having changed their prefix.
+	//
+	// The 2026-09-06 trial attributed 3,734,134 re-billed tokens to a changed
+	// prefix through the single-field path. Re-read lane by lane, all thirty
+	// of its sub-agent lanes are internally stable and never change prefix at
+	// all; the three real changes are in the main loop and are MCP connectors
+	// finishing their handshake.
+	//
+	// prefixHash above is kept as the session's most recent hash, which is
+	// what the status endpoint reports. It is no longer what a break is
+	// judged against.
+	prefixByLane map[string]string
+	tally        analysis.Tally
+	breaks       int
 	// prefixChanges counts requests whose system prompt or tool definitions
 	// differed from the request before, which a transcript cannot see.
 	prefixChanges int
@@ -201,10 +220,17 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 	cur := *rec.Response.Usage
 	st := s.session(rec.SessionID)
 	var out *ledger.CacheOutcome
-	prefixChanged := st.tally.Requests > 0 && rec.PrefixHash != st.prefixHash
+	// Judged against this lane's own previous request. A lane with no
+	// previous request is establishing its prefix, not changing it.
+	priorPrefix, laneSeen := st.prefixByLane[rec.AgentID]
+	prefixChanged := laneSeen && rec.PrefixHash != priorPrefix
 	if prefixChanged {
 		st.prefixChanges++
 	}
+	if st.prefixByLane == nil {
+		st.prefixByLane = make(map[string]string)
+	}
+	st.prefixByLane[rec.AgentID] = rec.PrefixHash
 	if st.tally.Requests > 0 {
 		outcome, expected := cachemodel.ClassifyRead(st.last, cur)
 		out = &ledger.CacheOutcome{Outcome: outcome.String(), Expected: expected}
