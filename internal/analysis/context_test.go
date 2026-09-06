@@ -160,3 +160,79 @@ func TestCompactionIsCalledOutSeparately(t *testing.T) {
 		t.Fatalf("compaction gives no measured size, so no share may be quoted; got %v", g.OverstatedShare())
 	}
 }
+
+// The overstatement a compaction causes is measured, not waved at.
+//
+// OverstatedShare returned zero whenever the only content leaving the context
+// was a compaction, and the comment justified it: "Compaction reports no size,
+// so a compacted session returns zero rather than a guess". The premise was
+// false. Claude Code records preTokens and postTokens on every compaction, and
+// the parser was simply not reading them.
+//
+// The cost of the gap is concentrated: the transcripts containing a compaction
+// hold 31.8% of all re-billed tokens in the measured corpus, so the sessions
+// the tool declined to quantify are the expensive ones.
+//
+// PASS: a recorded compaction contributes its dropped tokens to the share.
+// FAIL: zero, which reports "nothing measurable" over a number on disk.
+func TestGapCountsRecordedCompaction(t *testing.T) {
+	g := ContextGap{AttributedTokens: 1_000_000}
+	if g.OverstatedShare() != 0 {
+		t.Fatal("setup: an empty gap overstates nothing")
+	}
+	g.CompactedTokens = 500_000
+	got := g.OverstatedShare()
+	if got != 0.5 {
+		t.Errorf("OverstatedShare = %.3f, want 0.500: a compaction that dropped half the "+
+			"attributed total overstates by half", got)
+	}
+	if !g.Overstated() {
+		t.Error("a session with a sized compaction is overstated")
+	}
+}
+
+// A compaction whose size the client did not record still says so.
+//
+// PASS: counted, but contributing no share, so "compacted, size unknown" stays
+// distinguishable from "compacted, dropped nothing".
+// FAIL: a share invented from a count.
+func TestGapSizelessCompactionAddsNoShare(t *testing.T) {
+	g := ContextGap{AttributedTokens: 1_000_000, Compactions: 1}
+	if g.OverstatedShare() != 0 {
+		t.Errorf("a compaction with no recorded size must add no share, got %.3f",
+			g.OverstatedShare())
+	}
+	if !g.Overstated() {
+		t.Error("it is still a known overstatement, just an unmeasured one")
+	}
+}
+
+// A share above 100% means the denominator is wrong, and saying so beats
+// printing it.
+//
+// Observed live: a session compacted 16 times, dropping 7.0M tokens the client
+// recorded, against roughly 1M attributed. The ratio is 700%, and "these
+// figures overstate by at least 700%" is not a sentence about the world - an
+// attribution cannot overstate itself sevenfold. It means the attributed total
+// describes only what SURVIVED, while the dropped total covers everything that
+// ever passed through.
+//
+// PASS: the note reports the absolute figure and says the attribution covers
+// what remains, without printing an impossible percentage.
+// FAIL: a percentage over 100, which reads as a bug and discredits the real
+// number beside it.
+func TestGapNoteRefusesAnImpossibleShare(t *testing.T) {
+	g := ContextGap{AttributedTokens: 1_000_000, Compactions: 16, CompactedTokens: 7_000_000}
+	note := g.Note()
+	if strings.Contains(note, "700%") {
+		t.Errorf("printed an impossible overstatement share: %q", note)
+	}
+	if !strings.Contains(note, "7.0M") {
+		t.Errorf("the absolute figure is real and must survive: %q", note)
+	}
+	// And the ordinary case still reports a share.
+	ok := ContextGap{AttributedTokens: 1_000_000, Compactions: 1, CompactedTokens: 250_000}
+	if !strings.Contains(ok.Note(), "25%") {
+		t.Errorf("a share under 100%% must still be reported: %q", ok.Note())
+	}
+}

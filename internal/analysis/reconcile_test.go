@@ -111,7 +111,7 @@ func reconcile(t *testing.T, name string, session *transcript.Session) {
 	}
 
 	last := lane.Requests[len(lane.Requests)-1]
-	want := last.Usage.PromptTotal() + MeasureGap(lane, attributed).ClearedTokens
+	want := last.Usage.PromptTotal() + MeasureGap(session, lane, attributed).ClearedTokens
 	if want == 0 {
 		return
 	}

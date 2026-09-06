@@ -31,8 +31,22 @@ type rawLine struct {
 	APIBlockIndex int    `json:"apiBlockIndex"`
 	IsSidechain   bool   `json:"isSidechain"`
 	Effort        string `json:"effort"`
+	// IsCompactSummary marks the record that replaced the history.
+	IsCompactSummary bool `json:"isCompactSummary"`
+	// CompactMetadata carries the sizes the client dropped. Its absence on a
+	// compaction record is a client that stopped reporting them, not a
+	// compaction that dropped nothing.
+	CompactMetadata *rawCompaction `json:"compactMetadata"`
 	// Message is decoded once, at read time, for the lines that carry one.
 	Message *RawMessage `json:"message"`
+}
+
+type rawCompaction struct {
+	Trigger                 string `json:"trigger"`
+	PreTokens               int    `json:"preTokens"`
+	PostTokens              int    `json:"postTokens"`
+	CumulativeDroppedTokens int    `json:"cumulativeDroppedTokens"`
+	DurationMS              int    `json:"durationMs"`
 }
 
 // ParseClaudeCodeFile parses one Claude Code transcript file.
@@ -73,6 +87,22 @@ func ParseClaudeCode(r io.Reader) (*Session, error) {
 		}
 		if l.Version != "" && session.ClientVersion == "" {
 			session.ClientVersion = l.Version
+		}
+		// A compaction is recorded either by the marker or by the metadata.
+		// Taking both means a client that drops one of them still reports the
+		// rewrite, which is the failure this parsing exists to fix.
+		if l.IsCompactSummary || l.CompactMetadata != nil {
+			c := Compaction{}
+			if m := l.CompactMetadata; m != nil {
+				c = Compaction{
+					Trigger:           m.Trigger,
+					PreTokens:         m.PreTokens,
+					PostTokens:        m.PostTokens,
+					CumulativeDropped: m.CumulativeDroppedTokens,
+					DurationMS:        m.DurationMS,
+				}
+			}
+			session.Compactions = append(session.Compactions, c)
 		}
 	}
 

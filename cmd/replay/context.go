@@ -58,7 +58,7 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 				"measures": "content that entered this context; the attribution does not " +
 					"subtract cleared or compacted content",
 				"entries": rows,
-				"gap":     analysis.MeasureGap(rep.Lane, sumTokens(rows)),
+				"gap":     analysis.MeasureGap(session, rep.Lane, sumTokens(rows)),
 			}, "", "  ")
 			if err != nil {
 				return err
@@ -85,7 +85,7 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 			_, _ = fmt.Fprintf(stdout, "  %-*s %5.1f%%  %10s  x%-5d%s\n",
 				analysis.MaxContextLabel, r.Label, r.Share*100, formatCount(r.Tokens), r.Occurrences, mark)
 		}
-		gap := analysis.MeasureGap(rep.Lane, total)
+		gap := analysis.MeasureGap(session, rep.Lane, total)
 		_, _ = fmt.Fprintf(stdout, "\n  * estimated through the byte-to-token fit; everything else is provider usage.\n")
 		_, _ = fmt.Fprintf(stdout, "\n  %s\n", gap.Note())
 		return nil

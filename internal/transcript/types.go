@@ -194,6 +194,42 @@ type Session struct {
 	// "treated", "control", or empty. Only the ledger knows either.
 	Policy string
 	Trial  string
+	// Compactions are the history rewrites this session recorded, in order.
+	//
+	// Claude Code writes the sizes it dropped, so this is measured rather than
+	// inferred from a prompt that shrank. It matters because the transcripts
+	// containing a compaction hold a disproportionate share of re-billed
+	// tokens, so they are exactly the sessions worth quantifying rather than
+	// waving at.
+	Compactions []Compaction
+}
+
+// Compaction is one recorded history rewrite.
+type Compaction struct {
+	Trigger    string
+	PreTokens  int
+	PostTokens int
+	// CumulativeDropped is the client's own running total for the session.
+	CumulativeDropped int
+	DurationMS        int
+}
+
+// Sized reports whether the client recorded the sizes. A compaction with no
+// sizes is still a compaction; it just cannot say how much left, and saying so
+// is different from saying nothing left.
+func (c Compaction) Sized() bool { return c.PreTokens > 0 }
+
+// Dropped is how much context the rewrite removed, never negative.
+//
+// One record in the measured corpus reports postTokens ABOVE preTokens
+// (22,303 -> 296,742). Whatever produced it, a negative drop would subtract
+// from a total describing content that LEFT the context, and a single bad
+// record would silently offset several good ones.
+func (c Compaction) Dropped() int {
+	if d := c.PreTokens - c.PostTokens; d > 0 {
+		return d
+	}
+	return 0
 }
 
 // Lane finds or creates the lane with the given id, keeping lanes in order

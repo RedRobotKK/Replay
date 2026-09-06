@@ -140,25 +140,36 @@ type ContextGap struct {
 	ClearedTokens int
 	// ContextEdits is how many times it did so.
 	ContextEdits int
-	// Compactions counts history rewrites, which report no size.
+	// Compactions counts history rewrites.
 	Compactions int
+	// CompactedTokens is how much those rewrites removed, where the client
+	// recorded it. Zero means unrecorded, never "removed nothing" - the two
+	// are different claims and Compactions above keeps them apart.
+	CompactedTokens int
 	// AttributedTokens is the total this gap applies to.
 	AttributedTokens int
 }
 
 // Overstated reports whether content is known to have left this context.
 func (g ContextGap) Overstated() bool {
-	return g.ClearedTokens > 0 || g.ContextEdits > 0 || g.Compactions > 0
+	return g.ClearedTokens > 0 || g.ContextEdits > 0 || g.Compactions > 0 || g.CompactedTokens > 0
 }
 
 // OverstatedShare is the measured overstatement as a share of the attributed
-// total, and zero when nothing measurable is available. Compaction reports no
-// size, so a compacted session returns zero rather than a guess.
+// total, and zero when nothing measurable is available.
+//
+// Compaction used to be excluded here on the grounds that it "reports no
+// size". It does: Claude Code writes preTokens and postTokens on every
+// compaction record, and the parser was not reading them. A compaction with no
+// recorded size still adds nothing, because a count is not a size - but it is
+// counted in Compactions, so "compacted, size unknown" stays distinguishable
+// from "compacted, dropped nothing".
 func (g ContextGap) OverstatedShare() float64 {
-	if g.ClearedTokens <= 0 || g.AttributedTokens <= 0 {
+	measured := g.ClearedTokens + g.CompactedTokens
+	if measured <= 0 || g.AttributedTokens <= 0 {
 		return 0
 	}
-	return float64(g.ClearedTokens) / float64(g.AttributedTokens)
+	return float64(measured) / float64(g.AttributedTokens)
 }
 
 // Note is the one line a reader needs about how far to trust the figures.
@@ -187,7 +198,29 @@ func (g ContextGap) Note() string {
 	if g.Compactions > 0 {
 		b.WriteString(" The history was compacted ")
 		b.WriteString(plural(g.Compactions, "time"))
-		b.WriteString(", which reports no size at all, so the overstatement cannot be measured.")
+		if g.CompactedTokens > 0 {
+			b.WriteString(", dropping ")
+			b.WriteString(shortCount(g.CompactedTokens))
+			b.WriteString(" tokens the client recorded")
+			// A share at or above 1 is not an overstatement, it is a sign the
+			// denominator is wrong: more has passed through this session than
+			// is attributed, because the attribution describes what survived.
+			// Printing 700% would read as a defect and discredit the absolute
+			// figure standing next to it.
+			if s := g.OverstatedShare(); s > 0 && s < 1 {
+				b.WriteString("; these figures overstate by at least ")
+				b.WriteString(percent(s))
+				b.WriteString(".")
+			} else {
+				b.WriteString(", which is more than is attributed above: the attribution " +
+					"describes what remains, not everything that passed through.")
+			}
+		} else {
+			// The client recorded the rewrite and not its size. Distinct from
+			// dropping nothing, and worth saying rather than implying.
+			b.WriteString(" without recording a size, so that part of the overstatement " +
+				"cannot be measured.")
+		}
 	}
 	return b.String()
 }
@@ -218,8 +251,19 @@ func plural(n int, word string) string {
 // The fields have been on transcript.Request all along and rereads.go already
 // consumes them; the attribution never did, which is precisely why it
 // overstates without knowing it.
-func MeasureGap(lane *transcript.Lane, attributed int) ContextGap {
+func MeasureGap(session *transcript.Session, lane *transcript.Lane, attributed int) ContextGap {
 	g := ContextGap{AttributedTokens: attributed}
+	// Recorded compactions beat inferred ones. The client writes the sizes it
+	// dropped, so a prompt that shrank is only evidence when nothing better is
+	// on disk - and until now nothing better was ever read.
+	var recorded int
+	if session != nil {
+		for _, c := range session.Compactions {
+			recorded++
+			g.CompactedTokens += c.Dropped()
+		}
+		g.Compactions = recorded
+	}
 	if lane == nil {
 		return g
 	}
@@ -230,7 +274,10 @@ func MeasureGap(lane *transcript.Lane, attributed int) ContextGap {
 		// A prompt that shrank between turns is history leaving the context by
 		// some route the provider did not report: compaction, a rewind, or a
 		// resume. The size is not recoverable, only the fact.
-		if cur := r.Usage.PromptTotal(); i > 0 && prev > 0 && cur < prev {
+		// Only when the client recorded nothing. A shrinking prompt is a weak
+		// signal - it also fires on a rewind or a resume - so it is the
+		// fallback rather than a second count added to the recorded one.
+		if cur := r.Usage.PromptTotal(); recorded == 0 && i > 0 && prev > 0 && cur < prev {
 			g.Compactions++
 		}
 		prev = r.Usage.PromptTotal()
