@@ -134,12 +134,12 @@ worth declaring.
 ## Footprint
 
 - **No account, no telemetry, no first-run prompt.** Nothing to opt out of.
-- **One ask, at most once every thirty days.** When `cost` has just shown you more than $5 you paid
-  twice, it prints one line naming the tip jar. It never opens a browser and it sends nothing; the
-  date of the last ask and a random local seed live in `~/.replay/tip.json`, and the seed exists to
-  pick between two wordings, not to identify anyone. Rate-limited because an ask on every run is a
-  nag, and a nag teaches you to skip the last paragraph of a report whose last paragraph sometimes
-  carries the caveat.
+- **One ask, at most once every thirty days.** If `cost` has just found more than $5 you paid
+  twice, it prints one line about the tip jar. That is the only time this tool asks you for
+  anything. It opens no browser and sends nothing: `~/.replay/tip.json` holds the date it last
+  asked and a random local seed, and the seed only picks which of two wordings you see. Once a
+  month, because asking every run would train you to skip the last paragraph, and the last
+  paragraph is often where the caveat is.
 - **The binary originates two network requests, both of which you type**: `rules --check-prices`
   fetches a public price table, and `probe --execute` sends billable measurement requests to your
   own provider on your own key, after printing the plan and asking. The proxy forwards your own
