@@ -968,7 +968,14 @@ func isMessages(path string) bool {
 }
 
 // isChatCompletions reports the OpenAI-compatible endpoint, which Cursor,
-// DeepSeek, Grok and OpenAI itself all speak.
+// DeepSeek and OpenAI itself all speak.
+//
+// Grok was named on this line until 2026-09-06 and it does not belong here. It
+// was grouped by an assumption about what an OpenAI-compatible CLI must send;
+// captured off a live authenticated session it posts to /responses at
+// cli-chat-proxy.grok.com, which nothing in this build parses. It is forwarded
+// and warned about like any other unknown path, and saying otherwise would
+// promise a user a report that comes back empty.
 //
 // It is read but not rewritten. Policy application stays off for this family:
 // ADR-0003 admits a parameter the client left unset, and this provider caches

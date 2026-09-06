@@ -54,9 +54,18 @@ func homeWithTranscript(t *testing.T) string {
 // would leave a developer who has relocated their own transcripts running these
 // assertions against their real corpus — which is both slow and a test that
 // passes or fails depending on whose machine it is.
+//
+// USERPROFILE for the same reason on Windows. os.UserHomeDir reads HOME on unix
+// and USERPROFILE on Windows, so setting only HOME left every one of these
+// tests pointed at the CI runner's real home: they found no transcripts,
+// failed on empty output, and read as a product bug for as long as the
+// windows-latest job stayed red. Setting it on every platform is deliberate —
+// a helper that isolates on the platform you happen to be on is not isolation,
+// it is a coincidence, and FrozenDefectsTest FD-4 fails if this line is lost.
 func isolateHome(t *testing.T, home string) {
 	t.Helper()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 }
 

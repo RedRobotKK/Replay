@@ -1,6 +1,6 @@
 {
   "schema": "replay.mutants.v1",
-  "note": "Frozen historical defects. This is error seeding (Mills 1972) and fault regression, NOT mutation analysis: the denominator is 52 hand-chosen edits, not a generated operator population, so the ratio is not commensurable with a published mutation score and must never be reported beside one. The first run of any entry is caught by construction, because a named test dying is an ADMISSION criterion \u2014 it carries zero information. The information is temporal: run k>1 executes against a tree that moved while the mutant did not, and asks whether the guard still exists, still runs, and still discriminates. The strongest claim here is not the score but that each defect is still caught BY THE NAMED TEST THAT CLAIMS IT. Each one is a defect that was real, applied to production code, verified to turn a named test red, and reverted. The catalogue exists because a mutation score stated in a commit message is a claim nobody can re-run: the mutant is gone and only the number survives. Here the mutant survives instead. Adding one is how a fixed bug stops being able to come back quietly.",
+  "note": "Frozen historical defects. This is error seeding (Mills 1972) and fault regression, NOT mutation analysis: the denominator is 52 hand-chosen edits, not a generated operator population, so the ratio is not commensurable with a published mutation score and must never be reported beside one. The first run of any entry is caught by construction, because a named test dying is an ADMISSION criterion — it carries zero information. The information is temporal: run k>1 executes against a tree that moved while the mutant did not, and asks whether the guard still exists, still runs, and still discriminates. The strongest claim here is not the score but that each defect is still caught BY THE NAMED TEST THAT CLAIMS IT. Each one is a defect that was real, applied to production code, verified to turn a named test red, and reverted. The catalogue exists because a mutation score stated in a commit message is a claim nobody can re-run: the mutant is gone and only the number survives. Here the mutant survives instead. Adding one is how a fixed bug stops being able to come back quietly.",
   "classes": {
     "attribution-loss": "Tokens the provider billed are computed and then dropped, so the total no longer reconciles.",
     "attribution-misplacement": "Tokens are conserved but credited to the wrong content. The total looks perfect and the ranking is wrong, which is harder to notice than losing them.",
@@ -10,7 +10,11 @@
     "privacy": "A field that must be coarsened, scoped or withheld before it leaves the machine is not.",
     "transport": "A guarantee the transport exists to make - owner-only access, no clobbering, no data loss - is not delivered, while the name of it remains.",
     "evidence": "A measurement that was never taken is reported as a good one, or a sample is counted in units that overstate its independence.",
-    "funnel": "The tool holds the answer and hands back a menu. Not a wrong number - a right number nobody reaches, which costs the same as not having measured it."
+    "funnel": "The tool holds the answer and hands back a menu. Not a wrong number - a right number nobody reaches, which costs the same as not having measured it.",
+    "claim-outruns-evidence": "A statement about what the tool supports, measures, or cost is made without the reading that would establish it. Prose is not compiled, so nothing fails.",
+    "record-lag": "A document goes on stating a fact that stopped being true, and work is planned on top of the stored version rather than the world.",
+    "report-truncation": "An instrument reports a subset of what it knows and the subset is read as the whole, so a backlog is tracked against a number that does not exist.",
+    "harness-isolation": "A test's isolation misses a platform, so the suite reads the runner's own machine and fails for reasons that have nothing to do with the code."
   },
   "mutants": [
     {
@@ -218,7 +222,7 @@
       "killedBy": [
         "TestO8_TheFileIsOwnerOnlyAndNeverOverwrites"
       ],
-      "note": "Corrected after review: with this applied NOTHING is overwritten \u2014 the O_EXCL open still refuses the second write. What the mutant actually removes is a specific, actionable refusal, degrading it to a bare EEXIST. That matters because this file is the only review step in the design, so the diagnostic is a functional requirement rather than a courtesy. The earlier note claimed a silent overwrite the mutant does not cause, which is the sort of thing the observable-behaviour admission criterion leans on being true."
+      "note": "Corrected after review: with this applied NOTHING is overwritten — the O_EXCL open still refuses the second write. What the mutant actually removes is a specific, actionable refusal, degrading it to a bare EEXIST. That matters because this file is the only review step in the design, so the diagnostic is a functional requirement rather than a courtesy. The earlier note claimed a silent overwrite the mutant does not cause, which is the sort of thing the observable-behaviour admission criterion leans on being true."
     },
     {
       "id": "M16",
@@ -751,6 +755,243 @@
         "TestMK4_HexIsJudgedByProximityNotLength"
       ],
       "note": "Security finding 2 said the entropy heuristic is blind to lowercase hex, which is true. The obvious fix - flag any lowercase hex run of 32 or more - was measured before it was written: 1,928 such runs in the corpus, of which 848 are 40 characters (git SHAs), 490 are 32 (MD5 or dashless UUID) and 234 are 64. It would redact commit hashes out of prompts and ruin the tool it protects. Only 43 of the 1,928 carry a credential cue within 40 characters, so proximity separates them and length does not."
+    },
+    {
+      "id": "M56",
+      "name": "grok-back-on-the-chat-completions-row",
+      "class": "claim-outruns-evidence",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/server.go",
+      "anchor": "// DeepSeek and OpenAI itself all speak.",
+      "replacement": "// DeepSeek, Grok and OpenAI itself all speak.",
+      "killedBy": [
+        "TestFrozenFD5_GrokIsNotFiledUnderTheOpenAICompatibleWire"
+      ],
+      "note": "Regroups Grok with the OpenAI-compatible family on an assumption about what such a CLI must send. Grok posts to /responses at cli-chat-proxy.grok.com and this build parses none of it, so the line promises a user a report that comes back empty."
+    },
+    {
+      "id": "M57",
+      "name": "grok-regrouped-in-the-architecture-doc",
+      "class": "claim-outruns-evidence",
+      "discovered": "2026-09-06",
+      "file": "docs/architecture/multi-provider.md",
+      "anchor": "every request from Cursor or any other generic",
+      "replacement": "every request from Cursor, Grok or any other generic",
+      "killedBy": [
+        "TestFrozenFD5_GrokIsNotFiledUnderTheOpenAICompatibleWire"
+      ],
+      "note": "The same false grouping in prose rather than in a comment. It shipped in three places at once, which is why the guard reads the whole tree instead of one file."
+    },
+    {
+      "id": "M58",
+      "name": "ratelimit-remaining-falls-again",
+      "class": "claim-outruns-evidence",
+      "discovered": "2026-09-06",
+      "file": "CHANGELOG.md",
+      "anchor": "These are the only figures a flat-seat user has, since they have no invoice to compare against.",
+      "replacement": "These are the only figures a flat-seat user has, since they have no invoice to compare against. The `x-ratelimit-remaining-*` family is a falling per-request counter at token granularity.",
+      "killedBy": [
+        "TestFrozenFD6_ARateLimitHeaderClaimCarriesItsMeasurement"
+      ],
+      "note": "Restates the retracted claim, written from the header names. Across 8 model calls and ~940KB of responses remaining never moved off the plan ceiling, which is the shape of a healthcheck that cannot fail, published as a spend signal."
+    },
+    {
+      "id": "M59",
+      "name": "ratelimit-citation-points-nowhere",
+      "class": "claim-outruns-evidence",
+      "discovered": "2026-09-06",
+      "file": "CHANGELOG.md",
+      "anchor": "These are the only figures a flat-seat user has, since they have no invoice to compare against.",
+      "replacement": "These are the only figures a flat-seat user has, since they have no invoice to compare against. The `x-ratelimit-remaining-*` family is a falling per-request counter, see [the reading](evidence/never-measured-2026-09-06.md).",
+      "killedBy": [
+        "TestFrozenFD6_ARateLimitHeaderClaimCarriesItsMeasurement"
+      ],
+      "note": "The same claim with a citation nobody can follow. A footnote to a file that does not exist reads as evidence, and is the claim wearing evidence's clothes."
+    },
+    {
+      "id": "M60",
+      "name": "lint-display-cap-restored",
+      "class": "report-truncation",
+      "discovered": "2026-09-06",
+      "file": ".golangci.yml",
+      "anchor": "max-same-issues: 0",
+      "replacement": "max-same-issues: 3",
+      "killedBy": [
+        "TestFrozenFD7_TheLinterReportsEveryIssueItFinds"
+      ],
+      "note": "Puts back the default that showed 38 of 119 issues. CI still fails on all of them; every person reading the output reasons about a third of them, and the backlog was tracked at that third for as long as nobody ran it uncapped."
+    },
+    {
+      "id": "M61",
+      "name": "installer-quotes-a-dollar-figure",
+      "class": "claim-outruns-evidence",
+      "discovered": "2026-09-06",
+      "file": "install.sh",
+      "anchor": "printf '\\n%sFree, Apache 2.0, no account, no telemetry. Calibrated against 78 sessions",
+      "replacement": "printf '\\n%sThe corpus cost its author $2851. Free, Apache 2.0, no account, no telemetry. Calibrated against 78 sessions",
+      "killedBy": [
+        "TestFrozenFD8_TheInstallerPrintsOnlyFiguresTheEvidenceHolds"
+      ],
+      "note": "Puts a cost back on the installer's closing screen, where the tool has measured nothing and the figure can only be the author's. This exact number appeared in install.sh and in no evidence anywhere, and every new user read it."
+    },
+    {
+      "id": "M62",
+      "name": "installer-quotes-a-count-the-corpus-never-measured",
+      "class": "claim-outruns-evidence",
+      "discovered": "2026-09-06",
+      "file": "install.sh",
+      "anchor": "Calibrated against 78 sessions",
+      "replacement": "Calibrated against 640 sessions",
+      "killedBy": [
+        "TestFrozenFD8_TheInstallerPrintsOnlyFiguresTheEvidenceHolds"
+      ],
+      "note": "Inflates the corpus the installer claims. A weaker version of the guard passed this, because the evidence document is full of numbers and a substring search finds any of them; the cross-check now requires the figure to be counted as sessions."
+    },
+    {
+      "id": "M63",
+      "name": "installer-retraction-deleted",
+      "class": "record-lag",
+      "discovered": "2026-09-06",
+      "file": "install.sh",
+      "anchor": "# The old copy also carried an unsourced $2851, removed 2026-09-06 because it\n# appeared in this file and in no evidence anywhere.\n",
+      "replacement": "",
+      "killedBy": [
+        "TestFrozenFD8_TheInstallerPrintsOnlyFiguresTheEvidenceHolds"
+      ],
+      "note": "Erases the note recording that this file once printed an unsourced figure. Corrections stay in place here; a file with nothing saying it was ever wrong is a file where the number comes back."
+    },
+    {
+      "id": "M64",
+      "name": "windows-built-again-without-the-docs",
+      "class": "record-lag",
+      "discovered": "2026-09-06",
+      "file": ".goreleaser.yaml",
+      "anchor": "goos: [linux, darwin]",
+      "replacement": "goos: [linux, darwin, windows]",
+      "killedBy": [
+        "TestFrozenFD9_PlatformClaimsMatchTheReleaseConfig"
+      ],
+      "note": "Restores the Windows target while every document says it is not built. This is what v0.4.0 did: archives published beside release notes calling the platform unsupported, deleted after publication."
+    },
+    {
+      "id": "M65",
+      "name": "surfaces-says-windows-is-built",
+      "class": "record-lag",
+      "discovered": "2026-09-06",
+      "file": "docs/SURFACES.md",
+      "anchor": "**Windows is not built and has never been tested.**",
+      "replacement": "**Windows is built and never tested.**",
+      "killedBy": [
+        "TestFrozenFD9_PlatformClaimsMatchTheReleaseConfig"
+      ],
+      "note": "The stale sentence as it actually stood, naming goreleaser as producing a target the goos line had already dropped. It sends a reader looking for an archive that was never published."
+    },
+    {
+      "id": "M66",
+      "name": "userprofile-left-unset",
+      "class": "harness-isolation",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/bare_test.go",
+      "anchor": "\tt.Setenv(\"USERPROFILE\", home)\n",
+      "replacement": "",
+      "killedBy": [
+        "TestFrozenFD4_IsolateHomeRedirectsEveryHomeVariableOnEveryPlatform"
+      ],
+      "note": "Isolates HOME and not USERPROFILE. os.UserHomeDir reads USERPROFILE on Windows, so every test built on this helper ran against the runner's real home, found no transcripts, and failed as though the product were broken."
+    },
+    {
+      "id": "M67",
+      "name": "lane-map-keyed-by-a-constant",
+      "class": "attribution-misplacement",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/state.go",
+      "anchor": "\tln, ok := st.lanes[agentID]\n\tif !ok {\n\t\tln = &laneState{}\n\t\tst.lanes[agentID] = ln\n\t}",
+      "replacement": "\tln, ok := st.lanes[\"\"]\n\tif !ok {\n\t\tln = &laneState{}\n\t\tst.lanes[\"\"] = ln\n\t}",
+      "killedBy": [
+        "TestObserve_ConcurrentLanesDoNotForgeCacheBreaks",
+        "TestObserve_AnOpeningRequestInAnyLaneIsNotAReproduction",
+        "TestObserve_ConcurrentLanesDoNotForgeAPrefixChange",
+        "TestObserve_OpeningALaneIsNotAChange"
+      ],
+      "note": "Collapses every lane back onto one comparison slot, which is the session-vs-lane defect as it shipped. Its quietest consequence is the one worth the mutant: an unseen lane's usage is the zero value, ExpectedRead of it is 0, an opening request reads 0, so the two match exactly and score reproduced - a cache hit that never happened, inflating a success metric."
+    },
+    {
+      "id": "M68",
+      "name": "lane-accessor-ignores-its-argument",
+      "class": "attribution-misplacement",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/state.go",
+      "anchor": "func (st *sessionState) contextFor(agentID string) []analysis.ContextEntry {\n\treturn st.context[agentID]",
+      "replacement": "func (st *sessionState) contextFor(agentID string) []analysis.ContextEntry {\n\treturn st.context[\"\"]",
+      "killedBy": [
+        "TestSessionState_LaneAccessorsReadTheKeyTheyAreGiven"
+      ],
+      "note": "Answers every lane with the main loop's context breakdown. Found originally by mutation rather than by reading: the shipped fixture yields a zero value for every lane, so through the pipeline tests 'read the right key' and 'read any key' are indistinguishable."
+    },
+    {
+      "id": "M69",
+      "name": "consent-fix-lands-row-not-promoted",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "internal/consent/consent.go",
+      "anchor": "info.Mode().Perm()&0o022 != 0",
+      "replacement": "info.Mode().Perm()&0o020 != 0",
+      "killedBy": [
+        "TestFrozenDefects_AnUnmergedRowPointsAtTheDefectItClaimsIsStillHere"
+      ],
+      "note": "Stands for the Windows consent fix arriving from its branch. The frozen-defect register records that defect as still live in this tree; when it stops being live the row has to be promoted rather than left claiming a defect that is gone."
+    },
+    {
+      "id": "M70",
+      "name": "eviction-fix-lands-row-not-promoted",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/guards.go",
+      "anchor": "v.seen.Before(oldestSeen)",
+      "replacement": "!v.seen.After(oldestSeen)",
+      "killedBy": [
+        "TestFrozenDefects_AnUnmergedRowPointsAtTheDefectItClaimsIsStillHere"
+      ],
+      "note": "Stands for the LRU fix arriving from its branch, and is a real behaviour change besides: it reverses which record wins a tie, which is the whole of the defect under a clock too coarse to separate them."
+    },
+    {
+      "id": "M71",
+      "name": "unmerged-row-promoted-by-editing-a-string",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "internal/regression/frozen_defects_test.go",
+      "anchor": "\t\tStatus:    StatusUnmerged,\n\t\tStillHere: &Detector{File: \"internal/consent/consent.go\"",
+      "replacement": "\t\tStatus:    StatusGuarded,\n\t\tStillHere: &Detector{File: \"internal/consent/consent.go\"",
+      "killedBy": [
+        "TestFrozenDefects_AGuardedRowNamesTestsThatExist"
+      ],
+      "note": "Claims a defect is guarded by typing the word. The register is only worth reading if a status cannot be promoted without the test that justifies it, which is the rule the surface registry applies to a LIVE fixture."
+    },
+    {
+      "id": "M72",
+      "name": "guard-renamed-and-the-row-not",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "internal/regression/frozen_defects_test.go",
+      "anchor": "\"TestObserve_AnOpeningRequestInAnyLaneIsNotAReproduction\",",
+      "replacement": "\"TestObserve_AnOpeningRequestInAnyLaneIsNotAReproductionXX\",",
+      "killedBy": [
+        "TestFrozenDefects_AGuardedRowNamesTestsThatExist"
+      ],
+      "note": "A guard renamed away from the row that names it. Left unchecked the register keeps claiming protection while the named test no longer exists, which is how a harness outlives its subject."
+    },
+    {
+      "id": "M73",
+      "name": "frozen-row-reduced-to-a-memo",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "internal/regression/frozen_defects_test.go",
+      "anchor": "\t\tSymptom: \"With a frozen clock, evicting past the table's cap would drop an entry other \" +\n\t\t\t\"than the least recently used one.\",",
+      "replacement": "\t\tSymptom: \"eviction breaks\",",
+      "killedBy": [
+        "TestFrozenDefects_EveryRowSaysWhatItLookedLikeAndWhatWouldReturn"
+      ],
+      "note": "Strips the returning symptom down to a label. The symptom is the field a future test gets written from; without it the row is a bug number, and every defect in this register looked like success from outside."
     }
   ],
   "knownSurvivors": [
