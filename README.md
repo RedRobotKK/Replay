@@ -147,6 +147,14 @@ worth declaring.
   [`docs/SURFACES.md`](docs/SURFACES.md), including the ones that were wrong in earlier versions
   of this file.
 - **The ledger never stores message text.** It stores block kinds, sizes, timings and usage counts.
+  Tool names are kept in the clear; the path argument is HMAC'd with a machine-local key, so two
+  lanes reading the same file are visibly the same file without the file ever being named.
+- **A break says which tools changed.** Not "system prompt or tool definitions changed", which names
+  two causes and settles neither. It names the ones that arrived: *added 3 tool(s):
+  mcp__claude_ai_Otter_ai__otter_fetch, otter_get_user_info, otter_search; removed 1 tool(s):
+  WaitForMcpServers.* That break cost 157,080 tokens.
+- **Sessions that spawn subagents are measured per lane**, and a report covering one lane says so
+  rather than calling itself complete.
 - **Apache 2.0**, no dependencies. `go.mod` is three lines.
 
 ## How far to trust it
@@ -164,6 +172,19 @@ are several.
 
 **The open gap is independence, and no amount of data from this machine closes it.** That is
 stated in the roadmap rather than buried.
+
+The largest correction is the most recent. On 2026-09-06 the proxy measured a session running
+parallel subagents and reported that **98.8%** of its re-billed tokens came from one cause. That
+figure was wrong, and it was wrong because every comparison the proxy made was against a single
+session-wide slot: with several lanes running at once, each was judged against whichever sibling
+wrote last. Read lane by lane, **31 of the 34 events had not happened**, and the real answer is
+**4.2%**. Both numbers, and the retraction, are in
+[`docs/evidence/lane-isolation-2026-09-06.md`](docs/evidence/lane-isolation-2026-09-06.md) and in
+the commit history. The wrong one is still there.
+
+Five fields carried that defect. The lesson had already been written down against a sixth, with a
+comment explaining exactly why it had to be keyed per lane, and it had been applied to one field
+out of six.
 
 The second open gap is the one the flat-seat framing above rests on. A metered user is re-billed for
 a broken cache; whether a subscriber's rate-limit window is charged the same way is undocumented, so
