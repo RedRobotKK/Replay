@@ -61,6 +61,12 @@ func shareCard(s costSummary, breaks int) string {
 	b.WriteString("  " + headline + "\n\n")
 	fmt.Fprintf(&b, "    transcripts   %-8d  median task   $%.2f\n", s.Tasks, s.MedianUSD)
 	fmt.Fprintf(&b, "    cache breaks  %-8d  p90 task      $%.2f\n", breaks, s.P90USD)
+	// Omitted rather than blanked when nothing was observed: an empty label
+	// reads as a measurement that came back nothing, which is a different
+	// claim from a measurement that was not taken.
+	if s.Route != "" {
+		fmt.Fprintf(&b, "    routed via    %s\n", s.Route)
+	}
 	b.WriteString("\n")
 	b.WriteString("  Not a forecast of savings. Tokens already billed twice\n")
 	b.WriteString("  because a prompt cache broke and nothing said so.\n\n")

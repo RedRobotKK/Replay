@@ -64,8 +64,32 @@ Three failures, all silent:
 | Solo developer on Claude Code | Pays per token or holds a subscription; has weeks of transcripts | One command that explains their bill and one change that lowers it |
 | Team lead with an agent budget | Ten developers, one invoice, no attribution | Per-project blame and a policy that is safe to roll out |
 | Platform or security engineer | Must approve any tool that touches API traffic | A threat model, a data-handling statement, and a binary they can verify |
+| Operator running inference against a live position | Trading, market-making, or any loop where the model's output is acted on for money | The **total** cost of inference for a window, not a rate — because it is subtracted from a P&L, not compared with a peer |
 
 **Non-user:** anyone whose agent cannot be pointed at a local base URL and who does not keep local transcripts. Replay has nothing to offer them and the README says so.
+
+### The last row wants the number the share card refuses
+
+This is worth stating rather than smoothing over, because the two surfaces
+answer opposite questions and the tension is by design.
+
+`replay cost` reports the total. It runs locally, prints to that operator's own
+terminal, and the total is the entire point: a trading loop's inference cost is
+a line item against realised P&L, and a median task cost cannot be subtracted
+from anything.
+
+The share card omits the total on purpose, for the reason in
+`cmd/replay/share.go`: it is built to be pasted in public, and a total tells a
+reader the poster's burn rate. That reasoning does not weaken for a trader — it
+strengthens. Position size is inferable from spend, and an operator who posts
+their monthly inference bill has published something about the size of the book
+behind it.
+
+So the card carries the **route**, not the total: whether the traffic went
+first-party, through Bedrock, or through Vertex. That is a category rather than
+a quantity, it reveals nothing about the poster, and for the metered routes it
+is the one billing fact a model id actually settles. See `cmd/replay/namespace.go`
+for why the first-party case deliberately claims less than the other two.
 
 ## 5. Product principles (non-negotiable)
 

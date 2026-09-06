@@ -42,6 +42,10 @@ type costSummary struct {
 	P90USD         float64 `json:"p90Usd"`
 	AvoidableUSD   float64 `json:"avoidableUsd"`
 	AvoidableShare float64 `json:"avoidableShare"`
+	// Which route the traffic took. A category, never an id — see
+	// namespace.go for why the billing mode is only claimed where the model
+	// id actually settles it.
+	Route string `json:"route,omitempty"`
 }
 
 // summarise reduces priced sessions to the figures a unit-economics
@@ -56,6 +60,11 @@ func summarise(units []costUnit) costSummary {
 	if len(units) == 0 {
 		return s
 	}
+	models := make([]string, 0, len(units))
+	for _, u := range units {
+		models = append(models, u.Model)
+	}
+	s.Route = routeLine(models)
 	costs := make([]float64, 0, len(units))
 	for _, u := range units {
 		s.TotalUSD += u.CostUSD

@@ -388,6 +388,112 @@
         "TestCR3_ARowWithNothingComparedIsNotPerfect"
       ],
       "note": "The same defect as M26 carried into the report: a transcript with nothing to compare was printed at 100% and counted as above the calibration threshold in the below-threshold tally."
+    },
+    {
+      "id": "M29",
+      "name": "bedrock-id-read-as-unknown",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/namespace.go",
+      "anchor": "\tcase strings.Contains(id, \"anthropic.claude\"):",
+      "replacement": "\tcase false:",
+      "killedBy": [
+        "TestN1_ModelIdsAreClassifiedByRoute"
+      ],
+      "note": "Bedrock inference-profile ids (us.anthropic.claude-...) stop being recognised. Bedrock has no flat seat, so this traffic is the only population Replay can prove is metered; reading it as unknown erases the evidence for who the product can charge."
+    },
+    {
+      "id": "M30",
+      "name": "vertex-path-read-as-unknown",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/namespace.go",
+      "anchor": "\tcase strings.Contains(id, \"publishers/anthropic/models/\"):",
+      "replacement": "\tcase false:",
+      "killedBy": [
+        "TestN1_ModelIdsAreClassifiedByRoute"
+      ],
+      "note": "Same loss on the Vertex side. Also the ordering guard: the Vertex publisher path has to be tested before the Bedrock substring, and this is what proves the ordering is load-bearing rather than incidental."
+    },
+    {
+      "id": "M31",
+      "name": "metered-route-not-named-metered",
+      "class": "provenance",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/namespace.go",
+      "anchor": "\t\treturn line + \", metered\"",
+      "replacement": "\t\treturn line",
+      "killedBy": [
+        "TestN3_BedrockAndVertexAreNamedMetered"
+      ],
+      "note": "Discards the one billing fact the model id settles. Silent, and silence here is indistinguishable from a first-party run."
+    },
+    {
+      "id": "M32",
+      "name": "first-party-claimed-as-metered",
+      "class": "provenance",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/namespace.go",
+      "anchor": "\tmetered := present[routeBedrock] || present[routeVertex]",
+      "replacement": "\tmetered := true",
+      "killedBy": [
+        "TestN2_FirstPartyIsNotReportedAsMetered"
+      ],
+      "note": "The inverse, and the worse one. A bare first-party id is emitted by an API key and by a Max subscription alike, so calling it metered invents the precondition the whole product rests on - that the reader is billed per token."
+    },
+    {
+      "id": "M33",
+      "name": "minority-route-dropped",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/namespace.go",
+      "anchor": "\t\t\tnamed = append(named, r)",
+      "replacement": "\t\t\tif len(named) == 0 {\n\t\t\t\tnamed = append(named, r)\n\t\t\t}",
+      "killedBy": [
+        "TestN4_MixedRoutesAreBothNamed",
+        "TestN8_SummariseDerivesTheRoute"
+      ],
+      "note": "Reports only the first route found. The shape that hides one Bedrock account inside a corpus of subscriptions - which is exactly the account that proves someone is paying per token."
+    },
+    {
+      "id": "M34",
+      "name": "raw-model-id-on-the-share-card",
+      "class": "privacy",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/namespace.go",
+      "anchor": "\tline := strings.Join(named, \" + \")",
+      "replacement": "\tline := strings.Join(models, \" + \")",
+      "killedBy": [
+        "TestN5_TheRouteLineLeaksNoIdentifier",
+        "TestShareCardCarriesNoIdentifiers"
+      ],
+      "note": "Prints the ids themselves on a card built to be pasted in public. A real Vertex id embeds the caller's GCP project and region, a real Bedrock ARN their account number. Frozen because the first version of this mutant did not compile and was scored as caught; written so it builds, it is caught by two independent tests, and the second only after the identifier test was rebuilt to cover the field."
+    },
+    {
+      "id": "M35",
+      "name": "summarise-never-derives-the-route",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/cost.go",
+      "anchor": "\ts.Route = routeLine(models)",
+      "replacement": "\ts.Route = \"\"",
+      "killedBy": [
+        "TestN8_SummariseDerivesTheRoute"
+      ],
+      "note": "Leaves the field empty on every real run while a hand-built summary still renders it. The classic split between a unit test on a literal and the wiring nobody exercises."
+    },
+    {
+      "id": "M36",
+      "name": "card-drops-the-route-line",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/share.go",
+      "anchor": "\tif s.Route != \"\" {",
+      "replacement": "\tif false {",
+      "killedBy": [
+        "TestN7_TheCardCarriesTheRouteOnlyWhenObserved"
+      ],
+      "note": "The route is measured and then not shown. The guard is deliberately an omission rather than a blank label, because an empty field reads as a measurement that came back nothing."
     }
   ],
   "knownSurvivors": [

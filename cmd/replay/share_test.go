@@ -61,8 +61,21 @@ func TestShareCardRefusesEmpty(t *testing.T) {
 // Nothing in the card may identify a project, a path, or a machine.
 func TestShareCardCarriesNoIdentifiers(t *testing.T) {
 	s := costSummary{Tasks: 12, MedianUSD: 1.10, P90USD: 4.00, AvoidableShare: 0.11, TotalUSD: 90}
+	// The route is derived from a model id, and a real Vertex id embeds the
+	// caller's GCP project and region — "projects/acme-prod/locations/..." is
+	// the ordinary shape, not a contrived one. Built from a bare literal this
+	// test would leave the newest field on the card uncovered, which is the
+	// failure mode the card's whole design exists to avoid.
+	s.Route = routeLine([]string{
+		"projects/acme-prod/locations/us-central1/publishers/anthropic/models/claude-opus-5",
+		"arn:aws:bedrock:us-east-1:123456789012::foundation-model/anthropic.claude-opus-5",
+	})
+	if s.Route == "" {
+		t.Fatal("the route came back empty, so this test does not cover the route line")
+	}
 	card := shareCard(s, 3)
-	for _, bad := range []string{"/Users/", "/home/", ".claude", "projects/"} {
+	for _, bad := range []string{"/Users/", "/home/", ".claude", "projects/",
+		"acme-prod", "us-central1", "us-east-1", "123456789012", "arn:"} {
 		if strings.Contains(card, bad) {
 			t.Errorf("the card carries an identifier (%q):\n%s", bad, card)
 		}

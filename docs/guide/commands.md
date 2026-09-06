@@ -51,12 +51,25 @@ price table are excluded and counted, never treated as free.
 replay cost ~/.claude/projects/ --share
 ```
 
-It carries the avoidable rate, the median and p90 task cost, the session count and the break count —
-and deliberately not the total. A total tells a reader your monthly burn and lets them infer team
+It carries the avoidable rate, the median and p90 task cost, the transcript count and the break
+count — and deliberately not the total. A total tells a reader your monthly burn and lets them infer team
 size; it is also the least comparable number in the set, because $3,000 means nothing without
 knowing how many engineers spent it. A rate reads the same from a solo developer and a team of
 fifty. No paths, no project names. The card goes to stdout and its note to stderr, so
 `replay cost <dir> --share | pbcopy` copies exactly what is safe to paste.
+
+It also names the **route** the traffic took — `first-party API`, `Bedrock`, `Vertex`, or a mix —
+derived from the model ids already on each request. The route is a category, not an identifier: a
+real Vertex model id embeds the caller's GCP project and region and a real Bedrock ARN their account
+number, and none of that reaches the card.
+
+Bedrock and Vertex are labelled `metered`, because neither offers a flat seat, so that traffic is
+billed per token by construction. A bare first-party id is **not** labelled, and the omission is the
+point: the same id is emitted whether the caller holds an API key or a subscription, so claiming a
+billing mode there would be inventing the one fact that decides whether a cache break cost the
+reader anything. A mixed corpus reads `partly metered`. When no model id was observed the line is
+omitted rather than printed empty, because a blank field reads as a measurement that returned
+nothing rather than one that was never taken.
 
 A plain `replay cost` run also names the tip jar once, under the figures, when the avoidable amount
 is over $5 — at the one moment the tool has just shown you money you already spent twice. It prints
