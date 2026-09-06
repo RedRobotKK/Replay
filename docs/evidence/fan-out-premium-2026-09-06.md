@@ -81,3 +81,68 @@ work would if the cache were shared, and that the multiple gets worse as you wid
 Every input is in the transcripts already on disk: `cache_creation_input_tokens`,
 `cache_read_input_tokens`, `sessionId`, `requestId` and `timestamp`. No proxy, no key, no network.
 Deduplicate on `requestId` first or the result is meaningless.
+
+
+---
+
+## Correction, same day: most of this number is arithmetic
+
+**Added 2026-09-06 after adversarial review. The table above is not withdrawn,
+but it must not be read as a discovery, and the headline framing was wrong.**
+
+Take the method above literally. Observed cost is `1.25 · ΣPᵢ`, because every
+sibling writes the shared prefix. The counterfactual is
+`1.25 · P_max + 0.1 · P_max · (k−1)`, one write and `k−1` reads. Divide:
+
+```text
+premium = [ ΣPᵢ / (k · P_max) ] × [ 1.25k / (1.25 + 0.1(k−1)) ]
+              empirical                  pure arithmetic in k
+```
+
+The right-hand factor contains no data. It is fixed by the group size and the
+provider's own 1.25 and 0.1 multipliers, and it is greater than 1 for every
+`k > 1` with non-empty prompts. **No corpus can produce a premium below 1.** A
+quantity that cannot come out low is not evidence about fan-out; it is a
+restatement of the price list.
+
+Against that ceiling:
+
+| lanes | measured | arithmetic ceiling | implied dispersion |
+|---:|---:|---:|---:|
+| 2 | 1.68× | 1.852× | 0.907 |
+| 3 | 2.56× | 2.586× | 0.990 |
+| 5 | 3.34× | 3.788× | 0.882 |
+
+The measured values sit at 88–99% of the ceiling. So the **only** empirical
+content in the whole table is the dispersion ratio `ΣPᵢ / (k · P_max)` — how
+equal the sibling prompts are — and it is about 0.9 and flat. Everything else,
+including the monotonic rise from 1.68× to 3.34×, is the shape of the
+estimator.
+
+The robustness table is explained by the same identity rather than supporting
+the result. Neither `k` nor the multipliers depend on the grouping window, so
+the premium was never free to move much across 30–300s. Window-invariance here
+is a property of the formula, not evidence that the finding is stable.
+
+This is the defect class ADR-0014 exists for, one level up from code: a
+measurement that could not have come out otherwise. The section above already
+said "the counterfactual is arithmetic, not a setting", which was right and was
+not carried into the headline.
+
+**What survives.** The cost is real — siblings genuinely do pay it, and an
+operator running five lanes genuinely is billed about 3.3× a shared-prefix
+baseline. What does not survive is presenting it as a measured discovery about
+fan-out behaviour. The honest statement is: *here is the arithmetic of
+concurrent cache writes, and here is how similar sibling prompts turn out to
+be on one machine (≈0.9).*
+
+**What would make it a finding.** Report the dispersion ratio directly with its
+distribution; simulate the null by drawing sibling prompt sizes from the
+observed marginal and grouping at random within session, and show whether the
+simulated premiums reproduce the table; and cluster the 483 / 79 / 24 groups by
+session, because if the 24 five-lane groups come from a handful of sessions a
+cluster bootstrap on 3.34× will be very wide.
+
+**Surfaces still carrying the uncorrected framing** as of this writing: the
+project site page and the `--share` card copy. Both need the wording changed
+from a discovery to an identity plus a dispersion measurement.
