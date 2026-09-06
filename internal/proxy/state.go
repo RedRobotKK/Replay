@@ -58,9 +58,18 @@ type sessionState struct {
 	// holding the proxy-wide lock through a walk of the whole session.
 	scoreMu sync.Mutex
 	builder *ledger.SessionBuilder
-	whatIf  []WhatIf
-	context []analysis.ContextEntry
-	reReads analysis.ReReads
+	// whatIf, context and reReads are keyed by AgentID with "" for the main
+	// loop, for the same reason errorByLane and prefixByLane are.
+	//
+	// rescore analyses ONE lane, the one the finished record belongs to, and
+	// these three held its answer in a single slot. In a fan-out session that
+	// meant the last lane to finish decided what the status endpoint reported
+	// for the whole session, and a quiet sub-agent erased a busy one. That is
+	// the sentence already written against errorByLane below; it was applied
+	// to one field out of four.
+	whatIf  map[string][]WhatIf
+	context map[string][]analysis.ContextEntry
+	reReads map[string]analysis.ReReads
 	// errorByLane is the estimated prompt cost of error content carried by
 	// each agent lane, from the same analysis replay prints, keyed by AgentID
 	// with "" for the main loop.
@@ -316,6 +325,21 @@ func (s *stats) setLaneErrors(sessionID, agentID string, tokens int) {
 
 // session finds or creates a session's state, evicting the least recently
 // seen ones past maxSessions. Callers hold the lock.
+// contextFor returns one lane's context breakdown, "" being the main loop.
+func (st *sessionState) contextFor(agentID string) []analysis.ContextEntry {
+	return st.context[agentID]
+}
+
+// reReadsFor returns one lane's re-read figures.
+func (st *sessionState) reReadsFor(agentID string) analysis.ReReads {
+	return st.reReads[agentID]
+}
+
+// whatIfFor returns one lane's candidate-policy scoring.
+func (st *sessionState) whatIfFor(agentID string) []WhatIf {
+	return st.whatIf[agentID]
+}
+
 func (s *stats) session(id string) *sessionState {
 	st, ok := s.sessions[id]
 	if ok {
@@ -426,12 +450,23 @@ func (s *stats) rescore(rec *ledger.Record) (string, analysis.ReReads) {
 		errorTokens += e.PromptTokens.Value
 	}
 	s.mu.Lock()
-	st.whatIf = rows
-	st.reReads = report.ReReads
+	if st.whatIf == nil {
+		st.whatIf = map[string][]WhatIf{}
+	}
+	if st.context == nil {
+		st.context = map[string][]analysis.ContextEntry{}
+	}
+	if st.reReads == nil {
+		st.reReads = map[string]analysis.ReReads{}
+	}
+	// Each replaces this lane's figure rather than adding to it: the report is
+	// that lane's running total, not a delta. Same rule as errorByLane below.
+	st.whatIf[rec.AgentID] = rows
+	st.reReads[rec.AgentID] = report.ReReads
 	// Blame was computed and discarded here. It is the only attribution of what
 	// a session's context is made of, and the proxy is the one place it can be
 	// produced from provider usage rather than from the byte-to-token fit.
-	st.context = analysis.EnteredContext(report.Blame)
+	st.context[rec.AgentID] = analysis.EnteredContext(report.Blame)
 	if st.errorByLane == nil {
 		st.errorByLane = map[string]int{}
 	}
@@ -505,8 +540,23 @@ type SessionSummary struct {
 	// path already in context, before and after the provider's first clear.
 	// Context is what entered this session's context, by tool. It does not
 	// subtract cleared or compacted content; see analysis.ContextEntry.
+	// Context, ReReads and WhatIf report the MAIN LOOP's own figures.
+	//
+	// They used to hold whichever lane finished last, which made them
+	// non-deterministic in any fan-out session. They keep their published
+	// array and object shapes because /replay/status is a documented surface
+	// in docs/SURFACES.md carrying no schema version, so a consumer has
+	// nothing to branch on and a changed shape would break it silently. What
+	// changed is that they now mean something: the main loop, every time.
+	//
+	// The per-lane breakdown arrives beside them, additively.
 	Context []analysis.ContextEntry `json:"context,omitempty"`
-	ReReads analysis.ReReads        `json:"re_reads"`
+	// ContextByLane carries every lane's breakdown keyed by AgentID, with ""
+	// for the main loop. This is the field a fan-out session needs.
+	ContextByLane map[string][]analysis.ContextEntry `json:"context_by_lane,omitempty"`
+	ReReadsByLane map[string]analysis.ReReads        `json:"re_reads_by_lane,omitempty"`
+	WhatIfByLane  map[string][]WhatIf                `json:"what_if_by_lane,omitempty"`
+	ReReads       analysis.ReReads                   `json:"re_reads"`
 	// WhatIf scores candidate layouts over the session so far; as-run is
 	// first. Nothing here was sent to the provider.
 	WhatIf []WhatIf `json:"what_if,omitempty"`
@@ -590,7 +640,7 @@ func (s *stats) status() Status {
 				out.Trial.Treated++
 			}
 		}
-		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, Context: st.context, ReReads: st.reReads, WhatIf: st.whatIf, ErrorShare: share(st.totalErrorTokens(), st.tally.PromptTokens), Masked: st.masked, Rehydrated: st.rehydrated, RehydrationDenied: st.denied, Held: st.held, HeldMS: st.heldMS})
+		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, Context: st.contextFor(""), ContextByLane: st.context, ReReads: st.reReadsFor(""), ReReadsByLane: st.reReads, WhatIf: st.whatIfFor(""), WhatIfByLane: st.whatIf, ErrorShare: share(st.totalErrorTokens(), st.tally.PromptTokens), Masked: st.masked, Rehydrated: st.rehydrated, RehydrationDenied: st.denied, Held: st.held, HeldMS: st.heldMS})
 	}
 	sort.Slice(out.Sessions, func(i, j int) bool { return out.Sessions[i].LastSeen.After(out.Sessions[j].LastSeen) })
 	return out
