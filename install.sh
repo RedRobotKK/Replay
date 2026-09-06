@@ -395,8 +395,8 @@ printf '        %s%s ~/.claude/projects/<project>/%s   %s# read a session you al
 # Discovery, not consent. Naming the local report is the installer's job. There
 # is no submission path to point at: the binary sends nothing anywhere.
 if [ "$CORPUS_OPT_IN" -eq 0 ]; then
-  printf '\n%sReplay makes no network request except to the provider you configured.%s\n' \
-    "$C_DIM" "$C_0" >&2
+  printf '\n%sReplay originates no network request you did not type. The proxy forwards\nyour own traffic; %s rules --check-prices and %s probe --execute are the two\nthat reach out, and only when you run them.%s\n' \
+    "$C_DIM" "$BIN" "$BIN" "$C_0" >&2
   printf '%sTo see how well it is calibrated on your own traffic:%s %s%s corpus%s%s shows what\nyour sessions look like, on this machine, and sends nothing anywhere.%s\n' \
     "$C_DIM" "$C_0" "$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
 fi
@@ -406,7 +406,7 @@ fi
 # opportunity and no nag. Tied to a real number rather than a general appeal,
 # because the corpus that makes the tool's figures measured rather than guessed
 # was paid for out of pocket.
-printf '\n%sReplay is free, Apache 2.0, and funded by nobody. The 1363-session corpus\nbehind its numbers cost about $2851 in API spend to gather.%s\n' \
+printf '\n%sReplay is free, Apache 2.0, and funded by nobody. The corpus behind its\nnumbers is 78 sessions across 1,450 transcripts, and cost about $2851 in\nAPI spend to gather.%s\n' \
   "$C_DIM" "$C_0" >&2
 printf '%sIf it saves you more than it cost you to install:%s %s%s%s\n' \
   "$C_DIM" "$C_0" "$C_ACCENT$C_B" "$COFFEE" "$C_0" >&2
