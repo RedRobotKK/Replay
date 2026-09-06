@@ -67,7 +67,34 @@ func note(urgent bool, s string) string {
 // kv renders a label and value at a fixed column, for the header block and the
 // settings screen, where the label column is the thing a reader scans.
 func kv(label, value string) string {
-	return "  " + cell(label, 24) + value
+	return "  " + cell(label, labelW) + value
+}
+
+// The header block is a table too, and it has to be the same table in every
+// state. State 1 put its third column at 54 and state 2 at 48, because both
+// were assembled from hand-counted spaces inside a value string. A reader
+// moving between screens re-finds the column each time, which is the cost the
+// traffic grid already avoids and this block was not.
+const (
+	labelW = 24 // label column: "corpus contribution" is the longest
+	valueW = 22 // value column: "api.anthropic.com" plus room
+	statW  = 10 // stat label: "requests", "sessions", "billed"
+)
+
+// stat renders a header line with the same geometry in every state: a label, a
+// value, a second label, and its figure.
+func stat(label, value, statLabel, statValue string) string {
+	return "  " + cell(label, labelW) + cell(value, valueW) +
+		cell(statLabel, statW) + statValue
+}
+
+// note2 renders a header line that has no stat column, keeping the value
+// column where every other state puts it.
+func note2(label, value, trailing string) string {
+	if trailing == "" {
+		return strings.TrimRight("  "+cell(label, labelW)+value, " ")
+	}
+	return "  " + cell(label, labelW) + cell(value, valueW) + trailing
 }
 
 // Storyboard returns every scene, in lifecycle order.
@@ -87,9 +114,9 @@ func Storyboard() []Scene {
 	add(1, "Idle, listening",
 		append([]string{
 			"  replay serve                                                    v0.4.0", "",
-			kv("listening", "127.0.0.1:4000"),
-			kv("upstream", "api.anthropic.com"),
-			kv("ledger", "~/.replay/ledger            (writable)"),
+			note2("listening", "127.0.0.1:4000", ""),
+			note2("upstream", "api.anthropic.com", ""),
+			note2("ledger", "~/.replay/ledger", "(writable)"),
 			"", "  traffic",
 		}, append(hdr,
 			Empty(), Empty(), Empty(), "",
@@ -99,9 +126,9 @@ func Storyboard() []Scene {
 	add(2, "Active traffic, mixed surfaces",
 		append([]string{
 			"  replay serve                                                    v0.4.0", "",
-			kv("listening", "127.0.0.1:4000        sessions  3"),
-			kv("upstream", "api.anthropic.com     billed    1,204,881 tokens"),
-			kv("ledger", "~/.replay/ledger      spend     $2.41 of $5.00 cap"),
+			stat("listening", "127.0.0.1:4000", "sessions", "3"),
+			stat("upstream", "api.anthropic.com", "billed", "1,204,881 tokens"),
+			stat("ledger", "~/.replay/ledger", "spend", "$2.41 of $5.00 cap"),
 			"", "  traffic",
 		}, append(hdr,
 			Traffic("15:06:44", "anthropic", "api.anthropic.com", "messages", "parsed"),
@@ -177,6 +204,94 @@ func Storyboard() []Scene {
 		Row([]Column{{"time", 8}, {"surface", 9}, {"status", 9}},
 			"15:05:58", "grok", "forwarded"),
 	)
+
+	add(3, "Shutting down",
+		[]string{
+			"  replay serve                                                    v0.4.0", "",
+			"  session totals", "",
+			stat("requests", "412", "billed", "8,204,551 tokens"),
+			stat("re-billed", "336,060", "share", "4.1% of prompt tokens"),
+			stat("forwarded", "38", "read", "nothing"),
+			"", "  notes",
+			note(false, "ledger written to ~/.replay/ledger"),
+			note(false, "38 requests on /responses were forwarded and not recorded."),
+		}...)
+
+	add(5, "Parsed against a stub, never verified live",
+		append([]string{"  traffic"}, append(hdr,
+			Traffic("15:06:41", "openai", "api.openai.com", "chat/completions", "stub"),
+			"", "  notes",
+			note(false, "this path parses a payload we wrote and has never been checked"),
+			"      against a live provider. Figures from it carry that caveat.")...)...)
+
+	add(9, "Spend cap reached",
+		[]string{
+			"  spend", "",
+			stat("day cap", "$5.00", "reached", "15:41:07"),
+			stat("counted", "$5.00", "requests", "204"),
+			"", "  notes",
+			note(true, "refusing before the next request. Nothing was interrupted"),
+			"      mid-stream, and nothing already in flight was cut short.",
+			note(false, "override with x-replay-override, and the reason is logged."),
+		}...)
+
+	add(11, "The same tool call, over and over",
+		[]string{
+			"  loop", "",
+			stat("tool", "Read", "repeats", "7 in a row"),
+			stat("argument", "src/main.go", "cost", "412,880 tokens"),
+			"", "  notes",
+			note(true, "loop: the same Read call was just made 7 times in a row."),
+			note(false, "warn at 5, block at 12. Both are flags, both are off by default."),
+		}...)
+
+	add(13, "Upstream failing, breaker open",
+		[]string{
+			"  breaker", "",
+			stat("state", "open", "since", "15:52:11"),
+			stat("failures", "3 of 3", "cooldown", "47s remaining"),
+			"", "  notes",
+			note(true, "holding requests rather than passing them to a failing provider."),
+			note(false, "one request will be let through when the cooldown ends."),
+		}...)
+
+	add(17, "Never asked",
+		[]string{
+			"  consent", "",
+			stat("corpus contribution", "undecided", "asked", "never"),
+			"", "  notes",
+			note(false, "absence is not refusal. Replay has not put the question to you,"),
+			"      and will not send anything until it does and you say yes.",
+		}...)
+
+	add(19, "Refused, and remembered",
+		[]string{
+			"  consent", "",
+			stat("corpus contribution", "refused", "recorded", "2026-09-04"),
+			"", "  notes",
+			note(false, "a refusal is kept so nothing asks again. Delete the file to"),
+			"      return to undecided.",
+		}...)
+
+	add(20, "The answer cannot be trusted",
+		[]string{
+			"  consent", "",
+			stat("corpus contribution", "unreadable", "mode", "0666"),
+			"", "  notes",
+			note(true, "this file is writable by anyone on the machine, so it is not"),
+			"      evidence of your decision. Nothing will be sent.",
+			note(false, "chmod 600 the file, or answer again."),
+		}...)
+
+	add(23, "What masking does not cover",
+		[]string{
+			"  masking                 on", "",
+			stat("patterns", "14", "entropy", "4.20"),
+			stat("covered", "/v1/messages", "records", "412"),
+			"", "  notes",
+			note(true, "NOT covered: /responses, /v1/chat/completions."),
+			"      Secrets on those paths are forwarded unmasked and unrecorded.",
+		}...)
 
 	sort.Slice(s, func(i, j int) bool { return s[i].N < s[j].N })
 	return s
