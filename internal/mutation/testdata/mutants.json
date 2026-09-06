@@ -1,0 +1,360 @@
+{
+  "schema": "replay.mutants.v1",
+  "note": "Frozen historical defects. This is error seeding (Mills 1972) and fault regression, NOT mutation analysis: the denominator is 15 hand-chosen edits, not a generated operator population, so the ratio is not commensurable with a published mutation score and must never be reported beside one. The first run of any entry is 15/15 by construction, because a named test dying is an ADMISSION criterion \u2014 it carries zero information. The information is temporal: run k>1 executes against a tree that moved while the mutant did not, and asks whether the guard still exists, still runs, and still discriminates. The strongest claim here is not the score but that each defect is still caught BY THE NAMED TEST THAT CLAIMS IT. Each one is a defect that was real, applied to production code, verified to turn a named test red, and reverted. The catalogue exists because a mutation score stated in a commit message is a claim nobody can re-run: the mutant is gone and only the number survives. Here the mutant survives instead. Adding one is how a fixed bug stops being able to come back quietly.",
+  "classes": {
+    "attribution-loss": "Tokens the provider billed are computed and then dropped, so the total no longer reconciles.",
+    "attribution-misplacement": "Tokens are conserved but credited to the wrong content. The total looks perfect and the ranking is wrong, which is harder to notice than losing them.",
+    "guard-removed": "A check that exists to refuse something stops refusing it.",
+    "provenance": "A figure derived through the byte-to-token fit is presented as measured, or the reverse.",
+    "cost-integral": "The per-request carry count is wrong, so the cost integral is wrong while the count-once figure stays right.",
+    "privacy": "A field that must be coarsened, scoped or withheld before it leaves the machine is not.",
+    "transport": "A guarantee the transport exists to make - owner-only access, no clobbering, no data loss - is not delivered, while the name of it remains."
+  },
+  "mutants": [
+    {
+      "id": "M1",
+      "name": "positional-suffix-scan",
+      "class": "attribution-misplacement",
+      "discovered": "2026-09-06",
+      "file": "internal/analysis/fit.go",
+      "anchor": "for i, m := range cur.Context {",
+      "replacement": "for i, m := range cur.Context[min(len(prev.Context), len(cur.Context)):] {",
+      "killedBy": [
+        "TestReconcile_EveryBlockWithBytesIsAttributed"
+      ],
+      "note": "Half of the original defect. Decides what is new by position, so a prefix message replaced in place is invisible. On its own it conserves the total and moves the tool block's tokens onto whatever message follows, which is why conservation alone does not catch it."
+    },
+    {
+      "id": "M2",
+      "name": "user-role-blocks-only",
+      "class": "attribution-misplacement",
+      "discovered": "2026-09-06",
+      "file": "internal/analysis/blame.go",
+      "anchor": "shareByBytes(tc.blocks, Estimated(tc.newTokens), carried, get)",
+      "replacement": "shareByBytes(tc.userBlocks, Estimated(tc.newTokens), carried, get)",
+      "killedBy": [
+        "TestReconcile_EveryBlockWithBytesIsAttributed"
+      ],
+      "note": "The other half. Attributes only user-role content, so a system-role prefix carrying 439,611 bytes of tool definitions gets nothing."
+    },
+    {
+      "id": "M3",
+      "name": "the-original-defect",
+      "class": "attribution-loss",
+      "discovered": "2026-09-06",
+      "file": "internal/analysis/fit.go",
+      "anchor": "for i, m := range cur.Context {",
+      "replacement": "for i, m := range cur.Context[min(len(prev.Context), len(cur.Context)):] {",
+      "also": [
+        {
+          "file": "internal/analysis/blame.go",
+          "anchor": "shareByBytes(tc.blocks, Estimated(tc.newTokens), carried, get)",
+          "replacement": "shareByBytes(tc.userBlocks, Estimated(tc.newTokens), carried, get)"
+        }
+      ],
+      "killedBy": [
+        "TestReconcile_AttributionSumsToWhatTheProviderBilled",
+        "TestReconcile_EveryBlockWithBytesIsAttributed"
+      ],
+      "note": "M1 and M2 together, which is exactly what shipped. The write tokens are computed correctly and shared across an empty block list, so `replay context` reported 1k tokens for a 203,466-token prompt and printed tool 0.0% against 439,611 bytes. Subsumption, from the kill matrix: M3 is killed by a strict SUPERSET of the tests that kill M1 and M2, so it adds no adequacy information beyond them and the honest denominator for adequacy is 14, not 15. It is kept because it documents what actually shipped, as two edits.",
+      "subsumes": [
+        "M1",
+        "M2"
+      ]
+    },
+    {
+      "id": "M4",
+      "name": "drop-first-request-prefix",
+      "class": "attribution-loss",
+      "discovered": "2026-09-06",
+      "file": "internal/analysis/blame.go",
+      "anchor": "seen[m.UUID] = true\n\t\tfirstBlocks = append(firstBlocks, m.Blocks...)",
+      "replacement": "seen[m.UUID] = true",
+      "killedBy": [
+        "TestReconcile_AttributionSumsToWhatTheProviderBilled"
+      ],
+      "note": "Survived a one-percent tolerance and dies against exact equality. The reason the law is an identity and not a band."
+    },
+    {
+      "id": "M5",
+      "name": "drop-output-attribution",
+      "class": "attribution-loss",
+      "discovered": "2026-09-06",
+      "file": "internal/analysis/blame.go",
+      "anchor": "attributeOutput(t.Previous, carried, get)",
+      "replacement": "_ = attributeOutput",
+      "killedBy": [
+        "TestReconcile_AttributionSumsToWhatTheProviderBilled"
+      ],
+      "note": "Assistant output re-enters the prompt as context on the next turn. Dropping it loses the provider's own measured output tokens."
+    },
+    {
+      "id": "M6",
+      "name": "drop-unseen-prefix",
+      "class": "attribution-loss",
+      "discovered": "2026-09-06",
+      "file": "internal/analysis/blame.go",
+      "anchor": "if fit.UnseenPrefix.Total() > 0 {\n\t\tget(UnseenPrefixLabel).add(fit.UnseenPrefix, total, false)\n\t}",
+      "replacement": "",
+      "killedBy": [
+        "TestReconcile_AttributionSumsToWhatTheProviderBilled"
+      ],
+      "note": "Transcript sessions do not show the shared prefix, so it is estimated. Dropping it loses the largest single row on every transcript-sourced session."
+    },
+    {
+      "id": "M7",
+      "name": "never-mark-seen",
+      "class": "attribution-misplacement",
+      "discovered": "2026-09-06",
+      "file": "internal/analysis/fit.go",
+      "anchor": "if seen[m.UUID] {\n\t\t\tcontinue\n\t\t}\n\t\tseen[m.UUID] = true",
+      "replacement": "if false {\n\t\t\tcontinue\n\t\t}\n\t\tseen[m.UUID] = true",
+      "killedBy": [
+        "TestReconcile_EveryBlockWithBytesIsAttributed"
+      ],
+      "note": "The count-once figure counts history again on every turn, so a carried block is credited once per request that carried it."
+    },
+    {
+      "id": "M8",
+      "name": "never-flag-prefix-change",
+      "class": "provenance",
+      "discovered": "2026-09-06",
+      "file": "internal/analysis/fit.go",
+      "anchor": "if i < len(prev.Context) {\n\t\t\ttc.prefixChanged = true\n\t\t}",
+      "replacement": "\t\t_ = i",
+      "killedBy": [
+        "TestReconcile_ThePrefixTurnIsNotFitted"
+      ],
+      "note": "A turn that re-lays the shared prefix enters the byte-to-token fit, so tool-definition JSON drags a ratio meant for prose. The replacement keeps `_ = i` deliberately: deleting the block outright makes the loop index unused and the mutant STILLBORN, which the first version of this catalogue scored as a kill. The compiler refusing a mutant is not the test suite catching it."
+    },
+    {
+      "id": "M9",
+      "name": "carry-count-is-one",
+      "class": "cost-integral",
+      "discovered": "2026-09-06",
+      "file": "internal/analysis/blame.go",
+      "anchor": "carried := total - t.Index",
+      "replacement": "carried := 1",
+      "killedBy": [
+        "TestFixtureProducesTheExpectedSuggestions"
+      ],
+      "note": "Deliberately not killed by the reconciliation laws: they check the count-once figure, and this only moves the cost integral. Kept in the catalogue to record which law covers which figure, and to notice if the advisor test that does kill it ever stops."
+    },
+    {
+      "id": "M10",
+      "name": "consent-gate-removed",
+      "class": "guard-removed",
+      "discovered": "2026-09-06",
+      "file": "internal/observation/observation.go",
+      "anchor": "\tif !d.Allowed() {",
+      "replacement": "\tif false {",
+      "killedBy": [
+        "TestO1_BuildRequiresGrantedConsent"
+      ],
+      "note": "The consent check inside Build. It lives in the pure function rather than only at the call site precisely so it cannot be forgotten by the next caller; this asserts the function still refuses."
+    },
+    {
+      "id": "M11",
+      "name": "contribute-gate-removed",
+      "class": "guard-removed",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/contribute.go",
+      "anchor": "\tif !decision.Allowed() {",
+      "replacement": "\tif false {",
+      "killedBy": [
+        "TestC2_ContributeHonoursARecordedRefusal"
+      ],
+      "note": "The command-level gate. internal/consent was dead code in the shipped binary until this wiring; the mutant is what stops it going dead again."
+    },
+    {
+      "id": "M12",
+      "name": "unreadable-consent-becomes-yes",
+      "class": "guard-removed",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/contribute.go",
+      "anchor": "\tif err != nil {\n\t\treturn fmt.Errorf(\"the corpus consent file cannot be read, so it is not a decision: %w\", err)\n\t}",
+      "replacement": "\t_ = err",
+      "killedBy": [
+        "TestC3_AWorldWritableConsentFileIsRefused"
+      ],
+      "note": "A consent file that is a symlink or writable by anyone else is refused by the consent package. Swallowing that error turns a refusal into a decision."
+    },
+    {
+      "id": "M13",
+      "name": "timestamp-not-truncated",
+      "class": "privacy",
+      "discovered": "2026-09-06",
+      "file": "internal/observation/observation.go",
+      "anchor": "\treturn t.UTC().Truncate(time.Hour).Format(time.RFC3339), nil",
+      "replacement": "\treturn t.UTC().Format(time.RFC3339), nil",
+      "killedBy": [
+        "TestO3_TheTimestampIsTruncatedToTheHour"
+      ],
+      "note": "Second-resolution timestamps are a correlation handle against the provider's own request logs and buy nothing: a campaign window is hours wide."
+    },
+    {
+      "id": "M14",
+      "name": "tag-linkable-across-campaigns",
+      "class": "privacy",
+      "discovered": "2026-09-06",
+      "file": "internal/observation/observation.go",
+      "anchor": "\tm := hmac.New(sha256.New, []byte(campaign))",
+      "replacement": "\tm := hmac.New(sha256.New, []byte(\"replay\"))",
+      "killedBy": [
+        "TestO4_TagsDedupWithinACampaignAndNotAcross"
+      ],
+      "note": "Keying on a fixed string instead of the campaign makes the tag stable across campaigns, which is a persistent installation id however it is labelled."
+    },
+    {
+      "id": "M15",
+      "name": "submission-refusal-made-unactionable",
+      "class": "privacy",
+      "discovered": "2026-09-06",
+      "file": "internal/observation/observation.go",
+      "anchor": "\t\treturn \"\", fmt.Errorf(\"%s already exists; move or delete it rather than replacing a submission that has not been sent\", path)",
+      "replacement": "\t\t_ = info",
+      "killedBy": [
+        "TestO8_TheFileIsOwnerOnlyAndNeverOverwrites"
+      ],
+      "note": "Corrected after review: with this applied NOTHING is overwritten \u2014 the O_EXCL open still refuses the second write. What the mutant actually removes is a specific, actionable refusal, degrading it to a bare EEXIST. That matters because this file is the only review step in the design, so the diagnostic is a functional requirement rather than a courtesy. The earlier note claimed a silent overwrite the mutant does not cause, which is the sort of thing the observable-behaviour admission criterion leans on being true."
+    },
+    {
+      "id": "M16",
+      "name": "socket-left-at-umask",
+      "class": "transport",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/uds.go",
+      "anchor": "if err := os.Chmod(abs, socketMode); err != nil {",
+      "replacement": "if err := error(nil); err != nil {",
+      "killedBy": [
+        "TestU2_TheSocketIsOwnerOnly"
+      ],
+      "note": "The socket mode is set explicitly because the umask is inherited from whatever shell or supervisor started the proxy and is routinely permissive. A socket at 0666 is reachable by every local user, which is what the TCP port already was: the transport becomes ceremony while claiming a security property."
+    },
+    {
+      "id": "M17",
+      "name": "socket-in-a-shared-directory",
+      "class": "transport",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/uds.go",
+      "anchor": "\tif err := checkSocketDir(filepath.Dir(abs)); err != nil {\n\t\treturn nil, err\n\t}\n",
+      "replacement": "",
+      "killedBy": [
+        "TestU3_ARefusedSocketDirectory"
+      ],
+      "note": "Socket permissions are not sufficient on their own. In a directory others can write to, another user unlinks the socket and binds their own; the agent then sends its API key to them. Putting it in /tmp is the ordinary way to get this wrong."
+    },
+    {
+      "id": "M18",
+      "name": "bind-through-a-symlink",
+      "class": "transport",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/uds.go",
+      "anchor": "if info.Mode()&os.ModeSymlink != 0 {",
+      "replacement": "if false {",
+      "killedBy": [
+        "TestU4_ASymlinkAtTheSocketPathIsRefused"
+      ],
+      "note": "Binding through a link puts the socket wherever the link points, which is somebody else's choice of location rather than the user's."
+    },
+    {
+      "id": "M19",
+      "name": "clobber-a-live-proxy",
+      "class": "transport",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/uds.go",
+      "anchor": "\tif c, derr := net.Dial(\"unix\", path); derr == nil {\n\t\tc.Close()\n\t\treturn fmt.Errorf(\"a proxy is already listening on %s; refusing to take over its socket\", path)\n\t}\n",
+      "replacement": "",
+      "killedBy": [
+        "TestU5_ALiveProxyIsNotDisplaced"
+      ],
+      "note": "A stale socket must be cleaned up and a live one must not: unlinking a socket something is still serving silently steals every future request from a working proxy. Dialling it is the only reliable way to tell the two apart. This mutant HUNG rather than failed until the test's wait was bounded."
+    },
+    {
+      "id": "M20",
+      "name": "no-sun-path-limit",
+      "class": "transport",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/uds.go",
+      "anchor": "if len(abs) > maxSocketPath {",
+      "replacement": "if false {",
+      "killedBy": [
+        "TestU9_APathTooLongForTheKernelIsRefusedByName"
+      ],
+      "note": "sun_path is a fixed-size kernel field (104 bytes on macOS, 108 on Linux). Over it, bind returns 'invalid argument', which names nothing and sends people to look at permissions. Reachable in ordinary use by a deep home directory - it is how the first version of these tests failed."
+    },
+    {
+      "id": "M21",
+      "name": "delete-a-non-socket",
+      "class": "transport",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/uds.go",
+      "anchor": "if info.Mode()&os.ModeSocket == 0 {",
+      "replacement": "if false {",
+      "killedBy": [
+        "TestU10_ANonSocketAtThePathIsNeverDeleted"
+      ],
+      "note": "Clearing a stale socket unlinks a file at a user-supplied path. A typo pointing at a key, a config or a database must not cost the user that file. Only a socket is ever removed."
+    },
+    {
+      "id": "M22",
+      "name": "metrics-listener-gets-a-catch-all",
+      "class": "transport",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/metrics_listener.go",
+      "anchor": "mux.HandleFunc(MetricsPath, s.metrics)\n\treturn mux",
+      "replacement": "mux.HandleFunc(MetricsPath, s.metrics)\n\tmux.HandleFunc(\"/\", s.handle)\n\treturn mux",
+      "killedBy": [
+        "TestMT2_TheMetricsListenerCannotProxy"
+      ],
+      "note": "The read-only listener's whole property is that it cannot proxy. Adding a catch-all makes the port a complete bypass of the socket transport it exists to complement: anyone able to open a loopback connection could spend against the key the proxy holds. This is why the listener has its own mux with no '/' route rather than a guard that could be removed."
+    },
+    {
+      "id": "M23",
+      "name": "metrics-listener-shares-the-proxy-mux",
+      "class": "transport",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/metrics_listener.go",
+      "anchor": "srv := &http.Server{Handler: s.readOnlyMux(), ReadHeaderTimeout: ReadHeaderTimeout}",
+      "replacement": "srv := &http.Server{Handler: s.http.Handler, ReadHeaderTimeout: ReadHeaderTimeout}",
+      "killedBy": [
+        "TestMT2_TheMetricsListenerCannotProxy"
+      ],
+      "note": "The same bypass reached the other way, and the more likely one in practice: sharing the mux looks like sensible reuse, and it silently inherits the '/' route that forwards to the provider. It would also mean any route added to the proxy later appears here with nobody noticing."
+    },
+    {
+      "id": "M24",
+      "name": "metrics-listener-on-any-interface",
+      "class": "transport",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/metrics_listener.go",
+      "anchor": "if !isLoopback(addr) {",
+      "replacement": "if false {",
+      "killedBy": [
+        "TestMT5_TheMetricsListenerIsLoopbackOnly"
+      ],
+      "note": "The counters name repositories and token spend. Binding a routable address turns an internal diagnostic into a public endpoint publishing a department's usage."
+    },
+    {
+      "id": "M25",
+      "name": "metrics-listener-always-bound",
+      "class": "transport",
+      "discovered": "2026-09-06",
+      "file": "internal/proxy/metrics_listener.go",
+      "anchor": "\tif addr == \"\" {\n\t\treturn nil, nil\n\t}\n",
+      "replacement": "",
+      "killedBy": [
+        "TestMT4_NoMetricsListenerByDefault"
+      ],
+      "note": "A metrics port appearing by default would hand the counters to every local process, for users who never asked to be scraped."
+    }
+  ],
+  "knownSurvivors": [
+    {
+      "name": "metrics-shutdown-drain-not-awaited",
+      "file": "internal/proxy/server.go",
+      "anchor": "if mdone != nil { ... <-mdone ... }",
+      "why": "Not frozen, on purpose. Removing the drain leaves the metrics goroutine briefly outliving ListenAndServe, and no test in the suite detects it. Admission criterion 4 says a mutant with no named killer records nothing, so it is listed here as a known gap rather than admitted as a kill. Killing it needs goroutine-leak detection the suite does not have."
+    }
+  ]
+}

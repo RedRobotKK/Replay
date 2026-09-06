@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/build/constraint"
 	"go/parser"
 	"go/token"
 	"net/http"
@@ -261,6 +262,23 @@ var allowedImports = map[string]bool{
 	// itself on the first run, which is the cheapest possible demonstration
 	// that the walk reaches real files and the list is enforced.
 	"go/parser": true, "go/token": true,
+
+	// go/ast: internal/observation's own import allowlist walks its syntax
+	// tree. Reading code, not emitting it.
+	"go/ast": true,
+
+	// os/exec: internal/mutation invokes `go build` and `go test` to apply a
+	// mutant and ask whether a test notices. It cannot be avoided — the
+	// harness has to run the compiler. It is the strongest capability on this
+	// list, so it is bounded structurally rather than by promise: the test
+	// below requires every file importing it to sit behind the `mutation`
+	// build tag, which excludes it from every ordinary build and from
+	// `go test -c` without that tag.
+	"os/exec": true,
+
+	// go/build/constraint: parses build tags so the os/exec confinement above
+	// is a real constraint check and not a substring match.
+	"go/build/constraint": true,
 }
 
 func TestX402_NoSigningCapability(t *testing.T) {
@@ -354,6 +372,109 @@ func TestX402_NoSigningCapability(t *testing.T) {
 // PASS: the walk sees real files, and the curve and bignum packages a signer
 // needs are absent from the list.
 // FAIL: either, which means X6 is decoration.
+
+// requiresTag reports whether a file is compiled ONLY when tag is set.
+//
+// Deliberately not a substring match. The first version of this check tested
+// strings.Contains(body, "//go:build mutation"), which `//go:build mutationX`
+// satisfies — so removing the real tag left the check green. It could not
+// fail, which is the defect class this whole file exists to prevent, reached
+// by writing the guard carelessly rather than by anyone weakening it.
+//
+// The constraint is parsed and evaluated twice: once with only tag true, once
+// with nothing true. A file that builds in the second case does not require
+// the tag at all.
+func requiresTag(body, tag string) bool {
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "//go:build") {
+			if line != "" && !strings.HasPrefix(line, "//") {
+				return false // past the header
+			}
+			continue
+		}
+		expr, err := constraint.Parse(line)
+		if err != nil {
+			return false
+		}
+		withTag := expr.Eval(func(t string) bool { return t == tag })
+		without := expr.Eval(func(string) bool { return false })
+		return withTag && !without
+	}
+	return false
+}
+
+// X6c: the strongest import on the allowlist is confined to a build tag.
+//
+// os/exec can call anything, including a signer this test cannot read. It is
+// on the list because the mutation harness must invoke the compiler, and that
+// is a real need — but "only the mutation harness uses it" is a promise unless
+// something checks. This checks: a file importing os/exec must carry the
+// `mutation` build tag, so it is absent from every ordinary build and from a
+// `go test -c` that does not ask for it.
+//
+// PASS: every os/exec importer is build-tagged.
+// FAIL: one that is not, which would put an arbitrary-execution capability
+// into the shipped binary through the back door this allowlist exists to shut.
+func TestX402_ExecIsConfinedToTheMutationHarness(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var offenders []string
+	var seen int
+	fset := token.NewFileSet()
+	werr := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			switch info.Name() {
+			case ".git", "node_modules", "dist", "bin":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filepath.Ext(path) != ".go" {
+			return nil
+		}
+		f, perr := parser.ParseFile(fset, path, nil, parser.ImportsOnly|parser.ParseComments)
+		if perr != nil {
+			return nil
+		}
+		uses := false
+		for _, im := range f.Imports {
+			if p, uerr := strconv.Unquote(im.Path.Value); uerr == nil && p == "os/exec" {
+				uses = true
+			}
+		}
+		if !uses {
+			return nil
+		}
+		seen++
+		body, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return rerr
+		}
+		rel, _ := filepath.Rel(root, path)
+		if !requiresTag(string(body), "mutation") {
+			offenders = append(offenders, rel)
+		}
+		return nil
+	})
+	if werr != nil {
+		t.Fatal(werr)
+	}
+	if seen == 0 {
+		t.Fatal("no file imports os/exec, so this check asserts nothing. Remove os/exec from " +
+			"allowedImports rather than keeping a permission nothing uses.")
+	}
+	if len(offenders) > 0 {
+		t.Errorf("os/exec imported outside the `mutation` build tag:\n  %s",
+			strings.Join(offenders, "\n  "))
+	}
+}
+
 func TestX402_AllowlistIsMeaningful(t *testing.T) {
 	for _, banned := range []string{
 		"crypto/ecdsa", "crypto/ed25519", "crypto/elliptic", "crypto/ecdh", "math/big",

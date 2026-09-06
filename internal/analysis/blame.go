@@ -65,8 +65,10 @@ func Blame(cal *Calibration, fit TokenFit) []BlameEntry {
 	}
 
 	first := requests[0]
+	seen := make(map[string]bool)
 	var firstBlocks []transcript.Block
 	for _, m := range first.Context {
+		seen[m.UUID] = true
 		firstBlocks = append(firstBlocks, m.Blocks...)
 	}
 	visible := first.Usage.PromptTotal() - fit.UnseenPrefix.Total() - fit.Injected.Total()
@@ -80,10 +82,11 @@ func Blame(cal *Calibration, fit TokenFit) []BlameEntry {
 
 	for _, t := range cal.Turns {
 		if t.Outcome == cachemodel.ReadFirst {
+			markSeen(seen, t.Request)
 			continue
 		}
 		carried := total - t.Index
-		tc := splitTurn(t)
+		tc := splitTurn(t, seen)
 		if tc.rebillTokens > 0 {
 			// A break re-bills history that is already attributed to its
 			// own labels; it is reported as its own line so the table
@@ -91,7 +94,11 @@ func Blame(cal *Calibration, fit TokenFit) []BlameEntry {
 			get(RebillLabel).add(Measured(tc.rebillTokens), 1, false)
 		}
 		attributeOutput(t.Previous, carried, get)
-		shareByBytes(tc.userBlocks, Estimated(tc.userTokens), carried, get)
+		// Every block new to the lane, not only the user-role ones: when
+		// tool definitions bind late the new content is a system-role
+		// prefix message, and sharing this turn's write across user blocks
+		// alone drops it on an empty list.
+		shareByBytes(tc.blocks, Estimated(tc.newTokens), carried, get)
 	}
 
 	entries := make([]BlameEntry, 0, len(byLabel))

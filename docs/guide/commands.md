@@ -454,6 +454,42 @@ full price and learn nothing.
 | `--trend` | Read the recorded series and report what has provably changed. Sends nothing |
 | `--max-age` | Skip probing when a reading for this model is younger than this, and print it instead. `--max-age 24h` makes a daily schedule idempotent |
 | `--record` | Append the reading to a measurement series. Defaults to `~/.replay/measurements.jsonl`; `-` disables it |
+| `--contribute` | Build a submission file for this campaign from the recorded reading. Writes a file and sends nothing |
+| `--contribute-dir` | Where `--contribute` writes it. Defaults to the working directory |
+
+**`--contribute` sends nothing, and the binary cannot.** A floor measured on one
+account, in one region, at one hour is one account's floor; whether there is a
+single global floor needs several vantage points. So `--contribute` builds a
+file, prints its path, and stops. You read it and decide whether to move it —
+attached to a pull request, or an issue.
+
+The binary has no way to send it. `internal/observation` has no transport and a
+test enforces its import allowlist, which is a stronger promise than a consent
+flow because it does not depend on reasoning about a gate: the released binary
+makes no network request except the proxy, and that stays checkable in one line.
+
+It is off until you turn it on. `--contribute` reads
+`${XDG_CONFIG_HOME:-~/.config}/replay/corpus-consent.toml` and refuses unless it
+contains `corpus_opt_in = true`. A recorded `false` is remembered and not argued
+with. A file that is a symlink, or writable by group or other, is refused rather
+than believed — it stops the build instead of quietly becoming a decision.
+
+What the file carries: the bracket, the method version, the documented figure,
+the provenance (model answered, service tier, geography), the probe and confirm
+counts, any anomalies with their evidence, and a contributor tag. The timestamp
+is truncated to the hour, because second resolution is a correlation handle
+against the provider's own logs and a campaign window is hours wide. The tag is
+`HMAC-SHA256(campaign, secret)`, so it deduplicates submissions within one
+campaign and cannot be linked across campaigns — it is not a persistent install
+id. It is labelled `local`, meaning it was minted on this machine: it
+deduplicates and nothing more, since anyone can mint unlimited local secrets, so
+a count of distinct tags is not a count of people.
+
+What it does not carry: prompts, responses, file paths, project names, session
+ids, spend, request volume, credentials or anything derived from them. The
+payload is built field by field rather than by embedding the stored reading, so
+a field added later cannot become a disclosure by accident, and the field list
+is asserted in a test that says why it is short.
 
 **`--confirm` multiplies against `--max-probes`.** Every confirmation is a
 billable request, so 16 probes at 2 confirmations buys 8 bisection decisions,
@@ -615,7 +651,45 @@ proxy.
 
 | Flag | What it does |
 |---|---|
-| `--listen` | Address to bind. Loopback only |
+| `--listen` | Address to bind. A loopback `host:port`, or `unix:///path/to/socket` |
+| `--metrics-listen` | Bind a second, read-only listener for the three read endpoints. Off by default. It never proxies |
+
+**The socket transport is opt-in, and it is not a drop-in replacement.** A
+loopback port is bound to an address, and an address is not an authorization:
+every user and process on the machine can connect to `127.0.0.1:4000`, and the
+proxy holds the API key it was configured with. On a personal laptop that is
+nobody. On a shared build box or a jump host it is anyone, and whatever can
+dial the proxy can spend against that key.
+
+`--listen unix:///path/to/socket` moves that decision to the filesystem, where
+the kernel enforces it and you can read the answer with `ls`. The socket is
+created `0600`, and Replay refuses to bind at all when it cannot deliver the
+guarantee: a directory writable by group or other (anyone who can write there
+can replace the socket and receive your key), a symlink at the socket path, a
+socket a live proxy is still serving, a path that is not a socket, or a path
+longer than the kernel's `sun_path` field — 104 bytes on macOS, 108 on Linux,
+which a deep home directory reaches in ordinary use. A socket left by a killed
+proxy is cleaned up; one that is still answering is never taken over.
+
+It cannot be the default. `ANTHROPIC_BASE_URL` takes an `http://` URL and the
+provider SDKs cannot dial a socket path from one, so a socket needs a client
+that can — `curl --unix-socket`, or a scraper configured for it.
+
+**`--metrics-listen` exists because Prometheus cannot scrape a Unix socket.**
+Without it the two features cancel: move the proxy to a socket and you cannot
+be scraped; stay scrapable and every local process can reach the proxy. The
+second listener serves only `/replay/metrics`, `/replay/status` and
+`/replay/healthz`, and it takes the same address forms as `--listen`, so it can
+be a socket too.
+
+It never proxies, and that is structural rather than guarded. It runs on its
+own mux with three routes and no `/` catch-all, so there is no path through it
+to the provider — not a check somebody could remove, but a route that does not
+exist. If it could proxy, the port would be a complete bypass of the transport
+it exists to complement.
+
+It is off unless you ask for it, and it binds loopback only: the counters name
+repositories and token spend, which is not something to publish to a network.
 | `--upstream` | Provider base URL. Default `https://api.anthropic.com`. This is how the proxy is pointed at an OpenAI-compatible provider, or at another proxy, and it is the only setting that changes where your traffic goes — so it is worth reading twice |
 | `--token`, or `REPLAY_TOKEN` | Require `x-replay-token` on every request |
 | `--ledger` | Where ledger files are written. Default `~/.replay/ledger`, owner-only |

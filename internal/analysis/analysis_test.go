@@ -81,12 +81,15 @@ func TestBlameSumsToReportedUsage(t *testing.T) {
 		got += e.Tokens.Value
 	}
 	want := lane.Requests[0].Usage.PromptTotal()
+	seen := make(map[string]bool)
+	markSeen(seen, lane.Requests[0])
 	for _, turn := range cal.Turns {
 		if turn.Outcome == cachemodel.ReadFirst {
+			markSeen(seen, turn.Request)
 			continue
 		}
-		tc := splitTurn(turn)
-		want += turn.Previous.Usage.Output + tc.userTokens + tc.rebillTokens
+		tc := splitTurn(turn, seen)
+		want += turn.Previous.Usage.Output + tc.newTokens + tc.rebillTokens
 	}
 	if got != want {
 		t.Fatalf("attributed %d tokens, provider reported %d", got, want)

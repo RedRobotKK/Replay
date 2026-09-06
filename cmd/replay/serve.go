@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -47,7 +48,8 @@ var errDisabled = errors.New(envDisabled + " is set; Replay will not start. To b
 func runServe(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	listen := fs.String("listen", defaultListen, "loopback address to bind")
+	listen := fs.String("listen", defaultListen, "address to bind: a loopback host:port, or unix:///path/to/socket for an owner-only socket")
+	metricsListen := fs.String("metrics-listen", "", "bind a second, read-only listener for /replay/metrics, /replay/status and /replay/healthz. It never proxies. Use it when the proxy is on a socket and a scraper needs a port")
 	upstream := fs.String("upstream", envOr(envUpstream, defaultUpstream), "provider base URL")
 	ledgerDir := fs.String("ledger", "", "ledger directory (default ~/.replay/ledger)")
 	token := fs.String("token", "", "require this value in the "+proxy.HeaderToken+" header (or set "+envToken+")")
@@ -132,23 +134,24 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	spend.LoadState(dir)
 
 	srv, err := proxy.New(proxy.Config{
-		Listen:      *listen,
-		Upstream:    target,
-		Token:       *token,
-		Store:       store,
-		Logger:      log.New(stderr, "replay ", log.LstdFlags),
-		Spend:       spend,
-		Loops:       proxy.LoopLimits{Warn: *loopWarn, Block: *loopBlock},
-		Breaker:     proxy.NewBreaker(proxy.BreakerSettings{Failures: *breakerFailures, Cooldown: *breakerCooldown}),
-		ContextEdit: contextEdit,
-		PolicyFile:  *policyFile,
-		NoPolicy:    noPolicy,
-		Masker:      masker,
-		Rehydrator:  rehydrator,
-		Trial:       proxy.TrialSettings{Share: *trialShare, ReReadRate: *guardrail, RevertAfter: *revertAfter},
-		Siblings:    proxy.SiblingSettings{MaxWait: *holdSiblings},
-		Retries:     proxy.RetrySettings{Attempts: *retries, BaseDelay: *retryBase, MaxDelay: *retryMax},
-		ErrorBudget: proxy.ErrorBudget{Share: *errorBudget},
+		Listen:        *listen,
+		MetricsListen: *metricsListen,
+		Upstream:      target,
+		Token:         *token,
+		Store:         store,
+		Logger:        log.New(stderr, "replay ", log.LstdFlags),
+		Spend:         spend,
+		Loops:         proxy.LoopLimits{Warn: *loopWarn, Block: *loopBlock},
+		Breaker:       proxy.NewBreaker(proxy.BreakerSettings{Failures: *breakerFailures, Cooldown: *breakerCooldown}),
+		ContextEdit:   contextEdit,
+		PolicyFile:    *policyFile,
+		NoPolicy:      noPolicy,
+		Masker:        masker,
+		Rehydrator:    rehydrator,
+		Trial:         proxy.TrialSettings{Share: *trialShare, ReReadRate: *guardrail, RevertAfter: *revertAfter},
+		Siblings:      proxy.SiblingSettings{MaxWait: *holdSiblings},
+		Retries:       proxy.RetrySettings{Attempts: *retries, BaseDelay: *retryBase, MaxDelay: *retryMax},
+		ErrorBudget:   proxy.ErrorBudget{Share: *errorBudget},
 	})
 	if err != nil {
 		return err
@@ -169,6 +172,21 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 			_, _ = fmt.Fprintf(stdout, "masking: on (experimental); rehydration scope %s, project %s\n", rehydrator.Scopes().Default, rehydrator.Scopes().Project)
 		} else if masker != nil {
 			_, _ = fmt.Fprintf(stdout, "masking: on (experimental); rehydration off, placeholders stay in responses\n")
+		}
+		if strings.HasPrefix(*listen, proxy.UnixScheme) {
+			// A socket has no URL, and saying otherwise would send people to
+			// an ANTHROPIC_BASE_URL their SDK cannot dial. Tell them what
+			// this transport is actually for.
+			_, _ = fmt.Fprintf(stdout, "replay serve listening on unix://%s -> %s\nledger: %s\n\n"+
+				"The socket is owner-only (0600), so no other user on this machine can reach\n"+
+				"the proxy or spend against the key it holds.\n\n"+
+				"Provider SDKs take an http:// base URL and cannot dial a socket, so point a\n"+
+				"client that can at it:\n"+
+				"  curl --unix-socket %s http://replay/replay/status\n\n"+
+				"Then analyze measured data with:\n  replay replay %s\n\n"+
+				"Stop with Ctrl-C. Disable without uninstalling: %s=1.\n",
+				addr, target, dir, addr, dir, envDisabled)
+			return
 		}
 		_, _ = fmt.Fprintf(stdout, "replay serve listening on http://%s -> %s\nledger: %s\n\nPoint your agent at it:\n  export ANTHROPIC_BASE_URL=http://%s\n\nThen analyze measured data with:\n  replay replay %s\n\nStop with Ctrl-C. Disable without uninstalling: %s=1.\n", addr, target, dir, addr, dir, envDisabled)
 	}()

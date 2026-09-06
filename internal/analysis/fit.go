@@ -73,19 +73,64 @@ const defaultTokensPerByte = 0.25
 const minFitBytes = 512
 
 // turnContent splits what a request's cache write covered into the
-// previous output (measured), new user-side content (estimated from bytes),
-// and history re-written because the prefix broke (measured).
+// previous output (measured), content new to the lane (estimated from
+// bytes), and history re-written because the prefix broke (measured).
 type turnContent struct {
-	userBlocks   []transcript.Block
-	userBytes    int
-	userTokens   int
-	rebillTokens int
+	// blocks is everything new to this request except the previous output,
+	// which attributeOutput credits from the provider's own output count.
+	blocks []transcript.Block
+	// userBlocks and userBytes are the user-role subset. The fit relates
+	// user-side content bytes to tokens, so tool definitions must not enter
+	// it: JSON schemas are denser than prose and would skew the ratio.
+	userBlocks []transcript.Block
+	userBytes  int
+	// prefixChanged reports that a message an earlier request already
+	// carried was replaced rather than appended to.
+	prefixChanged bool
+	newTokens     int
+	rebillTokens  int
 }
 
-func splitTurn(t Turn) turnContent {
+// markSeen records every message a request carried, so a later request that
+// carries the same message again is not attributed twice.
+func markSeen(seen map[string]bool, req *transcript.Request) {
+	for _, m := range req.Context {
+		seen[m.UUID] = true
+	}
+}
+
+// splitTurn separates what this request added from the history it carried.
+//
+// New content is decided by message identity across the whole lane so far,
+// not by position, and seen must therefore be threaded through every turn in
+// order. A positional scan is wrong whenever a message is replaced rather
+// than appended: when tool definitions bind late, the request's prefix
+// message at index zero is a different, much larger message than its
+// predecessor's, and a suffix scan reports no new content at all. The write
+// tokens were then computed correctly and shared across an empty block list,
+// which silently dropped them. That is the shape of three of four real
+// ledger sessions, because MCP servers connect after the first request: one
+// of them wrote 439,611 bytes of tool definitions that were attributed to
+// nothing, and `replay context` reported 0.6% of the prompt tokens the
+// provider billed.
+func splitTurn(t Turn, seen map[string]bool) turnContent {
 	prev, cur := t.Previous, t.Request
 	var tc turnContent
-	for _, m := range cur.Context[min(len(prev.Context), len(cur.Context)):] {
+	for i, m := range cur.Context {
+		if seen[m.UUID] {
+			continue
+		}
+		seen[m.UUID] = true
+		if i < len(prev.Context) {
+			tc.prefixChanged = true
+		}
+		// The previous request's output reappears here as context. It is
+		// attributed from the provider's reported output tokens instead,
+		// and subtracted from this turn's write below.
+		if m.Role == transcript.RoleAssistant {
+			continue
+		}
+		tc.blocks = append(tc.blocks, m.Blocks...)
 		if m.Role == transcript.RoleUser {
 			tc.userBlocks = append(tc.userBlocks, m.Blocks...)
 			tc.userBytes += m.Bytes()
@@ -100,8 +145,8 @@ func splitTurn(t Turn) turnContent {
 	if t.Outcome == cachemodel.ReadBroken {
 		tc.rebillTokens = min(t.Expected-t.Actual, written)
 	}
-	newTokens := written - tc.rebillTokens + max(t.Actual-t.Expected, 0)
-	tc.userTokens = max(newTokens-prev.Usage.Output, 0)
+	written = written - tc.rebillTokens + max(t.Actual-t.Expected, 0)
+	tc.newTokens = max(written-prev.Usage.Output, 0)
 	return tc
 }
 
@@ -117,17 +162,35 @@ type sample struct {
 func Fit(cal *Calibration, prefixVisible bool) TokenFit {
 	var sumBytes, sumTokens float64
 	var samples []sample
+	seen := make(map[string]bool)
+	if len(cal.Lane.Requests) > 0 {
+		markSeen(seen, cal.Lane.Requests[0])
+	}
 	for _, t := range cal.Turns {
+		// Every turn must be walked, in order, even one this fit will not
+		// sample: splitTurn decides what is new against everything seen
+		// before it, so skipping a turn would make the next one attribute
+		// content twice.
+		if t.Outcome == cachemodel.ReadFirst {
+			markSeen(seen, t.Request)
+			continue
+		}
+		tc := splitTurn(t, seen)
 		if t.Outcome != cachemodel.ReadReproduced {
 			continue
 		}
-		tc := splitTurn(t)
-		if tc.userBytes < minFitBytes || tc.userTokens <= 0 {
+		// A turn that re-laid the shared prefix is not a sample of the
+		// user-side ratio: its write covers tool definitions, which are
+		// denser than prose and would drag the fit.
+		if tc.prefixChanged {
+			continue
+		}
+		if tc.userBytes < minFitBytes || tc.newTokens <= 0 {
 			continue
 		}
 		sumBytes += float64(tc.userBytes)
-		sumTokens += float64(tc.userTokens)
-		samples = append(samples, sample{ratio: float64(tc.userTokens) / float64(tc.userBytes), weight: float64(tc.userBytes)})
+		sumTokens += float64(tc.newTokens)
+		samples = append(samples, sample{ratio: float64(tc.newTokens) / float64(tc.userBytes), weight: float64(tc.userBytes)})
 	}
 	fit := TokenFit{Turns: len(samples)}
 	if sumBytes == 0 {

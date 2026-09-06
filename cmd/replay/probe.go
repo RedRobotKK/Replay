@@ -44,11 +44,19 @@ func runProbe(args []string, stdout, stderr io.Writer) error {
 	record := fs.String("record", "", "append the reading to a measurement series (default ~/.replay/measurements.jsonl; \"-\" for none)")
 	execute := fs.Bool("execute", false, "actually send the probes; without this, only the plan is printed")
 	yes := fs.Bool("yes", false, "with --execute, skip the confirmation. For scripts that meant it")
+	contributeTo := fs.String("contribute", "", "build a submission file for this campaign from the recorded reading; writes a file, sends nothing")
+	contributeDir := fs.String("contribute-dir", ".", "where --contribute writes its file")
 	if err := parseArgs(fs, args, stdout); err != nil {
 		return err
 	}
 	if *trend {
 		return reportTrend(seriesPath(*record), stdout)
+	}
+	if *contributeTo != "" {
+		if *model == "" {
+			return fmt.Errorf("a model is required: replay probe --model claude-opus-5 --contribute <campaign>: %w", errUsage)
+		}
+		return contribute(*contributeTo, *contributeDir, *model, seriesPath(*record), stdout)
 	}
 	if *model == "" {
 		return fmt.Errorf("a model is required: replay probe --model claude-opus-5: %w", errUsage)
