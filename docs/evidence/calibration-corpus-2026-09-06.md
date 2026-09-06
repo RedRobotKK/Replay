@@ -31,7 +31,6 @@
 > The 2026-09-05 file is left exactly as published. Files here are dated and never edited after
 > the fact; corrections are new files, and this is one.
 
-
 How well the replay engine reproduces the provider's cache reads across 1450 transcripts, from 78 distinct sessions, found on one machine on 2026-09-06. **One row is one transcript, not one session**: a session writes one per lane, so a session that spawned subagents contributes several rows that share its id and its conditions. Rows carry a session id prefix, never a path, project name, or content.
 
 | Session | Client | Tier | Requests | Compared | Matched | Breaks | Match rate | Fit tokens/byte | Fit ±% |
