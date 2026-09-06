@@ -151,6 +151,15 @@ func reportProbe(out io.Writer, s *probe.Search) {
 	lo, hi := s.Bracket()
 	fmt.Fprintf(out, "\n%d billable decision(s)\n", s.Probes())
 
+	if n := s.Inconclusive(); n > 0 {
+		fmt.Fprintf(out, "%d probe(s) read an existing cache entry and decided nothing. They were\n"+
+			"billed anyway, and that many of them says more about the cache than the floor.\n", n)
+	}
+	for _, a := range s.Anomalies() {
+		fmt.Fprintf(out, "\nanomaly      %s at %d tokens: cached %d time(s), did not cache %d\n",
+			a.Kind, a.Size, a.Wrote, a.DidNotWrite)
+	}
+
 	switch {
 	case s.NonDeterministic():
 		fmt.Fprintf(out, "\nThe same prefix cached on one request and not the next. There is no single\n"+

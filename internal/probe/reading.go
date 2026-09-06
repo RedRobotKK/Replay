@@ -62,6 +62,17 @@ type Reading struct {
 	// bracket.
 	Outcome string `json:"outcome,omitempty"`
 
+	// Anomalies are the error states the run hit, with the evidence behind
+	// them. Kept because a label is not something anyone can learn from: every
+	// real correction to this instrument came from an anomaly that could be
+	// inspected, and a series that records only "non-deterministic" throws
+	// away the part that was worth having.
+	Anomalies []Anomaly `json:"anomalies,omitempty"`
+	// Inconclusive counts probes that read an existing cache entry and so
+	// tested nothing. They were billed regardless, and a run full of them is
+	// evidence about the cache rather than about the floor.
+	Inconclusive int `json:"inconclusive,omitempty"`
+
 	Probes int `json:"probes,omitempty"`
 	// Confirm is how many agreeing answers each boundary needed, which is what
 	// separates a measurement from a single observation.
@@ -109,15 +120,17 @@ func AppendReading(path string, r Reading) error {
 func ReadingFrom(model string, documented int, s *Search, p Provenance, confirm int) Reading {
 	lo, hi := s.Bracket()
 	r := Reading{
-		Model:       model,
-		AnsweredBy:  p.ResolvedModel,
-		ServiceTier: p.ServiceTier,
-		Geo:         p.Geo,
-		Above:       lo,
-		AtMost:      hi,
-		Documented:  documented,
-		Probes:      s.Probes(),
-		Confirm:     confirm,
+		Model:        model,
+		AnsweredBy:   p.ResolvedModel,
+		ServiceTier:  p.ServiceTier,
+		Geo:          p.Geo,
+		Above:        lo,
+		AtMost:       hi,
+		Documented:   documented,
+		Probes:       s.Probes(),
+		Anomalies:    s.Anomalies(),
+		Inconclusive: s.Inconclusive(),
+		Confirm:      confirm,
 	}
 	switch {
 	case p.Mixed:

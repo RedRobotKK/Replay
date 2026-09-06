@@ -104,6 +104,24 @@ type Search struct {
 	nonDeterministic bool
 	stalled          bool
 	cachedAt         map[int]bool
+	anomalies        []Anomaly
+	inconclusive     int
+}
+
+// Anomaly is an error state with its evidence attached.
+//
+// The label alone is worthless. Every real improvement to this instrument came
+// from an anomaly someone could inspect — a 118-token bracket that exposed
+// warm cache writes being read as prefix sizes, a flap at 510 tokens that
+// turned out to be this tool's own sizing noise. Recording that a run was
+// "non-deterministic" without recording where or how leaves nothing to learn
+// from.
+type Anomaly struct {
+	Kind string `json:"kind"`
+	Size int    `json:"size"`
+	// Wrote and DidNotWrite are how the answers at that size split.
+	Wrote       int `json:"wrote"`
+	DidNotWrite int `json:"didNotWrite"`
 }
 
 // New starts a search.
@@ -283,6 +301,10 @@ func (s *Search) confirmed(n int) bool {
 // size that was never actually tested.
 func (s *Search) Record(r Result) error {
 	if r.Read {
+		// Counted even though it decided nothing: the run paid for it, and a
+		// run full of these is saying something about the cache rather than
+		// about the floor.
+		s.inconclusive++
 		return errInconclusive{}
 	}
 	s.probes++
@@ -299,6 +321,7 @@ func (s *Search) Record(r Result) error {
 			// floor explains that, and a majority vote would bury the only
 			// interesting thing this run found.
 			s.nonDeterministic = true
+			s.noteAnomaly("non-deterministic", r.PrefixTokens, got)
 			return nil
 		}
 	}
@@ -349,6 +372,7 @@ func (s *Search) Record(r Result) error {
 	// have crossed, no single floor explains them.
 	if s.lo >= s.hi {
 		s.contradicted = true
+		s.noteAnomaly("contradicted", r.PrefixTokens, got)
 		return nil
 	}
 
@@ -567,3 +591,24 @@ func (s *Search) smallestCachingCandidate() int {
 	consider(s.cfg.Prior)
 	return best
 }
+
+// noteAnomaly records an error state with the answers that produced it.
+func (s *Search) noteAnomaly(kind string, size int, answers []bool) {
+	a := Anomaly{Kind: kind, Size: size}
+	for _, w := range answers {
+		if w {
+			a.Wrote++
+			continue
+		}
+		a.DidNotWrite++
+	}
+	s.anomalies = append(s.anomalies, a)
+}
+
+// Anomalies returns every error state the run hit, with its evidence.
+func (s *Search) Anomalies() []Anomaly { return s.anomalies }
+
+// Inconclusive is how many probes decided nothing — they read an existing
+// cache entry rather than testing whether the prefix was cacheable. They were
+// still billed.
+func (s *Search) Inconclusive() int { return s.inconclusive }

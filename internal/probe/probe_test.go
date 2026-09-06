@@ -1174,3 +1174,64 @@ func TestB30_NoSizeIsAskedMoreThanConfirmTimes(t *testing.T) {
 		}
 	}
 }
+
+// B31: an anomaly keeps its evidence, not just its name.
+//
+// A non-deterministic boundary is the most interesting thing a run can find —
+// it says the premise of the whole search is wrong for that model — and the
+// code recorded the word "non-deterministic" and discarded the size and the
+// answers that produced it. The next person to look could not tell whether the
+// boundary flapped at 510 or at 4096, nor how it flapped.
+//
+// Every real improvement today came from an error state that could be
+// inspected: a 118-token bracket exposed warm writes being read as prefix
+// sizes, and a flap at 510 exposed this tool's own sizing noise. An anomaly
+// reduced to a label is an anomaly nobody can learn from.
+//
+// PASS: the size, the answers seen there, and the kind are all retained.
+// FAIL: a bare flag, which throws away the only part worth having.
+func TestB31_AnAnomalyKeepsItsEvidence(t *testing.T) {
+	s := New(Config{Min: 0, Max: 4096, Resolution: 4, Confirm: 3})
+	s.Record(Result{PrefixTokens: 510, Wrote: true, CachedTokens: 512})
+	s.Record(Result{PrefixTokens: 510, Wrote: false})
+
+	if !s.NonDeterministic() {
+		t.Fatal("disagreement at one size must be reported")
+	}
+	as := s.Anomalies()
+	if len(as) != 1 {
+		t.Fatalf("recorded %d anomalies, want 1", len(as))
+	}
+	a := as[0]
+	if a.Kind != "non-deterministic" {
+		t.Errorf("kind = %q", a.Kind)
+	}
+	if a.Size != 510 {
+		t.Errorf("size = %d, want the 510 where it flapped — a run that cannot say where is not evidence of anything", a.Size)
+	}
+	if a.Wrote != 1 || a.DidNotWrite != 1 {
+		t.Errorf("answers = %d wrote / %d not, want 1 and 1", a.Wrote, a.DidNotWrite)
+	}
+}
+
+// B32: inconclusive probes are counted, not silently retried away.
+//
+// A probe that read an existing cache entry is discarded and the size retried.
+// That is correct — it tested nothing — but the run has still paid for it, and
+// a run full of them is telling you something about the cache rather than the
+// floor.
+//
+// PASS: the count survives to the report.
+// FAIL: a run that quietly spent half its budget learning nothing and says so
+// nowhere.
+func TestB32_InconclusiveProbesAreCounted(t *testing.T) {
+	s := New(Config{Min: 0, Max: 4096, Resolution: 4, Confirm: 1})
+	for i := 0; i < 3; i++ {
+		if err := s.Record(Result{PrefixTokens: 512, Wrote: true, Read: true}); err == nil {
+			t.Fatal("a read must be refused as inconclusive")
+		}
+	}
+	if s.Inconclusive() != 3 {
+		t.Errorf("inconclusive = %d, want 3; the run paid for each of them", s.Inconclusive())
+	}
+}
