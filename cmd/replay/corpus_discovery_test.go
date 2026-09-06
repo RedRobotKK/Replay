@@ -129,3 +129,35 @@ func TestDiscovery_TheSearchedListHasNoDuplicates(t *testing.T) {
 		seen[ln] = true
 	}
 }
+
+// The empty state must tell apart two situations that are not the same.
+//
+// "You have never run Claude Code here" and "you have run it but there are no
+// sessions yet" produce identical output today, and the useful next step is
+// different for each. This is the installer's advertised first command, so on a
+// fresh machine this branch IS the product's first impression.
+func TestDiscovery_TheEmptyStateKnowsWhichKindOfEmptyItIs(t *testing.T) {
+	// No agent directory at all.
+	fresh := t.TempDir()
+	var a bytes.Buffer
+	explainNoCorpus(fresh, &a)
+	if !strings.Contains(a.String(), "not installed") && !strings.Contains(a.String(), "have not run") {
+		t.Errorf("a machine with no Claude Code directory should be told that is what "+
+			"happened, not handed a path list:\n%s", a.String())
+	}
+
+	// Agent installed, no sessions recorded yet.
+	installed := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(installed, ".claude", "projects"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var b bytes.Buffer
+	explainNoCorpus(installed, &b)
+	if a.String() == b.String() {
+		t.Error("an installed agent with no sessions reads the same as a machine that " +
+			"has never seen one. The next step is different for each")
+	}
+	if !strings.Contains(b.String(), "no sessions") {
+		t.Errorf("say that the agent is there and the sessions are not:\n%s", b.String())
+	}
+}

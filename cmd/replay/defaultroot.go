@@ -100,27 +100,58 @@ func holdsTranscripts(root string) bool {
 	return found
 }
 
-// explainNoCorpus says where Replay looked and how to tell it where to look
-// instead.
+// explainNoCorpus says what kind of empty this is, and what to do about it.
 //
-// The previous message named one directory and moved on to the command list. A
-// user could not tell "you have no transcripts" from "yours are somewhere I did
-// not search", and had no way to say which. Those are different situations and
-// only one of them is the user's problem to fix.
+// Three situations produce no transcripts and they are not the same. The agent
+// was never installed here. It is installed and has recorded nothing yet. Or
+// there is a corpus somewhere Replay did not look. The next step differs for
+// each, and printing one message over all three tells the reader that the tool
+// does not know which they are in.
+//
+// This is the installer's advertised first command, so on a fresh machine this
+// function IS the product's first impression. It leads with what Replay would
+// have shown, because a reader who cannot see the point will not go and get a
+// corpus to prove it.
 func explainNoCorpus(home string, w io.Writer) {
+	p := func(format string, a ...any) { _, _ = fmt.Fprintf(w, format, a...) }
 	roots := candidateTranscriptRoots(home)
+
 	if len(roots) == 0 {
-		_, _ = fmt.Fprintf(w, "No home directory could be resolved, so there was nowhere to look "+
-			"for transcripts.\n")
-	} else {
-		_, _ = fmt.Fprintf(w, "No transcripts found. Looked in:\n")
-		for _, r := range roots {
-			_, _ = fmt.Fprintf(w, "  %s\n", r)
+		p("No home directory could be resolved, so there was nowhere to look.\n\n")
+		p("Point Replay at your sessions directly:\n")
+		p("  replay cost /path/to/projects\n\n")
+		return
+	}
+
+	switch {
+	case !anyRootExists(roots):
+		p("Claude Code is not installed here, or has never run.\n\n")
+		p("Replay reads its session files and shows what your agent's prompt cache\n")
+		p("cost you: which turns re-billed the whole context, and why.\n\n")
+		p("If you use a different agent, Replay can measure it live instead:\n")
+		p("  replay serve\n\n")
+	default:
+		p("Claude Code is here, but has recorded no sessions yet.\n\n")
+		p("Run it once, then come back. Replay will show what each task cost and\n")
+		p("where the prompt cache broke.\n\n")
+	}
+
+	p("Already have sessions somewhere else?\n")
+	p("  %s=/path/to/projects replay\n\n", transcriptsEnv)
+	p("Looked in:\n")
+	for _, r := range roots {
+		p("  %s\n", r)
+	}
+	p("\n")
+}
+
+// anyRootExists reports whether any candidate directory is present, which is
+// what separates "never installed" from "installed and empty".
+func anyRootExists(roots []string) bool {
+	for _, r := range roots {
+		if fi, err := os.Stat(r); err == nil && fi.IsDir() {
+			return true
 		}
 	}
-	_, _ = fmt.Fprintf(w, "\nIf your sessions are somewhere else, say so:\n")
-	_, _ = fmt.Fprintf(w, "  %s=/path/to/projects replay\n", transcriptsEnv)
-	_, _ = fmt.Fprintf(w, "  replay cost /path/to/projects\n")
-	_, _ = fmt.Fprintf(w, "\nReplay reads Claude Code sessions from disk. For any other agent, "+
-		"replay serve proxies it live.\n\n")
+	return false
 }
