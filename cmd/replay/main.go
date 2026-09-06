@@ -103,7 +103,7 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 	switch args[0] {
 	case "version", "--version", "-v":
 		if wantsHelp(args[1:]) {
-			fmt.Fprint(stdout, "Usage of version:\n"+
+			_, _ = fmt.Fprint(stdout, "Usage of version:\n"+
 				"  replay version\n\n"+
 				"Prints the version, the commit and the build date. Takes no flags.\n"+
 				"A source build reports \"dev (unknown, built unknown)\": the real\n"+
@@ -480,7 +480,7 @@ func runRedact(args []string, stdout io.Writer) error {
 	// `redact --help` was opened as a filename and reported
 	// "open --help: no such file or directory".
 	if wantsHelp(args) {
-		fmt.Fprint(stdout, "Usage of redact:\n"+
+		_, _ = fmt.Fprint(stdout, "Usage of redact:\n"+
 			"  replay redact <transcript.jsonl> > redacted.jsonl\n\n"+
 			"Rewrites a transcript with message text removed, keeping block kinds,\n"+
 			"sizes and usage counts, so a session can be shared without its content.\n"+

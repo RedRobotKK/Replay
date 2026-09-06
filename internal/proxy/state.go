@@ -677,7 +677,7 @@ func (s *stats) status() Status {
 				out.Trial.Treated++
 			}
 		}
-		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, Context: st.contextFor(""), ContextByLane: st.context, ReReads: st.reReadsFor(""), ReReadsByLane: st.reReads, WhatIf: st.whatIfFor(""), WhatIfByLane: st.whatIf, ErrorShare: share(st.totalErrorTokens(), st.tally.PromptTokens), Masked: st.masked, Rehydrated: st.rehydrated, RehydrationDenied: st.denied, Held: st.held, HeldMS: st.heldMS})
+		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, Context: st.contextFor(""), ContextByLane: copyContextByLane(st.context), ReReads: st.reReadsFor(""), ReReadsByLane: copyReReadsByLane(st.reReads), WhatIf: st.whatIfFor(""), WhatIfByLane: copyWhatIfByLane(st.whatIf), ErrorShare: share(st.totalErrorTokens(), st.tally.PromptTokens), Masked: st.masked, Rehydrated: st.rehydrated, RehydrationDenied: st.denied, Held: st.held, HeldMS: st.heldMS})
 	}
 	sort.Slice(out.Sessions, func(i, j int) bool { return out.Sessions[i].LastSeen.After(out.Sessions[j].LastSeen) })
 	return out
@@ -888,4 +888,73 @@ func (s *stats) noteUnmasked(path string) bool {
 	first := s.unmasked[path] == 0
 	s.unmasked[path]++
 	return first
+}
+
+// laneSnapshot returns what preFlight needs to judge a request, under the
+// lock, without creating anything.
+//
+// It exists because the first version of preFlight called session() directly.
+// session() writes: it creates the entry on a miss and evicts under LRU, and it
+// assumes its caller already holds mu, which every other caller does. Calling
+// it from the request path raced with the bookkeeping goroutine reading the
+// same map, and made a read-only guard create sessions for requests that had
+// not been observed yet.
+//
+// ok is false when the session or the lane has not been seen, which is the
+// same answer as "nothing to compare against".
+func (s *stats) laneSnapshot(sessionID, agentID string) (prefixHash string, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st, exists := s.sessions[sessionID]
+	if !exists {
+		return "", false
+	}
+	ln, seen := st.lanes[agentID]
+	if !seen || !ln.seen {
+		return "", false
+	}
+	return ln.prefixHash, true
+}
+
+// The status snapshot copies the per-lane maps rather than sharing them.
+//
+// A SessionSummary is marshalled to JSON after mu is released, so handing it
+// the live map lets the encoder read entries while rescore writes them. The
+// fields these replaced were slices that rescore REPLACED wholesale under the
+// lock, so a reader held a stable value; a map is mutated in place and a
+// reference is not a snapshot. Caught by -race, not by review.
+//
+// One level deep is enough: the values are replaced wholesale per lane, never
+// appended to, so the inner slices are not mutated after they are stored.
+func copyContextByLane(m map[string][]analysis.ContextEntry) map[string][]analysis.ContextEntry {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(map[string][]analysis.ContextEntry, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+func copyReReadsByLane(m map[string]analysis.ReReads) map[string]analysis.ReReads {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(map[string]analysis.ReReads, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+func copyWhatIfByLane(m map[string][]WhatIf) map[string][]WhatIf {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(map[string][]WhatIf, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }

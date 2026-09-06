@@ -60,6 +60,24 @@ request. Cost of discovering it expired: total, and discovered late.
 - The CLA's contributor cost is real and is paid at contribution number one. At the time of
   writing there are none, and the requirement is disclosed before anyone invests work.
 
+## Amended 2026-09-06: ADR-0015 makes this deferral more durable than it knew
+
+This ADR defers open core and says to revisit "when an enterprise surface exists and someone has
+asked for one". [ADR-0015](0015-single-tenant-state-is-a-boundary.md) landed the following day and
+changed the standing of that condition. Every piece of shared mutable state in the proxy is scoped
+to one human and carries no tenant dimension, and 0015 records that as an **architectural
+boundary** rather than an unbuilt feature. The centralised, many-developer instance is therefore
+not a gap in the roadmap waiting to be filled; it is a different work, declined on purpose.
+
+That matters here because it is the one deployment shape whose absence this ADR rests on. The
+Context above declines copyleft on the grounds that a loopback proxy triggers neither distribution
+nor AGPL §13 network interaction. 0015 says the architecture will not grow the shape that would
+supply the trigger. **The two arguments are independent and point the same way**, so the deferral
+does not quietly expire the first time someone builds a dashboard: it would take a deliberate
+reversal of 0015, which is itself a recorded decision. Re-verified on the same day: `go.mod` is
+still 45 bytes with no `require` block, no `go.sum` and no `vendor/`, so nothing inbound
+constrains the outbound licence.
+
 ## Alternatives considered
 
 **AGPL plus a commercial licence.** Rejected: no trigger, per the Context. Note the one

@@ -254,7 +254,7 @@ func WriteObservation(dir string, o Observation) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if _, err := f.Write(append(body, '\n')); err != nil {
 		return "", err
 	}

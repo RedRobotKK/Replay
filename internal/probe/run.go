@@ -153,10 +153,10 @@ const (
 // Plan describes what a run would do, and sends nothing.
 func (r *Runner) Plan(cfg Config, model string) {
 	s := New(cfg)
-	fmt.Fprintf(r.Out, "probe plan for %s\n\n", model)
-	fmt.Fprintf(r.Out, "  range        %d to %d tokens\n", cfg.Min, cfg.Max)
+	_, _ = fmt.Fprintf(r.Out, "probe plan for %s\n\n", model)
+	_, _ = fmt.Fprintf(r.Out, "  range        %d to %d tokens\n", cfg.Min, cfg.Max)
 	if cfg.RelativeResolution > 0 {
-		fmt.Fprintf(r.Out, "  resolution   within %.1f%% of the answer\n", cfg.RelativeResolution*100)
+		_, _ = fmt.Fprintf(r.Out, "  resolution   within %.1f%% of the answer\n", cfg.RelativeResolution*100)
 	} else {
 		fmt.Fprintf(r.Out, "  resolution   %d tokens\n", cfg.Resolution)
 	}

@@ -286,7 +286,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	// MetricsAddr races the bind and sees an empty string.
 	mln, merr := listenMetrics(s.cfg.MetricsListen)
 	if merr != nil {
-		ln.Close()
+		_ = ln.Close()
 		return merr
 	}
 	if mln != nil {

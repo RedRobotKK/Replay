@@ -96,7 +96,7 @@ func listenUnix(addr string) (net.Listener, error) {
 	// that window: nobody else can reach into an owner-only directory to
 	// connect in the meantime.
 	if err := os.Chmod(abs, socketMode); err != nil {
-		ln.Close()
+		_ = ln.Close()
 		return nil, fmt.Errorf("cannot restrict %s to its owner: %w", abs, err)
 	}
 	return ln, nil
@@ -151,7 +151,7 @@ func clearSocketPath(path string) error {
 		return fmt.Errorf("%s exists and is not a socket; refusing to delete it", path)
 	}
 	if c, derr := net.Dial("unix", path); derr == nil {
-		c.Close()
+		_ = c.Close()
 		return fmt.Errorf("a proxy is already listening on %s; refusing to take over its socket", path)
 	}
 	// Nothing answered, so the file is the remains of a process that died.
