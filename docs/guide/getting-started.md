@@ -29,6 +29,23 @@ of that spend nobody chose. Nothing to configure and nothing to point it at. If 
 transcripts it prints the command list instead, which is the honest answer to a machine with nothing
 on it yet.
 
+The avoidable line comes in two currencies, and the second one is probably yours:
+
+```text
+  avoidable      $150.27  (5% of the total)
+                 31.4M tokens re-billed
+```
+
+**If you are on a subscription seat — Claude Pro or Max, Copilot, Cursor — the dollars are not your
+money.** You are not billed per token, so those are list prices for someone who is, and the report
+says so under the figures rather than leaving you to work out that the headline was addressed to
+somebody else. The tokens are still yours: a re-billed token is context the work did not get, and
+rate-limit budget spent on nothing. That is why the same finding is stated both ways.
+
+`replay cost` prints the same report on its own, and takes the same default — no directory needed. It
+names on stderr which root it read, so a report never leaves you guessing what it was over. Give it a
+path when you want a different one.
+
 ## Find out what Replay can see
 
 ```sh
@@ -39,6 +56,12 @@ replay doctor
 directory, whether a proxy variable is set, whether a proxy is already running, and whether a ledger
 has been written yet. It finishes by naming the next command worth running. If you only ever run one
 Replay command, make it this one.
+
+It reports **two** transcript figures where there are two, and the second only when it differs from
+the first. Claude Code writes one transcript per session and one more per sub-agent lane, so a session
+that fanned out contributes several files. `doctor` counts sessions; `cost` reads files. Both numbers
+are right, and until they were printed side by side with the reason, seeing 91 from one command and
+1494 from the next one second later looked like a bug.
 
 ## Read a session you have already paid for
 

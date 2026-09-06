@@ -67,10 +67,31 @@ Session cost $12.40, of which $3.10 (25%) bought nothing:
 Every figure here already exists. This is presentation, not new measurement, and it is the single
 highest-leverage change available.
 
+**Update, 2026-09-06: the headline half of this shipped, the breakdown half did not.** `replay cost`
+now leads with one number — the avoidable amount, as a share of the total — and bare `replay` prints
+it with no arguments at all. It also does something this section did not anticipate: it states the
+same finding in **tokens** as well as dollars, and names who the dollars are for. The reason is in the
+next paragraph but one — most readers hold a flat seat, and a dollar-only waste figure is addressed to
+a minority. What is still missing is the five-way split. Today the report says how much was avoidable
+and `replay diff` says which causes produced it; nothing puts the two on one screen.
+
 **2. The compaction question, which nobody has data for.** Replay can see the turn where a session
 stopped benefiting from its own history: where re-reads climb, where the cached share stops paying
 for the prefix it carries. **"You should have started a fresh session around turn 40"** is a claim
 only this tool can make, and it is the decision agent users make most often and most blindly.
+
+**Update, 2026-09-06: the data now exists, and the advice still does not.** Claude Code records each
+compaction with the prompt size before and after it, and nothing here was reading that field. It is
+read now. Across this corpus the client wrote 39 such records, at a median of 999,029 tokens before
+against 23,218 after — a **retention of 2.55%**, which is to say a compaction throws away
+ninety-seven percent of the context and the session keeps going.
+
+The first thing that bought was a correction rather than a feature: `replay context` was ranking
+everything that had ever entered a session as though it were still there, which describes a context
+that no longer exists. It now says by how much its own answer overstates. "Start fresh around turn 40"
+is still not a claim this tool can make — knowing what a compaction dropped is not knowing whether the
+session would have gone better without it — but the measurement that claim would have to rest on is
+now taken instead of assumed.
 
 **3. Fan-out economics.** `--hold-siblings` exists because parallel sub-agents all pay the cache
 write. The cost is real. The *finding* was not, and this section is kept as written plus this
@@ -109,10 +130,26 @@ breakdown is the useful part.
 
 ## The honest constraint
 
-All five waste categories are computed from **eleven sessions on one machine**. The taxonomy is
-sound; the thresholds that turn a measurement into advice are not calibrated. **Ship the breakdown
-before the advice.** Showing someone where their money went is defensible on eleven sessions.
-Telling them what to change is not.
+All five waste categories are computed from **78 sessions on one machine, one account and one
+operator** — the figure this document originally gave as eleven, and later as 1363, which was a count
+of transcript *files* rather than of independent draws
+([correction](evidence/calibration-corpus-2026-09-06.md)). More files did not make it a wider sample.
+The taxonomy is sound; the thresholds that turn a measurement into advice are not calibrated. **Ship
+the breakdown before the advice.** Showing someone where their money went is defensible on 78
+sessions from one operator. Telling them what to change is not.
+
+The break-cause study on 2026-09-06 is the sharpest available demonstration of why. Run over the 40
+largest sessions it said TTL expiry was 75.2% of re-billed tokens and prefix layout was not worth
+building. Run over all 1,506 transcripts it said layout-addressable causes were 63.6% and TTL 33.9% —
+the opposite conclusion, from the same tool on the same machine, five seconds apart
+([evidence](evidence/break-causes-2026-09-06.md)). If a change of sample can invert the answer within
+one operator's data, a threshold fitted to that data is not a threshold.
+
+There is a second, quieter constraint that governs how any of this is worded. For a subscriber a
+broken cache costs no dollars, and whether it costs *anything* — rate-limit budget, in practice — was
+measured and came back null ([titration](evidence/quota-titration-2026-09-06.md)). So the waste
+breakdown has to be stated in tokens as well as money, which `replay cost` now does. A breakdown
+denominated only in dollars is a breakdown most of the audience will read as somebody else's problem.
 
 ---
 

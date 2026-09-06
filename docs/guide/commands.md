@@ -1,7 +1,14 @@
 # Commands
 
-Sixteen commands, listed on nineteen lines because three of them have a form worth
-showing separately. Most people use three of them.
+Seventeen commands, listed on twenty-one lines because four of them have a form worth showing
+separately. Most people use three of them.
+
+`replay --help` prints them in four groups — **start here**, **look closer**, **corpus and
+calibration**, **setup and maintenance** — ordered by what they are worth rather than alphabetically.
+The order is the point: a flat list put `probe` and `redact` in front of a reader who had not yet
+found `diff`, and the list is what a person reads before they know which command answers their
+question. This page keeps its own two headings, because a reference is read by someone who already
+knows which command they want and a menu is read by someone who does not.
 
 `replay <command> --help` prints that command's flags to stdout and exits 0, and is always the
 authority on what your installed version actually has — this page can drift, the binary cannot. It
@@ -46,16 +53,49 @@ lane, so a session that spawned sub-agents contributes several — on the machin
 The unit-economics view: what one task cost, and the share of it nobody chose.
 
 ```sh
-replay cost ~/.claude/projects/            # the summary
+replay cost                                # the discovered transcript root, no argument needed
+replay cost ~/.claude/projects/            # the summary, over a directory you name
 replay cost --per-task ~/.claude/projects/ # every session, most expensive first
 replay cost --json ~/.claude/projects/     # for a dashboard, or an agent
 ```
+
+**The directory is optional.** With no argument, `cost` reads the root `doctor` discovers —
+`$CLAUDE_CONFIG_DIR/projects`, or `~/.claude/projects` — after confirming it holds at least one
+transcript, and prints which root that was on stderr. A command that demands a path the reader has not
+found yet is a command they do not run, and `doctor` had printed exactly that path one command
+earlier. An explicit argument still wins; a machine with nothing to find gets the usage error rather
+than an invented default. `replay corpus` takes the same default for the same reason.
 
 There is deliberately no mean. One very long session drags an average somewhere no real task lives,
 so it reports the median and the p90, which is the spread you need before you can price a feature.
 The avoidable figure prices tokens the provider re-billed after a cache break: money already spent
 twice, not a projection of what a different layout might save. Sessions whose model is not in the
 price table are excluded and counted, never treated as free.
+
+**Avoidable is stated in tokens as well as dollars, and the report says who the dollars are for.**
+Most people running this hold a flat seat — Claude Pro or Max, Copilot, Cursor — where a broken cache
+costs no money at all, so a dollar-only finding is addressed to a minority and reads to everyone else
+as a number that does not apply. The token figure applies to all of them: a re-billed token is context
+the work did not get, on a window you are rate-limited against whether or not you are invoiced. The
+report says both, and says which is which, rather than letting a subscriber assume the headline is
+about them.
+
+**It discloses the overlap rather than implying the total is exact.** A sub-agent lane re-renders its
+parent's requests, so the same request is present in more than one transcript file and is priced once
+per file. `cost` counts distinct request ids alongside the total and prints how many were duplicated,
+with the direction of the error named — measured with the real parser over 1,484 files, 430 of 30,716
+requests, 1.4%. Deduplicating quietly would have been the wrong fix: the overlap is a property of how
+the client writes transcripts, and a reader who does not know it exists cannot judge any per-file
+figure.
+
+**It indexes rather than reparsing.** Over 1,483 transcripts the report cost 6.3s wall and 19.6s CPU,
+nearly all of it spent reparsing files that had not changed. Priced units are cached in
+`~/.replay/cost-index.json`, keyed by the price table and rules versions so that a rules change throws
+the whole file away instead of serving figures computed under the old ones. An entry is reused only
+when the file's size **and** modification time both match, because a restore from backup, a checkout
+or clock skew each produce changed content under an unchanged timestamp. A corrupt or unreadable index
+is a cache miss and never an error: an optimisation that can fail the command it accelerates costs
+more than the work it saves.
 
 `--share` prints a block designed to be posted:
 
@@ -70,8 +110,8 @@ knowing how many engineers spent it. A rate reads the same from a solo developer
 fifty. No paths, no project names. The card goes to stdout and its note to stderr, so
 `replay cost <dir> --share | pbcopy` copies exactly what is safe to paste.
 
-It also names the **route** the traffic took — `first-party API`, `Bedrock`, `Vertex`, or a mix —
-derived from the model ids already on each request. The route is a category, not an identifier: a
+It also names the **route** the traffic took — `first-party API`, `Bedrock`, `Vertex`, `other`, or a
+mix of them joined with ` + ` — derived from the model ids already on each request. The route is a category, not an identifier: a
 real Vertex model id embeds the caller's GCP project and region and a real Bedrock ARN their account
 number, and none of that reaches the card.
 
@@ -83,9 +123,17 @@ reader anything. A mixed corpus reads `partly metered`. When no model id was obs
 omitted rather than printed empty, because a blank field reads as a measurement that returned
 nothing rather than one that was never taken.
 
-A plain `replay cost` run also names the tip jar once, under the figures, when the avoidable amount
-is over $5 — at the one moment the tool has just shown you money you already spent twice. It prints
-a line; it never opens a browser.
+A plain `replay cost` run also names the tip jar under the figures when the avoidable amount is over
+$5 — at the one moment the tool has just shown you money you already spent twice. It prints a line;
+it never opens a browser.
+
+**It asks at most once every thirty days.** Printing it on every run turns a thank-you into a nag, and
+teaches the reader to skip the last paragraph of a report whose last paragraph sometimes carries the
+overlap disclosure. The last ask is remembered in `~/.replay/tip.json`. A finding at least three times
+the amount at the last ask re-opens it early, because a number that has tripled is new information
+rather than a repeat; a forty-percent rise is not. Two wordings are split by a random per-machine seed
+stored in the same file — random and local, since a hostname or a hardware id would be an identifier
+and this is a coin flip, not a cohort.
 
 ### `replay cost --compare <date>`
 
@@ -299,6 +347,21 @@ Starts the local proxy on `127.0.0.1:4000`. Point your agent at it with
 `export ANTHROPIC_BASE_URL=http://127.0.0.1:4000` and every figure moves from estimated to measured.
 Flags are below.
 
+Every response's rate-limit headers are recorded on the ledger entry — the `anthropic-ratelimit-*` and
+`x-ratelimit-*` families, plus `retry-after` — kept **verbatim**, as the strings the provider sent. The
+formats disagree between providers and between header families, and a parser that guesses wrong fails
+silently, so the ledger's job here is to preserve the reading rather than interpret it. For a flat-seat
+user this is the only spend figure that exists: there is no invoice to check the dollars against. It
+is deliberately not on `/replay/status` or `/replay/metrics` yet, because nothing has established what
+a movement in those counters means — see [the titration](../evidence/quota-titration-2026-09-06.md),
+which came back null.
+
+One documentation fact came out of live traffic and is worth knowing before you go looking. A
+**subscription** session returns none of the documented `anthropic-ratelimit-tokens-remaining` headers.
+It returns `anthropic-ratelimit-unified-5h-utilization` and `-7d-utilization`, two windows at once,
+with a companion `-representative-claim` naming which one currently binds. The population that cannot
+see a bill is visible only through that second family.
+
 ## The rest
 
 ### `replay blame`
@@ -319,7 +382,8 @@ project names and no message content. It is designed to be safe to share, and it
 contribute a calibration report without handing over your work.
 
 ```sh
-replay corpus ~/.claude/projects > corpus-report.md
+replay corpus > corpus-report.md                        # the discovered transcript root
+replay corpus ~/.claude/projects > corpus-report.md     # or a directory you name
 ```
 
 Open it and check that nothing in it identifies your projects before you share it. It judges
@@ -354,6 +418,18 @@ wire.
 **`--top` truncates silently, including under `--json`.** The default is 12, so a script reading the
 JSON gets twelve rows and no indication that more existed. Pass a larger `--top` when the output is
 being parsed rather than read.
+
+**It says when the attribution is overstated, and by how much.** Content leaves a context as well as
+entering it: the provider clears old tool results under a context-edit policy, and Claude Code
+compacts the history and writes a record carrying the prompt size before and after. Ranking everything
+that ever entered, without subtracting what left, describes a context that no longer exists. The
+closing note says whether anything was cleared or compacted, how many tokens the client recorded as
+dropped, and the share by which the table above therefore overstates — and when the dropped share
+exceeds what is attributed, it says that outright, because the honest reading is that the table
+describes what remains rather than everything that passed through. A compaction that recorded no size
+is reported as unmeasurable rather than treated as zero. Across this corpus the client wrote 39 such
+records, at a median of 999,029 tokens before against 23,218 after: a retention of 2.55%, which is the
+scale of the error this note exists to declare.
 
 ### `replay learn`
 
@@ -413,6 +489,20 @@ measured from both sides of your ledger or the figure is suppressed. There is no
 no constant on a rate card: at a 99% cached share a comparison can break even at sigma = 1.0627, so a
 plausible-looking 1.15 would not be a safety margin, it would be the deciding vote cast by a number
 nobody measured.
+
+**When it does answer in dollars, it charges for the move itself.** The destination model starts with
+a cold cache and writes the shared prefix again before it reads any of it, so the comparison is not
+between two per-turn rates — it is between staying put and paying a one-time cost that a per-turn
+saving then has to repay. The report prints the switch cost, the saving per turn, and the turn on
+which those cross, and it says whether that turn falls inside the run it measured. Cheaper per turn
+and still the wrong move for a session this short is the answer a price-only comparison cannot
+produce, and it is the common case for short tasks.
+
+Three refusals hold the figure honest. With no turns to divide by it prints the switch cost and no
+per-turn figure, because dividing there would manufacture one. With no saving per turn it reports no
+payback rather than a negative or enormous turn count. And the payback turn is rounded up and floored
+at one, since a partial turn repays nothing and a payback reported a turn early is advice to switch on
+a task that loses money.
 
 ### `replay trim <dir> --cap <bytes>`
 
@@ -640,6 +730,18 @@ decide whether a request goes out at all.
 
 A refusal arrives as a provider-shaped error your agent will show you. Send
 `x-replay-override: <reason>` to proceed once.
+
+**A day-cap refusal names the session that spent the budget.** "Daily spend cap reached" tells an
+operator that something stopped, not that the indexing lane did it, and the second is the only version
+with an action attached. The reason names the largest session still accounted for and its share,
+attributed on **today's** spend rather than the lifetime total — a lane that ran all of yesterday has a
+large lifetime figure and may have touched nothing today. The guard's session table is bounded and
+evicts, so when enough has been dropped that the largest survivor cannot be the largest spender, the
+refusal says the attribution is partial instead of blaming a small lane for someone else's overrun.
+When no live session accounts for the day's spend at all, it says that too. This is SP-7 in
+[the requirements](../requirements.md); SP-5, SP-6 and SP-8 — a real tenant key, per-tenant caps, and
+accounting that eviction cannot widen — are specified and not built, and
+[ADR-0015](../adr/0015-single-tenant-state-is-a-boundary.md) says why they gate any shared deployment.
 
 ### Failure
 

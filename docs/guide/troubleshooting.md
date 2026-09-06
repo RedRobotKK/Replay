@@ -12,6 +12,45 @@ project rather than at the parent.
 If `doctor` reports no transcript directory at all, your agent may write them somewhere else, or may
 not write them. Replay reads what already exists; it does not ask the agent for anything.
 
+## `doctor` and `cost` report different transcript counts
+
+They are counting different things, and both are right. Claude Code writes one transcript per session
+at `<project>/<sessionId>.jsonl`, and one more per sub-agent lane under
+`<project>/<sessionId>/subagents/`. `doctor` reports sessions; `cost` reads every file. On the machine
+this was found on, 91 sessions and 1494 files. `doctor` now prints both with the reason, and prints
+the second only when it differs from the first.
+
+The same fan-out has a second consequence: a lane re-renders its parent's requests, so a few requests
+appear in more than one file and are priced once per file. `cost` says how many — 430 of 30,716
+requests, 1.4%, on the corpus this was measured over — and which way that pushes the total. It is
+disclosed rather than silently deduplicated, because the overlap is a fact about how the client writes
+transcripts and a reader who does not know it exists cannot judge any per-file figure.
+
+## The report shows dollars and I am on a subscription
+
+Then those dollars are not your money, and the report says so under the figures. A flat seat — Claude
+Pro or Max, Copilot, Cursor — is not billed per token, so a broken cache costs the subscriber nothing
+and the dollar column is list price for someone who is metered.
+
+Read the token figure on the line beneath instead. Those tokens are yours: they are context the work
+did not get, on a rate-limit window you are measured against either way. `replay advise` ranks what to
+cut.
+
+Whether a broken cache also burns a subscription's rate-limit budget the way it burns a bill is an
+open question here, not a settled one. It was measured — matched cold-write and warm-read arms, 3.09M
+tokens — and the utilisation counter moved zero steps, so the answer is published as null rather than
+guessed in either direction.
+
+## The first `replay cost` run is slow, or an old figure came back
+
+The first run over a large corpus parses every transcript; over 1,483 files that was 6.3s wall and
+19.6s CPU. Later runs read `~/.replay/cost-index.json` and reparse only what changed.
+
+An entry is reused only when a file's size and modification time both still match, and the whole index
+is discarded when the price table or rules version changes, so a figure computed under old prices is
+never served. If you suspect the index anyway, delete it — a missing or corrupt index is a cache miss,
+not an error, and the next run rebuilds it.
+
 ## The numbers say "estimated" and I want "measured"
 
 That is working as intended. Transcripts do not contain the system prompt, the tool definitions or
@@ -45,6 +84,23 @@ Every guard is off unless you enabled it, so check the flags you passed to `serv
 
 Refusals arrive as a provider-shaped error your agent will surface. To proceed once, send
 `x-replay-override: <reason>`.
+
+A **daily** spend-cap refusal also names the session that spent the budget and its share, attributed
+on today's spend rather than the lifetime total. When the guard's session table has evicted enough
+that the largest survivor cannot be the largest spender, it says the attribution is partial instead of
+naming a session it is not sure about.
+
+## `replay context` says the attribution is overstated
+
+Because it is, and the alternative was to say nothing. Content leaves a context as well as entering
+it: the provider clears old tool results under a context-edit policy, and Claude Code compacts the
+history. A ranking of everything that ever entered describes a context that no longer exists, so the
+closing note gives the number of compactions, the tokens the client recorded as dropped, and the share
+by which the table above overstates.
+
+If the dropped share is larger than what is attributed, that is not a bug either — it means most of
+what passed through this session is gone, and the table describes what remains. Where a compaction
+recorded no size, the note says the overstatement cannot be measured rather than treating it as zero.
 
 ## The browser cannot reach `/replay/status`
 
