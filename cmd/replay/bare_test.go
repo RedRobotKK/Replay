@@ -90,8 +90,15 @@ func TestBR2_BareReplayFallsBackToUsageWhenNothingIsDiscoverable(t *testing.T) {
 	if err := run(nil, &out, &errOut); err != nil {
 		t.Fatalf("bare replay with no transcripts: %v (stderr: %s)", err, errOut.String())
 	}
-	if !strings.Contains(out.String(), "Usage:") {
-		t.Fatalf("with no transcripts the usage list is the correct output:\n%s", out.String())
+	// Assert on the list itself rather than on a heading. The heading was
+	// "Usage:" and is now "Start here:", because help is ranked by value
+	// instead of listed flat; a test pinned to one word would break on every
+	// such change while telling you nothing about whether the list appeared.
+	for _, want := range []string{"Start here:", "replay doctor", "replay serve"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("with no transcripts the command list is the correct output, and %q "+
+				"is missing from it:\n%s", want, out.String())
+		}
 	}
 }
 
@@ -153,8 +160,11 @@ func TestBR5_HelpStillPrintsTheMenuOnAMachineWithTranscripts(t *testing.T) {
 			t.Fatalf("replay %s: %v (stderr: %s)", arg, err, errOut.String())
 		}
 		got := out.String()
-		if !strings.Contains(got, "Usage:") {
-			t.Errorf("replay %s must print the usage list:\n%s", arg, got)
+		// "Start here:" rather than "Usage:": help is now ranked by value into
+		// sections instead of listed flat. Asserting the section heading keeps
+		// the test about whether the list appeared.
+		if !strings.Contains(got, "Start here:") {
+			t.Errorf("replay %s must print the command list:\n%s", arg, got)
 		}
 		if strings.Contains(got, "Cost per task") {
 			t.Errorf("replay %s must not run the cost report:\n%s", arg, got)

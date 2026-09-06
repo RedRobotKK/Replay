@@ -518,26 +518,33 @@ More:
 func printUsage(w io.Writer) error {
 	_, err := fmt.Fprint(w, `replay - see where your coding agent's prompt cache broke and what it cost
 
-Usage:
-  replay <transcript|dir>          reproduce caching, then score alternative layouts (--dollars adds list cost)
-  replay replay <transcript|dir>   the same, named explicitly
-  replay blame  <transcript|dir>   rank what is eating prompt tokens
-  replay diff   <transcript|dir>   locate and classify every cache break
-  replay corpus <dir...>           calibration summary across many sessions, as Markdown (no paths or content)
-  replay advise <dir...>           turn the largest token sources across sessions into suggestions with predicted savings, tracked to closure
-  replay advise <dir> --guards     spend caps from your own session spread, print-only
-  replay learn  <dir...>           re-score the policy catalog over all sessions, select one with held-out checks, write ~/.replay/policy.json
-  replay doctor                    what replay can see on this machine and what to do next
-  replay probe --model <id>        measure a model's caching floor on purpose; plans by default, --execute sends
-  replay rules [--update <src>]    show the provider rules in effect, or install a dated document
-  replay statusline                live spend and what the cache misses cost, for Claude Code's status line
-  replay cost   <dir...>           cost per task, the share nobody chose, and --compare <date> for before/after
-  replay cost   <dir> --share      the same, as a card that is safe to post: a rate, no total, no paths
+Start here:
+  replay <no args>                 what your sessions cost, from transcripts already on disk
+  replay diff   <transcript|dir>   locate and classify every cache break, with its cause
+  replay advise <dir...>           the largest token sources, ranked, with predicted savings
+  replay serve  [flags]            local proxy: byte-for-byte passthrough, records a ledger
+
+Look closer:
+  replay cost   <dir...>           cost per task, and --compare <date> for before/after
+  replay cost   <dir> --share      a card that is safe to post: a rate, no total, no paths
   replay context <transcript|dir>  what entered a session's context, by tool
-  replay route <dir> --to <model>  what switching models would change, structurally
-  replay trim <dir> --cap <bytes>  what a byte cap on tool output would have saved, and cost
+  replay blame  <transcript|dir>   rank what is eating prompt tokens
+  replay <transcript|dir>          reproduce caching, then score alternative layouts
+  replay replay <transcript|dir>   the same, named explicitly
+  replay route  <dir> --to <model> what switching models would change, structurally
+  replay trim   <dir> --cap <n>    what a byte cap on tool output would have saved, and cost
+  replay advise <dir> --guards     spend caps from your own session spread, print-only
+
+Corpus and calibration:
+  replay corpus <dir...>           calibration across many sessions, as Markdown (no paths or content)
+  replay learn  <dir...>           re-score the policy catalog, select one with held-out checks
+  replay probe  --model <id>       measure a model's caching floor; plans by default, --execute sends
+
+Setup and maintenance:
+  replay doctor                    what replay can see on this machine and what to do next
+  replay rules  [--update <src>]   show the provider rules in effect, or install a dated document
+  replay statusline                live spend and cache-miss cost, for Claude Code's status line
   replay redact <transcript>       strip content, keep structure and usage (for bug reports)
-  replay serve [flags]             local proxy: byte-for-byte passthrough, records a ledger
   replay version                   print build information
 
 With no arguments at all, replay reports cost per task across the transcripts it

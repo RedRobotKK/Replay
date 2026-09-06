@@ -28,13 +28,14 @@ import (
 // has to a task.
 
 type costUnit struct {
-	ID           string    `json:"session"`
-	Model        string    `json:"model"`
-	Requests     int       `json:"requests"`
-	CostUSD      float64   `json:"costUsd"`
-	AvoidableUSD float64   `json:"avoidableUsd"`
-	Breaks       int       `json:"breaks"`
-	At           time.Time `json:"at"`
+	ID              string    `json:"session"`
+	Model           string    `json:"model"`
+	Requests        int       `json:"requests"`
+	CostUSD         float64   `json:"costUsd"`
+	AvoidableUSD    float64   `json:"avoidableUsd"`
+	AvoidableTokens int       `json:"avoidableTokens,omitempty"`
+	Breaks          int       `json:"breaks"`
+	At              time.Time `json:"at"`
 }
 
 type costSummary struct {
@@ -44,6 +45,13 @@ type costSummary struct {
 	P90USD         float64 `json:"p90Usd"`
 	AvoidableUSD   float64 `json:"avoidableUsd"`
 	AvoidableShare float64 `json:"avoidableShare"`
+	// AvoidableTokens is the same waste before it is multiplied by a price.
+	//
+	// The dollar figure is meaningless to a flat-seat subscriber, who is not
+	// billed per token and is most of the readership. The tokens are what they
+	// actually lost: context the work did not get, and rate-limit budget spent
+	// on nothing. The deficit was always in tokens first.
+	AvoidableTokens int `json:"avoidableTokens,omitempty"`
 	// Which route the traffic took. A category, never an id — see
 	// namespace.go for why the billing mode is only claimed where the model
 	// id actually settles it.
@@ -67,6 +75,9 @@ func summarise(units []costUnit) costSummary {
 		models = append(models, u.Model)
 	}
 	s.Route = routeLine(models)
+	for _, u := range units {
+		s.AvoidableTokens += u.AvoidableTokens
+	}
 	costs := make([]float64, 0, len(units))
 	for _, u := range units {
 		s.TotalUSD += u.CostUSD
@@ -112,7 +123,16 @@ func renderCost(s costSummary, unpriced int, out io.Writer, stateDir string) str
 	fmt.Fprintf(&b, "  median task    $%.2f\n", s.MedianUSD)
 	fmt.Fprintf(&b, "  p90 task       $%.2f\n", s.P90USD)
 	fmt.Fprintf(&b, "  avoidable      $%.2f  (%.0f%% of the total)\n", s.AvoidableUSD, s.AvoidableShare*100)
+	if s.AvoidableTokens > 0 {
+		fmt.Fprintf(&b, "                 %s tokens re-billed\n", shortTokens(s.AvoidableTokens))
+	}
 	fmt.Fprintf(&b, "\nAvoidable is the part nobody chose: tokens re-billed because a prompt cache\nbroke. It is not a forecast of savings, it is what was already spent twice.\n")
+	if s.AvoidableTokens > 0 {
+		fmt.Fprintf(&b, "\nOn a subscription seat - Claude Pro or Max, Copilot, Cursor - none of that is\n"+
+			"money: you are not billed per token, so the dollars above are list price for\n"+
+			"someone who is. The tokens are still yours. They are context the work did not\n"+
+			"get, and rate-limit budget spent on nothing. `replay advise` ranks what to cut.\n")
+	}
 	if unpriced > 0 {
 		fmt.Fprintf(&b, "\n%d further transcripts were read but not priced, because their model is not in\nthe price table. They are excluded rather than counted as free.\n", unpriced)
 	}
@@ -268,6 +288,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 				deficit += br.Deficit
 			}
 			u.AvoidableUSD = float64(deficit) / 1_000_000 * price.InputPerMTok
+			u.AvoidableTokens = deficit
 		}
 		units = append(units, u)
 		cache.put(path, u, reqIDs)
@@ -373,4 +394,17 @@ func costHeaderLine(tasks int) string {
 	line := fmt.Sprintf("Cost per task, across %d transcripts at list prices dated %s (caching rules %s).",
 		tasks, cachemodel.PriceTableVersion, cachemodel.RulesVersionInEffect())
 	return line + cachemodel.PriceTableAgeNote(time.Now())
+}
+
+// shortTokens renders a token count the way a reader scans it, not the way it
+// is stored. 31,264,349 is a figure to parse; 31.3M is a figure to read.
+func shortTokens(n int) string {
+	switch {
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
+	case n >= 1_000:
+		return fmt.Sprintf("%.0fk", float64(n)/1_000)
+	default:
+		return fmt.Sprintf("%d", n)
+	}
 }
