@@ -332,7 +332,7 @@ Initial catalog for v0.3: `freeze-system-prompt` (diagnostic only, reports when 
 |----------|--------|
 | macOS (arm64, amd64) | Supported from v0.1 |
 | Linux (amd64, arm64) | Supported from v0.1 |
-| Windows | Replay from v0.1; proxy verified in CI from v0.2 |
+| Windows | **UNSUPPORTED, and never tested.** This row said "proxy verified in CI from v0.2". It was not: the Windows job failed at `go vet` before reaching its test step, so no test has ever run there. Corrected 2026-09-06, when fixing the compile error produced the first Windows test run and fourteen failed. See [RELEASE-CRITERIA.md](../RELEASE-CRITERIA.md) |
 | Devcontainers and WSL | Loopback TCP with token; documented networking pattern from v0.2 |
 
 ## 10. Security
@@ -425,7 +425,7 @@ Sequenced so that the first release costs nothing to run, works for every user r
 
 | Release | Scope | Gate |
 |---------|-------|------|
-| v0.1 | `replay`, `blame`, `diff` on transcripts. Estimated tier only. Anthropic rules. macOS and Linux and Windows. | Spikes 1 and 2 pass; calibration line on every output; README shows real output from the maintainer's own sessions. |
+| v0.1 | `replay`, `blame`, `diff` on transcripts. Estimated tier only. Anthropic rules. macOS and Linux. (Windows was listed here and was never tested; see section 9.) | Spikes 1 and 2 pass; calibration line on every output; README shows real output from the maintainer's own sessions. |
 | v0.2 | `serve` passthrough with usage capture; measured tier; live `diff`. | Spike 3 answered; passthrough hash test green on the fixture corpus; added latency p99 published. |
 | v0.3 | Policy catalog, dry-run, spend and loop guards, error guards. | Spike 4 passes; history-binding check green in CI; guardrail revert tested. |
 | v0.4 | Learning job, session types, live trials, advisor. | Synthetic-corpus selection test passes; policy file documented. |
@@ -439,7 +439,7 @@ Masking ships last on purpose: it is the feature with the highest consequence of
 These are in force now and are described in [`maintainers.md`](maintainers.md) and [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 - `main` is protected: pull requests only, CI green, one review, linear history. Conventional Commits; squash merge; small single-purpose changes.
-- CI runs vet, race tests, build on Linux, macOS, and Windows, golangci-lint, and markdownlint on every pull request.
+- CI runs vet, race tests and build on Linux and macOS, plus golangci-lint and markdownlint, on every pull request. **A Windows job also runs and does not pass**, and as of 2026-09-06 the lint job does not either: 37 issues, all pre-existing. Both are listed as gates in [RELEASE-CRITERIA.md](../RELEASE-CRITERIA.md) rather than described here as passing. This line previously said the suite ran on Windows, which was true and read as a claim that it passed.
 - Every design change lands with an ADR. Every user-visible change lands with a changelog entry.
 - Historical documents are never edited; a new version is added instead, and superseded drafts live in the git history rather than the working tree.
 - Issue and pull request templates, a canonical label set, weekly stale automation, Dependabot, CODEOWNERS.
