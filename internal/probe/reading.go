@@ -91,12 +91,20 @@ func AppendReading(path string, r Reading) error {
 	if r.Method == "" {
 		r.Method = MethodVersion
 	}
-	// An inconclusive run carries no bounds. Storing the untouched search
-	// range as though it were a measurement is how a series stops being able
-	// to tell a result from a failure.
-	if r.Outcome != "" && r.Outcome != "budget-exhausted" {
-		r.Above, r.AtMost = 0, 0
-	}
+	// Bounds are kept whatever the outcome.
+	//
+	// They used to be zeroed for any anomalous run, on the reasoning that an
+	// untouched search range should not look like a measurement. The reasoning
+	// was right and the remedy was wrong: trend.go already excludes a reading
+	// with an outcome from comparison, so the numbers were being deleted from
+	// a record that was already being handled correctly. The result was a
+	// series selected on agreement with the sharp-threshold model — one that
+	// could never hold evidence against its own premise. A referee named it
+	// publication bias implemented in code.
+	//
+	// Excluding a reading from change detection is a judgement about
+	// comparability. Deleting its numbers destroys the evidence about where
+	// the anomaly was, which is the part worth having.
 
 	line, err := json.Marshal(r)
 	if err != nil {

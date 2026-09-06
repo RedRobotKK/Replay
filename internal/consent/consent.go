@@ -28,6 +28,15 @@ import (
 // uses the same convention for corpus consent.
 const FileName = "update-consent.toml"
 
+// CorpusFileName is the corpus opt-in, written by `install.sh --corpus-opt-in`.
+//
+// The installer has written this since before any Go code read it, and the
+// file says so itself: "nothing is sent: no command in this release transmits
+// it." Reading it here does not change that. It grants permission to BUILD a
+// submission and to show it to the person who asked; sending remains something
+// only a human does, deliberately, having seen the payload.
+const CorpusFileName = "corpus-consent.toml"
+
 // State is what the user has said. Three states, not two.
 //
 // Unset and Declined both mean "do not check now", so a boolean would merge
@@ -78,7 +87,20 @@ func (d Decision) ShouldAsk() bool { return d.State == Unset }
 // a file we cannot read confidently must never become permission, and the
 // caller should be told rather than left to assume.
 func ReadUpdateConsent(configDir string) (Decision, error) {
-	path := filepath.Join(configDir, "replay", FileName)
+	return readDecision(filepath.Join(configDir, "replay", FileName), "update_checks")
+}
+
+// ReadCorpusConsent reads whether the user has opted in to contributing
+// structural observations.
+//
+// Same rules as every other consent here: absence is undecided, only the exact
+// affirmative grants, a refusal is remembered, and a file that is a symlink or
+// writable by anyone else is refused rather than believed.
+func ReadCorpusConsent(configDir string) (Decision, error) {
+	return readDecision(filepath.Join(configDir, "replay", CorpusFileName), "corpus_opt_in")
+}
+
+func readDecision(path, key string) (Decision, error) {
 	d := Decision{State: Unset, Path: path}
 
 	// Lstat, not Stat: a symlink here means someone else chose where this
@@ -116,12 +138,12 @@ func ReadUpdateConsent(configDir string) (Decision, error) {
 		}
 		var want State
 		switch line {
-		case "update_checks = true":
+		case key + " = true":
 			want = Granted
-		case "update_checks = false":
+		case key + " = false":
 			want = Declined
 		default:
-			return d, fmt.Errorf("%s: cannot read %q; the file must contain exactly `update_checks = true` or `update_checks = false`", path, line)
+			return d, fmt.Errorf("%s: cannot read %q; the file must contain exactly `%s = true` or `%s = false`", path, line, key, key)
 		}
 		if found != nil && *found != want {
 			return d, fmt.Errorf("%s contradicts itself; delete it and decide once", path)

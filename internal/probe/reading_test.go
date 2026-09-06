@@ -149,3 +149,43 @@ func readLines(t *testing.T, path string) []string {
 	}
 	return out
 }
+
+// S6: an anomalous reading keeps its bounds and stays in the record.
+//
+// AppendReading used to zero Above and AtMost whenever an outcome was set, and
+// trend.go's comparable() excludes any reading with an outcome — so every run
+// that observed non-determinism was stripped of its numbers and then dropped
+// from the analysis. The retained series was therefore SELECTED on agreement
+// with the sharp-threshold model, and could never exhibit evidence against it.
+// A referee called it publication bias implemented in code, and was right.
+//
+// The bounds an anomalous run reached are evidence about where the anomaly
+// lives. Excluding a reading from change detection is a judgement about
+// comparability; deleting its numbers destroys the record.
+//
+// PASS: bounds survive, and the outcome marks the reading rather than emptying
+// it.
+// FAIL: a stored reading that cannot say where its anomaly was.
+func TestS6_AnAnomalousReadingKeepsItsBounds(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := AppendReading(path, Reading{
+		Model: "m", Outcome: "non-deterministic",
+		Above: 508, AtMost: 512,
+		Anomalies: []Anomaly{{Kind: "non-deterministic", Size: 510, Wrote: 1, DidNotWrite: 1}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var r Reading
+	if err := json.Unmarshal([]byte(readLines(t, path)[0]), &r); err != nil {
+		t.Fatal(err)
+	}
+	if r.Above != 508 || r.AtMost != 512 {
+		t.Errorf("bounds = (%d, %d]; an anomalous run still reached a bracket and the record must keep it", r.Above, r.AtMost)
+	}
+	if r.Outcome != "non-deterministic" {
+		t.Errorf("outcome = %q, want it retained so the reading is not compared as if clean", r.Outcome)
+	}
+	if len(r.Anomalies) != 1 || r.Anomalies[0].Size != 510 {
+		t.Error("the anomaly and the size it happened at must survive into the series")
+	}
+}
