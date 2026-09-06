@@ -406,7 +406,7 @@ fi
 # opportunity and no nag. Tied to a real number rather than a general appeal,
 # because the corpus that makes the tool's figures measured rather than guessed
 # was paid for out of pocket.
-printf '\n%sReplay is free, Apache 2.0, and funded by nobody. The corpus behind its\nnumbers is 78 sessions across 1,450 transcripts, and cost about $2851 in\nAPI spend to gather.%s\n' \
+printf '\n%sReplay is free, Apache 2.0, and funded by nobody. The corpus behind its\nnumbers is 78 sessions across 1,450 transcripts, on one machine.%s\n' \
   "$C_DIM" "$C_0" >&2
 printf '%sIf it saves you more than it cost you to install:%s %s%s%s\n' \
   "$C_DIM" "$C_0" "$C_ACCENT$C_B" "$COFFEE" "$C_0" >&2
