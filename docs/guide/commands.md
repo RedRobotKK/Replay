@@ -448,6 +448,7 @@ full price and learn nothing.
 | `--relative` | Stop within this fraction of the answer instead of a fixed width. `--relative 0.1` is "within ten percent", which is the same statement at every scale — 128 tokens is a quarter of 512 and two thousandths of 65,536 |
 | `--max-probes` | How many billable requests the run may make. Default 16 |
 | `--confirm` | Agreeing answers required before a boundary is believed. Default 2 |
+| `--prior` | A documented floor to test before searching. Defaults to the compiled table's figure for the model; `-1` disables it |
 | `--execute` | Actually send them. Without it, only the plan is printed |
 
 **`--confirm` multiplies against `--max-probes`.** Every confirmation is a
@@ -471,6 +472,27 @@ probing for it spends money distinguishing sizes the provider treats as the
 same. Probe points are deliberately offset from the power-of-two grid, because
 a clean bisection proposes 32768, 16384, 8192, whose divisor is an artifact of
 the search rather than a fact about the provider.
+
+**It tests the documented figure first.** A published minimum is a hypothesis,
+and the cheapest experiment tests the hypothesis rather than bisecting the space
+that contains it. The run probes the documented size, then the size just below
+it — because "the floor is exactly 512" predicts both that 512 caches and that
+511 does not. When the documentation is right that settles it in two decisions,
+where a blind bisection of 0–2048 needs nine. When it is wrong, the prior is
+refuted by its own probe and the bisection continues from the bracket those
+answers established, having spent one probe to find out.
+
+**Probe content is varied CJK, and both words matter.** Measured on this API,
+English `filler` repeated with a trailing space is about 3.4 characters per token, so a character is
+a blunt dial and the reachable token counts are sparse. Varied Han ideographs
+count at almost exactly 2 tokens each — 200 runes to 420 tokens, 201 to 422,
+202 to 424 — perfectly linear, which is what makes a three-token bracket
+reachable at all. *Varied* is load-bearing: a repeated character compresses, so
+`あ` a hundred times counts 60 tokens and the hundred-and-first adds nothing,
+because the tokenizer merges the run.
+
+The ratio is learned from the first probe rather than assumed, so a model whose
+tokenizer differs corrects itself, and every probe still verifies its own size.
 
 Feed the result into a rules document with `replay rules --measure`.
 

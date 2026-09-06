@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/probe"
 )
 
@@ -31,6 +32,7 @@ func runProbe(args []string, stdout, stderr io.Writer) error {
 	// default budget must clear its own default resolution, or the first thing
 	// every user sees is the tool warning about a configuration it chose.
 	maxProbes := fs.Int("max-probes", 16, "how many billable requests this run may make")
+	prior := fs.Int("prior", 0, "a documented floor to test first; 0 uses the compiled table's figure for the model, and -1 disables it")
 	confirm := fs.Int("confirm", 2, "agreeing answers required before a boundary is believed")
 	execute := fs.Bool("execute", false, "actually send the probes; without this, only the plan is printed")
 	yes := fs.Bool("yes", false, "with --execute, skip the confirmation. For scripts that meant it")
@@ -41,7 +43,19 @@ func runProbe(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("a model is required: replay probe --model claude-opus-5: %w", errUsage)
 	}
 
+	// A published figure is a hypothesis worth testing before searching the
+	// space that contains it. Taken from the compiled table unless overridden,
+	// and refuted by its own probe if wrong.
+	seed := *prior
+	if seed == 0 {
+		seed = cachemodel.DocumentedMinPrefix(*model)
+	}
+	if seed < 0 {
+		seed = 0
+	}
+
 	cfg := probe.Config{
+		Prior:              seed,
 		Min:                *minTok,
 		Max:                *maxTok,
 		Resolution:         *resolution,

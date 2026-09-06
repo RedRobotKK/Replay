@@ -50,6 +50,17 @@ type Runner struct {
 	// while a 512-token request carries 505 and does not.
 	overhead    int
 	overheadSet bool
+
+	// tokensPerRune is learned from the first sizing and reused.
+	//
+	// Sizing used to be a search — build, count, adjust, repeat — which was
+	// necessary while the filler was English words, where a character is a
+	// blunt and irregular dial. Varied CJK measures at exactly 2.00 tokens per
+	// rune on this API and is linear across neighbouring sizes, so the rune
+	// count for a target is a division. It is learned rather than assumed,
+	// because another model or a future tokenizer may differ, and every probe
+	// still verifies the result.
+	tokensPerRune float64
 }
 
 // Overhead is the measured non-prefix cost of a request, available after a run.
@@ -76,6 +87,14 @@ func (r *Runner) measureOverhead(model string) error {
 // is what the provider reports it cached, not what we intended to send.
 const tokensPerProbeChar = 4
 
+// runeBytes is how many bytes a CJK ideograph takes in UTF-8, and
+// fillerPrefixBytes the fixed "replay probe <nonce> " header. Both are needed
+// to convert a rune count back into the byte length fillerOfChars builds to.
+const (
+	runeBytes         = 3
+	fillerPrefixBytes = 46
+)
+
 // Plan describes what a run would do, and sends nothing.
 func (r *Runner) Plan(cfg Config, model string) {
 	s := New(cfg)
@@ -88,6 +107,9 @@ func (r *Runner) Plan(cfg Config, model string) {
 	}
 	fmt.Fprintf(r.Out, "  confirm      %d agreeing answers per decision\n", max2(cfg.Confirm, 1))
 	fmt.Fprintf(r.Out, "  budget       %d probe requests\n", cfg.MaxProbes)
+	if cfg.Prior > 0 {
+		fmt.Fprintf(r.Out, "  testing      the documented %d first, then the size below it\n", cfg.Prior)
+	}
 	if d := s.AffordableDecisions(); d > 0 {
 		fmt.Fprintf(r.Out, "  which buys   %d bisection decisions\n", d)
 	}
@@ -211,6 +233,11 @@ func (r *Runner) sizedFiller(model string, target int) (string, int, error) {
 	}
 	best, bestTokens, bestGap := "", 0, 1<<30
 	chars := target * tokensPerProbeChar
+	if r.tokensPerRune > 0 {
+		// Arithmetic, not search: runes needed for the target, converted back
+		// to the byte length fillerOfChars builds to.
+		chars = int(float64(target)/r.tokensPerRune)*runeBytes + fillerPrefixBytes
+	}
 	var text string
 	for i := 0; i < 40; i++ {
 		text = fillerOfChars(chars)
@@ -223,6 +250,11 @@ func (r *Runner) sizedFiller(model string, target int) (string, int, error) {
 		got := total - r.overhead
 		if got <= 0 {
 			return "", 0, fmt.Errorf("the provider counted the probe prefix as no tokens")
+		}
+		if runes := len([]rune(text)); runes > 0 {
+			// Learned from what was actually built and counted, so a model
+			// whose tokenizer differs corrects itself on the first probe.
+			r.tokensPerRune = float64(got) / float64(runes)
 		}
 		if gap := abs(got - target); gap < bestGap {
 			best, bestTokens, bestGap = text, got, gap
@@ -238,11 +270,28 @@ func (r *Runner) sizedFiller(model string, target int) (string, int, error) {
 		// confirmations of the same target were different sizes. That produced
 		// a "non-deterministic boundary" at 507 tokens on opus-5 which was
 		// this function's noise, not the provider's behaviour.
-		if got < target-8 || got > target+8 {
+		// Correct arithmetically too. Stepping a few characters at a time was
+		// how this worked before the ratio was known, and it cost four and a
+		// half counting round trips per probe where the ratio makes it one or
+		// two: the distance to the target in tokens divides straight into a
+		// rune count.
+		switch {
+		case r.tokensPerRune > 0:
+			step := int(float64(target-got)/r.tokensPerRune) * runeBytes
+			if step == 0 {
+				// Inside one rune of the target. Move by the smallest unit
+				// that changes anything, in the right direction.
+				step = runeBytes
+				if got > target {
+					step = -runeBytes
+				}
+			}
+			chars += step
+		case got < target-8 || got > target+8:
 			chars = chars * target / got
-		} else if got < target {
+		case got < target:
 			chars += 3
-		} else {
+		default:
 			chars -= 3
 		}
 		if chars < 1 {

@@ -855,3 +855,79 @@ func TestB22_AStalledBracketStops(t *testing.T) {
 		t.Errorf("%d probes before noticing the bracket had stopped moving", probes)
 	}
 }
+
+// B23: a documented figure is tested first, not bisected towards.
+//
+// The definitive opus-5 run cost 39 probes bisecting 0..2048 from scratch —
+// while the documented figure, 512, was known before the run started. A
+// published number is a hypothesis, and the cheapest experiment tests the
+// hypothesis rather than searching the space that contains it. If the
+// documentation is right the search finishes in two decisions; if it is wrong
+// the bracket opens and the bisection proceeds exactly as before, so nothing
+// is assumed.
+//
+// PASS: the first probe is the prior, and a correct prior resolves in far
+// fewer decisions than a blind search.
+// FAIL: probing the midpoint of the range while holding a better starting
+// point, which is a bill for information already published.
+func TestB23_ADocumentedPriorIsTestedFirst(t *testing.T) {
+	s := New(Config{Min: 0, Max: 2048, Resolution: 4, Prior: 512})
+	if first := s.Next(); first != 512 {
+		t.Errorf("first probe = %d, want the documented 512", first)
+	}
+
+	// A correct prior: 512 caches, 511 does not.
+	const floor = 512
+	decisions := 0
+	for i := 0; ; i++ {
+		if i > 64 {
+			t.Fatal("did not converge")
+		}
+		n := s.Next()
+		if n == 0 {
+			break
+		}
+		decisions++
+		s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
+	}
+	lo, hi := s.Bracket()
+	if lo >= floor || hi < floor {
+		t.Errorf("bracket (%d, %d] excludes the floor %d", lo, hi, floor)
+	}
+	// A blind bisection of 0..2048 to a resolution of 4 needs nine decisions.
+	// Starting from the answer should cost a small fraction of that.
+	if decisions > 4 {
+		t.Errorf("%d decisions with a correct prior; a blind search of this range needs 9", decisions)
+	}
+}
+
+// B24: a wrong prior costs almost nothing and is not believed.
+//
+// PASS: the search still brackets the true floor, at a cost close to a blind
+// bisection.
+// FAIL: converging on the prior, or paying a large penalty for having tried
+// it. A prior that cannot be wrong is an assumption, not a hypothesis.
+func TestB24_AWrongPriorIsRefutedCheaply(t *testing.T) {
+	for _, floor := range []int{64, 1500} {
+		s := New(Config{Min: 0, Max: 2048, Resolution: 4, Prior: 512})
+		decisions := 0
+		for i := 0; ; i++ {
+			if i > 64 {
+				t.Fatalf("floor %d: did not converge", floor)
+			}
+			n := s.Next()
+			if n == 0 {
+				break
+			}
+			decisions++
+			s.Record(Result{PrefixTokens: n, Wrote: n >= floor, CachedTokens: n})
+		}
+		lo, hi := s.Bracket()
+		if lo >= floor || hi < floor {
+			t.Errorf("floor %d: bracket (%d, %d] excludes it — a wrong prior was believed", floor, lo, hi)
+		}
+		if decisions > 12 {
+			t.Errorf("floor %d: %d decisions; a wrong prior must cost about one probe, not a restart", floor, decisions)
+		}
+	}
+}

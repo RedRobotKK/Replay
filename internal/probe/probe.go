@@ -42,6 +42,15 @@ type Config struct {
 	RelativeResolution float64
 	// MaxProbes caps the spend. Zero means the resolution decides.
 	MaxProbes int
+	// Prior is a documented figure to test before searching. Zero means none.
+	//
+	// A published minimum is a hypothesis, and the cheapest experiment tests
+	// the hypothesis rather than bisecting the space that contains it. The
+	// definitive opus-5 run cost 39 probes searching 0..2048 while the
+	// documented 512 was known before it started. Nothing is assumed: a prior
+	// that is wrong is refuted by its own probe and the bisection continues
+	// from the bracket that answer establishes.
+	Prior int
 	// Confirm is how many agreeing answers a size needs before the search
 	// acts on it. Zero or one means take the first answer.
 	//
@@ -68,7 +77,10 @@ type Result struct {
 
 // Search is a bisection over prefix sizes.
 type Search struct {
-	cfg Config
+	cfg         Config
+	priorDone   bool
+	priorCached bool
+	priorBelow  bool
 	// lo is the largest size seen NOT to cache; hi the smallest seen to cache.
 	lo, hi       int
 	probes       int
@@ -110,6 +122,33 @@ func (s *Search) Next() int {
 	if s.hi-s.lo <= s.stopWidth() {
 		return 0
 	}
+	// The documented figure first, then the size just below it.
+	//
+	// The hypothesis is not "the floor is somewhere near 512" but "the floor
+	// is exactly 512", and that predicts two things: 512 caches, and the size
+	// below it does not. Testing both settles it in two decisions where a
+	// blind bisection of 0..2048 needs nine. If either prediction fails the
+	// prior is refuted, the bracket is whatever those answers established, and
+	// the bisection proceeds from there having lost one probe.
+	if !s.priorDone && s.cfg.Prior > s.lo && s.cfg.Prior < s.hi {
+		s.pending = s.cfg.Prior
+		return s.cfg.Prior
+	}
+	// Keyed on what the prior's own answer was, not on the bracket.
+	//
+	// Comparing hi to the prior looked equivalent and is not: hi comes from
+	// the provider's reported cached size, which is a few tokens above the
+	// prefix that was requested. The condition never held, so the search
+	// confirmed the documented 512 and then bisected from zero anyway,
+	// throwing away the answer it had just paid three probes for.
+	if !s.priorBelow && s.priorDone && s.priorCached && s.cfg.Prior > 0 {
+		below := s.cfg.Prior - s.stopWidth()
+		if below > s.lo && below < s.hi {
+			s.pending = below
+			return below
+		}
+	}
+
 	// Midpoint, dithered off the power-of-two grid.
 	//
 	// A clean bisection over a power-of-two range proposes 32768, 16384, 8192
@@ -188,6 +227,17 @@ func (s *Search) Record(r Result) error {
 	}
 
 	beforeLo, beforeHi := s.lo, s.hi
+	// Only now that the answer is confirmed. Marking the prior done on its
+	// first record abandoned it before the bound could move: with Confirm at
+	// 3, one probe at 512 changed nothing, the prior branch stopped proposing
+	// it, and the search jumped to 1027 — testing the documented figure once
+	// and then ignoring what it said.
+	if r.PrefixTokens == s.cfg.Prior {
+		s.priorDone, s.priorCached = true, r.Wrote
+	} else if s.priorDone && r.PrefixTokens < s.cfg.Prior {
+		s.priorBelow = true
+	}
+
 	if r.Wrote {
 		// The provider's own count, not the size we asked for. Probe filler is
 		// built from a chars-per-token approximation, so the requested size is

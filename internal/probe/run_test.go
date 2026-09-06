@@ -369,3 +369,61 @@ func TestR10_SizesAreTheCacheablePrefix(t *testing.T) {
 		t.Errorf("overhead measured as %d, want %d", r.Overhead(), overhead)
 	}
 }
+
+// R11: the token ratio is learned once, then used as arithmetic.
+//
+// Sizing was a search: build a prefix, count it, adjust, repeat — up to forty
+// counting round trips per probe. That was necessary while the filler was
+// English, where a character is a blunt and irregular dial. It is not
+// necessary now. Varied CJK measured at exactly 2.00 tokens per rune on this
+// API, perfectly linear across 200, 201 and 202 runes, so the rune count for a
+// target is a division rather than a search.
+//
+// The ratio is still measured rather than assumed, because a different model
+// or a future tokenizer may not be 2.00 — it is learned from the first probe
+// and reused, with a verification count on every probe to catch it drifting.
+//
+// PASS: after the first sizing, later ones cost a small constant number of
+// counting calls.
+// FAIL: re-searching every time, which is latency nobody needs and round trips
+// nobody is paying for information they already have.
+func TestR11_TheRatioIsLearnedOnceThenApplied(t *testing.T) {
+	var counts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		var body struct {
+			System []struct {
+				Text string `json:"text"`
+			} `json:"system"`
+		}
+		_ = json.NewDecoder(req.Body).Decode(&body)
+		runes := 0
+		if len(body.System) > 0 {
+			runes = len([]rune(body.System[0].Text))
+		}
+		if strings.HasSuffix(req.URL.Path, "/count_tokens") {
+			counts++
+			// Exactly two tokens per rune, plus the envelope.
+			_, _ = fmt.Fprintf(w, `{"input_tokens":%d}`, runes*2+7)
+			return
+		}
+		_, _ = fmt.Fprintf(w, `{"usage":{"input_tokens":10,"cache_creation_input_tokens":%d,"cache_read_input_tokens":0}}`, runes*2)
+	}))
+	t.Cleanup(srv.Close)
+
+	r := &Runner{BaseURL: srv.URL, APIKey: "k", Client: srv.Client(), Out: io.Discard}
+	if _, _, err := r.sizedFiller("m", 1000); err != nil {
+		t.Fatalf("first sizing failed: %v", err)
+	}
+	afterFirst := counts
+
+	for _, target := range []int{800, 600, 500, 450} {
+		if _, _, err := r.sizedFiller("m", target); err != nil {
+			t.Fatalf("sizing %d failed: %v", target, err)
+		}
+	}
+	perProbe := float64(counts-afterFirst) / 4
+	if perProbe > 3 {
+		t.Errorf("%.1f counting calls per probe after the ratio is known; it should be arithmetic plus a check", perProbe)
+	}
+}
