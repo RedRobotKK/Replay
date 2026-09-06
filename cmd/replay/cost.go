@@ -249,7 +249,11 @@ func sessionTime(rep *analysis.LaneReport) time.Time {
 // as the price date: the rules govern what gets cached, the price table
 // governs what that costs, and on 2026-09-05 they were 73 days apart.
 func costHeaderLine(tasks int) string {
-	line := fmt.Sprintf("Cost per task, across %d sessions at list prices dated %s (caching rules %s).",
+	// Transcripts, not sessions. A session writes one transcript per lane, so
+	// a session that spawned subagents contributes several. Calling the file
+	// count a session count overstated the corpus roughly twentyfold in the
+	// published evidence before 2026-09-06.
+	line := fmt.Sprintf("Cost per task, across %d transcripts at list prices dated %s (caching rules %s).",
 		tasks, cachemodel.PriceTableVersion, cachemodel.RulesVersionInEffect())
 	return line + cachemodel.PriceTableAgeNote(time.Now())
 }

@@ -20,13 +20,14 @@ are the inputs to any forecast of what an autonomous agent will spend, and almos
 
 | | |
 |---|---:|
-| Sessions | 1,363 |
+| Transcripts | 1,363 |
+| Sessions | **78** — a session writes one transcript per lane, so subagents multiply the file count without adding an independent draw ([correction](evidence/calibration-corpus-2026-09-06.md)) |
 | Spend at list rates | $2,850.77 |
 | Median task | $0.65 |
 | p90 task | $2.30 |
 | Cache breaks located and classified | 731 |
 | Re-billed because a cache broke | $152.94 (5.4%) |
-| Turns reproduced against real bills | 26,571 of 27,302 (97.32%) |
+| Turns reproduced against real bills | 28,135 of 28,868 (97.46%) |
 
 ## What that is worth, honestly
 
@@ -141,7 +142,7 @@ the cause.
 Items 1 to 4 exist. The named-server attribution in the box above **does not** — it is a presentation
 change over data already in the ledger, and it is the single highest-leverage thing left to build.
 
-**And all of it rests on eleven sessions from one machine.** The mechanism is sound; the thresholds
+**And all of it rests on 78 sessions from one machine.** The mechanism is sound; the thresholds
 that would turn "9 tools never called" into "you should disable this" are not calibrated, which is
 why the output above states a fact and leaves the decision alone.
 

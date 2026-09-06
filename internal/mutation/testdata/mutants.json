@@ -8,7 +8,8 @@
     "provenance": "A figure derived through the byte-to-token fit is presented as measured, or the reverse.",
     "cost-integral": "The per-request carry count is wrong, so the cost integral is wrong while the count-once figure stays right.",
     "privacy": "A field that must be coarsened, scoped or withheld before it leaves the machine is not.",
-    "transport": "A guarantee the transport exists to make - owner-only access, no clobbering, no data loss - is not delivered, while the name of it remains."
+    "transport": "A guarantee the transport exists to make - owner-only access, no clobbering, no data loss - is not delivered, while the name of it remains.",
+    "evidence": "A measurement that was never taken is reported as a good one, or a sample is counted in units that overstate its independence."
   },
   "mutants": [
     {
@@ -347,6 +348,46 @@
         "TestMT4_NoMetricsListenerByDefault"
       ],
       "note": "A metrics port appearing by default would hand the counters to every local process, for users who never asked to be scraped."
+    },
+    {
+      "id": "M26",
+      "name": "no-evidence-scores-perfect",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "internal/analysis/calibrate.go",
+      "anchor": "\tif !c.HasEvidence() {\n\t\treturn 0\n\t}",
+      "replacement": "\tif !c.HasEvidence() {\n\t\treturn 1\n\t}",
+      "killedBy": [
+        "TestE2_NoEvidenceIsNotAPerfectScore"
+      ],
+      "note": "A lane's first request is always ReadFirst, so a single-request lane compares nothing. Returning 1 made Passes() true for it, admitting 18 of 1450 real transcripts to alternative scoring on no evidence at all. Passes() has no separate evidence guard - that conjunct was removed as dead code, since with the threshold a constant it never changed an answer - so the gate rests entirely on this returning something below the threshold."
+    },
+    {
+      "id": "M27",
+      "name": "transcripts-counted-as-sessions",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/corpus.go",
+      "anchor": "\tsessions := distinctSessions(rows)",
+      "replacement": "\tsessions := len(rows)",
+      "killedBy": [
+        "TestCR1_CorpusSeparatesTranscriptsFromSessions",
+        "TestCR2_TheRoadmapGateCountsSessionsNotFiles"
+      ],
+      "note": "The published corpus said 'Sessions: 1363' while counting transcript files. The same corpus holds 78 sessions and one supplies 1020 of the rows, so the independent sample was overstated about twentyfold. Also re-opens the roadmap gate to a single session with enough subagents."
+    },
+    {
+      "id": "M28",
+      "name": "empty-corpus-row-scores-perfect",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/corpus.go",
+      "anchor": "func (r corpusRow) matchRate() float64 {\n\tif r.compared == 0 {\n\t\treturn 0\n\t}",
+      "replacement": "func (r corpusRow) matchRate() float64 {\n\tif r.compared == 0 {\n\t\treturn 1\n\t}",
+      "killedBy": [
+        "TestCR3_ARowWithNothingComparedIsNotPerfect"
+      ],
+      "note": "The same defect as M26 carried into the report: a transcript with nothing to compare was printed at 100% and counted as above the calibration threshold in the below-threshold tally."
     }
   ],
   "knownSurvivors": [

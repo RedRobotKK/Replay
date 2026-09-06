@@ -45,17 +45,44 @@ func (c *Calibration) Compared() int {
 	return c.Reproduced + c.Exceeded + c.Broken
 }
 
+// HasEvidence reports whether any turn was actually checked.
+//
+// A lane's first request is always ReadFirst — there is nothing before it to
+// compare against — so a single-request lane offers no evidence at all. That
+// is not a failure and not a success; it is an absence, and it needs its own
+// name so a caller cannot mistake it for either.
+func (c *Calibration) HasEvidence() bool { return c.Compared() > 0 }
+
 // MatchRate is the share of compared turns whose read was reproduced or
 // exceeded. Exceeded counts as a match because the provider served at least
 // the prefix the model predicted.
+//
+// Zero when nothing was compared. It returned 1 until 2026-09-06, which made
+// every threshold test on it pass for free on exactly the lanes that had
+// tested nothing: 18 of 1450 lanes in the real corpus scored a perfect 100%
+// for having no turn to check, and every one of them was admitted to
+// alternative scoring. An absent measurement must not read as a good one.
+//
+// Callers wanting the gate should use Passes, which asks for evidence first.
 func (c *Calibration) MatchRate() float64 {
-	if c.Compared() == 0 {
-		return 1
+	if !c.HasEvidence() {
+		return 0
 	}
 	return float64(c.Reproduced+c.Exceeded) / float64(c.Compared())
 }
 
 // Passes reports whether alternatives may be scored for this lane.
+//
+// "The check never ran" must not be inside the passing case, and it is kept
+// out structurally rather than by a second guard here: MatchRate reports 0
+// without evidence, and 0 is below any threshold worth having. An explicit
+// `HasEvidence() &&` was tried and removed — with the threshold a constant
+// 0.95 its removal changed nothing observable, which makes it dead code by
+// ADR-0014's own standard rather than defence in depth.
+//
+// That makes this gate depend on MatchRate's behaviour at zero, so
+// TestE2_NoEvidenceIsNotAPerfectScore pins exactly that: the empty rate must
+// sit below CalibrationThreshold, not merely differ from 1.
 func (c *Calibration) Passes() bool {
 	return c.MatchRate() >= CalibrationThreshold
 }

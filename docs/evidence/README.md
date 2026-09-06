@@ -7,7 +7,8 @@ fact; a new measurement gets a new file.
 | Document | What it measures | Headline |
 |---|---|---|
 | [Calibration corpus, 2026-09-03](calibration-corpus-2026-09-03.md) | How well the replay engine reproduces the provider's own cache reads | 398 of 402 turns across 11 sessions, all from this repository's own development on one machine |
-| [Calibration corpus, 2026-09-05](calibration-corpus-2026-09-05.md) | How well the engine reproduces the provider's own numbers, across 1363 sessions from many unrelated projects rather than this repository's own development work | Supersedes the 2026-09-03 corpus, which covered 11 self-referential sessions |
+| [Calibration corpus, 2026-09-05](calibration-corpus-2026-09-05.md) | How well the engine reproduces the provider's own numbers, across 1363 transcripts from many unrelated projects rather than this repository's own development work. **It called those transcripts "sessions"; see the 2026-09-06 correction** | Supersedes the 2026-09-03 corpus, which covered 11 self-referential sessions |
+| [Calibration corpus, 2026-09-06](calibration-corpus-2026-09-06.md) | The same engine, re-read, and a correction: the previous file counted transcript files and called them sessions | **1450 transcripts from 78 sessions**, 97.46%. The 1363 published as "sessions" was a file count; one session supplied 1020 of them |
 | [Proxy added latency, 2026-09-03](proxy-latency-2026-09-03.md) | What `replay serve` adds to a request, and why the first attempt could not measure it | **~1.7ms p50** (corrected 2026-09-05; the 48µs originally published was noise) |
 | [Rehydration boundary under attack, 2026-09-05](rehydration-boundary-2026-09-05.md) | Whether a poisoned agent can write a real credential outside the project | Eight vectors refused; the harness was checked by weakening the boundary, which showed `filepath.Clean` alone defeats dot-dot and only `EvalSymlinks` stops the symlink escape |
 | [Spike: OpenAI-compatible path, 2026-09-05](spike-openai-compatible-2026-09-05.md) | What the proxy does with a request it was not built for | It forwarded it correctly and applied nothing: a one-token spend cap refused none of three requests. Led to the warnings, then to the path being built |
@@ -16,7 +17,7 @@ fact; a new measurement gets a new file.
 | [Adversarial security review, 2026-09-04](security-review-2026-09-04.md) | An external reviewer reading the code and running the proxy end to end | Five findings open, one fixed, and what was verified to hold |
 
 > [!IMPORTANT]
-> The calibration corpus is 1363 sessions from one machine, not the independent sessions the
+> The calibration corpus is 1450 transcripts from **78 sessions** on one machine, not the independent sessions the
 > [roadmap](../ROADMAP.md) gate asks for. It is published because an under-powered measurement stated
 > plainly is worth more than a claim with nothing behind it.
 

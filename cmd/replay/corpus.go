@@ -31,11 +31,33 @@ type corpusRow struct {
 	causes   []cachemodel.BreakCause
 }
 
+// matchRate is the share of this transcript's compared turns that matched.
+//
+// Zero when nothing was compared. It returned 1 until 2026-09-06, which
+// reported a transcript offering no turn to check as a perfect one and counted
+// it as above the calibration threshold in the tally below.
 func (r corpusRow) matchRate() float64 {
 	if r.compared == 0 {
-		return 1
+		return 0
 	}
 	return float64(r.matched) / float64(r.compared)
+}
+
+// distinctSessions counts session ids, not transcripts.
+//
+// A session writes one transcript per lane — the main one plus one per
+// subagent — and they all carry the same session id. So a file count is not a
+// sample size: on the corpus this was built from, 1450 transcripts carry 78
+// session ids, and one session supplies 1020 of 1363 published rows. Turns
+// inside one session share a client version, an account, a machine, a project
+// and one person's habits, so counting files overstates the independent sample
+// by roughly twenty times.
+func distinctSessions(rows []corpusRow) int {
+	seen := make(map[string]bool, len(rows))
+	for _, r := range rows {
+		seen[r.id] = true
+	}
+	return len(seen)
 }
 
 // runCorpus calibrates every session under the given paths and prints a
@@ -90,7 +112,12 @@ func runCorpus(args []string, stdout, stderr io.Writer) error {
 func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibration, failures []string) error {
 	p := analysis.NewPrinter(w)
 	p.Printf("# Calibration Corpus\n\n")
-	p.Printf("How well the replay engine reproduces the provider's cache reads across %d sessions found on one machine on %s. Rows carry a session id prefix, never a path, project name, or content.\n\n", len(rows), time.Now().UTC().Format("2006-01-02"))
+	p.Printf("How well the replay engine reproduces the provider's cache reads across %d transcripts, "+
+		"from %d distinct sessions, found on one machine on %s. **One row is one transcript, not one "+
+		"session**: a session writes one per lane, so a session that spawned subagents contributes "+
+		"several rows that share its id and its conditions. Rows carry a session id prefix, never a "+
+		"path, project name, or content.\n\n",
+		len(rows), distinctSessions(rows), time.Now().UTC().Format("2006-01-02"))
 	p.Printf("| Session | Client | Tier | Requests | Compared | Matched | Breaks | Match rate | Fit tokens/byte | Fit ±%% |\n")
 	p.Printf("|---|---|---|---:|---:|---:|---:|---:|---:|---:|\n")
 	totalTurns, totalMatched, totalBreaks, below := 0, 0, 0, 0
@@ -108,15 +135,26 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 		}
 		p.Printf("| %s | %s | %s | %d | %d | %d | %d | %.1f%% | %.3f | %.0f |\n", r.id, r.client, tierName(r.source), r.requests, r.compared, r.matched, r.breaks, rate*100, r.fit.TokensPerByte, r.fit.RelativeError*100)
 	}
-	overall := 1.0
+	overall := 0.0
 	if totalTurns > 0 {
 		overall = float64(totalMatched) / float64(totalTurns)
 	}
+	sessions := distinctSessions(rows)
 	p.Printf("\n## Totals\n\n")
-	p.Printf("- Sessions: %d (%d below the %.0f%% threshold)\n", len(rows), below, analysis.CalibrationThreshold*100)
+	p.Printf("- Transcripts: %d (%d below the %.0f%% threshold)\n", len(rows), below, analysis.CalibrationThreshold*100)
+	p.Printf("- Sessions: %d\n", sessions)
+	if len(rows) > sessions {
+		p.Printf("  A session writes one transcript per lane, so these differ whenever subagents ran.\n" +
+			"  Sessions is the independent count: turns inside one session share a client version,\n" +
+			"  an account, a machine and one person's habits, and are not independent draws.\n")
+	}
 	p.Printf("- Compared turns: %d, matched: %d, breaks: %d\n", totalTurns, totalMatched, totalBreaks)
-	p.Printf("- Overall match rate: %.2f%%\n", overall*100)
-	if len(rows) < corpusTarget {
+	p.Printf("- Overall match rate: %.2f%%", overall*100)
+	if totalTurns == 0 {
+		p.Printf(" (nothing was compared, so this is an absence rather than a result)")
+	}
+	p.Printf("\n")
+	if sessions < corpusTarget {
 		p.Printf("- Fewer than %d sessions: the roadmap gate for spikes 1 and 2 is not met by this corpus alone\n", corpusTarget)
 	}
 
