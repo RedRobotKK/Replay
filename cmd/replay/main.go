@@ -91,6 +91,21 @@ func runDefault(stdout, stderr io.Writer) error {
 	// no separate branch here.
 	home, _ := os.UserHomeDir()
 	if len(defaultTranscriptRoots(home)) == 0 {
+		// Say what happened before showing the list. The menu is the right
+		// answer here (BR-2) and it is not a self-explanatory one: a reader
+		// who pasted `replay` and received sixteen commands cannot tell
+		// whether the tool needs arguments, failed, or simply found nothing.
+		// All three look identical, and only the third is true.
+		//
+		// It matters more since the installer began pointing every new user
+		// at bare `replay` as their first command. On a machine that has
+		// never run Claude Code, this branch IS the first impression.
+		if home != "" {
+			fmt.Fprintf(stderr, "No transcripts found in %s\n",
+				filepath.Join(claudeConfigDir(home), "projects"))
+			fmt.Fprint(stderr, "Replay reads Claude Code sessions. If you use a different "+
+				"agent, replay serve proxies any of them.\n\n")
+		}
 		return printUsage(stdout)
 	}
 	if err := runCost(nil, stdout, stderr); err != nil {
