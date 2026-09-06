@@ -29,6 +29,7 @@ back to this index.
 | [Requirements](requirements.md) | What Replay is meant to do, with the build status of each requirement |
 | [Roadmap](ROADMAP.md) | What ships in each release, its gate, and what is deliberately deferred |
 | [Maintainers](maintainers.md) | How the repository is run: branches, reviews, releases, labels |
+| [Dashboard design](DASHBOARD-DESIGN.md) | The live `replay serve` surface: the 25 states it has to survive, and why every frame element is ASCII |
 
 ## If you want to know where this is going
 
