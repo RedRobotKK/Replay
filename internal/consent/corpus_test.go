@@ -89,6 +89,7 @@ func TestK3_ARefusalIsRemembered(t *testing.T) {
 func TestK4_ASymlinkOrWorldWritableFileIsRefused(t *testing.T) {
 	// PASS: refused. A grant any process could have written, or one whose
 	// location someone else chose, is not this user's decision.
+	requireUnixModeBits(t)
 	dir := t.TempDir()
 	p := writeCorpus(t, dir, "corpus_opt_in = true\n")
 	if err := os.Chmod(p, 0o666); err == nil {

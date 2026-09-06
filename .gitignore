@@ -33,3 +33,6 @@ node_modules/
 # `go build -o ./replay`, which scripts/preflight.sh itself produces. Without
 # this, one `git add -A` commits a 10 MB binary.
 /replay
+
+# Git worktrees for parallel agents: full clones of this repo, never source.
+.claude/worktrees/

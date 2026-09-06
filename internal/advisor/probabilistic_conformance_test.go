@@ -39,7 +39,7 @@ func TestFenceRefusalIsMonotoneInSampleCount(t *testing.T) {
 	// A spread that is genuinely usable, so only the count is under test.
 	pool := []float64{0.10, 0.25, 0.40, 0.55, 0.70, 0.95, 1.30, 2.10, 3.40, 5.00}
 
-	var firstOK int = -1
+	firstOK := -1
 	for n := 0; n <= len(pool); n++ {
 		_, ok := UpperFence(pool[:n], floor)
 		if ok && firstOK < 0 {

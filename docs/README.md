@@ -29,6 +29,8 @@ back to this index.
 | [Requirements](requirements.md) | What Replay is meant to do, with the build status of each requirement |
 | [Roadmap](ROADMAP.md) | What ships in each release, its gate, and what is deliberately deferred |
 | [Maintainers](maintainers.md) | How the repository is run: branches, reviews, releases, labels |
+| [Audit outreach](AUDIT-OUTREACH.md) | What to say to someone who has not asked for anything yet, and the rule that the offer is always a measurement rather than a claim about their systems |
+| [Dashboard design](DASHBOARD-DESIGN.md) | The live `replay serve` surface: the 25 states it has to survive, and why every frame element is ASCII |
 
 ## If you want to know where this is going
 
@@ -43,6 +45,7 @@ is the only place that says what will actually ship.
 | [Token prices](TOKEN-PRICES.md) | Whether a first-party machine-readable price source exists. It does not, which is why the table is hand-maintained and dated |
 | [The feed worth publishing](THE-FEED.md) | Why the useful feed is verification of documented cache behaviour, not prices |
 | [The money path](MONEY-PATH.md) | What a subscription could honestly charge for, what stays free forever, and why the unit is a repository rather than a developer |
+| [Open design questions](design/README.md) | Questions written up before a decision, not after. Currently: where live context cost should surface and who consumes it |
 
 ## If you are curious how it got here
 

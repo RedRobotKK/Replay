@@ -61,6 +61,9 @@ func TestServeUsageNeverShowsTheToken(t *testing.T) {
 
 func TestDoctorReportsWithoutFailing(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	// os.UserHomeDir reads USERPROFILE on Windows, so HOME alone
+	// leaves the command pointed at the real home.
+	t.Setenv("USERPROFILE", t.TempDir())
 	t.Setenv(envBaseURL, "http://127.0.0.1:1") // nothing listens there
 	var out, errOut bytes.Buffer
 	if err := run([]string{"doctor"}, &out, &errOut); err != nil {

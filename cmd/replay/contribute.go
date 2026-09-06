@@ -87,8 +87,8 @@ func contribute(campaign, dir, model, seriesPath string, stdout io.Writer) error
 		return err
 	}
 
-	fmt.Fprintf(stdout, "\nwrote %s\n", path)
-	fmt.Fprintf(stdout, "Nothing was sent. Read it, and if you are happy with it, attach it to a\n"+
+	_, _ = fmt.Fprintf(stdout, "\nwrote %s\n", path)
+	_, _ = fmt.Fprintf(stdout, "Nothing was sent. Read it, and if you are happy with it, attach it to a\n"+
 		"pull request against the campaign's observations file. It carries the bracket,\n"+
 		"the method, the provenance and a per-campaign tag — no prompts, no paths, no\n"+
 		"spend, and nothing that links this submission to another campaign's.\n")

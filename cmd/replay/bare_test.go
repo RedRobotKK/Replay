@@ -57,6 +57,14 @@ func homeWithTranscript(t *testing.T) string {
 func isolateHome(t *testing.T, home string) {
 	t.Helper()
 	t.Setenv("HOME", home)
+	// os.UserHomeDir, which is what the commands actually call, reads
+	// USERPROFILE on Windows and HOME everywhere else. Setting only HOME left
+	// every test using this helper pointed at the runner's real home on
+	// Windows, where it found no transcripts and the command correctly printed
+	// nothing. The tests then failed on the empty output rather than on the
+	// behaviour they were written to check, which made a harness bug look like
+	// a product bug for as long as the job stayed red.
+	t.Setenv("USERPROFILE", home)
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 }
 
