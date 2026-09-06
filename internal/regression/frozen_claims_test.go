@@ -104,13 +104,18 @@ func TestFrozenFD6_ARateLimitHeaderClaimCarriesItsMeasurement(t *testing.T) {
 		"more precise than",
 		"better instrument",
 	}
+	// A citation written from inside docs/evidence is relative and carries no
+	// "evidence/" prefix, so requiring one made the evidence index fail while
+	// it was correctly citing its own measurement. A check that fires on the
+	// right answer is how a guard gets switched off.
 	cite := regexp.MustCompile(`evidence/([A-Za-z0-9._-]+\.md)`)
+	citeLocal := regexp.MustCompile(`\(([A-Za-z0-9._-]+-\d{4}-\d{2}-\d{2}\.md)\)`)
 
 	for path, body := range textFiles(t, ".go", ".md") {
 		if strings.HasPrefix(path, filepath.Join("internal", "regression")) {
 			continue // this file names the retracted phrasings on purpose
 		}
-		for _, p := range paragraphs(body) {
+		for _, p := range claimUnits(body) {
 			if _, ok := containsAny(p, headers...); !ok {
 				continue
 			}
@@ -124,6 +129,9 @@ func TestFrozenFD6_ARateLimitHeaderClaimCarriesItsMeasurement(t *testing.T) {
 				}
 			}
 			m := cite.FindStringSubmatch(p)
+			if m == nil && strings.HasPrefix(path, filepath.Join("docs", "evidence")) {
+				m = citeLocal.FindStringSubmatch(p)
+			}
 			if m == nil {
 				t.Errorf("%s says the rate-limit headers %q with no evidence file cited:\n\n%s\n\n"+
 					"This claim was made once from the header names alone and retracted: "+
@@ -323,6 +331,34 @@ func keys(m map[string]bool) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)
+	}
+	return out
+}
+
+// claimUnits splits a document into the smallest pieces that can carry a claim
+// and its citation together.
+//
+// paragraphs() is the right unit for prose and the wrong one for a markdown
+// table: a table separated by no blank lines is a single paragraph, so a row
+// making an uncited claim was satisfied by a citation in a neighbouring row.
+// That is not a hypothetical. Loosening this check to accept relative links
+// let exactly that through, and the mutation that removed the real citation
+// passed.
+//
+// Table rows are therefore their own unit. A claim and the evidence for it have
+// to appear in the same row, which is the granularity a reader reads at.
+func claimUnits(body string) []string {
+	var out []string
+	for _, p := range paragraphs(body) {
+		if !strings.Contains(p, "\n|") && !strings.HasPrefix(strings.TrimSpace(p), "|") {
+			out = append(out, p)
+			continue
+		}
+		for _, line := range strings.Split(p, "\n") {
+			if strings.TrimSpace(line) != "" {
+				out = append(out, line)
+			}
+		}
 	}
 	return out
 }

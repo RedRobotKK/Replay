@@ -98,7 +98,7 @@ and one consistent width across all rows.
   time      surface    endpoint                 wire              status
   --------  ---------  -----------------------  ----------------  ---------
   15:06:44  anthropic  api.anthropic.com        messages          parsed
-  15:05:58  grok       cli-chat-proxy.grok.com  responses         forwarded
+  15:05:58  grok       cli-chat-proxy.grok.com  /responses        forwarded
   15:05:44  deepseek   api.deepseek.com         chat/completions  parsed
 ```
 
@@ -238,7 +238,7 @@ Each names the path or address it failed on.
   --------  ---------  -----------------------  ----------------  ---------
   15:06:44  anthropic  api.anthropic.com        messages          parsed
   15:06:41  openai     api.openai.com           chat/completions  stub
-  15:05:58  grok       cli-chat-proxy.grok.com  responses          forwarded
+  15:05:58  grok       cli-chat-proxy.grok.com  /responses        forwarded
   15:05:44  anthropic  api.anthropic.com        messages          parsed
 
   notes

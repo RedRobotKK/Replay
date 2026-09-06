@@ -119,10 +119,16 @@ var defects = []Defect{
 		Symptom: "A consent decision written on a platform without Unix mode semantics would " +
 			"be rejected on its own permissions, and 'verified as this user's' would be " +
 			"indistinguishable from 'not verifiable here'.",
-		Status:    StatusUnmerged,
-		StillHere: &Detector{File: "internal/consent/consent.go", Text: "info.Mode().Perm()&0o022 != 0"},
-		Fix: "origin/fix/consent-on-windows, 8e1b1d8: the check moves behind a build tag and " +
-			"reports whether it ran, via Decision.OwnershipChecked",
+		Status: StatusGuarded,
+		Guards: []string{
+			"TestConsent_AUserWrittenFileIsReadableOnThisPlatform",
+			"TestConsent_TheDecisionReportsWhetherOwnershipWasVerified",
+			"TestConsent_AWorldWritableFileIsStillRefusedOnUnix",
+		},
+		Fix: "merged in #34, 8e1b1d8: the check moves behind a build tag and reports " +
+			"whether it ran, via Decision.OwnershipChecked. The guard is behavioural rather " +
+			"than textual, because a row that only greps for the old expression passes the " +
+			"moment somebody rewrites it a different way",
 		Evidence: "8e1b1d8, 'Windows could never record a consent decision, and eviction was " +
 			"not an LRU'",
 	},
@@ -138,9 +144,12 @@ var defects = []Defect{
 			"a lane that spent 500 tokens for a 500,000-token overrun.",
 		Symptom: "With a frozen clock, evicting past the table's cap would drop an entry other " +
 			"than the least recently used one.",
-		Status:    StatusUnmerged,
-		StillHere: &Detector{File: "internal/proxy/guards.go", Text: "v.seen.Before(oldestSeen)"},
-		Fix: "origin/fix/consent-on-windows, 8e1b1d8: a monotonic touch counter, which has no " +
+		Status: StatusGuarded,
+		Guards: []string{
+			"TestSpendGuard_EvictsLeastRecentlyUsedWhenTheClockCannotSeparateRecords",
+			"TestSpendGuard_AStillActiveHeavySessionOutlivesIdleOnes",
+		},
+		Fix: "merged in #34, 8e1b1d8: a monotonic touch counter, which has no " +
 			"resolution to run out of; seen stays for attribution's staleness filter",
 		Evidence: "INCIDENTS.md 2026-09-06 FAKE GREEN: 'The defect was on every platform. The " +
 			"test could only fail on one of them.'",
@@ -399,12 +408,20 @@ func TestFrozenDefects_TheRegisterKeepsItsUnguardedRows(t *testing.T) {
 			unmerged++
 		}
 	}
-	if unmerged == 0 {
-		t.Error("no UNMERGED row. Two defects found on 2026-09-06 are fixed on branches that " +
-			"have not reached this tree, and both are still live here. A register that " +
-			"quietly loses them reports this tree as safer than it is, which is the " +
-			"direction every defect in this file failed in")
-	}
+	// There is deliberately no assertion that some row must be UNMERGED.
+	//
+	// This test used to require one, because when it was written two defects
+	// were fixed on branches that had not reached this tree and a register
+	// that quietly lost them would report the tree as safer than it was. Both
+	// fixes have since merged, and the assertion then failed for the best
+	// possible reason: there was nothing left unguarded.
+	//
+	// An assertion that pins a fact about the world on the day it was written,
+	// rather than a property that should always hold, goes red when the world
+	// improves. Every UNMERGED row is checked against its detector above,
+	// which is the property that actually protects the register, and it holds
+	// whether the count is two or zero.
+	_ = unmerged
 }
 
 // Every frozen guard in the tree has a row here, and vice versa.
