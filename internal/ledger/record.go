@@ -159,4 +159,9 @@ type CacheOutcome struct {
 	Expected int                   `json:"expected,omitempty"`
 	Deficit  int                   `json:"deficit,omitempty"`
 	Cause    cachemodel.BreakCause `json:"cause,omitempty"`
+	// CauseDetail names what actually changed, in words, for a person. It is
+	// deliberately free text and deliberately NOT a metrics label: Cause is
+	// emitted as replay_cache_break_total{cause=...} and must stay a bounded
+	// vocabulary, while this can name the thirty-four tools that arrived.
+	CauseDetail string `json:"cause_detail,omitempty"`
 }

@@ -628,7 +628,15 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		}
 		s.cfg.Logger.Printf("%s %s status=%d ms=%d session=%s model=%s %s%s", r.Method, r.URL.Path, rec.Status, rec.LatencyMS, short(rec.SessionID), rec.Model, usageSummary(rec.Response.Usage), note)
 		if rec.Cache != nil && rec.Cache.Deficit > 0 {
-			s.cfg.Logger.Printf("cache break session=%s: read %d of %d expected, %d tokens re-billed; likely cause: %s", short(rec.SessionID), rec.Response.Usage.CacheRead, rec.Cache.Expected, rec.Cache.Deficit, rec.Cache.Cause)
+			// The detail names what actually changed. It is omitted rather
+			// than printed empty: a bare "()" reads as a measurement that
+			// came back nothing, which is a different claim from one that was
+			// not taken.
+			detail := ""
+			if rec.Cache.CauseDetail != "" {
+				detail = " (" + rec.Cache.CauseDetail + ")"
+			}
+			s.cfg.Logger.Printf("cache break session=%s lane=%s: read %d of %d expected, %d tokens re-billed; likely cause: %s%s", short(rec.SessionID), laneName(rec.AgentID), rec.Response.Usage.CacheRead, rec.Cache.Expected, rec.Cache.Deficit, rec.Cache.Cause, detail)
 		}
 		if whatIf != "" {
 			s.cfg.Logger.Print(whatIf)

@@ -28,6 +28,11 @@ type laneState struct {
 	model string
 	// prefixHash is the lane's last prefix, used for the prefix-change cause.
 	prefixHash string
+	// tools and systemBytes are what that prefix was made of, kept so a
+	// change can be described rather than merely reported. Names and sizes
+	// only; no content.
+	tools       []transcript.ToolDef
+	systemBytes int
 	// seen is false until the lane's first request, so an opening request is
 	// classified as ReadFirst rather than measured against nothing.
 	seen bool
@@ -255,7 +260,7 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 		out = &ledger.CacheOutcome{Outcome: outcome.String(), Expected: expected}
 		if outcome == cachemodel.ReadBroken {
 			out.Deficit = expected - cur.CacheRead
-			out.Cause = s.breakCause(ln, rec, prefixChanged)
+			out.Cause, out.CauseDetail = s.breakCause(ln, rec, prefixChanged)
 			st.breaks++
 			s.breaksTotal++
 			s.breakCauses[out.Cause]++
@@ -265,6 +270,7 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 	// The session copies stay for the status endpoint and for LRU eviction;
 	// nothing is classified against them any more.
 	ln.last, ln.lastSeen, ln.model, ln.prefixHash, ln.seen = cur, rec.Timestamp, rec.Model, rec.PrefixHash, true
+	ln.tools, ln.systemBytes = rec.Prompt.Tools, rec.Prompt.SystemBytes
 	st.last, st.lastSeen, st.model, st.prefixHash = cur, rec.Timestamp, rec.Model, rec.PrefixHash
 	before := st.tally.CostUSD
 	st.tally.Add(cur, rec.Model)
@@ -425,15 +431,19 @@ func (s *stats) trialSession(sessionID string) (*policy.ContextEdit, time.Time, 
 // breakCause names a break from what the proxy can see. A changed prefix
 // is certain, since the proxy hashed both requests; the usage-and-timing
 // causes come next; the rest is left to the offline diff.
-func (s *stats) breakCause(ln *laneState, rec *ledger.Record, prefixChanged bool) cachemodel.BreakCause {
+func (s *stats) breakCause(ln *laneState, rec *ledger.Record, prefixChanged bool) (cachemodel.BreakCause, string) {
 	if prefixChanged {
-		return cachemodel.CausePrefixChange
+		// The request carries the tool list, so the specific answer is in
+		// hand. Reporting "system prompt or tool definitions changed" while
+		// holding it is the silence this codebase keeps finding.
+		d := diffPrefix(ln.tools, rec.Prompt.Tools, ln.systemBytes, rec.Prompt.SystemBytes)
+		return d.cause(), d.detail()
 	}
 	cause, ok := cachemodel.ClassifyBreak(ln.last, *rec.Response.Usage, ln.model, rec.Model, rec.Timestamp.Sub(ln.lastSeen))
 	if !ok {
-		return cachemodel.CauseUnknown
+		return cachemodel.CauseUnknown, ""
 	}
-	return cause
+	return cause, ""
 }
 
 // rescore adds the record to the session's analysis shape, simulates the
