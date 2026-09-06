@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -8,11 +9,19 @@ import (
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
+// nextToolUseID gives every fixture block a distinct id, because every real
+// tool_result carries one. Without it the fixtures shared the empty string,
+// so two genuinely different Reads of the same path looked like one block
+// matching itself - and the probe correctly refused to call that a re-read.
+var toolUseSeq int
+
 func toolResult(tool, path, body string) *transcript.Block {
+	toolUseSeq++
 	return &transcript.Block{
 		Kind: transcript.KindToolResult, ToolName: tool,
-		Label: "tool result: " + tool + " " + path,
-		Bytes: len(body), Text: body,
+		Label:     "tool result: " + tool + " " + path,
+		ToolUseID: fmt.Sprintf("tu_fixture_%d", toolUseSeq),
+		Bytes:     len(body), Text: body,
 	}
 }
 
