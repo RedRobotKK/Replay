@@ -698,6 +698,19 @@
         "TestBR3_BareReplayPointsAtTheOtherCommands"
       ],
       "note": "This mutation IS what shipped. The install line is `curl | sh` and the next thing typed is `replay`, which answered with a list of sixteen commands - `cost`, the one that reports money, eleventh. The binary already knew where the transcripts were: defaultTranscriptRoots found them unaided and `replay doctor` had been reporting on them from that path all along. The mutant restores the menu unconditionally, which also removes the report the command-pointer footer hangs under."
+    },
+    {
+      "id": "M52",
+      "name": "index-key-ignores-the-struct-shape",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "cmd/replay/cost.go",
+      "anchor": "\"replay.cost.v1/\"+cachemodel.PriceTableVersion+\"/\"+cachemodel.RulesVersion+\"/\"+unitSchema()",
+      "replacement": "\"replay.cost.v1/\"+cachemodel.PriceTableVersion+\"/\"+cachemodel.RulesVersion",
+      "killedBy": [
+        "TestCC8_AnIndexFromAnOlderShapeIsDiscarded"
+      ],
+      "note": "The mutation is what shipped for forty minutes. costUnit gained AvoidableTokens and the hand-written schema literal was not bumped, so every entry already on disk deserialized with the field absent: the same binary on the same machine printed 763k tokens warm and 31.4M cold, while the dollar column - already cached - agreed in both, implying $197 per million tokens, which is no model's price. costcache.go promised precisely this guarantee and did not deliver it: 'keyed on a schema string the caller derives from EVERYTHING the figure depends on'. The code version is part of everything. The key now derives from costUnit's own JSON tags, because a constant someone must remember to bump is the same defect with a comment on it."
     }
   ],
   "knownSurvivors": [

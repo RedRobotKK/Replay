@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
+	"strings"
 )
 
 // An index over transcripts already understood.
@@ -128,4 +131,39 @@ func (c *costCache) save() error {
 		return err
 	}
 	return os.Rename(tmp, c.path)
+}
+
+// unitSchema is the shape of the value this index stores, derived rather than
+// declared.
+//
+// The index was keyed on a hand-written "replay.cost.v1" plus the price and
+// rules versions. When costUnit gained AvoidableTokens the literal was not
+// bumped, so every entry already on disk deserialized with the new field
+// absent: the same binary printed 763k tokens on a warm run and 31.4M on a
+// cold one, with the dollar column - already cached - agreeing in both.
+//
+// A version constant someone must remember to bump is not a fix, it is the
+// same defect with a comment on it. Deriving the key from the struct's own
+// field names means adding, removing or renaming one invalidates the index
+// whether or not anyone remembered, which is the only version of this that
+// cannot rot.
+func unitSchema() string {
+	t := reflect.TypeOf(costUnit{})
+	names := make([]string, 0, t.NumField())
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		// The JSON tag, because that is what was actually serialized. A
+		// renamed Go field with an unchanged tag reads back fine and must not
+		// invalidate; a changed tag does not, and must.
+		tag := f.Tag.Get("json")
+		if c := strings.IndexByte(tag, ','); c >= 0 {
+			tag = tag[:c]
+		}
+		if tag == "" || tag == "-" {
+			tag = f.Name
+		}
+		names = append(names, tag)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ",")
 }

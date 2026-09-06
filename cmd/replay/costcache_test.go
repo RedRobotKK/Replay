@@ -147,3 +147,67 @@ func TestCC6_CorruptIndexIsAMiss(t *testing.T) {
 		t.Errorf("a corrupt index must degrade to a cold run, not an error: %v", err)
 	}
 }
+
+// CC-7: the index key changes when the cached STRUCT changes.
+//
+// This is the defect the red team found, and it shipped for forty minutes.
+// AvoidableTokens was added to costUnit and the schema literal stayed
+// "replay.cost.v1", so every entry already on disk deserialized with the new
+// field absent. The same binary on the same machine printed 763k tokens warm
+// and 31.4M cold - and the dollar column, which was already cached, agreed in
+// both. Two adjacent lines implied $197 per million tokens, which is no
+// model's price.
+//
+// costcache.go promised exactly this and did not deliver it: "keyed on the
+// file's identity AND on a schema string the caller derives from EVERYTHING
+// the figure depends on". The code version is part of everything.
+//
+// A constant someone must remember to bump is not a fix - it is the same
+// defect with a comment. The key now derives from the struct's own field
+// names, so adding, removing or renaming a field invalidates the index whether
+// or not anyone remembered.
+//
+// PASS: two different shapes produce two different keys.
+// FAIL: a key that ignores the shape, which serves yesterday's fields to
+// today's renderer.
+func TestCC7_SchemaKeyTracksTheStructShape(t *testing.T) {
+	got := unitSchema()
+	if got == "" {
+		t.Fatal("the schema key is empty, so it distinguishes nothing")
+	}
+	// Every field name must be represented: a key over a subset would miss
+	// exactly the field that was just added.
+	for _, f := range []string{"avoidableTokens", "costUsd", "requests", "breaks", "model"} {
+		if !contains(got, f) {
+			t.Errorf("the schema key omits %q, so adding it would not invalidate the index: %q",
+				f, got)
+		}
+	}
+}
+
+// CC-8: an index written before a field existed is not served.
+//
+// PASS: the older file is discarded whole.
+// FAIL: a hit, which is the bug: the dollar figure is right and the token
+// figure silently zero.
+func TestCC8_AnIndexFromAnOlderShapeIsDiscarded(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "a.jsonl")
+	touch(t, f, "{}\n", time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+	path := filepath.Join(dir, "idx.json")
+
+	// Written by a binary whose costUnit had a different shape.
+	old := newCostCache(path, "replay.cost.v1/prices/rules/OLDSHAPE")
+	old.put(f, costUnit{ID: "a", CostUSD: 1.5}, []string{"req_1"})
+	if err := old.save(); err != nil {
+		t.Fatal(err)
+	}
+
+	fresh := newCostCache(path, "replay.cost.v1/prices/rules/"+unitSchema())
+	if err := fresh.load(); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok := fresh.get(f); ok {
+		t.Error("served an entry written under a different struct shape")
+	}
+}

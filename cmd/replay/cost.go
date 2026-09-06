@@ -213,7 +213,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	// identity: a figure priced from a table that has since moved is a wrong
 	// number that arrives fast.
 	cache := newCostCache(filepath.Join(tipStateDir(), "cost-index.json"),
-		"replay.cost.v1/"+cachemodel.PriceTableVersion+"/"+cachemodel.RulesVersion)
+		"replay.cost.v1/"+cachemodel.PriceTableVersion+"/"+cachemodel.RulesVersion+"/"+unitSchema())
 	_ = cache.load()
 	var cold []string
 	var units []costUnit
