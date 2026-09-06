@@ -317,7 +317,7 @@ func TestDeepSeekStreamingSurfaces(t *testing.T) {
 
 			// The streamed response's size must survive. Zeroing it left the
 			// suite green before, because these surfaces asserted usage only.
-			if r.Blocks == nil || len(r.Blocks) == 0 {
+			if len(r.Blocks) == 0 {
 				t.Error("no blocks from the stream: the assistant text was " +
 					"accumulated to nothing and every byte-to-token fit " +
 					"downstream reads zero")

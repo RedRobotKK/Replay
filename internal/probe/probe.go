@@ -313,8 +313,8 @@ func (s *Search) Record(r Result) error {
 	}
 
 	// Repeats at one size must agree before the search acts on them.
-	got := append(s.answers[r.PrefixTokens], r.Wrote)
-	s.answers[r.PrefixTokens] = got
+	s.answers[r.PrefixTokens] = append(s.answers[r.PrefixTokens], r.Wrote)
+	got := s.answers[r.PrefixTokens]
 	for _, a := range got {
 		if a != got[0] {
 			// The same prefix cached once and not the next time. No single

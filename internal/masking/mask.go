@@ -15,7 +15,6 @@ import (
 // thinking is skipped whole in case its keys come in another order.
 var untouchedKeys = map[string]bool{"thinking": true, "signature": true, "data": true}
 
-// Masker applies the pattern set to request bodies.
 // placeholderStore is the vault seam.
 //
 // It exists so the FAILURE path is reachable from a test. Before it, the vault
@@ -32,6 +31,7 @@ type placeholderStore interface {
 // later restore report a denial for something that was never stored.
 const BlindPlaceholder = "[REDACTED_BY_PROXY_ERROR]"
 
+// Masker applies the pattern set to request bodies.
 type Masker struct {
 	patterns []Pattern
 	vault    placeholderStore
@@ -41,7 +41,6 @@ type Masker struct {
 	Entropy bool
 }
 
-// New builds a masker over the built-in patterns plus user patterns.
 // NewWithVault builds a masker over any placeholder store. Exists so the
 // vault-failure path can be exercised; production uses New.
 func NewWithVault(user []Pattern, v placeholderStore) *Masker {
@@ -50,6 +49,7 @@ func NewWithVault(user []Pattern, v placeholderStore) *Masker {
 	return m
 }
 
+// New builds a masker over the built-in patterns plus user patterns.
 func New(vault *Vault, user []Pattern) *Masker {
 	return &Masker{patterns: append(append([]Pattern(nil), Patterns...), user...), vault: vault}
 }

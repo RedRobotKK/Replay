@@ -2,8 +2,8 @@ package ledger
 
 import "github.com/RedRobotKK/Replay/internal/cachemodel"
 
-// Turning served requests into testimony about where a model's prompt cache
-// actually begins.
+// EvidenceFrom turns served requests into testimony about where a model's
+// prompt cache actually begins.
 //
 // This is the content behind the maintained rules feed. The compiled table
 // carries what a provider documents; this carries what the wire showed. A

@@ -73,11 +73,15 @@ type Turn struct {
 	Tools     []string
 }
 
+// Value is an OTLP attribute value in the JSON encoding. Exactly one field is
+// set per instance — String for the gen_ai.* string attributes, Int for the
+// token counts — matching the "oneof" shape the collector's schema expects.
 type Value struct {
 	String string `json:"stringValue,omitempty"`
 	Int    string `json:"intValue,omitempty"`
 }
 
+// Attr is one key/value pair in a Span's attribute list.
 type Attr struct {
 	Key   string `json:"key"`
 	Value Value  `json:"value"`
@@ -97,6 +101,8 @@ type Span struct {
 // Builder derives ids and keyed labels for one installation.
 type Builder struct{ key []byte }
 
+// New returns a Builder keyed by key. The key is what makes tag's hashes
+// confirmation-resistant off this machine; see tag for why that matters.
 func New(key string) *Builder { return &Builder{key: []byte(key)} }
 
 // tag is a keyed, truncated label.

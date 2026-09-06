@@ -297,7 +297,7 @@ func TestO7_ThisPackageCannotSend(t *testing.T) {
 						"file and prints its path; it must not be able to send one.", name, path)
 				}
 			}
-			ast.Inspect(file, func(n ast.Node) bool { return true })
+			ast.Inspect(file, func(_ ast.Node) bool { return true })
 		}
 	}
 	// The allowlist must be able to fail: if it admitted a transport, it would
