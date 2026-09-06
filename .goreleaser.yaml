@@ -17,7 +17,19 @@ builds:
     binary: replay
     env:
       - CGO_ENABLED=0
-    goos: [linux, darwin, windows]
+    # Windows is not built. It is not supported and has never been tested
+    # there: the CI job failed at `go vet` on a unix-tagged helper for as long
+    # as it existed, so the first Windows test run ever produced, on
+    # 2026-09-06, failed fourteen tests. The ones that matter assert Unix
+    # file-mode semantics guarding the ledger and the masking vault.
+    #
+    # v0.4.0 shipped Windows archives anyway, next to release notes saying
+    # Windows was unsupported. They were deleted after publication. A binary
+    # that runs while not keeping the promises its own tests check is worse
+    # than no binary, and shipping one under a note saying so is worse again.
+    #
+    # Restore this line when RELEASE-CRITERIA.md's platform gate is met.
+    goos: [linux, darwin]
     goarch: [amd64, arm64]
     flags:
       - -trimpath
@@ -33,6 +45,8 @@ archives:
     formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
+      # Kept deliberately while Windows is not built, so restoring the goos
+      # line above is the only edit needed. Dead config, not an oversight.
       - goos: windows
         formats: [zip]
     files:
