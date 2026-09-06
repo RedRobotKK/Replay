@@ -305,7 +305,9 @@ func TestX402_NoSigningCapability(t *testing.T) {
 		}
 		if info.IsDir() {
 			switch info.Name() {
-			case ".git", "node_modules", "dist", "bin":
+			// .claude holds agent worktrees: full copies of this repo, which
+			// would be walked as if they were source.
+			case ".git", ".claude", "node_modules", "dist", "bin":
 				return filepath.SkipDir
 			}
 			return nil
@@ -430,7 +432,9 @@ func TestX402_ExecIsConfinedToTheMutationHarness(t *testing.T) {
 		}
 		if info.IsDir() {
 			switch info.Name() {
-			case ".git", "node_modules", "dist", "bin":
+			// .claude holds agent worktrees: full copies of this repo, which
+			// would be walked as if they were source.
+			case ".git", ".claude", "node_modules", "dist", "bin":
 				return filepath.SkipDir
 			}
 			return nil

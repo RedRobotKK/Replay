@@ -100,12 +100,7 @@ func runDefault(stdout, stderr io.Writer) error {
 		// It matters more since the installer began pointing every new user
 		// at bare `replay` as their first command. On a machine that has
 		// never run Claude Code, this branch IS the first impression.
-		if home != "" {
-			fmt.Fprintf(stderr, "No transcripts found in %s\n",
-				filepath.Join(claudeConfigDir(home), "projects"))
-			fmt.Fprint(stderr, "Replay reads Claude Code sessions. If you use a different "+
-				"agent, replay serve proxies any of them.\n\n")
-		}
+		explainNoCorpus(home, stderr)
 		return printUsage(stdout)
 	}
 	if err := runCost(nil, stdout, stderr); err != nil {

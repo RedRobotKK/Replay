@@ -60,7 +60,10 @@ func TestOutboundSurfacesAreAllDocumented(t *testing.T) {
 		}
 		if info.IsDir() {
 			switch info.Name() {
-			case ".git", "node_modules", "dist", "bin", "testdata":
+			// .claude/worktrees holds git worktrees for parallel agents: full
+			// copies of this repo. Walking into one makes every package appear
+			// twice and fails this test with paths that are not source at all.
+			case ".git", ".claude", "node_modules", "dist", "bin", "testdata":
 				return filepath.SkipDir
 			}
 			return nil
