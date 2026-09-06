@@ -28,6 +28,9 @@ func withSeries(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	// os.UserHomeDir reads USERPROFILE on Windows, so HOME alone
+	// leaves the command pointed at the real home.
+	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	dir := filepath.Join(home, ".replay")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -128,6 +131,14 @@ func TestC2_ContributeHonoursARecordedRefusal(t *testing.T) {
 // PASS: refused, and the reason names the permissions.
 // FAIL: the file read as consent, or the error swallowed into a default.
 func TestC3_AWorldWritableConsentFileIsRefused(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// This asserts the ownership gate REFUSES. On Windows that gate does
+		// not run at all, by design: Go synthesises 0666 for every writable
+		// file, so a check on the mode bits refuses everything rather than
+		// the unsafe thing. The test passed there before only because every
+		// file tripped it, which is a pass that could not have failed.
+		t.Skip("no Unix mode bits on this platform; the ownership gate does not run")
+	}
 	home := withSeries(t)
 	path := writeConsent(t, home, "corpus_opt_in = true\n")
 	if err := os.Chmod(path, 0o666); err != nil {
@@ -268,6 +279,9 @@ func TestC5_TheContributorSecretIsStableAndOwnerOnly(t *testing.T) {
 func TestC6_ContributeRefusesWhenNothingWasMeasured(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	// os.UserHomeDir reads USERPROFILE on Windows, so HOME alone
+	// leaves the command pointed at the real home.
+	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	writeConsent(t, home, "corpus_opt_in = true\n")
 	out := t.TempDir()
