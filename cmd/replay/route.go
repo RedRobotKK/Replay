@@ -187,7 +187,14 @@ type routeReport struct {
 	// figure it is measured against is always carried beside it.
 	Observed *float64 `json:"observed_usd,omitempty"`
 	Dollars  *float64 `json:"projected_usd,omitempty"`
-	Notes    []string `json:"notes,omitempty"`
+	// Switch is what the move itself costs. Everything above is steady
+	// state and charges nothing for arriving: a cache entry is keyed per
+	// model, so the destination starts cold and rewrites the whole shared
+	// prefix at the write multiple before one read discount applies. Nil
+	// under the same rule as the dollar figures - no measured sigma, no
+	// number.
+	Switch *analysis.Switch `json:"switch,omitempty"`
+	Notes  []string         `json:"notes,omitempty"`
 }
 
 func buildRoute(from, to string, c modelCorpus) routeReport {
@@ -238,6 +245,16 @@ func buildRoute(from, to string, c modelCorpus) routeReport {
 			}
 			projected := cachemodel.CostUSD(scaled, pTo)
 			r.Observed, r.Dollars = &observed, &projected
+
+			// The prefix the destination has to write once before it reads
+			// anything: what the source was being served warm, per turn,
+			// counted by the destination's tokenizer.
+			if c.total > 0 {
+				prefix := scaleTokens(u.CacheRead/c.total, r.Dilation.Sigma)
+				cost := cachemodel.CostUSD(transcript.Usage{CacheCreation: prefix}, pTo)
+				sw := analysis.Payback(cost, observed, projected, c.total)
+				r.Switch = &sw
+			}
 		}
 	}
 	return r
@@ -278,6 +295,23 @@ func (r routeReport) write(w io.Writer) error {
 			p.printf("\nOver these turns %s cost $%.2f at list price. The same work on %s\n", r.From.Model, *r.Observed, r.To.Model)
 			p.printf("projects to $%.2f, which is $%.2f %s. Carrying sigma's +/-%.0f%%, so the\n", *r.Dollars, delta, verb, r.Dilation.RelativeError*100)
 			p.printf("figure is a bound to argue with, not an invoice.\n")
+		}
+		if sw := r.Switch; sw != nil {
+			p.printf("\nThe move itself costs $%.2f: %s starts with a cold cache and writes the\n", sw.CostUSD, r.To.Model)
+			p.printf("shared prefix again before it reads any of it.\n")
+			switch {
+			case !sw.PaysBack:
+				p.printf("It never earns that back, because %s is not cheaper per turn here.\n", r.To.Model)
+			case sw.WithinObserved:
+				p.printf("At $%.4f saved per turn it repays on turn %d, inside the %d turns\n",
+					sw.SavingPerTurnUSD, sw.PaybackTurns, r.Turns)
+				p.printf("measured. Switching is worth it for work this long or longer.\n")
+			default:
+				p.printf("At $%.4f saved per turn it repays on turn %d - beyond the %d turns\n",
+					sw.SavingPerTurnUSD, sw.PaybackTurns, r.Turns)
+				p.printf("measured here. Cheaper per turn and still the wrong move for sessions\n")
+				p.printf("this short, which is what a price-only comparison hides.\n")
+			}
 		}
 	} else {
 		p.printf("unmeasured\n")
