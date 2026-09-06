@@ -59,7 +59,7 @@ func shareCard(s costSummary, breaks int) string {
 
 	b.WriteString(line + "\n\n")
 	b.WriteString("  " + headline + "\n\n")
-	fmt.Fprintf(&b, "    sessions      %-8d  median task   $%.2f\n", s.Tasks, s.MedianUSD)
+	fmt.Fprintf(&b, "    transcripts   %-8d  median task   $%.2f\n", s.Tasks, s.MedianUSD)
 	fmt.Fprintf(&b, "    cache breaks  %-8d  p90 task      $%.2f\n", breaks, s.P90USD)
 	b.WriteString("\n")
 	b.WriteString("  Not a forecast of savings. Tokens already billed twice\n")
