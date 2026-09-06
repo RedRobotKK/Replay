@@ -561,6 +561,71 @@
         "TestQ5_RetryAfterIsCaptured"
       ],
       "note": "Every other quota header describes budget remaining. retry-after is the lockout itself - the provider saying the budget is gone and naming the wait. Dropping it leaves the only part of the story the user actually feels with no record."
+    },
+    {
+      "id": "M42",
+      "name": "quota-paired-within-session",
+      "class": "attribution-misplacement",
+      "discovered": "2026-09-06",
+      "file": "internal/quota/quota.go",
+      "anchor": "\t\treturn ordered[i].Timestamp.Before(ordered[j].Timestamp)",
+      "replacement": "\t\tif ordered[i].SessionID != ordered[j].SessionID {\n\t\t\treturn ordered[i].SessionID < ordered[j].SessionID\n\t\t}\n\t\treturn ordered[i].Timestamp.Before(ordered[j].Timestamp)",
+      "killedBy": [
+        "TestQT2_PairingIsGlobalNotPerSession"
+      ],
+      "note": "A rate limit is charged against the account, not the conversation. Pairing within a session absorbs whatever other lanes spent in between, and the error is largest under fan-out - exactly the workload the answer is about."
+    },
+    {
+      "id": "M43",
+      "name": "quota-reset-becomes-a-sample",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "internal/quota/quota.go",
+      "anchor": "\t\t\tcase d > 0:",
+      "replacement": "\t\t\tcase true:",
+      "killedBy": [
+        "TestQT3_AResetBreaksTheChain"
+      ],
+      "note": "When the window resets the counter rises. Pairing across it puts a whole window's budget into the middle of a median as a single negative or enormous sample."
+    },
+    {
+      "id": "M44",
+      "name": "quota-chain-survives-a-missing-reading",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "internal/quota/quota.go",
+      "anchor": "\t\t\thavePrev = false\n\t\t\tcontinue",
+      "replacement": "\t\t\tcontinue",
+      "killedBy": [
+        "TestQT4_AMissingReadingBreaksTheChain"
+      ],
+      "note": "A response with no quota header must end the chain. Without it the next delta spans two requests and every affected sample is silently doubled."
+    },
+    {
+      "id": "M45",
+      "name": "quota-ratio-without-minimum-evidence",
+      "class": "evidence",
+      "discovered": "2026-09-06",
+      "file": "internal/quota/quota.go",
+      "anchor": "const MinPerArm = 20",
+      "replacement": "const MinPerArm = 0",
+      "killedBy": [
+        "TestQT7_ThinEvidenceOnBothArmsStillRefuses"
+      ],
+      "note": "Frozen because it SURVIVED the first mutation run. QT-5 supplied writes only, so Compare refused on the divide-by-zero branch and the minimum-evidence guard was never exercised - the guard standing between a three-sample fluke and '12.5x confirmed' being repeated as settled. QT-7 was written for it and asserts its own fixture populates both arms first."
+    },
+    {
+      "id": "M46",
+      "name": "quota-ratio-hardcoded-to-the-bill",
+      "class": "provenance",
+      "discovered": "2026-09-06",
+      "file": "internal/quota/quota.go",
+      "anchor": "\t\tc.Ratio = c.WriteMedian / c.ReadMedian",
+      "replacement": "\t\tc.Ratio = 12.5",
+      "killedBy": [
+        "TestQT6_ReportsTheMeasuredRatio"
+      ],
+      "note": "Returns the BILLING multiple (1.25/0.1) as though it were the measured quota multiple. The entire question is whether the subscription limit behaves like the bill; answering it with the bill is the assumption dressed as the finding."
     }
   ],
   "knownSurvivors": [
