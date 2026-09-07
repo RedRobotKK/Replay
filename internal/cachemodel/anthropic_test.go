@@ -99,10 +99,14 @@ func TestModelTable(t *testing.T) {
 	if _, ok := PriceFor("some-unknown-model"); ok {
 		t.Fatal("unknown models must have no price")
 	}
-	if _, ok := PriceFor("claude-opus-4-5"); ok {
+	// A family row with a caching floor and no list price. opus-4-5 stood here
+	// until 2026-09-07, when the provider's page was read and it gained one;
+	// the invariant still needs an example, so it uses a row that genuinely
+	// has no price rather than one that used to.
+	if _, ok := PriceFor("claude-haiku-9-9"); ok {
 		t.Fatal("a model with a caching floor but no list price must not be priced")
 	}
-	if ReadMultiplierFor("claude-opus-4-5") != ReadMultiplier || ReadMultiplierFor("claude-fable-5-1") != readMultiplierNewest {
+	if ReadMultiplierFor("claude-haiku-9-9") != ReadMultiplier || ReadMultiplierFor("claude-fable-5-1") != readMultiplierNewest {
 		t.Fatal("read multiples wrong")
 	}
 }
@@ -187,6 +191,43 @@ func TestForeignModelIDsAreNotPricedByTheAnthropicTable(t *testing.T) {
 		if got := EffectiveTokens(openAIShaped, id); got > 1000 {
 			t.Errorf("EffectiveTokens(%q) = %.0f from a 1,000 token prompt: the cached "+
 				"share was added to a total that already contained it", id, got)
+		}
+	}
+}
+
+// Models the table used to decline to price, read from the provider's own page
+// on 2026-09-07 rather than inferred from a second observer.
+func TestPricesReadFromTheProviderPage20260907(t *testing.T) {
+	for _, c := range []struct {
+		id            string
+		input, output float64
+	}{
+		{"claude-opus-4-5", 5, 25},
+		{"claude-sonnet-4-5", 3, 15},
+		{"claude-sonnet-4", 3, 15},
+		{"claude-opus-4-1", 15, 75},
+		{"claude-3-5-haiku", 0.80, 4},
+	} {
+		r := lookup(c.id)
+		if !r.priced {
+			t.Errorf("%s is unpriced; the page lists it", c.id)
+			continue
+		}
+		if r.price.InputPerMTok != c.input || r.price.OutputPerMTok != c.output {
+			t.Errorf("%s = $%g/$%g, page says $%g/$%g",
+				c.id, r.price.InputPerMTok, r.price.OutputPerMTok, c.input, c.output)
+		}
+	}
+	// The read multiple is 0.1x everywhere except the Fable and Mythos 5.1
+	// tier, which the page footnotes at 0.025x.
+	for _, id := range []string{"claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5", "claude-3-5-haiku"} {
+		if got := ReadMultiplierFor(id); got != 0.10 {
+			t.Errorf("%s read multiple = %g, want 0.10", id, got)
+		}
+	}
+	for _, id := range []string{"claude-fable-5-1", "claude-mythos-5-1"} {
+		if got := ReadMultiplierFor(id); got != 0.025 {
+			t.Errorf("%s read multiple = %g, want 0.025", id, got)
 		}
 	}
 }

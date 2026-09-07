@@ -24,20 +24,39 @@ import (
 // Conflating them would mean bumping fetchedAt on a LiteLLM check, which
 // claims a source that was not read.
 
+// staleNow is a clock far enough past PriceTableVersion that the table is old
+// whatever the constant says today.
+//
+// These tests pinned it to a literal date, which meant they measured the
+// constant rather than the age note and went red the day the table was
+// refreshed past that literal. Deriving it keeps them testing the function.
+func staleNow(t *testing.T) time.Time {
+	t.Helper()
+	table, err := time.Parse("2006-01-02", PriceTableVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return table.AddDate(0, 0, PriceTableStaleDays+15)
+}
+
 // C1: the age note distinguishes stale-and-unverified from old-but-checked.
 //
 // PASS: an old table with a recent check reports the check; an old table with
 // no check keeps the original warning.
 // FAIL: the two cases print the same thing, which is what one date forces.
 func TestC1_AnOldTableThatWasCheckedSaysSo(t *testing.T) {
-	now := time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
+	// Far enough past PriceTableVersion that the table is old whatever the
+	// constant currently says. Pinning this to a fixed date meant the test
+	// broke the day the table was refreshed past it, which measured the
+	// constant rather than the age note.
+	now := staleNow(t)
 
 	unchecked := PriceTableAgeNoteAt(now, "")
 	if !strings.Contains(unchecked, "days old") {
 		t.Errorf("an unverified old table must still warn: %q", unchecked)
 	}
 
-	checked := PriceTableAgeNoteAt(now, "2026-09-06")
+	checked := PriceTableAgeNoteAt(now, now.Format("2006-01-02"))
 	if checked == unchecked {
 		t.Fatal("a table verified today reads identically to one nobody has looked at since June")
 	}
@@ -58,8 +77,8 @@ func TestC1_AnOldTableThatWasCheckedSaysSo(t *testing.T) {
 // PASS: an old check warns like no check at all.
 // FAIL: any past date suppressing the warning.
 func TestC2_AStaleCheckDoesNotSuppressTheWarning(t *testing.T) {
-	now := time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
-	old := PriceTableAgeNoteAt(now, "2026-05-01")
+	now := staleNow(t)
+	old := PriceTableAgeNoteAt(now, now.AddDate(0, 0, -120).Format("2006-01-02"))
 	if !strings.Contains(old, "days old") {
 		t.Errorf("a check from four months ago suppressed the warning: %q", old)
 	}
@@ -71,7 +90,7 @@ func TestC2_AStaleCheckDoesNotSuppressTheWarning(t *testing.T) {
 // FAIL: an unparseable date silencing the notice — the failure direction that
 // hides staleness rather than over-reporting it.
 func TestC3_AMalformedCheckIsTreatedAsNoCheck(t *testing.T) {
-	now := time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
+	now := staleNow(t)
 	for _, bad := range []string{"soon", "2026-13-45", "26-09-06", " "} {
 		if got := PriceTableAgeNoteAt(now, bad); !strings.Contains(got, "days old") {
 			t.Errorf("checkedAt %q suppressed the staleness warning: %q", bad, got)
