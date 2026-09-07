@@ -70,7 +70,7 @@ func TestOT2_AttributesAreAFrozenAllowlist(t *testing.T) {
 	want := []string{
 		"gen_ai.system", "gen_ai.operation.name", "gen_ai.request.model",
 		"gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens",
-		"replay.cache.read_tokens", "replay.cache.write_tokens",
+		"gen_ai.usage.cache_read.input_tokens", "gen_ai.usage.cache_write.input_tokens",
 		"replay.cache.outcome", "replay.cache.prefix_id", "replay.calibration.tier",
 	}
 	for _, k := range want {
@@ -203,6 +203,54 @@ func TestOT6_ThisPackageCannotSend(t *testing.T) {
 	for _, banned := range []string{`"net/http"`, `"net"`, `"net/url"`, `net.Dial`} {
 		if strings.Contains(string(src), banned) {
 			t.Errorf("the exporter imports %s; it writes a file and must not be able to send", banned)
+		}
+	}
+}
+
+// Cache tokens use the convention's names, and input_tokens includes them.
+//
+// The GenAI semantic conventions specified cache accounting on 2026-08-20
+// (semantic-conventions-genai PR #440): gen_ai.usage.cache_read.input_tokens
+// and gen_ai.usage.cache_write.input_tokens, both experimental, and both
+// defined as SUBSETS of gen_ai.usage.input_tokens.
+//
+// That subset rule is the trap. This engine reads the Anthropic wire, where
+// cache_read_input_tokens and cache_creation_input_tokens are DISJOINT from
+// input_tokens, so emitting the field straight through would report an input
+// total that omits every cached token. The two models disagree and the
+// convention has to win, because the whole point of a convention is that a
+// reader can add up figures from two vendors.
+func TestOTLPCacheUsesTheConventionAndInputIncludesIt(t *testing.T) {
+	b := &Builder{}
+	sp := b.Turn(Turn{Model: "claude-opus-5", InputTokens: 1000, OutputTokens: 50,
+		CacheRead: 4000, CacheWrite: 500, Outcome: "reproduced", Tier: "measured"})
+
+	got := map[string]string{}
+	for _, a := range sp.Attributes {
+		v := a.Value.String
+		if a.Value.Int != "" {
+			v = a.Value.Int
+		}
+		got[a.Key] = v
+	}
+	if got["gen_ai.usage.cache_read.input_tokens"] != "4000" {
+		t.Errorf("cache read is not on the convention attribute: %v", got)
+	}
+	if got["gen_ai.usage.cache_write.input_tokens"] != "500" {
+		t.Errorf("cache write is not on the convention attribute: %v", got)
+	}
+	// 1000 uncached + 4000 read + 500 written. The convention's input total is
+	// everything the prompt was made of, not the part that missed the cache.
+	if got["gen_ai.usage.input_tokens"] != "5500" {
+		t.Errorf("input_tokens = %q, want 5500: the convention says cache tokens are "+
+			"included in it, and Anthropic reports them disjoint, so the sum has to be "+
+			"made here or every cached token vanishes from the total",
+			got["gen_ai.usage.input_tokens"])
+	}
+	for _, dead := range []string{"replay.cache.read_tokens", "replay.cache.write_tokens"} {
+		if _, ok := got[dead]; ok {
+			t.Errorf("%s is still emitted; a private name for a specified attribute "+
+				"splits the ecosystem for no gain", dead)
 		}
 	}
 }

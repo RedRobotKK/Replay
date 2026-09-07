@@ -140,12 +140,21 @@ func (b *Builder) Turn(t Turn) Span {
 			{Key: "gen_ai.system", Value: Value{String: "anthropic"}},
 			{Key: "gen_ai.operation.name", Value: Value{String: "chat"}},
 			{Key: "gen_ai.request.model", Value: Value{String: t.Model}},
-			{Key: "gen_ai.usage.input_tokens", Value: Value{Int: itoa(t.InputTokens)}},
+			// The convention's input total INCLUDES the cached tokens, and the
+			// Anthropic wire reports them disjoint from input_tokens, so the
+			// sum is made here. Emitting the wire field straight through would
+			// report a prompt total with every cached token missing from it,
+			// which on this corpus is most of the prompt.
+			{Key: "gen_ai.usage.input_tokens",
+				Value: Value{Int: itoa(t.InputTokens + t.CacheRead + t.CacheWrite)}},
 			{Key: "gen_ai.usage.output_tokens", Value: Value{Int: itoa(t.OutputTokens)}},
-			// No GenAI convention covers cache economics, so these are
-			// replay.* rather than a convention name they do not have.
-			{Key: "replay.cache.read_tokens", Value: Value{Int: itoa(t.CacheRead)}},
-			{Key: "replay.cache.write_tokens", Value: Value{Int: itoa(t.CacheWrite)}},
+			// Specified 2026-08-20 in semantic-conventions-genai PR #440, at
+			// experimental stability. An earlier version of this file said no
+			// convention covered cache economics and used replay.* names; that
+			// was true when written and is not now. A private name for a
+			// specified attribute splits the ecosystem for no gain.
+			{Key: "gen_ai.usage.cache_read.input_tokens", Value: Value{Int: itoa(t.CacheRead)}},
+			{Key: "gen_ai.usage.cache_write.input_tokens", Value: Value{Int: itoa(t.CacheWrite)}},
 			{Key: "replay.cache.outcome", Value: Value{String: t.Outcome}},
 			{Key: "replay.cache.prefix_id", Value: Value{String: b.tag("prefix", t.PrefixHash)[:16]}},
 			{Key: "replay.calibration.tier", Value: Value{String: t.Tier}},
