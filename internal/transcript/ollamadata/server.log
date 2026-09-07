@@ -1,0 +1,18 @@
+time=2026-09-02T13:00:01.000Z level=INFO source=server.go:1 msg="starting llama server" model=registry.ollama.ai/library/qwen2.5-coder:7b
+slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+slot update_slots: id  0 | task 0 | n_past was set to 116
+slot print_timing: id  0 | task 0 | prompt eval time =    4601.48 ms /   838 tokens (    5.49 ms per token,   182.12 tokens per second)
+slot print_timing: id  0 | task 0 |        eval time =    4699.52 ms /    93 tokens (   50.53 ms per token,    19.79 tokens per second)
+slot print_timing: id  0 | task 0 |       total time =    9301.01 ms /   931 tokens
+slot      release: id  0 | task 0 | stop processing: n_tokens = 930, truncated = 0
+time=2026-09-02T13:05:00.000Z level=INFO source=server.go:1 msg="starting llama server" model=registry.ollama.ai/library/llama3:latest
+slot launch_slot_: id  0 | task 1 | processing task, is_child = 0
+slot update_slots: id  0 | task 1 | n_past was set to 657
+slot print_timing: id  0 | task 1 | prompt eval time =     120.00 ms /    12 tokens (   10.00 ms per token,   100.00 tokens per second)
+slot print_timing: id  0 | task 1 |        eval time =    1000.00 ms /    40 tokens (   25.00 ms per token,    40.00 tokens per second)
+slot print_timing: id  0 | task 1 |       total time =    1120.00 ms /    52 tokens
+time=2026-09-02T13:09:00.000Z level=INFO source=server.go:1 msg="starting llama server" model=registry.ollama.ai/library/mistral:latest
+slot launch_slot_: id  0 | task 2 | processing task, is_child = 0
+slot update_slots: id  0 | task 2 | n_past was set to 400
+slot print_timing: id  0 | task 2 | prompt eval time =     900.00 ms /    77 tokens (   11.69 ms per token,    85.56 tokens per second)
+slot print_timing: id  0 | task 2 |       total time =     900.00 ms /    77 tokens
