@@ -1,6 +1,6 @@
 # 0005. License the project under Apache 2.0
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-0016](0016-business-source-license.md)
 **Date:** 2026-09-02
 
 ## Context

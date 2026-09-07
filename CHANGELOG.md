@@ -4,16 +4,156 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-07
+
+The first release with an interactive surface, the first carrying a fix somebody
+outside the project reported, and the first under a new licence.
+
+### Changed — licence
+
+- **Replay is now under the Business Source License 1.1**, converting to Apache
+  2.0 on 2029-09-06 ([ADR-0016](docs/adr/0016-business-source-license.md)).
+  Running it inside your own organisation stays free and unrestricted —
+  commercially, in production, in CI, modified for internal use, and its output
+  is yours for any purpose. The one thing the grant withholds is reselling
+  Replay itself as a hosted service or embedding it in a product sold on its
+  analysis. **v0.4.0 and everything before it remain Apache 2.0 permanently**;
+  a licence binds a version, not a project. Under the OSI definition this
+  project is no longer open source, it is source-available, and the README no
+  longer claims otherwise. The name is now reserved explicitly in NOTICE: a
+  fork may take the code, not the name.
+
 ### Added
 
-- **A frozen-defect harness** (`internal/regression`): one register entry per defect this project has found, each carrying what it looked like from outside and what would be true again if it returned. Six of the nine are guarded by a test that has been made to fail on purpose; three are recorded as still live in this tree, because their fixes are on branches that have not merged here, and each of those names a fragment of the defective code that must still be findable — so the row goes red the day the fix lands and asks to be promoted, rather than outliving its subject. Eighteen new mutants are frozen in `internal/mutation/testdata/mutants.json` so the score is reproducible instead of a number in a commit message.
+- **`replay tui`**, a question-first surface. Eight questions, one keystroke
+  each, and every screen prints the command that produced it so a reader can
+  copy the line and stop needing the screen. Three screens read this machine
+  (`doctor`, `cost`, and `why` once a session is chosen); the rest say
+  `example data` above their figures rather than letting anyone take them for
+  their own. Row selection with `j`/`k`, `H`/`G` and enter, a `?` overlay
+  carrying the full vocabulary, and a footer of three keys rather than a wall
+  of them. Piped output is plain lines with no escape sequences.
+- **Corpus discovery searches everywhere it might be**, returns every root
+  holding transcripts rather than the first, and honours `REPLAY_TRANSCRIPTS`.
+  A user with sessions in two places was previously reported on one of them,
+  which is worse than no total because it is wrong and looks right. When
+  nothing is found it names every path it searched and tells apart a machine
+  that never ran the agent from one that has run it and recorded nothing.
+- **A frozen-defect harness** (`internal/regression`): one register entry per
+  defect this project has found, each carrying what it looked like from outside
+  and what would be true again if it returned. Eighteen new mutants are frozen
+  in `internal/mutation/testdata/mutants.json` so the score is reproducible
+  rather than a number in a commit message.
+- **`replay codex` reads OpenAI Codex rollout logs**, the first surface beyond
+  Claude Code. Codex writes two token counters and they are not the same
+  quantity: `last_token_usage` is the per-turn delta and `total_token_usage` is
+  a running total that Codex **rebases when the context compacts**. Summing the
+  deltas is what was paid for; reading the running total is what is still in
+  context. Measured across 148 local rollouts the two agree on 146 and diverge
+  on exactly the 2 that compacted — 610,551,532 tokens billed against
+  401,450,788 reported, so 34% of the spend is invisible to the client's own
+  counter. Both figures are kept and named rather than reconciled into one.
+  Discovery searches `sessions/` **and** `archived_sessions/`, which on the
+  machine this was built against is 148 files rather than 27.
+- **The Codex rate-limit signal is now readable.** Every session opens with a
+  `token_count` event whose `info` is null, because nothing has been spent yet,
+  and which carries `rate_limits` instead: used-percent over a five-hour and a
+  seven-day window, each with a reset time. Refusing that record as malformed
+  costs the only live quota signal this project has found in any client. The
+  Anthropic surface reports utilization on the wire only, and a titration moved
+  3.09M tokens through it for zero counter movement; the Grok CLI's
+  `x-ratelimit-*` headers did not shift once across 8 calls and 940KB. This one
+  moves, and it needs no proxy. How heavily a cached read weighs against it is
+  measured as far below one and no further: the corpus fits four weightings
+  equally well and cannot separate them.
+- **A surface registry** where a support claim cannot outrun its evidence.
+  `LIVE` requires a captured fixture on disk, so a surface cannot be promoted by
+  editing a string.
 
 ### Fixed
 
-- **Grok is no longer filed under the OpenAI-compatible wire.** A source comment, this changelog and the multi-provider document all grouped it with Cursor, DeepSeek and OpenAI on `/v1/chat/completions`, on an assumption about what such a CLI must send. Captured off a live session it posts to `/responses` at `cli-chat-proxy.grok.com`, which this build forwards and does not parse — so the grouping promised a user a report that comes back empty.
-- **`docs/SURFACES.md` said Windows was built** and named goreleaser as producing the target, after the `goos` line had already dropped it. The document and `.goreleaser.yaml` are now checked against each other in both directions.
-- **`isolateHome` sets `USERPROFILE` as well as `HOME`.** `os.UserHomeDir` reads `USERPROFILE` on Windows, so tests built on that helper ran against the runner's real home and failed as though the product were broken.
-- **golangci-lint reports every issue it finds.** The default `max-same-issues: 3` and `max-issues-per-linter: 50` are display caps, not filters: the run always failed on everything it found, but the backlog was tracked at 38 issues when there were 119.
+- **`--check-prices` never compared the cache-read price it parsed.** Reported
+  by [@roy-tong](https://github.com/roy-tong) in #54 with an exact diagnosis:
+  the field was read from the price database and had no other use anywhere in
+  the repository, tests included. "No disagreement" was therefore silent on the
+  field this cost model leans on hardest. Following the same gap one field
+  sideways found the cache-write multiplier equally unchecked and larger: a
+  cached read costs 0.1x input where a write costs 1.25x. Both are compared now,
+  and a field the other database does not carry is recorded as absent rather
+  than compared against zero.
+- **A Windows user could not record a consent decision at all.** The gate read
+  Unix permission bits; Windows has none and Go synthesises `0666` for any
+  writable file, so every consent file a user had just written was refused,
+  citing permissions that do not exist there. No corpus opt-in, no update
+  consent, silently. `Decision.OwnershipChecked` now reports whether the check
+  could run, so "verified as this user's" stays distinguishable from "not
+  verifiable here".
+- **Spend eviction was not least-recently-used.** It broke ties by wall-clock
+  timestamp, which is an LRU only if the clock can separate two records. Under a
+  burst on a coarse clock it became evict-anything, and the entry it dropped
+  could be the heavy, still-active session whose spend is the reason attribution
+  exists. Now keyed on a monotonic counter.
+- **A routing error band was describing the estimator, not the corpus.**
+  Comparing a model against itself returned a ratio of exactly 1.0 with a band
+  of ±85%, which a quantity known to be exactly 1 cannot honestly carry. The
+  band was a turn-weighted mean of per-session errors, and a mean does not
+  shrink with sample size, so no amount of corpus could ever sharpen it. Work
+  deferred on "we need more data for sigma" was deferred for a reason that was
+  never true.
+- **The ledger read in filename order rather than write order.** `Glob` sorts by
+  name, so a session whose records landed in two files came back in the wrong
+  sequence, and every test asserting "the first record carries the policy"
+  passed on which filename happened to sort first.
+- **golangci-lint reports every issue it finds.** The default `max-same-issues:
+  3` and `max-issues-per-linter: 50` are display caps, not filters: the run
+  always failed on everything it found, and everyone reading the output saw 38
+  issues where there were 119.
+- **Grok is no longer filed under the OpenAI-compatible wire.** It posts to
+  `/responses` at `cli-chat-proxy.grok.com`, not `/v1/chat/completions` at
+  `api.x.ai`, and nothing in this build parses that path. It is `FORWARDED`, on
+  its own row, with the capture behind it.
+- **`isolateHome` sets `USERPROFILE` as well as `HOME`.** `os.UserHomeDir` reads
+  `USERPROFILE` on Windows, so tests built on that helper ran against the
+  runner's own home and failed on empty output: a harness bug wearing a product
+  bug's clothes for as long as the job stayed red.
+- **`docs/SURFACES.md` said Windows was built** after the `goos` line had
+  already dropped it.
+- **Every TUI screen displayed `v0.4.0` as a string literal.** The version is
+  injected at link time precisely so it cannot drift, and no screen read it, so
+  a 0.5.0 binary would have reported 0.4.0 on every screen it drew. The header
+  padding was also derived from the literal's width, so any other version would
+  have sheared the right edge of every header at once.
+- **The surface wrote cursor addressing into pipes.** `enter` and `leave`
+  already refused to emit alternate-screen sequences when the terminal had not
+  taken raw mode, with a comment naming the failure exactly — "writing escape
+  sequences into a pipe produces a file full of control codes". The per-frame
+  paint did not share the gate, so redirecting `replay tui` to a file, a pager,
+  or an agent reading on someone's behalf wrapped every line in control codes.
+- **A test asserting that every screen leads with a figure had never once
+  exercised a screen.** It scanned the first four rows for a digit, and row zero
+  was the header carrying `v0.4.0` — so every screen passed on the version
+  number in its own title bar. Removing the hardcoded version is what exposed
+  it. The window now skips the header, and the one screen that genuinely opened
+  without a figure was fixed rather than the test loosened.
+
+### Changed
+
+- **The context report says when its estimate borrowed a constant.** A session
+  that fitted its own turns measures its own ratio; one with no fittable turn
+  falls back to an English prose average, and both used to print the same
+  footnote. At 2.29 bytes per character for Japanese against roughly 1.0 for
+  ASCII, that is a difference worth stating.
+- **Two conservation laws run in CI.** Every token the provider billed lands in
+  exactly one named bucket, and the same holds inside each agent lane. Three of
+  the eleven mutations written against them passed the pre-existing suite.
+
+### Known limits
+
+- Windows is still not supported. The job passes and that is not the same thing:
+  `Decision.OwnershipChecked` is false there, and the tests asserting Unix mode
+  semantics skip with the reason stated. Skipping honestly is not passing.
+- Five of the eight TUI screens carry example data and say so. `guards`, `model`
+  and `safe` need a running proxy or are limited by the estimator floor above.
 
 ## [0.4.0] - 2026-09-06
 

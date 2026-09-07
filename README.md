@@ -155,7 +155,10 @@ worth declaring.
   WaitForMcpServers.* That break cost 157,080 tokens.
 - **Sessions that spawn subagents are measured per lane**, and a report covering one lane says so
   rather than calling itself complete.
-- **Apache 2.0**, no dependencies. `go.mod` is three lines.
+- **Business Source License 1.1**, no dependencies. `go.mod` is three lines.
+  Free for any use inside your own organisation, including commercially and in
+  production; converts to Apache 2.0 on 2029-09-06. Selling Replay itself as a
+  service is the one thing it does not permit.
 
 ## How far to trust it
 
@@ -270,4 +273,6 @@ measurements behind it are real API spend.
 
 ## License
 
-Apache 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Business Source License 1.1, converting to Apache 2.0 on 2029-09-06. Running it
+at work is free and unrestricted; reselling it as a hosted service is not. See
+[LICENSE](LICENSE), [NOTICE](NOTICE) and [ADR-0016](docs/adr/0016-business-source-license.md).

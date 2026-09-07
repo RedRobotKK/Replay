@@ -183,9 +183,9 @@ fi
 group "4. Licence and distribution"
 
 for f in LICENSE NOTICE CLA.md CONTRIBUTING.md CITATION.cff; do
-  [ -f "$f" ] && ok "$f" || bad "$f missing" "Apache 2.0 s4 requires LICENSE and NOTICE to ship with the binary"
+  [ -f "$f" ] && ok "$f" || bad "$f missing" "BUSL 1.1 requires the licence to be displayed on every copy of the work"
 done
-grep -q "Apache-2.0" CITATION.cff 2>/dev/null \
+grep -q "BUSL-1.1" CITATION.cff 2>/dev/null \
   && ok "CITATION.cff agrees with LICENSE" \
   || warn "CITATION.cff licence field" "must not disagree with LICENSE"
 

@@ -82,7 +82,7 @@ func LiveScenes() []LiveScene {
 			Name: "idle, listening",
 			Render: func(tick int) []string {
 				return append([]string{
-					"  replay serve                                                    v0.4.0", "",
+					header("serve"), "",
 					stat("listening", "127.0.0.1:4000", "waiting", Heartbeat(tick)),
 					note2("upstream", "api.anthropic.com", ""),
 					"", "  traffic",
@@ -95,7 +95,7 @@ func LiveScenes() []LiveScene {
 			Name: "a request in flight",
 			Render: func(tick int) []string {
 				return append([]string{
-					"  replay serve                                                    v0.4.0", "",
+					header("serve"), "",
 					stat("listening", "127.0.0.1:4000", "active", Heartbeat(tick)),
 					Awaiting("this turn", tick),
 					"", "  traffic",

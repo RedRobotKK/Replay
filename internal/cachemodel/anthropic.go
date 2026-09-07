@@ -145,6 +145,10 @@ var modelTable = []modelRow{
 	{"sonnet-5", minPrefixStandard, Price{2, 10, ReadMultiplier}, true},
 	{"sonnet-4-6", minPrefixStandard, Price{3, 15, ReadMultiplier}, true},
 	{"sonnet", minPrefixStandard, Price{}, false},
+	// Haiku 3.5 floors at 2048, not the 1024 the bare haiku row would give it.
+	// A prefix under the floor does not cache, silently, so a wrong floor here
+	// recommends caching something that cannot be cached.
+	{"3-5-haiku", minPrefixOpus47, Price{}, false},
 	{"opus-4", minPrefixStandard, Price{}, false},
 	{"haiku", minPrefixStandard, Price{}, false},
 }
@@ -163,6 +167,28 @@ var modelTable = []modelRow{
 // cache read costs understates the benefit of keeping the cache, which is the
 // claim this tool would otherwise be making on its own behalf.
 var unknownModel = modelRow{minPrefix: minPrefixStandard, price: Price{ReadMult: readMultiplierNewest}}
+
+// anthropicFamilies are the names this table is allowed to answer for.
+//
+// lookup matches by substring and has no provider dimension, so without this
+// an OpenAI or Gemini id reaches unknownModel and comes back carrying a cache
+// read multiple. The multiple is not the problem; the arithmetic behind it is.
+// EffectiveTokens adds CacheRead to Input because on the Anthropic wire they
+// are disjoint, and on every other surface measured the cached tokens are a
+// share of the input and are already in it. Applying one provider's shape to
+// another's record counts the cached share twice and labels it measured.
+var anthropicFamilies = []string{"claude", "opus", "sonnet", "haiku", "fable", "mythos"}
+
+// foreignModel reports that this id belongs to no family this table prices.
+func foreignModel(model string) bool {
+	m := strings.ToLower(model)
+	for _, f := range anthropicFamilies {
+		if strings.Contains(m, f) {
+			return false
+		}
+	}
+	return m != ""
+}
 
 func lookup(model string) modelRow {
 	m := strings.ToLower(model)
@@ -332,6 +358,12 @@ func writeEquivalent(u transcript.Usage) float64 {
 // model's read multiplier. It is a relative measure for comparing layouts,
 // not a bill.
 func EffectiveTokens(u transcript.Usage, model string) float64 {
+	if foreignModel(model) {
+		// No cache arithmetic, because this table does not know which one
+		// applies. Returning the input alone is short rather than wrong, and
+		// the caller can tell it is unpriced from the same lookup.
+		return float64(u.Input)
+	}
 	return float64(u.Input) + writeEquivalent(u) + float64(u.CacheRead)*ReadMultiplierFor(model)
 }
 

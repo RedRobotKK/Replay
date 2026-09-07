@@ -43,6 +43,15 @@ type Loop struct {
 	Source Source
 	// Keys carries input. Closing it ends the loop, which is what q does.
 	Keys <-chan rune
+	// Addressable says the destination is a terminal that took raw mode, so
+	// the frame may move the cursor and clear rows in place.
+	//
+	// False is the safe default and means a pipe, a file, or an agent reading
+	// on someone's behalf. enter and leave already refused to write the
+	// alternate-screen sequences in that case; paint did not share the gate,
+	// so every frame still carried cursor addressing and line clears into the
+	// pipe. The reader got the text wrapped in control codes.
+	Addressable bool
 
 	mu      sync.Mutex
 	cur     rune
@@ -193,6 +202,19 @@ func (l *Loop) paint() {
 	lines = append(lines, Footer(key))
 
 	var b strings.Builder
+	if !l.Addressable {
+		// Nothing to address. Write the frame as plain lines and skip the
+		// diff: a pipe has no previous frame to leave stale, and repeating
+		// an unchanged line costs a reader nothing while omitting it would
+		// hand them a frame with holes in it.
+		for _, line := range lines {
+			b.WriteString(strings.TrimRight(line, " "))
+			b.WriteByte('\n')
+		}
+		_, _ = io.WriteString(l.Out, b.String())
+		l.painted = append(l.painted[:0], lines...)
+		return
+	}
 	for i, line := range lines {
 		if i < len(l.painted) && l.painted[i] == line {
 			continue

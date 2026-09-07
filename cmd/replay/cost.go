@@ -212,8 +212,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	// index. Keyed on the price table and rules version as well as file
 	// identity: a figure priced from a table that has since moved is a wrong
 	// number that arrives fast.
-	cache := newCostCache(filepath.Join(tipStateDir(), "cost-index.json"),
-		"replay.cost.v1/"+cachemodel.PriceTableVersion+"/"+cachemodel.RulesVersion+"/"+unitSchema())
+	cache := newCostCache(filepath.Join(tipStateDir(), "cost-index.json"), costIndexKey())
 	_ = cache.load()
 	var cold []string
 	var units []costUnit

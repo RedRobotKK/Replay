@@ -448,7 +448,7 @@ These are in force now and are described in [`maintainers.md`](maintainers.md) a
 
 ## 16. Licensing
 
-Apache License 2.0, decided by the owner on 2026-09-02 and recorded in ADR-0005. Any future commercial tier is a separate work. The README calls the project open source, which is now true.
+Business Source License 1.1, decided by the owner on 2026-09-06 and recorded in ADR-0016, superseding the Apache 2.0 choice of ADR-0005. It converts to Apache 2.0 on 2029-09-06. The README no longer calls the project open source, because under the OSI definition it is not; it is source-available, and says so.
 
 ## 17. Risks
 

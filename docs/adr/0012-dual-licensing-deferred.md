@@ -1,6 +1,6 @@
 # 0012. Consider dual licensing, decline it, keep the option
 
-**Status:** Accepted
+**Status:** Reversed by [ADR-0016](0016-business-source-license.md)
 **Date:** 2026-09-05
 
 ## Context

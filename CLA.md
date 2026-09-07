@@ -7,7 +7,10 @@ lawyer read it. The maintainer is not one.
 
 ## Why this exists
 
-Replay is licensed under [Apache 2.0](LICENSE) and there is no plan to change that. This
+Replay is licensed under the [Business Source License 1.1](LICENSE), which converts to
+Apache 2.0 on the Change Date stated there. The licence was changed from Apache 2.0 on
+2026-09-06 ([ADR-0016](docs/adr/0016-business-source-license.md)), which is precisely the
+reversal this agreement existed to keep possible. This
 agreement exists so that a change remains *possible* later, because that possibility expires
 quietly: once a contribution lands that the maintainer has no right to relicense, the
 project's licensing is fixed forever, whatever anyone later decides.

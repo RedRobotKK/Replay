@@ -40,7 +40,11 @@ func TestOutcomesFitTheBudget(t *testing.T) {
 // four rows or the screen is built the wrong way round.
 func TestOutcomesLeadWithTheAnswer(t *testing.T) {
 	for _, sc := range Outcomes() {
-		head := strings.Join(sc.Lines[:4], "\n")
+		// Skip row 0. It is the header, and it carries the version, whose
+		// digits satisfied this check on every screen for as long as the
+		// version was spelled "v0.4.0" — so the test passed on furniture and
+		// could not have failed whatever the screen led with.
+		head := strings.Join(sc.Lines[1:5], "\n")
 		if !strings.ContainsAny(head, "0123456789") {
 			t.Errorf("%q does not state a figure in its first four rows, so it opens with "+
 				"furniture rather than an answer:\n%s", sc.Title, head)
