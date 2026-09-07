@@ -102,3 +102,92 @@ func TestDoctorScreenFitsTheBudget(t *testing.T) {
 		}
 	}
 }
+
+func aCountedMachine() Machine {
+	m := aMachine()
+	m.CostReady = true
+	m.Tasks, m.TotalUSD, m.MedianUSD, m.P90USD = 1599, 3102.84, 0.63, 2.14
+	m.AvoidableUSD, m.AvoidableShare, m.AvoidableTokens = 152.88, 0.05, 41_200_000
+	m.PriceDate, m.CorpusFiles = "2026-06-24", 1614
+	return m
+}
+
+// Counting is not the same as nothing, and the screen says which.
+//
+// A corpus of a thousand transcripts takes seconds to walk. A surface showing
+// zeros until it finished would be showing a wrong number rather than a pending
+// one, and zero dollars is a number somebody will believe.
+func TestCostSaysItIsStillCountingRatherThanShowingZero(t *testing.T) {
+	m := aMachine() // Found, but not counted yet
+	sc := CostScreen(m, 0)
+	body := strings.Join(sc.Lines, "\n")
+	if strings.Contains(body, "$0.00") {
+		t.Errorf("showed a zero total while still counting. That is a wrong figure, "+
+			"not a pending one:\n%s", body)
+	}
+	if !strings.Contains(body, "waiting") {
+		t.Errorf("did not mark the fields as waiting:\n%s", body)
+	}
+	if sc.From == Measured {
+		t.Error("a screen that has not finished counting declared itself measured")
+	}
+}
+
+// The cue moves while it counts, or the screen is indistinguishable from stuck.
+func TestCostScreenIsAliveWhileItCounts(t *testing.T) {
+	m := aMachine()
+	a := strings.Join(CostScreen(m, 0).Lines, "\n")
+	b := strings.Join(CostScreen(m, 1).Lines, "\n")
+	if a == b {
+		t.Error("the counting screen renders identically at two consecutive ticks. " +
+			"Somebody waiting on a slow walk cannot tell it from a hang")
+	}
+}
+
+// Once counted it is measured, carries no notice, and shows the real figures.
+func TestCostScreenIsMeasuredOnceCounted(t *testing.T) {
+	sc := CostScreen(aCountedMachine(), 0)
+	if sc.From != Measured {
+		t.Errorf("a counted corpus declares itself %v", sc.From)
+	}
+	if Marked(sc.Lines) {
+		t.Error("a measured cost screen carries a provenance notice")
+	}
+	body := strings.Join(sc.Lines, "\n")
+	for _, want := range []string{"$3102.84", "$0.63", "$2.14", "$152.88", "2026-06-24"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("does not show %q, which it was given:\n%s", want, body)
+		}
+	}
+}
+
+// The dollars are not the reader's bill, and the screen says so.
+//
+// costSummary's own comment: the dollar figure is meaningless to a flat-seat
+// subscriber, who is not billed per token and is most of the readership. The
+// tokens are what they actually lost. A screen that leads with dollars and
+// never says that is telling most of its readers a number about somebody else.
+func TestCostScreenSaysDollarsAreNotYourBill(t *testing.T) {
+	body := strings.Join(CostScreen(aCountedMachine(), 0).Lines, "\n")
+	if !strings.Contains(body, "not your bill") {
+		t.Errorf("does not say the dollars are list price rather than an invoice:\n%s", body)
+	}
+	if !strings.Contains(body, "41,200,000") {
+		t.Errorf("does not give the waste in tokens, which is what a flat-seat reader "+
+			"actually lost:\n%s", body)
+	}
+}
+
+func TestCostScreenFitsTheBudget(t *testing.T) {
+	for _, m := range []Machine{aCountedMachine(), aMachine(), {ProjectsDir: "~/x"}} {
+		sc := CostScreen(m, 0)
+		if len(sc.Lines) > BudgetRows {
+			t.Errorf("%d rows, budget %d", len(sc.Lines), BudgetRows)
+		}
+		for i, l := range sc.Lines {
+			if len(l) > BudgetCols {
+				t.Errorf("line %d is %d columns:\n%s", i, len(l), l)
+			}
+		}
+	}
+}
