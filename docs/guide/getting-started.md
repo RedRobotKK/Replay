@@ -8,7 +8,7 @@ You do not need to change how your agent works, and nothing leaves your machine.
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/RedRobotKK/Replay/main/install.sh | sh
+curl -fsSL https://redrobot.jp/replay.sh | sh
 ```
 
 If you already have Go, `go install github.com/RedRobotKK/Replay/cmd/replay@latest` does the same

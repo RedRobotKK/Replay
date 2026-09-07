@@ -44,8 +44,11 @@ Docs live in `docs/` and are linted in CI. Every document opens with one sentenc
 
 ## License of contributions
 
-Your contribution is licensed under the [Apache License 2.0](LICENSE), as its Section 5
-provides. That has not changed and there is no plan to change it.
+Your contribution is distributed under the project's licence, the [Business Source License
+1.1](LICENSE), which converts to Apache 2.0 on the Change Date stated there. It was Apache 2.0
+until 2026-09-06 ([ADR-0016](docs/adr/0016-business-source-license.md)). BUSL 1.1 has no inbound
+contribution clause of its own, so the terms on which you grant your work are the ones written in
+[CLA.md](CLA.md), not anything in the licence file.
 
 A first pull request also needs a one-line sign-off on the [CLA](CLA.md). You keep your
 copyright and you can reuse your own work anywhere; what you grant is the right to relicense
