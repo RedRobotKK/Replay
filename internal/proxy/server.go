@@ -651,15 +651,29 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	s.rp.ServeHTTP(tap, r)
 }
 
-// mask replaces secrets in the body with placeholders and records what it
-// did. A body the masker cannot read goes through unchanged: masking
-// fails open like every other feature, and the log says so without the
-// content.
+// mask replaces secrets in the body with placeholders and records what it did.
+//
+// Masking fails SECURE, which is the one place in this program that does not
+// fail open. Every other feature degrades by doing less; a redaction that
+// degrades by doing less puts a credential on the wire, and the difference is
+// that the secret leaves the machine.
+//
+// masking.Mask already implements that: when the vault cannot store a mapping
+// it blind-scrubs the region and returns the SAFE body alongside the error, so
+// the stream survives and the credential does not. This function used to see a
+// non-nil error and return the ORIGINAL body, discarding the scrubbed one, so
+// the fix never reached anything that ships. internal/masking/failclosed_test.go
+// could not see it, because it drives Masker.Mask, which was already correct.
+// The guard for this now lives beside the caller it guards.
 func (s *Server) mask(rec *ledger.Record, body []byte) []byte {
 	out, report, err := s.cfg.Masker.Mask(body)
 	if err != nil {
-		s.cfg.Logger.Printf("MASKING FAILED session=%s: the request was forwarded UNMASKED, including any secret already matched: %v", short(rec.SessionID), err)
-		return body
+		s.cfg.Logger.Printf("MASKING DEGRADED session=%s: a secret was blind-scrubbed and cannot be rehydrated, because the vault could not store it: %v", short(rec.SessionID), err)
+		// Recorded, not only logged. A degraded request that leaves a single
+		// stderr line is indistinguishable afterwards from one that masked
+		// cleanly, and the ledger is where anything about this request is
+		// looked up later.
+		rec.MaskDegraded = true
 	}
 	if report.Total() > 0 {
 		rec.Masked = report
