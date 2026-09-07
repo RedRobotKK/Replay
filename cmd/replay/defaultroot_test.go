@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -55,5 +57,40 @@ func TestDR3_AnEmptyDirectoryIsNotARoot(t *testing.T) {
 	}
 	if got := defaultTranscriptRoots(home); len(got) != 0 {
 		t.Errorf("an empty projects directory is not a usable default: %v", got)
+	}
+}
+
+// cost and corpus explain an empty machine, they do not scold it.
+//
+// Bare `replay` already does this: it names every path it searched and tells a
+// machine that never ran the agent apart from one that ran it and recorded
+// nothing. cost and corpus returned "one or more transcript directories are
+// required: invalid usage" instead, which is the funnel dying at step one that
+// cost's own comment warns about. cost is the command the docs, the share card
+// and the installer all name, so it is the one most likely to be typed first.
+func TestCostAndCorpusExplainAnEmptyMachine(t *testing.T) {
+	for _, cmd := range []string{"cost", "corpus"} {
+		t.Run(cmd, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv("USERPROFILE", home)
+			t.Setenv("REPLAY_TRANSCRIPTS", "")
+			t.Setenv("CLAUDE_CONFIG_DIR", "")
+
+			var out, errOut bytes.Buffer
+			err := run([]string{cmd}, &out, &errOut)
+			got := out.String() + errOut.String()
+
+			if strings.Contains(got, "invalid usage") {
+				t.Errorf("%s scolds a machine with no corpus instead of explaining it:\n%s", cmd, got)
+			}
+			if !strings.Contains(got, "Looked in") {
+				t.Errorf("%s does not name the paths it searched, so a reader cannot tell "+
+					"whether it looked in the right place:\n%s", cmd, got)
+			}
+			if err != nil && !strings.Contains(got, "No transcripts found") {
+				t.Errorf("%s: %v\n%s", cmd, err, got)
+			}
+		})
 	}
 }
