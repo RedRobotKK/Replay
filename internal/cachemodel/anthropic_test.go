@@ -144,3 +144,49 @@ func TestUnknownModelDoesNotGetAFabricatedReadMultiple(t *testing.T) {
 			unknown, newest, unknown/newest)
 	}
 }
+
+// The cache floor is per model family, and the fallback is not a floor.
+//
+// claude-3-5-haiku fell through to the bare "haiku" row and took the 1,024
+// default. Its published minimum is 2,048, and a prefix below the minimum does
+// not cache at all: no error, cache_creation_input_tokens zero, and advice that
+// recommends caching a prefix which cannot be cached.
+func TestHaiku35CarriesItsOwnCacheFloor(t *testing.T) {
+	if got := lookup("claude-3-5-haiku").minPrefix; got != 2048 {
+		t.Errorf("claude-3-5-haiku minPrefix = %d, want 2048", got)
+	}
+	// The newer Haiku is a different floor again, and must not be disturbed.
+	if got := lookup("claude-haiku-4-5").minPrefix; got != 4096 {
+		t.Errorf("claude-haiku-4-5 minPrefix = %d, want 4096", got)
+	}
+}
+
+// This table prices one provider, and must not answer for another.
+//
+// lookup matches by substring with no provider dimension, so an OpenAI id
+// reaches unknownModel and comes back with a read multiple. That is worse than
+// no answer: EffectiveTokens adds CacheRead on top of Input, which is the
+// Anthropic arithmetic, and OpenAI reports cached tokens INSIDE input. Pricing
+// an OpenAI usage record through this path counts every cached token twice.
+//
+// Measured on 148 local Codex rollouts, 6,751 usage records: total equals
+// input + output on all of them, and input + cached + output on none.
+func TestForeignModelIDsAreNotPricedByTheAnthropicTable(t *testing.T) {
+	// Usage as an OpenAI surface reports it: 1,000 tokens of prompt, 900 of
+	// which were served from cache. The cached 900 are INSIDE the 1,000.
+	openAIShaped := transcript.Usage{Input: 1000, CacheRead: 900}
+	for _, id := range []string{"gpt-5.4", "gpt-5.1-codex-mini", "gemini-3-pro", "deepseek-v4"} {
+		if lookup(id).priced {
+			t.Errorf("%q is priced by the Anthropic table", id)
+		}
+		// The real hazard is not the dollar column, which is already withheld.
+		// It is EffectiveTokens, which adds CacheRead to Input because that is
+		// what the Anthropic wire means, and which reports its label as
+		// measured. Fed a subset-shaped record it counts the cached share
+		// twice and says it measured it.
+		if got := EffectiveTokens(openAIShaped, id); got > 1000 {
+			t.Errorf("EffectiveTokens(%q) = %.0f from a 1,000 token prompt: the cached "+
+				"share was added to a total that already contained it", id, got)
+		}
+	}
+}
