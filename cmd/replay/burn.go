@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/RedRobotKK/Replay/internal/facts"
 	"io"
 	"os"
 	"path/filepath"
@@ -104,6 +105,11 @@ func runBurn(args []string, stdout, stderr io.Writer) error {
 	}
 
 	_, _ = fmt.Fprintf(stdout, "\n  ran   replay burn\n")
+	// The behaviour table this surface's advice rests on is true of a version,
+	// not of a date. Say so when the installed one differs.
+	if n := facts.Ollama().Note(ollamaVersion()); n != "" {
+		_, _ = fmt.Fprintf(stdout, "  %s\n\n", wrapAt(n, 74, "  "))
+	}
 	return nil
 }
 
