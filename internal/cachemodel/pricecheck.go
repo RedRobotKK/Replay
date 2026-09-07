@@ -144,6 +144,15 @@ func CheckPrices(obs map[string]PriceObservation) PriceCheck {
 		}{
 			{"input", m.price.InputPerMTok, o.InputPerMTok},
 			{"output", m.price.OutputPerMTok, o.OutputPerMTok},
+			// Cache read, converted rather than compared directly. LiteLLM
+			// states an absolute price per million tokens; this table states a
+			// multiplier of input, so the two are only comparable after the
+			// multiply. That conversion is why this row was missing, and its
+			// absence meant "no disagreement" was silent on the field the cost
+			// model leans on hardest: a cached read is the cheapest token in
+			// the system and its multiplier decides whether a break costs
+			// anything at all. Reported by roy-tong, issue #54.
+			{"cache read", m.price.InputPerMTok * m.price.ReadMult, o.CacheReadPerMTo},
 		} {
 			if math.Abs(f.ours-f.theirs) > priceTolerance {
 				res.Disagreements = append(res.Disagreements, PriceDisagreement{
