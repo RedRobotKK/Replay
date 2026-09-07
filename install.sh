@@ -158,10 +158,28 @@ fi
 info "install   ${BIN_DIR}/${BIN}"
 
 # ------------------------------------------------------- what is already here
+# Two different facts, and the installer used to conflate them: whether
+# something is about to be overwritten at the destination, and whether some
+# other copy on PATH will keep winning afterwards. Reporting the second as the
+# first claimed a replacement that never happened, and hid the case worth
+# warning about.
 previous=""
+shadowed=""
+# Is something about to be overwritten? That is a question about the
+# destination file, and command -v cannot answer it: it reports what PATH
+# resolves, which is a different file whenever BIN_DIR is not on PATH.
+if [ -x "${BIN_DIR}/${BIN}" ]; then
+  previous=$("${BIN_DIR}/${BIN}" version 2>/dev/null | head -1 || echo "unknown version")
+  info "existing  ${previous} at ${BIN_DIR}/${BIN}"
+fi
+# Will some other copy keep answering `replay` afterwards? Separate question,
+# separate answer.
 if command -v "$BIN" >/dev/null 2>&1; then
-  previous=$("$BIN" version 2>/dev/null | head -1 || echo "unknown version")
-  info "existing  ${previous} at $(command -v "$BIN")"
+  found=$(command -v "$BIN")
+  if [ "$found" != "${BIN_DIR}/${BIN}" ]; then
+    shadowed="$found"
+    [ -n "$previous" ] || info "on PATH   $("$BIN" version 2>/dev/null | head -1) at ${found}"
+  fi
 fi
 
 # ------------------------------------------------------------------- version
@@ -386,6 +404,13 @@ fi
 printf '\n' >&2
 if [ -n "$previous" ]; then
   info "replaced  ${previous}"
+fi
+if [ -n "$shadowed" ]; then
+  # Nothing was replaced, and the copy that answers `replay` is still the other
+  # one. Saying so here costs a line; not saying it costs a confused user who
+  # runs the new binary's version and sees the old one.
+  printf '\n%sAnother replay is earlier on your PATH at %s, so that one still\nanswers `replay`. Remove it, or run %s/%s directly.%s\n' \
+    "$C_DIM" "$shadowed" "$BIN_DIR" "$BIN" "$C_0" >&2
 fi
 # One command, and it is complete. The old second line was
 # `replay ~/.claude/projects/<project>/`, which is not a command: it is a
