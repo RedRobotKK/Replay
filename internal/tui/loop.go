@@ -49,6 +49,51 @@ type Loop struct {
 	tick    int
 	painted []string
 	help    bool
+
+	// sel is where the cursor sits in the current screen's list, and rows is
+	// how many there are. Held here rather than in the source so a repaint
+	// does not reset it: a cursor that jumps to the top four times a second
+	// loses the reader's place before they can read anything.
+	sel  Selection
+	rows int
+	// opened records that enter was pressed, so a source can act on it and
+	// clear it. A flag rather than a callback, because a callback would run on
+	// the key goroutine and the source is already called on the render path.
+	opened bool
+}
+
+// TakeOpened reports whether enter was pressed since the last call, and clears
+// it. Read-and-clear so one keystroke opens one row.
+func (l *Loop) TakeOpened() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	was := l.opened
+	l.opened = false
+	return was
+}
+
+// SetRows tells the loop how many selectable rows the current screen has.
+//
+// Called by the source as it renders. A screen with none reports zero, and the
+// movement keys then decline the keystroke rather than swallowing it, which is
+// what keeps the shortcut letters working everywhere.
+func (l *Loop) SetRows(n int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.rows = n
+	if l.sel.At >= n {
+		l.sel.At = n - 1
+	}
+	if l.sel.At < 0 {
+		l.sel.At = 0
+	}
+}
+
+// Cursor is where the selection sits, for a source that renders a list.
+func (l *Loop) Cursor() Selection {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.sel
 }
 
 // Run draws until Keys closes or ctx-like stop arrives via a closed channel.
@@ -97,11 +142,21 @@ func (l *Loop) Run(stop <-chan struct{}) {
 func (l *Loop) press(k rune) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	// Movement first, and only when the screen has rows. Move reports whether
+	// it consumed the key, so a screen with no list leaves j and k to fall
+	// through rather than swallowing them silently.
+	if !l.help && l.sel.Move(k, l.rows) {
+		return
+	}
 	switch k {
 	case '?':
 		l.help = !l.help
 	case 27: // escape
 		l.help = false
+	case '\r', '\n':
+		// Enter opens the selected row. The source reads Cursor() and decides
+		// what opening means; the loop does not know what a row stands for.
+		l.opened = true
 	default:
 		for _, s := range Shortcuts() {
 			if s.Key == k {
