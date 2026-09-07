@@ -147,6 +147,21 @@ outside the project reported, and the first under a new licence.
   exactly one named bucket, and the same holds inside each agent lane. Three of
   the eleven mutations written against them passed the pre-existing suite.
 
+### Fixed after tagging
+
+- **The release pipeline's tool pins did not pin the tools.** Both
+  `cosign-installer` and `sbom-action` are pinned by commit SHA, which fixes the
+  action and leaves the binary it downloads free to move: v0.4.0 was signed with
+  cosign v2.5.2 and built its SBOM with syft v1.42.3, and the identical workflow
+  a day later pulled cosign v3.0.6 and syft v1.51.1. cosign v3 defaults to the
+  new bundle format, ignores `--output-signature` and `--output-certificate`, and
+  the release failed on `create bundle file: open : no such file or directory`.
+  Both tools are now pinned to the versions that produced every release so far.
+  The format matters beyond this failure: every copy of `install.sh` in the wild
+  looks for `checksums.txt.pem` and `checksums.txt.sig`, and an installer that
+  finds cosign but no signature refuses to install rather than proceeding
+  unverified. Publishing bundles instead would break them.
+
 ### Known limits
 
 - Windows is still not supported. The job passes and that is not the same thing:
