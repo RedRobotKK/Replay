@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -209,5 +210,30 @@ func TestCC8_AnIndexFromAnOlderShapeIsDiscarded(t *testing.T) {
 	}
 	if _, _, ok := fresh.get(f); ok {
 		t.Error("served an entry written under a different struct shape")
+	}
+}
+
+// The production index key carries the struct shape.
+//
+// TestCC8 proves the cache discards an entry whose key differs, but it builds
+// both keys by hand and never evaluates the expression the binary actually
+// uses. Deleting unitSchema() from that expression therefore broke nothing it
+// could observe, and the mutation that does so survived the whole suite. This
+// asserts the real key, so the defect that shipped once cannot ship silently
+// twice.
+func TestCC9_TheProductionIndexKeyCarriesTheStructShape(t *testing.T) {
+	key := costIndexKey()
+	if !strings.Contains(key, unitSchema()) {
+		t.Fatalf("the index key does not carry costUnit's shape, so a binary whose "+
+			"costUnit gained a field will serve entries written before it:\n\tkey    = %q\n\tschema = %q",
+			key, unitSchema())
+	}
+	// Every serialized field must be reachable from the key, so that adding
+	// one changes it. A key that merely contains *a* schema string is not
+	// enough if that string can go stale independently.
+	for _, tag := range strings.Split(unitSchema(), ",") {
+		if !strings.Contains(key, tag) {
+			t.Errorf("field %q is serialized but absent from the index key", tag)
+		}
 	}
 }

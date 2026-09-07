@@ -419,8 +419,40 @@ fi
 #
 # The old copy also carried an unsourced $2851, removed 2026-09-06 because it
 # appeared in this file and in no evidence anywhere.
-printf '\n%sFree, Apache 2.0, no account, no telemetry. Calibrated against 78 sessions\nacross 1,450 transcripts on one machine, and every figure says how it was\nobtained.%s\n' \
+printf '\n%sFree to run, BUSL 1.1, no account, no telemetry. Calibrated against 78 sessions\nacross 1,450 transcripts on one machine, and every figure says how it was\nobtained.%s\n' \
   "$C_DIM" "$C_0" >&2
 
 printf '\n%sDocs%s https://github.com/%s#readme   %sUninstall%s rm %s/%s\n' \
   "$C_DIM" "$C_0" "$REPO" "$C_DIM" "$C_0" "$BIN_DIR" "$BIN" >&2
+
+# Open the surface, if there is a terminal to open it on.
+#
+# Most people who install this will not go on to learn eleven commands and
+# seventy-odd flags, and the value is in what the binary already knows about
+# their machine. So it opens on the answer rather than leaving them at a prompt
+# holding a list of things to type.
+#
+# `curl … | sh` hands this script a pipe on stdin. The binary would find no
+# terminal there, fall back to line mode and paint a single static frame — the
+# worst outcome, because a frozen surface looks like the product. /dev/tty is
+# the controlling terminal and survives the pipe, so keys arrive as keys.
+#
+# The probe is an open of /dev/tty, not a test of stdin: stdin is the script
+# and says nothing about whether a person is watching. Where there is no
+# controlling terminal the open is skipped and the Next: lines above stand on
+# their own — CI, a Dockerfile RUN, cron, a provisioner, a container built
+# without -t. REPLAY_NO_OPEN=1 skips it for anyone who wants the old ending.
+should_open() {
+  [ "${REPLAY_NO_OPEN:-0}" = "1" ] && return 1
+  [ -n "${CI:-}" ] && return 1
+  [ -t 1 ] || return 1
+  (: < /dev/tty) 2>/dev/null || return 1
+  return 0
+}
+
+if should_open; then
+  printf '\n%sOpening %s. %sq%s quits, %s?%s lists the keys.%s\n' \
+    "$C_DIM" "$BIN" "$C_B" "$C_0$C_DIM" "$C_B" "$C_0$C_DIM" "$C_0" >&2
+  # exec, so the surface owns the terminal and its exit is the install's exit.
+  exec "$BIN_DIR/$BIN" tui < /dev/tty
+fi

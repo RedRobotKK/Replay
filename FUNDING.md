@@ -1,6 +1,6 @@
 # Funding
 
-Replay is free and Apache-2.0. Every command works, on every model, with no
+Replay is free to run, under the Business Source License 1.1. Every command works, on every model, with no
 account, no key and no network call — and that does not change. What is not
 free is the measurement behind it: the corpus that makes its figures measured
 rather than estimated is real API spend, and adding each new provider costs the

@@ -133,6 +133,8 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 		return runReport("diff", args[1:], stdout, stderr, (*analysis.LaneReport).WriteDiff)
 	case "corpus":
 		return runCorpus(args[1:], stdout, stderr)
+	case "codex":
+		return runCodex(args[1:], stdout, stderr)
 	case "doctor":
 		return runDoctor(args[1:], stdout, stderr)
 	case "probe":

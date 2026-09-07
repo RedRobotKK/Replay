@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -147,6 +148,20 @@ func (c *costCache) save() error {
 // field names means adding, removing or renaming one invalidates the index
 // whether or not anyone remembered, which is the only version of this that
 // cannot rot.
+// costIndexKey is the schema string the cost index is keyed on.
+//
+// It lives here, next to unitSchema, rather than inline at the call site,
+// because inline it was untestable: the only test that cared built its own key
+// strings by hand and never touched this expression, so removing unitSchema()
+// from it broke nothing any test could see. The mutation that does exactly
+// that survived the suite, and the defect it stands for shipped once already —
+// costUnit gained a field, the key did not change, and the same binary on the
+// same machine reported 763k tokens warm against 31.4M cold.
+func costIndexKey() string {
+	return "replay.cost.v1/" + cachemodel.PriceTableVersion + "/" +
+		cachemodel.RulesVersion + "/" + unitSchema()
+}
+
 func unitSchema() string {
 	t := reflect.TypeOf(costUnit{})
 	names := make([]string, 0, t.NumField())

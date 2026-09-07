@@ -47,8 +47,7 @@ func Outcome(key rune) Screen {
 			sc = s
 		}
 	}
-	head := []string{"  replay " + sc.Label + strings.Repeat(" ",
-		BudgetCols-12-len(sc.Label)-6) + "v0.4.0", ""}
+	head := []string{header(sc.Label), ""}
 
 	var body []string
 	switch key {
@@ -123,7 +122,7 @@ func Outcome(key rune) Screen {
 			"  the band is the estimator's own floor, not this corpus being small.",
 			"  More sessions will not narrow it. See routing-baseline-2026-09-06.")
 	case 's':
-		body = append(answerBlock("masking is on, and does not cover two paths",
+		body = append(answerBlock("masking is on, and 2 of 3 paths are not covered by it",
 			"Anything sent on those paths leaves this machine unmasked."), "",
 			Row(safeCols, "path", "parsed", "masked"),
 			Row(safeCols, "------------------------", "----------------", "----------------"),

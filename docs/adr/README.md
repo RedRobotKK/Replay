@@ -10,7 +10,7 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | [0002](0002-replay-engine-and-truth-tiers.md) | Replay engine with calibration gate and two tiers of truth | Proposed |
 | [0003](0003-policy-application-constraints.md) | Live policies use only provider-sanctioned mechanisms | Proposed |
 | [0004](0004-masking-and-scoped-rehydration.md) | Secret masking with persistent vault and scoped rehydration | Proposed |
-| [0005](0005-apache-2-license.md) | License the project under Apache 2.0 | Accepted |
+| [0005](0005-apache-2-license.md) | License the project under Apache 2.0 | Superseded by 0016 |
 | [0006](0006-learning-selection.md) | Learning selection | Accepted |
 | [0007](0007-federated-calibration-corpus.md) | Improving the cache model from many machines | Proposed |
 | [0008](0008-corpus-at-launch.md) | Collecting a corpus from a public launch without shipping telemetry | Proposed |
@@ -21,6 +21,7 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | [0013](0013-x402-rules-feed.md) | Sell a maintained rules feed over x402; the binary never holds a key | Accepted |
 | [0014](0014-checks-must-be-able-to-fail.md) | A check must be able to fail, and reachability is asserted mechanically | Accepted |
 | [0015](0015-single-tenant-state-is-a-boundary.md) | Single-tenant state is a boundary, not an implementation detail | Accepted |
+| [0016](0016-business-source-license.md) | Relicense under the Business Source License 1.1 | Accepted |
 
 ---
 

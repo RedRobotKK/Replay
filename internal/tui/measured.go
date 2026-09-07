@@ -91,7 +91,7 @@ type Task struct {
 // Never Example: this screen has no illustrative version, because a made-up
 // answer to "what can you see on my machine" is worse than no answer.
 func DoctorScreen(m Machine) Screen {
-	head := []string{"  replay doctor" + spaces(BudgetCols-15-6) + "v0.4.0", ""}
+	head := []string{header("doctor"), ""}
 
 	if !m.Found {
 		lines := make([]string, 0, BudgetRows)
@@ -223,7 +223,7 @@ func commas(n int) string {
 // the difference between "nothing" and "not yet", and it is the reason the
 // liveness cue exists at all.
 func CostScreen(m Machine, tick int, sel Selection) Screen {
-	head := []string{"  replay cost" + spaces(BudgetCols-13-6) + "v0.4.0", ""}
+	head := []string{header("cost"), ""}
 
 	if !m.Found {
 		lines := make([]string, 0, BudgetRows)
@@ -347,7 +347,7 @@ func padCost(lines []string) []string {
 // run is injected so this package still does no I/O and the screen stays
 // testable without a corpus.
 func WhyScreen(t *Task, run func(path string) (string, error)) Screen {
-	head := []string{"  replay why" + spaces(BudgetCols-12-6) + "v0.4.0", ""}
+	head := []string{header("why"), ""}
 	lines := make([]string, 0, BudgetRows)
 	lines = append(lines, head...)
 

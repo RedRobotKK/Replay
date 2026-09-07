@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -263,5 +264,47 @@ func TestSpendStateFailsOpenOnAnUnreadableFile(t *testing.T) {
 	g.LoadState(dir) // must not panic, must not error out
 	if msg := g.Check("s1"); msg != "" {
 		t.Fatalf("a corrupt state file must not refuse traffic: %q", msg)
+	}
+}
+
+// Eviction is least-recently-used even when the clock cannot tell records apart.
+//
+// The table was scanned on seen alone, which is an LRU only if time.Now can
+// separate two touches. Under a coarse clock a burst lands on one instant,
+// every seen compares equal, and the victim becomes whichever key Go's
+// randomised map iteration happens to yield — so the record dropped could be
+// the heavy, still-active session whose spend is the reason the guard exists.
+//
+// The clock here is frozen, which is the coarse case taken to its limit and
+// the only way to test the tie at all. Against the old comparison this fails
+// 1023 times in 1024; against the counter it cannot fail.
+func TestSpendGuardEvictsLeastRecentlyUsedUnderAFrozenClock(t *testing.T) {
+	g := NewSpendGuard(SpendLimits{SessionTokens: 1 << 30})
+	frozen := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
+	g.now = func() time.Time { return frozen }
+
+	ids := make([]string, maxSpendSessions)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("s%04d", i)
+		g.Record(ids[i], 1, 0)
+	}
+	// Touch every session except the first, so it is unambiguously the least
+	// recently used and every seen timestamp remains identical.
+	for _, id := range ids[1:] {
+		g.Record(id, 1, 0)
+	}
+
+	g.Record("newcomer", 1, 0)
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if _, ok := g.session[ids[0]]; ok {
+		t.Errorf("%s was the least recently used and survived eviction", ids[0])
+	}
+	for _, id := range ids[1:] {
+		if _, ok := g.session[id]; !ok {
+			t.Fatalf("%s was touched more recently than %s and was evicted instead; "+
+				"eviction is not ordered when the clock cannot separate touches", id, ids[0])
+		}
 	}
 }

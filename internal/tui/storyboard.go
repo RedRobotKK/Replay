@@ -107,13 +107,13 @@ func Storyboard() []Scene {
 	}
 
 	title := func(sub string) []string {
-		return []string{"  replay serve" + strings.Repeat(" ", 48) + "v0.4.0", "", sub}
+		return []string{header("serve"), "", sub}
 	}
 	_ = title
 
 	add(1, "Idle, listening",
 		append([]string{
-			"  replay serve                                                    v0.4.0", "",
+			header("serve"), "",
 			note2("listening", "127.0.0.1:4000", ""),
 			note2("upstream", "api.anthropic.com", ""),
 			note2("ledger", "~/.replay/ledger", "(writable)"),
@@ -125,7 +125,7 @@ func Storyboard() []Scene {
 
 	add(2, "Active traffic, mixed surfaces",
 		append([]string{
-			"  replay serve                                                    v0.4.0", "",
+			header("serve"), "",
 			stat("listening", "127.0.0.1:4000", "sessions", "3"),
 			stat("upstream", "api.anthropic.com", "billed", "1,204,881 tokens"),
 			stat("ledger", "~/.replay/ledger", "spend", "$2.41 of $5.00 cap"),
@@ -162,7 +162,7 @@ func Storyboard() []Scene {
 	)
 
 	add(16, "Settings, with provenance",
-		"  replay settings                                                 v0.4.0", "",
+		header("settings"), "",
 		kv("caps", "value            from"),
 		kv("max-session-tokens", "unset            default"),
 		kv("max-day-tokens", "unset            default"),
@@ -207,7 +207,7 @@ func Storyboard() []Scene {
 
 	add(3, "Shutting down",
 		[]string{
-			"  replay serve                                                    v0.4.0", "",
+			header("serve"), "",
 			"  session totals", "",
 			stat("requests", "412", "billed", "8,204,551 tokens"),
 			stat("re-billed", "336,060", "share", "4.1% of prompt tokens"),

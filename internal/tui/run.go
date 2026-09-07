@@ -48,7 +48,7 @@ func Start(out io.Writer, src Source) error {
 	keys := make(chan rune)
 	go readKeys(os.Stdin, keys, rawErr == nil)
 
-	l := &Loop{Out: out, Source: src, Keys: keys}
+	l := &Loop{Out: out, Source: src, Keys: keys, Addressable: rawErr == nil}
 	l.Run(stop)
 	restore()
 
@@ -139,7 +139,7 @@ func StartWith(out io.Writer, src Source, into **Loop) error {
 	keys := make(chan rune)
 	go readKeys(os.Stdin, keys, rawErr == nil)
 
-	l := &Loop{Out: out, Source: src, Keys: keys}
+	l := &Loop{Out: out, Source: src, Keys: keys, Addressable: rawErr == nil}
 	*into = l
 	l.Run(stop)
 

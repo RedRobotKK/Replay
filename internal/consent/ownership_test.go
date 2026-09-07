@@ -101,3 +101,37 @@ func TestConsent_AWorldWritableFileIsStillRefusedOnUnix(t *testing.T) {
 		t.Error("a refused decision must never be Allowed")
 	}
 }
+
+// A file the world can write is refused even when the group cannot.
+//
+// The sibling test above uses 0666, which carries both the group-write and
+// other-write bits, so it stays red no matter which of the two the mask keeps.
+// Narrowing 0o022 to 0o020 therefore changed nothing it could see, and the
+// mutation that does exactly that survived the suite. 0606 is writable by
+// anyone on the machine and by no group, which is the case that separates them:
+// it is the mode that decides whether "or other" in the refusal is true.
+func TestConsent_AnOtherWritableFileIsRefusedWhenTheGroupCannotWrite(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no Unix mode bits on Windows; the sibling test covers what applies there")
+	}
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "replay")
+	if err := os.MkdirAll(cfg, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(cfg, CorpusFileName)
+	if err := os.WriteFile(path, []byte("corpus_opt_in = true\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o606); err != nil {
+		t.Fatal(err)
+	}
+	d, err := ReadCorpusConsent(dir)
+	if err == nil {
+		t.Fatalf("a 0606 consent file is writable by any process on this machine and "+
+			"must be refused; got state %q", d.State)
+	}
+	if d.Allowed() {
+		t.Error("a refused decision must never be Allowed")
+	}
+}

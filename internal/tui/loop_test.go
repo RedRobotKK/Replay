@@ -17,7 +17,7 @@ func drive(t *testing.T, src Source, keys ...rune) (*Loop, string) {
 		ch <- k
 	}
 	close(ch)
-	l := &Loop{Out: &out, Source: src, Keys: ch}
+	l := &Loop{Out: &out, Source: src, Keys: ch, Addressable: true}
 	done := make(chan struct{})
 	go func() { l.Run(nil); close(done) }()
 	select {
@@ -41,7 +41,7 @@ func plain(key rune, tick int) Frame {
 // the case that runs for eight hours.
 func TestAQuietRedrawWritesOnlyWhatMoved(t *testing.T) {
 	var out bytes.Buffer
-	l := &Loop{Out: &out, Source: plain, Keys: make(chan rune)}
+	l := &Loop{Out: &out, Source: plain, Keys: make(chan rune), Addressable: true}
 	l.cur = 'c'
 	l.paint()
 	first := out.Len()
@@ -80,7 +80,7 @@ func TestEveryWrittenRowIsClearedFirst(t *testing.T) {
 			return Frame{Lines: []string{"  a much longer line than the next one"}}
 		}
 		return Frame{Lines: []string{"  short"}}
-	}, Keys: make(chan rune)}
+	}, Keys: make(chan rune), Addressable: true}
 	l.cur = 'c'
 	l.paint()
 	out.Reset()
