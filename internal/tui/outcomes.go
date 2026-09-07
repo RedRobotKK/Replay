@@ -29,6 +29,9 @@ type Screen struct {
 	// From is where the figures came from. Every screen states it, and the
 	// unmeasured ones say so on screen rather than in a comment.
 	From Provenance
+	// Rows is how many selectable lines the screen has, so the loop knows
+	// whether the movement keys apply here.
+	Rows int
 }
 
 // answerBlock renders the headline: a figure and the sentence that reads it.

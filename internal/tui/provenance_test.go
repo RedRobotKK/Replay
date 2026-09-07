@@ -103,7 +103,7 @@ func TestEveryMeasuredScreenNamesItsSource(t *testing.T) {
 	}
 
 	all := append([]Screen(nil), Outcomes()...)
-	all = append(all, DoctorScreen(aMachine()), CostScreen(aCountedMachine(), 0))
+	all = append(all, DoctorScreen(aMachine()), CostScreen(aCountedMachine(), 0, Selection{Window: 6}))
 
 	if len(all) <= len(Outcomes()) {
 		t.Fatal("the screen list did not grow, so this check walks only the example " +

@@ -64,6 +64,25 @@ type Machine struct {
 	// prints.
 	PriceDate   string
 	CorpusFiles int
+
+	// Tasks is the per-task breakdown, most expensive first. It is what makes
+	// the cost screen answerable rather than merely true: a total tells you
+	// there is a problem and a list tells you where it is.
+	TaskRows []Task
+}
+
+// Task is one session's cost, and enough to go and look at it.
+type Task struct {
+	Session   string
+	Model     string
+	CostUSD   float64
+	Breaks    int
+	Requests  int
+	Avoidable float64
+	// Path is the transcript, resolved from the session prefix. Empty when the
+	// file could not be found, and a row with no path cannot be opened, which
+	// the screen says rather than failing on enter.
+	Path string
 }
 
 // DoctorScreen renders what Replay can see here.
@@ -203,7 +222,7 @@ func commas(n int) string {
 // finished would be showing a wrong number, not a pending one. The pinwheel is
 // the difference between "nothing" and "not yet", and it is the reason the
 // liveness cue exists at all.
-func CostScreen(m Machine, tick int) Screen {
+func CostScreen(m Machine, tick int, sel Selection) Screen {
 	head := []string{"  replay cost" + spaces(BudgetCols-13-6) + "v0.4.0", ""}
 
 	if !m.Found {
@@ -237,33 +256,73 @@ func CostScreen(m Machine, tick int) Screen {
 	lines = append(lines, head...)
 	lines = append(lines,
 		"  "+money(m.TotalUSD)+" across "+commas(m.Tasks)+" tasks",
-		"  Median task "+money(m.MedianUSD)+", ninetieth percentile "+money(m.P90USD)+".",
+		"  Median "+money(m.MedianUSD)+", p90 "+money(m.P90USD)+", "+
+			money(m.AvoidableUSD)+" avoidable. List price, not your bill.",
+		"")
+
+	rows := TaskLines(m.TaskRows)
+	if len(rows) == 0 {
+		lines = append(lines, "  No per-task breakdown available.")
+		return Screen{Key: 'c', Title: "cost", Lines: padCost(lines), From: Measured}
+	}
+	// The list is capped so the notes below it survive the budget.
+	//
+	// They were being truncated away by padCost, which took the price date and
+	// the token figure with them: the list grew until it pushed the provenance
+	// off the screen. Rows are the cheapest thing here to give up, because
+	// there is a whole screen of them one keystroke away and only one place
+	// the date appears.
+	const maxRows = 8
+	if sel.Window <= 0 || sel.Window > maxRows {
+		sel.Window = maxRows
+	}
+	vis, cur := sel.Visible(rows)
+	// Two spaces for the cursor marker, so the headings sit above the row text
+	// rather than above the marker. Without this the columns are offset by the
+	// width of the thing that points at them.
+	lines = append(lines,
+		"  "+Row(taskCols, "task", "cost", "breaks", "model"),
+		"  "+Row(taskCols, "--------", "----------", "------", "----------------------"))
+	lines = append(lines, RenderRows(vis, cur)...)
+	lines = append(lines, "", SelectedLine(rows, sel.At),
+		"  "+Dim("enter opens why this one cost what it did"),
 		"",
-		Row(costCols2, "figure", "value", "what it is"),
-		Row(costCols2, "--------------", "------------", "----------------------------"),
-		Row(costCols2, "total", money(m.TotalUSD), "list price, not your invoice"),
-		Row(costCols2, "median task", money(m.MedianUSD), "half cost less than this"),
-		Row(costCols2, "p90 task", money(m.P90USD), "one task in ten costs more"),
-		Row(costCols2, "avoidable", money(m.AvoidableUSD), avoidableWhat(m)),
-		"", "  notes",
-		note(false, "on a flat seat the dollars are not your bill. "+
-			commas(m.AvoidableTokens)+" tokens is"),
-		"      what the waste actually cost you: context the work did not get.",
-		note(false, "prices dated "+m.PriceDate+", across "+commas(m.CorpusFiles)+" transcripts."))
-	return Screen{Key: 'c', Title: "cost", Lines: padCost(lines), From: Measured}
+		// The price date and the token figure survive the list.
+		//
+		// Two tests caught their loss when the table replaced the notes block,
+		// and both were right to. The date is the provenance: without it the
+		// dollars are a number with no basis. The tokens are what a flat-seat
+		// reader actually lost, and they are most of the readership, so a
+		// screen that shows only dollars is talking to somebody else.
+		note(false, commas(m.AvoidableTokens)+" tokens is what the waste cost you: "+
+			"context the work did not get."),
+		note(false, "prices dated "+m.PriceDate+", across "+commas(m.CorpusFiles)+
+			" transcripts."))
+	return Screen{Key: 'c', Title: "cost", Lines: padCost(lines), From: Measured, Rows: len(rows)}
 }
 
-func avoidableWhat(m Machine) string {
-	if m.TotalUSD <= 0 {
-		return "re-billed by cache breaks"
+// TaskLines renders the per-task rows, most expensive first.
+//
+// Sorted by cost rather than by time, because the question the screen answers
+// is "where did the money go" and the answer is almost never the most recent
+// task. A list in arrival order makes the reader scroll to find it.
+func TaskLines(tasks []Task) []Line {
+	out := make([]Line, 0, len(tasks))
+	for _, t := range tasks {
+		text := Row(taskCols, t.Session, money(t.CostUSD), fmt.Sprint(t.Breaks), t.Model)
+		label := t.Session + "  " + money(t.CostUSD)
+		if t.Path == "" {
+			label += "   (transcript not found, cannot open)"
+		}
+		out = append(out, Line{Text: text, Path: t.Path, Label: label})
 	}
-	return fmt.Sprintf("%.0f%% of the total", m.AvoidableShare*100)
+	return out
 }
+
+var taskCols = []Column{{"task", 8}, {"cost", 10}, {"breaks", 6}, {"model", 22}}
 
 // money formats a dollar figure the way the cost report does.
 func money(v float64) string { return fmt.Sprintf("$%.2f", v) }
-
-var costCols2 = []Column{{"figure", 14}, {"value", 12}, {"what it is", 28}}
 
 // padCost fills to the budget and names the command that produced the screen.
 func padCost(lines []string) []string {
@@ -274,5 +333,86 @@ func padCost(lines []string) []string {
 		lines = lines[:BudgetRows-3]
 	}
 	return append(lines, "", "  ran   replay cost --per-task",
+		"  "+Dim("copy it and you never need this screen again."))
+}
+
+// WhyScreen answers why one session cost what it did.
+//
+// It needs a session. `replay blame` refuses without a transcript, and
+// averaging "why was it expensive" over 1,599 tasks answers nobody: the
+// question is always about the one that cost forty dollars. So this screen has
+// a state the others do not, which is having nothing to answer about yet, and
+// it says so rather than inventing a session to talk about.
+//
+// run is injected so this package still does no I/O and the screen stays
+// testable without a corpus.
+func WhyScreen(t *Task, run func(path string) (string, error)) Screen {
+	head := []string{"  replay why" + spaces(BudgetCols-12-6) + "v0.4.0", ""}
+	lines := make([]string, 0, BudgetRows)
+	lines = append(lines, head...)
+
+	if t == nil {
+		lines = append(lines,
+			"  Pick a session first.", "",
+			"  This answers why ONE task cost what it did, so it needs to know which.",
+			"", "  "+cell("press", 10)+"c   the cost list",
+			"  "+cell("then", 10)+"j k to move, enter to open one here",
+			"", "  notes",
+			note(false, "averaged over every task this question has no useful answer."))
+		lines = WithBanner(lines, Unavailable, "no session chosen yet")
+		return Screen{Key: 'w', Title: "why", Lines: padWhy(lines), From: Unavailable}
+	}
+
+	out, err := run(t.Path)
+	if err != nil {
+		lines = append(lines,
+			"  Could not read that session.", "",
+			"  "+cell("session", 10)+t.Session,
+			"  "+cell("error", 10)+truncate(err.Error(), BudgetCols-14))
+		lines = WithBanner(lines, Unavailable, "the transcript could not be read")
+		return Screen{Key: 'w', Title: "why", Lines: padWhy(lines), From: Unavailable}
+	}
+
+	lines = append(lines,
+		"  "+t.Session+"  "+money(t.CostUSD)+"  "+fmt.Sprint(t.Breaks)+" cache break(s)",
+		"  "+t.Model, "")
+	for _, l := range blameBody(out) {
+		lines = append(lines, "  "+truncate(l, BudgetCols-2))
+	}
+	return Screen{Key: 'w', Title: "why", Lines: padWhy(lines), From: Measured}
+}
+
+// blameBody keeps the lines of a blame report that answer the question, and
+// drops the file path header, which the reader already knows.
+func blameBody(out string) []string {
+	all := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	keep := make([]string, 0, len(all))
+	for _, l := range all {
+		if strings.HasPrefix(l, "/") || strings.TrimSpace(l) == "" {
+			continue
+		}
+		keep = append(keep, l)
+		if len(keep) >= BudgetRows-11 {
+			break
+		}
+	}
+	return keep
+}
+
+func truncate(s string, w int) string {
+	if w <= 1 || len(s) <= w {
+		return s
+	}
+	return s[:w-1] + string(truncationMark)
+}
+
+func padWhy(lines []string) []string {
+	for len(lines) < BudgetRows-3 {
+		lines = append(lines, "")
+	}
+	if len(lines) > BudgetRows-3 {
+		lines = lines[:BudgetRows-3]
+	}
+	return append(lines, "", "  ran   replay blame <session>",
 		"  "+Dim("copy it and you never need this screen again."))
 }

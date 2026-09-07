@@ -6,12 +6,15 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/tui"
 )
@@ -68,16 +71,36 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 		mu.Unlock()
 	}()
 
+	var loop *tui.Loop
+	// opened is the session the reader pressed enter on, and what the why
+	// screen answers about. Nil until they choose one: a screen that picked a
+	// session for them would be answering a question nobody asked.
+	var opened *tui.Task
+
 	src := func(k rune, tick int) tui.Frame {
 		mu.Lock()
 		cur := m
 		mu.Unlock()
+
 		switch k {
 		case 'd':
-			return tui.Frame{Key: k, Lines: tui.DoctorScreen(cur).Lines}
+			sc := tui.DoctorScreen(cur)
+			loop.SetRows(sc.Rows)
+			return tui.Frame{Key: k, Lines: sc.Lines}
 		case 'c':
-			return tui.Frame{Key: k, Lines: tui.CostScreen(cur, tick).Lines}
+			sc := tui.CostScreen(cur, tick, loop.Cursor())
+			loop.SetRows(sc.Rows)
+			if loop.TakeOpened() {
+				if t := taskAt(cur.TaskRows, loop.Cursor().At); t != nil && t.Path != "" {
+					opened = t
+				}
+			}
+			return tui.Frame{Key: k, Lines: sc.Lines}
+		case 'w':
+			loop.SetRows(0)
+			return tui.Frame{Key: k, Lines: tui.WhyScreen(opened, blameFor).Lines}
 		}
+		loop.SetRows(0)
 		return tui.Frame{Key: k, Lines: tui.Outcome(k).Lines}
 	}
 
@@ -89,6 +112,7 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 		if key == 'c' {
 			m = costState(m)
 		}
+		loop = &tui.Loop{}
 		frame := src(key, 0).Lines
 		lines := make([]string, 0, len(frame)+1)
 		lines = append(lines, frame...)
@@ -100,7 +124,7 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 		}
 		return nil
 	}
-	return tui.Start(stdout, src)
+	return tui.StartWith(stdout, src, &loop)
 }
 
 // machineState reads what the local filesystem can answer without a proxy.
@@ -204,10 +228,18 @@ func costState(m tui.Machine) tui.Machine {
 	// walk producing a slightly different figure is exactly how the two counts
 	// in `doctor` drifted apart once already.
 	var buf bytes.Buffer
-	if err := runCost([]string{"--json"}, &buf, io.Discard); err != nil {
+	if err := runCost([]string{"--per-task", "--json"}, &buf, io.Discard); err != nil {
 		return m
 	}
 	var out struct {
+		Tasks []struct {
+			Session      string  `json:"session"`
+			Model        string  `json:"model"`
+			Requests     int     `json:"requests"`
+			CostUSD      float64 `json:"costUsd"`
+			AvoidableUSD float64 `json:"avoidableUsd"`
+			Breaks       int     `json:"breaks"`
+		} `json:"tasks"`
 		Summary struct {
 			Tasks           int     `json:"tasks"`
 			TotalUSD        float64 `json:"totalUsd"`
@@ -229,5 +261,81 @@ func costState(m tui.Machine) tui.Machine {
 	m.AvoidableTokens = sm.AvoidableTokens
 	m.PriceDate = cachemodel.PriceTableVersion
 	m.CorpusFiles = m.Transcripts
+
+	// Most expensive first: the question the list answers is "where did the
+	// money go", and the answer is almost never the most recent task.
+	sort.Slice(out.Tasks, func(i, j int) bool {
+		return out.Tasks[i].CostUSD > out.Tasks[j].CostUSD
+	})
+	index := transcriptIndex(m.ProjectsDir)
+	for _, t := range out.Tasks {
+		m.TaskRows = append(m.TaskRows, tui.Task{
+			Session: t.Session, Model: t.Model, CostUSD: t.CostUSD,
+			Breaks: t.Breaks, Requests: t.Requests, Avoidable: t.AvoidableUSD,
+			Path: index[t.Session],
+		})
+	}
 	return m
+}
+
+// transcriptIndex maps an eight-character session prefix to its transcript.
+//
+// The cost report identifies a task by prefix, which is enough for a human to
+// recognise and not enough to open. Building the map once beats globbing per
+// row: a corpus of 1,614 files against 1,599 tasks would otherwise be one walk
+// per keystroke.
+//
+// A prefix that matches two files is dropped rather than guessed. Opening the
+// wrong session and saying nothing is worse than saying it cannot be opened,
+// and the screen already renders a row that has no path as one that cannot be
+// opened.
+func transcriptIndex(projects string) map[string]string {
+	index := map[string]string{}
+	ambiguous := map[string]bool{}
+	_ = filepath.WalkDir(projects, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(path) != ".jsonl" {
+			return nil
+		}
+		name := strings.TrimSuffix(filepath.Base(path), ".jsonl")
+		if len(name) < 8 {
+			return nil
+		}
+		key := name[:8]
+		if _, seen := index[key]; seen {
+			ambiguous[key] = true
+			return nil
+		}
+		index[key] = path
+		return nil
+	})
+	for k := range ambiguous {
+		delete(index, k)
+	}
+	return index
+}
+
+// taskAt returns the task under the cursor, or nil.
+func taskAt(tasks []tui.Task, at int) *tui.Task {
+	if at < 0 || at >= len(tasks) {
+		return nil
+	}
+	return &tasks[at]
+}
+
+// blameFor runs the real blame report for one session.
+//
+// The same command the screen names, run in process, so what the screen shows
+// and what `replay blame <path>` prints cannot differ.
+func blameFor(path string) (string, error) {
+	var buf bytes.Buffer
+	// The same call main.go makes for `replay blame`, so what the screen shows
+	// and what the command prints cannot differ.
+	err := runReport("blame", []string{path}, &buf, io.Discard,
+		func(r *analysis.LaneReport, w io.Writer) error {
+			return r.WriteBlame(w, defaultBlameLimit)
+		})
+	if err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }

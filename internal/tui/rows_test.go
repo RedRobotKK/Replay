@@ -125,3 +125,58 @@ func TestALongRowIsTruncatedNotWrapped(t *testing.T) {
 		t.Errorf("a truncated row does not say it was cut: %q", got[0])
 	}
 }
+
+// Enter is reachable in line mode.
+//
+// An empty line IS the enter key, and readKeys skipped empty lines, so the one
+// key a reader presses to open what they selected was advertised in the footer
+// and impossible to send. Nothing downstream was broken; the keystroke never
+// arrived.
+func TestEnterIsReachableInLineMode(t *testing.T) {
+	keys := make(chan rune, 8)
+	readKeys(strings.NewReader("c\n\nw\n"), keys, false)
+	var got []rune
+	for k := range keys {
+		got = append(got, k)
+	}
+	if string(got) != "c\rw" {
+		t.Errorf("line mode read %q, want %q. A bare newline is somebody pressing "+
+			"enter, and dropping it makes the open key unsendable", string(got), "c\rw")
+	}
+}
+
+// Enter marks a row as opened, once.
+//
+// Read-and-clear, so one keystroke opens one row. A flag that stayed set would
+// reopen on every repaint, which at four frames a second means the reader
+// cannot leave the screen they opened.
+func TestEnterOpensOnceAndClears(t *testing.T) {
+	l := &Loop{Out: &strings.Builder{}, Keys: make(chan rune)}
+	l.SetRows(10)
+	if l.TakeOpened() {
+		t.Error("a loop nobody pressed enter on reports an open")
+	}
+	l.press('\r')
+	if !l.TakeOpened() {
+		t.Error("enter did not mark a row as opened")
+	}
+	if l.TakeOpened() {
+		t.Error("the open flag survived being read. It would fire again on the next " +
+			"repaint, and the reader could never leave the screen they opened")
+	}
+}
+
+// Movement does not open, and enter does not move.
+func TestMovementAndOpeningAreSeparate(t *testing.T) {
+	l := &Loop{Out: &strings.Builder{}, Keys: make(chan rune)}
+	l.SetRows(10)
+	l.press('j')
+	if l.TakeOpened() {
+		t.Error("moving down opened a row")
+	}
+	before := l.Cursor().At
+	l.press('\r')
+	if l.Cursor().At != before {
+		t.Errorf("enter moved the cursor from %d to %d", before, l.Cursor().At)
+	}
+}
