@@ -34,6 +34,21 @@ type PriceObservation struct {
 	InputPerMTok    float64
 	OutputPerMTok   float64
 	CacheReadPerMTo float64
+	// CacheWritePerMTok is what the other database charges to create a cache
+	// entry. Carried because it is the larger lever: a write costs 1.25x input
+	// where a read costs 0.1x, and this table applied one constant to every
+	// model without ever asking a second source.
+	CacheWritePerMTok float64
+	// HasCacheRead and HasCacheWrite record whether the other database carried
+	// the field at all.
+	//
+	// Absent is not zero. Without this, a model the observer prices without a
+	// cache entry compares our real figure against 0 and reports a
+	// disagreement that does not exist, which is the same defect as reading a
+	// null install count as no installs. A check that invents disagreements is
+	// no better than one that misses them: both teach the reader to stop
+	// looking at the output.
+	HasCacheRead, HasCacheWrite bool
 }
 
 // PriceDisagreement is one model where the two sources do not match.
@@ -71,10 +86,11 @@ const priceTolerance = 0.005
 // is really a different product.
 func ParseLiteLLMPrices(raw []byte) (map[string]PriceObservation, error) {
 	var db map[string]struct {
-		Input     *float64 `json:"input_cost_per_token"`
-		Output    *float64 `json:"output_cost_per_token"`
-		CacheRead *float64 `json:"cache_read_input_token_cost"`
-		Provider  string   `json:"litellm_provider"`
+		Input      *float64 `json:"input_cost_per_token"`
+		Output     *float64 `json:"output_cost_per_token"`
+		CacheRead  *float64 `json:"cache_read_input_token_cost"`
+		CacheWrite *float64 `json:"cache_creation_input_token_cost"`
+		Provider   string   `json:"litellm_provider"`
 	}
 	if err := json.Unmarshal(raw, &db); err != nil {
 		return nil, fmt.Errorf("parse price database: %w", err)
@@ -105,6 +121,11 @@ func ParseLiteLLMPrices(raw []byte) (map[string]PriceObservation, error) {
 		}
 		if v.CacheRead != nil {
 			obs.CacheReadPerMTo = *v.CacheRead * perM
+			obs.HasCacheRead = true
+		}
+		if v.CacheWrite != nil {
+			obs.CacheWritePerMTok = *v.CacheWrite * perM
+			obs.HasCacheWrite = true
 		}
 		out[name] = obs
 	}
@@ -141,9 +162,12 @@ func CheckPrices(obs map[string]PriceObservation) PriceCheck {
 		for _, f := range []struct {
 			name         string
 			ours, theirs float64
+			// compare is false when the other database does not carry the
+			// field, so silence there means "not observed" rather than "agrees".
+			compare bool
 		}{
-			{"input", m.price.InputPerMTok, o.InputPerMTok},
-			{"output", m.price.OutputPerMTok, o.OutputPerMTok},
+			{"input", m.price.InputPerMTok, o.InputPerMTok, true},
+			{"output", m.price.OutputPerMTok, o.OutputPerMTok, true},
 			// Cache read, converted rather than compared directly. LiteLLM
 			// states an absolute price per million tokens; this table states a
 			// multiplier of input, so the two are only comparable after the
@@ -152,8 +176,15 @@ func CheckPrices(obs map[string]PriceObservation) PriceCheck {
 			// model leans on hardest: a cached read is the cheapest token in
 			// the system and its multiplier decides whether a break costs
 			// anything at all. Reported by roy-tong, issue #54.
-			{"cache read", m.price.InputPerMTok * m.price.ReadMult, o.CacheReadPerMTo},
+			{"cache read", m.price.InputPerMTok * m.price.ReadMult, o.CacheReadPerMTo, o.HasCacheRead},
+			// Cache write. The short-TTL multiplier, because that is what the
+			// other database prices; the long-TTL one has no second observer
+			// and is recorded as unchecked rather than assumed correct.
+			{"cache write", m.price.InputPerMTok * WriteMultiplierShort, o.CacheWritePerMTok, o.HasCacheWrite},
 		} {
+			if !f.compare {
+				continue
+			}
 			if math.Abs(f.ours-f.theirs) > priceTolerance {
 				res.Disagreements = append(res.Disagreements, PriceDisagreement{
 					Model: m.match, SourceKey: o.SourceKey, Field: f.name,

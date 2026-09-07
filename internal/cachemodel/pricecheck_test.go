@@ -215,3 +215,114 @@ func fieldsOf(ds []PriceDisagreement) []string {
 	}
 	return out
 }
+
+// The cache-WRITE multiplier must be checked too, and it is the larger lever.
+//
+// Fixing #54 covered cache reads and left this. A cached read costs 0.1x input;
+// a cache write costs 1.25x, so the unverified constant was the more expensive
+// of the two. LiteLLM carries cache_creation_input_token_cost for 385 models,
+// so the second observer was there the whole time and nothing asked it.
+//
+// It is also not uniform. claude-3-haiku-20240307 prices creation at 1.2x input
+// where every other Anthropic model is 1.25x, and this table applies one
+// constant to all of them. A check that never runs cannot notice that.
+const cacheWriteDisagreesDB = `{
+  "claude-opus-5": {
+    "litellm_provider": "anthropic",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 2.5e-05,
+    "cache_read_input_token_cost": 5e-07,
+    "cache_creation_input_token_cost": 1e-05
+  }
+}`
+
+func TestCacheWriteDisagreementIsReported(t *testing.T) {
+	obs, err := ParseLiteLLMPrices([]byte(cacheWriteDisagreesDB))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := obs["opus-5"]
+	ours := got.InputPerMTok * WriteMultiplierShort
+	if math.Abs(got.CacheWritePerMTok-ours) <= priceTolerance {
+		t.Fatalf("the fixture agrees (%v vs %v), so this test cannot fail",
+			got.CacheWritePerMTok, ours)
+	}
+	var found bool
+	for _, d := range CheckPrices(obs).Disagreements {
+		if d.Model == "opus-5" && d.Field == "cache write" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("a cache-write price of $%.2f per Mtok against our $%.2f was not "+
+			"reported. A write costs 1.25x input against a read's 0.1x, so this is "+
+			"the larger of the two levers and it was the unchecked one",
+			got.CacheWritePerMTok, ours)
+	}
+}
+
+// A model whose write multiple genuinely differs must surface, not be absorbed.
+func TestANonStandardWriteMultipleSurfaces(t *testing.T) {
+	// 1.2x, which is what claude-3-haiku-20240307 actually prices, against the
+	// 1.25x this table applies to every model.
+	const db = `{
+  "claude-opus-5": {
+    "litellm_provider": "anthropic",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 2.5e-05,
+    "cache_read_input_token_cost": 5e-07,
+    "cache_creation_input_token_cost": 6e-06
+  }
+}`
+	obs, err := ParseLiteLLMPrices([]byte(db))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, d := range CheckPrices(obs).Disagreements {
+		if d.Field == "cache write" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("a 1.2x write multiple against our 1.25x was absorbed silently. That " +
+			"is a real difference on a real model and the tolerance must not hide it")
+	}
+}
+
+// A field the other database does not carry is not a disagreement.
+//
+// Caught by an existing test the moment cache-write comparison was added:
+// {Field:cache write Ours:6.25 Theirs:0}. LiteLLM does not price a cache entry
+// for every model, and an absent field arrived as a zero, so our real figure
+// was compared against nothing and reported as a mismatch.
+//
+// It is the same defect as reading a null install count as no installs, and it
+// was latent in the cache-read fix too. A check that invents disagreements is
+// no better than one that misses them: both teach the reader to stop reading
+// the output.
+func TestAnAbsentFieldIsNotADisagreement(t *testing.T) {
+	const noCacheFields = `{
+  "claude-opus-5": {
+    "litellm_provider": "anthropic",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 2.5e-05
+  }
+}`
+	obs, err := ParseLiteLLMPrices([]byte(noCacheFields))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := obs["opus-5"]
+	if got.HasCacheRead || got.HasCacheWrite {
+		t.Fatalf("the fixture carries no cache prices and the parser says it does: "+
+			"read=%v write=%v", got.HasCacheRead, got.HasCacheWrite)
+	}
+	for _, d := range CheckPrices(obs).Disagreements {
+		if d.Field == "cache read" || d.Field == "cache write" {
+			t.Errorf("reported %q as a disagreement when the other database does not "+
+				"carry it: ours %v against their %v, which is absent rather than zero",
+				d.Field, d.Ours, d.Theirs)
+		}
+	}
+}
