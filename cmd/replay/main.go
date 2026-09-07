@@ -135,6 +135,8 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 		return runCorpus(args[1:], stdout, stderr)
 	case "codex":
 		return runCodex(args[1:], stdout, stderr)
+	case "burn":
+		return runBurn(args[1:], stdout, stderr)
 	case "doctor":
 		return runDoctor(args[1:], stdout, stderr)
 	case "probe":
