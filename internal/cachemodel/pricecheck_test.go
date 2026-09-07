@@ -1,6 +1,7 @@
 package cachemodel
 
 import (
+	"math"
 	"strings"
 	"testing"
 )
@@ -130,4 +131,198 @@ func keysOf(m map[string]PriceObservation) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+// A cache-read price that disagrees must be reported.
+//
+// Reported by roy-tong in issue #54, and the diagnosis was exact:
+// CacheReadPerMTo was parsed from LiteLLM and never compared. Its only two
+// appearances in the repository were the field declaration and the line that
+// filled it. The comparison loop built entries for input and output and stopped.
+//
+// So "No disagreement" was silent on the cache-read price, which the cost model
+// leans on more than either of the two it did check: a cached read is the
+// cheapest token in the system and the one whose multiplier decides whether a
+// break is worth anything. A check that cannot fail on the field that matters
+// most is worse than no check, because the output says the prices were verified.
+//
+// The reason it went unwritten is visible in the types and is not an excuse.
+// LiteLLM states an absolute cache-read price per million tokens; this table
+// states a multiplier of input. Comparing them needs a conversion, and the
+// conversion is one line.
+const cacheReadDisagreesDB = `{
+  "claude-opus-5": {
+    "litellm_provider": "anthropic",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 2.5e-05,
+    "cache_read_input_token_cost": 2e-06
+  }
+}`
+
+func TestCacheReadDisagreementIsReported(t *testing.T) {
+	obs, err := ParseLiteLLMPrices([]byte(cacheReadDisagreesDB))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := obs["opus-5"]
+	// $2.00 per Mtok against our $5.00 input times the read multiplier. If this
+	// fixture ever stops disagreeing the test below proves nothing.
+	ours := got.InputPerMTok * ReadMultiplier
+	if math.Abs(got.CacheReadPerMTo-ours) <= priceTolerance {
+		t.Fatalf("the fixture agrees (%v vs %v), so this test cannot fail",
+			got.CacheReadPerMTo, ours)
+	}
+
+	res := CheckPrices(obs)
+	var found *PriceDisagreement
+	for i := range res.Disagreements {
+		if res.Disagreements[i].Model == "opus-5" && res.Disagreements[i].Field == "cache read" {
+			found = &res.Disagreements[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("a cache-read price of $%.2f per Mtok against our $%.2f was not "+
+			"reported. --check-prices would print no disagreement over the field "+
+			"the cost model leans on hardest. Fields reported: %v",
+			got.CacheReadPerMTo, ours, fieldsOf(res.Disagreements))
+	}
+	if found.Theirs != got.CacheReadPerMTo {
+		t.Errorf("reported their price as %v, parsed %v", found.Theirs, got.CacheReadPerMTo)
+	}
+	if math.Abs(found.Ours-ours) > priceTolerance {
+		t.Errorf("reported our price as %v, want %v (input times the read multiplier)",
+			found.Ours, ours)
+	}
+}
+
+// An agreeing cache-read price must not be reported.
+func TestCacheReadAgreementIsNotReported(t *testing.T) {
+	obs, err := ParseLiteLLMPrices([]byte(oneModelDB))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range CheckPrices(obs).Disagreements {
+		if d.Model == "opus-5" && d.Field == "cache read" {
+			t.Errorf("reported a disagreement on a cache-read price that matches: %+v", d)
+		}
+	}
+}
+
+func fieldsOf(ds []PriceDisagreement) []string {
+	out := make([]string, 0, len(ds))
+	for _, d := range ds {
+		out = append(out, d.Field)
+	}
+	return out
+}
+
+// The cache-WRITE multiplier must be checked too, and it is the larger lever.
+//
+// Fixing #54 covered cache reads and left this. A cached read costs 0.1x input;
+// a cache write costs 1.25x, so the unverified constant was the more expensive
+// of the two. LiteLLM carries cache_creation_input_token_cost for 385 models,
+// so the second observer was there the whole time and nothing asked it.
+//
+// It is also not uniform. claude-3-haiku-20240307 prices creation at 1.2x input
+// where every other Anthropic model is 1.25x, and this table applies one
+// constant to all of them. A check that never runs cannot notice that.
+const cacheWriteDisagreesDB = `{
+  "claude-opus-5": {
+    "litellm_provider": "anthropic",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 2.5e-05,
+    "cache_read_input_token_cost": 5e-07,
+    "cache_creation_input_token_cost": 1e-05
+  }
+}`
+
+func TestCacheWriteDisagreementIsReported(t *testing.T) {
+	obs, err := ParseLiteLLMPrices([]byte(cacheWriteDisagreesDB))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := obs["opus-5"]
+	ours := got.InputPerMTok * WriteMultiplierShort
+	if math.Abs(got.CacheWritePerMTok-ours) <= priceTolerance {
+		t.Fatalf("the fixture agrees (%v vs %v), so this test cannot fail",
+			got.CacheWritePerMTok, ours)
+	}
+	var found bool
+	for _, d := range CheckPrices(obs).Disagreements {
+		if d.Model == "opus-5" && d.Field == "cache write" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("a cache-write price of $%.2f per Mtok against our $%.2f was not "+
+			"reported. A write costs 1.25x input against a read's 0.1x, so this is "+
+			"the larger of the two levers and it was the unchecked one",
+			got.CacheWritePerMTok, ours)
+	}
+}
+
+// A model whose write multiple genuinely differs must surface, not be absorbed.
+func TestANonStandardWriteMultipleSurfaces(t *testing.T) {
+	// 1.2x, which is what claude-3-haiku-20240307 actually prices, against the
+	// 1.25x this table applies to every model.
+	const db = `{
+  "claude-opus-5": {
+    "litellm_provider": "anthropic",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 2.5e-05,
+    "cache_read_input_token_cost": 5e-07,
+    "cache_creation_input_token_cost": 6e-06
+  }
+}`
+	obs, err := ParseLiteLLMPrices([]byte(db))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, d := range CheckPrices(obs).Disagreements {
+		if d.Field == "cache write" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("a 1.2x write multiple against our 1.25x was absorbed silently. That " +
+			"is a real difference on a real model and the tolerance must not hide it")
+	}
+}
+
+// A field the other database does not carry is not a disagreement.
+//
+// Caught by an existing test the moment cache-write comparison was added:
+// {Field:cache write Ours:6.25 Theirs:0}. LiteLLM does not price a cache entry
+// for every model, and an absent field arrived as a zero, so our real figure
+// was compared against nothing and reported as a mismatch.
+//
+// It is the same defect as reading a null install count as no installs, and it
+// was latent in the cache-read fix too. A check that invents disagreements is
+// no better than one that misses them: both teach the reader to stop reading
+// the output.
+func TestAnAbsentFieldIsNotADisagreement(t *testing.T) {
+	const noCacheFields = `{
+  "claude-opus-5": {
+    "litellm_provider": "anthropic",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 2.5e-05
+  }
+}`
+	obs, err := ParseLiteLLMPrices([]byte(noCacheFields))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := obs["opus-5"]
+	if got.HasCacheRead || got.HasCacheWrite {
+		t.Fatalf("the fixture carries no cache prices and the parser says it does: "+
+			"read=%v write=%v", got.HasCacheRead, got.HasCacheWrite)
+	}
+	for _, d := range CheckPrices(obs).Disagreements {
+		if d.Field == "cache read" || d.Field == "cache write" {
+			t.Errorf("reported %q as a disagreement when the other database does not "+
+				"carry it: ours %v against their %v, which is absent rather than zero",
+				d.Field, d.Ours, d.Theirs)
+		}
+	}
 }
