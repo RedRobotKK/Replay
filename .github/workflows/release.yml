@@ -22,8 +22,32 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      # The SHA pins the action, not the tool it installs. cosign-release
+      # defaults to whatever is current at run time: v0.4.0 was signed by
+      # cosign v2.5.2 on 2026-09-06 and the identical workflow pulled v3.0.6 the
+      # next day, which defaults to the new bundle format, ignores
+      # --output-signature and --output-certificate, and failed with
+      # "create bundle file: open : no such file or directory".
+      #
+      # Pinned to the version that produced every release so far. It also keeps
+      # publishing checksums.txt.pem and checksums.txt.sig, which is what every
+      # copy of install.sh already in the wild looks for: an installer that
+      # finds cosign and no signature refuses to install rather than proceeding
+      # unverified, so changing the published format is a breaking change for
+      # anyone who has not re-fetched the script. Moving to v3 bundles is a
+      # deliberate migration that updates the installer first and publishes both
+      # formats through a transition, not a side effect of a Tuesday.
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v2.5.2
+      # Same again: this SHA pins the action and not syft. v0.4.0 was built
+      # with syft v1.42.3 and the next day's run pulled v1.51.1, nine minor
+      # versions later. It did not fail, which is the reason to pin it now
+      # rather than after it does: an SBOM whose generator changes underneath a
+      # release is a supply-chain document nobody can reproduce.
       - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          syft-version: v1.42.3
       - name: Verify the tag is on main
         run: |
           git fetch origin main
