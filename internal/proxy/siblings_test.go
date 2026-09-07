@@ -76,6 +76,17 @@ func (u *holdingUpstream) expectNoArrival(t *testing.T, d time.Duration) {
 
 const siblingProbe = 300 * time.Millisecond
 
+// notHeldMS is the ceiling for a request that was never made to wait.
+//
+// A request that genuinely waits for a sibling waits at least siblingProbe,
+// which is 300ms. HeldMS is an elapsed-time measurement, so a request that
+// waited for nothing still reports whatever the scheduler and the clock's
+// granularity happen to add: on a Windows runner that came back as 1ms and
+// failed an assertion of exactly zero. Ten milliseconds is thirty times under
+// the shortest real wait and well over the noise, so it separates the two
+// without asserting the clock.
+const notHeldMS = 10
+
 func postAsync(t *testing.T, base, body string, headers map[string]string) <-chan struct{} {
 	t.Helper()
 	done := make(chan struct{})
@@ -138,8 +149,13 @@ func TestSiblingsAreHeldUntilTheFirstResponseBegins(t *testing.T) {
 	for _, r := range recs {
 		held[r.SessionID] = r.HeldMS
 	}
-	if held["sib"] < siblingProbe.Milliseconds() || held["lead"] != 0 || held["other"] != 0 || held["late"] != 0 || held["after"] != 0 {
-		t.Fatalf("held_ms by session: %v", held)
+	if held["sib"] < siblingProbe.Milliseconds() {
+		t.Fatalf("sib was not held for a sibling: held_ms by session: %v", held)
+	}
+	for _, id := range []string{"lead", "other", "late", "after"} {
+		if held[id] > notHeldMS {
+			t.Fatalf("%s waited for a sibling and should not have: held_ms by session: %v", id, held)
+		}
 	}
 	if !strings.Contains(logs.String(), "session=sib") || !strings.Contains(logs.String(), " held_ms=") {
 		t.Fatalf("the wait must be logged:\n%s", logs.String())
