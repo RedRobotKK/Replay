@@ -45,6 +45,25 @@ type Machine struct {
 	// Found is false when the machine could not be read at all, which is a
 	// different answer from zero and is rendered as one.
 	Found bool
+
+	// Cost is what the corpus adds up to. It arrives late: the walk takes
+	// seconds on a real corpus, and blocking the first frame on it would hand
+	// the delay to the keyboard. Until CostReady the screen shows the field
+	// waiting rather than a zero, which is the same rule the doctor screen
+	// keeps about nothing-found.
+	CostReady       bool
+	Tasks           int
+	TotalUSD        float64
+	MedianUSD       float64
+	P90USD          float64
+	AvoidableUSD    float64
+	AvoidableShare  float64
+	AvoidableTokens int
+	// PriceDate and CorpusFiles say what the figures were computed from, so a
+	// reader can check the total against the same two numbers replay cost
+	// prints.
+	PriceDate   string
+	CorpusFiles int
 }
 
 // DoctorScreen renders what Replay can see here.
@@ -175,4 +194,85 @@ func commas(n int) string {
 		out = append(out, c)
 	}
 	return string(out)
+}
+
+// CostScreen renders what the corpus cost, or that it is still counting.
+//
+// Two states, and the waiting one is not a placeholder. A corpus of a thousand
+// transcripts takes seconds to walk, and a surface that showed zeros until it
+// finished would be showing a wrong number, not a pending one. The pinwheel is
+// the difference between "nothing" and "not yet", and it is the reason the
+// liveness cue exists at all.
+func CostScreen(m Machine, tick int) Screen {
+	head := []string{"  replay cost" + spaces(BudgetCols-13-6) + "v0.4.0", ""}
+
+	if !m.Found {
+		lines := make([]string, 0, BudgetRows)
+		lines = append(lines, head...)
+		lines = append(lines,
+			"  No transcripts to add up.", "",
+			"  "+cell("looked in", 22)+shortPath(m.ProjectsDir),
+			"", "  notes",
+			note(false, "REPLAY_TRANSCRIPTS=/path/to/projects replay tui"))
+		lines = WithBanner(lines, Unavailable, "no transcripts under "+shortPath(m.ProjectsDir))
+		return Screen{Key: 'c', Title: "cost", Lines: padCost(lines), From: Unavailable}
+	}
+
+	if !m.CostReady {
+		lines := make([]string, 0, BudgetRows)
+		lines = append(lines, head...)
+		lines = append(lines,
+			"  "+Pinwheel(tick)+" adding up "+commas(m.CorpusFiles)+" transcripts",
+			"  This takes a few seconds the first time and is cached after.", "",
+			Awaiting("total", tick),
+			Awaiting("median task", tick),
+			Awaiting("avoidable", tick),
+			"", "  notes",
+			note(false, "the keys still work while this counts. Nothing is blocked."))
+		lines = WithBanner(lines, Unavailable, "still counting")
+		return Screen{Key: 'c', Title: "cost", Lines: padCost(lines), From: Unavailable}
+	}
+
+	lines := make([]string, 0, BudgetRows)
+	lines = append(lines, head...)
+	lines = append(lines,
+		"  "+money(m.TotalUSD)+" across "+commas(m.Tasks)+" tasks",
+		"  Median task "+money(m.MedianUSD)+", ninetieth percentile "+money(m.P90USD)+".",
+		"",
+		Row(costCols2, "figure", "value", "what it is"),
+		Row(costCols2, "--------------", "------------", "----------------------------"),
+		Row(costCols2, "total", money(m.TotalUSD), "list price, not your invoice"),
+		Row(costCols2, "median task", money(m.MedianUSD), "half cost less than this"),
+		Row(costCols2, "p90 task", money(m.P90USD), "one task in ten costs more"),
+		Row(costCols2, "avoidable", money(m.AvoidableUSD), avoidableWhat(m)),
+		"", "  notes",
+		note(false, "on a flat seat the dollars are not your bill. "+
+			commas(m.AvoidableTokens)+" tokens is"),
+		"      what the waste actually cost you: context the work did not get.",
+		note(false, "prices dated "+m.PriceDate+", across "+commas(m.CorpusFiles)+" transcripts."))
+	return Screen{Key: 'c', Title: "cost", Lines: padCost(lines), From: Measured}
+}
+
+func avoidableWhat(m Machine) string {
+	if m.TotalUSD <= 0 {
+		return "re-billed by cache breaks"
+	}
+	return fmt.Sprintf("%.0f%% of the total", m.AvoidableShare*100)
+}
+
+// money formats a dollar figure the way the cost report does.
+func money(v float64) string { return fmt.Sprintf("$%.2f", v) }
+
+var costCols2 = []Column{{"figure", 14}, {"value", 12}, {"what it is", 28}}
+
+// padCost fills to the budget and names the command that produced the screen.
+func padCost(lines []string) []string {
+	for len(lines) < BudgetRows-3 {
+		lines = append(lines, "")
+	}
+	if len(lines) > BudgetRows-3 {
+		lines = lines[:BudgetRows-3]
+	}
+	return append(lines, "", "  ran   replay cost --per-task",
+		"  "+Dim("copy it and you never need this screen again."))
 }

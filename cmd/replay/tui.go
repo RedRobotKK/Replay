@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
@@ -50,9 +52,31 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 	// screen from Example to Measured in a change that has to say which source
 	// it now reads.
 	m := machineState()
-	src := func(k rune, _ int) tui.Frame {
-		if k == 'd' {
-			return tui.Frame{Key: k, Lines: tui.DoctorScreen(m).Lines}
+
+	// The corpus walk takes seconds and must not hold the first frame.
+	//
+	// Counting on the render path would hand the delay to the keyboard, which
+	// is the one thing the design says never to do. It runs behind a mutex
+	// instead and the cost screen shows its fields waiting until the answer
+	// lands: the pinwheel is the difference between "nothing" and "not yet",
+	// and zero dollars is a number somebody would believe.
+	var mu sync.Mutex
+	go func() {
+		counted := costState(m)
+		mu.Lock()
+		m = counted
+		mu.Unlock()
+	}()
+
+	src := func(k rune, tick int) tui.Frame {
+		mu.Lock()
+		cur := m
+		mu.Unlock()
+		switch k {
+		case 'd':
+			return tui.Frame{Key: k, Lines: tui.DoctorScreen(cur).Lines}
+		case 'c':
+			return tui.Frame{Key: k, Lines: tui.CostScreen(cur, tick).Lines}
 		}
 		return tui.Frame{Key: k, Lines: tui.Outcome(k).Lines}
 	}
@@ -60,6 +84,11 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 	if *once {
 		// The footer the loop would have added, so a single frame is the same
 		// frame either way.
+		// --once waits for the count, because a single frame that says
+		// "still counting" and exits has answered nothing.
+		if key == 'c' {
+			m = costState(m)
+		}
 		frame := src(key, 0).Lines
 		lines := make([]string, 0, len(frame)+1)
 		lines = append(lines, frame...)
@@ -154,4 +183,51 @@ func readingCounts(home string) (readings, models int) {
 		}
 	}
 	return readings, len(seen)
+}
+
+// costState adds up the corpus, using the same summary the cost report prints.
+//
+// Same helpers, so the screen and `replay cost` cannot disagree about the
+// total. A screen that computed its own figure a second, subtly different way
+// would be a second source of truth, and the point of this surface is that
+// there is one.
+func costState(m tui.Machine) tui.Machine {
+	if !m.Found {
+		return m
+	}
+	// The cost report, run in process and read back as JSON.
+	//
+	// Not a reimplementation. The unit assembly lives inside runCost's own walk
+	// and extracting it would refactor a working, tested command for no gain;
+	// calling it means the screen and `replay cost` cannot disagree about the
+	// total, which is the property that matters. A second, subtly different
+	// walk producing a slightly different figure is exactly how the two counts
+	// in `doctor` drifted apart once already.
+	var buf bytes.Buffer
+	if err := runCost([]string{"--json"}, &buf, io.Discard); err != nil {
+		return m
+	}
+	var out struct {
+		Summary struct {
+			Tasks           int     `json:"tasks"`
+			TotalUSD        float64 `json:"totalUsd"`
+			MedianUSD       float64 `json:"medianUsd"`
+			P90USD          float64 `json:"p90Usd"`
+			AvoidableUSD    float64 `json:"avoidableUsd"`
+			AvoidableShare  float64 `json:"avoidableShare"`
+			AvoidableTokens int     `json:"avoidableTokens"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &out); err != nil || out.Summary.Tasks == 0 {
+		return m
+	}
+	sm := out.Summary
+	m.CostReady = true
+	m.Tasks = sm.Tasks
+	m.TotalUSD, m.MedianUSD, m.P90USD = sm.TotalUSD, sm.MedianUSD, sm.P90USD
+	m.AvoidableUSD, m.AvoidableShare = sm.AvoidableUSD, sm.AvoidableShare
+	m.AvoidableTokens = sm.AvoidableTokens
+	m.PriceDate = cachemodel.PriceTableVersion
+	m.CorpusFiles = m.Transcripts
+	return m
 }
