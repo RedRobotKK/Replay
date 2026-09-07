@@ -71,8 +71,8 @@ What the corpus does establish is the direction and its size. Of the
 516,531,547 tokens in the attributed window, **483,512,448 were cached reads**.
 Whatever weight those carry, it is far below one: at full weight the observed
 mix would imply a 311M token window on a consumer plan, which is not credible.
-So cache health has large leverage over quota. How large is unresolved, and
-this file does not pretend otherwise.
+So the cache does most of the work of keeping a session inside its window.
+How much is unresolved, and this file does not pretend otherwise.
 
 Settling it needs one controlled run: a session with a known uncached volume,
 started against a known counter value, on an account whose window size is
