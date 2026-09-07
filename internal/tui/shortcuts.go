@@ -4,8 +4,8 @@ import "strings"
 
 // Most people will never type a flag.
 //
-// Replay has 72 of them across 11 commands, and the flag-surface design
-// classified all 72 into six kinds of screen element. That was the right map
+// Replay has 75 of them across 13 commands, and the flag-surface design
+// classified all 75 into six kinds of screen element. That was the right map
 // of the wrong territory: it assumed the person at the keyboard is choosing.
 // They are not. A TUI, or an agent, runs the command for them and their whole
 // experience is whatever lands on screen afterwards.
@@ -21,6 +21,7 @@ import "strings"
 //	which model should I be using
 //	is my setup actually safe
 //	is anything broken
+//	is any of this worth posting
 //
 // A flag is then an implementation detail of answering one of those, chosen by
 // the tool rather than the user.
@@ -61,12 +62,22 @@ type Shortcut struct {
 	Label string
 }
 
-// Shortcuts is the whole surface: eight questions, eight keys.
+// shareKey opens the share screen.
 //
-// Eight because that is what fits on one line of hints inside the budget, and
-// because a ninth would mean two of them overlap. Every command Replay has is
-// reachable from one of these or from the command line; not every command
-// deserves a key.
+// p, not s: s is the safety screen and was there first. The card is a picture
+// somebody posts, so p reads as post, and it is the same kind of borrowing as
+// x for context and m for model — the letter is a handle, not an abbreviation.
+const shareKey = 'p'
+
+// Shortcuts is the whole surface: nine questions, nine keys.
+//
+// Nine is the ceiling, and it is a measured one rather than a preference. The
+// key strip is one line of eighty columns, every entry costs three columns plus
+// its label, and the nine labels come to exactly eighty with the quit hint on
+// the end. A tenth does not fit, and a second row of hints is a menu.
+//
+// Every command Replay has is reachable from one of these or from the command
+// line; not every command deserves a key.
 func Shortcuts() []Shortcut {
 	return []Shortcut{
 		{'c', "What did this cost me?", "cost", []string{"--per-task"},
@@ -85,6 +96,8 @@ func Shortcuts() []Shortcut {
 			"What masking covers, and the paths it does not reach.", "safe"},
 		{'d', "Is anything broken?", "doctor", nil,
 			"What Replay can see on this machine, and what it cannot.", "doctor"},
+		{shareKey, "Is any of this worth posting?", "cost", []string{"--share", "--png"},
+			"What a card of these figures would say, and what it would not carry.", "share"},
 	}
 }
 
@@ -119,6 +132,11 @@ func Hints(cur rune) string {
 		}
 		b.WriteString(" " + string(s.Key) + " " + s.Label)
 	}
-	b.WriteString("  q quit")
+	// One space before the quit hint, the same as every other entry gets.
+	//
+	// It had two, which cost a column nothing was buying: at nine questions the
+	// strip is exactly eighty columns and the second space put it over. Every
+	// entry on this line is separated by one space and this one is not special.
+	b.WriteString(" q quit")
 	return b.String()
 }

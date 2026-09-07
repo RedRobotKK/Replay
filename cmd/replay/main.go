@@ -539,6 +539,7 @@ Start here:
   replay diff   <transcript|dir>   locate and classify every cache break, with its cause
   replay advise <dir...>           the largest token sources, ranked, with predicted savings
   replay serve  [flags]            local proxy: byte-for-byte passthrough, records a ledger
+  replay tui                       the same answers as screens you can move between
 
 Look closer:
   replay cost   <dir...>           cost per task, and --compare <date> for before/after
@@ -550,6 +551,8 @@ Look closer:
   replay route  <dir> --to <model> what switching models would change, structurally
   replay trim   <dir> --cap <n>    what a byte cap on tool output would have saved, and cost
   replay advise <dir> --guards     spend caps from your own session spread, print-only
+  replay codex  <dir...>           the same reading, for OpenAI Codex rollout logs
+  replay burn                      what each agent surface burned: Codex, Ollama, Claude Code
 
 Corpus and calibration:
   replay corpus <dir...>           calibration across many sessions, as Markdown (no paths or content)
