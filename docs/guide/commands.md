@@ -265,6 +265,20 @@ This is list price against transcripts, not your invoice. It says so in its own 
 
 Live spend, cache health, and what the misses are costing, in Claude Code's status line.
 
+**Two currencies, and an account has one of them.** A metered account is billed per token and
+Claude Code sends `cost`. A subscription seat is not billed per token at all: it sends
+`rate_limits`, carrying used-percentage and a reset time for a five-hour window, a seven-day
+window, and a spend limit where the account has one. Replay reports whichever window binds,
+which is not always the one listed first, and says how long until it resets, because "83%" is a
+number and "83%, resets in 40 minutes" is a decision.
+
+A window whose reset has already passed is not reported at all. Claude Code shipped a fix for a
+bug where a pre-reset percentage kept displaying on an idle session; reading that field back
+afterwards would be the same defect moved downstream, so an expired window is treated as no
+reading rather than as a full one. No attempt is made to convert a window into money: the
+titration that tried returned a null result, and a rate invented here would be exactly the kind
+of figure this tool refuses to state.
+
 ```sh
 replay statusline --install   # prints the settings.json snippet
 ```
