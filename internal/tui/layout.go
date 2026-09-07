@@ -92,9 +92,11 @@ func Meter(fraction float64, width int) string {
 	return string(out)
 }
 
-// Glyph width safety, measured rather than assumed.
+// GlyphSafety records which glyph sets occupy one cell in every locale,
+// measured rather than assumed.
 //
-// The intuition is backwards here, so the table is written down.
+// The intuition is backwards here, which is why it is a table and a test
+// rather than a rule somebody has to remember.
 //
 // Braille patterns look exotic and are SAFE: East Asian Width Neutral, one cell
 // in every locale. The humble full block and the fractional blocks that every
@@ -103,7 +105,7 @@ func Meter(fraction float64, width int) string {
 //
 // A sparkline made of Braille is therefore safer than one made of blocks, which
 // is the opposite of what the glyphs look like.
-var glyphSafety = map[string]bool{
+var GlyphSafety = map[string]bool{
 	// safe: one cell everywhere
 	"|/-\\": true, // the pinwheel
 	"#.":    true, // the meter

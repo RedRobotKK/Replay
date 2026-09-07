@@ -128,17 +128,16 @@ func TestMeterKeepsItsWidth(t *testing.T) {
 // while the full block every terminal chart is drawn from is Ambiguous and
 // doubles in a CJK locale. A sparkline of Braille is safer than one of blocks.
 func TestGlyphSafetyMatchesMeasurement(t *testing.T) {
-	safe := []string{"|/-\\", "#.", "[]<>", "⠐⢿"}
-	unsafe := []string{"█", "▏", "─", "│", "§"}
-	for _, s := range safe {
-		if !SafeInAFrame(s) {
-			t.Errorf("%q is measured safe and the code rejects it", s)
-		}
+	if len(GlyphSafety) == 0 {
+		t.Fatal("the table is empty, so this check would pass over nothing")
 	}
-	for _, s := range unsafe {
-		if SafeInAFrame(s) {
-			t.Errorf("%q is East Asian Ambiguous and would double in a CJK terminal, "+
-				"and the code accepts it in a frame", s)
+	for glyphs, want := range GlyphSafety {
+		if got := SafeInAFrame(glyphs); got != want {
+			verdict := "safe"
+			if !want {
+				verdict = "East Asian Ambiguous, and doubles in a CJK terminal"
+			}
+			t.Errorf("%q is measured %s and SafeInAFrame says %v", glyphs, verdict, got)
 		}
 	}
 }
