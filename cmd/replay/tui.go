@@ -44,7 +44,13 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 	}
 
 	if *once {
-		for _, l := range src(key, 0).Lines {
+		// The footer the loop would have added, so a single frame is the same
+		// frame either way.
+		frame := src(key, 0).Lines
+		lines := make([]string, 0, len(frame)+1)
+		lines = append(lines, frame...)
+		lines = append(lines, tui.Footer(key))
+		for _, l := range lines {
 			if _, err := fmt.Fprintln(stdout, l); err != nil {
 				return err
 			}

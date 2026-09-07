@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -207,4 +208,85 @@ func TestAPipeGetsNoEscapeSequences(t *testing.T) {
 		t.Error("a real terminal did not get the alternate screen, so the surface " +
 			"would scribble over the user's scrollback")
 	}
+}
+
+// Every key the surface advertises must do something.
+//
+// The footer said "j k move" and j did nothing. Up, down, enter, g, G and /
+// were all in the vocabulary and none reached press(). A surface that lists a
+// key it does not handle is lying in the one place a beginner looks, and this
+// audience is explicitly people who do not know the tool.
+//
+// It is the same defect as a status outrunning its evidence, moved to the
+// keyboard: the help text is a claim, and nothing checked it against the code.
+func TestEveryAdvertisedKeyIsHandled(t *testing.T) {
+	l := &Loop{Out: &bytes.Buffer{}, Source: plain, Keys: make(chan rune)}
+	l.cur = 'c'
+
+	for _, b := range Bindings() {
+		if b.Layer == L3 {
+			continue // documentation, not keystrokes
+		}
+		for _, k := range keysOfBinding(b.Keys) {
+			// Start somewhere the key can move away from, and with the overlay
+			// open so escape has something to close. Without this the test
+			// reports its own starting position as a defect.
+			l.cur, l.help = 'd', true
+			before := snapshot(l)
+			l.press(k)
+			after := snapshot(l)
+			if before == after && k != 'q' {
+				t.Errorf("%q is advertised as %q and changes nothing when pressed. "+
+					"Either handle it or stop offering it: a key listed in the footer "+
+					"is a promise to somebody who does not know this tool",
+					string(k), b.Does)
+			}
+			l.cur, l.help = 'c', false
+		}
+	}
+}
+
+// No key may mean two things.
+//
+// g was bound to the guards screen as a shortcut and to "first row" in the vim
+// layer at the same time. One of them was never going to happen, and the help
+// overlay listed both.
+func TestNoKeyIsBoundTwice(t *testing.T) {
+	seen := map[rune]string{}
+	for _, b := range Bindings() {
+		if b.Layer == L3 {
+			continue
+		}
+		for _, k := range keysOfBinding(b.Keys) {
+			if prev, dup := seen[k]; dup {
+				t.Errorf("%q means both %q and %q. The overlay lists both and only one "+
+					"can happen", string(k), prev, b.Does)
+			}
+			seen[k] = b.Does
+		}
+	}
+}
+
+// keysOfBinding turns a binding label into the runes it stands for.
+func keysOfBinding(s string) []rune {
+	switch s {
+	case "up down", "enter":
+		return nil // named keys, not printable runes; covered separately
+	case "esc":
+		return []rune{27}
+	}
+	var out []rune
+	for _, f := range strings.Fields(s) {
+		if len([]rune(f)) == 1 {
+			out = append(out, []rune(f)[0])
+		}
+	}
+	return out
+}
+
+// snapshot captures the loop state a keystroke could change.
+func snapshot(l *Loop) string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return string(l.cur) + fmt.Sprint(l.help)
 }

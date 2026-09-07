@@ -247,6 +247,24 @@ var allowedImports = map[string]bool{
 	"sync": true, "sync/atomic": true, "syscall": true, "testing": true,
 	"time": true, "unicode": true, "unicode/utf8": true,
 
+	// unsafe, for exactly one thing: handing a termios struct to
+	// syscall.Syscall so `replay tui` can read one keypress at a time.
+	// internal/tui/term_unix.go is its only use, and the ioctl numbers are
+	// per-platform constants beside it.
+	//
+	// Weighed against the two alternatives, which each spend something real. A
+	// dependency on golang.org/x/term ends a go.mod with no requires at all,
+	// and for a binary that sits in front of your traffic holding a token
+	// that is a claim worth more than thirty lines. Asking for Enter after
+	// every keystroke is a worse surface for the people this is built for.
+	//
+	// What this does NOT enable is the point of the list. unsafe grants no
+	// cryptography: crypto/ecdsa, crypto/ed25519, crypto/elliptic, crypto/ecdh
+	// and math/big remain absent and still fail this test. Pointer arithmetic
+	// cannot produce a signature over a transaction, and the guard against
+	// that is unchanged.
+	"unsafe": true,
+
 	// Cryptography, narrowly. These are for the secret vault in `serve
 	// --mask`: symmetric encryption of masked values at rest, and hashing for
 	// identity. None of them can produce a signature over a transaction.

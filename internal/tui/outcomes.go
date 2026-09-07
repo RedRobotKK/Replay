@@ -150,7 +150,15 @@ func Outcome(key rune) Screen {
 		lines = append(lines, "")
 	}
 	lines = append(lines, Ran(sc)...)
-	lines = append(lines, "", Hints(key))
+	// No footer here.
+	//
+	// The loop appends Footer(key) to whatever a source returns, so a screen
+	// carrying its own produced two, and the one baked in here was the old
+	// eight-key strip that progressive disclosure moved behind "?". The
+	// --once path printed that strip while the interactive path printed the
+	// three-key floor: the same screen, two different promises, depending on
+	// how you looked at it.
+	lines = append(lines, "")
 	return Screen{Key: key, Title: sc.Label, Lines: lines}
 }
 

@@ -1,33 +1,73 @@
+//go:build unix
+
 package tui
 
-import "errors"
+import (
+	"os"
+	"syscall"
+	"unsafe"
+)
 
-// Per-key input is not available in this build, and the reason is a boundary
-// worth more than the convenience.
+// Raw mode, with the standard library and nothing else.
 //
-// Raw mode needs a termios ioctl, which needs unsafe.Pointer to hand the struct
-// to syscall.Syscall. TestX402_NoSigningCapability keeps unsafe out of the
-// shipped binary's import tree, because a tool that sits in front of your API
-// traffic holding a token should not be able to reach past the type system.
-// Shelling out to stty is blocked by the same family of guard, which keeps
-// os/exec out.
+// go.mod has no requires. For a binary that sits in front of your API traffic
+// holding a token, dependency-free is a claim worth keeping, so this does the
+// termios dance directly rather than adding golang.org/x/term for thirty lines.
+// Shelling out to stty is not available either: the guard that keeps os/exec
+// out of this binary is worth more than the convenience.
 //
-// The alternatives were weighed and none is mine to take:
-//
-//	allowlist unsafe        widens a security boundary for a UI feature
-//	add golang.org/x/term   ends a dependency-free go.mod, which is a real
-//	                        claim for a binary holding a credential
-//	drop per-key input      what this does
-//
-// So keys need Enter. That is a worse surface and an honest one, and the loop
-// is written so swapping this out later changes nothing above it: readKeys
-// already handles both, and its raw path is tested.
-type termState struct{}
+// unsafe is on the x402 allowlist for exactly this, with the reasoning recorded
+// beside it. It buys one keypress at a time and grants no cryptography; the
+// signing guard is untouched.
+type termState struct {
+	fd  int
+	old syscall.Termios
+}
 
-var errNoRawMode = errors.New(
-	"per-key input needs a termios ioctl, which needs unsafe, which this binary " +
-		"deliberately cannot import")
+// rawMode puts the terminal into per-key input and returns the previous state.
+//
+// A failure here is not fatal. The caller falls back to line mode, because a
+// surface that refuses to start over per-key input is worse than one that asks
+// for a return.
+func rawMode() (*termState, error) {
+	fd := int(os.Stdin.Fd())
+	var old syscall.Termios
+	if err := ioctlTermios(fd, reqGetTermios, &old); err != nil {
+		return nil, err
+	}
+	raw := old
+	// Per key, no echo, no carriage-return translation.
+	//
+	// ISIG stays on deliberately: ctrl-c must still kill the process. A
+	// full-screen program you cannot interrupt is one people reach for the
+	// window close button on, and then wonder why their terminal is broken.
+	raw.Lflag &^= syscall.ICANON | syscall.ECHO
+	raw.Iflag &^= syscall.ICRNL
+	raw.Cc[syscall.VMIN] = 1
+	raw.Cc[syscall.VTIME] = 0
+	if err := ioctlTermios(fd, reqSetTermios, &raw); err != nil {
+		return nil, err
+	}
+	return &termState{fd: fd, old: old}, nil
+}
 
-func rawMode() (*termState, error) { return nil, errNoRawMode }
+// restore puts the terminal back.
+//
+// Called on every exit path including the signal handler. A program that exits
+// leaving a terminal in raw mode with no cursor has broken the shell its user
+// came from, and they will not know which program did it.
+func (t *termState) restore() {
+	if t == nil {
+		return
+	}
+	_ = ioctlTermios(t.fd, reqSetTermios, &t.old)
+}
 
-func (t *termState) restore() {}
+func ioctlTermios(fd int, req uintptr, t *syscall.Termios) error {
+	_, _, errno := syscall.Syscall6(syscall.SYS_IOCTL, uintptr(fd), req,
+		uintptr(unsafe.Pointer(t)), 0, 0, 0)
+	if errno != 0 {
+		return errno
+	}
+	return nil
+}

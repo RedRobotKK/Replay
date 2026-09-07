@@ -58,15 +58,23 @@ func TestBothL0AndL1AreOffered(t *testing.T) {
 		t.Error("no L1 binding. j/k, /, ? and g/G are the vocabulary terminal users " +
 			"already have, and omitting them asks them to unlearn it")
 	}
-	want := []string{"j k", "/", "?", "g G", "esc", "q"}
-	have := map[string]bool{}
+	// No fixed list of vim keys is required here.
+	//
+	// It used to demand j/k, g/G and "/", which are the right vocabulary and
+	// were being advertised before anything handled them. Requiring them by
+	// name made the aspiration load-bearing: the way to satisfy this test was
+	// to list keys that did nothing.
+	//
+	// What must hold is that both layers exist and that everything offered
+	// works, which TestEveryAdvertisedKeyIsHandled enforces. The vim block
+	// returns with row selection, and that test will require it to function on
+	// the day it is listed.
 	for _, b := range Bindings() {
-		have[b.Keys] = true
-	}
-	for _, k := range want {
-		if !have[k] {
-			t.Errorf("%q is not bound. It is part of the six-keystroke vocabulary that "+
-				"covers most terminal navigation", k)
+		if b.Layer == L0 || b.Layer == L1 {
+			if b.Keys == "" || b.Does == "" {
+				t.Errorf("a %v binding is missing its key or its description: %+v",
+					b.Layer, b)
+			}
 		}
 	}
 }
