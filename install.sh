@@ -323,7 +323,7 @@ else
     # run means a failed upgrade takes the user's working copy with it: a
     # wrong-architecture download, an interrupted copy, a full disk, and they
     # are left with nothing where they started with something. Removing the
-    # broken file afterwards is not a fix — it just makes the loss tidy.
+    # broken file afterwards is not a fix; it just makes the loss tidy.
     #
     # So install to a sibling, run it there, and only then move it into place.
     # The final mv is atomic within a filesystem, so there is no window where
@@ -339,7 +339,7 @@ else
     # been reported as "Installed" either way.
     if ! "$staged" version >/dev/null 2>&1; then
       # It does not run. Discard the staged copy and leave whatever was already
-      # installed exactly as it was — the user keeps the working binary they
+      # installed exactly as it was, so the user keeps the working binary they
       # had, and nothing that cannot run reaches their PATH.
       why=$("$staged" version 2>&1 | head -3 || true)
       rm -f "$staged"
@@ -458,14 +458,15 @@ printf '\n%sDocs%s https://github.com/%s#readme   %sUninstall%s rm %s/%s\n' \
 # holding a list of things to type.
 #
 # `curl … | sh` hands this script a pipe on stdin. The binary would find no
-# terminal there, fall back to line mode and paint a single static frame — the
-# worst outcome, because a frozen surface looks like the product. /dev/tty is
-# the controlling terminal and survives the pipe, so keys arrive as keys.
+# terminal there, fall back to line mode and paint a single static frame. That
+# is the worst outcome, because a frozen surface looks like the product.
+# /dev/tty is the controlling terminal and survives the pipe, so keys arrive
+# as keys.
 #
 # The probe is an open of /dev/tty, not a test of stdin: stdin is the script
 # and says nothing about whether a person is watching. Where there is no
 # controlling terminal the open is skipped and the Next: lines above stand on
-# their own — CI, a Dockerfile RUN, cron, a provisioner, a container built
+# their own: CI, a Dockerfile RUN, cron, a provisioner, a container built
 # without -t. REPLAY_NO_OPEN=1 skips it for anyone who wants the old ending.
 should_open() {
   [ "${REPLAY_NO_OPEN:-0}" = "1" ] && return 1
