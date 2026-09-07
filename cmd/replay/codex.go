@@ -90,6 +90,7 @@ func runCodex(args []string, stdout, stderr io.Writer) error {
 
 	var billed, reported int
 	var refused, compacted, quotas int
+	var breaks, coldTokens int
 	var latest *transcript.CodexQuota
 	type row struct {
 		name             string
@@ -115,6 +116,10 @@ func runCodex(args []string, stdout, stderr io.Writer) error {
 			quotas++
 			latest = s.Quota
 		}
+		breaks += len(s.Breaks)
+		for _, b := range s.Breaks {
+			coldTokens += b.ColdTokens
+		}
 		rows = append(rows, row{filepath.Base(f), s.Billed.Total(), s.Reported.Total(), s.Rebased, s.Skipped})
 	}
 
@@ -135,9 +140,17 @@ func runCodex(args []string, stdout, stderr io.Writer) error {
 			comma(gap), pct, compacted, comma(reported))
 	}
 	if refused > 0 {
-		_, _ = fmt.Fprintf(stdout, "  [NOTE] %d record(s) refused: a cached or reasoning count larger\n"+
-			"         than the total it is a share of cannot be true, so it was not\n"+
-			"         added to the figure above.\n\n", refused)
+		_, _ = fmt.Fprintf(stdout, "  [NOTE] %d record(s) refused, either because a share exceeded the\n"+
+			"         total it is part of, or because a total arrived with no breakdown\n"+
+			"         at all. Neither can be priced, and neither is zero.\n\n", refused)
+	}
+
+	if breaks > 0 {
+		_, _ = fmt.Fprintf(stdout, "  cache\n")
+		_, _ = fmt.Fprintf(stdout, "    %d break(s) re-read %s tokens cold that the turn before\n",
+			breaks, comma(coldTokens))
+		_, _ = fmt.Fprintf(stdout, "    them had warm. Codex states the cached share every turn, so\n")
+		_, _ = fmt.Fprintf(stdout, "    this is read off the log rather than inferred from a prefix.\n\n")
 	}
 
 	if latest != nil {

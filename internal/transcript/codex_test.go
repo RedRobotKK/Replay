@@ -80,3 +80,64 @@ func TestCodexRejectsImpossibleSubsets(t *testing.T) {
 			s.Skipped)
 	}
 }
+
+// A total with no breakdown is absent, not zero.
+//
+// 15 records in a 148-session corpus carry total_tokens in the thousands with
+// every component at zero. The components are missing, not measured as none,
+// and adding zero for them silently loses the tokens. Counting the refusal is
+// the difference between a total that is short and a total that says so.
+func TestCodexRefusesATotalWithNoBreakdown(t *testing.T) {
+	s, err := ParseCodexFile("codexdata/absent-breakdown.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Billed.Total() != 0 {
+		t.Errorf("billed = %d, want 0: a record with no breakdown cannot be priced",
+			s.Billed.Total())
+	}
+	if s.Skipped != 1 {
+		t.Errorf("Skipped = %d, want 1: 11,014 tokens went missing without a word",
+			s.Skipped)
+	}
+}
+
+// A cache break on Codex is reported, not inferred.
+//
+// For Anthropic this engine hashes the prefix and works out that it changed.
+// Codex states cached_input_tokens on every turn, so a break is visible
+// directly: a turn whose cached share collapses against the turn before it.
+// Measured across 148 local sessions, 80 such collapses re-read 10,635,679
+// tokens cold, and none of the three largest followed a compaction.
+func TestCodexSeesACacheBreakWithoutInferringIt(t *testing.T) {
+	s, err := ParseCodexFile("codexdata/break.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Breaks) != 1 {
+		t.Fatalf("breaks = %d, want 1: cached went 98%% to 3%% between turns", len(s.Breaks))
+	}
+	b := s.Breaks[0]
+	// 12,000 read, 300 of it cached, so 11,700 arrived cold that the previous
+	// turn would have had for a tenth of the price.
+	if b.ColdTokens != 11700 {
+		t.Errorf("cold tokens = %d, want 11700", b.ColdTokens)
+	}
+	if b.BeforeShare < 0.97 || b.AfterShare > 0.05 {
+		t.Errorf("shares = %.2f -> %.2f, want ~0.98 -> ~0.03", b.BeforeShare, b.AfterShare)
+	}
+}
+
+// A session that never cached well has no break to report.
+func TestCodexDoesNotInventBreaksWhereTheCacheNeverHeld(t *testing.T) {
+	s, err := ParseCodexFile("codexdata/compacted.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range s.Breaks {
+		if b.BeforeShare < 0.5 {
+			t.Errorf("reported a break from a %.0f%% cached turn; that is not a break, "+
+				"it is a session that was never warm", 100*b.BeforeShare)
+		}
+	}
+}

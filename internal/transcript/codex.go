@@ -34,6 +34,19 @@ type CodexQuota struct {
 	SecondaryResetsAt      int64
 }
 
+// CodexBreak is a turn whose cached share collapsed against the turn before.
+//
+// On the Anthropic surface a break has to be inferred: hash the prefix, notice
+// it changed. Codex reports cached_input_tokens every turn, so the break is
+// stated rather than deduced, and ColdTokens is what the provider re-read at
+// full price that the previous turn had warm.
+type CodexBreak struct {
+	Line        int
+	BeforeShare float64
+	AfterShare  float64
+	ColdTokens  int
+}
+
 // CodexSession is one rollout file.
 //
 // Billed and Reported are kept apart on purpose. They are the same quantity
@@ -56,6 +69,12 @@ type CodexSession struct {
 	Compactions   []Compaction
 	Quota         *CodexQuota
 	ContextWindow int
+	// Breaks are the turns where the cache stopped holding.
+	Breaks []CodexBreak
+	// prevShare carries the previous turn's cached share so a collapse can be
+	// seen. Unexported: it is scaffolding for the walk, not a result.
+	prevShare float64
+	line      int
 	// Skipped counts records this reader refused. Non-zero is not an error,
 	// but it is reported, because a format change must not pass silently.
 	Skipped int
@@ -121,6 +140,13 @@ func (c *codexUsage) usage() (Usage, bool) {
 	if c.Cached > c.Input || c.Reasoning > c.Output {
 		return Usage{}, false
 	}
+	// A total with no breakdown is absent, not zero. Fifteen records in a
+	// 148-session corpus carry total_tokens in the thousands with every
+	// component at zero; adding zero for them loses the tokens without
+	// saying so, which is the failure this reader exists to avoid.
+	if c.Total > 0 && c.Input+c.Output == 0 {
+		return Usage{}, false
+	}
 	return Usage{
 		Input:          c.Input,
 		CacheRead:      c.Cached,
@@ -165,6 +191,7 @@ func ParseCodex(r io.Reader) (*CodexSession, error) {
 		if line == "" {
 			continue
 		}
+		s.line++
 		var l codexLine
 		if err := json.Unmarshal([]byte(line), &l); err != nil {
 			s.Skipped++
@@ -208,6 +235,7 @@ func (s *CodexSession) event(p codexPayload) {
 		}
 		if u, ok := p.Info.Last.usage(); ok {
 			s.Billed.add(u)
+			s.observeCache(u)
 		} else if p.Info.Last != nil {
 			s.Skipped++
 		}
@@ -230,4 +258,33 @@ func (r *codexRateLimits) quota() *CodexQuota {
 		q.SecondaryResetsAt = r.Secondary.ResetsAt
 	}
 	return q
+}
+
+// observeCache records a turn where the cache stopped holding.
+//
+// The thresholds are deliberately far apart. A warm turn is above 50% cached
+// and a cold one below 10%, so ordinary variation between the two does not
+// register: only a collapse does. The floor on input size keeps a short
+// opening turn, which is cold because there is nothing to cache yet rather
+// than because something broke, out of the count.
+const (
+	codexWarmShare   = 0.50
+	codexColdShare   = 0.10
+	codexMinColdRead = 2000
+)
+
+func (s *CodexSession) observeCache(u Usage) {
+	if u.Input <= 0 {
+		return
+	}
+	share := float64(u.CacheRead) / float64(u.Input)
+	if s.prevShare > codexWarmShare && share < codexColdShare && u.Input >= codexMinColdRead {
+		s.Breaks = append(s.Breaks, CodexBreak{
+			Line:        s.line,
+			BeforeShare: s.prevShare,
+			AfterShare:  share,
+			ColdTokens:  u.Input - u.CacheRead,
+		})
+	}
+	s.prevShare = share
 }
