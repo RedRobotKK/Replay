@@ -91,12 +91,43 @@ func TestNoticesFitTheBudget(t *testing.T) {
 // them is measured. Pinning that turns the flip into a decision somebody makes
 // deliberately: the day a screen is wired, this test fails and whoever wired it
 // says so in the same change.
-func TestNoScreenClaimsToBeMeasuredYet(t *testing.T) {
-	for _, sc := range Outcomes() {
-		if sc.From == Measured {
-			t.Errorf("%q declares itself measured. Nothing on these screens reads a "+
-				"ledger, a corpus or a running proxy yet. If that changed, this test "+
-				"is the place to say which source it now reads", sc.Title)
+func TestEveryMeasuredScreenNamesItsSource(t *testing.T) {
+	// Which screens read the machine, and what they read. Adding a Measured
+	// screen without adding it here fails, which is the review moment: the
+	// change that wires a source is the change that says so.
+	sources := map[string]string{
+		"doctor": "the transcript walk, the ledger directory, the compiled price " +
+			"table and ~/.replay/measurements.jsonl",
+	}
+
+	all := append([]Screen(nil), Outcomes()...)
+	all = append(all, DoctorScreen(aMachine()))
+
+	if len(all) <= len(Outcomes()) {
+		t.Fatal("the screen list did not grow, so this check walks only the example " +
+			"screens and a new measured one would pass unexamined")
+	}
+	for _, sc := range all {
+		if sc.From != Measured {
+			continue
+		}
+		if _, named := sources[sc.Title]; !named {
+			t.Errorf("%q declares itself measured and this test does not say what it "+
+				"reads. Name the source here in the same change that wires it, or the "+
+				"claim has nothing behind it", sc.Title)
+		}
+	}
+	for title := range sources {
+		var found bool
+		for _, sc := range all {
+			if sc.Title == title && sc.From == Measured {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("this test names a source for %q and no measured screen by that "+
+				"name exists. A record of a wiring that was removed is worse than none",
+				title)
 		}
 	}
 }
