@@ -9,7 +9,7 @@ import (
 //
 // One question in, one screen out, inside eighty columns and twenty-four rows.
 // The shape is the same every time, which is the point: a user who learns to
-// read one of these can read all eight, and the thing that changes between them
+// read one of these can read all nine, and the thing that changes between them
 // is the answer rather than the furniture.
 //
 //	title        what this screen is
@@ -41,6 +41,13 @@ func answerBlock(figure, sentence string) []string {
 
 // Outcome renders the screen for one shortcut with the values it would carry.
 func Outcome(key rune) Screen {
+	if key == shareKey {
+		// The share screen has no illustrative version and never will. It
+		// previews a card built from this machine's figures, and an example one
+		// would be handing the reader somebody else's number to post under
+		// their own name. Given nothing, it is the screen saying so.
+		return ShareScreen(ShareState{})
+	}
 	var sc Shortcut
 	for _, s := range Shortcuts() {
 		if s.Key == key {

@@ -297,6 +297,17 @@ var allowedImports = map[string]bool{
 	// go/build/constraint: parses build tags so the os/exec confinement above
 	// is a real constraint check and not a substring match.
 	"go/build/constraint": true,
+
+	// Raster images, for the social card `replay cost --share --png` writes.
+	// internal/card decodes embedded glyph atlases and composes pixels into a
+	// PNG. embed reads files compiled into the binary at build time; the other
+	// three decode, allocate and encode raster images.
+	//
+	// None of them opens a socket, runs a process, reads a key or touches the
+	// filesystem at runtime. They are also what keeps this list short: the
+	// alternative to drawing text this way is a font library, which would be
+	// the first require line in go.mod and would fail the check above.
+	"embed": true, "image": true, "image/color": true, "image/png": true,
 }
 
 func TestX402_NoSigningCapability(t *testing.T) {
