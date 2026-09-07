@@ -2,7 +2,7 @@
 
 **Status:** design. Nothing here is built.
 
-Replay has **72 flags across 11 commands**. `serve` carries 29 of them, `probe`
+Replay has **74 flags across 12 commands**. `serve` carries 29 of them, `probe`
 16. That count is the finding rather than the input: a surface that renders 72
 flags as 72 widgets is a worse tool than the command line it replaces, because
 it asks the reader to hold the same complexity with less to hold onto.
@@ -12,17 +12,17 @@ flag is, because **twenty of them are the same kind of thing and collapse into
 one component with four states**.
 
 Every flag below was extracted from `cmd/replay/*.go`, not from documentation.
-All 72 are classified; none are left over.
+All 74 are classified; none are left over.
 
 ## The six archetypes
 
 | Archetype | Flags | What it looks like |
 |---|---|---|
-| Replaces the surface | 6 | There is no TUI. `--json` means a machine is reading, and drawing a frame for it is wrong |
+| Replaces the surface | 7 | There is no TUI. `--json` means a machine is reading, and drawing a frame for it is wrong |
 | Plumbing, shown once | 12 | A header line, never interactive. Where it listens, where it writes, what it talks to |
 | Threshold that can fire | 20 | A meter with **four** states: unset, armed, approaching, fired |
 | Posture, on or not covered | 13 | A line saying what is on, and more importantly what it does **not** reach |
-| Scope of the question | 10 | The query line. What this screen is about, and what it excludes |
+| Scope of the question | 11 | The query line. What this screen is about, and what it excludes |
 | Action with a consequence | 11 | A confirmation, with the consequence named before the key |
 
 ## Why a threshold needs four screens, not one
@@ -85,11 +85,12 @@ asking you to trust a summary of the thing rather than the thing.
 
 ## The full mapping
 
-### Replaces the surface (6)
+### Replaces the surface (7)
 
 | Flag | Command | Type |
 |---|---|---|
 | `--json` | `advise` | bool |
+| `--once` | `tui` | bool |
 | `--json` | `context` | bool |
 | `--json` | `cost` | bool |
 | `--json` | `route` | bool |
@@ -110,6 +111,7 @@ asking you to trust a summary of the thing rather than the thing.
 | `--out` | `learn` | string |
 | `--policy-file` | `serve` | string |
 | `--project` | `serve` | string |
+| `--screen` | `tui` | string |
 | `--token` | `serve` | string |
 | `--upstream` | `serve` | string |
 
@@ -156,7 +158,7 @@ asking you to trust a summary of the thing rather than the thing.
 | `--share` | `cost` | bool |
 | `--trend` | `probe` | bool |
 
-### Scope of the question (10)
+### Scope of the question (11)
 
 | Flag | Command | Type |
 |---|---|---|
