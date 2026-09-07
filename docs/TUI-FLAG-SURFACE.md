@@ -145,6 +145,7 @@ asking you to trust a summary of the thing rather than the thing.
 | Flag | Command | Type |
 |---|---|---|
 | `--compare` | `cost` | string |
+| `--dir` | `burn` | string |
 | `--dry-run` | `rules` | bool |
 | `--guards` | `advise` | bool |
 | `--hold-siblings` | `serve` | duration |

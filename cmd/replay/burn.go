@@ -1,0 +1,242 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/RedRobotKK/Replay/internal/transcript"
+)
+
+// surfaceBurn is one agent surface's consumption, on its own terms.
+//
+// The fields are deliberately not comparable across surfaces and this type
+// does not offer a way to add them. A Claude Code token is billed or drawn
+// against a subscription, a Codex token is drawn against a rate-limit window,
+// and an Ollama token is compute on this machine drawn against nothing. Their
+// headline figures do not even agree on whether the cached prefix is inside
+// them. A grand total would be a number with no unit.
+type surfaceBurn struct {
+	name     string
+	requests int
+	// tokens is the surface's own headline figure, and Unit says what it means.
+	tokens int
+	unit   string
+	// cached is the share of the prompt that did not have to be paid for
+	// again, where the surface reports enough to say.
+	cached    float64
+	hasCached bool
+	// quota is the live reading, where one exists at all.
+	quota    string
+	first    time.Time
+	last     time.Time
+	problems []string
+}
+
+// perHour is the burn rate over the window actually observed, which is the
+// only rate the data supports. A corpus spanning an afternoon says nothing
+// about a month.
+func (s surfaceBurn) perHour() (float64, bool) {
+	if s.first.IsZero() || s.last.IsZero() {
+		return 0, false
+	}
+	h := s.last.Sub(s.first).Hours()
+	if h <= 0 {
+		return 0, false
+	}
+	return float64(s.tokens) / h, true
+}
+
+func runBurn(args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("burn", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	dir := fs.String("dir", "", "read surfaces from this directory instead of the machine's own")
+	if err := parseArgs(fs, args, stdout); err != nil {
+		return err
+	}
+
+	home, _ := os.UserHomeDir()
+	var surfaces []surfaceBurn
+	surfaces = append(surfaces, burnCodex(home, *dir))
+	surfaces = append(surfaces, burnOllama(home, *dir))
+	surfaces = append(surfaces, burnClaudeCode(home, *dir))
+
+	_, _ = fmt.Fprintf(stdout, "\n  %s\n\n", "What your agents are consuming, per surface")
+	_, _ = fmt.Fprintf(stdout, "  %-14s %9s %14s  %-22s %s\n",
+		"surface", "requests", "tokens", "what that counts", "quota")
+	_, _ = fmt.Fprintf(stdout, "  %-14s %9s %14s  %-22s %s\n",
+		strings.Repeat("-", 14), strings.Repeat("-", 9), strings.Repeat("-", 14),
+		strings.Repeat("-", 22), strings.Repeat("-", 12))
+	for _, s := range surfaces {
+		tok := "not read"
+		if s.requests > 0 {
+			tok = comma(s.tokens)
+		}
+		_, _ = fmt.Fprintf(stdout, "  %-14s %9s %14s  %-22s %s\n",
+			s.name, commaOrDash(s.requests), tok, s.unit, s.quota)
+	}
+
+	_, _ = fmt.Fprintf(stdout, "\n  These columns are not addable. Anthropic reports the prompt with the\n")
+	_, _ = fmt.Fprintf(stdout, "  cached share partitioned out of it, Codex reports it nested inside, and\n")
+	_, _ = fmt.Fprintf(stdout, "  Ollama reports the work it performed with the cached prefix excluded\n")
+	_, _ = fmt.Fprintf(stdout, "  entirely. Summing them would produce a figure with no unit.\n\n")
+
+	for _, s := range surfaces {
+		if s.requests == 0 {
+			continue
+		}
+		_, _ = fmt.Fprintf(stdout, "  %s\n", s.name)
+		if r, ok := s.perHour(); ok {
+			_, _ = fmt.Fprintf(stdout, "    %s tokens/hour over the %s observed\n",
+				comma(int(r)), humanWindow(s.last.Sub(s.first)))
+		}
+		if s.hasCached {
+			_, _ = fmt.Fprintf(stdout, "    %.0f%% of the prompt served from cache\n", 100*s.cached)
+		}
+		for _, p := range s.problems {
+			_, _ = fmt.Fprintf(stdout, "    [NOTE] %s\n", p)
+		}
+		_, _ = fmt.Fprintf(stdout, "\n")
+	}
+
+	_, _ = fmt.Fprintf(stdout, "\n  ran   replay burn\n")
+	return nil
+}
+
+func humanWindow(d time.Duration) string {
+	switch {
+	case d < time.Hour:
+		return fmt.Sprintf("%.0f minutes", d.Minutes())
+	case d < 48*time.Hour:
+		return fmt.Sprintf("%.0f hours", d.Hours())
+	default:
+		return fmt.Sprintf("%.0f days", d.Hours()/24)
+	}
+}
+
+func commaOrDash(n int) string {
+	if n == 0 {
+		return "-"
+	}
+	return comma(n)
+}
+
+func burnCodex(home, dir string) surfaceBurn {
+	s := surfaceBurn{
+		name: "codex", unit: "context, cached inside",
+		quota: "reported",
+	}
+	roots := codexRoots(home)
+	if dir != "" {
+		roots = []string{filepath.Join(dir, "codex")}
+	}
+	files := findCodexRollouts(roots)
+	if dir != "" && len(files) == 0 {
+		files, _ = filepath.Glob(filepath.Join(dir, "codex", "*.jsonl"))
+	}
+	var billed, breaks, rebased int
+	var q *transcript.CodexQuota
+	for _, f := range files {
+		r, err := transcript.ParseCodexFile(f)
+		if err != nil {
+			continue
+		}
+		s.requests++
+		billed += r.Billed.Total()
+		breaks += len(r.Breaks)
+		if r.Quota != nil {
+			q = r.Quota
+		}
+		if r.Rebased {
+			rebased++
+		}
+	}
+	s.tokens = billed
+	if q != nil {
+		s.quota = fmt.Sprintf("%.0f%% of %s", q.PrimaryUsedPercent, minutes(q.PrimaryWindowMinutes))
+	}
+	if rebased > 0 {
+		s.problems = append(s.problems, fmt.Sprintf(
+			"%d session(s) compacted; Codex rebases its own counter there, so its total is not the bill", rebased))
+	}
+	if breaks > 0 {
+		s.problems = append(s.problems, fmt.Sprintf("%d cache break(s)", breaks))
+	}
+	return s
+}
+
+func burnOllama(home, dir string) surfaceBurn {
+	s := surfaceBurn{
+		name: "ollama", unit: "work done, no bill",
+		quota: "none exists",
+	}
+	pat := filepath.Join(home, ".ollama", "logs", "server*.log")
+	if dir != "" {
+		pat = filepath.Join(dir, "ollama", "server*.log")
+	}
+	logs, _ := filepath.Glob(pat)
+	var ctx, cached int
+	for _, p := range logs {
+		rs, err := transcript.ParseOllamaLogFile(p)
+		if err != nil {
+			continue
+		}
+		for _, r := range rs {
+			s.requests++
+			s.tokens += r.Total
+			ctx += r.ContextTokens()
+			cached += r.CachedPrefix
+		}
+	}
+	if ctx > 0 {
+		s.cached, s.hasCached = float64(cached)/float64(ctx), true
+	}
+	return s
+}
+
+func burnClaudeCode(home, dir string) surfaceBurn {
+	s := surfaceBurn{
+		name: "claude-code", unit: "prompt, cache separate",
+		quota: "not reported",
+	}
+	if dir != "" {
+		return s // the fixture carries no Claude Code corpus
+	}
+	roots := defaultTranscriptRoots(home)
+	var input, cacheRead, cacheWrite int
+	for _, root := range roots {
+		_ = filepath.Walk(root, func(p string, fi os.FileInfo, err error) error {
+			if err != nil || fi.IsDir() || !strings.HasSuffix(p, ".jsonl") {
+				return nil //nolint:nilerr // an unreadable subtree is not fatal
+			}
+			sess, err := transcript.ParseClaudeCodeFile(p)
+			if err != nil || sess == nil {
+				return nil //nolint:nilerr // a file that will not parse is counted nowhere
+			}
+			s.requests++
+			for _, lane := range sess.Lanes {
+				for _, r := range lane.Requests {
+					input += r.Usage.Input
+					cacheRead += r.Usage.CacheRead
+					cacheWrite += r.Usage.CacheCreation
+					if r.Timestamp.After(s.last) {
+						s.last = r.Timestamp
+					}
+					if s.first.IsZero() || r.Timestamp.Before(s.first) {
+						s.first = r.Timestamp
+					}
+				}
+			}
+			return nil
+		})
+	}
+	s.tokens = input + cacheRead + cacheWrite
+	if total := input + cacheRead + cacheWrite; total > 0 {
+		s.cached, s.hasCached = float64(cacheRead)/float64(total), true
+	}
+	return s
+}
