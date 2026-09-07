@@ -21,7 +21,7 @@ const RulesVersion = "anthropic-2026-09-01"
 // PriceTableVersion dates the price table. Every dollar figure Replay prints
 // cites it, because prices change and the figure is only as current as the
 // table.
-const PriceTableVersion = "2026-06-24"
+const PriceTableVersion = "2026-09-07"
 
 // PriceTableStaleDays is when a price table stops being worth trusting without
 // checking. Sixty days is a judgement, not a provider guarantee: inference
@@ -39,13 +39,19 @@ const PriceTableStaleDays = 60
 // date on somebody else's agreement would claim a source that was not read.
 //
 // But with one date a table that is old and correct is indistinguishable from
-// one nobody has looked at. On 2026-09-06 the 2026-06-24 table was compared
-// against 28 first-party models and disagreed with none of the 11 it covers.
-// That is worth saying, and it is the heartbeat a reader needs to tell a
+// one nobody has looked at. That is the heartbeat a reader needs to tell a
 // maintained document from an abandoned one.
 //
+// On 2026-09-07 the provider's own pricing page was read, which is what moves
+// PriceTableVersion, and every figure the 2026-06-24 table already carried
+// matched it: no price had moved in the intervening 75 days. Five models the
+// table had declined to price were added from the same read (Opus 4.5, Sonnet
+// 4.5, Sonnet 4, Opus 4.1 and Opus 4, and Haiku 3.5). The page also records
+// that Sonnet 5's scheduled increase to $3/$15 on 2026-09-01 will not occur,
+// so $2/$10 is the standard price rather than an introductory one.
+//
 // Move it only when a check has actually been run.
-const PriceTableCheckedAt = "2026-09-06"
+const PriceTableCheckedAt = "2026-09-07"
 
 // PriceTableAgeNote returns a warning when the compiled price table is old
 // enough that the dollar figures derived from it deserve a second look, and
@@ -140,16 +146,18 @@ var modelTable = []modelRow{
 	{"opus-4-8", minPrefixStandard, Price{5, 25, ReadMultiplier}, true},
 	{"opus-4-7", minPrefixOpus47, Price{5, 25, ReadMultiplier}, true},
 	{"opus-4-6", minPrefixLegacy, Price{5, 25, ReadMultiplier}, true},
-	{"opus-4-5", minPrefixLegacy, Price{}, false},
+	{"opus-4-5", minPrefixLegacy, Price{5, 25, ReadMultiplier}, true},
 	{"haiku-4-5", minPrefixLegacy, Price{1, 5, ReadMultiplier}, true},
 	{"sonnet-5", minPrefixStandard, Price{2, 10, ReadMultiplier}, true},
 	{"sonnet-4-6", minPrefixStandard, Price{3, 15, ReadMultiplier}, true},
+	{"sonnet-4-5", minPrefixStandard, Price{3, 15, ReadMultiplier}, true},
+	{"sonnet-4", minPrefixStandard, Price{3, 15, ReadMultiplier}, true},
 	{"sonnet", minPrefixStandard, Price{}, false},
 	// Haiku 3.5 floors at 2048, not the 1024 the bare haiku row would give it.
 	// A prefix under the floor does not cache, silently, so a wrong floor here
 	// recommends caching something that cannot be cached.
-	{"3-5-haiku", minPrefixOpus47, Price{}, false},
-	{"opus-4", minPrefixStandard, Price{}, false},
+	{"3-5-haiku", minPrefixOpus47, Price{0.80, 4, ReadMultiplier}, true},
+	{"opus-4", minPrefixStandard, Price{15, 75, ReadMultiplier}, true},
 	{"haiku", minPrefixStandard, Price{}, false},
 }
 
