@@ -109,6 +109,15 @@ func aCountedMachine() Machine {
 	m.Tasks, m.TotalUSD, m.MedianUSD, m.P90USD = 1599, 3102.84, 0.63, 2.14
 	m.AvoidableUSD, m.AvoidableShare, m.AvoidableTokens = 152.88, 0.05, 41_200_000
 	m.PriceDate, m.CorpusFiles = "2026-06-24", 1614
+	// Task rows, because without them the screen takes the no-breakdown path
+	// and the assertions below measure a branch nobody sees.
+	m.TaskRows = []Task{
+		{Session: "facfd32e", Model: "claude-opus-5", CostUSD: 286.59, Breaks: 4,
+			Path: "/p/facfd32e.jsonl"},
+		{Session: "fee79714", Model: "claude-opus-5", CostUSD: 236.26, Breaks: 6,
+			Path: "/p/fee79714.jsonl"},
+		{Session: "eec05948", Model: "claude-opus-5", CostUSD: 221.53, Breaks: 1},
+	}
 	return m
 }
 
@@ -119,7 +128,7 @@ func aCountedMachine() Machine {
 // one, and zero dollars is a number somebody will believe.
 func TestCostSaysItIsStillCountingRatherThanShowingZero(t *testing.T) {
 	m := aMachine() // Found, but not counted yet
-	sc := CostScreen(m, 0)
+	sc := CostScreen(m, 0, Selection{Window: 6})
 	body := strings.Join(sc.Lines, "\n")
 	if strings.Contains(body, "$0.00") {
 		t.Errorf("showed a zero total while still counting. That is a wrong figure, "+
@@ -136,8 +145,8 @@ func TestCostSaysItIsStillCountingRatherThanShowingZero(t *testing.T) {
 // The cue moves while it counts, or the screen is indistinguishable from stuck.
 func TestCostScreenIsAliveWhileItCounts(t *testing.T) {
 	m := aMachine()
-	a := strings.Join(CostScreen(m, 0).Lines, "\n")
-	b := strings.Join(CostScreen(m, 1).Lines, "\n")
+	a := strings.Join(CostScreen(m, 0, Selection{Window: 6}).Lines, "\n")
+	b := strings.Join(CostScreen(m, 1, Selection{Window: 6}).Lines, "\n")
 	if a == b {
 		t.Error("the counting screen renders identically at two consecutive ticks. " +
 			"Somebody waiting on a slow walk cannot tell it from a hang")
@@ -146,7 +155,7 @@ func TestCostScreenIsAliveWhileItCounts(t *testing.T) {
 
 // Once counted it is measured, carries no notice, and shows the real figures.
 func TestCostScreenIsMeasuredOnceCounted(t *testing.T) {
-	sc := CostScreen(aCountedMachine(), 0)
+	sc := CostScreen(aCountedMachine(), 0, Selection{Window: 6})
 	if sc.From != Measured {
 		t.Errorf("a counted corpus declares itself %v", sc.From)
 	}
@@ -168,7 +177,7 @@ func TestCostScreenIsMeasuredOnceCounted(t *testing.T) {
 // tokens are what they actually lost. A screen that leads with dollars and
 // never says that is telling most of its readers a number about somebody else.
 func TestCostScreenSaysDollarsAreNotYourBill(t *testing.T) {
-	body := strings.Join(CostScreen(aCountedMachine(), 0).Lines, "\n")
+	body := strings.Join(CostScreen(aCountedMachine(), 0, Selection{Window: 6}).Lines, "\n")
 	if !strings.Contains(body, "not your bill") {
 		t.Errorf("does not say the dollars are list price rather than an invoice:\n%s", body)
 	}
@@ -180,7 +189,7 @@ func TestCostScreenSaysDollarsAreNotYourBill(t *testing.T) {
 
 func TestCostScreenFitsTheBudget(t *testing.T) {
 	for _, m := range []Machine{aCountedMachine(), aMachine(), {ProjectsDir: "~/x"}} {
-		sc := CostScreen(m, 0)
+		sc := CostScreen(m, 0, Selection{Window: 6})
 		if len(sc.Lines) > BudgetRows {
 			t.Errorf("%d rows, budget %d", len(sc.Lines), BudgetRows)
 		}

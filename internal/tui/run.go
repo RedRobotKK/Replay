@@ -84,6 +84,14 @@ func readKeys(in io.Reader, out chan<- rune, raw bool) {
 	for sc.Scan() {
 		line := sc.Text()
 		if line == "" {
+			// An empty line IS the enter key.
+			//
+			// Skipping it made enter unreachable in line mode: the one key a
+			// reader presses to open the thing they selected, advertised in
+			// the footer and impossible to send. Pressing enter alone produces
+			// exactly this, an empty line, and treating it as nothing meant
+			// the row under the cursor could never be opened.
+			out <- '\r'
 			continue
 		}
 		out <- rune(line[0])
@@ -107,4 +115,40 @@ func leave(w io.Writer, raw bool) {
 		return
 	}
 	_, _ = io.WriteString(w, "\x1b[?25h\x1b[?1049l")
+}
+
+// StartWith runs the surface and hands the caller the loop.
+//
+// The source needs to read the cursor and set the row count, and it is
+// constructed before the loop exists. Passing the pointer back is less clever
+// than a callback and easier to follow, which matters more here than elegance:
+// this is the one file that cannot be tested without a terminal.
+func StartWith(out io.Writer, src Source, into **Loop) error {
+	if out == nil {
+		out = os.Stdout
+	}
+	st, rawErr := rawMode()
+	defer st.restore()
+	enter(out, rawErr == nil)
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	stop := make(chan struct{})
+	go func() { <-sig; close(stop) }()
+
+	keys := make(chan rune)
+	go readKeys(os.Stdin, keys, rawErr == nil)
+
+	l := &Loop{Out: out, Source: src, Keys: keys}
+	*into = l
+	l.Run(stop)
+
+	st.restore()
+	leave(out, rawErr == nil)
+	if rawErr != nil {
+		fmt.Fprintf(os.Stderr,
+			"replay: this terminal would not take per-key input (%v), so keys needed "+
+				"Enter. Everything else worked normally.\n", rawErr)
+	}
+	return nil
 }
