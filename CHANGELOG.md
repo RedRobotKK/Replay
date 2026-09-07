@@ -56,13 +56,16 @@ outside the project reported, and the first under a new licence.
   Discovery searches `sessions/` **and** `archived_sessions/`, which on the
   machine this was built against is 148 files rather than 27.
 - **The Codex rate-limit signal is now readable.** Every session opens with a
-  `token_count` event whose `info` is null — nothing has been spent yet — and
-  which carries `rate_limits` instead: used-percent over a five-hour and a
+  `token_count` event whose `info` is null, because nothing has been spent yet,
+  and which carries `rate_limits` instead: used-percent over a five-hour and a
   seven-day window, each with a reset time. Refusing that record as malformed
   costs the only live quota signal this project has found in any client. The
-  Anthropic surface reports utilization on the wire only, and the Grok CLI's
-  `x-ratelimit-*` headers did not move once across 8 calls and 940KB. This one
-  moves, and it needs no proxy.
+  Anthropic surface reports utilization on the wire only, and a titration moved
+  3.09M tokens through it for zero counter movement; the Grok CLI's
+  `x-ratelimit-*` headers did not shift once across 8 calls and 940KB. This one
+  moves, and it needs no proxy. How heavily a cached read weighs against it is
+  measured as far below one and no further: the corpus fits four weightings
+  equally well and cannot separate them.
 - **A surface registry** where a support claim cannot outrun its evidence.
   `LIVE` requires a captured fixture on disk, so a surface cannot be promoted by
   editing a string.

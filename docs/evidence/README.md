@@ -23,7 +23,7 @@ fact; a new measurement gets a new file.
 | [Spike 4: the real provider, 2026-09-05](spike-4-real-provider-2026-09-05.md) | Whether the proxy works against the real provider at all | Ten turns, all 200, 1,816,417 prompt tokens measured, zero credentials and zero message content in the ledger |
 | [Adversarial security review, 2026-09-04](security-review-2026-09-04.md) | An external reviewer reading the code and running the proxy end to end | Five findings open, one fixed, and what was verified to hold |
 | [codex-cache-breaks-2026-09-07](codex-cache-breaks-2026-09-07.md) | Codex cache breaks and their causes | 80 breaks re-read 10,635,679 tokens cold; five client-side causes ruled out, the sixth is not logged |
-| [codex-quota-2026-09-07](codex-quota-2026-09-07.md) | A live quota signal, and its unit | Counts uncached work, roughly 20M tokens per five-hour window; breaks cost 54% of one |
+| [codex-quota-2026-09-07](codex-quota-2026-09-07.md) | A live quota signal, and its unit | The counter moves, unlike every other surface checked; cached reads weigh far less, by an amount this corpus cannot pin down |
 
 > [!IMPORTANT]
 > The calibration corpus is 1450 transcripts from **78 sessions** on one machine, not the independent sessions the
