@@ -26,6 +26,9 @@ type Screen struct {
 	Key   rune
 	Title string
 	Lines []string
+	// From is where the figures came from. Every screen states it, and the
+	// unmeasured ones say so on screen rather than in a comment.
+	From Provenance
 }
 
 // answerBlock renders the headline: a figure and the sentence that reads it.
@@ -146,6 +149,12 @@ func Outcome(key rune) Screen {
 	lines := make([]string, 0, BudgetRows)
 	lines = append(lines, head...)
 	lines = append(lines, body...)
+
+	// Every figure on these screens was typed. Until each is wired to its
+	// source, the screen says so above the numbers rather than letting a
+	// reader take them for their own.
+	from := Example
+	lines = WithBanner(lines, from, "")
 	for len(lines) < BudgetRows-4 {
 		lines = append(lines, "")
 	}
@@ -159,7 +168,7 @@ func Outcome(key rune) Screen {
 	// three-key floor: the same screen, two different promises, depending on
 	// how you looked at it.
 	lines = append(lines, "")
-	return Screen{Key: key, Title: sc.Label, Lines: lines}
+	return Screen{Key: key, Title: sc.Label, Lines: lines, From: from}
 }
 
 var (
