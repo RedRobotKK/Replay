@@ -79,11 +79,11 @@ func runCodex(args []string, stdout, stderr io.Writer) error {
 	}
 
 	if len(files) == 0 {
-		fmt.Fprintf(stdout, "  No Codex sessions found. Searched:\n")
+		_, _ = fmt.Fprintf(stdout, "  No Codex sessions found. Searched:\n")
 		for _, s := range searched {
-			fmt.Fprintf(stdout, "    %s\n", s)
+			_, _ = fmt.Fprintf(stdout, "    %s\n", s)
 		}
-		fmt.Fprintf(stdout, "\n  Codex writes rollout-*.jsonl under ~/.codex. If it has never\n"+
+		_, _ = fmt.Fprintf(stdout, "\n  Codex writes rollout-*.jsonl under ~/.codex. If it has never\n"+
 			"  run on this machine there is nothing to read, which is not an error.\n")
 		return nil
 	}
@@ -102,7 +102,7 @@ func runCodex(args []string, stdout, stderr io.Writer) error {
 	for _, f := range files {
 		s, err := transcript.ParseCodexFile(f)
 		if err != nil {
-			fmt.Fprintf(stderr, "replay: %s: %v\n", filepath.Base(f), err)
+			_, _ = fmt.Fprintf(stderr, "replay: %s: %v\n", filepath.Base(f), err)
 			continue
 		}
 		billed += s.Billed.Total()
@@ -118,9 +118,9 @@ func runCodex(args []string, stdout, stderr io.Writer) error {
 		rows = append(rows, row{filepath.Base(f), s.Billed.Total(), s.Reported.Total(), s.Rebased, s.Skipped})
 	}
 
-	fmt.Fprintf(stdout, "\n  %s tokens billed across %d Codex session(s)\n",
+	_, _ = fmt.Fprintf(stdout, "\n  %s tokens billed across %d Codex session(s)\n",
 		comma(billed), len(rows))
-	fmt.Fprintf(stdout, "  Summed from per-turn deltas, which is what was paid for.\n\n")
+	_, _ = fmt.Fprintf(stdout, "  Summed from per-turn deltas, which is what was paid for.\n\n")
 
 	if compacted > 0 {
 		gap := billed - reported
@@ -128,30 +128,30 @@ func runCodex(args []string, stdout, stderr io.Writer) error {
 		if billed > 0 {
 			pct = 100 * float64(gap) / float64(billed)
 		}
-		fmt.Fprintf(stdout, "  [NOTE] %s of that (%.0f%%) is invisible to Codex's own counter.\n"+
+		_, _ = fmt.Fprintf(stdout, "  [NOTE] %s of that (%.0f%%) is invisible to Codex's own counter.\n"+
 			"         %d session(s) compacted, and Codex rebases its running total when\n"+
 			"         that happens, so it reports %s. The counter is not wrong; it is\n"+
 			"         measuring what is in context, not what was paid for.\n\n",
 			comma(gap), pct, compacted, comma(reported))
 	}
 	if refused > 0 {
-		fmt.Fprintf(stdout, "  [NOTE] %d record(s) refused: a cached or reasoning count larger\n"+
+		_, _ = fmt.Fprintf(stdout, "  [NOTE] %d record(s) refused: a cached or reasoning count larger\n"+
 			"         than the total it is a share of cannot be true, so it was not\n"+
 			"         added to the figure above.\n\n", refused)
 	}
 
 	if latest != nil {
-		fmt.Fprintf(stdout, "  quota (%s plan, from %d session(s) that recorded it)\n",
+		_, _ = fmt.Fprintf(stdout, "  quota (%s plan, from %d session(s) that recorded it)\n",
 			plainOr(latest.PlanType, "unknown"), quotas)
-		fmt.Fprintf(stdout, "    %-10s %5.0f%% used   window %s\n", "primary",
+		_, _ = fmt.Fprintf(stdout, "    %-10s %5.0f%% used   window %s\n", "primary",
 			latest.PrimaryUsedPercent, minutes(latest.PrimaryWindowMinutes))
-		fmt.Fprintf(stdout, "    %-10s %5.0f%% used   window %s\n\n", "secondary",
+		_, _ = fmt.Fprintf(stdout, "    %-10s %5.0f%% used   window %s\n\n", "secondary",
 			latest.SecondaryUsedPercent, minutes(latest.SecondaryWindowMinutes))
 	} else {
-		fmt.Fprintf(stdout, "  quota   not recorded in these sessions\n\n")
+		_, _ = fmt.Fprintf(stdout, "  quota   not recorded in these sessions\n\n")
 	}
 
-	fmt.Fprintf(stdout, "  ran   replay codex\n")
+	_, _ = fmt.Fprintf(stdout, "  ran   replay codex\n")
 	return nil
 }
 

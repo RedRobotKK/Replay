@@ -2,12 +2,13 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
 )
 
 // An index over transcripts already understood.
