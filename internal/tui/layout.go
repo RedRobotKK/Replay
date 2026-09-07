@@ -91,3 +91,42 @@ func Meter(fraction float64, width int) string {
 	}
 	return string(out)
 }
+
+// Glyph width safety, measured rather than assumed.
+//
+// The intuition is backwards here, so the table is written down.
+//
+// Braille patterns look exotic and are SAFE: East Asian Width Neutral, one cell
+// in every locale. The humble full block and the fractional blocks that every
+// terminal chart is built from are AMBIGUOUS, and double in a CJK terminal.
+// So does the section sign, and so does every box-drawing character.
+//
+// A sparkline made of Braille is therefore safer than one made of blocks, which
+// is the opposite of what the glyphs look like.
+var glyphSafety = map[string]bool{
+	// safe: one cell everywhere
+	"|/-\\": true, // the pinwheel
+	"#.":    true, // the meter
+	"[]<>":  true, // status flag brackets
+	"⠐⢿":    true, // braille patterns, Neutral width
+
+	// unsafe: East Asian Ambiguous, two cells in a CJK locale
+	"█▏": false, // full and fractional blocks
+	"─│": false, // box drawing
+	"§":  false, // section sign
+}
+
+// SafeInAFrame reports whether every rune may be used where a column position
+// depends on it.
+func SafeInAFrame(s string) bool {
+	for _, r := range s {
+		if r > 127 && !braille(r) {
+			return false
+		}
+	}
+	return true
+}
+
+// braille reports whether a rune is a Braille pattern, which is the one
+// non-ASCII block measured safe for frames.
+func braille(r rune) bool { return r >= 0x2800 && r <= 0x28FF }

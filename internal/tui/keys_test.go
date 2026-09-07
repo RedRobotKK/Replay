@@ -121,3 +121,24 @@ func TestMeterKeepsItsWidth(t *testing.T) {
 		}
 	}
 }
+
+// The glyph table must match what the runes actually are.
+//
+// Written because the intuition is backwards: Braille is Neutral width and safe,
+// while the full block every terminal chart is drawn from is Ambiguous and
+// doubles in a CJK locale. A sparkline of Braille is safer than one of blocks.
+func TestGlyphSafetyMatchesMeasurement(t *testing.T) {
+	safe := []string{"|/-\\", "#.", "[]<>", "⠐⢿"}
+	unsafe := []string{"█", "▏", "─", "│", "§"}
+	for _, s := range safe {
+		if !SafeInAFrame(s) {
+			t.Errorf("%q is measured safe and the code rejects it", s)
+		}
+	}
+	for _, s := range unsafe {
+		if SafeInAFrame(s) {
+			t.Errorf("%q is East Asian Ambiguous and would double in a CJK terminal, "+
+				"and the code accepts it in a frame", s)
+		}
+	}
+}
