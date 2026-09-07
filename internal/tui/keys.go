@@ -47,28 +47,29 @@ type Binding struct {
 // Bindings is the whole vocabulary, floor first.
 func Bindings() []Binding {
 	b := []Binding{
-		// Arrows and enter move between rows and open one. Same reason as the
-		// vim block below: nothing here has rows yet, so both would be listed
-		// and inert. They return with row selection.
+		{"enter", "open the row", L0},
 		{"esc", "back, or cancel", L0},
 		{"q", "quit", L0},
 
-		// j/k, g/G and "/" are the terminal lingua franca and are deliberately
-		// NOT here yet.
+		// j/k and g/G are back, because there are rows now. They were removed
+		// when nothing had rows to move between: a key listed in the footer is
+		// a promise, and four inert ones in the help overlay are worse than
+		// their absence.
 		//
-		// They move between rows and search among them, and these screens have
-		// no selectable rows: every one is an answer with its evidence under
-		// it, rendered whole. Listing them would put four keys in the help
-		// overlay that do nothing, which is worse than their absence, because
-		// the overlay is the one place somebody who does not know this tool
-		// goes to find out what it can do.
+		// "/" is still absent. Searching a list needs a query line, a match
+		// highlight and a way out of it, and none of that exists yet. It
+		// returns the same way these did, when it works.
+		{"j k", "down and up", L1},
+		// H and G, not gg and G.
 		//
-		// g would also have collided outright: it is bound to the guards
-		// screen, and "first row" would have meant the same keystroke did two
-		// things while the overlay listed both.
+		// The vim idiom for the top of a list is gg, a two-key prefix, and
+		// bare g is already the guards screen. Binding g to "first row" made
+		// one keystroke mean two things and the overlay listed both.
 		//
-		// They come back with row selection, and TestEveryAdvertisedKeyIsHandled
-		// fails the build if they are advertised before then.
+		// H is vim's own High, the top of the screen, so this borrows the
+		// vocabulary rather than inventing one. G stays as last, which is the
+		// same key vim uses.
+		{"H G", "first row and last", L1},
 		{"?", "every key, including the ones not shown", L1},
 	}
 	for _, s := range Shortcuts() {

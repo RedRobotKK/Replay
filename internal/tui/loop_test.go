@@ -222,16 +222,31 @@ func TestAPipeGetsNoEscapeSequences(t *testing.T) {
 func TestEveryAdvertisedKeyIsHandled(t *testing.T) {
 	l := &Loop{Out: &bytes.Buffer{}, Source: plain, Keys: make(chan rune)}
 	l.cur = 'c'
+	// A screen with rows, because the movement keys decline when there are
+	// none and would otherwise be reported as broken rather than inapplicable.
+	l.SetRows(20)
 
 	for _, b := range Bindings() {
 		if b.Layer == L3 {
 			continue // documentation, not keystrokes
 		}
 		for _, k := range keysOfBinding(b.Keys) {
-			// Start somewhere the key can move away from, and with the overlay
-			// open so escape has something to close. Without this the test
-			// reports its own starting position as a defect.
-			l.cur, l.help = 'd', true
+			// Start somewhere every key can move away from: a middle row and a
+			// screen that is not the one under test.
+			//
+			// The overlay is opened only for escape, which is the one key that
+			// needs something to close. Opening it for all of them suppressed
+			// the movement keys, because press() correctly refuses to scroll a
+			// list hidden behind an overlay, and the test then reported
+			// correct behaviour as four broken keys.
+			// Never start on the screen the key under test selects, or
+			// pressing it is a no-op and the test blames the key.
+			start := 'd'
+			if k == 'd' {
+				start = 'c'
+			}
+			l.cur, l.sel.At, l.opened = start, 10, false
+			l.help = k == 27
 			before := snapshot(l)
 			l.press(k)
 			after := snapshot(l)
@@ -241,7 +256,7 @@ func TestEveryAdvertisedKeyIsHandled(t *testing.T) {
 					"is a promise to somebody who does not know this tool",
 					string(k), b.Does)
 			}
-			l.cur, l.help = 'c', false
+			l.cur, l.help, l.sel.At, l.opened = 'c', false, 10, false
 		}
 	}
 }
@@ -285,8 +300,14 @@ func keysOfBinding(s string) []rune {
 }
 
 // snapshot captures the loop state a keystroke could change.
+//
+// The cursor and the opened flag are in here because they have to be: without
+// them the movement keys changed state the snapshot could not see, and every
+// one of them was reported as doing nothing. A test that cannot observe the
+// effect it is looking for finds an absence of evidence and calls it evidence
+// of absence.
 func snapshot(l *Loop) string {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return string(l.cur) + fmt.Sprint(l.help)
+	return fmt.Sprintf("%s|%v|%d|%v", string(l.cur), l.help, l.sel.At, l.opened)
 }
