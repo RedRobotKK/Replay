@@ -22,6 +22,7 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | [0014](0014-checks-must-be-able-to-fail.md) | A check must be able to fail, and reachability is asserted mechanically | Accepted |
 | [0015](0015-single-tenant-state-is-a-boundary.md) | Single-tenant state is a boundary, not an implementation detail | Accepted |
 | [0016](0016-business-source-license.md) | Relicense under the Business Source License 1.1 | Accepted |
+| [0017](0017-the-unintelligent-router.md) | Routing decided by cache structure, not by reading the prompt | Rejected |
 
 ---
 

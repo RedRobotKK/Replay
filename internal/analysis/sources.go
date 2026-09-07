@@ -71,7 +71,8 @@ var appendExts = map[string]bool{".jsonl": true, ".ndjson": true}
 // the silent narrowing this file exists to prevent.
 var skipDirs = map[string]bool{
 	"node_modules": true, "vendor": true, "dist": true, "build": true,
-	".git": true, "target": true, "__pycache__": true, ".venv": true,
+	"testdata": true,
+	".git":     true, "target": true, "__pycache__": true, ".venv": true,
 }
 
 // minSeriesFiles is the fewest dated documents in one directory that make a

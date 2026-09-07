@@ -135,6 +135,8 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 		return runCorpus(args[1:], stdout, stderr)
 	case "codex":
 		return runCodex(args[1:], stdout, stderr)
+	case "agents":
+		return runAgents(args[1:], stdout, stderr)
 	case "burn":
 		return runBurn(args[1:], stdout, stderr)
 	case "doctor":
@@ -553,6 +555,7 @@ Look closer:
   replay advise <dir> --guards     spend caps from your own session spread, print-only
   replay codex  <dir...>           the same reading, for OpenAI Codex rollout logs
   replay burn                      what each agent surface burned: Codex, Ollama, Claude Code
+  replay agents [dir] --write F    a boot block naming where this project keeps its records
 
 Corpus and calibration:
   replay corpus <dir...>           calibration across many sessions, as Markdown (no paths or content)

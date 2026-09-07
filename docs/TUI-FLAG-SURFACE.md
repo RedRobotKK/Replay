@@ -8,9 +8,9 @@ serve`, and the archetype renderings that do appear, the four-state threshold
 meter on the guards screen and the posture block on the safe screen, are drawn
 from example data and say so.
 
-Replay has **79 flags across 13 commands**. `serve` carries 29 of them, `probe`
+Replay has **80 flags across 14 commands**. `serve` carries 29 of them, `probe`
 16. That count is the finding rather than the input: a surface that renders 78
-flags as 78 widgets is a worse tool than the command line it replaces, because
+flags as 80 widgets is a worse tool than the command line it replaces, because
 it asks the reader to hold the same complexity with less to hold onto.
 
 So the question is not "where does each flag go". It is what kind of thing each
@@ -18,7 +18,7 @@ flag is, because **twenty of them are the same kind of thing and collapse into
 one component with four states**.
 
 Every flag below was extracted from `cmd/replay/*.go`, not from documentation.
-All 79 are classified; none are left over.
+All 80 are classified; none are left over.
 
 ## The six archetypes
 
@@ -149,12 +149,13 @@ asking you to trust a summary of the thing rather than the thing.
 | `--revert-after` | `serve` | int |
 | `--trial-share` | `serve` | float64 |
 
-### Posture, on or not covered (14)
+### Posture, on or not covered (15)
 
 | Flag | Command | Type |
 |---|---|---|
 | `--compare` | `cost` | string |
 | `--dir` | `burn` | string |
+| `--write` | `agents` | string |
 | `--dry-run` | `rules` | bool |
 | `--guards` | `advise` | bool |
 | `--hold-siblings` | `serve` | duration |

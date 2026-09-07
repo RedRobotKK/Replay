@@ -882,6 +882,31 @@ held, so an Ollama figure and a Codex figure are not the same unit and adding th
 number with no meaning. Each row says what it counts, in its own words, and the sum is left
 undrawn.
 
+### `replay agents`
+
+Writes a block naming where this project keeps its records, for the file coding agents
+read at boot. `AGENTS.md` is where several of them look now, `CLAUDE.md` is where one
+of them looks, and neither is a place to put a fact nobody can check.
+
+| Flag | What it does |
+|------|--------------|
+| `--write <file>` | Splice the block into that file between its markers, leaving everything else alone. Without it the block goes to stdout. |
+
+Takes a directory, defaulting to the working directory.
+
+**What it puts there is not what the project costs. It is where the records are.** The
+failure this prevents is a question answered confidently from one directory: five files
+read, all under the same tree, every one agreeing, and the authoritative record
+somewhere else entirely. Sources drawn from one directory agree by construction, and
+that agreement carries no information about completeness.
+
+The block is delimited by `<!-- replay:sources:begin -->` and `:end`, replaced in place
+on each run and idempotent, so regenerating produces no diff when nothing moved. Content
+outside the markers is never touched, and a file with no markers is appended to rather
+than rewritten. It closes with the same scope paragraph `replay sources` prints, naming
+the three rules it matched on and the trees it skipped, because a list of sources read
+without its limits is a claim of completeness that this scan cannot make.
+
 ### `replay version`
 
 Version and build commit.
