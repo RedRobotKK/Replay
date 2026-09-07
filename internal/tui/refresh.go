@@ -73,10 +73,18 @@ const (
 // calibrated monitor, colour is a hint; the word is the message. That is also
 // the sixteen-colour rule holding at a distance instead of over SSH.
 func Glance(a Attention, what string) string {
+	// Bracketed, so the marker has a SHAPE and not only a word.
+	//
+	// The first version was "  ok  " / " note " / " ACT  ": fixed width, which
+	// solved the reflow problem, and interchangeable silhouettes, which did not
+	// solve the reading one. Brackets give each state a distinct outline, so it
+	// is legible squinting, off-axis, on a badly calibrated monitor, and to a
+	// reader who cannot separate the colours at all. Colour is the third signal
+	// after shape and word, not the first.
 	mark := map[Attention]string{
-		Calm:   "  ok  ",
-		Notice: " note ",
-		Act:    " ACT  ",
+		Calm:   "[ OK ]",
+		Notice: "[NOTE]",
+		Act:    "[CRIT]",
 	}[a]
 	line := mark + " " + what
 	if len(line) > BudgetCols {

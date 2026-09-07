@@ -41,7 +41,7 @@ func TestGlanceReadsWithoutColour(t *testing.T) {
 		a    Attention
 		want string
 	}{
-		{Calm, "ok"}, {Notice, "note"}, {Act, "ACT"},
+		{Calm, "OK"}, {Notice, "NOTE"}, {Act, "CRIT"},
 	}
 	seen := map[string]bool{}
 	for _, c := range cases {
@@ -55,6 +55,26 @@ func TestGlanceReadsWithoutColour(t *testing.T) {
 		}
 		seen[strings.TrimSpace(got[:6])] = true
 	}
+	// The markers must differ in SHAPE, not only in the letters inside them.
+	// A reader who cannot separate the colours, or who is two metres away and
+	// squinting, is reading the outline before the word.
+	shapes := map[string]bool{}
+	for _, c := range cases {
+		shapes[Glance(c.a, "x")[:6]] = true
+	}
+	if len(shapes) != 3 {
+		t.Errorf("the three states share %d distinct markers, not 3. Fixed width "+
+			"stops the line reflowing; it does not make the states tellable apart "+
+			"at a glance: %v", len(shapes), shapes)
+	}
+	for _, c := range cases {
+		m := Glance(c.a, "x")[:6]
+		if m[0] != '[' || m[5] != ']' {
+			t.Errorf("marker %q has no bracket outline. The brackets are the "+
+				"structural tell that survives bad colour", m)
+		}
+	}
+
 	if len(seen) != 3 {
 		t.Errorf("the three attention levels do not produce three distinct markers: %v. "+
 			"A screen that looks the same when it needs you is a screen you stop "+
