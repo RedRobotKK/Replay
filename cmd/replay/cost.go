@@ -13,6 +13,7 @@ import (
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/card"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -26,9 +27,42 @@ import (
 //
 // The unit is one session, because a session is the closest thing a transcript
 // has to a task.
+//
+// It was not, until 2026-09-07. Claude Code writes one transcript per agent
+// LANE — a session that fanned out to sub-agents writes
+// <session>/subagents/agent-*.jsonl, and every one of those files carries the
+// parent's sessionId — and this command priced one file at a time. So a row
+// labelled `session` was a lane, and `--per-task --json` reported 1614 "tasks"
+// over 114 distinct sessions with one id on 1014 separate rows.
+//
+// The same conflation was published once and retracted: docs/evidence/README.md
+// records a figure of "1363 sessions" that was a file count, one session
+// supplying 1020 of them. It was corrected in the calibration corpus and left
+// live here. foldSessions is the correction; --per-lane is the lane view, kept
+// because fan-out analysis genuinely needs it.
+
+// unitSession and unitLane name what one row of this report is. They are
+// printed, and they appear in the JSON as summary.unit, because a reader who
+// cannot tell which one they are holding is the reader this file exists for.
+const (
+	unitSession = "session"
+	unitLane    = "lane"
+)
 
 type costUnit struct {
-	ID              string    `json:"session"`
+	ID string `json:"session"`
+	// Lane names the agent lane this row was priced from, and is set on every
+	// unit as it is built: "main" for the session's own transcript, the agent
+	// id for a sub-agent lane. It survives into a --per-lane row and is
+	// cleared when lanes are folded into a session, because a session is not
+	// one lane. It is a label, not a key — eight hex characters of an agent id
+	// are enough to tell two rows apart on screen and not enough to promise
+	// uniqueness across thousands of them.
+	Lane string `json:"lane,omitempty"`
+	// Lanes is how many agent lanes were folded into this row. Present only on
+	// a session row, where it is the fan-out, and it is the number that makes
+	// the difference between the two units visible instead of inferred.
+	Lanes           int       `json:"lanes,omitempty"`
 	Model           string    `json:"model"`
 	Requests        int       `json:"requests"`
 	CostUSD         float64   `json:"costUsd"`
@@ -38,8 +72,137 @@ type costUnit struct {
 	At              time.Time `json:"at"`
 }
 
+// costLaneRow is a --per-lane row on its way to JSON.
+//
+// Its id field is `ofSession`, never `session`. Several lanes share one
+// session id by construction, so a field named `session` on a row that is not
+// one is precisely the defect this file was opened to fix; naming it as the
+// parent link it actually is means a consumer that groups on `session` cannot
+// accidentally be handed lanes. The lane figures themselves are copied
+// unchanged — this is a renaming, not a second calculation.
+type costLaneRow struct {
+	Lane            string    `json:"lane,omitempty"`
+	OfSession       string    `json:"ofSession"`
+	Model           string    `json:"model"`
+	Requests        int       `json:"requests"`
+	CostUSD         float64   `json:"costUsd"`
+	AvoidableUSD    float64   `json:"avoidableUsd"`
+	AvoidableTokens int       `json:"avoidableTokens,omitempty"`
+	Breaks          int       `json:"breaks"`
+	At              time.Time `json:"at"`
+}
+
+func laneRows(units []costUnit) []costLaneRow {
+	rows := make([]costLaneRow, 0, len(units))
+	for _, u := range units {
+		rows = append(rows, costLaneRow{Lane: u.Lane, OfSession: u.ID, Model: u.Model,
+			Requests: u.Requests, CostUSD: u.CostUSD, AvoidableUSD: u.AvoidableUSD,
+			AvoidableTokens: u.AvoidableTokens, Breaks: u.Breaks, At: u.At})
+	}
+	return rows
+}
+
+// laneID names one agent lane from the transcript it was priced from.
+//
+// Claude Code writes a sub-agent lane to <session>/subagents/agent-<id>.jsonl,
+// so the file's own name carries the only lane identity available; the parent
+// lane's file is named after the session, and repeating the session id in a
+// lane column would say nothing, so it is called "main".
+func laneID(path string) string {
+	name := strings.TrimSuffix(filepath.Base(path), ".jsonl")
+	if rest, ok := strings.CutPrefix(name, "agent-"); ok {
+		return prefixID(rest)
+	}
+	return unitMain
+}
+
+const unitMain = "main"
+
+// foldSessions turns lane rows into session rows: one row, one session.
+//
+// Which fields may be summed was checked one at a time, because the fast way
+// to get an aggregation wrong is to sum something that is not a quantity:
+//
+//	requests, breaks, avoidableTokens  counts of events within one lane. Additive.
+//	costUsd, avoidableUsd              money already spent on that lane. Additive.
+//	at                                 a point in time, not a quantity. A session
+//	                                   began when its earliest lane began, so this
+//	                                   is a minimum, never a sum and never a mean.
+//	model                              a category. Neither summable nor averageable.
+//	                                   The row names the model that ran the largest
+//	                                   share of the money, which is the one a
+//	                                   routing decision is about; see runCost for
+//	                                   why the route line is still derived from
+//	                                   every lane rather than from these rows.
+//
+// No rate or percentile passes through here. avoidableShare, the median and
+// the p90 are all derived in summarise from the rows this returns, so folding
+// cannot silently average an average.
+//
+// The sums carry a known overlap and do not create it. A sub-agent lane
+// re-renders some of its parent's requests, so a request id can be present in
+// two of a session's files and is priced in both — measured over this corpus,
+// 430 of 32,559 ids, 1.3%. That residue is already disclosed as
+// duplicatedRequests, and it was already inside the corpus total, which sums
+// every lane. Folding changes which row a figure is shown on, not what is in
+// the figure: the grand total is identical before and after.
+func foldSessions(units []costUnit) []costUnit {
+	var order []string
+	by := map[string]*costUnit{}
+	// The cost of the lane whose model each row currently names, so a later,
+	// larger lane can take the column over.
+	dominant := map[string]float64{}
+	for _, u := range units {
+		s, ok := by[u.ID]
+		if !ok {
+			row := u
+			// A session is not one lane, so it does not carry one lane's id.
+			row.Lane = ""
+			row.Lanes = 1
+			by[u.ID] = &row
+			order = append(order, u.ID)
+			dominant[u.ID] = u.CostUSD
+			continue
+		}
+		s.Lanes++
+		s.Requests += u.Requests
+		s.CostUSD += u.CostUSD
+		s.AvoidableUSD += u.AvoidableUSD
+		s.AvoidableTokens += u.AvoidableTokens
+		s.Breaks += u.Breaks
+		// Earliest, not first-seen: files arrive in directory order, which is
+		// not time order.
+		if !u.At.IsZero() && (s.At.IsZero() || u.At.Before(s.At)) {
+			s.At = u.At
+		}
+		if u.CostUSD > dominant[u.ID] {
+			dominant[u.ID] = u.CostUSD
+			s.Model = u.Model
+		}
+	}
+	// First-seen order, so the fold is deterministic before the callers sort.
+	out := make([]costUnit, 0, len(order))
+	for _, id := range order {
+		out = append(out, *by[id])
+	}
+	return out
+}
+
 type costSummary struct {
-	Tasks          int     `json:"tasks"`
+	// Tasks counts the rows, whatever the rows are. Unit says which they are.
+	//
+	// The two travel together deliberately. This count was a file count under
+	// a name that reads as a count of work, which is the whole defect; a
+	// consumer that reads Tasks without reading Unit is making the same
+	// mistake in their own code, and Unit is there so that they cannot say
+	// they were not told.
+	Tasks int    `json:"tasks"`
+	Unit  string `json:"unit"`
+	// Lanes is the agent-lane count behind those rows — the transcript files
+	// actually read and priced. On a session-unit report it is the larger
+	// number and printing both is what stops either being mistaken for the
+	// other. On a lane-unit report it equals Tasks.
+	Lanes          int     `json:"lanes"`
 	TotalUSD       float64 `json:"totalUsd"`
 	MedianUSD      float64 `json:"medianUsd"`
 	P90USD         float64 `json:"p90Usd"`
@@ -118,10 +281,18 @@ func renderCost(s costSummary, unpriced int, out io.Writer, stateDir string) str
 		fmt.Fprintf(&b, "No transcript could be priced. %d were read but their model is not in the price table.\n", unpriced)
 		return b.String()
 	}
-	fmt.Fprintf(&b, "%s\n\n", costHeaderLine(s.Tasks))
+	fmt.Fprintf(&b, "%s\n\n", costHeaderLine(s))
 	fmt.Fprintf(&b, "  total          $%.2f\n", s.TotalUSD)
-	fmt.Fprintf(&b, "  median task    $%.2f\n", s.MedianUSD)
-	fmt.Fprintf(&b, "  p90 task       $%.2f\n", s.P90USD)
+	// "task" only where a row is a task. Under --per-lane the same two figures
+	// describe agent lanes, and calling a lane a task on the line beneath a
+	// header that just said "lanes" is how one word came to mean two things
+	// here in the first place.
+	noun := "task"
+	if s.Unit == unitLane {
+		noun = "lane"
+	}
+	fmt.Fprintf(&b, "  median %-8s$%.2f\n", noun, s.MedianUSD)
+	fmt.Fprintf(&b, "  p90 %-11s$%.2f\n", noun, s.P90USD)
 	fmt.Fprintf(&b, "  avoidable      $%.2f  (%.0f%% of the total)\n", s.AvoidableUSD, s.AvoidableShare*100)
 	if s.AvoidableTokens > 0 {
 		fmt.Fprintf(&b, "                 %s tokens re-billed\n", shortTokens(s.AvoidableTokens))
@@ -174,11 +345,34 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	asJSON := fs.Bool("json", false, "emit the figures as JSON")
 	perTask := fs.Bool("per-task", false, "list every priced session, most expensive first")
+	perLane := fs.Bool("per-lane", false, "report agent lanes instead of sessions: a session that spawned sub-agents wrote one transcript per lane, and this is the fan-out view of them")
 	since := fs.String("compare", "", "split at this date (YYYY-MM-DD) and report cost per task before and after")
 	predicted := fs.Float64("predicted", 0, "with --compare, the fractional change you predicted (e.g. -0.2 for a 20% saving)")
 	share := fs.Bool("share", false, "print a paste-ready summary: the avoidable rate and the task spread, with no spend total, no paths and no project names")
+	png := fs.String("png", "", "with --share, also write the same figures as a 1200x630 social card at this path")
+	design := fs.String("card", "", "which card design --png writes: b (the dark receipt) or c (the paper statement, the default)")
+	tone := fs.String("tone", "", "the register the card is written in: measured (what was found, stated, the default) or rekt (the same figures, exact and deadpan)")
 	if err := parseArgs(fs, args, stdout); err != nil {
 		return err
+	}
+	// Resolved before any transcript is read, so a typo in --card costs
+	// nothing and is reported as what it is rather than after a full scan.
+	variant, err := pickVariant(*design)
+	if err != nil {
+		return err
+	}
+	// Same reasoning as --card: resolved before any transcript is read, so a
+	// typo costs nothing and is reported as what it is rather than after a
+	// full scan.
+	register, err := card.ParseTone(*tone)
+	if err != nil {
+		return err
+	}
+	if *png != "" && !*share {
+		// A second way to produce the card would be a second way to produce it
+		// without the guard: the check for whether anything was measured well
+		// enough to stand behind lives on the --share path.
+		return fmt.Errorf("--png writes the share card, so it needs --share as well")
 	}
 	if fs.NArg() == 0 {
 		// The binary already knows where Claude Code writes. Demanding the
@@ -281,6 +475,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		u := costUnit{
 			At:       sessionTime(rep),
 			ID:       prefixID(session.ID),
+			Lane:     laneID(path),
 			Model:    model,
 			Requests: asRun.Requests,
 			CostUSD:  asRun.CostUSD,
@@ -302,6 +497,26 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		return nil
 	})
 
+	// One row, one session — and one unit for the whole report.
+	//
+	// The fold happens here, above every consumer, so that the compare split,
+	// the summary, the share card, the JSON rows and the printed table are all
+	// counting the same thing. A report that folded only the rows it printed
+	// would still say "tasks" over a lane count in the line above them, which
+	// is the defect wearing a smaller hat.
+	//
+	// --per-lane moves that single unit down to the agent lane. It does not
+	// add a second unit alongside the first: whichever one is in force, every
+	// figure below is in it.
+	lanesRead := len(units)
+	laneUnits := units
+	unit := unitSession
+	if *perLane {
+		unit = unitLane
+	} else {
+		units = foldSessions(units)
+	}
+
 	// The before/after comparison is the only test here that could be
 	// contradicted by a provider invoice, which makes it the only one worth
 	// much. Everything else measures the engine against its own model.
@@ -311,11 +526,26 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			return fmt.Errorf("--compare wants a date like 2026-09-01: %w", err)
 		}
 		before, after := splitAt(units, cut.UTC())
-		_, err = io.WriteString(stdout, renderCompare(compare(before, after), *predicted))
+		_, err = io.WriteString(stdout, renderCompare(compare(before, after, unit), *predicted))
 		return err
 	}
 
 	s := summarise(units)
+	s.Unit, s.Lanes = unit, lanesRead
+	// The route is the one summary field that must not be derived from the
+	// rows.
+	//
+	// routeLine reports the SET of routes the traffic took, and a set shrinks
+	// when its members are folded together: a session whose parent lane ran
+	// first-party and whose sub-agent lane ran on Bedrock collapses to one
+	// model, and "Bedrock, metered" would vanish from a card that gets posted
+	// publicly. Route is a statement about requests, not about rows, so it is
+	// computed over every lane whatever the row unit is.
+	models := make([]string, 0, len(laneUnits))
+	for _, u := range laneUnits {
+		models = append(models, u.Model)
+	}
+	s.Route = routeLine(models)
 
 	if err := cache.save(); err != nil {
 		// A slow next run is the whole consequence, so it is mentioned and
@@ -331,27 +561,50 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	// the full report would defeat its own purpose: the point is that what is
 	// on screen is exactly what is safe to paste.
 	if *share {
+		// Over the rows, not over the lanes: the two sums are equal because
+		// breaks are additive and the fold does not drop any, and summing the
+		// rows is the version that stays correct if a row unit is ever added
+		// that is not a partition of the lanes.
 		breaks := 0
 		for _, u := range units {
 			breaks += u.Breaks
 		}
-		card := shareCard(s, breaks)
-		if card == "" {
+		text := shareCard(s, breaks)
+		if text == "" {
 			return fmt.Errorf("nothing measured enough to share: %d priced sessions", s.Tasks)
 		}
-		if _, err := io.WriteString(stdout, card); err != nil {
+		if _, err := io.WriteString(stdout, text); err != nil {
 			return err
 		}
-		_, err := io.WriteString(stderr, shareNote())
-		return err
+		if _, err := io.WriteString(stderr, shareNote()); err != nil {
+			return err
+		}
+		if *png == "" {
+			return nil
+		}
+		// Same guard, same figures, one extra: the peak row's re-billed tokens,
+		// which the picture needs and the text card does not carry. See
+		// sharepng.go for why it is a peak and not the corpus sum.
+		return writeCard(*png, variant, register, cardData(s, breaks, peakAvoidableTokens(units)), stderr)
 	}
 
 	if *asJSON {
 		sort.Slice(units, func(i, j int) bool { return units[i].CostUSD > units[j].CostUSD })
-		out := map[string]any{"schema": "replay.cost.v1", "summary": s, "unpriced": unpriced,
+		// v2, because `tasks` changed meaning. A consumer pinned to v1 was
+		// handed one row per agent lane under that key; handing them session
+		// rows under the same version string would be the silent kind of
+		// break, where nothing errors and every figure moves.
+		out := map[string]any{"schema": "replay.cost.v2", "summary": s, "unpriced": unpriced,
 			"duplicatedRequests": duplicated, "totalRequests": totalReq}
 		if *perTask {
-			out["tasks"] = units
+			// Lanes never appear under `tasks`. A separate key, with rows whose
+			// id field is `ofSession`, means a consumer cannot be handed one
+			// unit while reading code written for the other.
+			if *perLane {
+				out["lanes"] = laneRows(units)
+			} else {
+				out["tasks"] = units
+			}
 		}
 		b, err := json.MarshalIndent(out, "", "  ")
 		if err != nil {
@@ -371,10 +624,25 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	}
 	if *perTask && len(units) > 0 {
 		sort.Slice(units, func(i, j int) bool { return units[i].CostUSD > units[j].CostUSD })
-		_, _ = fmt.Fprintf(stdout, "\n  %-10s %-24s %8s %10s %10s %7s\n", "session", "model", "requests", "cost", "avoidable", "breaks")
+		// The first column names the row's own unit, and under --per-lane the
+		// session it belongs to is a second column rather than the first one
+		// relabelled. A lane table whose only id column was the parent session
+		// would print the same id on a thousand rows, which is the screen the
+		// JSON defect looked like.
+		if *perLane {
+			_, _ = fmt.Fprintf(stdout, "\n  %-10s %-10s %-24s %8s %10s %10s %7s\n",
+				"lane", "of session", "model", "requests", "cost", "avoidable", "breaks")
+			for _, u := range units {
+				_, _ = fmt.Fprintf(stdout, "  %-10s %-10s %-24s %8d %10s %10s %7d\n", u.Lane, u.ID, u.Model,
+					u.Requests, fmt.Sprintf("$%.2f", u.CostUSD), fmt.Sprintf("$%.2f", u.AvoidableUSD), u.Breaks)
+			}
+			return nil
+		}
+		_, _ = fmt.Fprintf(stdout, "\n  %-10s %5s %-24s %8s %10s %10s %7s\n",
+			"session", "lanes", "model", "requests", "cost", "avoidable", "breaks")
 		for _, u := range units {
-			_, _ = fmt.Fprintf(stdout, "  %-10s %-24s %8d %10s %10s %7d\n", u.ID, u.Model, u.Requests,
-				fmt.Sprintf("$%.2f", u.CostUSD), fmt.Sprintf("$%.2f", u.AvoidableUSD), u.Breaks)
+			_, _ = fmt.Fprintf(stdout, "  %-10s %5d %-24s %8d %10s %10s %7d\n", u.ID, u.Lanes, u.Model,
+				u.Requests, fmt.Sprintf("$%.2f", u.CostUSD), fmt.Sprintf("$%.2f", u.AvoidableUSD), u.Breaks)
 		}
 	}
 	return nil
@@ -393,13 +661,26 @@ func sessionTime(rep *analysis.LaneReport) time.Time {
 // This previously cited the rules version beside a dollar total, which reads
 // as the price date: the rules govern what gets cached, the price table
 // governs what that costs, and on 2026-09-05 they were 73 days apart.
-func costHeaderLine(tasks int) string {
-	// Transcripts, not sessions. A session writes one transcript per lane, so
-	// a session that spawned subagents contributes several. Calling the file
-	// count a session count overstated the corpus roughly twentyfold in the
-	// published evidence before 2026-09-06.
-	line := fmt.Sprintf("Cost per task, across %d transcripts at list prices dated %s (caching rules %s).",
-		tasks, cachemodel.PriceTableVersion, cachemodel.RulesVersionInEffect())
+func costHeaderLine(s costSummary) string {
+	// Both counts, named, whenever they differ.
+	//
+	// This said "N transcripts" because the row unit WAS a transcript file and
+	// calling that a session count had overstated the corpus roughly
+	// twentyfold in the published evidence. The rows are sessions now, so the
+	// headline is a session count — and the file count is printed beside it
+	// rather than dropped, because the gap between 114 and 1614 is the fact
+	// that made the original figure wrong and a reader who cannot see it is
+	// one retraction away from the same mistake.
+	per, subject := "task", fmt.Sprintf("%d sessions", s.Tasks)
+	if s.Unit == unitLane {
+		// "Cost per task" over a lane count is the sentence this whole change
+		// exists to stop being printed.
+		per, subject = "agent lane", fmt.Sprintf("%d agent lanes", s.Tasks)
+	} else if s.Lanes > s.Tasks {
+		subject = fmt.Sprintf("%d sessions (%d agent lanes)", s.Tasks, s.Lanes)
+	}
+	line := fmt.Sprintf("Cost per %s, across %s at list prices dated %s (caching rules %s).",
+		per, subject, cachemodel.PriceTableVersion, cachemodel.RulesVersionInEffect())
 	return line + cachemodel.PriceTableAgeNote(time.Now())
 }
 

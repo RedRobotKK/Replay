@@ -34,6 +34,12 @@ type comparison struct {
 	// is the first thing a sceptic should look at.
 	VolumeDelta float64
 	Enough      bool
+	// Unit is what one row on each side is: a session, or an agent lane under
+	// --per-lane. It is carried rather than assumed because this report says
+	// "task" five times, and a report that says "task" over a lane count is
+	// the defect that put one session id on 1014 rows, reappearing in the one
+	// output somebody quotes at somebody else.
+	Unit string
 }
 
 // minSideTasks is the fewest tasks either side may have. Two sessions is an
@@ -51,8 +57,8 @@ func splitAt(units []costUnit, cut time.Time) (before, after []costUnit) {
 	return before, after
 }
 
-func compare(before, after []costUnit) comparison {
-	c := comparison{BeforeTasks: len(before), AfterTasks: len(after)}
+func compare(before, after []costUnit, unit string) comparison {
+	c := comparison{BeforeTasks: len(before), AfterTasks: len(after), Unit: unit}
 	c.Enough = len(before) >= minSideTasks && len(after) >= minSideTasks
 
 	med := func(us []costUnit) float64 {
@@ -100,17 +106,25 @@ func judgePrediction(predicted, actual float64) string {
 
 func renderCompare(c comparison, predicted float64) string {
 	var b strings.Builder
+	// One noun, and it is the one the rows actually are. Under --per-lane the
+	// rows are agent lanes, and a session that fanned out contributes hundreds
+	// of them, so "1528 tasks, median $0.63" would overstate the work by an
+	// order of magnitude in the one report a reader might take to a meeting.
+	noun, nouns := "task", "tasks"
+	if c.Unit == unitLane {
+		noun, nouns = "agent lane", "agent lanes"
+	}
 	if !c.Enough {
-		fmt.Fprintf(&b, "Too few tasks to compare: %d before, %d after, and each side needs at least %d.\n"+
-			"No figure is printed rather than a median of noise.\n", c.BeforeTasks, c.AfterTasks, minSideTasks)
+		fmt.Fprintf(&b, "Too few %s to compare: %d before, %d after, and each side needs at least %d.\n"+
+			"No figure is printed rather than a median of noise.\n", nouns, c.BeforeTasks, c.AfterTasks, minSideTasks)
 		return b.String()
 	}
-	fmt.Fprintf(&b, "Cost per task, before and after.\n\n")
-	fmt.Fprintf(&b, "  before   %d tasks, median $%.2f\n", c.BeforeTasks, c.BeforeMedian)
-	fmt.Fprintf(&b, "  after    %d tasks, median $%.2f\n", c.AfterTasks, c.AfterMedian)
-	fmt.Fprintf(&b, "  change   %+.0f%% per task, on %+.0f%% task volume\n", c.MedianDelta*100, c.VolumeDelta*100)
+	fmt.Fprintf(&b, "Cost per %s, before and after.\n\n", noun)
+	fmt.Fprintf(&b, "  before   %d %s, median $%.2f\n", c.BeforeTasks, nouns, c.BeforeMedian)
+	fmt.Fprintf(&b, "  after    %d %s, median $%.2f\n", c.AfterTasks, nouns, c.AfterMedian)
+	fmt.Fprintf(&b, "  change   %+.0f%% per %s, on %+.0f%% %s volume\n", c.MedianDelta*100, noun, c.VolumeDelta*100, noun)
 	if math.Abs(c.VolumeDelta) > 0.4 {
-		fmt.Fprintf(&b, "\nVolume moved by more than 40%%, so the two periods are not comparable work.\nTreat the per-task figure with suspicion.\n")
+		fmt.Fprintf(&b, "\nVolume moved by more than 40%%, so the two periods are not comparable work.\nTreat the per-%s figure with suspicion.\n", noun)
 	}
 	if predicted != 0 {
 		fmt.Fprintf(&b, "\n%s\n", judgePrediction(predicted, c.MedianDelta))

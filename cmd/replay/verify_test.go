@@ -27,7 +27,7 @@ func TestComparePricesPerTaskNotInTotal(t *testing.T) {
 		after = append(after, costUnit{CostUSD: 1})
 	}
 
-	c := compare(before, after)
+	c := compare(before, after, unitSession)
 	if math.Abs(c.MedianDelta) > 0.001 {
 		t.Fatalf("doing half as much work reported a %.1f%% saving", c.MedianDelta*100)
 	}
@@ -43,7 +43,7 @@ func TestCompareDetectsARealPerTaskImprovement(t *testing.T) {
 		after = append(after, costUnit{CostUSD: 0.80})
 	}
 
-	c := compare(before, after)
+	c := compare(before, after, unitSession)
 	if math.Abs(c.MedianDelta-(-0.20)) > 0.001 {
 		t.Fatalf("want a 20%% fall in cost per task, got %.1f%%", c.MedianDelta*100)
 	}
@@ -77,7 +77,7 @@ func TestCompareJudgesAPredictionHonestly(t *testing.T) {
 // Two sessions on one side is an anecdote. Refuse rather than publish a median
 // of noise, because this is the number the whole argument would rest on.
 func TestCompareRefusesTooLittleEvidence(t *testing.T) {
-	c := compare([]costUnit{{CostUSD: 1}}, []costUnit{{CostUSD: 1}})
+	c := compare([]costUnit{{CostUSD: 1}}, []costUnit{{CostUSD: 1}}, unitSession)
 	out := renderCompare(c, 0)
 	if !strings.Contains(strings.ToLower(out), "too few") {
 		t.Fatalf("want a refusal on thin evidence, got:\n%s", out)
@@ -98,5 +98,44 @@ func TestSplitByDatePutsEachSessionOnOneSide(t *testing.T) {
 	before, after := splitAt(units, cut)
 	if len(before) != 2 || len(after) != 2 {
 		t.Fatalf("split %d before / %d after, want 2/2", len(before), len(after))
+	}
+}
+
+// `--compare` must name the unit it is comparing, like every other output.
+//
+// The before/after report is the one measurement here a provider invoice could
+// contradict, and it says "tasks" in five places. Under `--per-lane` those are
+// agent lanes, and printing "1528 tasks, median $0.63" over a lane count is the
+// same conflation that put one session on 1014 rows — reappearing in the one
+// output that gets quoted at someone.
+//
+// PASS: a lane comparison calls them lanes.
+// FAIL: it calls them tasks, which is the defect.
+func TestCompareNamesTheUnitItIsComparing(t *testing.T) {
+	var before, after []costUnit
+	for i := 0; i < minSideTasks; i++ {
+		before = append(before, costUnit{CostUSD: 1})
+		after = append(after, costUnit{CostUSD: 2})
+	}
+
+	lanes := renderCompare(compare(before, after, unitLane), 0)
+	if strings.Contains(lanes, "task") {
+		t.Errorf("a --per-lane comparison calls its rows tasks:\n%s", lanes)
+	}
+	if !strings.Contains(lanes, "lane") {
+		t.Errorf("a --per-lane comparison does not say what it compared:\n%s", lanes)
+	}
+
+	// And the default is still a task comparison, in those words.
+	tasks := renderCompare(compare(before, after, unitSession), 0)
+	if !strings.Contains(tasks, "per task") {
+		t.Errorf("the default comparison must still be cost per task:\n%s", tasks)
+	}
+
+	// The refusal below the floor names the unit too: "too few tasks" over a
+	// lane count is the same sentence with the same error in it.
+	short := renderCompare(compare(before[:1], after, unitLane), 0)
+	if strings.Contains(short, "task") {
+		t.Errorf("the too-few refusal calls lanes tasks:\n%s", short)
 	}
 }
