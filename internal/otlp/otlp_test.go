@@ -155,8 +155,25 @@ func TestOT5_WriteRefusesSymlinkAndOverwrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Write(dir, sp); err == nil {
-		t.Error("a second write to an existing file must refuse")
+	// The guarantee is that a write never lands on a file that already exists,
+	// and it is tested against the same path rather than by calling Write
+	// twice. Write names files otlp-<unix seconds>.jsonl, so two calls only
+	// collide when both fall inside the same second: on a slow runner they do
+	// not, the second call gets its own name, and it is right to succeed. This
+	// test spent that whole time asserting the clock rather than the code, and
+	// went red the first time a runner was slow enough to separate them.
+	// Asserting the message, not just the refusal. Two layers refuse an
+	// existing path: the Lstat above the open, and O_EXCL on the open itself
+	// as a backstop for the race between them. Either alone still refuses, so
+	// a bare err != nil check cannot tell which is working, and removing the
+	// first one leaves the user with a raw OS error instead of a sentence
+	// telling them what to do about it.
+	_, err = writeTo(path, sp)
+	if err == nil {
+		t.Fatal("a write onto an existing file must refuse")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("refused, but not by the check that explains itself: %v", err)
 	}
 	link := filepath.Join(dir, "link.jsonl")
 	if err := os.Symlink(path, link); err != nil {

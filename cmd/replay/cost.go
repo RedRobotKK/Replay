@@ -186,7 +186,15 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		home, _ := os.UserHomeDir()
 		roots := defaultTranscriptRoots(home)
 		if len(roots) == 0 {
-			return fmt.Errorf("one or more transcript directories are required: %w", errUsage)
+			// Say where it looked and what that means, rather than asking for
+			// an argument the reader does not have. This is the branch a new
+			// user reaches, and a usage error here is the funnel dying at step
+			// one, which is the thing the comment above set out to prevent.
+			explainNoCorpus(home, stderr)
+			// Not an error. A machine that has never run the agent has nothing
+			// to report and that is a fact about the machine, not a failure of
+			// the command, so the exit status says so.
+			return nil
 		}
 		_, _ = fmt.Fprintf(stderr, "reading %s\n", roots[0])
 		args = append(args, roots...)
