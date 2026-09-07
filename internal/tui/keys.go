@@ -47,14 +47,28 @@ type Binding struct {
 // Bindings is the whole vocabulary, floor first.
 func Bindings() []Binding {
 	b := []Binding{
-		{"up down", "move", L0},
-		{"enter", "open a row", L0},
+		// Arrows and enter move between rows and open one. Same reason as the
+		// vim block below: nothing here has rows yet, so both would be listed
+		// and inert. They return with row selection.
 		{"esc", "back, or cancel", L0},
 		{"q", "quit", L0},
 
-		{"j k", "down and up", L1},
-		{"g G", "first row and last", L1},
-		{"/", "search this screen", L1},
+		// j/k, g/G and "/" are the terminal lingua franca and are deliberately
+		// NOT here yet.
+		//
+		// They move between rows and search among them, and these screens have
+		// no selectable rows: every one is an answer with its evidence under
+		// it, rendered whole. Listing them would put four keys in the help
+		// overlay that do nothing, which is worse than their absence, because
+		// the overlay is the one place somebody who does not know this tool
+		// goes to find out what it can do.
+		//
+		// g would also have collided outright: it is bound to the guards
+		// screen, and "first row" would have meant the same keystroke did two
+		// things while the overlay listed both.
+		//
+		// They come back with row selection, and TestEveryAdvertisedKeyIsHandled
+		// fails the build if they are advertised before then.
 		{"?", "every key, including the ones not shown", L1},
 	}
 	for _, s := range Shortcuts() {
@@ -72,9 +86,16 @@ func Bindings() []Binding {
 // L0 or L1 and one is the escape hatch to everything else, because a footer
 // that lists actions has already stopped being a floor.
 func footerKeys() []Binding {
+	// Three, not five.
+	//
+	// The floor is three to five keys, and it was five by listing "j k move"
+	// and "enter open" while neither did anything. A footer that advertises a
+	// key it does not handle is lying in the one place a beginner looks, and
+	// padding to the top of the allowed range with keys that do nothing is the
+	// worst way to reach it.
+	//
+	// It grows back to five when row selection exists.
 	return []Binding{
-		{"j k", "move", L1},
-		{"enter", "open", L0},
 		{"?", "keys", L1},
 		{"esc", "back", L0},
 		{"q", "quit", L0},

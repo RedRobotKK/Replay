@@ -57,13 +57,20 @@ func TestOutcomesCarryProvenanceAndAWayOut(t *testing.T) {
 				"behalf without showing what it did is asking for trust it has not "+
 				"earned", sc.Title)
 		}
-		last := sc.Lines[len(sc.Lines)-1]
-		for _, other := range Shortcuts() {
-			if !strings.Contains(last, other.Label) {
-				t.Errorf("%q cannot reach %q. Every question is one keystroke from every "+
-					"screen, or the answer somebody wants is three screens away and they "+
-					"stop looking", sc.Title, other.Label)
-			}
+		// Reachability is a property, not a printed list.
+		//
+		// This used to require every screen to name all eight questions in its
+		// last row, which was true while each screen carried the old
+		// eight-key strip. Progressive disclosure moved them behind "?", so
+		// demanding the list back would have undone the fix to satisfy a test
+		// that was checking the mechanism instead of the thing it protected.
+		//
+		// What must hold: the way to every other question is one keystroke
+		// away and is offered on screen. The footer offers "?", and
+		// TestHelpCarriesEveryQuestion holds that "?" carries all eight.
+		if !strings.Contains(Footer(sc.Key), "? keys") {
+			t.Errorf("%q does not offer the way to the other questions, so the answer "+
+				"somebody wants is unreachable and they stop looking", sc.Title)
 		}
 	}
 }

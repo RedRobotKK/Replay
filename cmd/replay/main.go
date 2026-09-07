@@ -139,6 +139,8 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 		return runProbe(args[1:], stdout, stderr)
 	case "rules":
 		return runRules(args[1:], stdout, stderr)
+	case "tui":
+		return runTUI(args[1:], stdout, stderr)
 	case "statusline":
 		return runStatusline(args[1:], stdout, stderr)
 	case "cost":
