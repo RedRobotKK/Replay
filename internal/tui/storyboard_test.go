@@ -114,3 +114,63 @@ func equal(a, b []int) bool {
 	}
 	return true
 }
+
+// The header block must be the same table in every state it appears in.
+//
+// It was not. State 1 put its third column at 54 and state 2 at 48, because
+// both were assembled from hand-counted spaces inside a value string. The
+// traffic grid below them has been aligned since it was written, so the screen
+// held one table a reader could scan and one they had to re-find, and the
+// second was the one carrying the spend figure.
+func TestStoryboard_TheHeaderBlockHasOneGeometryEverywhere(t *testing.T) {
+	seen := map[string][]int{}
+	for _, sc := range Storyboard() {
+		for _, line := range sc.Lines {
+			if !looksLikeHeaderBlock(line) {
+				continue
+			}
+			cols := columnStarts(line)
+			if len(cols) < 2 {
+				continue
+			}
+			key := strings.TrimSpace(line[:cols[1]])
+			_ = key
+			if prev, ok := seen["block"]; ok {
+				if !prefixEqual(prev, cols) {
+					t.Errorf("state %d's header block starts columns at %v; an earlier state "+
+						"used %v. A reader who moves between screens should not have to "+
+						"re-find the column carrying the spend figure.\n%s",
+						sc.N, cols, prev, line)
+				}
+				continue
+			}
+			seen["block"] = cols
+		}
+	}
+}
+
+// looksLikeHeaderBlock matches the label/value lines above the traffic table:
+// two leading spaces, a word, and a wide gap before the value.
+func looksLikeHeaderBlock(line string) bool {
+	for _, k := range []string{"listening", "upstream", "ledger"} {
+		if strings.HasPrefix(line, "  "+k+" ") {
+			return true
+		}
+	}
+	return false
+}
+
+// prefixEqual compares the columns both lines actually have, so a state with a
+// stat column is still checked against one without it for the columns they share.
+func prefixEqual(a, b []int) bool {
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+	for i := 0; i < n; i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
