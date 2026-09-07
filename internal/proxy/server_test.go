@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -239,6 +240,26 @@ func readLedger(t *testing.T, dir string) []ledger.Record {
 		}
 		out = append(out, recs...)
 	}
+	// Read a ledger in the order it was written.
+	//
+	// Glob returns files sorted by name, so a session whose records land in
+	// two files came back in filename order rather than write order. Every
+	// test asserting "the first record carries the policy and the second does
+	// not" then passed or failed on which filename sorted first, and the two
+	// records were four milliseconds apart.
+	//
+	// It went red on CI and passed forty times locally, which is the shape of
+	// an ordering assumption rather than a race: nothing is contended, the
+	// answer is simply not guaranteed to be the one the test wants.
+	//
+	// Sorting here rather than in each test, because every caller wants the
+	// same thing and a helper that returns records in an arbitrary order is a
+	// helper that makes its callers wrong by default. SliceStable so records
+	// sharing a timestamp keep the order the file gave them, which is their
+	// append order.
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].Timestamp.Before(out[j].Timestamp)
+	})
 	return out
 }
 
