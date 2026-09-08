@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -18,6 +20,35 @@ import (
 // these tests exist because wiring currency in is the most likely way for
 // somebody to break it.
 
+// corpus points the tool at a transcript of this test's own, and returns.
+//
+// Without it these tests read whatever corpus the machine happens to have.
+// That is how the first version of this file passed here and failed on CI in
+// three jobs: a runner has no transcripts, so the cost screen took its
+// nothing-found branch and returned before reaching any of the code under
+// test, while the author's machine has 1,681 and took the measured one.
+//
+// A test that only exercises the interesting path on the author's machine is
+// the same defect this project has spent the day finding, wearing a different
+// hat.
+func corpus(t *testing.T) {
+	t.Helper()
+	src := filepath.Join("..", "..", "internal", "transcript", "testdata", "session-redacted.jsonl")
+	b, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatalf("reading the fixture: %v", err)
+	}
+	dir := t.TempDir()
+	proj := filepath.Join(dir, "proj")
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proj, "s.jsonl"), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("REPLAY_TRANSCRIPTS", dir)
+}
+
 // TC-1: a converted screen is still ASCII and still fits the budget.
 //
 // The whole hazard in one test. TW1 and TW2 already assert this, but they run
@@ -25,6 +56,7 @@ import (
 // this project has a Latin one. On the operator's own ja_JP machine they would
 // have been exercising a different code path than the one they check.
 func TestTC1_AConvertedScreenIsStillASCIIAndFits(t *testing.T) {
+	corpus(t)
 	t.Setenv("LC_ALL", "ja_JP.UTF-8")
 	for _, s := range tuiScreens {
 		out := render(t, "tui", "-once", "-screen", s)
@@ -44,6 +76,7 @@ func TestTC1_AConvertedScreenIsStillASCIIAndFits(t *testing.T) {
 
 // TC-2: the local figure actually appears, named by its code.
 func TestTC2_TheLocalFigureIsShownAndNamed(t *testing.T) {
+	corpus(t)
 	t.Setenv("LC_ALL", "ja_JP.UTF-8")
 	out := render(t, "tui", "-once", "-screen", "cost")
 	if !strings.Contains(out, "JPY") {
@@ -59,6 +92,7 @@ func TestTC2_TheLocalFigureIsShownAndNamed(t *testing.T) {
 // Stated as an equality against the never case rather than by eye, so the
 // feature cannot cost anything to the people it is not for.
 func TestTC3_ADollarReaderSeesNoChange(t *testing.T) {
+	corpus(t)
 	t.Setenv("LC_ALL", "en_US.UTF-8")
 	us := render(t, "tui", "-once", "-screen", "cost")
 	t.Setenv("LC_ALL", "C")
@@ -77,6 +111,7 @@ func TestTC3_ADollarReaderSeesNoChange(t *testing.T) {
 // check, and this surface has no note under the block to carry it the way the
 // report does.
 func TestTC4_TheRateIsStatedOnScreen(t *testing.T) {
+	corpus(t)
 	t.Setenv("LC_ALL", "ja_JP.UTF-8")
 	out := render(t, "tui", "-once", "-screen", "cost")
 	if !strings.Contains(out, "/USD") {
