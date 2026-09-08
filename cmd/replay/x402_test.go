@@ -239,6 +239,13 @@ var allowedImports = map[string]bool{
 	"bufio": true, "bytes": true, "compress/gzip": true, "context": true,
 	"encoding/hex": true, "encoding/json": true, "errors": true, "flag": true,
 	"fmt": true, "hash/fnv": true, "io": true, "io/fs": true, "log": true,
+	// html, for escaping text into the generated screen SVGs in
+	// screens_svg_test.go. Escaping only: html.EscapeString takes a string and
+	// returns one. It opens nothing, runs nothing and signs nothing, and the
+	// alternative is hand-rolled replacement of five characters, which is how
+	// an image of a screen ends up carrying a broken tspan the day somebody
+	// puts an ampersand in a model name.
+	"html": true,
 	"math": true, "math/rand": true, "math/rand/v2": true, "net": true,
 	"net/http": true, "net/http/httptest": true, "net/http/httputil": true,
 	"net/url": true, "os": true, "os/signal": true, "path": true,
