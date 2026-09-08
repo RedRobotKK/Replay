@@ -160,6 +160,22 @@ jobs:
       - name: Check the CLI reference against the binary
         run: ./scripts/cli-blueprint/check.sh
 
+  tui-audit:
+    name: tui layout audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # The committed SVGs pin what one width looks like. They cannot tell you
+      # whether the layout survives a narrower terminal or a Japanese locale,
+      # where East Asian Ambiguous characters are two cells wide instead of one.
+      # This renders all nine screens across four widths and both locales.
+      - name: Audit every TUI screen
+        run: ./scripts/tui-audit/run.sh
+
   docs:
     name: Markdown lint
     runs-on: ubuntu-latest
