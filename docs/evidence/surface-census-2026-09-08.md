@@ -22,11 +22,19 @@ it was the only one.
 | Codex `~/.codex/{sessions,archived_sessions}` | 42 MB, **150** rollouts | **yes, both roots, 150** | yes | correct |
 | Ollama `~/.ollama/logs/server*.log` | 42 MB, **3,161** requests | **yes** | 586 of 3,161 | corrected 2026-09-08 |
 | Grok `~/.grok/sessions` | **3.8 GB, 6,787 files** | no | **no** | "no local transcript" — **wrong** |
-| Cursor `~/.cursor` | 11 MB, **118** agent transcripts | no | **no** | "unreadable by design" — **wrong** |
+| Cursor `~/.cursor` | 11 MB, **118** agent transcripts | no | **no** | out of scope, for a wire reason — **incomplete** |
 
 Everything the tool claims to read, it reads completely. The two surfaces it
-does not read were both documented with a false reason and a correct
-conclusion.
+does not read were both ruled out on the network and never checked on the
+disk: right conclusion, wrong instrument.
+
+A note on the last column, because getting this wrong here would be absurd.
+The Grok cell quotes `wire-families-2026-09-06.md` verbatim. The Cursor cell
+does not quote anything, because nothing in this repository says Cursor is
+unreadable: `requirements.md` §9 lists Cursor agent mode as unsupported with
+its hook column reading "None", and its non-goals exclude "clients that offer
+no base URL override". Both are true statements about a base URL. Neither is a
+statement about `~/.cursor`, and there was no third thing that examined it.
 
 ## Finding 1: the three read surfaces are exact
 
@@ -43,9 +51,13 @@ Ollama's glob is `server*.log`, and the `app*.log` files beside them contain
 logs, "starting Ollama" and "signaling Ollama app process". The narrower glob
 is right.
 
-## Finding 2: two surfaces were called absent and are present
+## Finding 2: two surfaces were ruled out without being opened
 
-Both were documented as unavailable for reasons that turn out to be false.
+Grok was documented with a claim about the disk that is false. Cursor was
+documented with a claim about the wire that is true, and no claim about the
+disk at all, which left a reader with the impression the question had been
+settled. Only the first is an error. Both left 3.8 GB and 118 files
+unexamined.
 
 **Grok.** `~/.grok/sessions`, 3.8 GB across 6,787 files, organised by
 URL-encoded working directory, one directory per project, each session carrying
@@ -56,8 +68,13 @@ URL-encoded working directory, one directory per project, each session carrying
 **Cursor.** `~/.cursor/projects/*/agent-transcripts/*.jsonl`, **118 files**,
 plain JSONL carrying `{message, role}`, plus a 6.7 MB
 `ai-tracking/ai-code-tracking.db` with tables `conversation_summaries`,
-`scored_commits`, `ai_code_hashes` and `tracked_file_content`. Nothing about it
-is unreadable.
+`scored_commits`, `ai_code_hashes` and `tracked_file_content`. It is ordinary
+JSONL and an ordinary SQLite file, readable with `cat` and `sqlite3`.
+
+The support table's reason for excluding Cursor, that its agent mode offers no
+base URL override, remains correct and remains about the proxy. What it never
+said, and what a reader could reasonably have assumed it covered, is whether
+anything is on disk. There is.
 
 ## Finding 3: neither carries usage, so the conclusion survived the reasoning
 
