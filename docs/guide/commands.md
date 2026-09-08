@@ -921,6 +921,35 @@ than rewritten. It closes with the same scope paragraph `replay sources` prints,
 the three rules it matched on and the trees it skipped, because a list of sources read
 without its limits is a claim of completeness that this scan cannot make.
 
+### `replay mcp`
+
+A Model Context Protocol server on stdio, so an agent can ask Replay a question
+**during** the work rather than being told afterwards what it cost. JSON-RPC 2.0,
+line delimited, standard library only.
+
+Three tools, and the surface is deliberately small:
+
+| Tool | Answers |
+|------|---------|
+| `replay_surfaces` | which agents leave readable state here, and how much of it Replay reads |
+| `replay_price_check` | one model's rates, cache read multiple and minimum cacheable prefix, with the table's date |
+| `replay_quota` | the rate-limit window closest to binding, and how long until it resets |
+
+**None of them return message text.** The whole surface runs over the user's own
+transcripts, and a tool that hands an agent back the content of an earlier
+conversation is an exfiltration path with a friendly name. Counts, rates and
+causes only.
+
+This is the second of two MCP servers and they answer different questions. The
+hosted one at `redrobot.jp/mcp.json` answers about the WORLD: what a model costs,
+what a tool set weighs. It needs no user data, which is why it can be hosted.
+This one answers about THIS MACHINE, and that data never leaves it, which is why
+it cannot be.
+
+An unknown model returns a refusal rather than a default rate, and a stored quota
+reading states its own age. A notification, which carries no id, gets no reply,
+because a server that answers one corrupts every client that batches.
+
 ### `replay version`
 
 Version and build commit.

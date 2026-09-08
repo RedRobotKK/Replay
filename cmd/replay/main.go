@@ -135,6 +135,8 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 		return runCorpus(args[1:], stdout, stderr)
 	case "codex":
 		return runCodex(args[1:], stdout, stderr)
+	case "mcp":
+		return runMCP(os.Stdin, stdout, stderr)
 	case "agents":
 		return runAgents(args[1:], stdout, stderr)
 	case "burn":
@@ -556,6 +558,7 @@ Look closer:
   replay codex  <dir...>           the same reading, for OpenAI Codex rollout logs
   replay burn                      what each agent surface burned: Codex, Ollama, Claude Code
   replay agents [dir] --write F    a boot block naming where this project keeps its records
+  replay mcp                       answer an agent's questions mid-session, JSON-RPC on stdio
 
 Corpus and calibration:
   replay corpus <dir...>           calibration across many sessions, as Markdown (no paths or content)
