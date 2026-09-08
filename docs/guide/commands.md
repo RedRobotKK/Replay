@@ -927,13 +927,22 @@ A Model Context Protocol server on stdio, so an agent can ask Replay a question
 **during** the work rather than being told afterwards what it cost. JSON-RPC 2.0,
 line delimited, standard library only.
 
-Three tools, and the surface is deliberately small:
+**One server, not two.** It serves the whole vocabulary the hosted endpoint
+advertises, so a user configures one thing:
 
-| Tool | Answers |
-|------|---------|
-| `replay_surfaces` | which agents leave readable state here, and how much of it Replay reads |
-| `replay_price_check` | one model's rates, cache read multiple and minimum cacheable prefix, with the table's date |
-| `replay_quota` | the rate-limit window closest to binding, and how long until it resets |
+| Tool | Answers | Needs the network |
+|------|---------|---|
+| `replay_surfaces` | which agents leave readable state here, and how much Replay reads | no |
+| `replay_price_check` | one model's rates, cache read multiple and minimum prefix, with the table's date | no |
+| `replay_rules_free` | the complete free rules table, generated from the compiled one | no |
+| `replay_mcp_overhead` | what a client's tool definitions cost to carry, per request and across many | no |
+| `replay_quota` | the rate-limit window closest to binding, and time to reset | no |
+| `replay_rules_latest` | says where the maintained feed is and that Replay never pays | yes, and it says so |
+| `replay_installer_release` | names its source rather than answering from a stale compiled value | yes, and it says so |
+
+Five answer from the compiled table with no network at all. The two that cannot
+say so rather than returning a figure that looks compiled-in, because where a
+number came from is the product.
 
 **None of them return message text.** The whole surface runs over the user's own
 transcripts, and a tool that hands an agent back the content of an earlier

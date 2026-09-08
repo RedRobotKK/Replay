@@ -89,6 +89,39 @@ func mcpTools() []mcpTool {
 			}, "model"),
 		},
 		{
+			Name: "replay_rules_free",
+			Description: "The complete free Replay rules table: prices and cache floors for every " +
+				"model Replay prices, in the format `replay rules --update` installs. Generated from " +
+				"the compiled table in this binary, so it needs no network and states its own date.",
+			InputSchema: obj(map[string]any{}),
+		},
+		{
+			Name: "replay_mcp_overhead",
+			Description: "Price the tool definitions a client is carrying. Every connected MCP " +
+				"server puts its tool definitions in the prompt on every request, so their cost is " +
+				"recurring rather than one-off. Takes a byte size and a request count and returns " +
+				"what carrying them costs, cached and cold.",
+			InputSchema: obj(map[string]any{
+				"model":    map[string]any{"type": "string", "description": "a model id, for example claude-opus-5"},
+				"bytes":    map[string]any{"type": "number", "description": "total size of the tool definitions in bytes"},
+				"requests": map[string]any{"type": "number", "description": "how many requests they are carried across"},
+			}, "model", "bytes"),
+		},
+		{
+			Name: "replay_rules_latest",
+			Description: "The maintained rules feed, which lives at redrobot.jp and is sold over " +
+				"x402. This server does not hold it and will not invent it: it says where it is and " +
+				"what it costs. Replay never pays.",
+			InputSchema: obj(map[string]any{}),
+		},
+		{
+			Name: "replay_installer_release",
+			Description: "The current installer release, its commit and digest. That is a fact " +
+				"about a remote release rather than about this machine, so this server names the " +
+				"source instead of answering from a compiled-in value that would go stale.",
+			InputSchema: obj(map[string]any{}),
+		},
+		{
 			Name: "replay_quota",
 			Description: "The rate-limit window closest to binding, and how long until it resets, " +
 				"from the last reading the status line stored. Reports the reading's age, and says " +
@@ -177,6 +210,30 @@ func mcpCall(name string, args json.RawMessage) (string, error) {
 			return "", fmt.Errorf("replay_price_check needs a model")
 		}
 		return priceCheckText(a.Model), nil
+	case "replay_rules_free":
+		b, err := json.MarshalIndent(cachemodel.ExportRules(), "", "  ")
+		if err != nil {
+			return "", err
+		}
+		return string(b), nil
+	case "replay_mcp_overhead":
+		var a struct {
+			Model    string  `json:"model"`
+			Bytes    float64 `json:"bytes"`
+			Requests float64 `json:"requests"`
+		}
+		_ = json.Unmarshal(args, &a)
+		return mcpOverheadText(a.Model, a.Bytes, a.Requests)
+	case "replay_rules_latest":
+		return "This server does not hold the maintained feed and will not invent it. It is served " +
+			"over the network at https://redrobot.jp/mcp.json, priced over x402, and Replay never " +
+			"pays: `replay rules --update <url>` reports the terms and installs nothing when payment " +
+			"is demanded. The free table is complete and is available here as replay_rules_free.", nil
+	case "replay_installer_release":
+		return "The current installer release is a fact about a remote release, not about this " +
+			"machine, so this server does not answer it from a compiled-in value that would go stale. " +
+			"It is served over the network at https://redrobot.jp/mcp.json, and the installed binary " +
+			"reports its own build with `replay version`.", nil
 	case "replay_quota":
 		q, _ := loadQuota(defaultQuotaPath())
 		if q.RateLimits == nil {
@@ -191,6 +248,65 @@ func mcpCall(name string, args json.RawMessage) (string, error) {
 		return fmt.Sprintf("%s (reading taken %s ago)", line, shortUntil(timeNow().Add(q.Age(timeNow())), timeNow())), nil
 	}
 	return "", fmt.Errorf("no tool %q", name)
+}
+
+// mcpOverheadText prices what a client's tool definitions cost to carry.
+//
+// The cost of a connected MCP server is not the call, it is the definitions:
+// they sit in the prompt on every request whether or not the agent uses them.
+// Measured on this project's own corpus, tool-definition changes are the single
+// largest re-billing cause, so the recurring half of that arithmetic is the one
+// nobody does.
+//
+// The token figure is derived from bytes and is therefore an ESTIMATE. It says
+// so, because a count that came from a divisor and a count that came from a
+// tokenizer are different kinds of number and only one of them is checkable.
+func mcpOverheadText(model string, bytes, requests float64) (string, error) {
+	if strings.TrimSpace(model) == "" || bytes <= 0 {
+		return "", fmt.Errorf("replay_mcp_overhead needs a model and a byte size")
+	}
+	if requests <= 0 {
+		requests = 1
+	}
+	p, ok := cachemodel.PriceFor(model)
+	if !ok {
+		return fmt.Sprintf("%s is not in the compiled table (%s), so no rate is printed for it.",
+			model, cachemodel.PriceTableVersion), nil
+	}
+	read := p.ReadMult
+	if read == 0 {
+		read = cachemodel.ReadMultiplier
+	}
+	tokens := bytes * defaultTokensPerByteMCP
+	cold := tokens / 1e6 * p.InputPerMTok
+	cached := tokens / 1e6 * p.InputPerMTok * read
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s bytes of tool definitions on %s, carried across %s requests\n",
+		commaFloat(bytes), model, commaFloat(requests))
+	fmt.Fprintf(&b, "  about %s tokens, ESTIMATED from bytes at %.2f tokens per byte, not counted by a tokenizer\n",
+		commaFloat(tokens), defaultTokensPerByteMCP)
+	fmt.Fprintf(&b, "  cold  $%.4f per request, $%.2f across %.0f\n", cold, cold*requests, requests)
+	fmt.Fprintf(&b, "  cached $%.4f per request, $%.2f across %.0f\n", cached, cached*requests, requests)
+	b.WriteString("  Definitions sit in the prompt on every request whether the agent calls the tool or not,\n")
+	b.WriteString("  so this cost is recurring. A tool never called is the whole figure wasted.\n")
+	return b.String(), nil
+}
+
+// defaultTokensPerByteMCP is the same coarse prose ratio analysis.Fit falls
+// back to, and carries the same warning: it is an English-prose average and
+// tool schemas are not English prose.
+const defaultTokensPerByteMCP = 0.25
+
+func commaFloat(f float64) string {
+	s := fmt.Sprintf("%.0f", f)
+	out := ""
+	for i, c := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			out += ","
+		}
+		out += string(c)
+	}
+	return out
 }
 
 // priceCheckText renders one model's row from the compiled table.

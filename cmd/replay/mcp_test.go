@@ -100,3 +100,57 @@ func TestMC5(t *testing.T) {
 		}
 	}
 }
+
+// One server, not two. The local server must serve the whole vocabulary the
+// hosted one advertises, so a user configures one endpoint.
+func TestMC6(t *testing.T) {
+	got := rpc(t, `{"jsonrpc":"2.0","id":6,"method":"tools/list"}`)
+	r, _ := got[0]["result"].(map[string]any)
+	have := map[string]bool{}
+	for _, x := range r["tools"].([]any) {
+		have[x.(map[string]any)["name"].(string)] = true
+	}
+	for _, want := range []string{
+		"replay_price_check", "replay_rules_free", "replay_mcp_overhead",
+		"replay_surfaces", "replay_quota",
+	} {
+		if !have[want] {
+			t.Errorf("merged server does not serve %s", want)
+		}
+	}
+}
+
+// A tool that needs the network must say so rather than returning a figure
+// that looks compiled-in. Provenance is the product.
+func TestMC7(t *testing.T) {
+	for _, name := range []string{"replay_rules_latest", "replay_installer_release"} {
+		out := rpc(t, `{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"`+name+`","arguments":{}}}`)
+		r, _ := out[0]["result"].(map[string]any)
+		if r == nil {
+			continue // an error is an acceptable answer; silence is not
+		}
+		txt := r["content"].([]any)[0].(map[string]any)["text"].(string)
+		if !strings.Contains(strings.ToLower(txt), "network") && !strings.Contains(strings.ToLower(txt), "redrobot.jp") {
+			t.Errorf("%s did not say it needs a remote source: %q", name, txt)
+		}
+	}
+}
+
+// mcp_overhead prices what a client's tool definitions cost to carry, and the
+// arithmetic must be checkable from the numbers it prints.
+func TestMC8(t *testing.T) {
+	out := rpc(t, `{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"replay_mcp_overhead","arguments":{"model":"claude-opus-5","bytes":40000,"requests":100}}}`)
+	r, _ := out[0]["result"].(map[string]any)
+	if r == nil {
+		t.Fatalf("no result: %v", out[0])
+	}
+	txt := r["content"].([]any)[0].(map[string]any)["text"].(string)
+	for _, want := range []string{"40,000", "100", "$"} {
+		if !strings.Contains(txt, want) {
+			t.Errorf("overhead answer missing %q:\n%s", want, txt)
+		}
+	}
+	if !strings.Contains(strings.ToLower(txt), "estimat") {
+		t.Error("a token count derived from bytes is an estimate and must say so")
+	}
+}
