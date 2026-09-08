@@ -588,6 +588,31 @@ describing last Tuesday rather than how you work.
 `--out` names the policy file written on selection (default `~/.replay/policy.json`); `--out -`
 writes none and prints only.
 
+### `replay since [--peek]`
+
+What ran, and what it cost, since you last looked.
+
+```sh
+replay since           # report, and advance the marker
+replay since --peek    # report without consuming the window
+```
+
+This is the return surface: the cheapest useful answer to *what did I miss*. It needs **no account,
+no network, no phone number and no pairing**, because the answer is already on disk. A push
+notification answers the same question and costs a server, a PII store and a first-run prompt — so
+this comes first, and it also measures whether anyone wants the notification at all. If nobody reads
+the digest, nobody wanted the buzz.
+
+It is a filter over `replay cost --per-task --json` rather than a second derivation, so the two can
+never disagree about what a session cost.
+
+Two things it will not do. **A first run says it has no previous look** rather than reporting "0
+sessions since" a window that does not exist. **A quiet window says nothing happened** rather than
+printing `$0.00`, because a quiet window and no spend are different claims and the second states a
+measurement of money that nobody made.
+
+The marker lives at `~/.replay/seen.json` and holds one timestamp.
+
 ### `replay prefix --before <file> --after <file>`
 
 Answers one question about a diff before it merges: **does this change void the cached prefix?**

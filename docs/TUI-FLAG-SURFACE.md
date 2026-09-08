@@ -104,10 +104,11 @@ asking you to trust a summary of the thing rather than the thing.
 | `--no-color` | `statusline` | bool |
 | `--color` | `tui` | string |
 
-### Plumbing, shown once (18)
+### Plumbing, shown once (19)
 
 | Flag | Command | Type |
 |---|---|---|
+| `--peek` | `since` | bool |
 | `--before` | `prefix` | string |
 | `--after` | `prefix` | string |
 | `--contribute-dir` | `probe` | string |
