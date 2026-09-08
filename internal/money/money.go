@@ -229,3 +229,31 @@ func group(s string) string {
 	}
 	return out
 }
+
+// ASCII renders the converted figure naming the currency by its ISO code.
+//
+// For grids. Every symbol in this package is East Asian width class Ambiguous,
+// one cell in a Latin locale and two in ja_JP, zh_CN and ko_KR, so a symbol in
+// a padded column shifts everything after it for exactly the readers this
+// feature is for. A three-letter code is ASCII and one cell everywhere.
+//
+// The cost report uses Short, because its local figure ends the line and
+// nothing downstream can shear. The TUI uses this.
+func (d Display) ASCII(usd float64) string {
+	if d.Code == "" || d.Rate <= 0 {
+		return ""
+	}
+	return group(strconv.FormatFloat(usd*d.Rate, 'f', minorUnits[d.Code], 64)) + " " + d.Code
+}
+
+// RateNote is the one-line provenance for a surface with no room for the full
+// caveat: the rate, the currency, and where it came from.
+func (d Display) RateNote() string {
+	if d.Code == "" || d.Rate <= 0 {
+		return ""
+	}
+	if d.Date != "" {
+		return fmt.Sprintf("%s %s/USD, ECB %s. You are billed in USD.", trimRate(d.Rate), d.Code, d.Date)
+	}
+	return fmt.Sprintf("%s %s/USD, your rate. You are billed in USD.", trimRate(d.Rate), d.Code)
+}
