@@ -96,6 +96,8 @@ func Shortcuts() []Shortcut {
 			"What masking covers, and the paths it does not reach.", "safe"},
 		{'d', "Is anything broken?", "doctor", nil,
 			"What Replay can see on this machine, and what it cannot.", "doctor"},
+		{'l', "What is flowing right now?", "serve", nil,
+			"What the proxy is seeing as it happens, or why it is seeing nothing.", "live"},
 		{shareKey, "Is any of this worth posting?", "cost", []string{"--share", "--png"},
 			"What a card of these figures would say, and what it would not carry.", "share"},
 	}
@@ -140,11 +142,18 @@ func Hints(cur rune) string {
 		}
 		b.WriteString(" " + string(s.Key) + " " + s.Label)
 	}
-	// One space before the quit hint, the same as every other entry gets.
+	// The quit hint is not on this strip, and its absence is deliberate.
 	//
-	// It had two, which cost a column nothing was buying: at nine questions the
-	// strip is exactly eighty columns and the second space put it over. Every
-	// entry on this line is separated by one space and this one is not special.
-	b.WriteString(" q quit")
+	// It used to be, and at nine questions the strip was exactly eighty
+	// columns. The tenth took it to eighty-seven and TestHintsFitTheBudget
+	// caught it. Dropping " q quit" recovers exactly the seven columns needed,
+	// and it was duplicated anyway: Footer already ends every screen with
+	// "esc back  q quit", so the strip was spending its last seven columns
+	// repeating the line directly beneath it.
+	//
+	// That puts the strip at exactly eighty again, which means an eleventh
+	// question does not fit either. The answer then is a different layout, not
+	// another entry: two rows, or labels that are not also the -screen names.
+	// The test is what will say so.
 	return b.String()
 }

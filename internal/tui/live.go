@@ -44,36 +44,46 @@ func LiveScreen(l Live, now time.Time) Screen {
 	if !l.Reachable {
 		add("  no proxy answered at %s", l.Addr)
 		add("")
-		add("  This screen shows traffic as it happens, which needs `replay serve`")
-		add("  running. Nothing is wrong with your transcripts; there is simply no")
-		add("  live proxy to look into.")
+		add("  %s", Dim("This screen shows traffic as it happens, which needs `replay serve`"))
+		add("  %s", Dim("running. Nothing is wrong with your transcripts; there is simply no"))
+		add("  %s", Dim("live proxy to look into."))
 		add("")
-		add("  start one    replay serve")
+		add("  start one    %s", paint(Accent, "replay serve"))
 		return s
 	}
 
 	up := time.Duration(l.UptimeSeconds) * time.Second
 	if len(l.Sessions) == 0 {
 		// The whole reason this screen exists.
-		add("  proxy up %s at %s, and it has recorded nothing", coarse(up), l.Addr)
+		// The one state this screen was built for, and the only Alarm on it.
+		// A proxy up for hours with nothing recorded is not a quiet day.
+		add("  proxy up %s at %s, and it has %s", coarse(up), l.Addr, paint(Alarm, "recorded nothing"))
 		add("")
 		add("  A proxy with no traffic is not a quiet day, it is an agent that was")
 		add("  never pointed at it. The ledger stays empty and every figure Replay")
 		add("  reports keeps coming from transcripts instead of the wire.")
 		add("")
-		add("  export ANTHROPIC_BASE_URL=http://%s", l.Addr)
-		add("  then start your agent in that shell")
+		// The fix, and the reason a reader opened this screen. Accented so the
+		// eye lands on the line it has to type.
+		add("  %s", paint(Accent, fmt.Sprintf("export ANTHROPIC_BASE_URL=http://%s", l.Addr)))
+		add("  %s", Dim("then start your agent in that shell"))
 		return s
 	}
 
 	add("  proxy up %s at %s", coarse(up), l.Addr)
 	add("")
-	add("  session    model                 reqs    cached  breaks     cost   last")
-	add("  ---------  --------------------  ------  ------  ------  -------  -----")
+	// Headings and rule are structure. Dimming them is what lets the figures
+	// rise without anything shouting.
+	add("  %s", Dim("session    model                 reqs    cached  breaks     cost   last"))
+	add("  %s", Dim("---------  --------------------  ------  ------  ------  -------  -----"))
 	for _, x := range l.Sessions {
-		add("  %-9s  %-20s  %6d  %5.0f%%  %6d  %7.2f  %5s",
+		// The break count is painted after it is padded, never before: an
+		// escape occupies no cells, so colouring the value first would take
+		// width out of its own column and shift the two after it.
+		add("  %-9s  %-20s  %6d  %5.0f%%  %s  %7.2f  %s",
 			trunc(x.ID, 9), trunc(x.Model, 20), x.Requests, x.CachedShare*100,
-			x.Breaks, x.CostUSD, ago(now.Sub(x.LastSeen)))
+			paint(Severity(x.Breaks), fmt.Sprintf("%6d", x.Breaks)),
+			x.CostUSD, Dim(fmt.Sprintf("%5s", ago(now.Sub(x.LastSeen)))))
 	}
 	return s
 }

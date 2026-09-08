@@ -863,11 +863,11 @@ replacing it.
 
 | Flag | What it does |
 |------|--------------|
-| `-screen <name>` | Open on one of `cost`, `why`, `context`, `advise`, `guards`, `model`, `safe`, `doctor`, `share`. Default `cost`. |
+| `-screen <name>` | Open on one of `cost`, `why`, `context`, `advise`, `guards`, `model`, `safe`, `doctor`, `share`, `live`. Default `cost`. |
 | `-once` | Render one frame and exit, for a pipe or a screenshot. |
 | `-color <when>` | `auto` (colour only when stdout is a terminal), `always`, `never`. Default `auto`. `NO_COLOR` in the environment beats all three. |
 
-**Four of the nine read this machine: `cost`, `why`, `doctor` and `share`.** The other five carry a
+**Five of the ten read this machine: `cost`, `why`, `doctor`, `share` and `live`.** The other five carry a
 notice saying they are example data and describe nobody, and they say it on screen rather than in
 a footnote. They are being wired one at a time, and each one that lands moves from example to
 measured in a change that has to name the source it now reads. A screen that quietly showed a
