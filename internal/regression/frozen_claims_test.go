@@ -209,6 +209,26 @@ func TestFrozenFD8_TheInstallerPrintsOnlyFiguresTheEvidenceHolds(t *testing.T) {
 	}
 	script := string(body)
 
+	// The retraction stays in the file, and this is the assertion that keeps it.
+	//
+	// M63 in the mutation catalogue deletes the note recording that install.sh
+	// once printed an unsourced $2851. It named this test as its killer and
+	// this test did not kill it: everything below compares FIGURES against
+	// evidence, and a deleted comment changes no figure. The kill matrix
+	// reported M63 as detected by nothing in the catalogue, which is what a
+	// killedBy that was never true looks like from the outside.
+	//
+	// The property is worth keeping on its own terms. A file with nothing
+	// saying it was ever wrong is a file where the number comes back, and this
+	// one has already carried an unsourced figure once.
+	for _, must := range []string{"unsourced $2851", "removed 2026-09-06"} {
+		if !strings.Contains(script, must) {
+			t.Errorf("install.sh no longer records that it once printed an unsourced figure: "+
+				"%q is gone. Corrections stay in place here. If the note was rewritten rather "+
+				"than dropped, update this check to the words that replaced it.", must)
+		}
+	}
+
 	corpus := filepath.Join(root, "docs", "evidence", "calibration-corpus-2026-09-06.md")
 	ev, err := os.ReadFile(corpus)
 	if err != nil {
