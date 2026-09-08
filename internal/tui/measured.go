@@ -337,7 +337,14 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 func TaskLines(tasks []Task) []Line {
 	out := make([]Line, 0, len(tasks))
 	for _, t := range tasks {
-		text := Row(taskCols, t.Session, money(t.CostUSD), fmt.Sprint(t.Breaks), t.Model)
+		// The breaks count is the one column where a glance should tell you
+		// something before you read it. 558 and 2 are both just numbers in a
+		// column of numbers; Severity says which is a session worth opening.
+		// Every other column stays plain, because a row painted throughout is
+		// a row with no emphasis in it.
+		text := StyledRow(taskCols,
+			[]Style{Plain, Plain, Severity(t.Breaks)},
+			t.Session, money(t.CostUSD), fmt.Sprint(t.Breaks), t.Model)
 		label := t.Session + "  " + money(t.CostUSD)
 		if t.Path == "" {
 			label += "   (transcript not found, cannot open)"

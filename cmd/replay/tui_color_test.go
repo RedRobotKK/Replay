@@ -139,3 +139,41 @@ func TestCL5_ColourIsActuallyEmitted(t *testing.T) {
 		}
 	}
 }
+
+// CL-6: no screen nests one colour inside another.
+//
+// SGR does not nest. "\x1b[0m" is a full reset, not a pop, so an inner colour
+// that closes itself also closes the one around it: the text after it renders
+// plain and a stray reset trails the line. The cursor row did exactly this,
+// wrapping a row that already coloured its own break count by severity.
+//
+// TestCL1 cannot catch it, and that is the point of writing this one down.
+// Stripping the escapes gives back identical text whether they nest or not, so
+// the invariant that guards the layout is blind to the one that guards the
+// rendering. Two different failures need two different tests, and assuming the
+// first covered the second is how the first six defects of the day survived.
+func TestCL6_ColoursDoNotNest(t *testing.T) {
+	for _, s := range tuiScreens {
+		painted := render(t, "tui", "-once", "-screen", s, "-color", "always")
+		for ln, line := range strings.Split(painted, "\n") {
+			open := ""
+			for _, esc := range sgr.FindAllString(line, -1) {
+				body := strings.TrimSuffix(strings.TrimPrefix(esc, "\x1b["), "m")
+				if body == "0" {
+					open = ""
+					continue
+				}
+				if open != "" {
+					t.Errorf("screen %s line %d opens SGR %q while %q is still open. "+
+						"SGR does not nest: the inner reset closes both, so the rest of "+
+						"the line loses the outer colour.\n  %q", s, ln+1, body, open, line)
+				}
+				open = body
+			}
+			if open != "" {
+				t.Errorf("screen %s line %d ends with SGR %q unclosed, which bleeds into "+
+					"every line the terminal draws after it", s, ln+1, open)
+			}
+		}
+	}
+}

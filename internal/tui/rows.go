@@ -1,6 +1,10 @@
 package tui
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+	"unicode/utf8"
+)
 
 // Row selection.
 //
@@ -110,14 +114,38 @@ func (s Selection) Visible(rows []Line) ([]Line, int) {
 func RenderRows(rows []Line, cursor int) []string {
 	out := make([]string, 0, len(rows))
 	for i, r := range rows {
+		// The marker is painted, not the row.
+		//
+		// Wrapping the whole row was tried and is wrong for a reason worth
+		// recording: a row already carries its own colours, the severity of
+		// its break count among them, and SGR does not nest. The inner reset
+		// that closes the severity also closes the row highlight, so
+		// everything after that column rendered plain and a stray reset
+		// trailed the line. Stripping the escapes gives back the same text
+		// either way, so TestCL1 cannot see it; only looking at the escape
+		// map does.
+		//
+		// Painting the marker alone is also the better design. The row's own
+		// colours mean something; a highlight competing with them says the
+		// selection matters more than what the row is telling you.
 		mark := "  "
 		if i == cursor {
-			mark = "> "
+			mark = paint(Accent, "> ")
 		}
 		line := mark + r.Text
-		if len(line) > BudgetCols {
-			line = line[:BudgetCols-1] + string(truncationMark)
+		// Measured on what the reader sees, not on the bytes.
+		//
+		// This was len(line), which is correct only while no row contains an
+		// escape sequence. An SGR sequence is five or so bytes that occupy no
+		// cells, so a painted row would be judged over budget and truncated
+		// early, cutting visible text that fits. Truncating first and painting
+		// afterwards would have been the other way to avoid it, and is not
+		// available here: the row's own colours are decided where the row is
+		// built, which is the only place that knows what the numbers mean.
+		if VisibleLen(line) > BudgetCols {
+			line = truncateVisible(line, BudgetCols-1) + string(truncationMark)
 		}
+
 		out = append(out, line)
 	}
 	return out
@@ -129,4 +157,57 @@ func SelectedLine(rows []Line, cursor int) string {
 		return ""
 	}
 	return fmt.Sprintf("  %d of %d   %s", cursor+1, len(rows), rows[cursor].Label)
+}
+
+// VisibleLen is the number of cells a rendered line occupies, ignoring SGR.
+//
+// Every screen here is ASCII apart from an allowlisted Braille range that is
+// East Asian width Neutral, so one rune is one cell and a rune count is a cell
+// count. That is enforced by TestTW1 rather than assumed, which is what makes
+// this simple enough to be worth having.
+func VisibleLen(s string) int {
+	n := 0
+	for range StripSGR(s) {
+		n++
+	}
+	return n
+}
+
+// truncateVisible cuts a line to n visible cells, keeping any escapes that
+// opened before the cut and closing them.
+//
+// A line cut through the middle of an escape sequence emits a fragment the
+// terminal treats as text, which is how a truncation turns into garbage on
+// screen. A line cut after an opening sequence and before its reset leaves the
+// colour running down the rest of the frame.
+func truncateVisible(s string, n int) string {
+	var b strings.Builder
+	seen, open := 0, false
+	for i := 0; i < len(s); {
+		if s[i] == 0x1b && i+1 < len(s) && s[i+1] == '[' {
+			j := i + 2
+			for j < len(s) && (s[j] == ';' || (s[j] >= '0' && s[j] <= '9')) {
+				j++
+			}
+			if j < len(s) && s[j] == 'm' {
+				esc := s[i : j+1]
+				b.WriteString(esc)
+				open = esc != "\x1b[0m"
+				i = j + 1
+				continue
+			}
+		}
+		if seen >= n {
+			break
+		}
+		r, size := utf8.DecodeRuneInString(s[i:])
+		_ = r
+		b.WriteString(s[i : i+size])
+		seen++
+		i += size
+	}
+	if open {
+		b.WriteString("\x1b[0m")
+	}
+	return b.String()
 }

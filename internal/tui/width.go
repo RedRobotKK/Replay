@@ -22,6 +22,36 @@ type Column struct {
 	Width int
 }
 
+// StyledRow lays values into columns and paints each one by its role.
+//
+// The painting happens after cell() has padded, which is the rule the whole
+// colour layer turns on: an escape occupies no cells, so a value coloured
+// before it is padded loses width from its own column and shifts every column
+// after it. Doing it here rather than at each call site means there is one
+// place where that order can be got wrong, and it is this one.
+//
+// A shorter styles slice leaves the remaining columns plain, so a caller
+// colouring one column of four does not have to name the other three.
+func StyledRow(cols []Column, styles []Style, values ...string) string {
+	var b strings.Builder
+	b.WriteString(gutter)
+	for i, c := range cols {
+		v := ""
+		if i < len(values) {
+			v = values[i]
+		}
+		if i > 0 {
+			b.WriteString(gutter)
+		}
+		padded := cell(v, c.Width)
+		if i < len(styles) {
+			padded = paint(styles[i], padded)
+		}
+		b.WriteString(padded)
+	}
+	return b.String()
+}
+
 // Row lays values into columns and returns one line of the table.
 //
 // The line is always exactly the same width for a given set of columns,
