@@ -107,6 +107,26 @@ jobs:
         with:
           version: v2.5
 
+  x402-e2e:
+    name: x402 end to end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # The unit tests drive the 402 path through a transport hook, which proves
+      # the parsing and the prose. They cannot prove that the shipped binary
+      # refuses plain http, verifies a certificate chain, gets its exit codes to
+      # a shell, or leaves no file behind when a feed demands payment. This runs
+      # the real binary against a real TLS listener and asserts all four.
+      #
+      # X402_E2E_REQUIRED turns a missing docker daemon into a failure here. The
+      # script skips without it so a developer is told why rather than handed a
+      # broken build, and a check that silently skips on the machine that
+      # matters is a check that cannot fail.
+      - name: Run the x402 harness
+        env:
+          X402_E2E_REQUIRED: "1"
+        run: ./scripts/x402-e2e/e2e.sh
+
   docs:
     name: Markdown lint
     runs-on: ubuntu-latest
