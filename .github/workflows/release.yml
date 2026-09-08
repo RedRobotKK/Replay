@@ -74,6 +74,12 @@ jobs:
       # and must be pulled or superseded, which is the correct severity.
       - name: Check the published binary
         run: |
-          bin="$(find dist -type f -name replay -perm -u+x | head -1)"
-          [ -n "$bin" ] || { echo "no built binary found under dist/" >&2; exit 1; }
+          # The runner is linux/amd64 and dist holds every platform, so the
+          # binary has to be selected, not found. v0.5.1 picked
+          # replay_darwin_arm64_v8.0/replay and got "Exec format error", which
+          # the script reported as two failed assertions rather than as an
+          # unrunnable binary. Both halves are fixed: this names the platform,
+          # and the script now refuses to grade a binary it cannot execute.
+          bin="$(find dist -type f -path '*linux_amd64*' -name replay | head -1)"
+          [ -n "$bin" ] || { echo "no linux/amd64 binary under dist/" >&2; find dist -type f -name replay >&2; exit 1; }
           ./scripts/release-check.sh "$bin"

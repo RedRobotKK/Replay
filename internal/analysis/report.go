@@ -152,7 +152,44 @@ func (r *LaneReport) header(p *Printer) {
 	if r.Session.Skipped > 0 {
 		p.Printf("Note: %d transcript lines were not conversation content and were skipped\n", r.Session.Skipped)
 	}
+	r.laneScope(p)
 	p.Printf("\n")
+}
+
+// laneScope says how much of the session these figures cover.
+//
+// Every offline command analyses the lane MainLane picks and discards the
+// rest, and until 2026-09-08 none of them said so. Measured on the corpus
+// this was built from: the whole set holds 817 breaks and 55,294,260
+// re-billed tokens, while `replay diff` printed 758 and 33.8M. So 21.5
+// million tokens, 38.9% of the total, sat in sub-agent lanes of the same
+// files, and every cause share the report printed was a share of 61% of the
+// tokens with nothing on the page to say so.
+//
+// Reporting one lane is still the right default. A sub-agent lane has its own
+// prefix and its own tool set, and folding them together is what forged 31 of
+// 34 events in the lane-isolation incident. What was wrong was the silence,
+// which is the same thing ContextGap.LanesTotal was added to fix, in a
+// different command.
+//
+// Silent when there is nothing to disclose. A note printed on every
+// single-lane session is noise, and a disclosure readers learn to skip has
+// stopped being one.
+func (r *LaneReport) laneScope(p *Printer) {
+	total := len(r.Session.Lanes)
+	if total < 2 {
+		return
+	}
+	omitted := 0
+	for _, l := range r.Session.Lanes {
+		if l != r.Lane {
+			omitted += len(l.Requests)
+		}
+	}
+	if omitted == 0 {
+		return
+	}
+	p.Printf("Scope: 1 of %d lanes; %d requests in this session's other lanes are not counted here.\n", total, omitted)
 }
 
 // WriteReplay prints the policy table, the error section, and the top
