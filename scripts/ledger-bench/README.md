@@ -18,7 +18,7 @@ table, and prints both columns side by side.
 | Product | Before, their own rule | After |
 |---|---|---|
 | **QM** | `estimateCostUsd(input + cacheRead + cacheWrite)` at a flat $5/MTok, output not counted | per model, cache tiers separated |
-| **Memorable** | four token classes, captured correctly, no rate card | the same classes, priced |
+| **Memorable** | four token classes, captured correctly, posted as counts | the same classes, priced |
 | **River AI** | `usage` returned on an OpenAI-compatible endpoint | **NOT PRICED** — no pricing units published |
 | **GBrain** | — | **NOT MEASURED** — needs a bearer token |
 
@@ -45,6 +45,24 @@ and scores 5.8×. This machine's real corpus caches 98.7% and scores
 [8.1×](../../docs/evidence/qm-budget-2026-09-08.md). A workload that never caches
 would score about 1× and the defect would be invisible. The number is a property
 of the workload; the mechanism is a property of the code.
+
+## What was checked on Memorable, and what was not
+
+`memorable-cli` 0.5.18 was run against real transcripts in an isolated `HOME`.
+`backfill` found 11 sessions and 33 tool calls, then **refused to send anything
+without `--yes`**, stating that the prompt and allow-listed arguments are sent
+scrubbed and the transcript never is. It was not given `--yes`, so nothing left
+the machine and nothing was written to the local store.
+
+Reading the package settles the rest. An undocumented `backfill-cost` command,
+absent from `--help`, posts `{workflows: [...]}` to `/v1/workflows/cost`. **It
+posts token counts.** No rate card, USD figure or per-million divisor exists
+anywhere in the package.
+
+So "prices none" is a claim about the client, which was read, and not about the
+service, which was not. The CLI's own 404 branch — *"this service does not
+measure stored workflows yet"* — suggests even the server side may be unfinished,
+but that is inference from an error string and is marked as such.
 
 ## NOT MEASURED is not zero
 

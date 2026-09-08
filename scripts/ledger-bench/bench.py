@@ -117,9 +117,17 @@ def memorable_tokens(agg):
     """Memorable's accounting, reproduced from memorable-cli 0.5.18.
 
     Its CLI accumulates exactly these four classes and maps Anthropic's
-    cache_read_input_tokens and cache_creation_input_tokens onto them. It has no
-    rate card, no USD and no per-million divisor anywhere in the package, so the
-    'before' here is a token count and not a cost.
+    cache_read_input_tokens and cache_creation_input_tokens onto them.
+
+    It does send them onward: an undocumented `backfill-cost` command, absent
+    from --help, posts {workflows: [...]} to /v1/workflows/cost. What it posts is
+    token counts. There is no rate card, no USD and no per-million divisor
+    anywhere in the package, so whether those counts ever become money happens on
+    a server this has not seen, and the CLI's own 404 branch says the service may
+    not measure them yet.
+
+    So the 'before' here is a token count and not a cost, which is a statement
+    about the client and deliberately not about the company.
     """
     s = [0, 0, 0, 0]
     for i, cr, cw, o in agg.values():
@@ -155,7 +163,7 @@ def main():
         row("QM", f"${qm:,.2f}", f"${true:,.2f}",
             f"{qm / true:.1f}x over — flat ${QM_FLAT_USD_PER_MTOK:.0f}/MTok on input+cache, output free"),
         row("Memorable", f"{mem['cached_input_tokens'] + mem['input_tokens'] + mem['cache_write_tokens']:,} tokens, no price",
-            f"${true:,.2f}", "captures all four classes, ships no rate card"),
+            f"${true:,.2f}", "captures all four classes; posts counts to /v1/workflows/cost, prices none client-side"),
         row("River AI", "usage returned, NOT PRICED", "NOT PRICED",
             "OpenAI-compatible /v1 confirmed live; no pricing units published at any documented path"),
         row("GBrain", "NOT MEASURED", "NOT MEASURED",
