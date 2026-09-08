@@ -17,6 +17,16 @@ that broke.
 curl -fsSL https://redrobot.jp/replay.sh | sh
 ```
 
+![The cost screen: what one task cost, and the share of it nobody chose](docs/screens/cost.svg)
+
+`replay tui` puts the same answers on ten screens, one keystroke apart. The images in this README
+are generated from those screens and checked against them by a test, so a screenshot here cannot
+drift from what the tool prints. Every screen is in [docs/screens](docs/screens).
+
+If you are pointing an agent through the proxy, `l` answers the question the transcripts cannot:
+
+![The live screen, with no proxy running: what to start, and how to point an agent at it](docs/screens/live.svg)
+
 Reading it first is reasonable, and the script is written expecting you to:
 
 ```sh
