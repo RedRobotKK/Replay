@@ -38,9 +38,13 @@ func TestOllamaTotalIsWorkDoneNotContextHeld(t *testing.T) {
 	if r.CachedPrefix != 116 {
 		t.Errorf("cached prefix = %d, want 116", r.CachedPrefix)
 	}
-	if r.ContextTokens() != 116+838 {
+	ctx, ok := r.ContextTokens()
+	if !ok {
+		t.Fatal("this fixture carries an n_past line, so the context is measured")
+	}
+	if ctx != 116+838 {
 		t.Errorf("context = %d, want %d: the prompt the model saw is the resident "+
-			"prefix plus what had to be computed", r.ContextTokens(), 116+838)
+			"prefix plus what had to be computed", ctx, 116+838)
 	}
 }
 
