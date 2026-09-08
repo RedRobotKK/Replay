@@ -26,7 +26,7 @@ injection, decided by the vendor and obeyed by the client.
 | Replay status | **NOT PARSED.** Forwarded byte for byte, warned once per path |
 | Caching | client declares `prompt_cache_key`; the provider does not infer a prefix |
 | Transport | SSE. `stream: true` on every call, so usage arrives in stream events |
-| Local transcript | none. Conversation state is POSTed to the vendor |
+| Local transcript | **3.8 GB in `~/.grok/sessions`.** The "none" first published here is retracted below |
 
 ## Method
 
@@ -136,9 +136,41 @@ POST /traces                     telemetry
 GET  /models  /settings  /feedback/config  /bundle/archive
 ```
 
-There is **no local transcript**. Claude Code writes sessions to disk, which is
-what Replay's offline path reads; this client POSTs conversation state to the
-vendor instead. For Grok the proxy is not the better route, it is the only one.
+**RETRACTED 2026-09-08: there is a local store, and it is large.**
+
+This section said "There is **no local transcript**" and concluded that for Grok
+the proxy is "not the better route, it is the only one". Both are wrong, and the
+second followed from the first.
+
+`~/.grok/sessions` holds **3.8 GB across 6,787 files** on the machine this file
+was written on. It is organised by URL-encoded working directory, one directory
+per project, and each session carries `chat_history.jsonl`, `events.jsonl`,
+`prompt_history.jsonl`, `hunk_records.jsonl`, `rewind_points.jsonl` and
+`prompt_context.json`, alongside a `session_search.sqlite` full-text index.
+
+The original claim was inferred from the wire capture: conversation state is
+POSTed to the vendor, `store: true` is set, and no local write was observed on
+the paths being watched. All of that remains true. None of it establishes that
+nothing is written locally, and nobody looked. A capture proxy sees the
+network; it is not an instrument for what a client does to a disk.
+
+**What the store does NOT carry, checked rather than assumed.** No token counts
+and no cost figures. The field names `inputTokens`, `outputTokens`,
+`cachedReadTokens`, `cacheCreationTokens` and `costUsdTicks` appear in **zero**
+files anywhere under `~/.grok`. One session's `events.jsonl` was walked field by
+field across 13,444 events and no token, cost, cached or usd key appears at any
+depth. The events are lifecycle: `phase_changed`, `tool_started`,
+`turn_started`, `first_token`.
+
+So this surface is readable and it is not a usage surface. Anything built on it
+reads prompts, tool calls and edits, not spend.
+
+**A figure that circulated on the strength of a claim about this store.** An
+analysis on 2026-09-07 reported that these records carry per-turn token counts
+and `costUsdTicks` over 1,411 turns, yielding **$406.07** as "the only measured
+dollar figure on the machine". That figure was repeated in a business memo sent
+off this machine before anyone opened the files. It is not supported: the fields
+are absent and the string `406.07` appears nowhere under `~/.grok`. Withdrawn.
 
 **Unresolved:** `store: true` and server-side `turn-deltas` suggest the vendor
 keeps the conversation, while `x-zero-data-retention: true` and
