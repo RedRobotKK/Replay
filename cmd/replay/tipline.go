@@ -4,6 +4,8 @@ import (
 	"io"
 	"math"
 	"os"
+
+	"github.com/RedRobotKK/Replay/internal/tui"
 )
 
 // The ask, at the one moment it is relevant.
@@ -57,11 +59,14 @@ func canHyperlink(out io.Writer) bool {
 	if os.Getenv("TERM") == "dumb" || os.Getenv("TERM") == "" {
 		return false
 	}
-	st, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	return st.Mode()&os.ModeCharDevice != 0
+	// Ask the terminal driver, not the file mode.
+	//
+	// This tested os.ModeCharDevice, and /dev/null is a character device. So
+	// `replay cost > /dev/null` satisfied "is a terminal" and got OSC 8
+	// sequences written into a sink. tui.IsTerminal asks the termios ioctl,
+	// which is the actual question, and a file, a pipe and /dev/null all fail
+	// it with ENOTTY.
+	return tui.IsTerminal(f)
 }
 
 func tipLineFor(avoidableUSD float64, hyperlink bool) string {
