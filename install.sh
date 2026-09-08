@@ -12,6 +12,8 @@
 #   --bin-dir <dir>     where the binary lands
 #   --dry-run           print what would happen, change nothing
 #   --no-modify-path    never mention or touch shell configuration
+#   --no-tui            install and stop; do not open the screens at the end
+#                       (same as REPLAY_NO_OPEN=1; already implied when CI is set)
 #   --no-verify         install even if the checksum cannot be verified. Off by
 #                       default: an unverifiable download aborts.
 #   --corpus-opt-in     agree now to share calibration reports. Off unless you
@@ -30,6 +32,11 @@ VERSION="${REPLAY_VERSION:-}"
 BIN_DIR="${REPLAY_BIN_DIR:-}"
 DRY_RUN=0
 MODIFY_PATH=1
+# Mirrors REPLAY_NO_OPEN, which has always existed. The flag is here because
+# every other choice this script offers has one, and a reader who runs --help
+# to find out how to script an install should not have to read the source to
+# learn that the environment variable is the only way to decline the last step.
+NO_OPEN="${REPLAY_NO_OPEN:-0}"
 CORPUS_OPT_IN=0
 ALLOW_UNVERIFIED=0
 
@@ -62,6 +69,8 @@ Replay installer.
   --bin-dir <dir>     where the binary lands
   --dry-run           print what would happen, change nothing
   --no-modify-path    never mention or touch shell configuration
+  --no-tui            install and stop; do not open the screens at the end
+                      (same as REPLAY_NO_OPEN=1; already implied when CI is set)
   --no-verify         install even if the download cannot be verified
   --corpus-opt-in     agree now to share calibration reports. Sends nothing.
   --help              this text
@@ -80,6 +89,7 @@ while [ $# -gt 0 ]; do
     --bin-dir=*)      BIN_DIR="${1#*=}"; shift ;;
     --dry-run)        DRY_RUN=1; shift ;;
     --no-modify-path) MODIFY_PATH=0; shift ;;
+    --no-tui)         NO_OPEN=1; shift ;;
     --corpus-opt-in)  CORPUS_OPT_IN=1; shift ;;
     --no-verify)      ALLOW_UNVERIFIED=1; shift ;;
     -h|--help)        usage ;;
@@ -483,9 +493,11 @@ printf '\n%sDocs%s https://github.com/%s#readme   %sUninstall%s rm %s/%s\n' \
 # and says nothing about whether a person is watching. Where there is no
 # controlling terminal the open is skipped and the Next: lines above stand on
 # their own: CI, a Dockerfile RUN, cron, a provisioner, a container built
-# without -t. REPLAY_NO_OPEN=1 skips it for anyone who wants the old ending.
+# without -t. --no-tui or REPLAY_NO_OPEN=1 skips it for anyone who wants the
+# old ending; the flag exists because --help is where a reader looks first, and
+# an opt-out only documented in a source comment is one nobody finds.
 should_open() {
-  [ "${REPLAY_NO_OPEN:-0}" = "1" ] && return 1
+  [ "$NO_OPEN" = "1" ] && return 1
   [ -n "${CI:-}" ] && return 1
   [ -t 1 ] || return 1
   (: < /dev/tty) 2>/dev/null || return 1
