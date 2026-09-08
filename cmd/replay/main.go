@@ -136,6 +136,14 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 	case "codex":
 		return runCodex(args[1:], stdout, stderr)
 	case "mcp":
+		if len(args) > 1 && (args[1] == "--install" || args[1] == "-install") {
+			bin, err := os.Executable()
+			if err != nil || bin == "" {
+				bin = "replay"
+			}
+			_, err = fmt.Fprint(stdout, "\n"+mcpInstallSnippet(bin))
+			return err
+		}
 		return runMCP(os.Stdin, stdout, stderr)
 	case "agents":
 		return runAgents(args[1:], stdout, stderr)

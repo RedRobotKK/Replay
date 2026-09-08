@@ -154,3 +154,34 @@ func TestMC8(t *testing.T) {
 		t.Error("a token count derived from bytes is an estimate and must say so")
 	}
 }
+
+// `mcp --install` prints a config a person can paste, and it must be valid
+// JSON naming this binary. A setup snippet that does not parse is worse than
+// no snippet: it fails inside somebody else's config file.
+func TestMC9(t *testing.T) {
+	var out, errb bytes.Buffer
+	if err := run([]string{"mcp", "--install"}, &out, &errb); err != nil && err != errHelpShown {
+		t.Fatalf("run: %v (%s)", err, errb.String())
+	}
+	s := out.String()
+	i, j := strings.Index(s, "{"), strings.LastIndex(s, "}")
+	if i < 0 || j < i {
+		t.Fatalf("no JSON object in the snippet:\n%s", s)
+	}
+	var cfg struct {
+		MCPServers map[string]struct {
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal([]byte(s[i:j+1]), &cfg); err != nil {
+		t.Fatalf("snippet is not valid JSON: %v\n%s", err, s[i:j+1])
+	}
+	e, ok := cfg.MCPServers["replay"]
+	if !ok {
+		t.Fatalf("no replay server in the snippet: %v", cfg.MCPServers)
+	}
+	if e.Command == "" || len(e.Args) == 0 || e.Args[0] != "mcp" {
+		t.Errorf("snippet does not invoke `replay mcp`: %+v", e)
+	}
+}

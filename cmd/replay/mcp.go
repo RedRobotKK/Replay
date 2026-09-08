@@ -131,6 +131,26 @@ func mcpTools() []mcpTool {
 	}
 }
 
+// mcpInstallSnippet is the whole setup, and it is one line of config.
+//
+// There is no daemon, no port and nothing to host: the agent spawns this binary
+// as a child process, talks JSON-RPC over its pipes, and kills it when the
+// session ends. Printing the snippet rather than describing it exists because
+// the question "how do I wire this in" was asked three times before anyone
+// noticed the guide answered it for the status line and for nothing else.
+func mcpInstallSnippet(bin string) string {
+	return "  Add this to your agent's MCP configuration:\n\n" +
+		"    {\n" +
+		"      \"mcpServers\": {\n" +
+		"        \"replay\": { \"command\": \"" + bin + "\", \"args\": [\"mcp\"] }\n" +
+		"      }\n" +
+		"    }\n\n" +
+		"  Claude Code:  ~/.claude/settings.json, or `claude mcp add replay -- " + bin + " mcp`\n" +
+		"  Codex:        ~/.codex/config.toml\n\n" +
+		"  No account, no port, nothing left running. The agent starts this binary\n" +
+		"  when it needs an answer and stops it when the session ends.\n"
+}
+
 // runMCP serves one client over a pair of streams.
 func runMCP(in io.Reader, stdout, stderr io.Writer) error {
 	sc := bufio.NewScanner(in)
