@@ -325,8 +325,21 @@ Initial catalog for v0.3: `freeze-system-prompt` (diagnostic only, reports when 
 | Claude Code, API key | `ANTHROPIC_BASE_URL` | Yes (transcripts) | Yes |
 | Claude Code, subscription | `ANTHROPIC_BASE_URL` without a gateway credential | Yes (transcripts) | Yes, documented (spike 3 passed) |
 | Aider | Base URL variables | Transcript format pending | Yes |
-| OpenAI Codex CLI | Base URL variable | No transcripts known | Chat completions passthrough; caching rules later |
-| Cursor agent mode | None | No | No, and the README says so |
+| OpenAI Codex CLI | Base URL variable | Yes (rollouts, corrected 2026-09-08) | Chat completions passthrough; caching rules later |
+| Cursor agent mode | None | No, but see below | No, and the README says so |
+
+**Codex, corrected 2026-09-08.** This row read "No transcripts known" and had
+gone stale: `~/.codex/sessions` and `~/.codex/archived_sessions` are both read,
+150 rollouts on the machine surveyed, and they carry usage.
+
+**Cursor, qualified 2026-09-08.** The "None" hook is correct and is the reason
+this client is out of scope: agent mode offers no base URL override, so the
+proxy cannot see it. That is a statement about the wire, and it was allowed to
+stand in for a statement about the disk that nobody had checked.
+`~/.cursor/projects/*/agent-transcripts/` holds 118 plain-JSONL transcripts.
+They carry no model, token, cost or cache field, so they cannot price anything
+and this row's answer does not change. See
+[surface-census-2026-09-08.md](evidence/surface-census-2026-09-08.md).
 
 | Platform | Status |
 |----------|--------|
