@@ -37,6 +37,18 @@ want_price="$(sed -n 's/^const PriceTableVersion = "\(.*\)"$/\1/p' internal/cach
 # 1. The version is real. A binary reporting "dev" has not been stamped, which
 #    is how a 0.5.0 build went on reporting 0.4.0 from a literal.
 ver="$("$BIN" version 2>&1 || true)"
+# A binary for another platform produces "Exec format error" from the shell,
+# and every assertion below then grades that message instead of the binary.
+# The v0.5.1 release run did exactly this against a darwin binary on a Linux
+# runner and printed two content failures, which reads as "the artifact is
+# wrong" when it means "nothing was checked". Refuse instead.
+case "$ver" in
+  *"Exec format error"*|*"cannot execute"*|*"Permission denied"*)
+    echo "  cannot run this binary on this machine: $ver" >&2
+    echo "release-check: NOT RUN (wrong platform or not executable)" >&2
+    exit 2
+    ;;
+esac
 case "$ver" in
   *dev*|"") bad "version is stamped" "reports '$ver'" ;;
   *) note "version is stamped" "$ver" ;;
