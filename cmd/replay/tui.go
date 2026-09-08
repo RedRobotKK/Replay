@@ -183,14 +183,27 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 		lines := make([]string, 0, len(frame)+1)
 		lines = append(lines, frame...)
 		lines = append(lines, tui.Footer(key))
+		// One boundary, so prose is fitted once rather than in nine screens.
+		//
+		// tui.Fit wraps a sentence that overruns the terminal and carries its
+		// indent onto the continuation. It leaves column layouts alone: this
+		// point sees strings and cannot know which column a table could afford
+		// to drop, which is what storyboard.go scene 25 specifies and where
+		// that work belongs.
+		//
+		// At 80 or wider nothing here overruns, so the committed screen images
+		// are untouched by this.
+		cols := tui.Cols()
 		for _, l := range lines {
-			// Right-trimmed, because this path is the pipe and the screenshot.
-			// A live terminal pads a row to the column width so the row it is
-			// overwriting disappears; down a pipe that padding is invisible
-			// junk that lands in a README code block and in every diff of it
-			// afterwards.
-			if _, err := fmt.Fprintln(stdout, strings.TrimRight(l, " \t")); err != nil {
-				return err
+			for _, fitted := range tui.Fit(l, cols) {
+				// Right-trimmed, because this path is the pipe and the
+				// screenshot. A live terminal pads a row to the column width so
+				// the row it is overwriting disappears; down a pipe that padding
+				// is invisible junk that lands in a README code block and in
+				// every diff of it afterwards.
+				if _, err := fmt.Fprintln(stdout, strings.TrimRight(fitted, " \t")); err != nil {
+					return err
+				}
 			}
 		}
 		return nil

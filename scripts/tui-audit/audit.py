@@ -29,7 +29,7 @@ SUPPORTED = 80
 # order: wire, endpoint, surface" — so this is an unimplemented design, not an
 # unknown defect. Implementing it should drive this number to zero, and this
 # check will say so.
-KNOWN_NARROW_OVERFLOWS = 72
+KNOWN_NARROW_OVERFLOWS = 30
 
 def cells(s, ambiguous_wide):
     s = SGR.sub("", s)
