@@ -33,6 +33,12 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 		"cost, why, context, advise, guards, model, safe, doctor, share")
 	once := fs.Bool("once", false,
 		"render one frame and exit, for a pipe or a screenshot")
+	// auto is the only default that is safe in both directions: colour when a
+	// person is looking, clean bytes when the output is a file, a README
+	// capture or another agent. NO_COLOR overrides all three values, because
+	// it is an accessibility setting and not a preference.
+	color := fs.String("color", "auto",
+		"when to colour: auto (a terminal only), always, never. NO_COLOR always wins")
 	// parseArgs, not fs.Parse: --help is a request, not a parse failure.
 	// Calling fs.Parse directly sent usage to stderr with a non-zero exit and
 	// a trailing "flag: help requested", which is the defect help.go exists to
@@ -40,6 +46,15 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 	if err := parseArgs(fs, args, stdout); err != nil {
 		return err
 	}
+	switch *color {
+	case "auto", "always", "never":
+	default:
+		return fmt.Errorf("-color must be auto, always or never, not %q: %w", *color, errUsage)
+	}
+	// Resolved once, before any screen is built, from the real stdout rather
+	// than from the writer this function was handed: a test writes to a buffer
+	// and still needs "auto" to mean what it means for a user.
+	tui.SetPainter(tui.NewPainter(*color, tui.IsTerminal(os.Stdout)))
 
 	key := rune(0)
 	for _, s := range tui.Shortcuts() {

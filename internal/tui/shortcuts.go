@@ -115,10 +115,18 @@ func Ran(s Shortcut) []string {
 	}
 }
 
-// Dim marks text the renderer should draw at lower contrast. It returns the
-// text unchanged so the layout is identical with or without colour, which is
-// what keeps a piped run and a live run the same width.
-func Dim(s string) string { return s }
+// Dim marks text the renderer should draw at lower contrast.
+//
+// It returned the text unchanged from the day it was written, as a seam for a
+// colour layer that had not been built. The eight call sites were already in
+// the right places; only the body was missing.
+//
+// The property its old comment claimed, that the layout is identical with or
+// without colour, is now a thing that can be got wrong rather than a thing
+// that is true by construction, so it is asserted instead of assumed:
+// TestCL1 strips the escapes from every screen and requires the uncoloured
+// render back byte for byte. Pass text that is already padded to its column.
+func Dim(s string) string { return paint(Faint, s) }
 
 // Hints renders the one-line key strip. Every question is reachable from every
 // screen, because a surface where the answer you want is three screens away is
