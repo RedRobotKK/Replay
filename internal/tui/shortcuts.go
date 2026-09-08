@@ -37,7 +37,6 @@ import "strings"
 // rows is the floor, not the target: every screen must be readable there, and
 // anything taller has to earn the scroll.
 const (
-	BudgetCols = 80
 	BudgetRows = 24
 )
 

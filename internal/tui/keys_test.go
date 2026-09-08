@@ -16,8 +16,8 @@ func TestFooterShowsAFloorNotEveryKey(t *testing.T) {
 			"that and a first-time user reads a manual before they read an answer", n)
 	}
 	f := Footer('c')
-	if len(f) > BudgetCols {
-		t.Errorf("the footer is %d columns, budget %d:\n%s", len(f), BudgetCols, f)
+	if len(f) > Cols() {
+		t.Errorf("the footer is %d columns, budget %d:\n%s", len(f), Cols(), f)
 	}
 	// The questions must NOT be in the footer any more.
 	loud := 0
@@ -89,8 +89,8 @@ func TestHelpCarriesEveryQuestion(t *testing.T) {
 		}
 	}
 	for _, l := range Help() {
-		if len(l) > BudgetCols {
-			t.Errorf("the help overlay is %d columns, budget %d:\n%s", len(l), BudgetCols, l)
+		if len(l) > Cols() {
+			t.Errorf("the help overlay is %d columns, budget %d:\n%s", len(l), Cols(), l)
 		}
 	}
 	if len(Help()) > BudgetRows {

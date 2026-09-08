@@ -50,8 +50,8 @@ func TestGlanceReadsWithoutColour(t *testing.T) {
 			t.Errorf("attention %v does not carry the word %q, so it depends on colour "+
 				"to be understood: %q", c.a, c.want, got)
 		}
-		if len(got) > BudgetCols {
-			t.Errorf("the glance line is %d columns, budget %d: %q", len(got), BudgetCols, got)
+		if len(got) > Cols() {
+			t.Errorf("the glance line is %d columns, budget %d: %q", len(got), Cols(), got)
 		}
 		seen[strings.TrimSpace(got[:6])] = true
 	}

@@ -87,8 +87,8 @@ func Glance(a Attention, what string) string {
 		Act:    "[CRIT]",
 	}[a]
 	line := mark + " " + what
-	if len(line) > BudgetCols {
-		line = line[:BudgetCols-1] + string(truncationMark)
+	if len(line) > Cols() {
+		line = line[:Cols()-1] + string(truncationMark)
 	}
 	return line
 }

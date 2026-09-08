@@ -71,9 +71,9 @@ func TestTW2(t *testing.T) {
 		}
 		for ln, line := range strings.Split(body, "\n") {
 			// ASCII is one cell each, which TestTW1 has already established.
-			if len(line) > tui.BudgetCols {
+			if len(line) > tui.Cols() {
 				t.Errorf("screen %s line %d is %d cells, over the %d budget:\n  %s",
-					s, ln+1, len(line), tui.BudgetCols, line)
+					s, ln+1, len(line), tui.Cols(), line)
 			}
 		}
 	}

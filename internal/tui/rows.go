@@ -142,8 +142,8 @@ func RenderRows(rows []Line, cursor int) []string {
 		// afterwards would have been the other way to avoid it, and is not
 		// available here: the row's own colours are decided where the row is
 		// built, which is the only place that knows what the numbers mean.
-		if VisibleLen(line) > BudgetCols {
-			line = truncateVisible(line, BudgetCols-1) + string(truncationMark)
+		if VisibleLen(line) > Cols() {
+			line = truncateVisible(line, Cols()-1) + string(truncationMark)
 		}
 
 		out = append(out, line)

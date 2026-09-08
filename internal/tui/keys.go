@@ -138,7 +138,7 @@ func Help() []string {
 	for _, b := range Bindings() {
 		byLayer[b.Layer] = append(byLayer[b.Layer], b)
 	}
-	out := []string{"  keys" + strings.Repeat(" ", BudgetCols-24) + "esc to close", ""}
+	out := []string{"  keys" + strings.Repeat(" ", Cols()-24) + "esc to close", ""}
 
 	out = append(out, "  anywhere                        moving around")
 	l0, l1 := byLayer[L0], byLayer[L1]

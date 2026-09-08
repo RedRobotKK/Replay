@@ -13,9 +13,9 @@ import (
 func TestHintsFitTheBudget(t *testing.T) {
 	for _, s := range Shortcuts() {
 		h := Hints(s.Key)
-		if len(h) > BudgetCols {
+		if len(h) > Cols() {
 			t.Errorf("the key strip is %d columns with %q selected, budget is %d:\n%s",
-				len(h), s.Label, BudgetCols, h)
+				len(h), s.Label, Cols(), h)
 		}
 		if strings.ContainsRune(h, '\n') {
 			t.Errorf("the key strip wrapped: %q", h)
@@ -53,7 +53,7 @@ func TestEveryQuestionIsOneKeystrokeAway(t *testing.T) {
 		}
 	}
 	// The cap used to be a hardcoded nine, on the stated grounds that more
-	// would not fit one strip inside BudgetCols. Ten fit, once Hints stopped
+	// would not fit one strip inside Cols(). Ten fit, once Hints stopped
 	// spending its last seven columns on a " q quit" that Footer already
 	// prints on the line below.
 	//

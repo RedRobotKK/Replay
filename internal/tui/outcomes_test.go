@@ -20,9 +20,9 @@ func TestOutcomesFitTheBudget(t *testing.T) {
 				sc.Title, len(sc.Lines), BudgetRows)
 		}
 		for i, l := range sc.Lines {
-			if len(l) > BudgetCols {
+			if len(l) > Cols() {
 				t.Errorf("%q line %d is %d columns, budget is %d:\n%s",
-					sc.Title, i, len(l), BudgetCols, l)
+					sc.Title, i, len(l), Cols(), l)
 			}
 			for _, r := range l {
 				if r > unicode.MaxASCII {

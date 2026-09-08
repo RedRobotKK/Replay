@@ -447,7 +447,7 @@ func WhyScreen(t *Task, run func(path string) (string, error)) Screen {
 		lines = append(lines,
 			"  Could not read that session.", "",
 			"  "+cell("session", 10)+t.Session,
-			"  "+cell("error", 10)+truncate(err.Error(), BudgetCols-14))
+			"  "+cell("error", 10)+truncate(err.Error(), Cols()-14))
 		lines = WithBanner(lines, Unavailable, "the transcript could not be read")
 		return Screen{Key: 'w', Title: "why", Lines: padWhy(lines), From: Unavailable}
 	}
@@ -456,7 +456,7 @@ func WhyScreen(t *Task, run func(path string) (string, error)) Screen {
 		"  "+t.Session+"  "+money(t.CostUSD)+"  "+fmt.Sprint(t.Breaks)+" cache break(s)",
 		"  "+t.Model, "")
 	for _, l := range blameBody(out) {
-		lines = append(lines, "  "+truncate(l, BudgetCols-2))
+		lines = append(lines, "  "+truncate(l, Cols()-2))
 	}
 	return Screen{Key: 'w', Title: "why", Lines: padWhy(lines), From: Measured}
 }

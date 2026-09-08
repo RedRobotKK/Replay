@@ -118,8 +118,8 @@ func TestALongRowIsTruncatedNotWrapped(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("a long row produced %d lines; it must stay one", len(got))
 	}
-	if len(got[0]) > BudgetCols {
-		t.Errorf("row is %d columns, budget %d", len(got[0]), BudgetCols)
+	if len(got[0]) > Cols() {
+		t.Errorf("row is %d columns, budget %d", len(got[0]), Cols())
 	}
 	if !strings.HasSuffix(got[0], string(truncationMark)) {
 		t.Errorf("a truncated row does not say it was cut: %q", got[0])

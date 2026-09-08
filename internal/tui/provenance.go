@@ -40,8 +40,8 @@ func Banner(p Provenance, what string) string {
 		return "  [NOTE] example data: describes nobody, shows only the shape."
 	case Unavailable:
 		s := "  [NOTE] not measured here: " + what
-		if len(s) > BudgetCols {
-			s = s[:BudgetCols-1] + string(truncationMark)
+		if len(s) > Cols() {
+			s = s[:Cols()-1] + string(truncationMark)
 		}
 		return s
 	default:

@@ -126,9 +126,9 @@ func tailOf(p string, w int) string {
 func padShare(lines []string, s ShareState) []string {
 	switch {
 	case s.Failed != "":
-		lines = append(lines, "  "+truncate("could not write it: "+s.Failed, BudgetCols-2))
+		lines = append(lines, "  "+truncate("could not write it: "+s.Failed, Cols()-2))
 	case s.Wrote != "":
-		lines = append(lines, "  wrote "+tailOf(shortPath(s.Wrote), BudgetCols-8))
+		lines = append(lines, "  wrote "+tailOf(shortPath(s.Wrote), Cols()-8))
 	}
 	for len(lines) < BudgetRows-3 {
 		lines = append(lines, "")

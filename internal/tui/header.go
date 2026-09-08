@@ -29,7 +29,7 @@ func versionTag() string {
 func header(cmd string) string {
 	left := "  replay " + cmd
 	tag := versionTag()
-	pad := BudgetCols - len(left) - len(tag)
+	pad := Cols() - len(left) - len(tag)
 	if pad < 1 {
 		pad = 1
 	}

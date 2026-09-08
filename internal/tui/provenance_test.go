@@ -75,8 +75,8 @@ func TestMeasuredScreensCarryNoNotice(t *testing.T) {
 func TestNoticesFitTheBudget(t *testing.T) {
 	for _, p := range []Provenance{Example, Unavailable} {
 		b := Banner(p, "no ledger at ~/.replay/ledger, and no proxy has run today")
-		if len(b) > BudgetCols {
-			t.Errorf("a %v notice is %d columns, budget %d:\n%s", p, len(b), BudgetCols, b)
+		if len(b) > Cols() {
+			t.Errorf("a %v notice is %d columns, budget %d:\n%s", p, len(b), Cols(), b)
 		}
 	}
 }

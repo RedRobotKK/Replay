@@ -146,9 +146,9 @@ func TestShareScreenFitsTheBudget(t *testing.T) {
 			t.Errorf("%s/%s is %d rows, budget %d", st.Variant, st.Tone, len(sc.Lines), BudgetRows)
 		}
 		for i, l := range sc.Lines {
-			if len(l) > BudgetCols {
+			if len(l) > Cols() {
 				t.Errorf("%s/%s line %d is %d columns, budget %d:\n%s",
-					st.Variant, st.Tone, i, len(l), BudgetCols, l)
+					st.Variant, st.Tone, i, len(l), Cols(), l)
 			}
 			if l != strings.TrimRight(l, " \t") {
 				t.Errorf("%s/%s line %d has trailing whitespace: %q", st.Variant, st.Tone, i, l)
