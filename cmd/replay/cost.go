@@ -14,6 +14,7 @@ import (
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/card"
+	"github.com/RedRobotKK/Replay/internal/money"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -282,7 +283,16 @@ func renderCost(s costSummary, unpriced int, out io.Writer, stateDir string) str
 		return b.String()
 	}
 	fmt.Fprintf(&b, "%s\n\n", costHeaderLine(s))
-	fmt.Fprintf(&b, "  total          $%.2f\n", s.TotalUSD)
+	// The reader's own currency, beside the dollars and never instead of them.
+	//
+	// A reader in Tokyo should not have to do arithmetic to know whether a
+	// number is large. They also must not be handed a yen figure as their
+	// cost: the provider bills dollars, and a card issuer converts at its own
+	// rate on its settlement date and adds a foreign transaction fee. The
+	// conversion is an indication of size, and the column header, the rate,
+	// its date and the note under the block all say so.
+	fx := money.Detect(os.LookupEnv, time.Now())
+	fmt.Fprintf(&b, "  total          %s\n", fxCol(fx, s.TotalUSD))
 	// "task" only where a row is a task. Under --per-lane the same two figures
 	// describe agent lanes, and calling a lane a task on the line beneath a
 	// header that just said "lanes" is how one word came to mean two things
@@ -291,11 +301,14 @@ func renderCost(s costSummary, unpriced int, out io.Writer, stateDir string) str
 	if s.Unit == unitLane {
 		noun = "lane"
 	}
-	fmt.Fprintf(&b, "  median %-8s$%.2f\n", noun, s.MedianUSD)
-	fmt.Fprintf(&b, "  p90 %-11s$%.2f\n", noun, s.P90USD)
-	fmt.Fprintf(&b, "  avoidable      $%.2f  (%.0f%% of the total)\n", s.AvoidableUSD, s.AvoidableShare*100)
+	fmt.Fprintf(&b, "  median %-8s%s\n", noun, fxCol(fx, s.MedianUSD))
+	fmt.Fprintf(&b, "  p90 %-11s%s\n", noun, fxCol(fx, s.P90USD))
+	fmt.Fprintf(&b, "  avoidable      %s  (%.0f%% of the total)\n", fxCol(fx, s.AvoidableUSD), s.AvoidableShare*100)
 	if s.AvoidableTokens > 0 {
 		fmt.Fprintf(&b, "                 %s tokens re-billed\n", shortTokens(s.AvoidableTokens))
+	}
+	if n := fx.Note(); n != "" {
+		fmt.Fprintf(&b, "\n%s\n", wrapAt(n, 78, ""))
 	}
 	fmt.Fprintf(&b, "\nAvoidable is the part nobody chose: tokens re-billed because a prompt cache\nbroke. It is not a forecast of savings, it is what was already spent twice.\n")
 	if s.AvoidableTokens > 0 {
@@ -695,4 +708,18 @@ func shortTokens(n int) string {
 	default:
 		return fmt.Sprintf("%d", n)
 	}
+}
+
+// fxCol renders one money figure for the summary block.
+//
+// The dollars keep their column exactly as they had it, so a reader who does
+// not want this feature sees a byte-identical report. The local figure is
+// appended after the column rather than inside it, because padding a string
+// that already carries a currency name would shift everything under it.
+func fxCol(fx money.Display, usd float64) string {
+	base := fmt.Sprintf("$%-13.2f", usd)
+	if a := fx.Short(usd); a != "" {
+		return strings.TrimRight(base, " ") + "  = " + a
+	}
+	return strings.TrimRight(base, " ")
 }
