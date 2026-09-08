@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -35,7 +36,22 @@ func TestQS1(t *testing.T) {
 }
 
 // TestQS2: the file is owner-only. It describes an account's consumption.
+//
+// Skipped on Windows, and the reason is worth stating rather than hiding
+// behind a build tag. Go's file mode is a POSIX concept; on Windows the only
+// bit the os package actually carries through is read-only, so a file written
+// with 0600 stats as 0666 and this assertion fails for a reason that has
+// nothing to do with the code under test. Access there is governed by the
+// ACL the file inherits from the user profile directory, which this test
+// cannot read and saveQuota does not set.
+//
+// So on Windows the owner-only property is NOT checked by anything. That is a
+// real gap, recorded here rather than papered over by a skip with no comment,
+// which would have read as coverage.
 func TestQS2(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file modes are POSIX; on Windows 0600 stats as 0666 and access comes from the profile ACL instead")
+	}
 	dir := t.TempDir()
 	p := filepath.Join(dir, "quota.json")
 	if err := saveQuota(p, statusInput{RateLimits: &rateLimits{FiveHour: lim(10, 60)}}, time.Now()); err != nil {

@@ -139,10 +139,21 @@ func mcpTools() []mcpTool {
 // the question "how do I wire this in" was asked three times before anyone
 // noticed the guide answered it for the status line and for nothing else.
 func mcpInstallSnippet(bin string) string {
+	// The path is JSON-encoded rather than quoted by hand. A Windows path is
+	// C:\Users\..., and \U is not a valid JSON escape, so concatenating it
+	// produced a snippet the reader was told to paste into their agent's
+	// config and which no JSON parser would accept. Caught by CI on
+	// windows-latest, not by anyone reading this line on a Mac.
+	cmd, err := json.Marshal(bin)
+	if err != nil {
+		// Marshalling a string cannot fail, but saying so beats a silent
+		// fallback that emits a broken snippet.
+		cmd = []byte(`""`)
+	}
 	return "  Add this to your agent's MCP configuration:\n\n" +
 		"    {\n" +
 		"      \"mcpServers\": {\n" +
-		"        \"replay\": { \"command\": \"" + bin + "\", \"args\": [\"mcp\"] }\n" +
+		"        \"replay\": { \"command\": " + string(cmd) + ", \"args\": [\"mcp\"] }\n" +
 		"      }\n" +
 		"    }\n\n" +
 		"  Claude Code:  ~/.claude/settings.json, or `claude mcp add replay -- " + bin + " mcp`\n" +

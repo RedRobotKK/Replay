@@ -185,3 +185,43 @@ func TestMC9(t *testing.T) {
 		t.Errorf("snippet does not invoke `replay mcp`: %+v", e)
 	}
 }
+
+// TestMC10: the snippet is valid JSON for a Windows path.
+//
+// The defect this pins was invisible on Unix. mcpInstallSnippet concatenated
+// the binary path into a JSON string literal, so on Windows the command read
+// "C:\Users\...\replay.exe", and \U is not a valid JSON escape. The snippet
+// the reader is told to paste into their agent's configuration would be
+// rejected by any parser.
+//
+// TestMC9 could not catch it, because it runs with whatever path the host
+// produces and every developer machine here is Unix. Only CI on
+// windows-latest failed. This test supplies the path instead of inheriting
+// it, so the case is checked everywhere.
+func TestMC10_SnippetSurvivesAWindowsPath(t *testing.T) {
+	for _, bin := range []string{
+		`C:\Users\runneradmin\go\bin\replay.exe`,
+		`C:\Program Files\Replay\replay.exe`,
+		`/usr/local/bin/replay`,
+		`/home/a b/replay`,
+	} {
+		s := mcpInstallSnippet(bin)
+		i, j := strings.Index(s, "{"), strings.LastIndex(s, "}")
+		if i < 0 || j < i {
+			t.Fatalf("no JSON object in the snippet for %q", bin)
+		}
+		var cfg struct {
+			MCPServers map[string]struct {
+				Command string   `json:"command"`
+				Args    []string `json:"args"`
+			} `json:"mcpServers"`
+		}
+		if err := json.Unmarshal([]byte(s[i:j+1]), &cfg); err != nil {
+			t.Errorf("snippet for %q is not valid JSON: %v\n%s", bin, err, s[i:j+1])
+			continue
+		}
+		if got := cfg.MCPServers["replay"].Command; got != bin {
+			t.Errorf("snippet for %q round-tripped the command as %q", bin, got)
+		}
+	}
+}
