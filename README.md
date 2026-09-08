@@ -145,6 +145,11 @@ replay route     <dir> --to <model>   # what a switch changes, including what th
 replay doctor                      # what is on this machine, and what to run next
 ```
 
+Every command and every flag is in the [CLI reference](docs/CLI.md), which is generated from the
+binary rather than written by hand, so it cannot drift from what the tool accepts. It marks which
+commands reach the network and which write, because those are the two things worth knowing before
+letting an agent run one unattended.
+
 `replay cost` and `replay corpus` take a directory, but no longer require one: with no argument they
 read the transcript root `replay doctor` already discovers, and say on stderr which root that was. The
 argument still wins when you give it. This is not a convenience — a first command that needs a path
