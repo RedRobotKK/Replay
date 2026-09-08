@@ -22,10 +22,16 @@ import argparse, os, re, subprocess, sys, tempfile
 # Every command main.go dispatches. Kept explicit rather than scraped, because a
 # command that disappears should break this loudly instead of vanishing quietly
 # from the reference.
+#
+# The cost of that choice is the opposite hole, and it was found the first time
+# a command was added after this file existed: `prefix` dispatched, appeared in
+# --help and in the guide, and was silently absent here, because nothing checked
+# this list against the dispatch table. TestCLIBlueprintCoversEveryCommand now
+# does, so the list stays explicit and can no longer fall behind.
 COMMANDS = [
     "cost", "diff", "advise", "serve", "tui", "context", "blame", "replay",
     "route", "trim", "codex", "burn", "agents", "mcp", "corpus", "learn",
-    "probe", "doctor", "rules", "statusline", "redact", "version",
+    "probe", "doctor", "rules", "statusline", "redact", "version", "prefix",
 ]
 
 # What each command is for, and the two facts an agent needs before running one
@@ -62,6 +68,7 @@ META = {
     "statusline": ("Live spend and cache-miss cost, for Claude Code's status line", "none", "none"),
     "redact":     ("Strip content, keep structure and usage (for bug reports)", "none", "none"),
     "version":    ("Print build information", "none", "none"),
+    "prefix":     ("Whether a change to a tool-server document voids the cached prefix", "none", "none"),
 }
 
 SCREENS = [

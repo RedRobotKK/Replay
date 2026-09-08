@@ -588,6 +588,35 @@ describing last Tuesday rather than how you work.
 `--out` names the policy file written on selection (default `~/.replay/policy.json`); `--out -`
 writes none and prints only.
 
+### `replay prefix --before <file> --after <file>`
+
+Answers one question about a diff before it merges: **does this change void the cached prefix?**
+Exits non-zero when it does, so CI can gate on it without parsing anything.
+
+```sh
+replay prefix --before /tmp/base-mcp.json --after .mcp.json
+replay prefix --before /tmp/base-mcp.json --after .mcp.json --json
+```
+
+A prefix change is the rarest break cause in the corpus and the most expensive per event: 5 breaks,
+1,807,000 tokens, a mean of **361,400** — higher than a TTL expiry. Rare and enormous is the shape a
+gate is for, because nobody catches it by watching.
+
+**It watches the tool set, not the system prompt**, and that is measured rather than assumed. Across
+the 30-lane trial of 2026-09-06 the system prompt never moved once; every real prefix change was the
+tool set changing, usually an MCP connector finishing its handshake and appending its whole block. A
+gate pointed at system prompts would be pointed at the half that did not move.
+
+**It reads only the two files you name.** Replay does not go looking through your configuration, and
+this command does not change that: it discovers nothing, and it refuses `settings.json` outright,
+because that is where environment variables and credentials live and no prefix question needs it.
+Only server names are read — never a command, argument or environment value.
+
+**It will not tell you what the change costs your team.** It knows that every session holding a warm
+prefix re-bills it in full on its next request. How many sessions that is cannot be read from a diff,
+so it prints `NOT MEASURED` rather than multiplying a per-session figure by a guessed headcount. For
+the size of one such break on your own history, use `replay diff`.
+
 ### `replay redact <transcript.jsonl>`
 
 Writes a redacted copy of a transcript to standard output. Use it before attaching a transcript to a
