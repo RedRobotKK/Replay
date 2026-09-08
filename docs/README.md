@@ -20,6 +20,7 @@ back to this index.
 | [Architecture](architecture/README.md) | How the replay engine and the proxy work, including the wire protocol |
 | [Decisions](adr/README.md) | Why the design is the way it is. One record per decision, never edited after acceptance |
 | [Surfaces](SURFACES.md) | Every file, socket and process Replay touches, each row marked verified, read, or unknown |
+| [CLI reference](CLI.md) | Every command and every flag, generated from the binary and checked in CI, with what each one reaches and what it writes |
 
 ## If you are contributing
 
