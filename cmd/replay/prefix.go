@@ -111,7 +111,7 @@ func runPrefix(args []string, stdout, stderr io.Writer) error {
 	after := fs.String("after", "", "the file as this change would leave it")
 	asJSON := fs.Bool("json", false, "emit the finding as JSON for a CI step to act on")
 	fs.Usage = func() {
-		fmt.Fprint(stderr, "Usage: replay prefix --before <file> --after <file>\n\n"+
+		_, _ = fmt.Fprint(stderr, "Usage: replay prefix --before <file> --after <file>\n\n"+
 			"Reports whether a change to a tool-server document invalidates the cached\n"+
 			"prefix, which re-bills the whole prefix on every affected session's next\n"+
 			"request. Exits non-zero when it does, so CI can gate on it.\n\n"+
@@ -141,7 +141,7 @@ func runPrefix(args []string, stdout, stderr io.Writer) error {
 				"schema": "replay.prefix.v1", "invalidated": false, "participates": false,
 			})
 		}
-		fmt.Fprintf(stdout, "  not a prefix input: neither file defines tool servers, so this change\n"+
+		_, _ = fmt.Fprintf(stdout, "  not a prefix input: neither file defines tool servers, so this change\n"+
 			"  cannot void a cached prefix.\n")
 		return nil
 	}
@@ -165,19 +165,19 @@ func runPrefix(args []string, stdout, stderr io.Writer) error {
 	}
 
 	if !invalidated {
-		fmt.Fprintf(stdout, "  tool set unchanged: %d server(s), same names. The cached prefix survives.\n",
+		_, _ = fmt.Fprintf(stdout, "  tool set unchanged: %d server(s), same names. The cached prefix survives.\n",
 			len(afterNames))
 		return nil
 	}
 
-	fmt.Fprintf(stdout, "  The cached prefix is invalidated by this change.\n\n")
+	_, _ = fmt.Fprintf(stdout, "  The cached prefix is invalidated by this change.\n\n")
 	if len(added) > 0 {
-		fmt.Fprintf(stdout, "    added    %s\n", strings.Join(added, ", "))
+		_, _ = fmt.Fprintf(stdout, "    added    %s\n", strings.Join(added, ", "))
 	}
 	if len(removed) > 0 {
-		fmt.Fprintf(stdout, "    removed  %s\n", strings.Join(removed, ", "))
+		_, _ = fmt.Fprintf(stdout, "    removed  %s\n", strings.Join(removed, ", "))
 	}
-	fmt.Fprintf(stdout, "    servers  %d before, %d after\n\n", len(beforeNames), len(afterNames))
+	_, _ = fmt.Fprintf(stdout, "    servers  %d before, %d after\n\n", len(beforeNames), len(afterNames))
 
 	// The honest stopping point, and the reason this command prints no total.
 	//
@@ -187,7 +187,7 @@ func runPrefix(args []string, stdout, stderr io.Writer) error {
 	// working, on what, and when they next send. Multiplying the per-session
 	// figure by a guessed headcount would manufacture exactly the defect this
 	// repository keeps finding — a number standing in for one nobody measured.
-	fmt.Fprintf(stdout,
+	_, _ = fmt.Fprintf(stdout,
 		"  Every session holding a warm prefix re-bills it in full on its next request.\n"+
 			"  How many sessions that is: NOT MEASURED. It cannot be read from a diff, and a\n"+
 			"  headcount multiplied by a per-session figure would be a guess wearing a total.\n\n"+
