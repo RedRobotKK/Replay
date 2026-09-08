@@ -135,6 +135,18 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 		return runCorpus(args[1:], stdout, stderr)
 	case "codex":
 		return runCodex(args[1:], stdout, stderr)
+	case "mcp":
+		if len(args) > 1 && (args[1] == "--install" || args[1] == "-install") {
+			bin, err := os.Executable()
+			if err != nil || bin == "" {
+				bin = "replay"
+			}
+			_, err = fmt.Fprint(stdout, "\n"+mcpInstallSnippet(bin))
+			return err
+		}
+		return runMCP(os.Stdin, stdout, stderr)
+	case "agents":
+		return runAgents(args[1:], stdout, stderr)
 	case "burn":
 		return runBurn(args[1:], stdout, stderr)
 	case "doctor":
@@ -539,6 +551,7 @@ Start here:
   replay diff   <transcript|dir>   locate and classify every cache break, with its cause
   replay advise <dir...>           the largest token sources, ranked, with predicted savings
   replay serve  [flags]            local proxy: byte-for-byte passthrough, records a ledger
+  replay tui                       the same answers as screens you can move between
 
 Look closer:
   replay cost   <dir...>           cost per task, and --compare <date> for before/after
@@ -550,6 +563,10 @@ Look closer:
   replay route  <dir> --to <model> what switching models would change, structurally
   replay trim   <dir> --cap <n>    what a byte cap on tool output would have saved, and cost
   replay advise <dir> --guards     spend caps from your own session spread, print-only
+  replay codex  <dir...>           the same reading, for OpenAI Codex rollout logs
+  replay burn                      what each agent surface burned: Codex, Ollama, Claude Code
+  replay agents [dir] --write F    a boot block naming where this project keeps its records
+  replay mcp                       answer an agent's questions mid-session, JSON-RPC on stdio
 
 Corpus and calibration:
   replay corpus <dir...>           calibration across many sessions, as Markdown (no paths or content)

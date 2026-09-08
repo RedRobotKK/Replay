@@ -11,7 +11,7 @@ import (
 
 // Every flag the CLI defines must appear in the flag-surface design.
 //
-// The document classifies all 72 into six kinds of screen element, and its
+// The document classifies all 75 into six kinds of screen element, and its
 // value rests entirely on being complete. A design that covers most of the
 // flags is a design with a hole exactly where nobody looked, and the hole is
 // invisible: the document reads as finished either way.

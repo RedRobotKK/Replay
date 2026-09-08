@@ -69,6 +69,29 @@ type Loop struct {
 	// clear it. A flag rather than a callback, because a callback would run on
 	// the key goroutine and the source is already called on the render path.
 	opened bool
+
+	// local is the current screen's own key handler, set by the source as it
+	// renders and offered every keystroke first.
+	//
+	// A callback here and a flag for enter, which looks inconsistent and is
+	// not: enter means the same thing on every screen that has rows, so the
+	// loop can record it and let the source decide later. A screen's own keys
+	// mean something only while that screen is on, and deciding them a repaint
+	// later would apply them to whatever screen the reader had moved to.
+	local func(rune) bool
+}
+
+// SetLocal gives the current screen first refusal on a keystroke.
+//
+// Called by the source as it renders, and cleared by every screen that has no
+// keys of its own. The handler reports whether it consumed the key, so a
+// screen that declines leaves the shortcut letters working: a surface where a
+// question becomes unreachable because some screen swallowed its letter is a
+// surface people get stuck in.
+func (l *Loop) SetLocal(f func(rune) bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.local = f
 }
 
 // TakeOpened reports whether enter was pressed since the last call, and clears
@@ -149,6 +172,16 @@ func (l *Loop) Run(stop <-chan struct{}) {
 // quitting, because a surface that exits on the key people press to back out is
 // a surface people lose work in.
 func (l *Loop) press(k rune) {
+	// The current screen first, and outside the lock: a handler that called
+	// back into the loop while it was held would deadlock the keyboard, which
+	// is the one thing this design says never to do.
+	l.mu.Lock()
+	local, helping := l.local, l.help
+	l.mu.Unlock()
+	if !helping && local != nil && local(k) {
+		return
+	}
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	// Movement first, and only when the screen has rows. Move reports whether

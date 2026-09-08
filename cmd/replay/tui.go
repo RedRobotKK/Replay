@@ -16,12 +16,13 @@ import (
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/card"
 	"github.com/RedRobotKK/Replay/internal/tui"
 )
 
 // runTUI opens the question-first surface.
 //
-// The eight questions are the whole point: most people will never type a flag,
+// The nine questions are the whole point: most people will never type a flag,
 // so the tool runs the command for them and every screen prints what it ran.
 // See docs/TUI-FLAG-SURFACE.md for the classification and
 // docs/DASHBOARD-DESIGN.md for the states.
@@ -29,10 +30,14 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("tui", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	screen := fs.String("screen", "cost", "which question to open on: "+
-		"cost, why, context, advise, guards, model, safe, doctor")
+		"cost, why, context, advise, guards, model, safe, doctor, share")
 	once := fs.Bool("once", false,
 		"render one frame and exit, for a pipe or a screenshot")
-	if err := fs.Parse(args); err != nil {
+	// parseArgs, not fs.Parse: --help is a request, not a parse failure.
+	// Calling fs.Parse directly sent usage to stderr with a non-zero exit and
+	// a trailing "flag: help requested", which is the defect help.go exists to
+	// prevent. It survived here because tui was written last.
+	if err := parseArgs(fs, args, stdout); err != nil {
 		return err
 	}
 
@@ -43,8 +48,8 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 		}
 	}
 	if key == 0 {
-		return fmt.Errorf("no screen called %q. The eight are: cost, why, context, "+
-			"advise, guards, model, safe, doctor: %w", *screen, errUsage)
+		return fmt.Errorf("no screen called %q. The nine are: cost, why, context, "+
+			"advise, guards, model, safe, doctor, share: %w", *screen, errUsage)
 	}
 
 	// Every screen is rendered from the same source, so the loop has no
@@ -64,12 +69,33 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 	// lands: the pinwheel is the difference between "nothing" and "not yet",
 	// and zero dollars is a number somebody would believe.
 	var mu sync.Mutex
-	go func() {
-		counted := costState(m)
-		mu.Lock()
-		m = counted
-		mu.Unlock()
-	}()
+	// Only the interactive loop needs the count in the background. --once
+	// computes it synchronously below because a single frame that says "still
+	// counting" has answered nothing, so starting the goroutine here as well
+	// gave two writers to m and only one of them took the mutex: the goroutine
+	// at this line, and the --once branch further down, which assigned
+	// costState(m) unguarded. The race detector reported it on every run of
+	// TestTW1, which drives runTUI through --once.
+	//
+	// Not starting the goroutine is the fix rather than locking the second
+	// write, because in --once mode its work is duplicated and then discarded.
+	// Locking would have made the report go quiet while leaving two walks of
+	// the corpus racing to write the same answer.
+	if !*once {
+		go func() {
+			counted := costState(m)
+			mu.Lock()
+			m = counted
+			mu.Unlock()
+		}()
+	}
+
+	// Where the share screen writes, resolved once at startup. A path decided
+	// per keystroke could change under the reader between the preview and the
+	// file.
+	shareDir, _ := os.Getwd()
+	ui := shareUI{variant: card.VariantC, tone: card.ToneMeasured}
+	shareK := screenKey("share")
 
 	var loop *tui.Loop
 	// opened is the session the reader pressed enter on, and what the why
@@ -81,6 +107,10 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 		mu.Lock()
 		cur := m
 		mu.Unlock()
+
+		// Cleared on every render, so a screen's own keys cannot follow the
+		// reader off it. Only the share screen sets one.
+		loop.SetLocal(nil)
 
 		switch k {
 		case 'd':
@@ -99,6 +129,15 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 		case 'w':
 			loop.SetRows(0)
 			return tui.Frame{Key: k, Lines: tui.WhyScreen(opened, blameFor).Lines}
+		case shareK:
+			loop.SetRows(0)
+			// The state that was previewed is the state w writes, captured
+			// here rather than rebuilt at keystroke time. The file is then the
+			// card that was on screen, which is the whole point of previewing
+			// it.
+			st := shareState(cur, ui)
+			loop.SetLocal(func(k rune) bool { return ui.press(k, st, shareDir) })
+			return tui.Frame{Key: k, Lines: tui.ShareScreen(st).Lines}
 		}
 		loop.SetRows(0)
 		return tui.Frame{Key: k, Lines: tui.Outcome(k).Lines}
@@ -109,7 +148,7 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 		// frame either way.
 		// --once waits for the count, because a single frame that says
 		// "still counting" and exits has answered nothing.
-		if key == 'c' {
+		if key == 'c' || key == shareK {
 			m = costState(m)
 		}
 		loop = &tui.Loop{}
@@ -118,7 +157,12 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 		lines = append(lines, frame...)
 		lines = append(lines, tui.Footer(key))
 		for _, l := range lines {
-			if _, err := fmt.Fprintln(stdout, l); err != nil {
+			// Right-trimmed, because this path is the pipe and the screenshot.
+			// A live terminal pads a row to the column width so the row it is
+			// overwriting disappears; down a pipe that padding is invisible
+			// junk that lands in a README code block and in every diff of it
+			// afterwards.
+			if _, err := fmt.Fprintln(stdout, strings.TrimRight(l, " \t")); err != nil {
 				return err
 			}
 		}
@@ -227,30 +271,39 @@ func costState(m tui.Machine) tui.Machine {
 	// total, which is the property that matters. A second, subtly different
 	// walk producing a slightly different figure is exactly how the two counts
 	// in `doctor` drifted apart once already.
+	//
+	// No --per-lane, so every row here is one session and m.Tasks is a session
+	// count. It was not: `cost` priced one transcript FILE at a time, and a
+	// session that fanned out to sub-agents writes one file per lane, so this
+	// screen said "$3,129 across 1,614 tasks" over 114 sessions and listed the
+	// same session id on a thousand consecutive rows.
 	var buf bytes.Buffer
 	if err := runCost([]string{"--per-task", "--json"}, &buf, io.Discard); err != nil {
 		return m
 	}
+	// The summary is read back into the same type the report writes, so the
+	// screen cannot pick up a field under a name the report stopped using.
 	var out struct {
 		Tasks []struct {
-			Session      string  `json:"session"`
-			Model        string  `json:"model"`
-			Requests     int     `json:"requests"`
-			CostUSD      float64 `json:"costUsd"`
-			AvoidableUSD float64 `json:"avoidableUsd"`
-			Breaks       int     `json:"breaks"`
-		} `json:"tasks"`
-		Summary struct {
-			Tasks           int     `json:"tasks"`
-			TotalUSD        float64 `json:"totalUsd"`
-			MedianUSD       float64 `json:"medianUsd"`
-			P90USD          float64 `json:"p90Usd"`
+			Session         string  `json:"session"`
+			Lanes           int     `json:"lanes"`
+			Model           string  `json:"model"`
+			Requests        int     `json:"requests"`
+			CostUSD         float64 `json:"costUsd"`
 			AvoidableUSD    float64 `json:"avoidableUsd"`
-			AvoidableShare  float64 `json:"avoidableShare"`
 			AvoidableTokens int     `json:"avoidableTokens"`
-		} `json:"summary"`
+			Breaks          int     `json:"breaks"`
+		} `json:"tasks"`
+		Summary costSummary `json:"summary"`
 	}
 	if err := json.Unmarshal(buf.Bytes(), &out); err != nil || out.Summary.Tasks == 0 {
+		return m
+	}
+	// The rows must be sessions. This screen labels them "tasks" and its rows
+	// open one transcript each, so being handed agent lanes here is the defect
+	// rather than a degraded view — and drawing it anyway is how it went
+	// unnoticed. Refusing leaves the screen Unavailable, which says so.
+	if out.Summary.Unit != "" && out.Summary.Unit != unitSession {
 		return m
 	}
 	sm := out.Summary
@@ -261,6 +314,22 @@ func costState(m tui.Machine) tui.Machine {
 	m.AvoidableTokens = sm.AvoidableTokens
 	m.PriceDate = cachemodel.PriceTableVersion
 	m.CorpusFiles = m.Transcripts
+
+	// What a share card of this corpus would carry.
+	//
+	// Built by cardData, the one function that turns a report into a picture,
+	// and gated by shareCard, the one function that decides whether there is
+	// anything worth posting. Both are the command's, called rather than
+	// copied: a screen that offered a card `replay cost --share` would have
+	// refused to produce is offering something nobody stands behind.
+	breaks, peak := 0, 0
+	for _, t := range out.Tasks {
+		breaks += t.Breaks
+		if t.AvoidableTokens > peak {
+			peak = t.AvoidableTokens
+		}
+	}
+	m.Card, m.ShareOK = shareFrom(sm, breaks, peak)
 
 	// Most expensive first: the question the list answers is "where did the
 	// money go", and the answer is almost never the most recent task.
@@ -282,8 +351,14 @@ func costState(m tui.Machine) tui.Machine {
 //
 // The cost report identifies a task by prefix, which is enough for a human to
 // recognise and not enough to open. Building the map once beats globbing per
-// row: a corpus of 1,614 files against 1,599 tasks would otherwise be one walk
-// per keystroke.
+// row: a corpus of 1,614 files against 114 session rows would otherwise be one
+// walk per keystroke.
+//
+// Sub-agent lanes are in this walk and cannot win a key from a session. They
+// are named agent-<id>.jsonl, so they all share the prefix "agent-a" or
+// similar and drop out as ambiguous, and no session id begins "agent-". Before
+// the rows became sessions this map was asked for the same parent transcript
+// on a thousand consecutive lane rows; now one row asks once.
 //
 // A prefix that matches two files is dropped rather than guessed. Opening the
 // wrong session and saying nothing is worse than saying it cannot be opened,

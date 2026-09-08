@@ -46,6 +46,9 @@ type statusInput struct {
 			Causes []string `json:"causes"`
 		} `json:"last_miss_cause"`
 	} `json:"prompt_cache"`
+	// The subscription seat's currency. Absent on a metered account, which is
+	// why it is a pointer: a zero window and no window are different facts.
+	RateLimits *rateLimits `json:"rate_limits"`
 }
 
 func parseStatusInput(r io.Reader) (statusInput, error) {
@@ -81,6 +84,18 @@ func statusLine(s statusInput, colour bool) string {
 	}
 
 	var parts []string
+	// Two currencies, and an account has one of them. A metered account is
+	// billed per token and carries `cost`. A subscription seat is not billed
+	// per token at all, carries `rate_limits`, and until this line existed got
+	// a dollar figure addressed to somebody else. The window comes first
+	// because it is the one that stops you: money is a number you review later,
+	// a window is a wall you hit in the next twenty minutes.
+	if q := quotaLine(s, timeNow()); q != "" {
+		if s.RateLimits != nil && bindingPercent(s) >= 80 {
+			q = paint(ansiRed, q)
+		}
+		parts = append(parts, q)
+	}
 	if s.Cost.TotalUSD > 0 {
 		parts = append(parts, fmt.Sprintf("$%.2f", s.Cost.TotalUSD))
 	}

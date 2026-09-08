@@ -31,7 +31,7 @@ back to this index.
 | [Agent surface](AGENT-SURFACE.md) | What an agent-first CLI does that Replay does not, and the four gaps that are real |
 | [Maintainers](maintainers.md) | How the repository is run: branches, reviews, releases, labels |
 | [Audit outreach](AUDIT-OUTREACH.md) | What to say to someone who has not asked for anything yet, and the rule that the offer is always a measurement rather than a claim about their systems |
-| [Flag surface](TUI-FLAG-SURFACE.md) | All 72 flags, and the six kinds of screen element they become. Twenty of them are one component with four states |
+| [Flag surface](TUI-FLAG-SURFACE.md) | All 80 flags, and the six kinds of screen element they become. Twenty of them are one component with four states |
 | [Dashboard design](DASHBOARD-DESIGN.md) | The live `replay serve` surface: the 25 states it has to survive, and why every frame element is ASCII |
 
 ## If you want to know where this is going
@@ -48,6 +48,7 @@ is the only place that says what will actually ship.
 | [The feed worth publishing](THE-FEED.md) | Why the useful feed is verification of documented cache behaviour, not prices |
 | [The money path](MONEY-PATH.md) | What a subscription could honestly charge for, what stays free forever, and why the unit is a repository rather than a developer |
 | [Open design questions](design/README.md) | Questions written up before a decision, not after. Currently: where live context cost should surface and who consumes it |
+| [Gap analysis, 2026-09-07](GAP-ANALYSIS-2026-09-07.md) | Everything a day of measuring the product and the site turned up, fixed and open, with the pattern six of the defects shared |
 
 ## If you are curious how it got here
 

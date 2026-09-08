@@ -6,10 +6,10 @@ phrase rather than a test.
 
 ## Where this stands today
 
-**v0.4.0 is a working tool with a documented threat model. It is not a v1.0.**
+**v0.5.0 is a working tool with a documented threat model. It is not a v1.0.**
 
-The distinction is not code quality. The test posture is strong: 675 test
-functions across 120 files against 101 source files, `go vet` plus
+The distinction is not code quality. The test posture is strong: 816 test
+functions across 152 files against 127 source files, `go vet` plus
 `go test -race -count=1` on every push, and every fix in this release was
 reproduced red before it was fixed and then mutation tested. What is missing is
 that four security findings are open by choice, and one provider path has never
@@ -80,8 +80,18 @@ There was none, and 67 changelog entries accumulated in a day after v0.3.0 was
 cut. That is engineering inventory decoupled from the people running it.
 
 **Cut a release when the changelog has something a user would act on, and do not
-let `Unreleased` run past roughly twenty entries.** A release is how work
-reaches the 26 installs that exist; holding it is not caution.
+let `Unreleased` run past roughly twenty entries.** Holding a release is not
+caution.
+
+There is no defensible install count, and the figure this file carried until
+2026-09-07 was one. It said "the 26 installs that exist", which was a fetch
+count wearing the word "installs". Measured on 2026-09-07: **53 fetches of the
+install script over its lifetime, from 2 distinct IP addresses**, and 152
+release-asset downloads that include scanners and CI. A fetch is not an install,
+an install is not a person, and a download is not either. The honest statement
+is that no external user has been observed. Wrong units in a count is the defect
+this project spends most of its time finding in its own output, and it had one
+in the file that tells it when to ship.
 
 ---
 

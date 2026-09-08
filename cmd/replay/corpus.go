@@ -183,14 +183,24 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 	p.Printf("| Model | Sessions | Match rate | Recent sessions | Recent match rate | Verdict |\n")
 	p.Printf("|---|---:|---:|---:|---:|---|\n")
 	for _, m := range models {
+		// A model with nothing compared is not a model that scored badly, and
+		// printing a percentage for it says it was measured. `<synthetic>` is
+		// the case that forced this: it is Claude Code's label for assistant
+		// messages generated locally that never reached the API, so its turns
+		// carry zero usage and none of them can be compared. It published as
+		// 100.0% "calibrated" until 2026-09-08. Now the row says which of the
+		// two it is, and the percentage is only printed where a comparison
+		// actually happened.
 		verdict := "calibrated"
 		switch {
+		case m.Compared == 0:
+			verdict = "not measured: no turn to compare"
 		case m.Stale:
 			verdict = "stale: provider behavior changed"
 		case m.MatchRate() < analysis.CalibrationThreshold:
 			verdict = "below threshold"
 		}
-		p.Printf("| %s | %d | %.1f%% | %d | %.1f%% | %s |\n", m.Model, m.Sessions, m.MatchRate()*100, m.RecentSessions, m.RecentMatchRate()*100, verdict)
+		p.Printf("| %s | %d | %s | %d | %s | %s |\n", m.Model, m.Sessions, matchRateCell(m.Matched, m.Compared), m.RecentSessions, matchRateCell(m.RecentMatched, m.RecentCompared), verdict)
 	}
 	for _, m := range models {
 		p.Printf("\n- %s: %s", m.Model, m.MinPrefix)
@@ -271,4 +281,22 @@ func scrubPath(msg string) string {
 		return prefixID(msg[:i]) + msg[i+len(".jsonl"):]
 	}
 	return msg
+}
+
+// matchRateCell renders a match rate, or says there was nothing to rate.
+//
+// The distinction the table has to keep is between a model that was measured
+// and matched badly and a model that was never measured at all. Both used to
+// print as a percentage, which made the second one indistinguishable from the
+// first at a glance and, while rate() returned 1 for an empty comparison, made
+// it indistinguishable from a perfect score.
+//
+// "no evidence" is the same phrase MinPrefixFit already uses for the same
+// condition in the notes below this table, so the two halves of the report
+// describe an absent measurement the same way.
+func matchRateCell(matched, compared int) string {
+	if compared == 0 {
+		return "no evidence"
+	}
+	return fmt.Sprintf("%.1f%%", float64(matched)/float64(compared)*100)
 }

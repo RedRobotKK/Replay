@@ -209,7 +209,7 @@ Each names the path or address it failed on.
 ### Idle
 
 ```text
-  replay serve                                                    v0.4.0
+  replay serve                                                    v0.5.0
 
   listening   127.0.0.1:4000
   upstream    api.anthropic.com
@@ -227,7 +227,7 @@ Each names the path or address it failed on.
 ### Active, with a blind path and a cap that is not enforced
 
 ```text
-  replay serve                                                    v0.4.0
+  replay serve                                                    v0.5.0
 
   listening   127.0.0.1:4000        sessions  3
   upstream    api.anthropic.com     billed    1,204,881 prompt tokens
@@ -257,7 +257,7 @@ worth printing.
 ### Settings
 
 ```text
-  replay settings                                                 v0.4.0
+  replay settings                                                 v0.5.0
 
   caps                       value            from
   max-session-tokens         unset            default

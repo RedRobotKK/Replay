@@ -1,10 +1,16 @@
 # Every flag, and what it becomes on screen
 
-**Status:** design. Nothing here is built.
+**Status:** partly built. `replay tui` shipped in 0.5.0 with the question
+screens, nine of them now, and four read this machine: `cost`, `why`, `doctor`
+and `share`. The flag-to-widget mapping below
+is what is still unbuilt: no screen renders a flag from a running `replay
+serve`, and the archetype renderings that do appear, the four-state threshold
+meter on the guards screen and the posture block on the safe screen, are drawn
+from example data and say so.
 
-Replay has **74 flags across 12 commands**. `serve` carries 29 of them, `probe`
-16. That count is the finding rather than the input: a surface that renders 72
-flags as 72 widgets is a worse tool than the command line it replaces, because
+Replay has **80 flags across 14 commands**. `serve` carries 29 of them, `probe`
+16. That count is the finding rather than the input: a surface that renders 78
+flags as 80 widgets is a worse tool than the command line it replaces, because
 it asks the reader to hold the same complexity with less to hold onto.
 
 So the question is not "where does each flag go". It is what kind of thing each
@@ -12,16 +18,16 @@ flag is, because **twenty of them are the same kind of thing and collapse into
 one component with four states**.
 
 Every flag below was extracted from `cmd/replay/*.go`, not from documentation.
-All 74 are classified; none are left over.
+All 80 are classified; none are left over.
 
 ## The six archetypes
 
 | Archetype | Flags | What it looks like |
 |---|---|---|
 | Replaces the surface | 7 | There is no TUI. `--json` means a machine is reading, and drawing a frame for it is wrong |
-| Plumbing, shown once | 12 | A header line, never interactive. Where it listens, where it writes, what it talks to |
+| Plumbing, shown once | 16 | A header line, never interactive. Where it listens, where it writes, what it talks to |
 | Threshold that can fire | 20 | A meter with **four** states: unset, armed, approaching, fired |
-| Posture, on or not covered | 13 | A line saying what is on, and more importantly what it does **not** reach |
+| Posture, on or not covered | 14 | A line saying what is on, and more importantly what it does **not** reach |
 | Scope of the question | 11 | The query line. What this screen is about, and what it excludes |
 | Action with a consequence | 11 | A confirmation, with the consequence named before the key |
 
@@ -97,7 +103,7 @@ asking you to trust a summary of the thing rather than the thing.
 | `--json` | `trim` | bool |
 | `--no-color` | `statusline` | bool |
 
-### Plumbing, shown once (12)
+### Plumbing, shown once (16)
 
 | Flag | Command | Type |
 |---|---|---|
@@ -107,8 +113,11 @@ asking you to trust a summary of the thing rather than the thing.
 | `--ledger` | `serve` | string |
 | `--listen` | `serve` | string |
 | `--metrics-listen` | `serve` | string |
+| `--card` | `cost` | string |
 | `--out` | `advise` | string |
 | `--out` | `learn` | string |
+| `--png` | `cost` | string |
+| `--tone` | `cost` | string |
 | `--policy-file` | `serve` | string |
 | `--project` | `serve` | string |
 | `--screen` | `tui` | string |
@@ -140,12 +149,13 @@ asking you to trust a summary of the thing rather than the thing.
 | `--revert-after` | `serve` | int |
 | `--trial-share` | `serve` | float64 |
 
-### Posture, on or not covered (13)
+### Posture, on or not covered (15)
 
 | Flag | Command | Type |
 |---|---|---|
 | `--compare` | `cost` | string |
 | `--dir` | `burn` | string |
+| `--write` | `agents` | string |
 | `--dry-run` | `rules` | bool |
 | `--guards` | `advise` | bool |
 | `--hold-siblings` | `serve` | duration |
@@ -169,6 +179,7 @@ asking you to trust a summary of the thing rather than the thing.
 | `--min` | `probe` | int |
 | `--min-sessions` | `learn` | int |
 | `--model` | `probe` | string |
+| `--per-lane` | `cost` | bool |
 | `--prior` | `probe` | int |
 | `--resolution` | `probe` | int |
 | `--to` | `route` | string |

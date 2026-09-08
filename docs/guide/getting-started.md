@@ -8,7 +8,7 @@ You do not need to change how your agent works, and nothing leaves your machine.
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/RedRobotKK/Replay/main/install.sh | sh
+curl -fsSL https://redrobot.jp/replay.sh | sh
 ```
 
 If you already have Go, `go install github.com/RedRobotKK/Replay/cmd/replay@latest` does the same
@@ -121,6 +121,60 @@ Same commands, measured tier.
 
 If you want out, unset `ANTHROPIC_BASE_URL` and the proxy is bypassed entirely. `REPLAY_DISABLED=1`
 stops it starting at all.
+
+## How you actually talk to it
+
+Four surfaces, and most people use two. Each one is a single command or a single
+line of config.
+
+**The command line.** Nothing to set up. `replay` with no arguments reads the
+transcripts already on disk and prints cost per task.
+
+**The status line, which is where most people will meet it.** It renders while
+you work, every few hundred milliseconds, and carries live spend, cache health,
+and the rate-limit window closest to binding with time until it resets. On a
+subscription seat that window is the useful number, because the dollars are
+somebody else's.
+
+```sh
+replay statusline --install    # prints the settings.json snippet
+```
+
+**MCP, so an agent can ask mid-session rather than being told afterwards.** The
+binary IS the server: there is no daemon, no port and nothing hosted. Your agent
+starts it as a child process, talks JSON-RPC over its pipes, and stops it when
+the session ends.
+
+```sh
+replay mcp --install           # prints the config, with this binary's real path
+```
+
+```json
+{ "mcpServers": { "replay": { "command": "replay", "args": ["mcp"] } } }
+```
+
+Seven tools. Five answer from the table compiled into the binary and touch no
+network at all; the two that are facts about a remote release say so rather than
+answering from a value that would go stale.
+
+**The boot file, where the reader is another program.** `AGENTS.md` is where
+several coding agents look at startup and `CLAUDE.md` is where one of them does.
+
+```sh
+replay agents .                      # print the block
+replay agents . --write AGENTS.md    # splice it in, between its markers
+```
+
+It writes where this project keeps its records, so an agent asked "what was
+sent" knows to look somewhere other than the first directory it thinks of. The
+block is capped and drops file names on purpose: it sits in the cached prefix of
+every session, so its size is a recurring cost paid against the breaks it
+prevents.
+
+**And one that is not an interface to the tool at all.** `replay cost --share
+--png card.png` renders an image you post. That is an interface to other people,
+and it carries a rate, a break count and a session count, never a path, a
+project name or a spend total.
 
 ## Where to go next
 

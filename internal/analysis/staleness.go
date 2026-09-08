@@ -53,9 +53,29 @@ func (m ModelCalibration) MatchRate() float64 { return rate(m.Matched, m.Compare
 // RecentMatchRate is the same over the recent window.
 func (m ModelCalibration) RecentMatchRate() float64 { return rate(m.RecentMatched, m.RecentCompared) }
 
+// rate is the share of compared turns that matched, and it reports 0 when
+// nothing was compared.
+//
+// It returned 1 until 2026-09-08, which is the same defect Calibration.MatchRate
+// carried until 2026-09-06 and the same fix. calibrate.go states the rule an
+// absent measurement must not read as a good one and applies it to one of the
+// two types that reach this idea; this is the other one.
+//
+// What it published: `replay corpus` printed a `<synthetic>` row at 100.0% with
+// the verdict "calibrated". `<synthetic>` is Claude Code's label for assistant
+// messages generated locally that never reached the API, so every one carries
+// zero input, output, cache-creation and cache-read tokens and nothing was ever
+// compared. The best-calibrated row in a published table described no API
+// traffic at all, while the note two lines below it said "no evidence" about the
+// same model.
+//
+// Zero is the honest floor here rather than an error return, because it is
+// below any threshold worth having, which is exactly the argument calibrate.go
+// makes for Passes. Callers that must distinguish "nothing matched" from
+// "nothing was compared" ask Compared directly; the table does.
 func rate(matched, compared int) float64 {
 	if compared == 0 {
-		return 1
+		return 0
 	}
 	return float64(matched) / float64(compared)
 }

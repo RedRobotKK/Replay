@@ -16,7 +16,7 @@ import (
 // The rules govern what gets cached. The price table governs what it costs.
 // A dollar figure must cite the second.
 func TestCostHeaderCitesThePriceTable(t *testing.T) {
-	head := costHeaderLine(1384)
+	head := costHeaderLine(costSummary{Tasks: 114, Lanes: 1384, Unit: unitSession})
 
 	// The date attached to the word "prices" must be the price table's.
 	if !strings.Contains(head, "list prices dated "+cachemodel.PriceTableVersion) {

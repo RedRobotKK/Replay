@@ -1,6 +1,6 @@
 # Commands
 
-Seventeen commands, listed on twenty-one lines because four of them have a form worth showing
+Twenty commands, listed on twenty-four lines because four of them have a form worth showing
 separately. Most people use three of them.
 
 `replay --help` prints them in four groups — **start here**, **look closer**, **corpus and
@@ -53,11 +53,43 @@ lane, so a session that spawned sub-agents contributes several — on the machin
 The unit-economics view: what one task cost, and the share of it nobody chose.
 
 ```sh
-replay cost                                # the discovered transcript root, no argument needed
-replay cost ~/.claude/projects/            # the summary, over a directory you name
-replay cost --per-task ~/.claude/projects/ # every session, most expensive first
-replay cost --json ~/.claude/projects/     # for a dashboard, or an agent
+replay cost                                          # the discovered transcript root, no argument needed
+replay cost ~/.claude/projects/                      # the summary, over a directory you name
+replay cost --per-task ~/.claude/projects/           # every session, most expensive first
+replay cost --per-task --per-lane ~/.claude/projects/ # every agent lane, for fan-out analysis
+replay cost --json ~/.claude/projects/               # for a dashboard, or an agent
 ```
+
+**One row is one session, and `--per-lane` is how you get the lanes.** Claude Code writes one
+transcript per agent *lane*: a session that spawned sub-agents writes
+`<session>/subagents/agent-*.jsonl`, and every one of those files carries the parent's `sessionId`.
+Until 2026-09-07 this command priced one file at a time and called each file a task, so on the
+machine it was found on `--per-task --json` emitted 1614 rows over 114 distinct sessions, with one
+session id on 1014 of them. A reader told "the top 22 of 1613 tasks are half your spend" was being
+shown agent lanes and believed they were being shown work they did. This repository had already
+retracted the same conflation once, in a published figure of "1363 sessions" that was a file count.
+
+Rows are now sessions. A session row sums its lanes, and which fields may be summed was decided one
+at a time: `requests`, `breaks`, `avoidableTokens`, `costUsd` and `avoidableUsd` are counts and
+amounts within a lane, so they add; `at` is a point in time, so the session takes its *earliest*
+lane; `model` is a category, so the row names the model that ran the largest share of the money.
+Nothing that is a rate or a percentile is ever added — `avoidableShare`, the median and the p90 are
+derived from the finished rows. The grand total is identical either way; only the row a figure
+appears on changes.
+
+`--per-lane` reports the lanes instead, because fan-out analysis needs them. It changes the **unit of
+the whole report**, not just the rows: the summary, the median, the p90 and the `--compare` split all
+follow it, so the report never counts one thing while naming another. In JSON the lane rows arrive
+under a `lanes` key rather than `tasks`, and each carries `lane` (the agent id, or `main`) plus
+`ofSession` — never a bare `session`, because several lanes share one session id and a field named
+`session` on a row that is not one is the defect itself.
+
+The headline names both counts — `across 114 sessions (1614 agent lanes)` — because the gap between
+them is the fact that made the retracted figure wrong. `summary.tasks` counts the rows, whatever the
+rows are, and `summary.unit` says which they are: `session` or `lane`. `summary.lanes` is always the
+transcript count behind them. The JSON `schema` is `replay.cost.v2`; v1 emitted one row per lane
+under `tasks`, and serving session rows under the same version string would have been the silent kind
+of break, where nothing errors and every figure moves.
 
 **The directory is optional.** With no argument, `cost` reads the root `doctor` discovers —
 `$CLAUDE_CONFIG_DIR/projects`, or `~/.claude/projects` — after confirming it holds at least one
@@ -103,7 +135,7 @@ more than the work it saves.
 replay cost ~/.claude/projects/ --share
 ```
 
-It carries the avoidable rate, the median and p90 task cost, the transcript count and the break
+It carries the avoidable rate, the median and p90 task cost, the session count and the break
 count — and deliberately not the total. A total tells a reader your monthly burn and lets them infer team
 size; it is also the least comparable number in the set, because $3,000 means nothing without
 knowing how many engineers spent it. A rate reads the same from a solo developer and a team of
@@ -122,6 +154,77 @@ billing mode there would be inventing the one fact that decides whether a cache 
 reader anything. A mixed corpus reads `partly metered`. When no model id was observed the line is
 omitted rather than printed empty, because a blank field reads as a measurement that returned
 nothing rather than one that was never taken.
+
+#### The picture form: `--png`
+
+```sh
+replay cost ~/.claude/projects/ --share --png card.png
+replay cost ~/.claude/projects/ --share --png card.png --card b
+```
+
+`--png` writes the same figures as a 1200x630 image, the Open Graph size, because the places a
+finding like this actually travels render an image and truncate a code block. It needs `--share`,
+and it refuses on exactly the same condition: when nothing was measured well enough to stand behind,
+no file is written at all. A zero-byte or half-finished PNG where you asked for a card reads as a
+card that worked, and the next thing that happens to it is being posted.
+
+It carries what the text card carries — the rate, the row count and its noun, the cache breaks, the
+median and the p90 — plus one figure the text card does not: the tokens re-billed in the single
+worst session, which design b uses as its headline. That is a peak, not a corpus sum, deliberately.
+The corpus sum divided by the avoidable rate printed beside it would reconstruct an
+order-of-magnitude spend total, which is the one number the share card refuses to carry; a peak
+divides into nothing, because a reader cannot know how many sessions produced it.
+
+No path and no project name can reach it, and that is structural rather than careful: the type the
+renderer takes has no string field, so there is nowhere for one to arrive. The stronger property is
+tested directly — the same transcripts under two different project names produce byte-identical
+files.
+
+`--card` chooses the design. **`c`** (the default) is the paper one: a statement in the first
+person, with the figures under a rule. **`b`** is the dark one: the tool's own output as a receipt,
+with the re-billed tokens as the headline. Both ship, neither is an experiment, and nothing about
+your choice is reported anywhere.
+
+`--tone` chooses the register. **`measured`** (the default) states what was found. **`rekt`** is
+the register of cloud-bill horror screenshots: deadpan, very short lines, no adjectives, and the
+figure printed exactly and comma-grouped — `32,635,820`, never `32.6M` and never "about 33
+million", because the whole credibility of that genre is that the number is real. It is grievance
+rather than self-deprecation: the loss was discovered, not chosen, and nobody posting under their
+own name wants to be told they were an idiot. There is no call to action in it. The install line
+stays on the card and reads as how the poster found out.
+
+```sh
+replay cost ~/.claude/projects/ --share --png card.png --card b --tone rekt
+```
+
+**A tone changes words and cannot change a figure.** Both registers are handed the same numbers by
+the same function, so there is nowhere for one of them to compute something the other would have
+shown differently, and a test renders both from one set of figures and asserts it.
+
+**A card carries an absolute or the rate, never both.** That is the constraint the rekt register
+runs into, because it leads with a large exact number and the measured card leads with a
+percentage. A token total divided by the avoidable rate printed beside it reconstructs an
+order-of-magnitude spend total; neither half discloses it alone. So design **b** carries the peak
+session's re-billed tokens and no percentage, and design **c** carries the rate in the measured
+register and drops it entirely in the rekt one, where the absolute has moved into the headline.
+
+The absolute is always the **peak session**, never the corpus sum, in both registers. A sum divides
+by the rate into a spend total; a peak divides into nothing, because a reader cannot know how many
+sessions produced it. Design b also prints the row count and the median beside it, so a corpus sum
+there would reconstruct the same total by a second route even with the rate removed. The card says
+which session the figure came from, because a large unqualified number reads as a corpus total and
+would be a fabrication with a real figure in it.
+
+Both registers handle a measured zero. A card saying "tokens I paid for twice" in the largest type
+on the page, over a corpus where nothing was re-billed, is the card lying about its own figure.
+
+The install line on the card is `curl -fsSL https://redrobot.jp/c/<design> | sh` — no query string,
+no quotes, no shell metacharacter but the pipe. The earlier form carried `?src=card&v=b`, which zsh
+globs on the bare `?` and aborts with "no matches found" before curl runs, so it had to be quoted;
+quoting fixes the shell and breaks the human, because people retype this from a photograph of a
+phone screen. Attribution moved into the path, which needs no protecting. It is set at 47px, a 36px
+cap height, which is about 11px once a 1200px card is rendered at 375px in a feed: readable without
+tapping, which the 21px it started at was not.
 
 A plain `replay cost` run also names the tip jar under the figures when the avoidable amount is over
 $5 — at the one moment the tool has just shown you money you already spent twice. It prints a line;
@@ -145,7 +248,8 @@ replay cost --compare 2026-08-25 ~/.claude/projects/
 replay cost --compare 2026-08-25 --predicted -0.2 ~/.claude/projects/
 ```
 
-It splits sessions at the date and reports cost **per task** on each side. Per task, because total
+It splits sessions at the date and reports cost **per task** on each side — sessions, or agent lanes
+under `--per-lane`, in the same unit as the rest of the report. Per task, because total
 spend also falls when you simply do less work, and that is how a report like this most easily
 misleads. Task volume is printed on both sides so you can judge the mix yourself, and a swing beyond
 40 percent warns that the two periods are not comparable work. Fewer than ten tasks on a side prints
@@ -160,6 +264,20 @@ This is list price against transcripts, not your invoice. It says so in its own 
 ### `replay statusline`
 
 Live spend, cache health, and what the misses are costing, in Claude Code's status line.
+
+**Two currencies, and an account has one of them.** A metered account is billed per token and
+Claude Code sends `cost`. A subscription seat is not billed per token at all: it sends
+`rate_limits`, carrying used-percentage and a reset time for a five-hour window, a seven-day
+window, and a spend limit where the account has one. Replay reports whichever window binds,
+which is not always the one listed first, and says how long until it resets, because "83%" is a
+number and "83%, resets in 40 minutes" is a decision.
+
+A window whose reset has already passed is not reported at all. Claude Code shipped a fix for a
+bug where a pre-reset percentage kept displaying on an idle session; reading that field back
+afterwards would be the same defect moved downstream, so an expired window is treated as no
+reading rather than as a full one. No attempt is made to convert a window into money: the
+titration that tried returned a null result, and a rate invented here would be exactly the kind
+of figure this tool refuses to state.
 
 ```sh
 replay statusline --install   # prints the settings.json snippet
@@ -711,6 +829,135 @@ it were a measurement is how a series stops being able to tell a result from a
 failure.
 
 Feed the result into a rules document with `replay rules --measure`.
+
+### `replay tui`
+
+The nine questions as screens you move between, instead of nine commands you have to know the
+names of. Every screen prints the command it ran, so the surface teaches the CLI rather than
+replacing it.
+
+| Flag | What it does |
+|------|--------------|
+| `-screen <name>` | Open on one of `cost`, `why`, `context`, `advise`, `guards`, `model`, `safe`, `doctor`, `share`. Default `cost`. |
+| `-once` | Render one frame and exit, for a pipe or a screenshot. |
+
+**Four of the nine read this machine: `cost`, `why`, `doctor` and `share`.** The other five carry a
+notice saying they are example data and describe nobody, and they say it on screen rather than in
+a footnote. They are being wired one at a time, and each one that lands moves from example to
+measured in a change that has to name the source it now reads. A screen that quietly showed a
+plausible number instead of that notice would be worth less than no screen.
+
+`share` previews the card `replay cost --share --png` would write, as text, before anything reaches
+the disk. `t` switches the register, `d` switches the design, and `w` writes the PNG and then
+states the absolute path it wrote — a key with a filesystem side effect has to say what it did. The
+preview and the file come from one set of figures through one renderer, so the screen cannot show a
+number the file does not have. It obeys the same guard the command does: with nothing measured well
+enough to post, the screen says so and `w` refuses rather than writing a card of zeros.
+
+`d` and `w` are the `doctor` and `why` questions everywhere else on this surface. While the share
+screen is open they belong to it, and the screen says so; the other seven questions are still one
+keystroke away, and `c` then `w` or `d` reaches those two.
+
+`-once` right-trims every line, because that path is the pipe and the screenshot. A live terminal
+pads a row to the column width so the row underneath disappears; down a pipe that padding is
+invisible junk that lands in a document and in every diff of it afterwards.
+
+Every screen is ASCII and fits 80 columns. That is enforced by a test, not by convention: box
+drawing characters are Unicode width class Ambiguous, one cell in a Latin locale and two in
+`ja_JP`, `zh_CN` and `ko_KR`, so a frame drawn with them shears for the reader and not for the
+author.
+
+### `replay codex`
+
+The same reading, for OpenAI Codex rollout logs rather than Claude Code transcripts. Takes
+directories; with no argument it looks where Codex writes by default.
+
+Codex reports cache differently and the difference is not cosmetic. `cached_input_tokens` is a
+**subset** of `input_tokens`, where Anthropic's `input_tokens` counts only what follows the last
+cache breakpoint. Adding the two the way Anthropic's shape requires would double-count every
+cached token here. Compaction rebases `total_token_usage` but not `last_token_usage`, so the two
+disagree by design after a compaction and only one of them is a bill.
+
+The reader keeps billed and reported figures apart for that reason, and refuses a total it was
+given without a breakdown rather than presenting a sum it cannot defend.
+
+### `replay burn`
+
+What each agent surface on this machine is consuming: Codex, Ollama and Claude Code, side by side.
+
+| Flag | What it does |
+|------|--------------|
+| `-dir <path>` | Read surfaces from this directory instead of the machine's own. |
+
+**It prints no cross-surface total, and that is the point.** The three do not count the same thing.
+Codex counts tokens against a rolling quota window. Claude Code counts tokens billed. Ollama's
+total *excludes* the cached prefix entirely, because it reports work done rather than context
+held, so an Ollama figure and a Codex figure are not the same unit and adding them produces a
+number with no meaning. Each row says what it counts, in its own words, and the sum is left
+undrawn.
+
+### `replay agents`
+
+Writes a block naming where this project keeps its records, for the file coding agents
+read at boot. `AGENTS.md` is where several of them look now, `CLAUDE.md` is where one
+of them looks, and neither is a place to put a fact nobody can check.
+
+| Flag | What it does |
+|------|--------------|
+| `--write <file>` | Splice the block into that file between its markers, leaving everything else alone. Without it the block goes to stdout. |
+
+Takes a directory, defaulting to the working directory.
+
+**What it puts there is not what the project costs. It is where the records are.** The
+failure this prevents is a question answered confidently from one directory: five files
+read, all under the same tree, every one agreeing, and the authoritative record
+somewhere else entirely. Sources drawn from one directory agree by construction, and
+that agreement carries no information about completeness.
+
+The block is delimited by `<!-- replay:sources:begin -->` and `:end`, replaced in place
+on each run and idempotent, so regenerating produces no diff when nothing moved. Content
+outside the markers is never touched, and a file with no markers is appended to rather
+than rewritten. It closes with the same scope paragraph `replay sources` prints, naming
+the three rules it matched on and the trees it skipped, because a list of sources read
+without its limits is a claim of completeness that this scan cannot make.
+
+### `replay mcp`
+
+A Model Context Protocol server on stdio, so an agent can ask Replay a question
+**during** the work rather than being told afterwards what it cost. JSON-RPC 2.0,
+line delimited, standard library only.
+
+**One server, not two.** It serves the whole vocabulary the hosted endpoint
+advertises, so a user configures one thing:
+
+| Tool | Answers | Needs the network |
+|------|---------|---|
+| `replay_surfaces` | which agents leave readable state here, and how much Replay reads | no |
+| `replay_price_check` | one model's rates, cache read multiple and minimum prefix, with the table's date | no |
+| `replay_rules_free` | the complete free rules table, generated from the compiled one | no |
+| `replay_mcp_overhead` | what a client's tool definitions cost to carry, per request and across many | no |
+| `replay_quota` | the rate-limit window closest to binding, and time to reset | no |
+| `replay_rules_latest` | says where the maintained feed is and that Replay never pays | yes, and it says so |
+| `replay_installer_release` | names its source rather than answering from a stale compiled value | yes, and it says so |
+
+Five answer from the compiled table with no network at all. The two that cannot
+say so rather than returning a figure that looks compiled-in, because where a
+number came from is the product.
+
+**None of them return message text.** The whole surface runs over the user's own
+transcripts, and a tool that hands an agent back the content of an earlier
+conversation is an exfiltration path with a friendly name. Counts, rates and
+causes only.
+
+This is the second of two MCP servers and they answer different questions. The
+hosted one at `redrobot.jp/mcp.json` answers about the WORLD: what a model costs,
+what a tool set weighs. It needs no user data, which is why it can be hosted.
+This one answers about THIS MACHINE, and that data never leaves it, which is why
+it cannot be.
+
+An unknown model returns a refusal rather than a default rate, and a stored quota
+reading states its own age. A notification, which carries no id, gets no reply,
+because a server that answers one corrupts every client that batches.
 
 ### `replay version`
 

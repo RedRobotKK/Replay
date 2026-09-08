@@ -59,7 +59,15 @@ func shareCard(s costSummary, breaks int) string {
 
 	b.WriteString(line + "\n\n")
 	b.WriteString("  " + headline + "\n\n")
-	fmt.Fprintf(&b, "    transcripts   %-8d  median task   $%.2f\n", s.Tasks, s.MedianUSD)
+	// The card names the unit it is counting. It said "transcripts" while
+	// s.Tasks was a file count, which was at least honest; s.Tasks is now the
+	// row count, and a card that gets posted publicly is the last place a
+	// label should be one release behind the figure beside it.
+	unit := "sessions"
+	if s.Unit == unitLane {
+		unit = "agent lanes"
+	}
+	fmt.Fprintf(&b, "    %-13s %-8d  median task   $%.2f\n", unit, s.Tasks, s.MedianUSD)
 	fmt.Fprintf(&b, "    cache breaks  %-8d  p90 task      $%.2f\n", breaks, s.P90USD)
 	// Omitted rather than blanked when nothing was observed: an empty label
 	// reads as a measurement that came back nothing, which is a different

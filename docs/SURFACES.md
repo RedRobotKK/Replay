@@ -26,7 +26,7 @@ of the document.
 | `~/.replay/tip.json` | **read and write** | Added 2026-09-06. When the tip line was last shown, the avoidable amount at that moment, and a random 16-byte seed minted once on this machine to pick between two wordings. The seed is random and local on purpose: a hostname or a hardware id would be an identifier, and this needs to be a stable coin flip and nothing more. `0600`, directory `0700`. Nothing here is transmitted — the binary has no path to send it | Read |
 | `~/.replay/measurements.jsonl` | write | `probe --record` (on by default when `--execute` runs). Append-only, owner-only, never rewritten: the bracket, method version, documented figure, provenance and any anomalies for each probe run. `--record -` disables it | Read |
 | `~/.replay/rules.json` | **read and write** | Written by `rules --update`, read at startup by every command that prices anything. Like `policy.json`, anything that can write this file changes the figures Replay reports — and unlike it, a wrong file here is refused at load rather than trusted | Read |
-| `$GOMODCACHE`, `$GOCACHE` | write | **Only via the installer's `go install` fallback**, which is the only path available today. Hundreds of MB | Read |
+| `$GOMODCACHE`, `$GOCACHE` | write | **Only via the installer's `go install` fallback**, which since v0.1.2 runs only when the releases API reports nothing published. Hundreds of MB | Read |
 | `${XDG_CONFIG_HOME:-~/.config}/replay/corpus-consent.toml` | write | Only from `install.sh --corpus-opt-in`. Sends nothing | **Verified** |
 | `/usr/local/bin/replay` or `~/.local/bin/replay` | write | The binary, at install. Since 2026-09-05 the installer runs `replay version` before reporting success, so a binary that lands but cannot execute fails the install instead of being announced as one | **Verified** end to end |
 
@@ -158,28 +158,37 @@ what it does not read.
 question.** In all non-test code there is **no `exec.Command` anywhere**: Replay never shells out, so
 there is no command-injection surface. There is no `os.Setenv`, so it never mutates the environment
 of anything it starts. No `os.Symlink`. No `os.TempDir` in the binary, so no predictable-path temp
-file and no symlink-attack surface there. No `filepath.Walk`, so it cannot wander outside the
-directory it was handed. Every write in the tool resolves under `~/.replay` or a directory the user
-named.
+file and no symlink-attack surface there. It walks with `filepath.Walk` and `filepath.WalkDir` in seven places, so the claim that
+matters is not that it does not walk but WHERE it is allowed to start: every walk is rooted
+at a directory the caller named, and none follows a symlink out of that root by design. An
+earlier version of this paragraph said "No `filepath.Walk`, so it cannot wander outside the
+directory it was handed", which was false when written and is the wrong kind of false for a
+document about the security surface: it stated a property of the code rather than a property
+of the roots, and a reader checking it would have found seven counter-examples in one grep.
 
 ## 4. What a stranger sees
 
 | Surface | Status |
 |---|---|
 | Repository, README, docs, ADRs, evidence | **Verified** by an adversarial claims audit; 6 false and 9 partial claims found and fixed |
-| `install.sh`, piped to a shell | **Verified against a FAKE release.** The download-and-verify path works and a tampered archive is refused, but **no real release exists, so today every user takes the `go install` fallback instead** — which contacts `proxy.golang.org` and `sum.golang.org`, writes hundreds of MB to `$GOMODCACHE` and `$GOCACHE`, and performs **none** of the checksum or signature verification. The verified path is not the reachable one |
+| `install.sh`, piped to a shell | **Verified against a FAKE release.** The download-and-verify path works and a tampered archive is refused. Five releases are now tagged, v0.1.2 through v0.5.0, so that is the path a user takes; the `go install` fallback, which contacts `proxy.golang.org` and `sum.golang.org`, writes hundreds of MB to `$GOMODCACHE` and `$GOCACHE` and performs **none** of the checksum or signature verification, now runs only when the releases API reports nothing published. **The proof is still against a fake release**, so the reachable path and the verified one are the same shape and not the same run |
 | GitHub Actions | **Verified**: all 15 were floating tags, now SHA-pinned |
-| Release artefacts, checksums, Sigstore signatures | Read. **Never exercised** — no release is tagged |
+| Release artefacts, checksums, Sigstore signatures | **Exercised.** Five tags exist, v0.1.2 through v0.5.0. v0.4.0 was signed with cosign v2.5.2 and shipped an SBOM built by syft v1.42.3; the unpinned tool versions that allowed cosign v3 to break a later run were fixed in 0.5.0 |
 | Issue templates, SECURITY.md, Discussions | **Verified**: Discussions was linked and disabled; now enabled |
 | **git history** | **KNOWN PROBLEM.** Deleted PRDs, both adversarial reviews and the former project name `Buffy` are all still reachable |
 | `internal/transcript/testdata/session-redacted.jsonl` | **KNOWN PROBLEM.** Paths and bodies hashed, **tool names are not**, including a connector UUID |
 
 ## 5. Provider surface
 
-**One, and only one.** Replay models Anthropic's explicit-breakpoint caching and reads Claude Code
-transcripts. `architecture/multi-provider.md` sets out why the other two families, implicit prefix
-and rented cache, are different products rather than variants, and why the rented family breaks the
-engine's assumption that more caching is better.
+**One cache model, four readers.** Replay models Anthropic's explicit-breakpoint caching and that is
+still the only cache model in the engine. What it reads is wider: Claude Code transcripts, the
+proxy's own ledger (which parses both the Anthropic and the OpenAI-compatible wire shapes), Codex
+rollout logs since 0.5.0 (`internal/transcript/codex.go`, surfaced by `replay codex`), and Ollama
+server logs (`internal/transcript/ollama.go`, surfaced by `replay burn`). The Codex and Ollama
+readers report what those surfaces billed and cached; neither is replayed against a layout, because
+neither is an explicit-breakpoint scheme. `architecture/multi-provider.md` sets out why the other two
+families, implicit prefix and rented cache, are different products rather than variants, and why the
+rented family breaks the engine's assumption that more caching is better.
 
 **~6,800 of 10,310 non-test lines are provider-neutral already.** The coupling is concentrated in
 `internal/transcript` (1,100), `internal/ledger` (957) and `internal/cachemodel` (267).
@@ -210,9 +219,10 @@ engine's assumption that more caching is better.
 
 Listed because a surface map that only contains what we checked is a marketing document.
 
-**No release has ever been built or installed from.** The signing, checksums, SBOM and the six-target
-matrix are all configured and none has run. The installer's release path was proven against a **fake**
-release served locally, not a real one.
+**Five releases have been built and none has been installed from.** v0.1.2 through v0.5.0 are tagged,
+and the signing, checksums, SBOM and six-target matrix have all run. What has not been exercised is
+the other end: the installer's release path was proven against a **fake** release served locally, and
+no run of `install.sh` against a real one is recorded here.
 
 **The proxy has now run against the real provider, once.** [Spike 4](evidence/spike-4-real-provider-2026-09-05.md), 2026-09-05: a ten-turn session completed intact with the context-editing parameter applied, and the ledger carried no credential and no message content. The provider applied zero context edits on that session, so the parameter is accepted and not yet shown to do anything. The guards, retries and provider-error handling were still not exercised, because nothing failed. Roadmap spike 4 says so. Every measured-tier
 figure and every guard has been exercised against a fake upstream. `--context-edit-trigger` in

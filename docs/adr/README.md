@@ -17,11 +17,12 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | [0009](0009-crowdsourced-waste-and-predictive-guards.md) | Crowdsource the waste taxonomy, not the cache model | Proposed |
 | [0010](0010-storage-and-retention.md) | Where waste data lives, and what gets thrown away | Proposed |
 | [0011](0011-opt-in-request-rewriting.md) | Opt-in request rewriting | Proposed |
-| [0012](0012-dual-licensing-deferred.md) | Dual licensing considered and declined; the CLA stays | Accepted |
+| [0012](0012-dual-licensing-deferred.md) | Dual licensing considered and declined; the CLA stays | Reversed by 0016 |
 | [0013](0013-x402-rules-feed.md) | Sell a maintained rules feed over x402; the binary never holds a key | Accepted |
 | [0014](0014-checks-must-be-able-to-fail.md) | A check must be able to fail, and reachability is asserted mechanically | Accepted |
 | [0015](0015-single-tenant-state-is-a-boundary.md) | Single-tenant state is a boundary, not an implementation detail | Accepted |
 | [0016](0016-business-source-license.md) | Relicense under the Business Source License 1.1 | Accepted |
+| [0017](0017-the-unintelligent-router.md) | Routing decided by cache structure, not by reading the prompt | Rejected |
 
 ---
 

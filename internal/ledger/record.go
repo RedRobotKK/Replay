@@ -66,6 +66,13 @@ type Record struct {
 	// Masked counts the secrets the proxy replaced with placeholders in
 	// this request, by pattern name. Never a secret or a placeholder.
 	Masked map[string]int `json:"masked,omitempty"`
+
+	// MaskDegraded records that a secret was positively identified and then
+	// blind-scrubbed because the vault could not store the mapping. The
+	// request still went out and the credential did not, but the placeholder
+	// carries no vault entry and cannot be rehydrated, so a later reader needs
+	// to know this request is not like the others.
+	MaskDegraded bool `json:"mask_degraded,omitempty"`
 	// Rehydrated counts the placeholders the proxy restored in this
 	// response, by destination: text, edit:<tool>, or tool:<tool>.
 	// RehydrationDenied counts those left in place, by destination and

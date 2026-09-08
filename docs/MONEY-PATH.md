@@ -355,8 +355,9 @@ survives the customer reading every evidence file in this directory, which is th
 purchase decision this project can honestly ask for.
 
 One thing worth stating so the price does not get blamed for the wrong problem. The
-[release criteria](../RELEASE-CRITERIA.md) record that a release "is how work reaches the 26 installs
-that exist." At 26 installs there is no subscription business at any price, and no amount of pricing
+measurement on 2026-09-07 counted **53 lifetime fetches of the install script from 2 distinct
+IP addresses**, and no external user has ever been observed. At that population there is no
+subscription business at any price, and no amount of pricing
 work changes that. **The constraint today is distribution, not the number on the page.** The value of
 deciding the money path now is that it says what to build and what never to gate, which is worth
 having settled before the install count is large enough for the question to be urgent.

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/RedRobotKK/Replay/internal/card"
 )
 
 // Measured screens.
@@ -69,6 +71,17 @@ type Machine struct {
 	// the cost screen answerable rather than merely true: a total tells you
 	// there is a problem and a list tells you where it is.
 	TaskRows []Task
+
+	// Card is what a share card of this corpus would carry, built by the same
+	// function `replay cost --share --png` builds it with. One construction, so
+	// the screen and the command cannot disagree about what the card says.
+	//
+	// ShareOK is the command's own guard on whether there is anything worth
+	// posting, asked rather than reimplemented. A screen that decided for
+	// itself would be a second answer to a question the command already
+	// answers, and the two would drift.
+	Card    card.Data
+	ShareOK bool
 }
 
 // Task is one session's cost, and enough to go and look at it.

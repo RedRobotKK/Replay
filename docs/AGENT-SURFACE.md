@@ -45,7 +45,7 @@ PostHog documents **When to use the CLI** against **When to use the MCP**, so an
 agent holding both does not have to guess.
 
 Replay has three ways in and no such page: read transcripts from disk, sit in
-front of the traffic as a proxy, or answer a question through the eight
+front of the traffic as a proxy, or answer a question through the nine
 shortcuts. Which one is right depends on whether the surface writes transcripts,
 which is exactly the thing the surface registry knows and nobody else does.
 
@@ -66,11 +66,12 @@ what to do instead.
 ### 4. One command over many, rather than many flags
 
 `posthog-cli api` is a single shell-friendly front over their whole tool
-catalog. Replay has 72 flags across 11 commands and, until the shortcut layer,
+catalog. Replay has 75 flags across 13 commands and, until the shortcut layer,
 no single entry point.
 
-The eight questions are Replay's version of this and they are not finished:
-they exist in `internal/tui` and no command runs them.
+The nine questions are Replay's version of this and they are not finished.
+`replay tui` runs them as of 0.5.0, and four of the nine read this machine:
+cost, why, doctor and share. The other five carry an example-data notice.
 
 ## What Replay has that this comparison does not flatter away
 
