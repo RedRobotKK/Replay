@@ -588,6 +588,35 @@ describing last Tuesday rather than how you work.
 `--out` names the policy file written on selection (default `~/.replay/policy.json`); `--out -`
 writes none and prints only.
 
+#### `--max-avoidable-usd <n>` — fail the build on avoidable spend
+
+```sh
+replay cost --max-avoidable-usd 5      # exit 1 when more than $5 was re-billed
+```
+
+Compares the avoidable figure this command already measures against a ceiling you
+type, and exits non-zero when it is breached, so CI can gate on it without
+parsing prose. Avoidable is the part nobody chose: context re-billed because a
+prompt cache broke.
+
+It derives nothing of its own. A governance check whose numbers come from
+anywhere but the measurement can be confidently right about a corpus nobody ran.
+
+**It will not pass on a corpus that priced nothing.** `replay cost` exits 0 with
+no transcripts, because a machine that never ran an agent has nothing to report
+and that is a fact about the machine. But passing a ceiling is a request to
+assert spend is *under* a number, and that cannot be asserted over nothing — so
+with the flag set, an empty corpus prints `NOT MEASURED` and fails. A CI runner
+has no transcripts, and a green check that measured nothing is worse than a red
+one.
+
+When unpriced transcripts were excluded, the failure says how many, because the
+total the ceiling was compared against has holes in it and the real figure is
+higher.
+
+`0` means off, the same convention `serve --max-day-usd` uses. A negative
+ceiling is refused.
+
 ### `replay since [--peek]`
 
 What ran, and what it cost, since you last looked.

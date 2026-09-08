@@ -1,0 +1,562 @@
+[
+ {
+  "surface": "cost --png",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "cost",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "cost --card",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "cost --compare",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "cost --json",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "cost --per-lane",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "cost --per-task",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "cost --predicted",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "cost --share",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "cost --tone",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "diff",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "diff --dollars",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "advise --apply",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "advise --out",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "advise --yes",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "advise",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "advise --guards",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "advise --json",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --listen",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "serve --metrics-listen",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "serve --upstream",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "serve",
+  "verdict": "DRIFT",
+  "note": "exit 1, reproducible across 3 runs: replay serve listening on http:// -> https://api.anthropic.com"
+ },
+ {
+  "surface": "serve --breaker-cooldown",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --breaker-failures",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --context-edit-keep",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --context-edit-trigger",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --error-budget",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --guardrail-reread",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --hold-siblings",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --ledger",
+  "verdict": "DRIFT",
+  "note": "exit 1, reproducible across 3 runs: replay serve listening on http:// -> https://api.anthropic.com"
+ },
+ {
+  "surface": "serve --loop-block",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --loop-warn",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --mask",
+  "verdict": "DRIFT",
+  "note": "exit 1, reproducible across 3 runs: masking: on (experimental); rehydration scope text,edit, project /User"
+ },
+ {
+  "surface": "serve --mask-entropy",
+  "verdict": "DRIFT",
+  "note": "exit 1, reproducible across 3 runs: replay serve listening on http:// -> https://api.anthropic.com"
+ },
+ {
+  "surface": "serve --mask-patterns",
+  "verdict": "DRIFT",
+  "note": "exit 1, reproducible across 3 runs: replay serve listening on http:// -> https://api.anthropic.com"
+ },
+ {
+  "surface": "serve --max-day-tokens",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --max-day-usd",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --max-session-tokens",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --max-session-usd",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --policy-file",
+  "verdict": "DRIFT",
+  "note": "exit 1, reproducible across 3 runs: policy: from /var/folders/d3/k4p6m6410_592dy5x8l8jws40000gn/T/drift-1l"
+ },
+ {
+  "surface": "serve --project",
+  "verdict": "DRIFT",
+  "note": "exit 1, reproducible across 3 runs: replay serve listening on http:// -> https://api.anthropic.com"
+ },
+ {
+  "surface": "serve --rehydrate",
+  "verdict": "DRIFT",
+  "note": "exit 1, reproducible across 3 runs: replay serve listening on http:// -> https://api.anthropic.com"
+ },
+ {
+  "surface": "serve --rehydrate-scope",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --retries",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --retry-base",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --retry-max",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --revert-after",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --token",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "serve --trial-share",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "tui",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "tui --color",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "tui --once",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "tui --screen",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "context",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "context --json",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "context --top",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "blame",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "blame --dollars",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "replay",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "replay --dollars",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "route",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "route --json",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "route --to",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "trim",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "trim --cap",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "trim --json",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "codex",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "burn",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "burn --dir",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "agents --write",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "agents",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "mcp",
+  "verdict": "SILENT",
+  "note": "exit 0 and printed nothing: a success indistinguishable from a no-op"
+ },
+ {
+  "surface": "corpus",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "learn --out",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "learn",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "learn --min-sessions",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "probe --contribute",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "probe --execute",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "probe --record",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "probe --yes",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "probe",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "probe --candidates",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "probe --confirm",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "probe --contribute-dir",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "probe --max",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "probe --max-age",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "probe --max-probes",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "probe --min",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "probe --model",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "probe --prior",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "probe --relative",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "probe --resolution",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "probe --trend",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "doctor",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "rules --check-prices",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "rules --measure",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "rules --update",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "rules",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "rules --dry-run",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "rules --export",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "rules --x402-json",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "statusline --install",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "statusline",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "statusline --no-color",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "redact",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "version",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "prefix",
+  "verdict": "EXPECTED REFUSAL",
+  "note": "exit 1 is the gate firing, which is the feature"
+ },
+ {
+  "surface": "prefix --after",
+  "verdict": "EXPECTED REFUSAL",
+  "note": "exit 1 is the gate firing, which is the feature"
+ },
+ {
+  "surface": "prefix --before",
+  "verdict": "EXPECTED REFUSAL",
+  "note": "exit 1 is the gate firing, which is the feature"
+ },
+ {
+  "surface": "prefix --json",
+  "verdict": "EXPECTED REFUSAL",
+  "note": "exit 1 is the gate firing, which is the feature"
+ },
+ {
+  "surface": "since",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "since --peek",
+  "verdict": "OK",
+  "note": ""
+ }
+]

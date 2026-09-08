@@ -74,6 +74,7 @@ Cost per task from transcripts already on disk.
 | `-card` | string | which card design --png writes: b (the dark receipt) or c (the paper statement, the default) |
 | `-compare` | string | split at this date (YYYY-MM-DD) and report cost per task before and after |
 | `-json` | bool | emit the figures as JSON |
+| `-max-avoidable-usd` | float | fail the build when measured avoidable spend exceeds this many dollars (0 = off). Refuses to pass when nothing was priced |
 | `-per-lane` | bool | report agent lanes instead of sessions: a session that spawned sub-agents wrote one transcript per lane, and this is the fan-out view of them |
 | `-per-task` | bool | list every priced session, most expensive first |
 | `-png` | string | with --share, also write the same figures as a 1200x630 social card at this path |
@@ -355,4 +356,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-24 commands, 88 flags, read from the binary.
+24 commands, 89 flags, read from the binary.

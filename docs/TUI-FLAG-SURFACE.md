@@ -104,10 +104,11 @@ asking you to trust a summary of the thing rather than the thing.
 | `--no-color` | `statusline` | bool |
 | `--color` | `tui` | string |
 
-### Plumbing, shown once (19)
+### Plumbing, shown once (20)
 
 | Flag | Command | Type |
 |---|---|---|
+| `--max-avoidable-usd` | `cost` | float |
 | `--peek` | `since` | bool |
 | `--before` | `prefix` | string |
 | `--after` | `prefix` | string |
