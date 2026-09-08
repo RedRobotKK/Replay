@@ -6,6 +6,10 @@ import (
 	"strings"
 
 	"github.com/RedRobotKK/Replay/internal/card"
+	// Aliased because this file already has a money() that formats dollars,
+	// and a package name shadowed by a function is a compile error waiting for
+	// whoever adds the next reference.
+	currency "github.com/RedRobotKK/Replay/internal/money"
 )
 
 // Measured screens.
@@ -47,6 +51,14 @@ type Machine struct {
 	// Found is false when the machine could not be read at all, which is a
 	// different answer from zero and is rendered as one.
 	Found bool
+
+	// FX is the reader's currency, resolved from their locale by the command.
+	//
+	// The zero value is dollars only, so a screen built without one renders
+	// exactly what it rendered before this existed. That matters more here
+	// than in the report: nine screens share this struct and most of them will
+	// never set it.
+	FX currency.Display
 
 	// Cost is what the corpus adds up to. It arrives late: the walk takes
 	// seconds on a real corpus, and blocking the first frame on it would hand
@@ -279,8 +291,20 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 	// Painted into a free-form sentence rather than a padded column, so the
 	// escapes cannot narrow a field. TestCL1 checks that claim rather than
 	// trusting it.
+	// The reader's own currency, on the two figures that carry the screen.
+	//
+	// Named by ISO code rather than by symbol, because this is a grid: every
+	// currency symbol is East Asian width class Ambiguous and would take two
+	// cells in exactly the locales that need it. The report can use a symbol
+	// because its local figure ends the line; here it cannot.
+	//
+	// Only the total. The second line already carries three figures and a
+	// sentence, and adding the aside there took it to 85 cells: TestTC1 caught
+	// it under a ja_JP locale, which is the locale nobody here develops in.
+	// Putting a second currency in the table's cost column has the same
+	// problem with less to gain, and the column header already says dollars.
 	lines = append(lines,
-		"  "+paint(Strong, money(m.TotalUSD))+" across "+commas(m.Tasks)+" tasks",
+		"  "+paint(Strong, money(m.TotalUSD))+alsoIn(m.FX, m.TotalUSD)+" across "+commas(m.Tasks)+" tasks",
 		"  Median "+money(m.MedianUSD)+", p90 "+money(m.P90USD)+", "+
 			paint(Alarm, money(m.AvoidableUSD))+" avoidable. List price, not your bill.",
 		"")
@@ -297,7 +321,18 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 	// off the screen. Rows are the cheapest thing here to give up, because
 	// there is a whole screen of them one keystroke away and only one place
 	// the date appears.
-	const maxRows = 8
+	// One row fewer when a conversion is on screen, because the rate note
+	// costs a line and the provenance must not be what gets dropped.
+	//
+	// The comment above this already worked out the priority: rows are the
+	// cheapest thing here to give up, since there is a whole screen of them
+	// one keystroke away and only one place the rate appears. Without this the
+	// note is appended and then padCost trims it off the bottom, which reads
+	// on screen as the feature simply not working.
+	maxRows := 8
+	if m.FX.RateNote() != "" {
+		maxRows = 7
+	}
 	if sel.Window <= 0 || sel.Window > maxRows {
 		sel.Window = maxRows
 	}
@@ -326,6 +361,15 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 			"context the work did not get."),
 		note(false, "prices dated "+m.PriceDate+", across "+commas(m.CorpusFiles)+
 			" transcripts."))
+	// The rate belongs with the other provenance, not beside each figure.
+	//
+	// Repeating it on both converted numbers is noise a reader learns to skip,
+	// and a caveat nobody reads is not a caveat. This screen has no room for
+	// the report's full paragraph, so the line says the two things that cannot
+	// be dropped: the rate it used, and that the bill is in dollars.
+	if rn := m.FX.RateNote(); rn != "" {
+		lines = append(lines, note(false, rn))
+	}
 	return Screen{Key: 'c', Title: "cost", Lines: padCost(lines), From: Measured, Rows: len(rows)}
 }
 
@@ -450,4 +494,17 @@ func padWhy(lines []string) []string {
 	}
 	return append(lines, "", "  ran   replay blame <session>",
 		"  "+Dim("copy it and you never need this screen again."))
+}
+
+// alsoIn renders " (N CODE)" for a figure, or nothing at all.
+//
+// Dimmed, because it is the second way of saying a number the reader has
+// already been given. Painted after the parentheses so the whole aside lowers
+// together rather than leaving punctuation at full contrast.
+func alsoIn(fx currency.Display, usd float64) string {
+	a := fx.ASCII(usd)
+	if a == "" {
+		return ""
+	}
+	return " " + Dim("("+a+")")
 }

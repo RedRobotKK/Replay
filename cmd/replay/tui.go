@@ -17,6 +17,7 @@ import (
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/card"
+	"github.com/RedRobotKK/Replay/internal/money"
 	"github.com/RedRobotKK/Replay/internal/tui"
 )
 
@@ -55,6 +56,10 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 	// than from the writer this function was handed: a test writes to a buffer
 	// and still needs "auto" to mean what it means for a user.
 	tui.SetPainter(tui.NewPainter(*color, tui.IsTerminal(os.Stdout)))
+	// The reader's currency, resolved once from their locale, the same way and
+	// from the same code as the cost report. Two surfaces showing the same
+	// figures must not disagree about what currency they are in.
+	fx := money.Detect(os.LookupEnv, time.Now())
 
 	key := rune(0)
 	for _, s := range tui.Shortcuts() {
@@ -75,6 +80,7 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 	// screen from Example to Measured in a change that has to say which source
 	// it now reads.
 	m := machineState()
+	m.FX = fx
 
 	// The corpus walk takes seconds and must not hold the first frame.
 	//
