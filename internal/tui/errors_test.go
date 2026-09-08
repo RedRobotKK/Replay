@@ -105,7 +105,7 @@ func TestErrorScreensFitTheBudget(t *testing.T) {
 			t.Errorf("%q is %d rows, budget %d", p.Code, len(lines), BudgetRows)
 		}
 		for i, l := range lines {
-			if len(l) > BudgetCols {
+			if len(l) > Cols() {
 				t.Errorf("%q line %d is %d columns:\n%s", p.Code, i, len(l), l)
 			}
 			for _, r := range l {

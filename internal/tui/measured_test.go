@@ -96,8 +96,8 @@ func TestDoctorScreenFitsTheBudget(t *testing.T) {
 			t.Errorf("%d rows, budget %d", len(sc.Lines), BudgetRows)
 		}
 		for i, l := range sc.Lines {
-			if len(l) > BudgetCols {
-				t.Errorf("line %d is %d columns, budget %d:\n%s", i, len(l), BudgetCols, l)
+			if len(l) > Cols() {
+				t.Errorf("line %d is %d columns, budget %d:\n%s", i, len(l), Cols(), l)
 			}
 		}
 	}
@@ -194,7 +194,7 @@ func TestCostScreenFitsTheBudget(t *testing.T) {
 			t.Errorf("%d rows, budget %d", len(sc.Lines), BudgetRows)
 		}
 		for i, l := range sc.Lines {
-			if len(l) > BudgetCols {
+			if len(l) > Cols() {
 				t.Errorf("line %d is %d columns:\n%s", i, len(l), l)
 			}
 		}
