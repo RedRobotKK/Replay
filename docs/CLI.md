@@ -63,6 +63,7 @@ to test whether `~/.replay` is writable.
 | [`redact`](#redact) | Strip content, keep structure and usage (for bug reports) | none | none |
 | [`version`](#version) | Print build information | none | none |
 | [`prefix`](#prefix) | Whether a change to a tool-server document voids the cached prefix | none | none |
+| [`since`](#since) | What ran, and what it cost, since you last looked | none | ~/.replay/seen.json, one timestamp; --peek writes nothing |
 
 ### cost
 
@@ -306,6 +307,14 @@ Whether a change to a tool-server document voids the cached prefix.
 | `-before` | string | the file as it is on the base branch |
 | `-json` | bool | emit the finding as JSON for a CI step to act on |
 
+### since
+
+What ran, and what it cost, since you last looked.
+
+| Flag | Type | What it does |
+|---|---|---|
+| `-peek` | bool | report without consuming the window, so it can be read twice |
+
 ## The TUI covers the same ground
 
 `replay tui` opens the same answers as movable screens. `--screen <name>` opens
@@ -346,4 +355,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-23 commands, 87 flags, read from the binary.
+24 commands, 88 flags, read from the binary.
