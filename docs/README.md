@@ -48,6 +48,7 @@ is the only place that says what will actually ship.
 | [The feed worth publishing](THE-FEED.md) | Why the useful feed is verification of documented cache behaviour, not prices |
 | [The money path](MONEY-PATH.md) | What a subscription could honestly charge for, what stays free forever, and why the unit is a repository rather than a developer |
 | [Open design questions](design/README.md) | Questions written up before a decision, not after. Currently: where live context cost should surface and who consumes it |
+| [Gap analysis, 2026-09-07](GAP-ANALYSIS-2026-09-07.md) | Everything a day of measuring the product and the site turned up, fixed and open, with the pattern six of the defects shared |
 
 ## If you are curious how it got here
 
