@@ -42,6 +42,22 @@ var updateScreens = flag.Bool("update", false, "rewrite the committed screen SVG
 // screenDir is where the images live, beside the docs that embed them.
 const screenDir = "../../docs/screens"
 
+// unpinnable names screens whose content cannot be fixed, so no image of them
+// is committed.
+//
+// doctor is the whole list, and the reason is the point of the list existing.
+// Its job is to report this machine, today. Two of its rows move with HOME and
+// are handled by pinning that. The third cannot be: "price table dated
+// 2026-09-07, 1 days old" counts from the compiled table to the current date,
+// so an image of it is correct for one day and wrong every day after.
+//
+// The options were to inject a clock into production code so a screenshot
+// could be stable, or to normalise the line in the image and publish a
+// rendering of a screen nobody sees. Both are worse than not shipping this
+// one image. A test that fails every morning is a test somebody switches off,
+// and it would take the nine that do work with it.
+var unpinnable = map[string]bool{"doctor": true}
+
 // sgrColour maps the palette to what the SVG paints.
 //
 // One place, and it is the same set internal/tui/color.go emits: TestCL2 pins
@@ -81,7 +97,23 @@ func TestScreenSVGs(t *testing.T) {
 	// is the screen they will actually meet.
 	t.Setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:1")
 
+	// A clean HOME, so nothing about the developer's own machine reaches an
+	// image. Without it the doctor screen reported "~/.replay/ledger, writable"
+	// and "4 probe readings, across 4 model(s)" here, against "NOT writable"
+	// and "none" on a runner with no ~/.replay at all.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	// USERPROFILE as well, because os.UserHomeDir reads that on Windows and
+	// HOME is ignored there. Pinning only HOME would leave the Windows job
+	// rendering against the runner's real profile, which is the same
+	// machine-dependence this whole block exists to remove, hidden on the one
+	// platform nobody here develops on.
+	t.Setenv("USERPROFILE", home)
+
 	for _, name := range tuiScreens {
+		if unpinnable[name] {
+			continue
+		}
 		painted := render(t, "tui", "-once", "-screen", name, "-color", "always")
 		got := svgFor(name, painted)
 		path := filepath.Join(screenDir, name+".svg")
@@ -204,6 +236,9 @@ func TestScreenSVGsAreNotEmpty(t *testing.T) {
 			"guard asserts nothing about the ones missing from the list", len(tuiScreens))
 	}
 	for _, name := range tuiScreens {
+		if unpinnable[name] {
+			continue
+		}
 		path := filepath.Join(screenDir, name+".svg")
 		b, err := os.ReadFile(path)
 		if err != nil {
