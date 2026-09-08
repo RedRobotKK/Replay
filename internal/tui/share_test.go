@@ -132,7 +132,7 @@ func TestShareScreenNamesItsOwnKeys(t *testing.T) {
 
 // It fits, like everything else.
 func TestShareScreenFitsTheBudget(t *testing.T) {
-	states := []ShareState{ShareState{}, aShare()}
+	states := []ShareState{{}, aShare()}
 	for _, v := range card.Variants() {
 		for _, tone := range card.Tones() {
 			st := aShare()

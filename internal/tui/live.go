@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// The live proxy, rendered.
+// LiveSession is one lane of the live proxy, rendered.
 //
 // `replay serve` holds per-lane state in memory and publishes it, and nothing
 // ever drew it. The proxy on the maintainer's machine ran 24.8 hours with no
@@ -27,6 +27,7 @@ type LiveSession struct {
 	LastSeen     time.Time
 }
 
+// Live is the whole proxy: its address, whether it answers, and what it has seen.
 type Live struct {
 	Addr          string
 	Reachable     bool

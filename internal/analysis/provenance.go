@@ -1,4 +1,4 @@
-// Package analysis, source provenance.
+// Source provenance: did a session's evidence come from more than one place?
 //
 // This file answers one question about a session: did the evidence come from
 // more than one place?
@@ -14,6 +14,7 @@
 // search that produced it, and leaves the judgement to the reader. That is
 // deliberate: a tool that guessed which conclusions were wrong would be wrong
 // itself, often, and would be ignored within a week.
+
 package analysis
 
 import (

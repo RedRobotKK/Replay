@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"image/png"
 
-	"github.com/RedRobotKK/Replay/internal/card"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/RedRobotKK/Replay/internal/card"
 )
 
 // corpusAt builds a transcript directory under a project name of the caller's
@@ -48,7 +49,7 @@ func TestSharePNGIsAnOpenGraphCard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("no file was written: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	img, err := png.Decode(f)
 	if err != nil {
 		t.Fatalf("what was written is not a PNG: %v", err)

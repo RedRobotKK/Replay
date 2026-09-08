@@ -29,8 +29,8 @@ import (
 
 // SL-1: a symlinked root holds its transcripts.
 func TestSL1_ASymlinkedRootHoldsItsTranscripts(t *testing.T) {
-	real := t.TempDir()
-	proj := filepath.Join(real, "proj")
+	target := t.TempDir()
+	proj := filepath.Join(target, "proj")
 	if err := os.MkdirAll(proj, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestSL1_ASymlinkedRootHoldsItsTranscripts(t *testing.T) {
 	}
 
 	link := filepath.Join(t.TempDir(), "projects")
-	if err := os.Symlink(real, link); err != nil {
+	if err := os.Symlink(target, link); err != nil {
 		t.Skipf("symlinks unavailable on this platform: %v", err)
 	}
 
@@ -54,8 +54,8 @@ func TestSL1_ASymlinkedRootHoldsItsTranscripts(t *testing.T) {
 // looks correct against its own fixture; only comparing them shows that they
 // disagree about what a symlink is.
 func TestSL2_TheTwoWalksAgreeAboutWhatIsThere(t *testing.T) {
-	real := t.TempDir()
-	proj := filepath.Join(real, "proj")
+	target := t.TempDir()
+	proj := filepath.Join(target, "proj")
 	if err := os.MkdirAll(proj, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -64,11 +64,11 @@ func TestSL2_TheTwoWalksAgreeAboutWhatIsThere(t *testing.T) {
 	}
 
 	link := filepath.Join(t.TempDir(), "projects")
-	if err := os.Symlink(real, link); err != nil {
+	if err := os.Symlink(target, link); err != nil {
 		t.Skipf("symlinks unavailable on this platform: %v", err)
 	}
 
-	for _, root := range []string{real, link} {
+	for _, root := range []string{target, link} {
 		held := holdsTranscripts(root)
 		counted := countTranscripts(root)
 		found := counted.sessions+counted.lanes > 0
@@ -84,9 +84,9 @@ func TestSL2_TheTwoWalksAgreeAboutWhatIsThere(t *testing.T) {
 // that genuinely holds nothing has to keep reporting nothing, or SL-1 could be
 // satisfied by returning true unconditionally.
 func TestSL3_AnEmptySymlinkedRootIsStillEmpty(t *testing.T) {
-	real := t.TempDir()
+	target := t.TempDir()
 	link := filepath.Join(t.TempDir(), "projects")
-	if err := os.Symlink(real, link); err != nil {
+	if err := os.Symlink(target, link); err != nil {
 		t.Skipf("symlinks unavailable on this platform: %v", err)
 	}
 	if holdsTranscripts(link) {

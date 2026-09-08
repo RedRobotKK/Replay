@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// The register the card is written in.
+// Tone is the register the card is written in.
 //
 // Two, over one set of figures. The measured card states what was found; the
 // rekt card is the one that travels, and it travels because the number on it

@@ -1,4 +1,4 @@
-// Package analysis, source discovery.
+// Source discovery: where a project's records actually live.
 //
 // This is the other half of provenance.go. That file notices, after the fact,
 // that every file a session read came from one directory. This one runs
@@ -16,6 +16,7 @@
 // before. So the rules below are deliberately narrow and mechanical, and
 // Render always states what it did not look at. A false all-clear is the
 // failure direction that matters.
+
 package analysis
 
 import (
@@ -189,7 +190,7 @@ func ScanSources(root string) (SourceMap, error) {
 func hasRecordWord(name string) bool {
 	base := strings.TrimSuffix(name, filepath.Ext(name))
 	for _, tok := range strings.FieldsFunc(strings.ToLower(base), func(r rune) bool {
-		return !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9')
+		return (r < 'a' || r > 'z') && (r < '0' || r > '9')
 	}) {
 		if recordWords[tok] {
 			return true

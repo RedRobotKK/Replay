@@ -60,7 +60,6 @@ to a four-token bracket.
 
 ---
 
-
 ## Context
 
 Model routing is a contested category. OpenRouter, Martian, NotDiamond, RouteLLM

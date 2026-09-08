@@ -51,7 +51,14 @@ jobs:
       # check here ran against the source and none against the artifact, so
       # nothing compared them. This runs the built binary on a fixture and
       # reads its output back.
+      # Linux only. What is being checked is the text the binary prints, which
+      # does not vary by platform, so running it three times checks one thing
+      # three times. Windows also has no make on the runner and would name the
+      # binary replay.exe, so the matrix build is the wrong place to ask.
+      # The release workflow runs the same script against the real published
+      # artifact, which is the run that matters.
       - name: Check the built binary
+        if: runner.os == 'Linux'
         run: |
           make build
           ./scripts/release-check.sh ./bin/replay

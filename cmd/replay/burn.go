@@ -3,12 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/RedRobotKK/Replay/internal/facts"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/RedRobotKK/Replay/internal/facts"
 
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )

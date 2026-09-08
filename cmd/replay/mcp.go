@@ -152,7 +152,7 @@ func mcpInstallSnippet(bin string) string {
 }
 
 // runMCP serves one client over a pair of streams.
-func runMCP(in io.Reader, stdout, stderr io.Writer) error {
+func runMCP(in io.Reader, stdout, _ io.Writer) error {
 	sc := bufio.NewScanner(in)
 	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 	enc := json.NewEncoder(stdout)
