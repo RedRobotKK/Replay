@@ -267,10 +267,22 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 
 	lines := make([]string, 0, BudgetRows)
 	lines = append(lines, head...)
+	// The two figures that carry the screen, and only those two.
+	//
+	// Strong on the total because it is the answer to the question the screen
+	// asks, and bold rather than a hue so it survives a monochrome terminal.
+	// Alarm on the avoidable figure because it is the only number here that is
+	// money already spent twice; median and p90 describe what the work cost,
+	// which is not a fault. Painting all four would say they are all the same
+	// kind of number, and the reader would stop reading any of them.
+	//
+	// Painted into a free-form sentence rather than a padded column, so the
+	// escapes cannot narrow a field. TestCL1 checks that claim rather than
+	// trusting it.
 	lines = append(lines,
-		"  "+money(m.TotalUSD)+" across "+commas(m.Tasks)+" tasks",
+		"  "+paint(Strong, money(m.TotalUSD))+" across "+commas(m.Tasks)+" tasks",
 		"  Median "+money(m.MedianUSD)+", p90 "+money(m.P90USD)+", "+
-			money(m.AvoidableUSD)+" avoidable. List price, not your bill.",
+			paint(Alarm, money(m.AvoidableUSD))+" avoidable. List price, not your bill.",
 		"")
 
 	rows := TaskLines(m.TaskRows)
@@ -293,9 +305,12 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 	// Two spaces for the cursor marker, so the headings sit above the row text
 	// rather than above the marker. Without this the columns are offset by the
 	// width of the thing that points at them.
+	// Column headings and the rule under them are structure, not content.
+	// Lowering them is what lets the figures rise without anything shouting.
+	// Painted after Row has padded, never before.
 	lines = append(lines,
-		"  "+Row(taskCols, "task", "cost", "breaks", "model"),
-		"  "+Row(taskCols, "--------", "----------", "------", "----------------------"))
+		"  "+Dim(Row(taskCols, "task", "cost", "breaks", "model")),
+		"  "+Dim(Row(taskCols, "--------", "----------", "------", "----------------------")))
 	lines = append(lines, RenderRows(vis, cur)...)
 	lines = append(lines, "", SelectedLine(rows, sel.At),
 		"  "+Dim("enter opens why this one cost what it did"),
@@ -322,7 +337,14 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 func TaskLines(tasks []Task) []Line {
 	out := make([]Line, 0, len(tasks))
 	for _, t := range tasks {
-		text := Row(taskCols, t.Session, money(t.CostUSD), fmt.Sprint(t.Breaks), t.Model)
+		// The breaks count is the one column where a glance should tell you
+		// something before you read it. 558 and 2 are both just numbers in a
+		// column of numbers; Severity says which is a session worth opening.
+		// Every other column stays plain, because a row painted throughout is
+		// a row with no emphasis in it.
+		text := StyledRow(taskCols,
+			[]Style{Plain, Plain, Severity(t.Breaks)},
+			t.Session, money(t.CostUSD), fmt.Sprint(t.Breaks), t.Model)
 		label := t.Session + "  " + money(t.CostUSD)
 		if t.Path == "" {
 			label += "   (transcript not found, cannot open)"

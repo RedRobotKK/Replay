@@ -840,6 +840,7 @@ replacing it.
 |------|--------------|
 | `-screen <name>` | Open on one of `cost`, `why`, `context`, `advise`, `guards`, `model`, `safe`, `doctor`, `share`. Default `cost`. |
 | `-once` | Render one frame and exit, for a pipe or a screenshot. |
+| `-color <when>` | `auto` (colour only when stdout is a terminal), `always`, `never`. Default `auto`. `NO_COLOR` in the environment beats all three. |
 
 **Four of the nine read this machine: `cost`, `why`, `doctor` and `share`.** The other five carry a
 notice saying they are example data and describe nobody, and they say it on screen rather than in
@@ -861,6 +862,19 @@ keystroke away, and `c` then `w` or `d` reaches those two.
 `-once` right-trims every line, because that path is the pipe and the screenshot. A live terminal
 pads a row to the column width so the row underneath disappears; down a pipe that padding is
 invisible junk that lands in a document and in every diff of it afterwards.
+
+Colour is the semantic layer and it never carries meaning alone. The total is bold because it is the
+answer; the avoidable figure is red because it is the only number on the screen that is money
+already spent twice; headings and rules are dimmed so the figures rise without anything shouting.
+Every one of those distinctions is also in the words, because roughly one man in twelve cannot
+separate red from green and because this output gets piped into files where colour does not exist.
+
+An escape sequence occupies no cells, so a field coloured before it is padded shifts every column
+after it, and the machine that wrote it cannot see the damage. The rule is to paint after padding,
+and it is checked rather than remembered: `TestCL1` strips the escapes from every screen and
+requires the uncoloured render back byte for byte. It has already earned its keep, catching a
+painted header row whose trailing padding stopped being trimmed once the line ended in a reset
+sequence instead of a space.
 
 Every screen is ASCII and fits 80 columns. That is enforced by a test, not by convention: box
 drawing characters are Unicode width class Ambiguous, one cell in a Latin locale and two in

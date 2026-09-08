@@ -91,7 +91,7 @@ asking you to trust a summary of the thing rather than the thing.
 
 ## The full mapping
 
-### Replaces the surface (7)
+### Replaces the surface (8)
 
 | Flag | Command | Type |
 |---|---|---|
@@ -102,6 +102,7 @@ asking you to trust a summary of the thing rather than the thing.
 | `--json` | `route` | bool |
 | `--json` | `trim` | bool |
 | `--no-color` | `statusline` | bool |
+| `--color` | `tui` | string |
 
 ### Plumbing, shown once (16)
 
