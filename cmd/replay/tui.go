@@ -69,12 +69,26 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 	// lands: the pinwheel is the difference between "nothing" and "not yet",
 	// and zero dollars is a number somebody would believe.
 	var mu sync.Mutex
-	go func() {
-		counted := costState(m)
-		mu.Lock()
-		m = counted
-		mu.Unlock()
-	}()
+	// Only the interactive loop needs the count in the background. --once
+	// computes it synchronously below because a single frame that says "still
+	// counting" has answered nothing, so starting the goroutine here as well
+	// gave two writers to m and only one of them took the mutex: the goroutine
+	// at this line, and the --once branch further down, which assigned
+	// costState(m) unguarded. The race detector reported it on every run of
+	// TestTW1, which drives runTUI through --once.
+	//
+	// Not starting the goroutine is the fix rather than locking the second
+	// write, because in --once mode its work is duplicated and then discarded.
+	// Locking would have made the report go quiet while leaving two walks of
+	// the corpus racing to write the same answer.
+	if !*once {
+		go func() {
+			counted := costState(m)
+			mu.Lock()
+			m = counted
+			mu.Unlock()
+		}()
+	}
 
 	// Where the share screen writes, resolved once at startup. A path decided
 	// per keystroke could change under the reader between the preview and the

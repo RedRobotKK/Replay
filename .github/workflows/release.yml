@@ -59,3 +59,21 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Read the published artifact back and check what it says.
+      #
+      # This is the gap v0.5.0 went through. The tree said 115 sessions at
+      # prices dated 2026-09-07; the asset a stranger downloaded said 1666
+      # transcripts at prices dated 2026-06-24, a denominator that counts one
+      # file per agent lane and overstates the independent sample by roughly
+      # fourteen times on that corpus. Both numbers had been corrected in the
+      # tree. Nothing ran against the thing that was published.
+      #
+      # It runs after the upload rather than before, because the artifact is
+      # what has to be right, and a check on a different binary is a check on
+      # a different binary. A failure here means the release is already public
+      # and must be pulled or superseded, which is the correct severity.
+      - name: Check the published binary
+        run: |
+          bin="$(find dist -type f -name replay -perm -u+x | head -1)"
+          [ -n "$bin" ] || { echo "no built binary found under dist/" >&2; exit 1; }
+          ./scripts/release-check.sh "$bin"

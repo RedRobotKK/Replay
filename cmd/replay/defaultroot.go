@@ -87,6 +87,19 @@ func holdsTranscripts(root string) bool {
 	if err != nil || !fi.IsDir() {
 		return false
 	}
+	// os.Stat above follows a symlink and answers about its target; WalkDir
+	// below lstats and answers about the link itself. On a symlinked root the
+	// two disagreed: the gate admitted the directory, the walk saw a symlink
+	// rather than a directory, descended into nothing, and the function
+	// returned false having read no files. On a machine with a symlinked
+	// ~/.claude, bare `replay` said "recorded no sessions yet" while `doctor`,
+	// which opens through the link with os.ReadDir, counted 1,681 transcripts
+	// in the same shell. Resolving here makes both halves ask about the same
+	// directory. A root that cannot be resolved is walked as given, which is
+	// the pre-existing behaviour for every path that is not a link.
+	if resolved, err := filepath.EvalSymlinks(root); err == nil {
+		root = resolved
+	}
 	found := false
 	_ = filepath.WalkDir(root, func(_ string, d fs.DirEntry, err error) error {
 		if err != nil || found {

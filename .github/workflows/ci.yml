@@ -44,6 +44,17 @@ jobs:
         run: go tool cover -func=coverage.out | tail -1
       - name: Build
         run: go build -trimpath ./...
+      # What the binary prints, not what the tree says.
+      #
+      # v0.5.0 shipped a denominator counting transcripts and a price table
+      # dated 2026-06-24, both of which the tree had already moved past. Every
+      # check here ran against the source and none against the artifact, so
+      # nothing compared them. This runs the built binary on a fixture and
+      # reads its output back.
+      - name: Check the built binary
+        run: |
+          make build
+          ./scripts/release-check.sh ./bin/replay
 
   # The matrix above pins Go to go.mod, so a change in a newer standard
   # library is invisible to it. That is how a shutdown bug reached main:
