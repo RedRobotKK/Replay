@@ -52,9 +52,24 @@ func TestEveryQuestionIsOneKeystrokeAway(t *testing.T) {
 			t.Errorf("%q is not phrased as the question a user would ask: %q", s.Key, s.Question)
 		}
 	}
-	if len(seen) > 9 {
-		t.Errorf("%d shortcuts. More than nine will not fit one strip inside %d columns, "+
-			"and a second row of hints is a menu", len(seen), BudgetCols)
+	// The cap used to be a hardcoded nine, on the stated grounds that more
+	// would not fit one strip inside BudgetCols. Ten fit, once Hints stopped
+	// spending its last seven columns on a " q quit" that Footer already
+	// prints on the line below.
+	//
+	// So the number was never the property. It was a count derived from a
+	// layout that happened to contain a duplication, and it would have refused
+	// a tenth question that fits. What matters is what the comment said next:
+	// one strip, and a second row of hints is a menu.
+	//
+	// Width is measured by TestHintsFitTheBudget, which reads the rendered
+	// strip rather than counting entries. This asserts the other half, that it
+	// stays one line, which nothing else covers.
+	for k := range seen {
+		if strings.Contains(Hints(k), "\n") {
+			t.Errorf("the key strip wrapped with %q selected. A second row of hints is a menu, "+
+				"and this surface is not one", string(k))
+		}
 	}
 }
 

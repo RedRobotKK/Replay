@@ -14,7 +14,7 @@ import (
 // adding it here and nowhere else. A screen missing from this list is a screen
 // none of the width, encoding or whitespace invariants apply to, and the gap
 // would be invisible: the tests read as passing either way.
-var tuiScreens = []string{"cost", "why", "context", "advise", "guards", "model", "safe", "doctor", "share"}
+var tuiScreens = []string{"cost", "why", "context", "advise", "guards", "model", "safe", "doctor", "share", "live"}
 
 // safeNonASCII is the allowlist of non-ASCII runes a screen may contain.
 //

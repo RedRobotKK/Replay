@@ -153,6 +153,21 @@ func Outcome(key rune) Screen {
 			"",
 			"  - one reading per model means no within-model variance at all.",
 			"  - 74-day-old prices: figures are list price on that date, not today's.")
+	case 'l':
+		// The example carries the state the live screen exists for, because an
+		// example that shows a busy proxy teaches the wrong thing. A proxy up
+		// for hours with nothing in it is the case a reader cannot diagnose
+		// from their transcripts, and it is the case they will actually hit.
+		body = append(answerBlock("proxy up 3h12m, and it has recorded nothing",
+			"Not a quiet day. An agent that was never pointed at it."), "",
+			"  A proxy with no traffic leaves the ledger empty, so every figure",
+			"  Replay reports keeps coming from transcripts instead of the wire.",
+			"",
+			"  export ANTHROPIC_BASE_URL=http://127.0.0.1:4000",
+			"  then start your agent in that shell",
+			"",
+			"  - this screen reads the proxy's own status endpoint, on loopback only.",
+			"  - with traffic it lists each session: requests, cached share, breaks, cost.")
 	}
 
 	lines := make([]string, 0, BudgetRows)

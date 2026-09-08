@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -18,6 +20,7 @@ import (
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/card"
 	"github.com/RedRobotKK/Replay/internal/money"
+	"github.com/RedRobotKK/Replay/internal/proxy"
 	"github.com/RedRobotKK/Replay/internal/tui"
 )
 
@@ -147,6 +150,9 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 				}
 			}
 			return tui.Frame{Key: k, Lines: sc.Lines}
+		case 'l':
+			loop.SetRows(0)
+			return tui.Frame{Key: k, Lines: tui.LiveScreen(liveState(), time.Now()).Lines}
 		case 'w':
 			loop.SetRows(0)
 			return tui.Frame{Key: k, Lines: tui.WhyScreen(opened, blameFor).Lines}
@@ -434,4 +440,65 @@ func blameFor(path string) (string, error) {
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+// liveState asks a running proxy what it is seeing.
+//
+// The screen it feeds exists for one state above all others: a proxy that has
+// been up for hours and recorded nothing, which is not a quiet day but an agent
+// that was never pointed at it. That is invisible from the transcripts, which
+// is why reading it needs a request rather than a file.
+//
+// Loopback only, and that restriction is the same one `replay doctor` carries
+// for the same reason. ANTHROPIC_BASE_URL is whatever the environment says, so
+// without this a screen whose job is "what is my proxy doing" becomes a request
+// generator pointed at somebody else's network the moment that variable names
+// one.
+//
+// Every failure is the unreachable state rather than an error. There is nothing
+// a reader can do about a malformed status body that they would not also do
+// about a refused connection, and the screen already says the useful thing.
+func liveState() tui.Live {
+	base := os.Getenv("ANTHROPIC_BASE_URL")
+	if base == "" {
+		base = "http://127.0.0.1:4000"
+	}
+	l := tui.Live{Addr: strings.TrimPrefix(strings.TrimPrefix(base, "http://"), "https://")}
+	if !isLoopbackURL(base) {
+		return l
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), doctorTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(base, "/")+proxy.StatusPath, nil)
+	if err != nil {
+		return l
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return l
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return l
+	}
+	var st proxy.Status
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&st); err != nil {
+		return l
+	}
+	l.Reachable = true
+	l.UptimeSeconds = st.UptimeSeconds
+	l.PriceTable = st.PriceTable
+	for _, x := range st.Sessions {
+		l.Sessions = append(l.Sessions, tui.LiveSession{
+			ID:           x.Session,
+			Model:        x.Model,
+			Requests:     x.Requests,
+			PromptTokens: x.PromptTokens,
+			CachedShare:  x.CachedShare,
+			Breaks:       x.Breaks,
+			CostUSD:      x.ListCostUSD,
+			LastSeen:     x.LastSeen,
+		})
+	}
+	return l
 }
