@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-09-08
+
+### Added
+
+- `replay cost --max-avoidable-usd <n>` fails the build when measured avoidable
+  spend exceeds a ceiling, so CI can gate on it without parsing prose. It derives
+  nothing of its own: the figure is the one `cost` already measures.
+- **It refuses to pass on a corpus that priced nothing.** `cost` exits 0 with no
+  transcripts, deliberately, but asking for a ceiling is asking to assert spend
+  is under a number, and that cannot be asserted over nothing. A CI runner has no
+  transcripts, so without this the gate would go green having measured nothing.
+- Excluded unpriced transcripts are counted in the failure, because the total the
+  ceiling was compared against has holes and the real figure is higher.
+
 ## [0.5.2] - 2026-09-08
 
 ### Added
