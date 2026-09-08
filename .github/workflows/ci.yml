@@ -127,6 +127,22 @@ jobs:
           X402_E2E_REQUIRED: "1"
         run: ./scripts/x402-e2e/e2e.sh
 
+  ledger-bench:
+    name: ledger bench
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # The benchmark is a published claim about how four products account for
+      # tokens, and a published claim nobody re-checks is exactly what this
+      # repository keeps finding. The fixture is committed, so every figure here
+      # is a property of the scoring rule rather than of the runner.
+      #
+      # It also asserts that NOT MEASURED never becomes a number. Two of the four
+      # products cannot be scored from outside, and an unknown quietly rendered
+      # as a zero is the single defect class found most often in this tree.
+      - name: Run the ledger benchmark
+        run: ./scripts/ledger-bench/run.sh
+
   docs:
     name: Markdown lint
     runs-on: ubuntu-latest
