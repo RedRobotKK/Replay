@@ -62,6 +62,13 @@ jobs:
         run: |
           make build
           ./scripts/release-check.sh ./bin/replay
+      # The installer quotes the calibration corpus. Nothing connected the
+      # sentence to the document it came from, so the document could be
+      # regenerated and the sentence left behind, or the date dropped and the
+      # snapshot read as a standing property of the tool.
+      - name: Check the installer's corpus figures
+        if: runner.os == 'Linux'
+        run: ./scripts/corpus-figures-check.sh
 
   # The matrix above pins Go to go.mod, so a change in a newer standard
   # library is invisible to it. That is how a shutdown bug reached main:

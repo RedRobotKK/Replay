@@ -444,7 +444,14 @@ fi
 #
 # The old copy also carried an unsourced $2851, removed 2026-09-06 because it
 # appeared in this file and in no evidence anywhere.
-printf '\n%sFree to run, BUSL 1.1, no account, no telemetry. Calibrated against 78 sessions\nacross 1,450 transcripts on one machine, and every figure says how it was\nobtained.%s\n' \
+# The corpus figures carry their date, because they are a snapshot and not a
+# constant. They quote docs/evidence/calibration-corpus-2026-09-06.md exactly.
+# Undated, they read as a standing property of the tool; two days later the same
+# machine reported 115 sessions across 1,673 transcripts, because a corpus on
+# one person's laptop grows every day they work. A reader could not tell which
+# of those they were being told, and nothing tied this line to the document it
+# came from. scripts/corpus-figures-check.sh now does.
+printf '\n%sFree to run, BUSL 1.1, no account, no telemetry. Calibrated against 78 sessions\nacross 1,450 transcripts on one machine as of 2026-09-06, and every figure says\nhow it was obtained.%s\n' \
   "$C_DIM" "$C_0" >&2
 
 printf '\n%sDocs%s https://github.com/%s#readme   %sUninstall%s rm %s/%s\n' \
