@@ -4,6 +4,70 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-09-08
+
+### Added
+
+- `replay prefix --before <file> --after <file>` gates a change that voids the
+  cached prefix, exiting non-zero so CI can act on it. A prefix break is the
+  rarest cause in the corpus and the most expensive per event: 5 breaks,
+  1,807,000 tokens, a mean of 361,400 — higher than a TTL expiry. It watches the
+  tool set rather than the system prompt, because the 30-lane trial of
+  2026-09-06 found the system prompt never moved and the tool set always did. It
+  reads only the two files it is handed and refuses `settings.json` outright.
+- `replay since [--peek]` reports what ran and what it cost since you last
+  looked. No account, no network, no pairing: the answer is already on disk. A
+  first run says it has no previous look rather than reporting zero sessions
+  since a window that does not exist, and a quiet window says nothing happened
+  rather than printing `$0.00`.
+- `docs/CLI.md`, every command and every flag, generated from the binary and
+  diffed in CI so it cannot drift from what the tool accepts.
+- `scripts/ledger-bench`, before and after for each product that meters agent
+  spend, against a committed fixture with every figure pinned.
+- `scripts/tui-audit`, 72 renders across four widths and two locales checking
+  for overflow, palette drift, unclosed colour and control characters.
+
+### Fixed
+
+- The TUI width is a measurement rather than a constant. `BudgetCols = 80`
+  became `Cols()`: COLUMNS, then `TIOCGWINSZ`, then 80. Reading COLUMNS alone
+  would have been a fix that mostly does not fire, because a shell maintains it
+  for its own line editing and does not export it.
+- Prose is wrapped at the single output boundary, with the original indent
+  carried onto each continuation. Table rows are deliberately left alone:
+  wrapping destroys the alignment that makes a table, and truncating silently
+  drops a column's value.
+- Narrow-terminal overflows went from 88 to 30 across the nine screens. What
+  remains is 22 table rows, 4 rules and 4 unbreakable tokens, and no prose.
+
+### Changed
+
+- `docs/evidence/surface-census-2026-09-08.md` records every agent store on one
+  machine, opened and measured. Two earlier claims are retracted: Grok was
+  documented as keeping no local transcript and keeps 3.8 GB; Cursor was ruled
+  out on a base-URL argument and holds 118 readable transcripts. Neither carries
+  usage, so the conclusion held and both stated reasons were wrong.
+- A `$406.07` figure, reported as the only measured dollar figure on the
+  machine, is withdrawn. The fields it was derived from do not exist.
+
+## [0.5.1] - 2026-09-08
+
+Recorded after the fact: this release was tagged without a changelog entry, and
+a release nobody wrote down is one nobody can audit.
+
+### Added
+
+- `replay mcp` answers an agent's questions mid-session over JSON-RPC on stdio,
+  serving one MCP vocabulary from the binary and saying which answers need a
+  network.
+- `replay agents` writes a boot block naming where a project keeps its records.
+
+### Fixed
+
+- The MCP snippet was not valid JSON on Windows: a path like `C:\Users` made
+  `\U` an invalid escape. Paths are marshalled rather than interpolated.
+- Figures that were never measured stopped being reported as passing results.
+
 ## [0.5.0] - 2026-09-07
 
 The first release with an interactive surface, the first carrying a fix somebody
