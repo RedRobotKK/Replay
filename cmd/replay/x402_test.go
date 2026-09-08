@@ -265,6 +265,47 @@ var allowedImports = map[string]bool{
 	// that is unchanged.
 	"unsafe": true,
 
+	// crypto/ed25519, for verifying a signed vendor feed and nothing else.
+	//
+	// This list named ed25519 as deliberately absent, so adding it is the
+	// conversation the list exists to force, and this is that conversation
+	// written down rather than a quiet edit.
+	//
+	// What forced it. Model prices, caching rules and wire-format behaviour
+	// move faster than releases: the published v0.5.0 binary carried a price
+	// table 75 days old, and `replay corpus` already detects a provider
+	// changing behaviour underneath this build. A correctness instrument
+	// reasoning from stale facts is worse than none, because it is
+	// confidently wrong. Learning that your facts are old needs a fetch, and
+	// a fetch that drives figures needs its contents authenticated rather
+	// than its transport.
+	//
+	// Why not the alternatives, each of which was preferred and does not
+	// work. cosign is the project's existing signing story and needs os/exec,
+	// which this binary keeps out on purpose. crypto/hmac is already here but
+	// needs a shared secret, and a secret compiled into a public binary is
+	// not one. TLS alone authenticates the host, not the bytes, so a
+	// compromise of redrobot.jp would silently change every reader's figures,
+	// which is a worse provenance than "compiled in, 75 days old, and it says
+	// so".
+	//
+	// What this costs, stated plainly rather than argued away. The guard was
+	// capability-based on purpose: importing ed25519 gives this binary the
+	// ability to sign, not only to verify, and the reason the guard existed is
+	// that this binary sits in front of your traffic holding a token. That
+	// capability now exists and the compensating controls are structural
+	// rather than a promise. internal/feed verifies and never signs; it has
+	// no private key and no code path that could produce one, since
+	// ed25519.GenerateKey and ed25519.Sign appear in no non-test file.
+	// TestX402_NoSigningCapability still fails on crypto/ecdsa,
+	// crypto/elliptic, crypto/ecdh and math/big, so the x402 payment path is
+	// as closed as it was: an ed25519 signature is not an Ethereum one.
+	//
+	// The narrower guard that replaces the blanket one is
+	// TestFeedVerifiesAndNeverSigns, which reads the tree rather than trusting
+	// this paragraph.
+	"crypto/ed25519": true,
+
 	// Cryptography, narrowly. These are for the secret vault in `serve
 	// --mask`: symmetric encryption of masked values at rest, and hashing for
 	// identity. None of them can produce a signature over a transaction.
@@ -509,8 +550,21 @@ func TestX402_ExecIsConfinedToTheMutationHarness(t *testing.T) {
 }
 
 func TestX402_AllowlistIsMeaningful(t *testing.T) {
+	// crypto/ed25519 left this list on 2026-09-08, and the reasoning is at its
+	// entry in allowedImports above.
+	//
+	// What this test protects is that the binary cannot sign an x402 payment.
+	// That needs a secp256k1 ECDSA signature, which needs crypto/ecdsa with
+	// crypto/elliptic or crypto/ecdh, and math/big. All four are still banned
+	// here and an ed25519 signature is not an Ethereum one, so the payment
+	// path is exactly as closed as it was.
+	//
+	// The broader property, that the binary cannot sign ANYTHING, is genuinely
+	// weaker than it was, and pretending otherwise would be the failure this
+	// file is built to prevent. It is replaced by a narrower check that reads
+	// the tree rather than the list: TestFeedVerifiesAndNeverSigns.
 	for _, banned := range []string{
-		"crypto/ecdsa", "crypto/ed25519", "crypto/elliptic", "crypto/ecdh", "math/big",
+		"crypto/ecdsa", "crypto/elliptic", "crypto/ecdh", "math/big",
 	} {
 		if allowedImports[banned] {
 			t.Errorf("%s is allowlisted; a signer can be written with it", banned)
@@ -725,5 +779,91 @@ func TestX402_FlagWiring(t *testing.T) {
 	}
 	if doc.Schema != cachemodel.RulesSchema || len(doc.Models) == 0 {
 		t.Errorf("--export emitted a document this build would not install: schema=%q models=%d", doc.Schema, len(doc.Models))
+	}
+}
+
+// TestFeedVerifiesAndNeverSigns replaces the blanket ban on crypto/ed25519.
+//
+// The old guard was a property of a list. This one is a property of the tree,
+// which is the stronger form: it fails when somebody writes a signer, not when
+// somebody edits a permission.
+//
+// Three things are checked, and the third is the one that would actually
+// catch a mistake. Only internal/feed may import ed25519, so the capability
+// stays in one reviewable place. No non-test file may call Sign or
+// GenerateKey, so the package is used for verification and nothing else. And
+// the check refuses to pass when it has found no ed25519 at all, because a
+// guard that asserts nothing about an absent feature reads exactly like one
+// that is working.
+func TestFeedVerifiesAndNeverSigns(t *testing.T) {
+	root := filepath.Join("..", "..")
+	var importers, production, signers []string
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		body, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return rerr
+		}
+		src := string(body)
+		// Imports are parsed, not grepped.
+		//
+		// The first version matched the quoted path in the source and so
+		// flagged this file, whose allowlist entry and banned-list comment
+		// both contain the string. A guard that reports its own documentation
+		// as a violation is a guard people switch off.
+		f, perr := parser.ParseFile(token.NewFileSet(), path, body, parser.ImportsOnly)
+		if perr != nil {
+			return nil
+		}
+		imported := false
+		for _, im := range f.Imports {
+			if im.Path != nil && im.Path.Value == `"crypto/ed25519"` {
+				imported = true
+			}
+		}
+		if !imported {
+			return nil
+		}
+		rel, _ := filepath.Rel(root, path)
+		rel = filepath.ToSlash(rel)
+		importers = append(importers, rel)
+		if strings.HasSuffix(rel, "_test.go") {
+			return nil
+		}
+		production = append(production, rel)
+		for _, call := range []string{"ed25519.Sign(", "ed25519.GenerateKey(", "ed25519.NewKeyFromSeed("} {
+			if strings.Contains(src, call) {
+				signers = append(signers, rel+": "+call)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Counted over NON-TEST files, and that distinction was a real hole.
+	//
+	// Counting every importer, the guard stayed silent when ed25519 was
+	// removed from internal/feed and only its test still used it: the binary
+	// would have carried no ed25519 at all while a permission for it sat in
+	// the allowlist, and this check would have reported that as fine. A guard
+	// whose evidence is its own test fixture is asserting nothing about the
+	// thing it guards.
+	if len(production) == 0 {
+		t.Fatal("no non-test file imports crypto/ed25519, so the binary does not use it and " +
+			"this guard asserts nothing. Put it back on the banned list in " +
+			"TestX402_AllowlistIsMeaningful rather than keeping a permission nothing uses.")
+	}
+	for _, f := range importers {
+		if !strings.HasPrefix(f, "internal/feed/") {
+			t.Errorf("%s imports crypto/ed25519; only internal/feed may, so the signing "+
+				"capability stays in one reviewable place", f)
+		}
+	}
+	if len(signers) > 0 {
+		t.Errorf("crypto/ed25519 is allowlisted for VERIFICATION only, and these produce "+
+			"signatures or keys outside a test:\n  %s", strings.Join(signers, "\n  "))
 	}
 }
