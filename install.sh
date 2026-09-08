@@ -446,11 +446,20 @@ fi
 # appeared in this file and in no evidence anywhere.
 # The corpus figures carry their date, because they are a snapshot and not a
 # constant. They quote docs/evidence/calibration-corpus-2026-09-06.md exactly.
-# Undated, they read as a standing property of the tool; two days later the same
-# machine reported 115 sessions across 1,673 transcripts, because a corpus on
-# one person's laptop grows every day they work. A reader could not tell which
-# of those they were being told, and nothing tied this line to the document it
-# came from. scripts/corpus-figures-check.sh now does.
+# Undated they read as a standing property of the tool, and a corpus on one
+# person's laptop grows every day they work, so within days the same machine
+# reports more of both and a reader cannot tell which they were handed.
+#
+# Nothing tied this line to the document it came from.
+# scripts/corpus-figures-check.sh now does, and TestFrozenFD8 checks the figures
+# against the evidence.
+#
+# No count appears in this comment on purpose. An earlier draft stated the newer
+# figures here to explain the problem, and TestFrozenFD8 failed: it reads the
+# whole file, takes the first match, and found a number backed by no evidence
+# document. That is the $2851 shape again, introduced by the change meant to
+# prevent it. Readers are told to read this script, so a figure in a comment is
+# a claim the installer makes.
 printf '\n%sFree to run, BUSL 1.1, no account, no telemetry. Calibrated against 78 sessions\nacross 1,450 transcripts on one machine as of 2026-09-06, and every figure says\nhow it was obtained.%s\n' \
   "$C_DIM" "$C_0" >&2
 

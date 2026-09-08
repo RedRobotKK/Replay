@@ -6,12 +6,16 @@
 # and nothing connected the two: the document is regenerated when the corpus is
 # re-measured, and the installer line is edited by hand, if anyone remembers.
 #
-# On 2026-09-08 the line read "78 sessions across 1,450 transcripts" with no
-# date. It matched the 2026-09-06 document exactly, so it was not wrong, but the
-# same machine that day reported 115 sessions across 1,673 transcripts, because
-# a corpus on one laptop grows every day its owner works. Undated, the sentence
-# reads as a standing property of the tool rather than as a snapshot, and a
-# reader has no way to tell which they are being given.
+# On 2026-09-08 the line quoted the 2026-09-06 document exactly and carried no
+# date. It was not wrong. But a corpus on one laptop grows every day its owner
+# works, and the same machine already reported more of both, so undated the
+# sentence reads as a standing property of the tool rather than as a snapshot
+# and a reader has no way to tell which they are being given.
+#
+# Figures are deliberately absent from this comment. Stating the newer ones here
+# to explain the problem is what tripped TestFrozenFD8 when it was tried in
+# install.sh: a number backed by no evidence document, which is the defect this
+# whole area exists to prevent.
 #
 # So this checks two things: that the figures match the newest published corpus
 # document, and that the line carries that document's date. Either can drift on
