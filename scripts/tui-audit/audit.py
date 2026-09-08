@@ -9,7 +9,7 @@ Checks that hold regardless of taste:
 Width is measured East-Asian-aware, because Ambiguous characters are one cell
 in en_US and two in ja_JP and this project ships to both.
 """
-import os, re, subprocess, sys, unicodedata
+import os, re, shutil, subprocess, sys, tempfile, unicodedata
 
 SCREENS = ["cost","why","context","advise","guards","model","safe","share","live"]
 WIDTHS  = [60, 80, 120, 200]
@@ -29,7 +29,7 @@ SUPPORTED = 80
 # order: wire, endpoint, surface" — so this is an unimplemented design, not an
 # unknown defect. Implementing it should drive this number to zero, and this
 # check will say so.
-KNOWN_NARROW_OVERFLOWS = 86
+KNOWN_NARROW_OVERFLOWS = 88
 
 def cells(s, ambiguous_wide):
     s = SGR.sub("", s)
@@ -40,8 +40,36 @@ def cells(s, ambiguous_wide):
         n += 2 if (w in ("W","F") or (w == "A" and ambiguous_wide)) else 1
     return n
 
+# Render against the repository's own fixture, never the machine's corpus.
+#
+# The first version of this check did not pin it, and the count came out 86
+# here and 72 on the CI runner: the screens render real sessions, so the layout
+# depends on whatever transcripts happen to exist. That is precisely the fault
+# screens_svg_test.go documents — "a check whose inputs vary by machine is a
+# check that passes at home and fails in CI" — repeated by the check written to
+# catch layout faults.
+_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
+_FIXTURE_SRC = os.path.join(_ROOT, "internal", "transcript", "testdata", "session-redacted.jsonl")
+
+
+def _fixture_root():
+    d = tempfile.mkdtemp(prefix="tui-audit-")
+    proj = os.path.join(d, "proj")
+    os.makedirs(proj, exist_ok=True)
+    shutil.copyfile(_FIXTURE_SRC, os.path.join(proj, "s.jsonl"))
+    return d
+
+
+CORPUS = None
+
+
 def render(screen, width, locale, color):
+    global CORPUS
+    if CORPUS is None:
+        CORPUS = _fixture_root()
+    home = tempfile.mkdtemp(prefix="tui-audit-home-")
     env = dict(os.environ, COLUMNS=str(width), LINES="50", LC_ALL=locale,
+               REPLAY_TRANSCRIPTS=CORPUS, HOME=home, USERPROFILE=home,
                ANTHROPIC_BASE_URL="http://127.0.0.1:1")
     if not color: env["NO_COLOR"] = "1"
     else: env.pop("NO_COLOR", None)
