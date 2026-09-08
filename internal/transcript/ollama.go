@@ -39,16 +39,41 @@ type OllamaRequest struct {
 	PromptMS, EvalMS, TotalMS float64
 }
 
-// ContextTokens is how large the prompt was, which is not what Total measures.
-func (r OllamaRequest) ContextTokens() int { return r.CachedPrefix + r.PromptEval }
+// PrefixMeasured reports whether the log said how much prefix was reused.
+//
+// Ollama's prompt_eval_count EXCLUDES whatever it reused, so the n_past line
+// is the only place the reuse appears. A block without one has an unknown
+// prefix, and unknown is not zero: zero asserts that the whole prompt was
+// recomputed, which is the worst reading available and a claim about the
+// request rather than about the log.
+func (r OllamaRequest) PrefixMeasured() bool { return r.CachedPrefix >= 0 }
 
-// CacheHitRate is the share of the prompt that did not have to be recomputed.
-func (r OllamaRequest) CacheHitRate() float64 {
-	ctx := r.ContextTokens()
-	if ctx == 0 {
-		return 0
+// ContextTokens is how large the prompt was, which is not what Total measures.
+//
+// The second return says whether it is known. It is not derivable without the
+// prefix, and returning PromptEval alone would silently answer a smaller
+// question than the one asked.
+func (r OllamaRequest) ContextTokens() (int, bool) {
+	if !r.PrefixMeasured() {
+		return 0, false
 	}
-	return float64(r.CachedPrefix) / float64(ctx)
+	return r.CachedPrefix + r.PromptEval, true
+}
+
+// CacheHitRate is the share of the prompt that did not have to be recomputed,
+// and whether that share is known at all.
+//
+// Three outcomes, deliberately, where there used to be two. A measured reuse
+// gives a rate. A measured zero gives 0 and true, because the server looked
+// and reused nothing and that is a result. An unmeasured request gives false,
+// because the alternative is reporting a full cache miss for a request nobody
+// observed.
+func (r OllamaRequest) CacheHitRate() (float64, bool) {
+	ctx, ok := r.ContextTokens()
+	if !ok || ctx == 0 {
+		return 0, false
+	}
+	return float64(r.CachedPrefix) / float64(ctx), true
 }
 
 var (
@@ -113,9 +138,15 @@ func ParseOllamaLog(r io.Reader) ([]OllamaRequest, error) {
 					cur.Slot = atoiOr(s[1], 0)
 					cur.Task = atoiOr(s[2], 0)
 				}
-				if cur.CachedPrefix < 0 {
-					cur.CachedPrefix = 0
-				}
+				// CachedPrefix stays -1 when no n_past line appeared.
+				//
+				// It used to be set to 0 here, three lines before the append,
+				// which threw away the distinction the sentinel existed to
+				// carry. Everything above this line was already careful: the
+				// block is dropped when PromptEval or Generated is missing,
+				// on the stated grounds that a request missing its eval line
+				// is not a request that generated nothing. The prefix got the
+				// opposite treatment for no reason anybody wrote down.
 				out = append(out, cur)
 			}
 			reset()

@@ -186,7 +186,7 @@ func burnOllama(home, dir string) surfaceBurn {
 		pat = filepath.Join(dir, "ollama", "server*.log")
 	}
 	logs, _ := filepath.Glob(pat)
-	var ctx, cached int
+	var ctx, cached, unmeasured int
 	for _, p := range logs {
 		rs, err := transcript.ParseOllamaLogFile(p)
 		if err != nil {
@@ -195,12 +195,35 @@ func burnOllama(home, dir string) surfaceBurn {
 		for _, r := range rs {
 			s.requests++
 			s.tokens += r.Total
-			ctx += r.ContextTokens()
+			// Only requests whose reuse was actually observed reach the
+			// aggregate. Ollama's prompt_eval_count excludes the reused
+			// prefix, so the n_past line is the only place it appears, and a
+			// block without one has an unknown prefix rather than a zero.
+			//
+			// Averaging the unknown ones in as zero would drag the cached
+			// share toward a full miss in proportion to how much of the log
+			// went unlabelled, and the resulting figure would look like a
+			// measurement of the cache instead of a measurement of the
+			// logging.
+			c, ok := r.ContextTokens()
+			if !ok {
+				unmeasured++
+				continue
+			}
+			ctx += c
 			cached += r.CachedPrefix
 		}
 	}
 	if ctx > 0 {
 		s.cached, s.hasCached = float64(cached)/float64(ctx), true
+	}
+	// Say what the share is a share of. A cached figure computed over some of
+	// the requests, presented as if it were computed over all of them, is the
+	// defect this project keeps finding one surface at a time.
+	if unmeasured > 0 {
+		s.problems = append(s.problems, fmt.Sprintf(
+			"%d of %d requests logged no n_past line, so their cache reuse is unknown and they are not in the cached share",
+			unmeasured, s.requests))
 	}
 	return s
 }
