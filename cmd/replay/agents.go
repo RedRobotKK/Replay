@@ -23,6 +23,10 @@ import (
 // on 2026-09-07 five files were read, all under funding/, and the authoritative
 // record was in assets/applications/. Every source agreed and the agreement
 // carried no information.
+// maxBlockDirs bounds what goes into the prompt. Everything is still printed
+// to stdout; only the injected block is capped.
+const maxBlockDirs = 12
+
 const (
 	agentsBegin = "<!-- replay:sources:begin -->"
 	agentsEnd   = "<!-- replay:sources:end -->"
@@ -80,14 +84,30 @@ func agentsBlock(m analysis.SourceMap) string {
 	if len(m.Dirs) == 0 {
 		b.WriteString("No record files were found by this scan.\n\n")
 	} else {
+		// Capped, and the cap is the point.
+		//
+		// This block is injected into the cached prefix of EVERY session, so
+		// its size is not a formatting preference, it is a recurring cost paid
+		// against the breaks it exists to prevent. On this corpus each 100
+		// tokens of block costs roughly 853,000 token equivalents across the
+		// whole period, so an unbounded listing of a large repository can cost
+		// more than every preventable break combined. A directory name is what
+		// an agent needs in order to go and look; the file names under it are
+		// what it will find when it does.
 		b.WriteString("```text\n")
-		for _, d := range m.Dirs {
+		shown := m.Dirs
+		if len(shown) > maxBlockDirs {
+			shown = shown[:maxBlockDirs]
+		}
+		for _, d := range shown {
 			fmt.Fprintf(&b, "%-40s %s\n", d.Dir+"/", d.Why)
-			for _, f := range d.Files {
-				fmt.Fprintf(&b, "%-40s   %s\n", "", f)
-			}
 		}
 		b.WriteString("```\n\n")
+		if len(m.Dirs) > len(shown) {
+			fmt.Fprintf(&b, "%d more directories matched and are not listed here, to keep this "+
+				"block small enough to be worth its place in every prompt. `replay agents` "+
+				"prints all of them.\n\n", len(m.Dirs)-len(shown))
+		}
 	}
 	b.WriteString(scopeNote(m))
 	b.WriteString("\n" + agentsEnd + "\n")
@@ -127,5 +147,14 @@ func splice(old, block string) string {
 		}
 		return old + sep + block
 	}
-	return old[:i] + block + old[j+len(agentsEnd)+1:]
+	// Skip exactly one newline after the end marker if there is one, and
+	// clamp. Indexing past the marker unconditionally assumed a trailing
+	// newline, so a file saved without one panicked with a slice-bounds
+	// error. This block is written into a file people are told to hand-edit,
+	// which is the least acceptable place for a crash and the most likely.
+	end := j + len(agentsEnd)
+	if end < len(old) && old[end] == '\n' {
+		end++
+	}
+	return old[:i] + block + old[end:]
 }

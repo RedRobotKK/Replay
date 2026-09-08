@@ -107,3 +107,41 @@ func TestAG4(t *testing.T) {
 		}
 	}
 }
+
+// A hand-edited file whose end marker is the final bytes must not crash.
+//
+// splice indexed past the end marker assuming a newline followed it, so a file
+// saved without a trailing newline panicked. The block is written INTO a file
+// people are told to hand-edit, which is the one place a panic is least
+// acceptable and most likely.
+func TestAG5(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(dir, "funding"), 0o755)
+	for _, n := range []string{"A-LEDGER.md", "b.md", "c.md"} {
+		_ = os.WriteFile(filepath.Join(dir, "funding", n), []byte("x"), 0o644)
+	}
+	for _, tail := range []string{
+		"# Rules\n\n" + agentsBegin + "\nSTALE-BLOCK-SENTINEL\n" + agentsEnd,        // no trailing newline
+		"# Rules\n\n" + agentsBegin + "\nSTALE-BLOCK-SENTINEL\n" + agentsEnd + "\n", // with one
+		"# Rules\n\n" + agentsBegin + "\nSTALE-BLOCK-SENTINEL\n" + agentsEnd + "\n\nkeep me\n",
+	} {
+		target := filepath.Join(dir, "AGENTS.md")
+		if err := os.WriteFile(target, []byte(tail), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var out, errb bytes.Buffer
+		if err := run([]string{"agents", dir, "--write", target}, &out, &errb); err != nil {
+			t.Fatalf("run: %v (%s)", err, errb.String())
+		}
+		after, _ := os.ReadFile(target)
+		if strings.Count(string(after), agentsBegin) != 1 {
+			t.Errorf("marker count %d for input %q", strings.Count(string(after), agentsBegin), tail)
+		}
+		if strings.Contains(string(after), "STALE-BLOCK-SENTINEL") {
+			t.Errorf("stale block survived for input %q", tail)
+		}
+		if strings.Contains(tail, "keep me") && !strings.Contains(string(after), "keep me") {
+			t.Error("content after the end marker was eaten")
+		}
+	}
+}
