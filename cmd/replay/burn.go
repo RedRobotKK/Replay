@@ -97,7 +97,7 @@ func runBurn(args []string, stdout, stderr io.Writer) error {
 				comma(int(r)), humanWindow(s.last.Sub(s.first)))
 		}
 		if s.hasCached {
-			_, _ = fmt.Fprintf(stdout, "    %.0f%% of the prompt served from cache\n", 100*s.cached)
+			_, _ = fmt.Fprintf(stdout, "    %s of the prompt served from cache\n", sharePct(s.cached))
 		}
 		for _, p := range s.problems {
 			_, _ = fmt.Fprintf(stdout, "    [NOTE] %s\n", p)
@@ -217,13 +217,24 @@ func burnOllama(home, dir string) surfaceBurn {
 	if ctx > 0 {
 		s.cached, s.hasCached = float64(cached)/float64(ctx), true
 	}
-	// Say what the share is a share of. A cached figure computed over some of
-	// the requests, presented as if it were computed over all of them, is the
-	// defect this project keeps finding one surface at a time.
+	// Say what the share is a share of, and on this surface that turns out to
+	// disqualify the share entirely.
+	//
+	// n_past appears in an Ollama log ONLY when the whole prompt was already
+	// cached: on this machine's corpus all 586 requests carrying one are
+	// back-off cases, where llama.cpp finds every token resident and then
+	// re-evaluates one because it must evaluate at least one per active slot.
+	// So a cached share computed over those requests is not an estimate of
+	// cache performance. It is a measurement of a population defined by having
+	// been fully cached, pinned near (n-1)/n by the back-off rule.
+	//
+	// The honest report is two counts and no average. See
+	// docs/evidence/ollama-cache-ceiling-2026-09-08.md.
 	if unmeasured > 0 {
+		s.hasCached = false
 		s.problems = append(s.problems, fmt.Sprintf(
-			"%d of %d requests logged no n_past line, so their cache reuse is unknown and they are not in the cached share",
-			unmeasured, s.requests))
+			"%d of %d requests were served entirely from cache apart from the one token the server re-evaluates by rule; the other %d log no reuse figure, so no cache hit rate is reported",
+			s.requests-unmeasured, s.requests, unmeasured))
 	}
 	return s
 }
@@ -269,4 +280,28 @@ func burnClaudeCode(home, dir string) surfaceBurn {
 		s.cached, s.hasCached = float64(cacheRead)/float64(total), true
 	}
 	return s
+}
+
+// sharePct formats a cached share without rounding it into a claim.
+//
+// %.0f printed the operator's real Ollama corpus as "100% of the prompt served
+// from cache" when the measured share was 99.7318%. Those are different
+// statements: 100% says nothing was ever recomputed, and 586 tokens were.
+// A whole number is fine everywhere else, so the rule is narrow: a share only
+// prints as 100% when it IS 100%, and only as 0% when it is 0%. Everything
+// that merely rounds to an extreme gains a decimal place instead.
+func sharePct(f float64) string {
+	pct := 100 * f
+	switch {
+	case pct >= 100:
+		return "100%"
+	case pct > 99.5:
+		return fmt.Sprintf("%.1f%%", pct)
+	case pct <= 0:
+		return "0%"
+	case pct < 0.5:
+		return fmt.Sprintf("%.1f%%", pct)
+	default:
+		return fmt.Sprintf("%.0f%%", pct)
+	}
 }
