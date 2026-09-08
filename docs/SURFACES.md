@@ -178,6 +178,8 @@ of the roots, and a reader checking it would have found seven counter-examples i
 | **git history** | **KNOWN PROBLEM.** Deleted PRDs, both adversarial reviews and the former project name `Buffy` are all still reachable |
 | `internal/transcript/testdata/session-redacted.jsonl` | **KNOWN PROBLEM.** Paths and bodies hashed, **tool names are not**, including a connector UUID |
 
+**Surface census, 2026-09-08.** Every agent store on the operator's machine was opened and measured; see [surface-census-2026-09-08.md](evidence/surface-census-2026-09-08.md). Everything this tool claims to read, it reads completely. Two surfaces previously documented as unavailable are present and readable, Grok at 3.8 GB and Cursor at 118 agent transcripts, and neither carries token or cost fields. So they remain out of scope for spend, for a reason that is now measured rather than assumed.
+
 ## 5. Provider surface
 
 **One cache model, four readers.** Replay models Anthropic's explicit-breakpoint caching and that is
