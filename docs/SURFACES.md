@@ -158,9 +158,13 @@ what it does not read.
 question.** In all non-test code there is **no `exec.Command` anywhere**: Replay never shells out, so
 there is no command-injection surface. There is no `os.Setenv`, so it never mutates the environment
 of anything it starts. No `os.Symlink`. No `os.TempDir` in the binary, so no predictable-path temp
-file and no symlink-attack surface there. No `filepath.Walk`, so it cannot wander outside the
-directory it was handed. Every write in the tool resolves under `~/.replay` or a directory the user
-named.
+file and no symlink-attack surface there. It walks with `filepath.Walk` and `filepath.WalkDir` in seven places, so the claim that
+matters is not that it does not walk but WHERE it is allowed to start: every walk is rooted
+at a directory the caller named, and none follows a symlink out of that root by design. An
+earlier version of this paragraph said "No `filepath.Walk`, so it cannot wander outside the
+directory it was handed", which was false when written and is the wrong kind of false for a
+document about the security surface: it stated a property of the code rather than a property
+of the roots, and a reader checking it would have found seven counter-examples in one grep.
 
 ## 4. What a stranger sees
 
