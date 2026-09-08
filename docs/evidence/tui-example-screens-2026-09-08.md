@@ -14,12 +14,12 @@ and reading what came back.
 | `share` | **this machine** |
 | `live` | **this machine** |
 | `context` | example data |
-| `advise` | example data |
+| `advise` | **this machine** (wired 2026-09-08) |
 | `guards` | example data |
 | `model` | example data |
 | `safe` | example data |
 
-**Five of ten.** Each carries the notice `[NOTE] example data: describes nobody,
+**Was five of ten; `advise` is now wired, so four remain.** Each carries the notice `[NOTE] example data: describes nobody,
 shows only the shape.` — so nothing here is dishonest. It is simply not the
 reader's.
 

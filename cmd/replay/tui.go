@@ -16,11 +16,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/RedRobotKK/Replay/internal/advisor"
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/card"
 	"github.com/RedRobotKK/Replay/internal/money"
 	"github.com/RedRobotKK/Replay/internal/proxy"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 	"github.com/RedRobotKK/Replay/internal/tui"
 )
 
@@ -141,6 +143,10 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 			sc := tui.DoctorScreen(cur)
 			loop.SetRows(sc.Rows)
 			return tui.Frame{Key: k, Lines: sc.Lines}
+		case 'a':
+			sc := tui.AdviseScreen(adviceState())
+			loop.SetRows(sc.Rows)
+			return tui.Frame{Key: k, Lines: sc.Lines}
 		case 'c':
 			sc := tui.CostScreen(cur, tick, loop.Cursor())
 			loop.SetRows(sc.Rows)
@@ -217,6 +223,55 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 // commands cannot disagree about how much is on the machine. A screen that
 // counted transcripts a second, subtly different way would be a second source
 // of truth, and the point of the surface is that there is one.
+// adviceState runs the same analysis `replay advise` runs, for the screen.
+//
+// Here rather than in internal/tui because that package does no I/O: the
+// boundary that keeps every frame testable without a disk is the reason this
+// walk lives on the command side and hands over a flat slice.
+//
+// The session count is returned separately and is not len(rows). Zero rows from
+// six sessions is a finding — nothing crossed a threshold — and zero rows from
+// zero sessions is an absence. Collapsing them would put "example data" back on
+// a screen that simply had nothing to rank.
+func adviceState() ([]tui.AdviceRow, int) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, 0
+	}
+	roots := defaultTranscriptRoots(home)
+	if len(roots) == 0 {
+		return nil, 0
+	}
+	files, err := transcriptFiles(roots)
+	if err != nil || len(files) == 0 {
+		return nil, 0
+	}
+
+	var obs []advisor.Observation
+	sessions := 0
+	_ = forEachSession(files, func(_ string, session *transcript.Session, _ *analysis.LaneReport, err error) error {
+		if err != nil || session == nil {
+			return nil
+		}
+		sessions++
+		if ob, ok := advisor.Observe(session); ok {
+			obs = append(obs, ob)
+		}
+		return nil
+	})
+
+	rows := make([]tui.AdviceRow, 0, 4)
+	for _, sg := range advisor.Suggest(obs) {
+		rows = append(rows, tui.AdviceRow{
+			Title: sg.Title, Action: sg.Action, Sessions: sg.Sessions,
+			Share: sg.Share, PromptTokens: sg.PromptTokens,
+			PredictedShare: sg.PredictedShare, Estimated: sg.Estimated,
+			Status: string(sg.Status),
+		})
+	}
+	return rows, sessions
+}
+
 func machineState() tui.Machine {
 	m := tui.Machine{}
 

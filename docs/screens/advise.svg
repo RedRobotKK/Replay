@@ -1,29 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="704" height="498" viewBox="0 0 704 498" role="img" aria-label="replay advise">
-<rect width="704" height="498" rx="8" fill="#14161a"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="704" height="422" viewBox="0 0 704 422" role="img" aria-label="replay advise">
+<rect width="704" height="422" rx="8" fill="#14161a"/>
 <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="14">
 <text x="16.0" y="26.0" xml:space="preserve" fill="#d9dce1">  replay advise                                                              dev</text>
 <text x="16.0" y="45.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="64.0" xml:space="preserve" fill="#d9dce1">  [NOTE] example data: describes nobody, shows only the shape.</text>
+<text x="16.0" y="64.0" xml:space="preserve" fill="#d9dce1">  3 change(s) worth making, across 1 session(s)</text>
 <text x="16.0" y="83.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="102.0" xml:space="preserve" fill="#d9dce1">  2 changes worth making, 1 not yet</text>
-<text x="16.0" y="121.0" xml:space="preserve" fill="#d9dce1">  Both are measured on your sessions, not on a default.</text>
-<text x="16.0" y="140.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="159.0" xml:space="preserve" fill="#d9dce1">  1  bind MCP tools before the first request</text>
-<text x="16.0" y="178.0" xml:space="preserve" fill="#d9dce1">     evidence  3 sessions, 336,060 tokens re-billed by late tool blocks</text>
-<text x="16.0" y="197.0" xml:space="preserve" fill="#d9dce1">     saving    4.2% of prompt tokens        status  advice only</text>
-<text x="16.0" y="216.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="235.0" xml:space="preserve" fill="#d9dce1">  2  cache the system prompt explicitly</text>
-<text x="16.0" y="254.0" xml:space="preserve" fill="#d9dce1">     evidence  12 sessions, prefix stable across every one</text>
-<text x="16.0" y="273.0" xml:space="preserve" fill="#d9dce1">     saving    not measured on this corpus  status  pending</text>
-<text x="16.0" y="292.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="311.0" xml:space="preserve" fill="#d9dce1">  ! one suggestion is withheld: it needs a live trial and --trial-share</text>
-<text x="16.0" y="330.0" xml:space="preserve" fill="#d9dce1">    is unset, so nothing has been tested on your traffic.</text>
-<text x="16.0" y="349.0" xml:space="preserve" fill="#d9dce1"></text>
+<text x="16.0" y="102.0" xml:space="preserve" fill="#d9dce1">  <tspan fill="#767d87">1</tspan>  <tspan fill="#e6e8ec">Bash inputs are 28% of prompt tokens</tspan></text>
+<text x="16.0" y="121.0" xml:space="preserve" fill="#d9dce1">     <tspan fill="#767d87">evidence</tspan>  1 session(s), 6,601,667 prompt tokens</text>
+<text x="16.0" y="140.0" xml:space="preserve" fill="#d9dce1">     <tspan fill="#767d87">saving</tspan>    <tspan fill="#7dc47d">14.1% of prompt tokens</tspan>                           <tspan fill="#767d87">status</tspan>  pending</text>
+<text x="16.0" y="159.0" xml:space="preserve" fill="#d9dce1">     <tspan fill="#767d87">do</tspan>        keep tool inputs short: run scripts from files instead of inline~</text>
+<text x="16.0" y="178.0" xml:space="preserve" fill="#d9dce1"></text>
+<text x="16.0" y="197.0" xml:space="preserve" fill="#d9dce1">  <tspan fill="#767d87">2</tspan>  <tspan fill="#e6e8ec">first-turn instructions and attachments are 12% of prompt tokens</tspan></text>
+<text x="16.0" y="216.0" xml:space="preserve" fill="#d9dce1">     <tspan fill="#767d87">evidence</tspan>  1 session(s), 2,757,200 prompt tokens</text>
+<text x="16.0" y="235.0" xml:space="preserve" fill="#d9dce1">     <tspan fill="#767d87">saving</tspan>    <tspan fill="#7dc47d">5.9% of prompt tokens (estimated)</tspan>                <tspan fill="#767d87">status</tspan>  pending</text>
+<text x="16.0" y="254.0" xml:space="preserve" fill="#d9dce1">     <tspan fill="#767d87">do</tspan>        split instruction files: keep what every turn needs, move the re~</text>
+<text x="16.0" y="273.0" xml:space="preserve" fill="#d9dce1"></text>
+<text x="16.0" y="292.0" xml:space="preserve" fill="#d9dce1">  <tspan fill="#767d87">3</tspan>  <tspan fill="#e6e8ec">cache breaks re-billed 1% of prompt tokens</tspan></text>
+<text x="16.0" y="311.0" xml:space="preserve" fill="#d9dce1">     <tspan fill="#767d87">evidence</tspan>  1 session(s), 189,229 prompt tokens</text>
+<text x="16.0" y="330.0" xml:space="preserve" fill="#d9dce1">     <tspan fill="#767d87">saving</tspan>    <tspan fill="#7dc47d">0.8% of prompt tokens</tspan>                        <tspan fill="#767d87">status</tspan>  advice only</text>
+<text x="16.0" y="349.0" xml:space="preserve" fill="#d9dce1">     <tspan fill="#767d87">do</tspan>        run replay diff on the session to see the cause of each break; m~</text>
 <text x="16.0" y="368.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="387.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="406.0" xml:space="preserve" fill="#d9dce1">  ran   replay advise --guards</text>
-<text x="16.0" y="425.0" xml:space="preserve" fill="#d9dce1">  <tspan fill="#767d87">copy it and you never need this screen again.</tspan></text>
-<text x="16.0" y="444.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="463.0" xml:space="preserve" fill="#d9dce1">  advise   ? keys  esc back  q quit</text>
+<text x="16.0" y="387.0" xml:space="preserve" fill="#d9dce1">  advise   ? keys  esc back  q quit</text>
 </g>
 </svg>
