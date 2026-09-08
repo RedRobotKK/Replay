@@ -17,7 +17,7 @@ reach the network, and does it write. Both are answered per command below, and
 summarised here.
 
 **Opens no socket and writes nothing** — safe to run at will:
-`diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `mcp`, `corpus`, `statusline`, `redact`, `version`.
+`diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `mcp`, `corpus`, `statusline`, `redact`, `version`, `prefix`.
 
 **Leaves the machine:** `serve` proxies every request to the provider.
 `probe --execute` sends billable requests, and without `--execute` it prints a
@@ -62,6 +62,7 @@ to test whether `~/.replay` is writable.
 | [`statusline`](#statusline) | Live spend and cache-miss cost, for Claude Code's status line | none | none |
 | [`redact`](#redact) | Strip content, keep structure and usage (for bug reports) | none | none |
 | [`version`](#version) | Print build information | none | none |
+| [`prefix`](#prefix) | Whether a change to a tool-server document voids the cached prefix | none | none |
 
 ### cost
 
@@ -295,6 +296,16 @@ Print build information.
 
 Takes no flags.
 
+### prefix
+
+Whether a change to a tool-server document voids the cached prefix.
+
+| Flag | Type | What it does |
+|---|---|---|
+| `-after` | string | the file as this change would leave it |
+| `-before` | string | the file as it is on the base branch |
+| `-json` | bool | emit the finding as JSON for a CI step to act on |
+
 ## The TUI covers the same ground
 
 `replay tui` opens the same answers as movable screens. `--screen <name>` opens
@@ -335,4 +346,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-22 commands, 84 flags, read from the binary.
+23 commands, 87 flags, read from the binary.
