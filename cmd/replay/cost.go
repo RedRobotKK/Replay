@@ -361,6 +361,9 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	perLane := fs.Bool("per-lane", false, "report agent lanes instead of sessions: a session that spawned sub-agents wrote one transcript per lane, and this is the fan-out view of them")
 	since := fs.String("compare", "", "split at this date (YYYY-MM-DD) and report cost per task before and after")
 	predicted := fs.Float64("predicted", 0, "with --compare, the fractional change you predicted (e.g. -0.2 for a 20% saving)")
+	maxAvoidable := fs.Float64("max-avoidable-usd", 0,
+		"fail the build when measured avoidable spend exceeds this many dollars (0 = off). "+
+			"Refuses to pass when nothing was priced")
 	share := fs.Bool("share", false, "print a paste-ready summary: the avoidable rate and the task spread, with no spend total, no paths and no project names")
 	png := fs.String("png", "", "with --share, also write the same figures as a 1200x630 social card at this path")
 	design := fs.String("card", "", "which card design --png writes: b (the dark receipt) or c (the paper statement, the default)")
@@ -401,7 +404,13 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			// Not an error. A machine that has never run the agent has nothing
 			// to report and that is a fact about the machine, not a failure of
 			// the command, so the exit status says so.
-			return nil
+			//
+			// Unless a ceiling was asked for. Passing --max-avoidable-usd is a
+			// request to assert that spend is under a number, and that cannot
+			// be asserted over nothing: a CI runner has no transcripts, so a
+			// gate that stayed silent here would go green having measured
+			// nothing, which is the failure this flag exists to prevent.
+			return checkAvoidableCeiling(*maxAvoidable, costSummary{Unit: unitSession}, 0, stdout)
 		}
 		_, _ = fmt.Fprintf(stderr, "reading %s\n", roots[0])
 		args = append(args, roots...)
@@ -544,6 +553,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	}
 
 	s := summarise(units)
+	gateCeiling := *maxAvoidable
 	s.Unit, s.Lanes = unit, lanesRead
 	// The route is the one summary field that must not be derived from the
 	// rows.
@@ -658,7 +668,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 				u.Requests, fmt.Sprintf("$%.2f", u.CostUSD), fmt.Sprintf("$%.2f", u.AvoidableUSD), u.Breaks)
 		}
 	}
-	return nil
+	return checkAvoidableCeiling(gateCeiling, s, unpriced, stdout)
 }
 
 // sessionTime is when a session ran, taken from its first request.
