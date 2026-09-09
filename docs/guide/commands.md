@@ -1260,6 +1260,49 @@ been dropped and could fall between two scrapes; a falling counter reads to Prom
 a reset, which makes every `rate()` over it wrong on a busy machine and right on an idle
 one. Fixed 2026-09-05.
 
+### `replay budget <ledger-dir...> [--json]`
+
+What this configuration costs on **every** request before anybody types anything: the
+system prompt, plus every tool definition the session offers whether or not it calls
+them. It is the figure that moves when somebody adds an MCP server, and it moves for
+everyone who commits to the repository.
+
+```sh
+replay budget ~/.replay/ledger
+replay budget ~/.replay/ledger --json > .replay-budget.json
+```
+
+```text
+Standing cost of this setup, on every request:
+  system prompt + instructions   1,050 tokens
+  tool definitions (4 tools)     2,800 tokens
+  total, before any work         3,850 tokens
+
+By server:
+  playwright               1,625 tokens/request
+  jira                       725 tokens/request
+  built-in                   450 tokens/request
+```
+
+**It needs a ledger, and refuses without one.** A transcript records what was *called*;
+only the proxy sees what was *offered*. Deriving the standing cost from called tools
+would report a budget that **falls** when somebody uses fewer tools, which is backwards —
+the definitions were sent either way. So a transcript-only corpus is refused with
+`NOT MEASURED` rather than answered from the wrong quantity.
+
+**It reads no agent configuration.** The whole figure comes from the ledger. It would be
+easier to parse `.mcp.json` and count definitions, and that is the design this one avoids:
+that file can hold credentials, and the artefact exists to be compared inside CI, which is
+where secrets are most exposed. Comparing two measurements crosses nothing.
+
+**The newest session wins**, rather than an average across the corpus. The question is
+what the setup costs *now*, and a mean over a fortnight of edits describes a configuration
+nobody has.
+
+**The per-server breakdown is the point of committing it.** A later run that only said
+"the standing cost grew" would send the reader back to the configuration this command was
+designed not to read.
+
 ---
 
 [Guide](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

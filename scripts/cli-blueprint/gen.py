@@ -31,7 +31,7 @@ import argparse, os, re, subprocess, sys, tempfile
 COMMANDS = [
     "cost", "diff", "advise", "serve", "tui", "context", "blame", "replay",
     "route", "trim", "codex", "burn", "agents", "mcp", "corpus", "learn",
-    "probe", "doctor", "rules", "statusline", "redact", "version", "prefix", "since",
+    "probe", "doctor", "rules", "statusline", "redact", "version", "prefix", "since", "budget",
 ]
 
 # What each command is for, and the two facts an agent needs before running one
@@ -70,6 +70,7 @@ META = {
     "version":    ("Print build information", "none", "none"),
     "prefix":     ("Whether a change to a tool-server document voids the cached prefix", "none", "none"),
     "since":      ("What ran, and what it cost, since you last looked", "none", "~/.replay/seen.json, one timestamp; --peek writes nothing"),
+    "budget":     ("What this configuration costs on every request, before any work", "none", "none"),
 }
 
 SCREENS = [

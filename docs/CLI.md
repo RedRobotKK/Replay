@@ -17,7 +17,7 @@ reach the network, and does it write. Both are answered per command below, and
 summarised here.
 
 **Opens no socket and writes nothing** — safe to run at will:
-`diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `mcp`, `corpus`, `statusline`, `redact`, `version`, `prefix`.
+`diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `mcp`, `corpus`, `statusline`, `redact`, `version`, `prefix`, `budget`.
 
 **Leaves the machine:** `serve` proxies every request to the provider.
 `probe --execute` sends billable requests, and without `--execute` it prints a
@@ -64,6 +64,7 @@ to test whether `~/.replay` is writable.
 | [`version`](#version) | Print build information | none | none |
 | [`prefix`](#prefix) | Whether a change to a tool-server document voids the cached prefix | none | none |
 | [`since`](#since) | What ran, and what it cost, since you last looked | none | ~/.replay/seen.json, one timestamp; --peek writes nothing |
+| [`budget`](#budget) | What this configuration costs on every request, before any work | none | none |
 
 ### cost
 
@@ -316,6 +317,14 @@ What ran, and what it cost, since you last looked.
 |---|---|---|
 | `-peek` | bool | report without consuming the window, so it can be read twice |
 
+### budget
+
+What this configuration costs on every request, before any work.
+
+| Flag | Type | What it does |
+|---|---|---|
+| `-json` | bool | emit the artefact as JSON, for committing and for the gate to read |
+
 ## The TUI covers the same ground
 
 `replay tui` opens the same answers as movable screens. `--screen <name>` opens
@@ -356,4 +365,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-24 commands, 89 flags, read from the binary.
+25 commands, 90 flags, read from the binary.
