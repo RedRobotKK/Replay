@@ -191,7 +191,29 @@ func MeasureDilation(from, to string, fits map[string]TokenFit) Dilation {
 	}
 
 	d.Sigma = b.TokensPerByte / a.TokensPerByte
-	d.RelativeError = math.Hypot(a.RelativeError, b.RelativeError)
+
+	// Quadrature is the propagation for INDEPENDENT quantities. For a ratio of
+	// two correlated ones the general form is
+	//
+	//	rel(A/B)^2 = eA^2 + eB^2 - 2*rho*eA*eB
+	//
+	// and rho is not zero when both sides are the same fit. Asking for a model
+	// against itself divides a quantity by itself: rho is exactly 1, the term
+	// cancels, and the answer is 1 with no band at all. Quadrature assumed
+	// independence, returned e*sqrt(2), and put an 86% band on a number that is
+	// 1 by construction — which is what routing-baseline-2026-09-06.md quotes as
+	// the reason no sigma in this corpus can be distinguished from 1.0.
+	//
+	// Between DIFFERENT models rho is unknown. The two fits may share sessions,
+	// which would correlate them and make quadrature an overstatement, but
+	// nothing here measures that, so independence stays as the conservative
+	// assumption: it can only widen the band, never narrow it, and a band that
+	// is too wide misleads a reader far less than one that is too narrow.
+	if from == to {
+		d.RelativeError = 0
+	} else {
+		d.RelativeError = math.Hypot(a.RelativeError, b.RelativeError)
+	}
 	d.Measured = true
 	return d
 }
