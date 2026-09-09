@@ -84,6 +84,49 @@ type measured struct {
 	Model    string `json:"model,omitempty"`
 }
 
+// budgetRefusal decides whether the corpus can price a standing cost.
+//
+// Extracted from runBudget because the shell was the defect, not the
+// conditions. ADR-0014 practice 2 states the rule — decisions live in pure
+// functions, shells are addresses — and this command is the worked example of
+// why, twice over.
+//
+// R1 could only be reached through a corpus contrived to walk and yield
+// nothing. Until that fixture existed, the test that appeared to cover it was
+// exercising the walk refusal higher up, which opens with the same eight words.
+// R3 could not be reached at all: it declines a non-positive ratio, and
+// analysis.Fit cannot produce one. Neither was a missing assertion. Both were
+// reachability through a shell.
+//
+// Here each branch is one call away and none can shadow another. R3 is
+// exercisable for the first time — production cannot hand it a zero ratio, a
+// test can, and a guard nobody can exercise is decoration. It stays as defence
+// in depth against Fit's contract changing; FE7 pins that contract, BR3 pins
+// the response to its violation.
+//
+// The order is load-bearing and matches what the messages claim. R1 speaks for
+// a corpus with nothing in it; R2 for one with sessions but no ledger; R3 for a
+// ledger whose content cannot be converted. Reordering them would have each
+// answering for a corpus it does not describe.
+func budgetRefusal(sawAnyReq, sawLedger bool, sessions int, fit analysis.TokenFit, args []string) error {
+	if !sawAnyReq && sessions == 0 {
+		return fmt.Errorf("NOT MEASURED: no ledger found under %s. `replay serve` writes one to "+
+			"~/.replay/ledger; a budget with no corpus behind it is a number somebody typed: %w",
+			strings.Join(args, ", "), errUsage)
+	}
+	if !sawLedger {
+		return fmt.Errorf("NOT MEASURED: %d session(s) read, none from a ledger carrying tool "+
+			"definitions. A transcript records what was called, never what was offered, so it "+
+			"cannot say what the configuration costs when nothing is called. Run the work "+
+			"through `replay serve` and try again: %w", sessions, errUsage)
+	}
+	if fit.TokensPerByte <= 0 {
+		return fmt.Errorf("NOT MEASURED: the corpus has tool definitions but no usable "+
+			"byte-to-token fit, so their size cannot be converted to tokens: %w", errUsage)
+	}
+	return nil
+}
+
 func runBudget(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("budget", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -181,20 +224,8 @@ func runBudget(args []string, stdout, stderr io.Writer) error {
 		return nil
 	})
 
-	if !sawAnyReq && sessions == 0 {
-		return fmt.Errorf("NOT MEASURED: no ledger found under %s. `replay serve` writes one to "+
-			"~/.replay/ledger; a budget with no corpus behind it is a number somebody typed: %w",
-			strings.Join(fs.Args(), ", "), errUsage)
-	}
-	if !sawLedger {
-		return fmt.Errorf("NOT MEASURED: %d session(s) read, none from a ledger carrying tool "+
-			"definitions. A transcript records what was called, never what was offered, so it "+
-			"cannot say what the configuration costs when nothing is called. Run the work "+
-			"through `replay serve` and try again: %w", sessions, errUsage)
-	}
-	if fit.TokensPerByte <= 0 {
-		return fmt.Errorf("NOT MEASURED: the corpus has tool definitions but no usable "+
-			"byte-to-token fit, so their size cannot be converted to tokens: %w", errUsage)
+	if err := budgetRefusal(sawAnyReq, sawLedger, sessions, fit, fs.Args()); err != nil {
+		return err
 	}
 
 	out := budgetFile{
