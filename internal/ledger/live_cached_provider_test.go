@@ -3,7 +3,6 @@ package ledger
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -215,5 +214,5 @@ func rawUsageOf(body []byte) string {
 	if json.Unmarshal(body, &m) != nil {
 		return "<unparseable>"
 	}
-	return fmt.Sprintf("%s", m.Usage)
+	return string(m.Usage)
 }
