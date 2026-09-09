@@ -35,7 +35,7 @@ dollar. `replay` with no arguments does — and nothing here told me to run that
 
 ## 2. The single line that confused me most
 
-```
+```text
               next: no reader built yet. The data is there; the dollar scale is unverified
 ```
 
@@ -55,7 +55,7 @@ someone else's standup.
 
 Runner-up, and it is close:
 
-```
+```text
               next: nothing to run: this is not a spend surface and cannot be priced
 ```
 
@@ -124,7 +124,7 @@ Eleven terms in twenty lines. That is the review, really.
 **The `ledger` section is the worst offender** and it is not even the new
 feature. It is three words and a path:
 
-```
+```text
 ledger        5 sessions recorded under /Users/daniel/.replay/ledger
               next: replay replay /Users/daniel/.replay/ledger  (measured tier)
 ```
@@ -141,13 +141,13 @@ no idea whether that is good.
 
 Doctor:
 
-```
+```text
 agents        Codex   29 files in /Users/daniel/.codex/sessions
 ```
 
 `replay codex`, the command doctor told me to run, on the very next line:
 
-```
+```text
   610,551,532 tokens billed across 150 Codex session(s)
 ```
 
@@ -203,7 +203,7 @@ file has all three fields. That claim is good.
 
 ### 5f. The proxy line asks me to reroute my API traffic and tells me nothing
 
-```
+```text
 proxy         ANTHROPIC_BASE_URL is not set in this shell; the agent talks to the provider directly
               next: replay serve, then export ANTHROPIC_BASE_URL=http://127.0.0.1:4000
 ```
@@ -286,7 +286,7 @@ only thing I was doing.
 
 ## THE EMPTY-HOME CASE — reported prominently, as instructed
 
-```
+```text
 $ HOME=$(mktemp -d) /tmp/rp doctor
 
 replay doctor
@@ -341,7 +341,7 @@ their data, and one instruction they should probably refuse. I would close it.
 Lines run to 99 characters. The layout is a fixed two-column grid with a
 13-space label gutter, and at 60 columns the terminal hard-wraps mid-word:
 
-```
+```text
 transcripts   123 sessions across 12 projects under /Users/d
 aniel/.claude/projects
               1738 transcript files in all: a session writes

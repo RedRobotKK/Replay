@@ -1,5 +1,47 @@
 # What a cache break costs when you are not billed per token, 2026-09-09
 
+> ## RETRACTED IN FULL, same day — every window-denominated figure here is void
+>
+> **Both terms of the headline are unsound, for two separately documented
+> reasons. An earlier version of this banner retracted one and defended the
+> other; that was backwards and is corrected here.**
+>
+> **The multiplier has no data.** The claim that 3,778,706 re-billed tokens moved
+> 5h utilization from 0.10 to 0.15 exists **only as prose** in the header comment
+> of `internal/analysis/predictor.go`. A census of every ledger record and
+> transcript on this machine found **zero records carrying any
+> `anthropic-ratelimit-*` header, ever** — the key is absent, not empty — and
+> `retry-after` has never once been observed.
+>
+> **The multiplicand is retracted at its source.** 3,778,706 is the deficit total
+> of the 30-lane trial, and
+> [`lane-isolation-2026-09-06.md`](lane-isolation-2026-09-06.md) says of it:
+> **"Both figures are retracted."** 3,317,247 of that total is listed there as
+> *"Forged by the session-wide compare"*, and the doc adds that even the
+> corrected 11.0% is *"a less-polluted ghost of the same error"*, because the
+> deficit figures are themselves products of the broken classifier. The
+> correction reached `preflight.go` and `README.md` and never reached
+> `predictor.go` — the one file this document cited.
+>
+> So the arithmetic multiplied a retracted number by an unrecorded one. **Nothing
+> below survives**: not "roughly 0.45 of a five-hour window", not the 0.36-0.54
+> range, and not the weaker claim that re-billed tokens are known to consume the
+> allowance at all. The honest status of that last one is **NOT MEASURED**.
+>
+> **What does survive**, and it is the only thing: this machine's **33,778,322
+> avoidable tokens**, which come from `replay cost --json` and are reproducible
+> today. That is a token count. It is not a window figure and must not be
+> converted into one.
+>
+> **Why the file is kept.** The question is real, the method is right, and
+> "What would settle it" already names the paired warm/cold trial that would
+> produce a genuine reading. `internal/proxy/quota.go` is the capture path;
+> nothing has run through it. Read this as a specification for a measurement
+> nobody has taken.
+>
+> Filed against myself, 2026-09-09, and corrected the same hour after a red-team
+> review found the first retraction defended the wrong half.
+
 **What this measures:** whether re-billed tokens consume a Claude subscription's
 usage allowance, and roughly how much of one this machine's corpus has spent on
 them. Derived from an existing trial rather than newly measured, and the

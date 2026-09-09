@@ -63,6 +63,23 @@ Recorded here on the day it shipped, because this section has been wrong twice a
 claim and the third time would have been the author's own commit twenty minutes after making the
 claim stronger.
 
+**`replay upgrade` fetches `github.com/RedRobotKK/Replay/releases/…` (`internal/selfupdate`).**
+Added 2026-09-09. Three GETs, only when the command is typed: the `releases/latest` redirect to
+learn the tag, the platform archive, and `checksums.txt`. It sends nothing — no version, no
+identifier, no query string — and an archive whose sha256 does not match the published checksum
+is refused with nothing written.
+
+It deliberately does **not** call `api.github.com`. That endpoint allows 60 unauthenticated
+requests an hour per IP, which `install.sh` already documents as routinely exhausted on CI and
+behind shared NAT; the redirect carries no such budget.
+
+**There is no background version check, and this is a design constraint rather than an omission.**
+A periodic ping is the ordinary way to build this, and it would make the sentence at the top of
+this section false by addition — the exact failure mode the header warns about, and the one
+`cmd/replay/outbound_drift_test.go` was written to catch after `replay probe` shipped. What the
+binary does instead is arithmetic on the build date already linked into it: past 30 days it prints
+one line naming `replay upgrade`, and reaches nothing to do so.
+
 **`HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY` silently redirect every upstream request.** The transport
 is built with `Proxy: http.ProxyFromEnvironment` (`internal/proxy/server.go:170`), which reads all six
 spellings of those variables. **No Replay flag mentions this and nothing in the code or docs did until

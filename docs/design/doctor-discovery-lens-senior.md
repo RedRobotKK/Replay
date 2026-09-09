@@ -37,7 +37,7 @@ measured, and three of its claims are not yet measurements.
 
 `countStoreFiles` (`discover.go:147-169`) is correct in isolation. Measured:
 
-```
+```text
 files on disk=499  counted=499
 files on disk=500  counted=500
 files on disk=501  counted=500
@@ -59,7 +59,7 @@ but since the multi-root change the cap is applied **per root**
 (`discover.go:120-126` calls `countStoreFiles` once per `rel` and sums), while
 the label is applied **per finding**. Measured, with a two-root Codex store:
 
-```
+```text
 on disk= 500 (300 live + 200 archived)  Files= 500  doctor prints "500+ files"
 on disk= 700 (400 live + 300 archived)  Files= 700  doctor prints "500+ files"
 on disk=1200 (600 live + 600 archived)  Files=1000  doctor prints "500+ files"
@@ -90,7 +90,7 @@ resolves *intermediate* path components, so a symlinked parent is fine, but if
 the final component of the store path is itself a link, the walk sees one
 non-directory entry whose name matches no glob and returns 0. Measured:
 
-```
+```text
 ~/.grok symlinked to a real store (1 updates.jsonl)  -> discoverAgents = []
 ~/.codex/sessions symlinked to 3 rollouts            -> discoverAgents = []
 a symlinked subdirectory inside a real store         -> counted 0 of 3
@@ -171,7 +171,7 @@ not a blocker — but the general form of DS6 is the test worth having.
 `rels: [".cursor"]` with `patterns: ["*.db", "*.jsonl", "*.sqlite"]` matches
 anywhere in the tree. Measured on this machine:
 
-```
+```text
 matched under ~/.cursor            119
 of those, under ~/.cursor/projects 118   (the transcripts)
 the other one                      ~/.cursor/ai-tracking/ai-code-tracking.db
@@ -267,16 +267,16 @@ returns no finding. It is simply held up by nothing.
 // for anyone who opened Cursor once, and holds argv.json whether or not a
 // transcript was ever written.
 func TestDS7_NonEvidenceFilesAreNotAFinding(t *testing.T) {
-	home := fakeHome(t, map[string]string{
-		".cursor/argv.json":            "{}\n",
-		".cursor/extensions/readme.md": "x\n",
-		".codex/sessions/x/notes.txt":  "x\n",
-		".ollama/logs/README":          "x\n",
-	})
-	if found := discoverAgents(home); len(found) != 0 {
-		t.Errorf("a home whose agent directories hold no agent data reported %v; "+
-			"the directory existing is not the evidence, the files are", names(found))
-	}
+    home := fakeHome(t, map[string]string{
+        ".cursor/argv.json":            "{}\n",
+        ".cursor/extensions/readme.md": "x\n",
+        ".codex/sessions/x/notes.txt":  "x\n",
+        ".ollama/logs/README":          "x\n",
+    })
+    if found := discoverAgents(home); len(found) != 0 {
+        t.Errorf("a home whose agent directories hold no agent data reported %v; "+
+            "the directory existing is not the evidence, the files are", names(found))
+    }
 }
 ```
 
@@ -325,7 +325,7 @@ cap… without walking 3.8 GB to do it."*
 
 Per-root measurement:
 
-```
+```text
 Codex   .codex/sessions           entries=  41  matched= 29  capTripped=false
 Codex   .codex/archived_sessions  entries= 122  matched=121  capTripped=false
 Grok    .grok                     entries=8840  matched= 74  capTripped=false

@@ -22,6 +22,9 @@ ADR and the built thing goes to the architecture.
 | [Quota estimator: red](quota-estimator-red.md) | A hostile review of the quota claim | Five findings rated thread-defining; its lead retracted an evidence document of this repository's own |
 | [Quota data census](quota-data-census.md) | What rate-limit data actually exists on this machine | **Zero of 17 ledger records carry any quota header** |
 | [CLI tool integration survey](cli-tool-integration-survey.md) | Which AI CLIs are actually installed on this machine, and which of four integration routes each offers | **Five installed CLIs were missing from the original list**, one "not installed" verdict was wrong, and Grok turns out to be a spend surface the census had written off |
+| [Doctor discovery: beginner lens](doctor-discovery-lens-beginner.md) | A first-time reader on the new `agents` block: what confused them, and whether they would have typed anything next | **They would have closed the terminal.** Found the Codex undercount that two other reviews missed |
+| [Doctor discovery: junior lens](doctor-discovery-lens-junior.md) | Could a new maintainer add a fifth agent unaided, and what would they break first | `Priceable` had no consumer; `knownStores` was the fifth parallel store-location list |
+| [Doctor discovery: senior lens](doctor-discovery-lens-senior.md) | A staff review: correctness, failure modes, and which tests would still pass if the feature were quietly broken | **Three blockers, and eleven of fourteen mutations escaped the original tests** |
 | [Doctor discovery, read by a new maintainer](doctor-discovery-lens-junior.md) | Whether `doctor`'s agent-discovery block can be safely changed by someone who has never seen it: what a fifth `knownStores` entry forces you to guess, and what no test would catch | **`Priceable` has no consumer**; Ollama's file count disagrees with the command it recommends; a fifth parallel store-location list |
 
 ---
