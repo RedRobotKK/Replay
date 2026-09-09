@@ -214,7 +214,7 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 				// The age is not decoration. Advice read from disk without a
 				// date is yesterday's answer wearing today's clothes.
 				sc.Lines = append(sc.Lines, fmt.Sprintf(
-					"  as of %s — `replay advise` to refresh",
+					"  as of %s; `replay advise` to refresh",
 					at.Local().Format("15:04 on 2 Jan")))
 			} else {
 				sc = tui.AdviseScreen(adviceState())

@@ -56,7 +56,16 @@ type AdviceRow struct {
 // selMarker is the cursor. Two cells so it reserves the same width on every
 // row, selected or not, and the columns after it cannot shift as the reader
 // moves — the defect TestCL1 exists to catch, arriving through the front door.
-const selMarker = "\u25b8 "
+//
+// ASCII, and that is not a stylistic preference. It shipped as U+25B8, which
+// East Asian width classes as Ambiguous: one cell in a Latin terminal and two
+// in the ja_JP one this project's only daily reader uses. Reserving "two
+// cells" on the machine that writes it and spending three on the machine that
+// reads it shears every column after it — the same defect the comment above
+// claims to prevent, committed by the line that claims it. TestTW1 states the
+// rule for the whole TUI; AD11 now states it here, where the character is
+// chosen rather than four commits later at render time.
+const selMarker = "> "
 
 // AdviseScreen renders the findings with no selection, for callers that only
 // want the list.

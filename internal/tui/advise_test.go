@@ -248,3 +248,47 @@ func TestAD10_TheActionIsNotTruncated(t *testing.T) {
 		}
 	}
 }
+
+// AD11: nothing this package draws is East Asian Ambiguous.
+//
+// The selection marker shipped as U+25B8. It is one cell in a Latin terminal
+// and two in the operator's ja_JP one, so every column measured against it
+// sheared by one cell for the only person who reads this screen daily — the
+// exact defect TestTW1's comment describes, arriving through the front door of
+// a feature added after that rule was written.
+//
+// TW1 and TC1 in cmd/replay do catch it, by rendering. They caught it four
+// commits late, because they run a binary and this package is where the
+// character is chosen. The rule belongs beside the choice.
+//
+// Braille (U+2800–U+28FF) stays allowed: fixed at one cell in every locale,
+// and the spinner is built from it.
+func TestAD11_TheScreenDrawsNoAmbiguousWidthCharacters(t *testing.T) {
+	long := rows()
+	long[0].Action = "truncate outputs before they enter the conversation: head, tail, " +
+		"grep with limits, or a summarizing wrapper"
+	// AdviseScreenAt, not AdviseScreen. The first version of this test called
+	// only the latter, went green on the first run against the very character
+	// it was written to reject, and would have been filed as evidence: the
+	// unselected block substitutes spaces for the marker, so no frame it built
+	// ever contained one. A check that cannot fail is not a check.
+	frames := map[string][]string{
+		"no corpus":  AdviseScreen(nil, 0).Lines,
+		"none found": AdviseScreen(nil, 7).Lines,
+		"unselected": AdviseScreen(long, 12).Lines,
+		"selected 0": AdviseScreenAt(long, 12, 0).Lines,
+		"selected 1": AdviseScreenAt(long, 12, 1).Lines,
+		"detail":     AdviceDetail(long[0]).Lines,
+	}
+	for name, lines := range frames {
+		for i, l := range lines {
+			for _, r := range l {
+				if r < 0x80 || (r >= 0x2800 && r <= 0x28FF) {
+					continue
+				}
+				t.Errorf("%s line %d draws %q (U+%04X), which is one cell in a Latin "+
+					"terminal and two in a ja_JP one:\n  %s", name, i, r, r, l)
+			}
+		}
+	}
+}
