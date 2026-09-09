@@ -201,6 +201,32 @@ func (ob *Observation) noteReads(name string, e analysis.BlameEntry) {
 	ob.targets[k] = ev
 }
 
+// builtinTools is the bucket for definitions that name no server.
+//
+// Not a server name and deliberately not shaped like one: a reader who sees it
+// must not go looking for something to disable.
+const builtinTools = "built-in"
+
+// serverOf reads the MCP server out of a tool name, or reports a built-in.
+//
+// The convention is mcp__<server>__<tool>. Anything that does not match it is a
+// built-in, and inventing a server for one would tell the reader to switch off
+// something that does not exist. A malformed mcp__ name with no second
+// separator is treated the same way, because a server named from a broken
+// string is a worse answer than no server at all.
+func serverOf(tool string) string {
+	const p = "mcp__"
+	if !strings.HasPrefix(tool, p) {
+		return builtinTools
+	}
+	rest := tool[len(p):]
+	i := strings.Index(rest, "__")
+	if i <= 0 {
+		return builtinTools
+	}
+	return rest[:i]
+}
+
 // unusedTools finds tool definitions the session carried on every request
 // and never called. Only ledger sessions know their definitions.
 func (ob *Observation) unusedTools(lane *transcript.Lane, fit analysis.TokenFit) {
@@ -218,20 +244,42 @@ func (ob *Observation) unusedTools(lane *transcript.Lane, fit analysis.TokenFit)
 			}
 		}
 	}
-	bytes, names := 0, []string{}
+	// Grouped by the server that defines them, because the server is the unit
+	// of action. A reader cannot disable one tool; they can disable a server.
+	//
+	// This needs no configuration to work out, which is the whole reason it is
+	// free: MCP tools are named mcp__<server>__<tool>, so the attribution is
+	// already in the name the ledger stores beside each byte size. Reading
+	// .mcp.json to learn the same thing would cross the boundary WHAT-YOU-GET.md
+	// draws — that file can hold credentials, and a CI job that parses it would
+	// do so in the environment where secrets are most exposed.
+	type bucket struct {
+		bytes int
+		names []string
+	}
+	buckets := map[string]*bucket{}
 	for _, t := range first.Tools {
-		if !called[t.Name] {
-			bytes += t.Bytes
-			names = append(names, t.Name)
+		if called[t.Name] {
+			continue
 		}
+		g := serverOf(t.Name)
+		b := buckets[g]
+		if b == nil {
+			b = &bucket{}
+			buckets[g] = b
+		}
+		b.bytes += t.Bytes
+		b.names = append(b.names, t.Name)
 	}
-	if bytes == 0 {
-		return
+	for target, b := range buckets {
+		if b.bytes == 0 {
+			continue
+		}
+		sort.Strings(b.names)
+		tokens := fit.EstimateTokens(b.bytes) * len(lane.Requests)
+		ob.note(KindUnusedTools, target, analysis.Figure{Value: tokens, Error: int(float64(tokens) * fit.RelativeError)}, true)
+		ob.titles[key(KindUnusedTools, target)] = [3]string{fmt.Sprint(len(b.names)), strings.Join(b.names, ", "), target}
 	}
-	sort.Strings(names)
-	tokens := fit.EstimateTokens(bytes) * len(lane.Requests)
-	ob.note(KindUnusedTools, "tools never called", analysis.Figure{Value: tokens, Error: int(float64(tokens) * fit.RelativeError)}, true)
-	ob.titles[key(KindUnusedTools, "tools never called")] = [3]string{fmt.Sprint(len(names)), strings.Join(names, ", ")}
 }
 
 // agg is one target's evidence across the corpus.
@@ -361,7 +409,15 @@ func describe(a *agg, s Suggestion) (string, string) {
 		return fmt.Sprintf("first-turn instructions and attachments are %s of prompt tokens", pct),
 			"split instruction files: keep what every turn needs, move the rest to on-demand files or skills the agent loads when relevant"
 	case KindUnusedTools:
-		return fmt.Sprintf("%s tool definitions never called are %s of prompt tokens (%s)", titles[0], pct, titles[1]),
+		// A named server earns a different sentence from a built-in, because
+		// only one of them can be switched off. Telling a reader to "disable
+		// this server" for Glob would name something that does not exist.
+		if target != builtinTools {
+			return fmt.Sprintf("%s tool definitions from %s never called are %s of prompt tokens (%s)",
+					titles[0], target, pct, titles[1]),
+				fmt.Sprintf("disable this server if the work does not need it: its %s definitions are re-sent on every request, called or not", titles[0])
+		}
+		return fmt.Sprintf("%s built-in tool definitions never called are %s of prompt tokens (%s)", titles[0], pct, titles[1]),
 			"defer-load tools the session does not use (Claude Code tool search) or trim their descriptions"
 	case KindCacheBreaks:
 		return fmt.Sprintf("cache breaks re-billed %s of prompt tokens", pct),

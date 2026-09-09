@@ -2,6 +2,7 @@ package advisor
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -116,7 +117,11 @@ func TestUnusedToolsAndHotFilesAcrossSessions(t *testing.T) {
 	}
 	got := kinds(Suggest(obs))
 	unused, ok := got[KindUnusedTools]
-	if !ok || unused.Sessions != 3 || !strings.Contains(unused.Title, "5 tool definitions never called") || !strings.Contains(unused.Title, "Idle1") || unused.Status != Pending {
+	// "built-in" entered this string when unused tools gained per-server
+	// attribution on 2026-09-09. Idle1..Idle5 carry no mcp__ prefix, so they
+	// bucket as built-ins, which is the behaviour under test — the count, the
+	// share, the session total and the status are all unchanged.
+	if !ok || unused.Sessions != 3 || !strings.Contains(unused.Title, "5 built-in tool definitions never called") || !strings.Contains(unused.Title, "Idle1") || unused.Status != Pending {
 		t.Fatalf("unused tools: %+v", unused)
 	}
 	hot, ok := got[KindHotFile]
@@ -165,4 +170,136 @@ func TestSuggestionsAreTrackedToClosure(t *testing.T) {
 	if s.RealizedShare >= s.PredictedShare*verifyShare {
 		t.Fatalf("realized %.3f should be under the verification bar %.3f", s.RealizedShare, s.PredictedShare*verifyShare)
 	}
+}
+
+// Named-server attribution: the last step between a measurement and an action.
+//
+// docs/WHAT-YOU-GET.md calls this "the single highest-leverage thing left to
+// build" and MONEY-PATH section 5 makes it step 3, ahead of anything paid,
+// because the gate in step 5 consumes it.
+//
+// The gap it closes is small and total. Today advise says:
+//
+//	12 tool definitions never called are 8% of prompt tokens (a, b, c, ...)
+//
+// which is true, and stops one step short: the reader still has to work out
+// WHICH twelve and WHERE they came from, and a comma-joined list of twelve
+// mcp__ names is not a thing anybody reads. It needs no config to close, because
+// MCP tools are named mcp__<server>__<tool> — the server is already in the name,
+// and the ledger already stores each name with its byte size.
+//
+// So the unit of advice becomes the server, which is also the unit of action: a
+// reader cannot disable one tool, but they can disable a server.
+func TestUnusedToolsAreAttributedToTheirServer(t *testing.T) {
+	base := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	defined := []string{
+		"mcp__playwright__click", "mcp__playwright__screenshot", "mcp__playwright__navigate",
+		"mcp__jira__search", "mcp__jira__comment",
+		"Bash", "Read",
+	}
+	// Only Bash is ever called. Two servers and one built-in go unused.
+	var obs []Observation
+	for i := 0; i < 3; i++ {
+		s := synthetic(base.AddDate(0, 0, i), defined, []string{"Bash", "Bash"}, map[string]int{"main.go": 2}, 200)
+		ob, ok := Observe(s)
+		if !ok {
+			t.Fatalf("session %d must calibrate", i)
+		}
+		obs = append(obs, ob)
+	}
+
+	var servers []Suggestion
+	for _, s := range Suggest(obs) {
+		if s.Kind == KindUnusedTools {
+			servers = append(servers, s)
+		}
+	}
+	if len(servers) < 2 {
+		t.Fatalf("expected one suggestion per unused server, got %d: %+v",
+			len(servers), titlesOf(servers))
+	}
+
+	byTarget := map[string]Suggestion{}
+	for _, s := range servers {
+		byTarget[s.Target] = s
+	}
+	for _, want := range []string{"playwright", "jira"} {
+		s, ok := byTarget[want]
+		if !ok {
+			t.Errorf("no suggestion targets the %q server; targets were %v",
+				want, keysOf(byTarget))
+			continue
+		}
+		// The count must be that server's tools, not the corpus-wide total.
+		// Reporting 5 against playwright would be the old lumped number wearing
+		// a server's name, which is worse than not attributing at all.
+		wantN := map[string]string{"playwright": "3", "jira": "2"}[want]
+		if !strings.Contains(s.Title, wantN) {
+			t.Errorf("%s: title %q does not carry its own tool count %s",
+				want, s.Title, wantN)
+		}
+		if !strings.Contains(s.Title, want) {
+			t.Errorf("%s: title %q does not name the server", want, s.Title)
+		}
+		// The whole point: an action the reader can take.
+		if !strings.Contains(strings.ToLower(s.Action), "disable") {
+			t.Errorf("%s: action %q does not tell the reader what to do", want, s.Action)
+		}
+	}
+
+	// Playwright carries three definitions to jira's two, so it must cost more.
+	// If the tokens were split evenly the attribution would be decorative.
+	if p, j := byTarget["playwright"], byTarget["jira"]; p.PromptTokens <= j.PromptTokens {
+		t.Errorf("playwright (3 tools) costs %d prompt tokens against jira's (2 tools) %d; "+
+			"the per-server figures are not derived from the per-server bytes",
+			p.PromptTokens, j.PromptTokens)
+	}
+}
+
+// A built-in tool has no server, and must not be invented one.
+//
+// "Read" does not match mcp__<server>__<tool>. Bucketing it under a fabricated
+// server name would be the tool telling the reader to disable something that
+// does not exist.
+func TestUnusedBuiltinsAreNotGivenAServer(t *testing.T) {
+	base := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	var obs []Observation
+	for i := 0; i < 3; i++ {
+		s := synthetic(base.AddDate(0, 0, i),
+			[]string{"Bash", "Read", "Glob"}, []string{"Bash", "Bash"}, map[string]int{"main.go": 2}, 200)
+		ob, ok := Observe(s)
+		if !ok {
+			t.Fatalf("session %d must calibrate", i)
+		}
+		obs = append(obs, ob)
+	}
+	for _, s := range Suggest(obs) {
+		if s.Kind != KindUnusedTools {
+			continue
+		}
+		if strings.Contains(s.Target, "mcp__") || strings.Contains(s.Action, "disable this server") {
+			t.Errorf("built-in tools were attributed to a server: target=%q title=%q action=%q",
+				s.Target, s.Title, s.Action)
+		}
+		if !strings.Contains(s.Title, "Glob") {
+			t.Errorf("the built-in suggestion names neither the tools nor the count: %q", s.Title)
+		}
+	}
+}
+
+func titlesOf(ss []Suggestion) []string {
+	out := []string{}
+	for _, s := range ss {
+		out = append(out, s.Title)
+	}
+	return out
+}
+
+func keysOf(m map[string]Suggestion) []string {
+	out := []string{}
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
