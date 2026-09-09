@@ -79,7 +79,9 @@ how much of the prefix is shared with an already-warm request:
 
 So the quantity Ollama does not report can be recovered from one it does:
 
-    cached_tokens ~= prompt_eval_count - (prompt_eval_duration / cold_rate)
+```text
+cached_tokens ~= prompt_eval_count - (prompt_eval_duration / cold_rate)
+```
 
 where `cold_rate` is the per-token cost of evaluating an uncached prompt, which
 is a property of the model and the machine and has to be calibrated rather than
