@@ -87,6 +87,8 @@ type sessionState struct {
 	// the sentence already written against errorByLane below; it was applied
 	// to one field out of four.
 	whatIf  map[string][]WhatIf
+	// whatIfRequests is how many requests each lane's score covers.
+	whatIfRequests map[string]int
 	context map[string][]analysis.ContextEntry
 	reReads map[string]analysis.ReReads
 	// errorByLane is the estimated prompt cost of error content carried by
@@ -499,6 +501,13 @@ func (s *stats) rescore(rec *ledger.Record) (string, analysis.ReReads) {
 	// Each replaces this lane's figure rather than adding to it: the report is
 	// that lane's running total, not a delta. Same rule as errorByLane below.
 	st.whatIf[rec.AgentID] = rows
+	// Taken from the report that produced the rows, never from st.tally: the
+	// tally is incremented on the request path and would report a coverage
+	// this scoring does not have.
+	if st.whatIfRequests == nil {
+		st.whatIfRequests = map[string]int{}
+	}
+	st.whatIfRequests[rec.AgentID] = len(lane.Requests)
 	st.reReads[rec.AgentID] = report.ReReads
 	// Blame was computed and discarded here. It is the only attribution of what
 	// a session's context is made of, and the proxy is the one place it can be
@@ -597,6 +606,17 @@ type SessionSummary struct {
 	// WhatIf scores candidate layouts over the session so far; as-run is
 	// first. Nothing here was sent to the provider.
 	WhatIf []WhatIf `json:"what_if,omitempty"`
+	// WhatIfRequests is how many requests the scoring above covers.
+	//
+	// It is not the same as Requests, and the difference is the point.
+	// rescore runs AFTER the response has been delivered, so a status read
+	// between delivery and rescore sees a request counted in Requests whose
+	// what-if has not been computed yet. Without this field there is no way to
+	// tell a current score from a stale one, and no way to wait for a current
+	// one — which is how TestWhatIfMatchesOfflineReplayAndStaysOffTheWire came
+	// to compare a live figure over 9 requests against an offline figure over
+	// 10 and fail on CI while passing 70 consecutive local runs.
+	WhatIfRequests int `json:"what_if_requests,omitempty"`
 }
 
 // Status is the status endpoint's body.
@@ -677,7 +697,7 @@ func (s *stats) status() Status {
 				out.Trial.Treated++
 			}
 		}
-		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, Context: st.contextFor(""), ContextByLane: copyContextByLane(st.context), ReReads: st.reReadsFor(""), ReReadsByLane: copyReReadsByLane(st.reReads), WhatIf: st.whatIfFor(""), WhatIfByLane: copyWhatIfByLane(st.whatIf), ErrorShare: share(st.totalErrorTokens(), st.tally.PromptTokens), Masked: st.masked, Rehydrated: st.rehydrated, RehydrationDenied: st.denied, Held: st.held, HeldMS: st.heldMS})
+		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, Context: st.contextFor(""), ContextByLane: copyContextByLane(st.context), ReReads: st.reReadsFor(""), ReReadsByLane: copyReReadsByLane(st.reReads), WhatIf: st.whatIfFor(""), WhatIfRequests: st.whatIfRequests[""], WhatIfByLane: copyWhatIfByLane(st.whatIf), ErrorShare: share(st.totalErrorTokens(), st.tally.PromptTokens), Masked: st.masked, Rehydrated: st.rehydrated, RehydrationDenied: st.denied, Held: st.held, HeldMS: st.heldMS})
 	}
 	sort.Slice(out.Sessions, func(i, j int) bool { return out.Sessions[i].LastSeen.After(out.Sessions[j].LastSeen) })
 	return out
