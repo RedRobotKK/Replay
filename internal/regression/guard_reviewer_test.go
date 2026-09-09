@@ -25,24 +25,31 @@ import (
 // indistinguishable from a clean tree, so the script must exit non-zero on a
 // survivor rather than printing and passing.
 
-func ciFile(t *testing.T) string {
-	t.Helper()
-	b, err := os.ReadFile(filepath.Join(repoRoot(t), ".github", "workflows", "ci.yml"))
-	if err != nil {
-		t.Fatalf("reading the CI workflow: %v", err)
-	}
-	return string(b)
-}
-
 // GR1: a job runs the reviewer.
 func TestGR1_CIRunsTheGuardReviewer(t *testing.T) {
-	ci := ciFile(t)
-	if !strings.Contains(ci, "scripts/guard-reachability/main.go") {
-		t.Error("no CI job runs scripts/guard-reachability, so every conditional a pull " +
-			"request adds goes unchecked for whether any test can observe it")
+	// Executable lines only, via the same helper MC1 uses.
+	//
+	// The first version of this test read the workflow as one blob and had the
+	// identical hole MC1 had: commenting the step out and replacing it with
+	// `echo skipping` leaves the reviewer's own name in the file, so the guard
+	// passes while nothing runs. Two guards written days apart, defeated by the
+	// same edit, is the argument for one helper rather than two greps.
+	var runsIt, fullHistory bool
+	for _, line := range ciCommands(t) {
+		if strings.Contains(line, "scripts/guard-reachability/main.go") {
+			runsIt = true
+		}
+		if strings.Contains(line, "fetch-depth: 0") {
+			fullHistory = true
+		}
+	}
+	if !runsIt {
+		t.Error("no EXECUTABLE line in ci.yml runs scripts/guard-reachability, so every " +
+			"conditional a pull request adds goes unchecked for whether any test can " +
+			"observe it. A commented-out step does not count.")
 	}
 	// It diffs against the base branch, which a shallow clone does not have.
-	if !strings.Contains(ci, "fetch-depth: 0") {
+	if !fullHistory {
 		t.Error("the workflow never requests full history; the reviewer diffs against the " +
 			"base ref and a shallow clone has neither history nor base")
 	}
