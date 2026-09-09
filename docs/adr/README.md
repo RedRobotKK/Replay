@@ -23,6 +23,7 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | [0015](0015-single-tenant-state-is-a-boundary.md) | Single-tenant state is a boundary, not an implementation detail | Accepted |
 | [0016](0016-business-source-license.md) | Relicense under the Business Source License 1.1 | Accepted |
 | [0017](0017-the-unintelligent-router.md) | Routing decided by cache structure, not by reading the prompt | Rejected |
+| [0018](0018-this-is-an-instrument-not-an-app.md) | Provenance is a field, not a comment: absence, zero and unknown are three values | Accepted |
 
 ---
 
