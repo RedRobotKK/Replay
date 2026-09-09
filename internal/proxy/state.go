@@ -473,6 +473,12 @@ func (s *stats) rescore(rec *ledger.Record) (string, analysis.ReReads) {
 	lane := session.Lane(rec.AgentID, rec.AgentID != "")
 	report := analysis.AnalyzeLane(session, lane)
 	policies := report.Policies()
+	// Captured here, under scoreMu, because that is the lock guarding the
+	// builder that mutates this lane. Reading len(lane.Requests) further down
+	// beside the whatIf write looks equivalent and is not: it is outside
+	// scoreMu, so it races with the next request's builder.Add. CI's -race
+	// caught it on ubuntu; 25 local runs with -race did not.
+	covered := len(lane.Requests)
 	st.scoreMu.Unlock()
 
 	asRun := policies[0]
@@ -507,7 +513,7 @@ func (s *stats) rescore(rec *ledger.Record) (string, analysis.ReReads) {
 	if st.whatIfRequests == nil {
 		st.whatIfRequests = map[string]int{}
 	}
-	st.whatIfRequests[rec.AgentID] = len(lane.Requests)
+	st.whatIfRequests[rec.AgentID] = covered
 	st.reReads[rec.AgentID] = report.ReReads
 	// Blame was computed and discarded here. It is the only attribution of what
 	// a session's context is made of, and the proxy is the one place it can be
