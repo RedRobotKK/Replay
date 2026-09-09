@@ -14,9 +14,16 @@ import (
 // roughly 80-85% of users do not spend, so for most readers the headline is
 // literally $0.00 of relevance, printed with two decimal places of confidence.
 //
-// The waste is real for them; it is just not money. It is context that the
-// work did not get and rate-limit budget spent on nothing. Both are already
-// measured - the deficit is in tokens before it is ever multiplied by a price.
+// The waste is real for them; it is just not money. It is tokens, and the
+// token count is measured - the deficit is in tokens before it is ever
+// multiplied by a price.
+//
+// This comment used to add "context that the work did not get and rate-limit
+// budget spent on nothing. Both are already measured", and neither half was.
+// A broken cache changes what a prompt is billed, not what it contains, so the
+// work got the context either way; and the rate-limit question was measured
+// afterwards across 3.09M tokens with the utilisation counter moving zero
+// steps (README.md:228-235). See FS2 in flatseat_test.go.
 //
 // So the tokens are stated beside the dollars, and the report says plainly who
 // each figure is for. That is a presentation change over data already in hand,

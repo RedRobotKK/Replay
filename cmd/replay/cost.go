@@ -213,8 +213,10 @@ type costSummary struct {
 	//
 	// The dollar figure is meaningless to a flat-seat subscriber, who is not
 	// billed per token and is most of the readership. The tokens are what they
-	// actually lost: context the work did not get, and rate-limit budget spent
-	// on nothing. The deficit was always in tokens first.
+	// actually lost, and the token count is where this stops: what those
+	// tokens go on to cost such a reader is a quota question, and the one
+	// measurement of it came back null (README.md:228-235). The deficit was
+	// always in tokens first, and in tokens is where it can be stated.
 	AvoidableTokens int `json:"avoidableTokens,omitempty"`
 	// Which route the traffic took. A category, never an id — see
 	// namespace.go for why the billing mode is only claimed where the model
@@ -312,10 +314,31 @@ func renderCost(s costSummary, unpriced int, out io.Writer, stateDir string) str
 	}
 	fmt.Fprintf(&b, "\nAvoidable is the part nobody chose: tokens re-billed because a prompt cache\nbroke. It is not a forecast of savings, it is what was already spent twice.\n")
 	if s.AvoidableTokens > 0 {
+		// What this paragraph may and may not assert.
+		//
+		// It may say what re-billed tokens ARE: that is arithmetic from the
+		// transcript. It may not say what they COST a subscriber, because that
+		// is a quota measurement, and the only one anyone has run came back
+		// null — matched cold-write and warm-read arms, 3.09M tokens, and the
+		// utilisation counter moved zero steps (README.md:228-235).
+		//
+		// Two claims were removed here. "Rate-limit budget spent on nothing"
+		// asserted on the reader's screen exactly what the README refuses to
+		// assert two clicks away. "Context the work did not get" was wrong on
+		// its own terms: a broken cache changes what a prompt is billed, not
+		// what it contains, so the work got the context either way.
+		//
+		// Saying nothing was the other option and it is worse. A subscriber's
+		// whole reason to care about re-billed tokens is what they cost them,
+		// so leaving the question out invites them to assume an answer. The
+		// null is more useful than the silence and more honest than the claim.
 		fmt.Fprintf(&b, "\nOn a subscription seat - Claude Pro or Max, Copilot, Cursor - none of that is\n"+
 			"money: you are not billed per token, so the dollars above are list price for\n"+
-			"someone who is. The tokens are still yours. They are context the work did not\n"+
-			"get, and rate-limit budget spent on nothing. `replay advise` ranks what to cut.\n")
+			"someone who is. The tokens are still yours.\n\n"+
+			"What they cost you instead is not established. Whether a re-billed token draws\n"+
+			"down a rate-limit window was measured here across 3.09M tokens and the\n"+
+			"utilisation counter did not move: a null result, not a saving. `replay advise`\n"+
+			"ranks what to cut by token count, which is the part that was measured.\n")
 	}
 	if unpriced > 0 {
 		fmt.Fprintf(&b, "\n%d further transcripts were read but not priced, because their model is not in\nthe price table. They are excluded rather than counted as free.\n", unpriced)
