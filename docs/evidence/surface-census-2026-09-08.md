@@ -21,7 +21,7 @@ it was the only one.
 | Claude Code `~/.claude/projects` | 1.5 GB, **1,681** `.jsonl` | **yes, all 1,681** | yes | correct |
 | Codex `~/.codex/{sessions,archived_sessions}` | 42 MB, **150** rollouts | **yes, both roots, 150** | yes | correct |
 | Ollama `~/.ollama/logs/server*.log` | 42 MB, **3,161** requests | **yes** | 586 of 3,161 | corrected 2026-09-08 |
-| Grok `~/.grok/sessions` | **3.8 GB, 6,787 files** | no | **no** | "no local transcript" — **wrong** |
+| Grok `~/.grok/sessions` | **3.8 GB, 6,787 files** | no | **yes — see the 2026-09-09 correction below; this cell was wrong** | "no local transcript" — **wrong** |
 | Cursor `~/.cursor` | 11 MB, **118** agent transcripts | no | **no** | out of scope, for a wire reason — **incomplete** |
 
 Everything the tool claims to read, it reads completely. The two surfaces it
@@ -109,6 +109,37 @@ sent off this machine before anyone opened a file.
 
 The fields are absent and the string `406.07` appears nowhere under `~/.grok`.
 Withdrawn, and corrected to the recipient.
+
+> ### Correction, 2026-09-09: "the fields are absent" is wrong
+>
+> **The fields exist.** 72 files under `~/.grok` contain `cachedReadTokens`,
+> and 74 `updates.jsonl` files carry `inputTokens`, `cachedReadTokens`,
+> `outputTokens`, `reasoningTokens` and `costUsdTicks`. Verified by direct
+> `grep` and by an independent parse.
+>
+> This census walked `sessions/` and one session's `events.jsonl` field by
+> field over 13,444 events, and concluded from that absence that the fields
+> were absent everywhere. **`updates.jsonl` was never opened.** So the
+> withdrawal above repeated the error it was written to correct — a conclusion
+> drawn from an incomplete search, one level down. The lesson it states,
+> *"a figure from a summary is not a figure from a measurement"*, applies to
+> the correction as well as to the claim.
+>
+> **The dollar figure remains unestablished, for a better reason.** Two
+> independent aggregations of the same files disagree by exactly a factor of
+> two: $406.07 over 1,411 turns, and $812.13 over 2,822 usage objects. An exact
+> 2x is the signature of a nesting double-count in one of the two passes, and
+> which one has not been determined. The tick scale is also unverified — 1e-10
+> reproduces the first figure and yields plausible rates, but nobody has checked
+> it against an xAI invoice.
+>
+> So: **the token counts are real and readable, and the dollar total is not
+> settled.** Do not quote either figure. What changes is that Grok is now a
+> spend surface worth building a parser for, where this document says it is not.
+>
+> The claim about Cursor is untouched by this: its search covered every `.jsonl`
+> under `~/.cursor` rather than one file, and 118 transcripts with zero usage
+> fields was re-confirmed on 2026-09-09.
 
 The general form is worth keeping, because it is the same error as the Grok
 claim one level up: **a figure from a summary is not a figure from a
