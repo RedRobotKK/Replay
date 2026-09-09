@@ -288,7 +288,7 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 		}
 		return nil
 	}
-	return tui.StartWith(stdout, src, &loop)
+	return tui.StartWith(stdout, src, &loop, key)
 }
 
 // machineState reads what the local filesystem can answer without a proxy.

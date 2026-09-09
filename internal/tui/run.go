@@ -123,7 +123,7 @@ func leave(w io.Writer, raw bool) {
 // constructed before the loop exists. Passing the pointer back is less clever
 // than a callback and easier to follow, which matters more here than elegance:
 // this is the one file that cannot be tested without a terminal.
-func StartWith(out io.Writer, src Source, into **Loop) error {
+func StartWith(out io.Writer, src Source, into **Loop, start rune) error {
 	if out == nil {
 		out = os.Stdout
 	}
@@ -139,7 +139,7 @@ func StartWith(out io.Writer, src Source, into **Loop) error {
 	keys := make(chan rune)
 	go readKeys(os.Stdin, keys, rawErr == nil)
 
-	l := &Loop{Out: out, Source: src, Keys: keys, Addressable: rawErr == nil}
+	l := &Loop{Out: out, Source: src, Keys: keys, Start: start, Addressable: rawErr == nil}
 	*into = l
 	l.Run(stop)
 

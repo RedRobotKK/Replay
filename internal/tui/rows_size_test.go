@@ -112,3 +112,55 @@ func TestSZ6_ATallerTerminalShowsMore(t *testing.T) {
 		t.Errorf("a 24-row terminal got %d lines", got)
 	}
 }
+
+// SZ7: the loop opens on the screen it was given.
+//
+// `--screen advise` is documented as "which question to open on" and was
+// honoured only by --once. StartWith built the Loop with no initial key, so the
+// interactive path fell to Shortcuts()[0] — cost — and the flag was silently
+// dropped.
+//
+// Found by recording a demo. The tape typed `tui --screen advise`, waited, and
+// captured the cost screen counting zero transcripts; two renders were blamed
+// on the wrong binary before the flag itself was suspected. A demo is a test
+// that watches the product the way a person does, which is why it caught what
+// nine unit tests over this package did not.
+func TestSZ7_TheLoopOpensOnTheGivenScreen(t *testing.T) {
+	want := rune(0)
+	for _, s := range Shortcuts() {
+		if s.Label == "advise" {
+			want = s.Key
+		}
+	}
+	if want == 0 {
+		t.Fatal("no advise shortcut")
+	}
+
+	var got rune
+	l := &Loop{Start: want, Source: func(k rune, _ int) Frame {
+		got = k
+		return Frame{Key: k, Lines: []string{"x"}}
+	}}
+	l.first()
+	if got != want {
+		t.Errorf("the loop opened on %q with Start=%q; the --screen flag is dropped "+
+			"on the interactive path and honoured only by --once", got, want)
+	}
+}
+
+// SZ8: with no Start, the loop still opens on the first shortcut.
+//
+// The fallback has to survive, or every caller that does not care about the
+// opening screen gets a blank one.
+func TestSZ8_NoStartFallsBackToTheFirstShortcut(t *testing.T) {
+	var got rune
+	l := &Loop{Source: func(k rune, _ int) Frame {
+		got = k
+		return Frame{Key: k, Lines: []string{"x"}}
+	}}
+	l.first()
+	if got != Shortcuts()[0].Key {
+		t.Errorf("with no Start the loop opened on %q, want %q",
+			got, Shortcuts()[0].Key)
+	}
+}
