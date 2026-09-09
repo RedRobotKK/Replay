@@ -72,6 +72,12 @@ const (
 	Verified    Status = "verified"
 	NotVerified Status = "not verified"
 	AdviceOnly  Status = "advice only"
+	// Dismissed is the reader saying "not doing this", from the triage
+	// screen. Distinct from Applied because it records a decision rather
+	// than a change: nothing about the corpus moved, so nothing should be
+	// verified later, and re-suggesting it would be arguing with someone
+	// who has already answered.
+	Dismissed Status = "dismissed"
 )
 
 // Suggestion is one piece of advice with its evidence.

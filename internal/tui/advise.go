@@ -53,7 +53,37 @@ type AdviceRow struct {
 // sessions is how many were read, and it is the parameter that separates an
 // empty result from an absent one. Passing the rows alone would collapse both
 // into "no rows", which is the distinction this screen exists to keep.
+// selMarker is the cursor. Two cells so it reserves the same width on every
+// row, selected or not, and the columns after it cannot shift as the reader
+// moves — the defect TestCL1 exists to catch, arriving through the front door.
+const selMarker = "\u25b8 "
+
+// AdviseScreen renders the findings with no selection, for callers that only
+// want the list.
 func AdviseScreen(rows []AdviceRow, sessions int) Screen {
+	return adviseScreen(rows, sessions, -1)
+}
+
+// AdviseScreenAt renders with one finding selected.
+//
+// Triage is the point of this screen: a reader picks a finding and marks it
+// applied or dismissed. Selection comes first because a reader who cannot
+// point at a row cannot be asked what to do about it. The index is clamped
+// rather than validated — this is exported, and a panic mid-keystroke takes
+// the whole TUI down.
+func AdviseScreenAt(rows []AdviceRow, sessions, at int) Screen {
+	if len(rows) > 0 {
+		if at < 0 {
+			at = 0
+		}
+		if at >= len(rows) {
+			at = len(rows) - 1
+		}
+	}
+	return adviseScreen(rows, sessions, at)
+}
+
+func adviseScreen(rows []AdviceRow, sessions, at int) Screen {
 	sc := Screen{Key: 'a', Title: "advise", From: Measured}
 	lines := make([]string, 0, BudgetRows)
 	lines = append(lines, header("advise"), "")
@@ -95,9 +125,17 @@ func AdviseScreen(rows []AdviceRow, sessions int) Screen {
 	// is not something a reader can act on. The rest stay in `replay advise`
 	// and advice.json.
 	const onScreen = 4
-	shown := rows
+	shown, first := rows, 0
 	if len(shown) > onScreen {
-		shown = shown[:onScreen]
+		// Scroll to keep the selection visible rather than always showing the
+		// top: a cursor that moves off the screen is a cursor the reader loses.
+		if at >= onScreen {
+			first = at - onScreen + 1
+			if first+onScreen > len(rows) {
+				first = len(rows) - onScreen
+			}
+		}
+		shown = rows[first : first+onScreen]
 	}
 	head := fmt.Sprintf("  %d change(s) worth making, across %d transcript(s)",
 		len(rows), sessions)
@@ -115,10 +153,16 @@ func AdviseScreen(rows []AdviceRow, sessions int) Screen {
 		// The prefix is measured, not assumed. It was Cols()-6, which is right
 		// for a one- or two-digit index and one cell short at 100, and a corpus
 		// with a hundred suggestions is exactly where nobody is checking.
-		num := fmt.Sprintf("%d", i+1)
-		prefix := 4 + len(num)
-		lines = append(lines, fmt.Sprintf("  %s  %s",
-			paint(Faint, num), paint(Strong, fitTo(r.Title, Cols()-prefix))))
+		num := fmt.Sprintf("%d", first+i+1)
+		mark := strings.Repeat(" ", VisibleLen(selMarker))
+		title := Strong
+		if first+i == at {
+			mark = paint(Accent, selMarker)
+			title = Accent
+		}
+		prefix := 4 + len(num) + VisibleLen(selMarker)
+		lines = append(lines, fmt.Sprintf("  %s%s  %s",
+			mark, paint(Faint, num), paint(title, fitTo(r.Title, Cols()-prefix))))
 		lines = append(lines, "     "+paint(Faint, cell("evidence", 10))+
 			fitTo(fmt.Sprintf("%d transcript(s), %s prompt tokens", r.Sessions, commas(r.PromptTokens)), Cols()-15))
 
@@ -177,6 +221,14 @@ func AdviseScreen(rows []AdviceRow, sessions int) Screen {
 			paint(Faint, fmt.Sprintf("  %d more in `replay advise`, ranked the same way.",
 				len(rows)-len(shown))))
 	}
+	if at >= 0 && len(rows) > 0 {
+		// Named on screen rather than left to `?`. A key nobody is told about
+		// is a key nobody presses, which is how `--screen live` shipped
+		// working and denied by its own help text.
+		lines = append(lines, "",
+			paint(Faint, "  j/k move   a mark applied   x dismiss   enter evidence"))
+	}
+	sc.Rows = len(rows)
 	sc.Lines = lines
 	return sc
 }

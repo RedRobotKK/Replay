@@ -162,8 +162,33 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 		case 'a':
 			// Cached first. Recomputing took 7.7s of wall clock per keypress.
 			var sc tui.Screen
-			if rows, n, at, ok := adviceFromCache(); ok {
-				sc = tui.AdviseScreen(rows, n)
+			if rows, ids, n, at, ok := adviceFromCache(); ok {
+				sel := loop.Cursor().At
+				sc = tui.AdviseScreenAt(rows, n, sel)
+				// Local keys, cleared on every render, so `a` and `x` cannot
+				// follow the reader onto a screen where they mean something
+				// else. This is the whole point of the screen: a finding the
+				// reader has judged should stop being offered.
+				loop.SetLocal(func(r rune) bool {
+					var status advisor.Status
+					switch r {
+					case 'a':
+						status = advisor.Applied
+					case 'x':
+						status = advisor.Dismissed
+					default:
+						return false
+					}
+					i := loop.Cursor().At
+					if i < 0 || i >= len(ids) {
+						return false
+					}
+					// A write that fails must not look like one that worked.
+					// The next render re-reads the file, so a silent failure
+					// would show the old status and the reader would press
+					// the key again.
+					return markAdvice(ids[i], status) == nil
+				})
 				// The age is not decoration. Advice read from disk without a
 				// date is yesterday's answer wearing today's clothes.
 				sc.Lines = append(sc.Lines, fmt.Sprintf(
@@ -432,21 +457,25 @@ func modelState() (string, []tui.ModelRow, int) {
 // Freshness is the whole risk, so the caller shows the timestamp rather than
 // presenting yesterday's advice as today's. A cache that cannot say how old it
 // is would be worse than the delay it saves.
-func adviceFromCache() ([]tui.AdviceRow, int, time.Time, bool) {
+func adviceFromCache() ([]tui.AdviceRow, []string, int, time.Time, bool) {
 	b, err := os.ReadFile(filepath.Join(tipStateDir(), adviceFileName))
 	if err != nil {
-		return nil, 0, time.Time{}, false
+		return nil, nil, 0, time.Time{}, false
 	}
 	var f adviceFile
 	if json.Unmarshal(b, &f) != nil || f.Schema != advisor.AdviceFileSchema {
 		// A file this build does not understand is not advice. Recompute
 		// rather than render fields that may have moved.
-		return nil, 0, time.Time{}, false
+		return nil, nil, 0, time.Time{}, false
 	}
 	if len(f.Suggestions) == 0 {
-		return nil, 0, time.Time{}, false
+		return nil, nil, 0, time.Time{}, false
 	}
-	return adviceRows(f.Suggestions), f.Sessions, f.Generated, true
+	ids := make([]string, 0, len(f.Suggestions))
+	for _, sg := range f.Suggestions {
+		ids = append(ids, sg.ID)
+	}
+	return adviceRows(f.Suggestions), ids, f.Sessions, f.Generated, true
 }
 
 // adviceRows converts suggestions to screen rows. Shared so the cached path
