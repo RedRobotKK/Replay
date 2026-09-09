@@ -55,7 +55,23 @@ func FindEntropy(text []byte, taken []bool) []Match {
 		for j < len(text) && isTokenByte(text[j]) {
 			j++
 		}
-		if looksLikeCredential(text[i:j]) && !overlaps(taken, i, j) {
+		// Two detectors, because one of them structurally cannot see the
+		// other's case. looksLikeCredential requires an uppercase character
+		// (`!seen[classUpper]` below), so a lowercase hex token — a GitHub PAT
+		// body, a self-issued API key, an AWS secret in some tooling — can
+		// never satisfy it however long or random it is.
+		//
+		// LooksLikeHexSecret was written for exactly that gap on the day the
+		// entropy path landed, and until 2026-09-09 nothing called it. It had
+		// passing unit tests the whole time, which is why the leak survived: a
+		// test proves the predicate works, not that anything asks it.
+		//
+		// It is deliberately the narrower of the two. It fires only on a run
+		// introduced by a credential cue within hexCueWindow bytes, so a commit
+		// hash or a checksum in ordinary prose is left alone — masking every
+		// long hex run would redact most of what a transcript is for.
+		if (looksLikeCredential(text[i:j]) || LooksLikeHexSecret(string(text), i, j-i)) &&
+			!overlaps(taken, i, j) {
 			out = append(out, Match{Start: i, End: j, Pattern: EntropyPattern})
 		}
 		i = j
