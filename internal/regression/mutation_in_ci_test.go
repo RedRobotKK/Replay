@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The frozen mutant catalogue must actually run somewhere automatic.
@@ -38,13 +39,65 @@ func ciWorkflow(t *testing.T) string {
 	return string(b)
 }
 
+// ciCommands returns only the lines CI would execute.
+//
+// The reason these guards exist at all is that a capability can sit in the
+// repository looking wired and never run. Reading the workflow as one blob
+// reproduced that exactly: an audit replaced the mutation step with
+// `echo skipping`, left the real command one line above as a comment, and both
+// MC1 and MC2 stayed green while the catalogue stopped running entirely. The
+// guard whose stated job is "this is what proves the expensive job is still
+// wired up" was satisfied by a note about the job.
+//
+// A comment is not a command. Lines whose first non-space character is # are
+// dropped, and what remains is what a runner would actually do.
+func ciCommands(t *testing.T) []string {
+	t.Helper()
+	var out []string
+	for _, line := range strings.Split(ciWorkflow(t), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		out = append(out, line)
+	}
+	if len(out) == 0 {
+		t.Fatal("the workflow has no executable lines, so these guards assert nothing")
+	}
+	return out
+}
+
+// mutationRunLine finds the executable line that runs the catalogue.
+func mutationRunLine(t *testing.T) (string, bool) {
+	t.Helper()
+	for _, line := range ciCommands(t) {
+		if strings.Contains(line, "-tags mutation") {
+			return line, true
+		}
+	}
+	return "", false
+}
+
+// minMutationTimeout is the floor the catalogue's -timeout must clear.
+//
+// Two measurements, both real. 659s on a quiet laptop, and 1531s on the same
+// tree under concurrent load. A CI runner is slower than either, so the floor
+// is set well above the slower of the two rather than at a round number that
+// happens to be bigger than the faster one.
+//
+// It exists because MC2 used to check that the TOKEN -timeout appeared and
+// never what followed it: `-timeout 1s` passed, which is the exact failure its
+// own comment describes — a job that dies on the clock, red for a reason
+// unrelated to the commit, until somebody switches the check off.
+const minMutationTimeout = 30 * time.Minute
+
 // MC1: some job runs the catalogue.
 func TestMC1_CIRunsTheFrozenMutantCatalogue(t *testing.T) {
-	ci := ciWorkflow(t)
-	if !strings.Contains(ci, "-tags mutation") {
-		t.Error("no job in ci.yml passes -tags mutation, so internal/mutation is excluded " +
-			"from every automated run and its 72 frozen mutants are never asked whether " +
-			"the guards that killed them still work")
+	if _, ok := mutationRunLine(t); !ok {
+		t.Error("no EXECUTABLE line in ci.yml passes -tags mutation, so internal/mutation " +
+			"is excluded from every automated run and its frozen mutants are never asked " +
+			"whether the guards that killed them still work. A commented-out command does " +
+			"not count: that is how this guard was defeated.")
 	}
 }
 
@@ -56,18 +109,36 @@ func TestMC1_CIRunsTheFrozenMutantCatalogue(t *testing.T) {
 // switched off. installer-drift's comment in the same file makes exactly that
 // argument.
 func TestMC2_TheCatalogueIsGivenTimeToFinish(t *testing.T) {
-	ci := ciWorkflow(t)
-	idx := strings.Index(ci, "-tags mutation")
-	if idx < 0 {
+	line, ok := mutationRunLine(t)
+	if !ok {
 		t.Skip("MC1 covers the absent case")
 	}
-	line := ci[idx:]
-	if nl := strings.IndexByte(line, '\n'); nl >= 0 {
-		line = line[:nl]
+	fields := strings.Fields(line)
+	var raw string
+	for i, f := range fields {
+		if f == "-timeout" && i+1 < len(fields) {
+			raw = fields[i+1]
+			break
+		}
+		if v, found := strings.CutPrefix(f, "-timeout="); found {
+			raw = v
+			break
+		}
 	}
-	if !strings.Contains(line, "-timeout") {
-		t.Errorf("the mutation run sets no -timeout, so it inherits Go's 10-minute default "+
-			"and dies around mutant 66 of 72:\n  %s", line)
+	if raw == "" {
+		t.Fatalf("the mutation run sets no -timeout, so it inherits Go's 10-minute default "+
+			"and dies partway through:\n  %s", strings.TrimSpace(line))
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		t.Fatalf("-timeout %q is not a duration Go will accept: %v", raw, err)
+	}
+	// The value, not the token. `-timeout 1s` used to pass.
+	if d < minMutationTimeout {
+		t.Errorf("-timeout is %s; the catalogue has been measured at 659s on a quiet "+
+			"machine and 1531s under load, and a CI runner is slower than either. Below %s "+
+			"the job dies on the clock, which is red for a reason that has nothing to do "+
+			"with the commit under test.", d, minMutationTimeout)
 	}
 }
 
