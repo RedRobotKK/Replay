@@ -798,12 +798,30 @@ func TestWhatIfMatchesOfflineReplayAndStaysOffTheWire(t *testing.T) {
 		postTurn(t, base, growingBody("be brief", i))
 		waitLedger(t, dir, i)
 	}
-	waitFor(t, "what-if to be scored", func() bool {
+	// Wait for the scoring to COVER every request, not merely to exist.
+	//
+	// The old condition was len(WhatIf) > 1, which is true after the second
+	// request and says nothing about how many have been scored. rescore runs
+	// after the response is delivered, so waitLedger seeing 10 records does not
+	// mean 10 have been scored — and the test then compared a live figure over
+	// 9 requests against an offline one over 10. It failed on CI (ubuntu and
+	// windows, 12,019 effective tokens live against 13,757 offline) while
+	// passing 70 consecutive local runs including -race and -cpu=1.
+	//
+	// A wait condition that is already satisfied before the work it waits for
+	// is the same defect this repository keeps finding: a check that cannot
+	// fail, wearing a timeout.
+	waitFor(t, "what-if to cover every request", func() bool {
 		st := getStatus(t, base)
-		return len(st.Sessions) == 1 && len(st.Sessions[0].WhatIf) > 1
+		return len(st.Sessions) == 1 && len(st.Sessions[0].WhatIf) > 1 &&
+			st.Sessions[0].WhatIfRequests == turns
 	})
 	st := getStatus(t, base)
 	live := st.Sessions[0].WhatIf
+	if st.Sessions[0].WhatIfRequests != turns {
+		t.Fatalf("scoring covers %d requests, the ledger has %d: the comparison below "+
+			"would be against different data", st.Sessions[0].WhatIfRequests, turns)
+	}
 	if live[0].Policy != "as-run" || live[0].VsAsRun != 0 || live[0].Estimated {
 		t.Fatalf("as-run must lead and be measured: %+v", live[0])
 	}
