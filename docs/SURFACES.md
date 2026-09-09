@@ -178,7 +178,7 @@ of the roots, and a reader checking it would have found seven counter-examples i
 | **git history** | **KNOWN PROBLEM.** Deleted PRDs, both adversarial reviews and the former project name `Buffy` are all still reachable |
 | `internal/transcript/testdata/session-redacted.jsonl` | **KNOWN PROBLEM.** Paths and bodies hashed, **tool names are not**, including a connector UUID |
 
-**Surface census, 2026-09-08.** Every agent store on the operator's machine was opened and measured; see [surface-census-2026-09-08.md](evidence/surface-census-2026-09-08.md). Everything this tool claims to read, it reads completely. Two surfaces previously documented as unavailable are present and readable, Grok at 3.8 GB and Cursor at 118 agent transcripts, and neither carries token or cost fields. So they remain out of scope for spend, for a reason that is now measured rather than assumed.
+**Surface census, 2026-09-08.** Every agent store on the operator's machine was opened and measured; see [surface-census-2026-09-08.md](evidence/surface-census-2026-09-08.md). Everything this tool claims to read, it reads completely. Two surfaces previously documented as unavailable are present and readable, Grok at 3.8 GB and Cursor at 118 agent transcripts. **Corrected 2026-09-09: the claim that neither carries token or cost fields is wrong for Grok.** 72 files under `~/.grok` contain `cachedReadTokens`, and 74 `updates.jsonl` files carry `inputTokens`, `cachedReadTokens`, `outputTokens`, `reasoningTokens` and `costUsdTicks`. The census walked `sessions/` and one `events.jsonl` and never opened `updates.jsonl`, so it generalised from an incomplete search — the same error it was written to correct. Grok is a spend surface and wants a reader. Cursor is not: its search covered every `.jsonl` under `~/.cursor`, and 118 transcripts with zero usage fields was re-confirmed on 2026-09-09.
 
 ## 5. Provider surface
 
@@ -191,6 +191,28 @@ readers report what those surfaces billed and cached; neither is replayed agains
 neither is an explicit-breakpoint scheme. `architecture/multi-provider.md` sets out why the other two
 families, implicit prefix and rented cache, are different products rather than variants, and why the
 rented family breaks the engine's assumption that more caching is better.
+
+### Agent CLIs on the integration path, and the evidence for each
+
+Added 2026-09-09 after [the integration survey](design/cli-tool-integration-survey.md) found five
+installed CLIs that nothing here had recorded. The evidence column is the point: these are three
+different standards of proof and flattening them would be the failure this page exists to prevent.
+
+| CLI | Route | Evidence | Status |
+|---|---|---|---|
+| Oracle 0.8.6 | Proxy, via `--base-url` | **Verified on the wire 2026-09-09.** Pointed at a local listener, it sent `POST /v1/responses` and read the reply back — its own footer reported the token counts | **Works today, no new code** |
+| Codex 0.153.4 | Rollout logs | Already read by `internal/transcript/codex.go`. Carries 6,871 rate-limit events across 147 files, the only quota corpus on this machine that moves | Read; quota block not yet surfaced |
+| Grok 1.0.5 | `~/.grok/**/updates.jsonl` | Usage fields confirmed present in 74 files, per the correction above. The dollar total is **not** settled: two independent aggregations differ by exactly 2x, and the `costUsdTicks` scale is unverified against an invoice | Needs a reader |
+| OpenClaw 2026.2.15 | **None found** | `OPENAI_BASE_URL` and `ANTHROPIC_BASE_URL` appear **only inside vendored `node_modules`** — zero occurrences in OpenClaw's own code. No `--base-url` flag, no URL key in `openclaw.json`; it routes through OpenRouter | **No route. Do not list as supported** |
+
+Cursor 3.17.19 is deliberately absent. It has 118 transcripts and no usage fields, so listing it
+would imply a cost measurement its files cannot support.
+
+**A note on how the OpenClaw row was nearly wrong.** The first scoped grep reported 49 hits for
+`OPENAI_BASE_URL` and would have made OpenClaw look supported. Those hits were in a *sibling*
+package under `node_modules/..`, not in OpenClaw. A vendored SDK reading an environment variable
+says nothing about whether the tool wrapping it passes one through. That is the same unscoped-search
+error as the Grok cell above, found twice in one day.
 
 **~6,800 of 10,310 non-test lines are provider-neutral already.** The coupling is concentrated in
 `internal/transcript` (1,100), `internal/ledger` (957) and `internal/cachemodel` (267).
