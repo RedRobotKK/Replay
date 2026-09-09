@@ -124,7 +124,17 @@ func adviseScreen(rows []AdviceRow, sessions, at int) Screen {
 	// terminal, so everything past the third scrolled away unread, and a total
 	// is not something a reader can act on. The rest stay in `replay advise`
 	// and advice.json.
-	const onScreen = 4
+	// Sized to the terminal rather than fixed at four. A finding costs six
+	// lines: title, evidence, saving, two of wrapped action, and the blank that
+	// separates it from the next. Header, the more-findings note and the key
+	// legend take the rest, and Body() has already taken out the frame.
+	//
+	// Six by measurement, not arithmetic: five rendered 27 lines into a 24-row
+	// terminal, because the action wraps and the estimate had counted it once.
+	onScreen := (Body() - 4) / 6
+	if onScreen < 1 {
+		onScreen = 1
+	}
 	shown, first := rows, 0
 	if len(shown) > onScreen {
 		// Scroll to keep the selection visible rather than always showing the

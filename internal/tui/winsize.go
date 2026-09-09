@@ -8,7 +8,7 @@ import (
 	"unsafe"
 )
 
-// termCols asks the terminal how wide it is.
+// termSize asks the terminal how wide and how tall it is.
 //
 // COLUMNS alone was not enough, and shipping only that would have been a fix
 // that mostly does not fire: bash maintains COLUMNS for its own line editing
@@ -18,7 +18,11 @@ import (
 //
 // This asks the driver instead, the same way IsTerminal does, so it works
 // whether or not a shell chose to export anything.
-func termCols() (int, bool) {
+// The height was already coming back from this ioctl and being dropped on the
+// floor: the struct has always had a Row field and the function returned only
+// ws.Col. One field from useful, and it is why the advise screen rendered 704
+// lines into a 24-row terminal — nothing in the package could ask.
+func termSize() (cols, rows int, ok bool) {
 	var ws struct{ Row, Col, Xpixel, Ypixel uint16 }
 	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, os.Stdout.Fd(),
 		uintptr(syscall.TIOCGWINSZ), uintptr(unsafe.Pointer(&ws)))
@@ -26,7 +30,10 @@ func termCols() (int, bool) {
 	// answer wanted in all three: a size read from a pipe is not a size, and
 	// the committed screen images are generated into exactly that.
 	if errno != 0 || ws.Col == 0 {
-		return 0, false
+		return 0, 0, false
 	}
-	return int(ws.Col), true
+	// Row can be zero on a terminal that reports a width, so it is reported
+	// separately rather than failing the whole read: a caller that knows the
+	// width and not the height is better off than one told neither.
+	return int(ws.Col), int(ws.Row), true
 }
