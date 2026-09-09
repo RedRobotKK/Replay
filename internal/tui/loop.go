@@ -136,13 +136,6 @@ func (l *Loop) Cursor() Selection {
 	return l.sel
 }
 
-// Run draws until Keys closes or ctx-like stop arrives via a closed channel.
-//
-// The ticker is the liveness cadence, the fastest of the four, because a loop
-// that woke on the slowest could not advance the cue. Everything slower is
-// derived from the tick count rather than from its own timer, which keeps one
-// clock in the program and makes the relationship between the rates something
-// a test can assert instead of something four tickers agree on by luck.
 // first settles the opening screen, and paints nothing.
 //
 // Split out so the choice can be tested without a terminal, which is the one
@@ -159,6 +152,13 @@ func (l *Loop) first() {
 	}
 }
 
+// Run draws until Keys closes or ctx-like stop arrives via a closed channel.
+//
+// The ticker is the liveness cadence, the fastest of the four, because a loop
+// that woke on the slowest could not advance the cue. Everything slower is
+// derived from the tick count rather than from its own timer, which keeps one
+// clock in the program and makes the relationship between the rates something
+// a test can assert instead of something four tickers agree on by luck.
 func (l *Loop) Run(stop <-chan struct{}) {
 	if l.Now == nil {
 		l.Now = time.Now
