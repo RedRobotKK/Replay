@@ -236,3 +236,70 @@ func TestCrossRatioNamesWhichSideOfTheBoundaryWins(t *testing.T) {
 		t.Fatalf("above the boundary it must lose, ratio %.4f", got)
 	}
 }
+
+// The null test the estimator has to survive.
+//
+// routing-baseline-2026-09-06.md leads its "what cannot be concluded" section
+// with this: comparing a model against itself returns a ratio of exactly
+// 1.0000, correct by construction, and quoted it with a band of plus or minus
+// 85.10%. A quantity known to be exactly 1 cannot carry an 85% band, so the
+// number was the estimator describing itself rather than the corpus.
+//
+// PoolFits fixed the per-session half of that in internal/analysis/pool.go and
+// is wired at cmd/replay/route.go:164, but `replay route --to claude-opus-5`
+// still printed 1.0000 +/-86% on 2026-09-09. The remaining half is here:
+// MeasureDilation combined the two sides in quadrature, which is the right
+// propagation for INDEPENDENT quantities and the wrong one for these. On the
+// identity pair the two sides are the same fit, correlated at rho = 1, and
+//
+//	rel(A/B)^2 = eA^2 + eB^2 - 2*rho*eA*eB
+//
+// collapses to zero. Quadrature assumes rho = 0 and returns e*sqrt(2) instead,
+// which is how a band grew on a quantity that is 1 by construction.
+//
+// This matters beyond tidiness: sigma's band is what `replay route` carries
+// into its dollar projection, so an inflated band is what makes every routing
+// answer "a bound to argue with" instead of a recommendation.
+func TestRT_IdentityPairHasNoBand(t *testing.T) {
+	fits := map[string]TokenFit{
+		"claude-opus-5": {TokensPerByte: 0.2718, Turns: 18866, RelativeError: 0.6086},
+	}
+	d := MeasureDilation("claude-opus-5", "claude-opus-5", fits)
+
+	if !d.Measured {
+		t.Fatalf("the identity pair is unmeasured: %s", d.Why)
+	}
+	if math.Abs(d.Sigma-1.0) > 1e-12 {
+		t.Errorf("sigma = %.6f against itself, want exactly 1", d.Sigma)
+	}
+	if d.RelativeError > 1e-12 {
+		t.Errorf("a model against itself carries a band of +/-%.2f%%. It is 1 by "+
+			"construction, so the band is the estimator describing itself.",
+			d.RelativeError*100)
+	}
+}
+
+// A distinct pair keeps its band, so the fix above cannot be a blanket zero.
+//
+// Without this, setting RelativeError to 0 unconditionally would pass the null
+// test and silently delete the uncertainty from every real routing answer —
+// turning "a bound to argue with" into a fabricated invoice, which is the
+// failure the band exists to prevent.
+func TestRT_DistinctPairKeepsItsBand(t *testing.T) {
+	fits := map[string]TokenFit{
+		"claude-opus-5":    {TokensPerByte: 0.2718, Turns: 18866, RelativeError: 0.20},
+		"claude-haiku-4-5": {TokensPerByte: 0.3010, Turns: 12044, RelativeError: 0.15},
+	}
+	d := MeasureDilation("claude-opus-5", "claude-haiku-4-5", fits)
+	if !d.Measured {
+		t.Fatalf("unmeasured: %s", d.Why)
+	}
+	if d.RelativeError <= 0 {
+		t.Fatal("a distinct pair lost its uncertainty entirely")
+	}
+	if math.Abs(d.RelativeError-math.Hypot(0.20, 0.15)) > 1e-9 {
+		t.Errorf("distinct-pair band = %.4f, want quadrature %.4f: rho is unknown "+
+			"between different models, so independence stays the conservative default",
+			d.RelativeError, math.Hypot(0.20, 0.15))
+	}
+}

@@ -126,6 +126,28 @@ sigma (tokenizer dilation, claude-opus-5 -> claude-opus-5): 1.0000 +/-85% from 1
 The point estimate is right to four figures. The error bar is **85.10%**, on 17,560
 turns per side.
 
+> **Resolved 2026-09-09.** This finding was correct, including its diagnosis of the
+> cause two paragraphs below, and it is now fixed. The repair had two halves. The
+> first, `analysis.PoolFits`, replaced the turn-weighted mean of per-session errors
+> with the standard error of the pooled ratio; it was already wired at
+> `cmd/replay/route.go:164` and was not sufficient on its own — the identity pair
+> still printed `+/-86%` on 2026-09-09. The second half was the combination step:
+> `MeasureDilation` added the two sides in quadrature, which is the propagation for
+> *independent* quantities. On the identity pair both sides are the same fit,
+> correlated at rho = 1, so `rel(A/B)^2 = eA^2 + eB^2 - 2*rho*eA*eB` collapses to
+> zero while quadrature returns `e*sqrt(2)`. The identity pair now reads
+> `1.0000 +/-0%` over 18,866 turns per side. Distinct pairs keep quadrature, because
+> rho between different models is unknown and independence is the assumption that
+> can only widen a band. `TestRT_IdentityPairHasNoBand` and
+> `TestRT_DistinctPairKeepsItsBand` hold both halves; the second fails against a
+> blanket zero, which would have deleted the uncertainty from every real answer.
+>
+> **What this does not change:** every *measured* sigma in the table below is still
+> an identity or a refusal, because no second model has turns on the wire in this
+> corpus. The estimator was never the reason routing could not answer — the
+> monoculture in limit 7 is. Fixing it removed a blocker that was not the binding
+> one.
+
 That number is not noise about claude-opus-5's tokenizer. It is the estimator's own
 floor, and the arithmetic says so exactly: `MeasureDilation` adds the two sides in
 quadrature with `math.Hypot`, and 0.8510 is 0.6017 times the square root of two, so
@@ -264,7 +286,11 @@ this document supports.
 
 1. **Nothing about any sigma differing from 1.0.** Every measured band contains 1.0.
    The identity pair proves the band is estimator noise: sigma is exactly 1 there by
-   construction and still carries 85.10%.
+   construction and still carries 85.10%. *(Amended 2026-09-09: the estimator half is
+   fixed and the identity pair now returns +/-0%. The conclusion stands unchanged for
+   this corpus, because the only pairs it can measure are identities — every distinct
+   pair refuses for want of turns. A band that no longer lies is not the same as a
+   comparison that exists.)*
 2. **No dollar projection as a point figure.** $283.18 for claude-haiku-4-5 spans
    $18.35 to $548.01 at its own quoted error. The report already says the figure is
    a bound to argue with rather than an invoice; that wording is correct and should
@@ -337,6 +363,10 @@ recomputing the spread, instead of averaging per-session errors. That is an
 estimator change, costs no provider requests, and is testable against the identity
 pair, which must return an error near zero once the estimator is right. Until then,
 the identity pair's 85.10% is the honest floor to quote beside any sigma.
+
+*Done 2026-09-09, and the prediction held: the identity pair returns exactly zero.
+Do not quote 85.10% as a floor beside a sigma measured after that date. The figure
+survives here as the record of what the instrument did before it was corrected.*
 
 ## Status
 
