@@ -189,7 +189,7 @@ func TestSZ9_TheScreenNeverOverrunsTheTerminal(t *testing.T) {
 		return out
 	}
 	actions := map[string]string{
-		"short":  "trim it",
+		"short":   "trim it",
 		"onewrap": "truncate outputs before they enter the conversation with limits",
 		"twowrap": "truncate outputs before they enter the conversation: head, tail, " +
 			"grep with limits, or a summarizing wrapper that keeps the shape",

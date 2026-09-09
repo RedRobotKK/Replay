@@ -167,7 +167,6 @@ func adviseScreen(rows []AdviceRow, sessions, at int) Screen {
 			break
 		}
 		body = append(block, body...)
-		first = i
 		shownN++
 	}
 
