@@ -265,6 +265,18 @@ func TestX402_InstallsNothing(t *testing.T) {
 // asserts that shape, so the exemption cannot quietly grow into a general one.
 var execExempt = map[string]bool{
 	"internal/selfupdate/fetch.go": true,
+	// scripts/guard-reachability is a developer tool carrying //go:build
+	// ignore, so it is excluded from every build of this module and cannot
+	// reach the shipped binary. It runs `git diff` and `go test`, which is the
+	// job: it neutralises each conditional a change touches and reports the
+	// ones no test observes.
+	//
+	// Exempted by path rather than by the build tag, on purpose. A tag is one
+	// line anybody can add, and "it says ignore" is a weaker claim than a
+	// reviewer having agreed this specific file may exec. The stale-exemption
+	// check below still applies: if it stops importing os/exec the entry has
+	// to come out.
+	"scripts/guard-reachability/main.go": true,
 }
 
 var allowedImports = map[string]bool{
