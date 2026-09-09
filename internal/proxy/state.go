@@ -86,11 +86,11 @@ type sessionState struct {
 	// for the whole session, and a quiet sub-agent erased a busy one. That is
 	// the sentence already written against errorByLane below; it was applied
 	// to one field out of four.
-	whatIf  map[string][]WhatIf
+	whatIf map[string][]WhatIf
 	// whatIfRequests is how many requests each lane's score covers.
 	whatIfRequests map[string]int
-	context map[string][]analysis.ContextEntry
-	reReads map[string]analysis.ReReads
+	context        map[string][]analysis.ContextEntry
+	reReads        map[string]analysis.ReReads
 	// errorByLane is the estimated prompt cost of error content carried by
 	// each agent lane, from the same analysis replay prints, keyed by AgentID
 	// with "" for the main loop.
