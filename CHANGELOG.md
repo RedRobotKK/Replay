@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-09-09
+
+### Changed
+
+- **Every TUI screen now reads this machine.** `advise`, `context`, `guards`,
+  `model` and `safe` fell through to a canned illustration, because they had no
+  case in the dispatch and so no caller that measured. They carried an
+  example-data notice, so nothing was dishonest — it was simply not the reader's,
+  on the surface `install.sh` opens after a successful install.
+- Each keeps three states rather than two: data is Measured; sessions read with
+  nothing found is Measured and says how many; no sessions at all is
+  `not measured here`, never "example data". An absence and an illustration are
+  different claims, and only one is about the reader.
+- `guards` refuses a cap below ten sessions, because a threshold from fewer is a
+  threshold from noise. `model` names no target: pricing a switch to a model the
+  reader did not choose would invent the question as well as the answer.
+
+### Fixed
+
+- Narrow-terminal overflows went 88 to 18 across the release, as measured output
+  replaced the illustrations and the `advise` saving row began dropping its
+  status column when the terminal cannot hold it — `storyboard.go` scene 25,
+  implemented.
+
 ## [0.5.3] - 2026-09-08
 
 ### Added
