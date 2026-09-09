@@ -50,7 +50,14 @@ a share of that back is what keeps it going:
 There is now one optional paid thing, described under **Paid: the rules feed**
 below. It is a subscription to *maintenance* of the price and cache table, not
 a feature gate: the same table ships compiled into the binary, is published for
-free at a stable URL, and stays complete. Nothing in Replay is ever behind it.
+free at a stable URL, and stays complete. **Nothing in Replay is behind the
+feed** — subscribing buys maintenance, never access, and an expired subscription
+costs you a fresher table and nothing else.
+
+Two promises that go with it, stated in full because the sentence this replaces
+said "nothing in Replay is ever behind it" and read wider than the feed it meant:
+**sponsorship gates nothing**, and **nothing that is free today ever becomes
+paid**. See [SPONSORS.md](SPONSORS.md) and [the money path](docs/MONEY-PATH.md).
 
 ## Card
 
