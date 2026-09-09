@@ -23,7 +23,16 @@ import (
 // sends nothing until `--execute` is passed, and it never takes the key as a
 // flag: a credential on a command line lands in shell history and in the
 // process table, where every other user on the box can read it.
-func runProbe(args []string, stdout, stderr io.Writer) error {
+// runProbe takes stdin rather than reading os.Stdin, so the confirmation can
+// be driven from a test.
+//
+// The seam matters more than it looks. confirmSpend was already tested
+// thoroughly as a pure function, and nothing tested that runProbe CALLS it —
+// `probe --execute` is the only command that spends the reader's money, and
+// its one gate had no coverage at all. Disabling the guard left the whole suite
+// green while two billable requests left the machine. main.go already passes
+// os.Stdin into runMCP for the same reason.
+func runProbe(stdin io.Reader, args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("probe", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	model := fs.String("model", "", "model id to measure; repeat with commas to measure several at once")
@@ -127,7 +136,7 @@ func runProbe(args []string, stdout, stderr io.Writer) error {
 	// Confirm before spending. The plan is printed first so the answer is
 	// informed rather than reflexive.
 	r.Plan(cfg, *model)
-	if !confirmSpend(os.Stdin, stdout, fmt.Sprintf("%d billable requests to %s", cfg.MaxProbes, base), *yes) {
+	if !confirmSpend(stdin, stdout, fmt.Sprintf("%d billable requests to %s", cfg.MaxProbes, base), *yes) {
 		return fmt.Errorf("not confirmed; nothing was sent")
 	}
 
