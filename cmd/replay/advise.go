@@ -99,7 +99,10 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 		}
 		return p.Err()
 	}
-	suggestions := advisor.Suggest(obs)
+	// The reader's own decisions, carried across runs. Without them nothing can
+	// be verified, which is the point: a status inferred from the corpus moving
+	// is not a status.
+	suggestions := advisor.Suggest(obs, appliedIDs())
 
 	// With --json, stdout belongs to the machine. The human report still gets
 	// written — it is useful beside the JSON — but on stderr, so that

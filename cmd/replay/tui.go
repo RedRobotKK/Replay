@@ -560,7 +560,7 @@ func adviceState() ([]tui.AdviceRow, int) {
 		return nil
 	})
 
-	return adviceRows(advisor.Suggest(obs)), sessions
+	return adviceRows(advisor.Suggest(obs, appliedIDs())), sessions
 }
 
 func machineState() tui.Machine {
