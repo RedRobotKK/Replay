@@ -60,9 +60,14 @@ func AdviseScreen(rows []AdviceRow, sessions int) Screen {
 
 	if sessions == 0 {
 		sc.From = Unavailable
+		// Painted like every other branch. The first version coloured only the
+		// populated path, which passed here and failed on all four CI platforms:
+		// a runner has no transcripts, so it takes this branch, and TestCL5
+		// found a screen that emits no colour at all. Local data made the test
+		// kinder than the machine it has to run on.
 		lines = append(lines,
-			Banner(Unavailable, "no sessions were read, so nothing was ranked"), "",
-			"  Run an agent, then come back. `replay doctor` says what is visible.", "")
+			paint(Warn, Banner(Unavailable, "no sessions were read, so nothing was ranked")), "",
+			"  Run an agent, then come back. "+paint(Accent, "replay doctor")+" says what is visible.", "")
 		sc.Lines = lines
 		return sc
 	}
@@ -72,8 +77,8 @@ func AdviseScreen(rows []AdviceRow, sessions int) Screen {
 		// threshold; reporting that as "no data" would throw away the only
 		// thing the run established.
 		lines = append(lines,
-			fmt.Sprintf("  Nothing worth changing across %d session(s).", sessions), "",
-			"  Every target measured came in under the threshold.", "")
+			paint(Good, fmt.Sprintf("  Nothing worth changing across %d session(s).", sessions)), "",
+			paint(Faint, "  Every target measured came in under the threshold."), "")
 		sc.Lines = lines
 		return sc
 	}

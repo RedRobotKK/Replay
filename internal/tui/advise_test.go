@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -120,6 +121,44 @@ func TestAD6_ALongActionIsTruncatedNotWrapped(t *testing.T) {
 	for i, l := range AdviseScreen(long, 1).Lines {
 		if VisibleLen(l) > 80 {
 			t.Errorf("line %d is %d cells in an 80-cell terminal: %q", i, VisibleLen(l), l)
+		}
+	}
+}
+
+// AD7: every branch paints, including the ones with no data.
+//
+// The populated branch was the only one coloured, which passed locally and
+// failed on all four CI platforms at once: a runner has no transcripts, so it
+// takes the empty branch, and TestCL5 found a screen emitting no colour at all.
+// Having a corpus on the development machine made every other test kinder than
+// the machine this has to run on.
+func TestAD7_EveryBranchPaints(t *testing.T) {
+	// Unset, not set-to-empty. NewPainter uses os.LookupEnv, which asks whether
+	// the variable EXISTS, so t.Setenv("NO_COLOR", "") switches colour off
+	// rather than on — which is how the first version of this test failed
+	// against correct code. t.Setenv is called first purely so the testing
+	// package restores whatever was there afterwards.
+	t.Setenv("NO_COLOR", "x")
+	if err := os.Unsetenv("NO_COLOR"); err != nil {
+		t.Fatal(err)
+	}
+	old := active
+	active = NewPainter("always", true)
+	defer func() { active = old }()
+
+	for _, c := range []struct {
+		name     string
+		rows     []AdviceRow
+		sessions int
+	}{
+		{"no corpus", nil, 0},
+		{"corpus, nothing found", nil, 7},
+		{"suggestions", rows(), 1},
+	} {
+		body := strings.Join(AdviseScreen(c.rows, c.sessions).Lines, "\n")
+		if !strings.Contains(body, "\x1b[") {
+			t.Errorf("the %q branch emits no colour; the palette tests pass "+
+				"trivially against a branch that paints nothing", c.name)
 		}
 	}
 }
