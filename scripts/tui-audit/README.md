@@ -24,7 +24,7 @@ no unclosed colour, no control characters.
 
 ## What is frozen rather than fixed
 
-**26 overflows below 80 columns**, and the count is pinned so it cannot quietly
+**18 overflows below 80 columns**, and the count is pinned so it cannot quietly
 grow. The layout is a constant, not a measurement: `shortcuts.go` declares
 `BudgetCols = 80` and nothing reads `COLUMNS` or calls `TIOCGWINSZ`.
 

@@ -1,29 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="704" height="498" viewBox="0 0 704 498" role="img" aria-label="replay guards">
-<rect width="704" height="498" rx="8" fill="#14161a"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="704" height="232" viewBox="0 0 704 232" role="img" aria-label="replay guards">
+<rect width="704" height="232" rx="8" fill="#14161a"/>
 <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="14">
 <text x="16.0" y="26.0" xml:space="preserve" fill="#d9dce1">  replay guards                                                              dev</text>
 <text x="16.0" y="45.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="64.0" xml:space="preserve" fill="#d9dce1">  [NOTE] example data: describes nobody, shows only the shape.</text>
+<text x="16.0" y="64.0" xml:space="preserve" fill="#d9dce1">  Caps drawn from 1 session(s) on this machine</text>
 <text x="16.0" y="83.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="102.0" xml:space="preserve" fill="#d9dce1">  4 guards armed, 1 cannot fire</text>
-<text x="16.0" y="121.0" xml:space="preserve" fill="#d9dce1">  The day dollar cap is set and is not being enforced.</text>
-<text x="16.0" y="140.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="159.0" xml:space="preserve" fill="#d9dce1">  guard                  setting         state</text>
-<text x="16.0" y="178.0" xml:space="preserve" fill="#d9dce1">  ---------------------  --------------  ----------------------</text>
-<text x="16.0" y="197.0" xml:space="preserve" fill="#d9dce1">  day cap, dollars       $5.00           $2.41   NOT ENFORCED</text>
-<text x="16.0" y="216.0" xml:space="preserve" fill="#d9dce1">  day cap, tokens        unset           not set</text>
-<text x="16.0" y="235.0" xml:space="preserve" fill="#d9dce1">  error budget           15%             3.1%   armed</text>
-<text x="16.0" y="254.0" xml:space="preserve" fill="#d9dce1">  loop block             12 repeats      0   armed</text>
-<text x="16.0" y="273.0" xml:space="preserve" fill="#d9dce1">  breaker                3 failures      closed</text>
-<text x="16.0" y="292.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="311.0" xml:space="preserve" fill="#d9dce1">  ! 12 requests could not be priced. They add nothing to the dollar</text>
-<text x="16.0" y="330.0" xml:space="preserve" fill="#d9dce1">    total, so that cap will never be reached. You do not have it.</text>
-<text x="16.0" y="349.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="368.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="387.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="406.0" xml:space="preserve" fill="#d9dce1">  ran   replay serve --max-day-usd</text>
-<text x="16.0" y="425.0" xml:space="preserve" fill="#d9dce1">  <tspan fill="#767d87">copy it and you never need this screen again.</tspan></text>
-<text x="16.0" y="444.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="463.0" xml:space="preserve" fill="#d9dce1">  guards   ? keys  esc back  q quit</text>
+<text x="16.0" y="102.0" xml:space="preserve" fill="#d9dce1">not enough evidence for a spend cap: 10 sessions is the floor, and a</text>
+<text x="16.0" y="121.0" xml:space="preserve" fill="#d9dce1">threshold from fewer is a threshold from noise. It would refuse live</text>
+<text x="16.0" y="140.0" xml:space="preserve" fill="#d9dce1">requests with the same confidence as one from three hundred sessions.</text>
+<text x="16.0" y="159.0" xml:space="preserve" fill="#d9dce1"></text>
+<text x="16.0" y="178.0" xml:space="preserve" fill="#d9dce1">  <tspan fill="#767d87">Printed only. Nothing here is written to your configuration.</tspan></text>
+<text x="16.0" y="197.0" xml:space="preserve" fill="#d9dce1">  guards   ? keys  esc back  q quit</text>
 </g>
 </svg>
