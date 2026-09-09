@@ -176,6 +176,40 @@ jobs:
       - name: Audit every TUI screen
         run: ./scripts/tui-audit/run.sh
 
+  mutation:
+    name: frozen mutants
+    runs-on: ubuntu-latest
+    # 659 seconds on an M-series laptop for 72 mutants, because the harness
+    # copies the tree and runs the suite once per mutant. A CI runner is
+    # slower, so the ceiling is generous — the job failing on the clock would
+    # say nothing about the commit under test.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        # The harness enumerates the tree with `git ls-files --cached --others`
+        # so a mutant runs against the tree as it is now. A shallow or detached
+        # checkout still has an index, which is all it needs, but it must be a
+        # git checkout and not an extracted archive: without one it fails
+        # rather than skipping, deliberately.
+      - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # 72 mutants, frozen as data in internal/mutation/testdata/mutants.json,
+      # thawed one at a time against a scratch copy of the tree to ask whether
+      # the check that caught each one still works.
+      #
+      # It had never run. The package is behind `//go:build mutation` and no
+      # job here passed the tag, so `go test ./...` skipped it on every push
+      # since it was written — the catalogue that exists to stop a fixed defect
+      # returning quietly was itself unreachable.
+      #
+      # -timeout matters as much as the tag. Go's default is 10 minutes and the
+      # run needs eleven, so the obvious invocation dies around mutant 66 of 72
+      # with a timeout panic that looks like a broken harness.
+      - name: Thaw every frozen mutant and confirm it still dies
+        run: go test -tags mutation -timeout 45m -count=1 ./internal/mutation/
+
   installer-drift:
     name: installer drift
     runs-on: ubuntu-latest
