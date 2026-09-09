@@ -262,6 +262,29 @@ func (f TokenFit) EstimateTokens(bytes int) int {
 	return int(math.Round(float64(bytes) * f.TokensPerByte))
 }
 
+// EstimateOutsideFit sizes bytes this fit was not fitted on.
+//
+// Fit deliberately excludes any turn that re-laid the shared prefix, and says
+// why a few lines up: "its write covers tool definitions, which are denser than
+// prose and would drag the fit". internal/proxy/preflight.go:41-48 says the
+// same thing from the other side — schemas are denser, so a prose ratio
+// understates them.
+//
+// The advisor nevertheless has to size tool definitions, because a suggestion
+// nobody can rank is not a suggestion. This is that call, named for what it is.
+// The arithmetic is EstimateTokens; the difference is the claim. RelativeError
+// is a spread taken over prose turns, and a spread from one population is not
+// evidence about another, so the figure carries no error bar rather than a
+// borrowed one.
+//
+// It is not a correction. Nobody has measured tokens-per-byte on schema JSON
+// for this provider — that needs a tokenizer this tree does not have — so the
+// direction is known from the code's own reasoning and the magnitude is not.
+// Stating no uncertainty is honest; stating the prose fit's was not.
+func (f TokenFit) EstimateOutsideFit(bytes int) Figure {
+	return Figure{Value: f.EstimateTokens(bytes)}
+}
+
 // Figure turns a count into a printable figure with its uncertainty.
 func (f TokenFit) Figure(t Tokens) Figure {
 	return Figure{

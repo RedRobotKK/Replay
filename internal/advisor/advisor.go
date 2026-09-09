@@ -300,8 +300,23 @@ func (ob *Observation) unusedTools(lane *transcript.Lane, fit analysis.TokenFit)
 			continue
 		}
 		sort.Strings(b.names)
-		tokens := fit.EstimateTokens(b.bytes) * len(lane.Requests)
-		ob.note(KindUnusedTools, target, analysis.Figure{Value: tokens, Error: int(float64(tokens) * fit.RelativeError)}, true)
+		// EstimateOutsideFit, not EstimateTokens with the fit's spread bolted
+		// on. These are tool-definition bytes — exactly the content Fit
+		// excludes from its sample because schemas "are denser than prose and
+		// would drag the fit", which preflight.go:41-48 states independently.
+		//
+		// The estimate stays: a suggestion nobody can rank is not a
+		// suggestion, and this ratio is the only number anyone has. What goes
+		// is the error bar, which was a standard deviation over prose turns
+		// and says nothing about schema density. Borrowing it dressed an
+		// unquantified error as a measured one.
+		//
+		// The size of the real error is unknown and stays unknown until
+		// somebody measures tokens-per-byte on schema JSON for this provider.
+		// The direction is the code's own: denser, so this understates.
+		est := fit.EstimateOutsideFit(b.bytes)
+		est.Value *= len(lane.Requests)
+		ob.note(KindUnusedTools, target, est, true)
 		ob.titles[key(KindUnusedTools, target)] = [3]string{fmt.Sprint(len(b.names)), strings.Join(b.names, ", "), target}
 	}
 }
