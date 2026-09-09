@@ -64,6 +64,44 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 		p.Printf("              next: replay replay %s\n", filepath.Join(projects, "<project>"))
 	}
 
+	// Other agents on this machine.
+	//
+	// Printed after transcripts and before the proxy, because it answers the
+	// question the transcript line provokes: "that is Claude Code, what about
+	// everything else I run?" Silence when nothing is found — a heading over an
+	// empty list reads as a broken feature.
+	if found := discoverAgents(home); len(found) > 0 {
+		priceable := 0
+		for _, f := range found {
+			if f.Priceable {
+				priceable++
+			}
+		}
+		for i, f := range found {
+			label := "agents"
+			if i > 0 {
+				label = ""
+			}
+			// "+" only when a walk actually stopped early. Deriving it from
+			// the total was wrong three ways: the cap is per root and the
+			// total is per finding, so 700 known files printed "500+" with
+			// nothing truncated, and exactly 500 earned a "+" it had not.
+			count := fmt.Sprintf("%d files", f.Files)
+			if f.Capped {
+				count = fmt.Sprintf("%d+ files", f.Files)
+			}
+			p.Printf("%-13s %-7s %s in %s\n", label, f.Name, count, f.Path)
+			p.Printf("              %s\n", f.Reads)
+			p.Printf("              next: %s\n", f.Next)
+		}
+		// Consume Priceable rather than carry it as decoration. The count is
+		// the answer to the question the list provokes — of everything found,
+		// how much can this tool actually cost — and it is the difference
+		// between a report and an inventory.
+		p.Printf("              %d of %d can be priced; the rest are conversation only\n",
+			priceable, len(found))
+	}
+
 	// Proxy configuration.
 	base := os.Getenv(envBaseURL)
 	if base == "" {
