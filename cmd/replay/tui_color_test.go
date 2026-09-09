@@ -52,6 +52,20 @@ func render(t *testing.T, args ...string) string {
 // truncation that moved, and an escape emitted in the middle of a padded
 // column, without needing to know what any screen looks like.
 func TestCL1_ColourChangesNoCell(t *testing.T) {
+	// Pin the corpus, or this compares two renders of moving data.
+	//
+	// Every screen here is rendered twice and the results compared byte for
+	// byte. Without a pinned corpus those two renders read whatever transcripts
+	// the machine happens to hold *at that moment* — and on a machine with a
+	// coding agent running, that changes between the two calls. The `context`
+	// screen went red on main on 2026-09-09 for exactly this reason: rendering
+	// it by hand, twice, produced 924 identical bytes each time.
+	//
+	// So the failure was real and the defect was not where it pointed. A test
+	// that reads live state and asserts equality across two reads of it is
+	// measuring the clock, and it fails for the people most likely to be
+	// running it.
+	corpus(t)
 	for _, s := range tuiScreens {
 		plain := render(t, "tui", "-once", "-screen", s, "-color", "never")
 		painted := render(t, "tui", "-once", "-screen", s, "-color", "always")
