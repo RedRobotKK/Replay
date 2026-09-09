@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/ast"
 	"go/build/constraint"
 	"go/parser"
 	"go/token"
@@ -233,6 +234,39 @@ func TestX402_InstallsNothing(t *testing.T) {
 // PASS: every import in every .go file is listed, go.mod declares no
 // dependency, and there is no cgo or assembly to hide an implementation in.
 // FAIL: anything else, which is a prompt to think rather than to widen.
+// execExempt names the files allowed to import os/exec outside the `mutation`
+// build tag, one path at a time.
+//
+// The confinement exists so this binary cannot be made to run arbitrary things.
+// internal/selfupdate/fetch.go breaks it for one call, and the exemption is
+// written as a path rather than a package so widening it is an edit somebody
+// reviews rather than a side effect of adding a file.
+//
+// What the call is, at fetch.go:215:
+//
+//	exec.CommandContext(ctx, staged, "version")
+//
+// `staged` is a path this process built itself from os.Executable's directory
+// and a PID suffix — no part of it comes from the archive, the network or the
+// user. The bytes at that path were checksum-verified against checksums.txt
+// before it was written. The argument is the constant "version". There is no
+// shell, no PATH lookup, and a 20-second timeout.
+//
+// Why it earns the exemption: everything before it verifies the bytes that
+// arrived, and none of it proves the result runs HERE. A binary for the wrong
+// architecture, a chmod that did not take, a libc mismatch — each installs
+// cleanly, fails on first use, and would be reported as a successful upgrade.
+// Running the staged copy once is what turns that into a refusal with the old
+// binary still in place.
+//
+// The narrower reading is the one to hold onto: this does not permit
+// internal/selfupdate to run things. It permits it to run the file it just
+// verified, by absolute path, with a fixed argument. TestX402_SelfUpdateExecIsNotArbitrary
+// asserts that shape, so the exemption cannot quietly grow into a general one.
+var execExempt = map[string]bool{
+	"internal/selfupdate/fetch.go": true,
+}
+
 var allowedImports = map[string]bool{
 	// Standard library, as actually used. Kept explicit: the point is that
 	// adding to this list is a decision someone makes and a reviewer sees.
@@ -246,7 +280,18 @@ var allowedImports = map[string]bool{
 	// an image of a screen ends up carrying a broken tspan the day somebody
 	// puts an ampersand in a model name.
 	"html": true,
-	"math": true, "math/rand": true, "math/rand/v2": true, "net": true,
+	// archive/tar, for the release tarball in internal/selfupdate. It reads
+	// and never writes, which is the whole reason it is admissible here: the
+	// hazard with tar is an entry whose name escapes the destination
+	// directory, and unpack() has no destination directory. It matches on
+	// filepath.Base(hdr.Name), reads the one matching regular file into
+	// memory through an io.LimitReader, and refuses a symlink, a hard link or
+	// anything that is not a regular file rather than following it. Nothing in
+	// the archive ever names a path this code writes to.
+	//
+	// It also cannot sign or pay, which is what this test is actually about.
+	"archive/tar": true,
+	"math":        true, "math/rand": true, "math/rand/v2": true, "net": true,
 	"net/http": true, "net/http/httptest": true, "net/http/httputil": true,
 	"net/url": true, "os": true, "os/signal": true, "path": true,
 	"path/filepath": true, "reflect": true, "regexp": true, "runtime": true,
@@ -502,6 +547,7 @@ func TestX402_ExecIsConfinedToTheMutationHarness(t *testing.T) {
 	}
 	var offenders []string
 	var seen int
+	exempted := map[string]bool{}
 	fset := token.NewFileSet()
 	werr := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -538,6 +584,11 @@ func TestX402_ExecIsConfinedToTheMutationHarness(t *testing.T) {
 			return rerr
 		}
 		rel, _ := filepath.Rel(root, path)
+		rel = filepath.ToSlash(rel)
+		if execExempt[rel] {
+			exempted[rel] = true
+			return nil
+		}
 		if !requiresTag(string(body), "mutation") {
 			offenders = append(offenders, rel)
 		}
@@ -553,6 +604,16 @@ func TestX402_ExecIsConfinedToTheMutationHarness(t *testing.T) {
 	if len(offenders) > 0 {
 		t.Errorf("os/exec imported outside the `mutation` build tag:\n  %s",
 			strings.Join(offenders, "\n  "))
+	}
+	// An exemption that no longer applies is a permission nobody is using and
+	// everybody is trusting. If the file stopped importing os/exec, the entry
+	// comes out — the same rule this test already applies to the allowlist as
+	// a whole a few lines up.
+	for name := range execExempt {
+		if !exempted[name] {
+			t.Errorf("%s is exempted from the os/exec confinement and does not import "+
+				"os/exec. Remove the exemption rather than leaving a permission open.", name)
+		}
 	}
 }
 
@@ -882,5 +943,83 @@ func TestFeedVerifiesAndNeverSigns(t *testing.T) {
 	if len(signers) > 0 {
 		t.Errorf("crypto/ed25519 is allowlisted for VERIFICATION only, and these produce "+
 			"signatures or keys outside a test:\n  %s", strings.Join(signers, "\n  "))
+	}
+}
+
+// TestX402_SelfUpdateExecIsNotArbitrary pins the shape of the one exempted
+// exec call.
+//
+// execExempt lets internal/selfupdate/fetch.go import os/exec outside the
+// mutation build tag. That permission is only defensible because of what the
+// call looks like: a path this process constructed, bytes it checksum-verified,
+// a constant argument, a context timeout, no shell and no PATH lookup.
+//
+// None of that is enforced by the exemption itself. An exemption granted for a
+// narrow call is exactly the thing that widens later, because the next person
+// sees a package that is already allowed to exec and adds a second call to it.
+// So the shape is asserted rather than described.
+func TestX402_SelfUpdateExecIsNotArbitrary(t *testing.T) {
+	path := filepath.Join("..", "..", "internal", "selfupdate", "fetch.go")
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		t.Fatalf("parsing the exempted file: %v", err)
+	}
+
+	var calls []string
+	ast.Inspect(f, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		pkg, ok := sel.X.(*ast.Ident)
+		if !ok || pkg.Name != "exec" {
+			return true
+		}
+		calls = append(calls, sel.Sel.Name)
+
+		// CommandContext, so the child cannot outlive a timeout. Command
+		// without one is how a hung upgrade becomes a hung terminal.
+		if sel.Sel.Name != "CommandContext" {
+			t.Errorf("exec.%s is used; only CommandContext is exempted, because a child "+
+				"with no deadline outlives the upgrade that started it", sel.Sel.Name)
+			return true
+		}
+		// Every argument after ctx and the binary path must be a literal. A
+		// variable here would mean something outside this function chooses
+		// what the freshly downloaded binary is asked to do.
+		if len(call.Args) < 2 {
+			t.Errorf("exec.CommandContext called with %d arguments", len(call.Args))
+			return true
+		}
+		for i, a := range call.Args[2:] {
+			lit, ok := a.(*ast.BasicLit)
+			if !ok || lit.Kind != token.STRING {
+				t.Errorf("argument %d to the staged binary is not a string literal, so "+
+					"what it is asked to run is decided somewhere else", i+1)
+				continue
+			}
+			if lit.Value != `"version"` {
+				t.Errorf("the staged binary is run with %s; the exemption covers the "+
+					"smoke test only, which is `version`", lit.Value)
+			}
+		}
+		return true
+	})
+
+	// The exemption must cover something. If the call is gone, the entry in
+	// execExempt should go with it.
+	if len(calls) == 0 {
+		t.Fatal("internal/selfupdate/fetch.go makes no exec call, so its entry in " +
+			"execExempt is a permission nothing uses")
+	}
+	if len(calls) > 1 {
+		t.Errorf("internal/selfupdate/fetch.go now makes %d exec calls (%v). The exemption "+
+			"was granted for one smoke test; a second call is a new decision.",
+			len(calls), calls)
 	}
 }

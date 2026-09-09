@@ -91,7 +91,7 @@ asking you to trust a summary of the thing rather than the thing.
 
 ## The full mapping
 
-### Replaces the surface (8)
+### Replaces the surface (10)
 
 | Flag | Command | Type |
 |---|---|---|
@@ -103,6 +103,14 @@ asking you to trust a summary of the thing rather than the thing.
 | `--json` | `trim` | bool |
 | `--no-color` | `statusline` | bool |
 | `--color` | `tui` | string |
+| `--check` | `upgrade` | bool |
+| `--version` | `upgrade` | string |
+
+<!-- Both belong here rather than under a posture or a threshold. `--check`
+replaces the act of upgrading with a report about it, and `--version` replaces
+"whatever is latest" with a tag the reader chose: each swaps what the command
+produces rather than tuning how it behaves. `--dry-run` is already classified
+elsewhere in this file. -->
 
 ### Plumbing, shown once (20)
 
