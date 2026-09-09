@@ -26,6 +26,8 @@ ADR and the built thing goes to the architecture.
 | [Doctor discovery: junior lens](doctor-discovery-lens-junior.md) | Could a new maintainer add a fifth agent unaided, and what would they break first | `Priceable` had no consumer; `knownStores` was the fifth parallel store-location list |
 | [Doctor discovery: senior lens](doctor-discovery-lens-senior.md) | A staff review: correctness, failure modes, and which tests would still pass if the feature were quietly broken | **Three blockers, and eleven of fourteen mutations escaped the original tests** |
 | [Doctor discovery, read by a new maintainer](doctor-discovery-lens-junior.md) | Whether `doctor`'s agent-discovery block can be safely changed by someone who has never seen it: what a fifth `knownStores` entry forces you to guess, and what no test would catch | **`Priceable` has no consumer**; Ollama's file count disagrees with the command it recommends; a fifth parallel store-location list |
+| [**Vacuous tests: what would still pass if it broke**](vacuous-test-audit.md) | The adjacent question to the unwired audits: not what is unreachable, but what is checked and unfalsifiable | **20 vacuous tests; 144 of 239 refusal sites never execute.** Five escaping mutations verified by running them |
+| [Benefit gap analysis](benefit-gap-analysis.md) | Everything here tests whether the code does what it says; this maps what is untested: whether the tool helps | **The verified status was circular** — the drop was both the evidence and the measurement. `EstimateTokens` has no tests and 49% median error |
 
 ---
 
