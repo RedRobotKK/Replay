@@ -139,3 +139,47 @@ func TestTR6_ADetailWithNoPredictionSaysSo(t *testing.T) {
 		t.Errorf("the detail does not say the saving was not predicted:\n%s", body)
 	}
 }
+
+// TR7: the advise screens quote no dollar figure.
+//
+// A deliberate decision, taken 2026-09-09, and held here rather than
+// remembered.
+//
+// The obvious next step for this screen is to turn "14.1% of prompt tokens"
+// into money, because a percentage of prompt tokens is an abstraction nobody
+// feels. `replay cost` already knows the avoidable dollars, so it would be one
+// line.
+//
+// It would also be misleading to most of the people who run this. On a
+// subscription seat — Claude Pro or Max, Copilot, Cursor — none of those
+// dollars are the reader's: they are list price for somebody billed per token,
+// which is what `replay cost` says in prose every time it runs.
+//
+// The unit that would land is quota: minutes of a five-hour window spent
+// re-sending content already sent. Replay cannot say it yet.
+// docs/evidence/subscription-allowance-2026-09-09.md was retracted IN FULL the
+// same day — its multiplier exists only as a source comment and a census found
+// zero ledger records carrying any rate-limit header, ever, while its
+// multiplicand is retracted at source in lane-isolation-2026-09-06.md.
+//
+// So the screen stays in tokens and shares, which are measured, until the
+// paired warm/cold trial that document specifies has actually run. Lifting
+// this test is the gesture that says the measurement exists.
+func TestTR7_TheAdviseScreensQuoteNoDollars(t *testing.T) {
+	screens := map[string][]string{
+		"list":   AdviseScreenAt(rows(), 1738, 0).Lines,
+		"detail": AdviceDetail(rows()[0]).Lines,
+		"empty":  AdviseScreen(nil, 0).Lines,
+	}
+	for name, lines := range screens {
+		for i, l := range lines {
+			if strings.Contains(l, "$") {
+				t.Errorf("%s line %d quotes a dollar figure: %q\n"+
+					"On a subscription seat those dollars are list price for somebody "+
+					"else. The unit that lands is quota, and the evidence for it was "+
+					"retracted in full on 2026-09-09. Run the paired trial first.",
+					name, i, l)
+			}
+		}
+	}
+}
