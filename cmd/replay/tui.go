@@ -143,6 +143,22 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 			sc := tui.DoctorScreen(cur)
 			loop.SetRows(sc.Rows)
 			return tui.Frame{Key: k, Lines: sc.Lines}
+		case 'x':
+			sc := tui.ContextScreen(contextState())
+			loop.SetRows(sc.Rows)
+			return tui.Frame{Key: k, Lines: sc.Lines}
+		case 'g':
+			sc := tui.GuardsScreen(guardsState())
+			loop.SetRows(sc.Rows)
+			return tui.Frame{Key: k, Lines: sc.Lines}
+		case 's':
+			sc := tui.SafeScreen(safeState())
+			loop.SetRows(sc.Rows)
+			return tui.Frame{Key: k, Lines: sc.Lines}
+		case 'm':
+			sc := tui.ModelScreen(modelState())
+			loop.SetRows(sc.Rows)
+			return tui.Frame{Key: k, Lines: sc.Lines}
 		case 'a':
 			sc := tui.AdviseScreen(adviceState())
 			loop.SetRows(sc.Rows)
@@ -223,6 +239,167 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 // commands cannot disagree about how much is on the machine. A screen that
 // counted transcripts a second, subtly different way would be a second source
 // of truth, and the point of the surface is that there is one.
+// corpusFiles resolves the transcripts every wired screen reads.
+//
+// One place, so four screens cannot disagree about what "this machine" means,
+// and so the empty case is decided once. Returning no files is what makes a
+// screen Unavailable rather than Example.
+func corpusFiles() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	roots := defaultTranscriptRoots(home)
+	if len(roots) == 0 {
+		return nil
+	}
+	files, err := transcriptFiles(roots)
+	if err != nil {
+		return nil
+	}
+	return files
+}
+
+// contextState attributes what entered the context, by tool.
+func contextState() ([]tui.ContextRow, int) {
+	files := corpusFiles()
+	if len(files) == 0 {
+		return nil, 0
+	}
+	totals := map[string]*tui.ContextRow{}
+	sessions := 0
+	_ = forEachSession(files, func(_ string, _ *transcript.Session, rep *analysis.LaneReport, err error) error {
+		if err != nil || rep == nil {
+			return nil
+		}
+		sessions++
+		for _, e := range analysis.EnteredContext(rep.Blame) {
+			r, ok := totals[e.Label]
+			if !ok {
+				r = &tui.ContextRow{Label: e.Label}
+				totals[e.Label] = r
+			}
+			r.Tokens += e.Tokens
+			r.Occurrences += e.Occurrences
+		}
+		return nil
+	})
+
+	sum := 0
+	for _, r := range totals {
+		sum += r.Tokens
+	}
+	rows := make([]tui.ContextRow, 0, len(totals))
+	for _, r := range totals {
+		// Share is recomputed over the pooled total rather than averaged from
+		// the per-session shares. A mean of shares weights a tiny session the
+		// same as a long one, which is how a label that appeared once in a
+		// short session outranks one that dominated a long one.
+		if sum > 0 {
+			r.Share = float64(r.Tokens) / float64(sum)
+		}
+		rows = append(rows, *r)
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].Tokens > rows[j].Tokens })
+	if len(rows) > 12 {
+		rows = rows[:12]
+	}
+	return rows, sessions
+}
+
+// guardsState draws spend caps from this machine's own session spread.
+func guardsState() ([]string, int) {
+	files := corpusFiles()
+	if len(files) == 0 {
+		return nil, 0
+	}
+	var usd, toks []float64
+	sessions := 0
+	_ = forEachSession(files, func(_ string, _ *transcript.Session, rep *analysis.LaneReport, err error) error {
+		if err != nil || rep == nil {
+			return nil
+		}
+		sessions++
+		if pols := rep.Policies(); len(pols) > 0 {
+			usd = append(usd, pols[0].CostUSD)
+			toks = append(toks, float64(pols[0].PromptTokens))
+		}
+		return nil
+	})
+	return guardAdviceLines(usd, toks), sessions
+}
+
+// safeState scores the default byte cap on tool results.
+func safeState() (tui.TrimSummary, int) {
+	files := corpusFiles()
+	if len(files) == 0 {
+		return tui.TrimSummary{}, 0
+	}
+	var total analysis.TrimPlan
+	sessions := 0
+	_ = forEachSession(files, func(_ string, _ *transcript.Session, rep *analysis.LaneReport, err error) error {
+		if err != nil || rep == nil {
+			return nil
+		}
+		sessions++
+		p := analysis.ScoreTrim(rep.Lane, rep.Fit, defaultTrimCap)
+		total.Blocks += p.Blocks
+		total.RemovedBytes += p.RemovedBytes
+		total.RemovedPromptTokens += p.RemovedPromptTokens
+		return nil
+	})
+	return tui.TrimSummary{CapBytes: defaultTrimCap, Blocks: total.Blocks,
+		RemovedBytes: total.RemovedBytes, RemovedPromptTokens: total.RemovedPromptTokens}, sessions
+}
+
+// modelState reports what the corpus actually ran on.
+//
+// No target is passed. Naming a model the reader did not choose and pricing a
+// switch to it would invent the question as well as the answer; the screen says
+// which command asks it properly.
+func modelState() (string, []tui.ModelRow, int) {
+	files := corpusFiles()
+	if len(files) == 0 {
+		return "", nil, 0
+	}
+	turns := map[string]int{}
+	sessions := 0
+	_ = forEachSession(files, func(_ string, session *transcript.Session, _ *analysis.LaneReport, err error) error {
+		if err != nil || session == nil {
+			return nil
+		}
+		sessions++
+		// Lanes then requests: the model is a property of the request, and a
+		// session can carry several lanes with different ones when a sub-agent
+		// runs on something cheaper.
+		for _, ln := range session.Lanes {
+			if ln == nil {
+				continue
+			}
+			for _, rq := range ln.Requests {
+				if rq != nil && rq.Model != "" {
+					turns[rq.Model]++
+				}
+			}
+		}
+		return nil
+	})
+	sum := 0
+	for _, n := range turns {
+		sum += n
+	}
+	rows := make([]tui.ModelRow, 0, len(turns))
+	for m, n := range turns {
+		share := 0.0
+		if sum > 0 {
+			share = float64(n) / float64(sum)
+		}
+		rows = append(rows, tui.ModelRow{Model: m, Turns: n, Share: share})
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].Turns > rows[j].Turns })
+	return "", rows, sessions
+}
+
 // adviceState runs the same analysis `replay advise` runs, for the screen.
 //
 // Here rather than in internal/tui because that package does no I/O: the

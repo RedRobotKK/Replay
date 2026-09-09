@@ -29,7 +29,7 @@ SUPPORTED = 80
 # order: wire, endpoint, surface" — so this is an unimplemented design, not an
 # unknown defect. Implementing it should drive this number to zero, and this
 # check will say so.
-KNOWN_NARROW_OVERFLOWS = 26
+KNOWN_NARROW_OVERFLOWS = 18
 
 def cells(s, ambiguous_wide):
     s = SGR.sub("", s)
@@ -137,6 +137,6 @@ if len(narrow) > KNOWN_NARROW_OVERFLOWS:
 elif len(narrow) < KNOWN_NARROW_OVERFLOWS:
     print(f"   IMPROVED by {KNOWN_NARROW_OVERFLOWS-len(narrow)}. Lower the frozen count in this file.")
 else:
-    print("   unchanged. scene 25 is implemented on advise; the rest is the four screens still unwired.")
+    print("   unchanged. all ten screens read this machine; what remains is tables in the shared layout helpers.")
 
 sys.exit(1 if (hard or len(narrow) != KNOWN_NARROW_OVERFLOWS) else 0)
