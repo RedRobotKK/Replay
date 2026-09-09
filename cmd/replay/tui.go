@@ -128,6 +128,10 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 	// screen answers about. Nil until they choose one: a screen that picked a
 	// session for them would be answering a question nobody asked.
 	var opened *tui.Task
+	// adviseOpen is the finding enter was pressed on, and nil when the reader
+	// is looking at the list. Esc clears it by returning to the list render.
+	var adviseOpen *tui.AdviceRow
+	var lastAdviseKey rune
 
 	src := func(k rune, tick int) tui.Frame {
 		mu.Lock()
@@ -164,7 +168,25 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 			var sc tui.Screen
 			if rows, ids, n, at, ok := adviceFromCache(); ok {
 				sel := loop.Cursor().At
-				sc = tui.AdviseScreenAt(rows, n, sel)
+				// Enter opens the evidence. The help line advertised this
+				// before anything was behind it, which is the overpromise
+				// pattern unwired-3-branches-and-docs.md catalogues, written
+				// into a help string while cataloguing it.
+				//
+				// Read-and-clear, so one keystroke opens one finding, and the
+				// detail is shown for exactly the render after the press.
+				if loop.TakeOpened() && sel >= 0 && sel < len(rows) {
+					adviseOpen = &rows[sel]
+				} else if k != lastAdviseKey {
+					adviseOpen = nil
+				}
+				lastAdviseKey = k
+				if adviseOpen != nil {
+					sc = tui.AdviceDetail(*adviseOpen)
+					loop.SetRows(0)
+				} else {
+					sc = tui.AdviseScreenAt(rows, n, sel)
+				}
 				// Local keys, cleared on every render, so `a` and `x` cannot
 				// follow the reader onto a screen where they mean something
 				// else. This is the whole point of the screen: a finding the
@@ -471,11 +493,29 @@ func adviceFromCache() ([]tui.AdviceRow, []string, int, time.Time, bool) {
 	if len(f.Suggestions) == 0 {
 		return nil, nil, 0, time.Time{}, false
 	}
+	// Does this advice describe the corpus that is here now? Counting files is
+	// cheap; analysing them is the 7.7 seconds. So the check costs nothing and
+	// stops the screen being instant and wrong, which is how it shipped an hour
+	// ago: three findings over one transcript, from a fixture run, against a
+	// corpus of 1,729.
+	if home, err := os.UserHomeDir(); err == nil {
+		if files, ferr := transcriptFiles(defaultTranscriptRoots(home)); ferr == nil {
+			if !cacheCoversCorpus(f.Transcripts, len(files)) {
+				return nil, nil, 0, time.Time{}, false
+			}
+		}
+	}
 	ids := make([]string, 0, len(f.Suggestions))
 	for _, sg := range f.Suggestions {
 		ids = append(ids, sg.ID)
 	}
-	return adviceRows(f.Suggestions), ids, f.Sessions, f.Generated, true
+	// Transcripts, not Sessions. The screen's header says "transcript(s)" and
+	// f.Sessions is the CALIBRATED count — 1,246 against 1,738 files here.
+	// Passing it labelled the smaller number with the larger one's noun, which
+	// is the third time the same category error has landed in this one screen
+	// today: the header said sessions while counting files, the cache check
+	// compared calibrated against files, and then this.
+	return adviceRows(f.Suggestions), ids, f.Transcripts, f.Generated, true
 }
 
 // adviceRows converts suggestions to screen rows. Shared so the cached path

@@ -283,3 +283,53 @@ func wrapAction(action string, width int) []string {
 	}
 	return []string{action[:cut], fitTo(strings.TrimSpace(action[cut:]), width)}
 }
+
+// AdviceDetail is what enter opens on a selected finding.
+//
+// The list ranks; this says why. A finding reads "Bash results are 30% of
+// prompt tokens", and the reader's next question is always which sessions, how
+// much, and how it was measured — ranking without that asks somebody to act on
+// a number whose provenance they cannot see, which this repository refuses
+// everywhere else.
+//
+// It carries no figure the list does not already have. That is deliberate: a
+// detail screen that computes its own numbers is a second answer to the same
+// question, and the two drift.
+func AdviceDetail(r AdviceRow) Screen {
+	sc := Screen{Title: "finding", From: Measured}
+	lines := []string{
+		"", "  " + paint(Strong, fitTo(r.Title, Cols()-2)), "",
+	}
+
+	lines = append(lines, "  "+paint(Faint, cell("seen in", 12))+
+		fmt.Sprintf("%d transcript(s)", r.Sessions))
+	lines = append(lines, "  "+paint(Faint, cell("cost", 12))+
+		fmt.Sprintf("%s prompt tokens, %.0f%% of the corpus", commas(r.PromptTokens), r.Share*100))
+
+	// An absence is a result. Rendering 0.0%% would dress it as a modest win,
+	// which is the distinction measured.go exists to hold.
+	saving := "not predicted on this corpus"
+	style := Faint
+	if r.PredictedShare > 0 {
+		saving = fmt.Sprintf("%.1f%% of prompt tokens", r.PredictedShare*100)
+		style = Good
+		if r.Estimated {
+			saving += " (estimated from the byte-to-token fit)"
+		}
+	}
+	lines = append(lines, "  "+paint(Faint, cell("if applied", 12))+paint(style, saving))
+	lines = append(lines, "  "+paint(Faint, cell("status", 12))+r.Status, "")
+
+	if r.Action != "" {
+		lines = append(lines, "  "+paint(Faint, "what to do"), "")
+		for _, part := range wrapAction(r.Action, Cols()-6) {
+			lines = append(lines, "    "+part)
+		}
+		lines = append(lines, "")
+	}
+
+	lines = append(lines,
+		paint(Faint, "  a mark applied   x dismiss   esc back to the list"))
+	sc.Lines = lines
+	return sc
+}

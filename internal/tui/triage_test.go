@@ -88,3 +88,54 @@ func TestTR4_AnOutOfRangeSelectionIsClamped(t *testing.T) {
 		}
 	}
 }
+
+// TR5: enter shows the evidence behind the selected finding.
+//
+// The screen advertised "enter evidence" with nothing behind it. That is the
+// overpromise pattern docs/design/unwired-3-branches-and-docs.md catalogues —
+// the CLI printing a command it then rejects — and it was written into a help
+// line during the same session that catalogued it.
+//
+// A finding says "Bash results are 30% of prompt tokens". The reader's next
+// question is which sessions, how much, and how it was measured. Ranking
+// without that is asking somebody to act on a number whose provenance they
+// cannot see, and this repository refuses that everywhere else.
+func TestTR5_EnterShowsTheEvidence(t *testing.T) {
+	r := rows()[0]
+	sc := AdviceDetail(r)
+	body := strings.Join(sc.Lines, "\n")
+
+	if !strings.Contains(body, r.Title) {
+		t.Errorf("the detail does not name the finding it is about:\n%s", body)
+	}
+	// Every figure on the list must be reachable here, or the detail is a
+	// second summary rather than the evidence.
+	for _, want := range []string{"336,060", "3 transcript"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the detail does not carry %q from the finding:\n%s", want, body)
+		}
+	}
+	if !strings.Contains(body, r.Action) {
+		t.Errorf("the detail omits the action, which is the reason to open it:\n%s", body)
+	}
+	// And it must say how to get back, or the reader is stranded.
+	if !strings.Contains(strings.ToLower(body), "esc") {
+		t.Errorf("the detail offers no way back:\n%s", body)
+	}
+}
+
+// TR6: a detail for a finding with nothing predicted says so.
+//
+// "not predicted on this corpus" is a result. Rendering an empty saving line,
+// or a zero, would dress an absence as a modest win — the distinction
+// measured.go exists to hold.
+func TestTR6_ADetailWithNoPredictionSaysSo(t *testing.T) {
+	r := rows()[1] // PredictedShare 0, Estimated true
+	body := strings.Join(AdviceDetail(r).Lines, "\n")
+	if strings.Contains(body, "0.0%") {
+		t.Errorf("an absent prediction is rendered as 0.0%%:\n%s", body)
+	}
+	if !strings.Contains(body, "not predicted") {
+		t.Errorf("the detail does not say the saving was not predicted:\n%s", body)
+	}
+}

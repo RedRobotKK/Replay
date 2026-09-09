@@ -91,3 +91,37 @@ func TestTG3_NoAdviceFileIsAnError(t *testing.T) {
 		t.Error("marking against a missing advice file reported success")
 	}
 }
+
+// TG4: a cache built from a much smaller corpus is not used.
+//
+// Reading advice.json made the screen instant and, on this machine, wrong: it
+// showed "3 changes across 1 transcript" while the corpus held 140 across
+// 1,729. The file was left by an earlier run against a fixture, and nothing
+// compared it to what is on disk now.
+//
+// Instant and wrong is a worse trade than slow and right, because the reader
+// cannot tell. The timestamp does not save it either — advice from an hour ago
+// over one transcript is not stale, it is about a different corpus.
+//
+// So the rule is coverage, not age: use the cache when it was built from
+// substantially the same number of transcripts as exist now. The corpus grows
+// while the tool runs, so this cannot be an equality test.
+func TestTG4_ACacheFromASmallerCorpusIsRejected(t *testing.T) {
+	for _, c := range []struct {
+		name         string
+		cached, disk int
+		want         bool
+	}{
+		{"same corpus", 1729, 1729, true},
+		{"grown a little, as it always does mid-session", 1700, 1729, true},
+		{"a fixture run against one transcript", 1, 1729, false},
+		{"half the corpus", 800, 1729, false},
+		{"cache is larger, so files were removed", 1729, 800, false},
+		{"nothing on disk yet", 12, 0, false},
+	} {
+		if got := cacheCoversCorpus(c.cached, c.disk); got != c.want {
+			t.Errorf("%s: cached=%d disk=%d gave %v, want %v",
+				c.name, c.cached, c.disk, got, c.want)
+		}
+	}
+}

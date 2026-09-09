@@ -55,3 +55,30 @@ func markAdvice(id string, status advisor.Status) error {
 	}
 	return os.Rename(tmp, path)
 }
+
+// cacheCoversCorpus reports whether cached advice describes the corpus on disk.
+//
+// Coverage, not age. Reading advice.json made the advise screen instant and, on
+// the machine this was written on, wrong: it showed three findings over one
+// transcript while the corpus held 140 over 1,729, because an earlier run
+// against a fixture had left the file behind. A timestamp would not have caught
+// that — the advice was minutes old and about a different corpus.
+//
+// Equality is not the test either. The corpus grows while the tool runs; the
+// transcript count moved 1,691 to 1,719 in an hour on 2026-09-09. So the
+// question is whether the cache saw substantially what is there now.
+//
+// A cache LARGER than the corpus is also rejected. That means files were
+// removed or the reader has pointed at a different directory, and advice about
+// transcripts that are gone is advice about somebody else's machine.
+func cacheCoversCorpus(cached, onDisk int) bool {
+	if onDisk <= 0 || cached <= 0 {
+		return false
+	}
+	if cached > onDisk {
+		return false
+	}
+	// Within a tenth. Wide enough to survive a session's growth, narrow enough
+	// that a fixture run against one file cannot pass.
+	return float64(cached) >= float64(onDisk)*0.9
+}
