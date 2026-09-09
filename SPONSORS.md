@@ -1,8 +1,20 @@
 # Sponsors
 
-Replay is free and the source is all here. Nothing is behind a tier, and nothing
-will be gated on sponsorship. This file exists so that people who chose to fund
-the work are named, if they want to be.
+Replay is free and the source is all here. **Sponsorship gates nothing** — no
+feature, no tier, no priority, no support queue, now or later. This file exists
+so that people who chose to fund the work are named, if they want to be.
+
+**And nothing that is free today ever becomes paid.** A capability that works in
+a release you already have will keep working in every release after it. If a paid
+capability is ever added it will be something that does not exist today, and it
+will not be gated on sponsorship either.
+
+That is narrower than the sentence this paragraph used to carry, which said
+"nothing is behind a tier" and was scoped to sponsorship in its author's mind
+and to the whole product on the page. [The money path](docs/MONEY-PATH.md)
+describes a capability that might one day be paid, and the honest thing is to
+amend this before that exists rather than after — the promise that matters is
+the one above, and it is unchanged.
 
 Sponsorship pays for the parts that are not fun:
 
