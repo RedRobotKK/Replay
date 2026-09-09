@@ -113,9 +113,7 @@ of provider cost, and a per-machine constant rather than a published one.
 1. **One model, one machine, one quantization.** `qwen2.5-coder:7b` on Apple
    Silicon. `cold_rate` will differ by model size, quantization and hardware, and
    nothing here bounds that variation.
-2. **Nothing under concurrency.** Every request here was serial. Batched or
-   parallel requests share the GPU, and a duration-based estimator is exactly the
-   kind that concurrency distorts. This is the largest untested assumption.
+2. ~~**Nothing under concurrency.**~~ **Resolved the same day — see below.**
 3. **Nothing about eviction.** A stayed warm after B, so this Ollama holds more
    than one prefix, but the slot count, eviction order and capacity were not
    measured.
@@ -126,6 +124,51 @@ of provider cost, and a per-machine constant rather than a published one.
    provider that *reports* cached tokens, to exercise `usage.FromInclusive`.
    Ollama reports none, as re-verified above, so no amount of local work
    substitutes for one paid call to a provider like DeepSeek.
+
+## Concurrency, which was the largest untested assumption
+
+The limit above was written first and tested afterwards, because a duration-based
+estimator is exactly the kind concurrency should distort: parallel requests share
+one GPU, so a request that waits ought to look slower than one that does not.
+
+It does not distort, and the reason is more useful than the result.
+
+**Four warm concurrently, then four cold concurrently:**
+
+| | mean | serial baseline |
+|---|---:|---:|
+| warm | 15.1 us/tok | 15.4 |
+| cold | 4054.5 us/tok | 4211.9 |
+
+269x separation against 273x serial, and no overlap between the extremes.
+
+**Six fired together, alternating warm and cold** — the realistic shape, since an
+agent fleet does not politely batch by cache state:
+
+| Kind | Tokens | Duration | Per token |
+|---|---:|---:|---:|
+| warm | 2824 | 40.9 ms | 14.5 us |
+| cold | 2841 | 11515.8 ms | 4053.4 us |
+| warm | 2824 | 41.1 ms | 14.5 us |
+| cold | 2841 | 11510.3 ms | 4051.5 us |
+| warm | 2824 | 40.4 ms | 14.3 us |
+| cold | 2841 | 11544.6 ms | 4063.6 us |
+
+Still no overlap.
+
+**Why it survives:** `prompt_eval_duration` reports the evaluation work for that
+request, not the elapsed time the caller waited. In the four-cold run the wall
+clock per request spanned **11.6 s to 46.6 s** as requests queued behind one
+another, while `prompt_eval_duration` stayed inside **11,511 to 11,545 ms** — a
+0.3% spread across a 4x spread in wall clock.
+
+That is the property the estimator needs, and it is worth stating as the
+load-bearing assumption rather than a happy accident: **an estimator built on
+wall-clock latency would have been destroyed by queueing.** One built on
+`prompt_eval_duration` is not, because the provider has already separated the two.
+
+Untested beyond four-way concurrency on one machine, and a server configured with
+more parallel slots than the GPU can hold may behave differently.
 
 ## Method
 
