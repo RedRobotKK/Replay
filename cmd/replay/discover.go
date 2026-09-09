@@ -184,7 +184,7 @@ func countStoreFiles(root string, patterns []string) (n int, capped bool) {
 	if resolved, err := filepath.EvalSymlinks(root); err == nil {
 		root = resolved
 	}
-	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(root, func(_ string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil // unreadable is not found; say nothing rather than guess
 		}

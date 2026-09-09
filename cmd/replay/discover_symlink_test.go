@@ -14,8 +14,8 @@ import (
 // defaultroot.go:90-102 documents this exact bug and fixes it for transcripts;
 // discovery reintroduced it.
 func TestDS8_ASymlinkedStoreIsFound(t *testing.T) {
-	real := t.TempDir()
-	inner := filepath.Join(real, "sessions", "2026")
+	store := t.TempDir()
+	inner := filepath.Join(store, "sessions", "2026")
 	if err := os.MkdirAll(inner, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +26,7 @@ func TestDS8_ASymlinkedStoreIsFound(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(filepath.Join(real, "sessions"), filepath.Join(home, ".codex", "sessions")); err != nil {
+	if err := os.Symlink(filepath.Join(store, "sessions"), filepath.Join(home, ".codex", "sessions")); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 	found := discoverAgents(home)
