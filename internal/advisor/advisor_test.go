@@ -32,7 +32,7 @@ func TestFixtureProducesTheExpectedSuggestions(t *testing.T) {
 	if !ok {
 		t.Fatal("fixture must calibrate")
 	}
-	got := Suggest([]Observation{ob})
+	got := Suggest([]Observation{ob}, nil)
 	if len(got) == 0 || got[0].Kind != KindToolInputs || got[0].Target != "Bash" {
 		t.Fatalf("largest suggestion must be the Bash inputs: %+v", got)
 	}
@@ -115,7 +115,7 @@ func TestUnusedToolsAndHotFilesAcrossSessions(t *testing.T) {
 		}
 		obs = append(obs, ob)
 	}
-	got := kinds(Suggest(obs))
+	got := kinds(Suggest(obs, nil))
 	unused, ok := got[KindUnusedTools]
 	// "built-in" entered this string when unused tools gained per-server
 	// attribution on 2026-09-09. Idle1..Idle5 carry no mcp__ prefix, so they
@@ -147,14 +147,21 @@ func TestSuggestionsAreTrackedToClosure(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		add(i, tools)
 	}
-	if s := kinds(Suggest(obs))[KindUnusedTools]; s.Status != Pending {
+	if s := kinds(Suggest(obs, nil))[KindUnusedTools]; s.Status != Pending {
 		t.Fatalf("unchanged sessions stay pending: %+v", s)
 	}
-	// Two newest sessions with most idle tools removed: applied and, since
-	// the drop exceeds half the predicted halving, verified.
+	// Two newest sessions with most idle tools removed. Verified now requires
+	// the reader to have SAID they applied it: the drop alone used to be taken
+	// as the application, and track() then measured that same drop to decide
+	// whether the prediction held. See TK1 — that circularity reported pure
+	// corpus drift as a confirmed saving.
 	add(4, []string{"Bash", "Idle1"})
 	add(5, []string{"Bash", "Idle1"})
-	s := kinds(Suggest(obs))[KindUnusedTools]
+	appliedHere := map[string]bool{id(KindUnusedTools, "built-in"): true}
+	if s := kinds(Suggest(obs, nil))[KindUnusedTools]; s.Status != Pending {
+		t.Fatalf("a drop nobody claimed must stay pending, not verify itself: %+v", s)
+	}
+	s := kinds(Suggest(obs, appliedHere))[KindUnusedTools]
 	if s.Status != Verified || s.RealizedShare <= 0 {
 		t.Fatalf("a large drop must verify: %+v", s)
 	}
@@ -163,7 +170,7 @@ func TestSuggestionsAreTrackedToClosure(t *testing.T) {
 	obs = obs[:4]
 	add(4, tools[:4])
 	add(5, tools[:4])
-	s = kinds(Suggest(obs))[KindUnusedTools]
+	s = kinds(Suggest(obs, appliedHere))[KindUnusedTools]
 	if s.Status != NotVerified {
 		t.Fatalf("a small drop is applied but not verified: %+v", s)
 	}
@@ -209,7 +216,7 @@ func TestUnusedToolsAreAttributedToTheirServer(t *testing.T) {
 	}
 
 	var servers []Suggestion
-	for _, s := range Suggest(obs) {
+	for _, s := range Suggest(obs, nil) {
 		if s.Kind == KindUnusedTools {
 			servers = append(servers, s)
 		}
@@ -273,7 +280,7 @@ func TestUnusedBuiltinsAreNotGivenAServer(t *testing.T) {
 		}
 		obs = append(obs, ob)
 	}
-	for _, s := range Suggest(obs) {
+	for _, s := range Suggest(obs, nil) {
 		if s.Kind != KindUnusedTools {
 			continue
 		}

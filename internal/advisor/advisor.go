@@ -305,7 +305,14 @@ type agg struct {
 
 // Suggest aggregates observations into suggestions, newest evidence
 // last, and applies the tracking rules against earlier sessions.
-func Suggest(obs []Observation) []Suggestion {
+// Suggest aggregates observations into suggestions.
+//
+// applied carries the ids the reader marked applied in `replay tui`, and is the
+// only thing that lets a suggestion be judged. Nil means nobody has marked
+// anything, which is the common case and yields Pending throughout — the
+// honest answer, since two windows of a moving corpus are not a before and an
+// after. See track for why that used to be inferred and why it cannot be.
+func Suggest(obs []Observation, applied map[string]bool) []Suggestion {
 	sort.SliceStable(obs, func(i, j int) bool { return obs[i].at.Before(obs[j].at) })
 	aggs := map[string]*agg{}
 	var order []string
@@ -339,7 +346,9 @@ func Suggest(obs []Observation) []Suggestion {
 		if a.kind == KindHotFile && a.reads < minReads {
 			continue
 		}
-		s := Suggestion{ID: id(a.kind, a.target), Kind: a.kind, Target: a.target, Sessions: len(a.evidence), PromptTokens: a.tokens, Estimated: a.estimated, FirstSeen: a.evidence[0].at, LastSeen: a.evidence[len(a.evidence)-1].at}
+		sid := id(a.kind, a.target)
+		a.applied = applied[sid]
+		s := Suggestion{ID: sid, Kind: a.kind, Target: a.target, Sessions: len(a.evidence), PromptTokens: a.tokens, Estimated: a.estimated, FirstSeen: a.evidence[0].at, LastSeen: a.evidence[len(a.evidence)-1].at}
 		for _, ev := range a.evidence {
 			s.Share += ev.share
 		}

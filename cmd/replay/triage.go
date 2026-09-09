@@ -82,3 +82,28 @@ func cacheCoversCorpus(cached, onDisk int) bool {
 	// that a fixture run against one file cannot pass.
 	return float64(cached) >= float64(onDisk)*0.9
 }
+
+// appliedIDs reads which findings the reader has marked applied.
+//
+// The advice file is the only record of a decision anybody actually made. A
+// missing or unreadable file means nobody has marked anything, which is
+// Pending everywhere rather than an error: not having triaged is the normal
+// state, not a fault.
+func appliedIDs() map[string]bool {
+	b, err := os.ReadFile(filepath.Join(tipStateDir(), adviceFileName))
+	if err != nil {
+		return nil
+	}
+	var f adviceFile
+	if json.Unmarshal(b, &f) != nil {
+		return nil
+	}
+	out := map[string]bool{}
+	for _, s := range f.Suggestions {
+		if s.Status == advisor.Applied || s.Status == advisor.Verified ||
+			s.Status == advisor.NotVerified {
+			out[s.ID] = true
+		}
+	}
+	return out
+}
