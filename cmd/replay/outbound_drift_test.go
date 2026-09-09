@@ -44,11 +44,6 @@ func TestOutboundSurfacesAreAllDocumented(t *testing.T) {
 		"internal/probe":  "probe --execute, which originates synthetic billable requests on your own key",
 		"cmd/replay":      "rules --check-prices fetches a public price table; doctor probes loopback for a running proxy",
 		"internal/ledger": "streaming passthrough helpers on the proxy path",
-		// `replay upgrade`, and nothing else in this package, reaches
-		// github.com. It runs only when the user types the command, which is
-		// what the README's promise actually says; a background version check
-		// would be the drift this test exists to catch.
-		"internal/selfupdate": "replay upgrade, which resolves and downloads a release you asked for",
 	}
 
 	// Call expressions that construct or perform an outbound request.
