@@ -93,8 +93,23 @@ func TestFundingAddressIsPinned(t *testing.T) {
 		}
 
 		// Solana: 43-44 Base58 characters, no checksum to lean on.
+		//
+		// A digit is required, and that is not a fudge. Base58 has no checksum
+		// to verify against, so length and alphabet are the only filters -- and
+		// they match any CamelCase identifier of the right length.
+		// TestUnpricedTrafficDoesNotFabricateAZeroCost is 43 characters, uses no
+		// 0, O, I or l, and tripped this check on 2026-09-09.
+		//
+		// An address is derived from random bytes, so the chance it contains no
+		// digit at all is (49/58)^43, about one in eleven hundred. A digit-free
+		// token of this length is a symbol, not a key. Requiring one costs
+		// essentially no detection and removes the false positives that teach a
+		// reader to skip the failure.
 		for _, tok := range strings.Fields(strings.NewReplacer("`", " ", "|", " ", ",", " ").Replace(text)) {
 			if len(tok) < 43 || len(tok) > 44 || !isBase58(tok) {
+				continue
+			}
+			if !strings.ContainsAny(tok, "123456789") {
 				continue
 			}
 			if _, ok := fundingAddresses[tok]; !ok {
