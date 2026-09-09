@@ -25,6 +25,23 @@ type BlameEntry struct {
 // provider to process history again.
 const RebillLabel = "cache breaks: history re-billed (see replay diff)"
 
+// UnaccountedLabel names tokens a turn was billed that the blocks visible in
+// that turn cannot account for.
+//
+// Almost always a shared prefix that grew where the transcript cannot see it:
+// a second tool-definition re-lay, or an MCP server binding late. The provider
+// billed the write, the transcript shows only whatever the agent was doing at
+// the time, and shareByBytes used to hand the whole write to that. On session
+// 7022b9f2 it charged 21k tokens to a `Bash echo one` result whose content is
+// three bytes.
+//
+// It does not say where the tokens belong, because the transcript does not
+// contain that. It says they are not the visible block's, which is the part
+// that was being asserted wrongly.
+// The first word matters: `replay context` groups labels by it, so this
+// reads as "unaccounted" beside "system" and "Bash" rather than as "billed".
+const UnaccountedLabel = "unaccounted: prefix grew where the transcript cannot see it"
+
 // labelAcc accumulates attribution for one label.
 type labelAcc struct {
 	once, prompt        Tokens
@@ -98,7 +115,7 @@ func Blame(cal *Calibration, fit TokenFit) []BlameEntry {
 		// tool definitions bind late the new content is a system-role
 		// prefix message, and sharing this turn's write across user blocks
 		// alone drops it on an empty list.
-		shareByBytes(tc.blocks, Estimated(tc.newTokens), carried, get)
+		shareWithinTheFit(tc.blocks, tc.newTokens, carried, fit, get)
 	}
 
 	entries := make([]BlameEntry, 0, len(byLabel))
@@ -156,6 +173,41 @@ func attributeOutput(req *transcript.Request, carried int, get func(string) *lab
 // shareByBytes splits tokens across blocks in proportion to bytes. The last
 // block absorbs rounding so the sum is exact. carried is how many requests
 // carry these blocks in their prompt, this one included.
+// shareWithinTheFit attributes a turn's write to the blocks visible in it, up
+// to what those bytes can be worth, and names the rest.
+//
+// The allowance is the fit's own claim about itself: accountable bytes at the
+// fitted ratio, widened by the relative error it reports. For a well-fitted
+// session that is a tight band; for an unfitted one RelativeError is 1, so the
+// band is exactly double, which is deliberately generous. No new constant is
+// introduced, and a turn whose content is denser than the ratio expects keeps
+// its attribution as long as it stays inside the uncertainty the fit already
+// publishes.
+//
+// Beyond that band the excess is not evidence about the visible blocks. It is
+// reported under UnaccountedLabel rather than shared, because charging it to a
+// three-byte tool result is an assertion the bytes cannot support — and the
+// figure it produced, 21k tokens for `echo one`, went on to be the sole input
+// to advisor.Observe.
+func shareWithinTheFit(blocks []transcript.Block, newTokens, carried int, fit TokenFit, get func(string) *labelAcc) {
+	if newTokens <= 0 || len(blocks) == 0 {
+		shareByBytes(blocks, Estimated(newTokens), carried, get)
+		return
+	}
+	bytes := 0
+	for _, b := range blocks {
+		bytes += b.Bytes
+	}
+	accountable := fit.EstimateTokens(bytes)
+	allowance := int(float64(accountable) * (1 + fit.RelativeError))
+	if newTokens <= allowance {
+		shareByBytes(blocks, Estimated(newTokens), carried, get)
+		return
+	}
+	shareByBytes(blocks, Estimated(accountable), carried, get)
+	get(UnaccountedLabel).add(Estimated(newTokens-accountable), carried, false)
+}
+
 func shareByBytes(blocks []transcript.Block, tokens Tokens, carried int, get func(string) *labelAcc) {
 	total := tokens.Total()
 	if total <= 0 || len(blocks) == 0 {
