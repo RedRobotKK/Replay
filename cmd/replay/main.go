@@ -152,7 +152,7 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 	case "doctor":
 		return runDoctor(args[1:], stdout, stderr)
 	case "probe":
-		return runProbe(args[1:], stdout, stderr)
+		return runProbe(os.Stdin, args[1:], stdout, stderr)
 	case "rules":
 		return runRules(args[1:], stdout, stderr)
 	case "tui":
