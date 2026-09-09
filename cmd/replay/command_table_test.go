@@ -94,24 +94,56 @@ func TestCT2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	guide := string(b)
+	// Headings only, and stripped of HTML comments first.
+	//
+	// This used to look for the bare string "replay <name>" anywhere in the
+	// guide. Two things satisfied that without documenting anything: a passing
+	// mention in prose, and an HTML comment. Verified by neutralising every
+	// real occurrence of `replay budget` and leaving one inside
+	// <!-- replay budget -->, at which point the command was undocumented and
+	// this test still passed.
+	//
+	// A command is documented when it has a section, not when its name appears.
+	// The guide's own convention is `### ` + backticked usage, which is what a
+	// reader scrolls to and what the table of contents links.
+	guide := stripHTMLComments(string(b))
 
 	var missing []string
 	for _, name := range dispatchedCommands(t) {
 		// The tool is named for its own first command, so that one is
 		// documented under the bare heading `replay` rather than as
 		// "replay replay". Both spellings dispatch to it.
+		want := "### `replay " + name
 		if name == "replay" {
-			if !strings.Contains(guide, "### `replay`") {
-				missing = append(missing, name)
-			}
-			continue
+			want = "### `replay`"
 		}
-		if !strings.Contains(guide, "replay "+name) {
+		if !strings.Contains(guide, want) {
 			missing = append(missing, name)
 		}
 	}
 	if len(missing) > 0 {
-		t.Errorf("dispatched but undocumented in docs/guide/commands.md: %v", missing)
+		t.Errorf("dispatched but with no section in docs/guide/commands.md: %v\n"+
+			"A mention is not documentation: each needs a `### ` heading a reader can "+
+			"scroll to.", missing)
+	}
+}
+
+// stripHTMLComments removes <!-- ... --> so a commented-out heading cannot
+// stand in for a live one.
+//
+// Markdown has no comment syntax of its own, so this is the only way to hide
+// text in a .md file — which makes it the only way to satisfy a substring
+// check without publishing anything.
+func stripHTMLComments(s string) string {
+	for {
+		i := strings.Index(s, "<!--")
+		if i < 0 {
+			return s
+		}
+		j := strings.Index(s[i:], "-->")
+		if j < 0 {
+			return s[:i]
+		}
+		s = s[:i] + s[i+j+3:]
 	}
 }
