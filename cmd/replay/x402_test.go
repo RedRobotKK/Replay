@@ -739,8 +739,18 @@ func TestX402_RedirectToCleartextIsRefused(t *testing.T) {
 	if err == nil {
 		t.Fatal("a redirect to plain http must not install rules")
 	}
-	if !strings.Contains(err.Error(), "http") {
-		t.Errorf("the error should name the cleartext hop, got: %v", err)
+	// "cleartext", not "http". Go wraps a failed fetch in *url.Error, whose
+	// message always begins `Get "http://...`, so a check for "http" was
+	// satisfied by the wrapper no matter what the refusal said. Verified:
+	// replacing the refusal with errors.New("nope") left this test green.
+	//
+	// The behavioural assertions either side of this one are not vacuous —
+	// deleting CheckRedirect entirely makes the fetch succeed and both fire.
+	// This is about the operator who has to read the error and understand why
+	// their update refused.
+	if !strings.Contains(err.Error(), "cleartext") && !strings.Contains(err.Error(), "plain http") {
+		t.Errorf("the error does not name the cleartext hop, so an operator sees only a "+
+			"failed fetch and retries it: %v", err)
 	}
 	if _, statErr := os.Stat(file); statErr == nil {
 		t.Error("rules were installed over a cleartext hop")

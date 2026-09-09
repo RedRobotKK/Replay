@@ -230,7 +230,7 @@ func fetchRules(src string) ([]byte, string, error) {
 			// chain rather than only its first hop.
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if req.URL.Scheme != "https" {
-					return fmt.Errorf("refusing a redirect to plain http: %s", req.URL.Redacted())
+					return fmt.Errorf("refusing a redirect to cleartext http: %s", req.URL.Redacted())
 				}
 				if len(via) >= 10 {
 					return errors.New("too many redirects")

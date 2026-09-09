@@ -97,9 +97,12 @@ func columnStarts(line string) []int {
 			out = append(out, i)
 		}
 	}
-	if len(line) > 0 && line[0] == ' ' && len(line) > 2 && line[2] != ' ' {
-		out = append([]int{2}, out...)
-	}
+	// No prepend for the first column. The loop above already reports index 2
+	// for an indented row — line[2] is non-space with two spaces before it,
+	// which is exactly its condition — so adding it again returned 2 twice.
+	// Every traffic row then scored 6 starts against a looksLikeTraffic that
+	// requires 5, no row was ever examined, and the alignment assertion this
+	// file is named for never ran. See SB1.
 	return out
 }
 
@@ -173,4 +176,152 @@ func prefixEqual(a, b []int) bool {
 		}
 	}
 	return true
+}
+
+// SB1: the alignment check examines rows.
+//
+// TestStoryboard_TrafficRowsAlignWithTheirHeader was vacuous for its whole
+// life. Instrumented, 166 lines were considered and 0 reached the assertion,
+// so the check whose comment says it exists to catch "the defect the previous
+// storyboard shipped with" would have passed a storyboard with every row one
+// cell off its header. Verified: giving Traffic() the widths
+// {"time",9},{"surface",9},{"endpoint",22} — every row misaligned, total width
+// unchanged — left `go test ./internal/tui/` green.
+//
+// The cause is one line in columnStarts. The loop already reports index 2 for
+// an indented row, and the prepend below it adds a second 2, so every traffic
+// row scored 6 column starts against a looksLikeTraffic that requires 5. The
+// filter was correct and the function it called was not.
+//
+// This test is the one that could not have been written after the fact and
+// still be trusted, because it asserts on the count rather than the outcome: a
+// filter that matches nothing produces a green suite either way.
+func TestSB1_TheAlignmentCheckActuallyExaminesRows(t *testing.T) {
+	var timeShaped, examined int
+	for _, sc := range Storyboard() {
+		for _, line := range sc.Lines {
+			s := strings.TrimSpace(line)
+			if len(s) >= 8 && s[2] == ':' && s[5] == ':' && unicode.IsDigit(rune(s[0])) {
+				timeShaped++
+			}
+			if looksLikeTraffic(line) {
+				examined++
+			}
+		}
+	}
+	if timeShaped == 0 {
+		t.Fatal("the storyboard contains no rows shaped like traffic at all, so this " +
+			"guard is measuring the wrong thing")
+	}
+	if examined == 0 {
+		t.Fatalf("%d rows in the storyboard are shaped like traffic and looksLikeTraffic "+
+			"admits none of them, so the alignment assertion never runs", timeShaped)
+	}
+	// Some rows are excluded on purpose, and the exclusion is pinned by scene
+	// rather than by count. looksLikeTraffic's comment names two: scene 24
+	// emits plain lines with no columns, and scene 25 drops columns to fit a
+	// narrow terminal. Demanding the wide table's alignment from either would
+	// assert the opposite of what they exist to show. A bare count would let a
+	// future filter quietly stop admitting a third scene.
+	allowed := map[int]bool{24: true, 25: true}
+	for _, sc := range Storyboard() {
+		if allowed[sc.N] {
+			continue
+		}
+		for i, line := range sc.Lines {
+			s := strings.TrimSpace(line)
+			if len(s) >= 8 && s[2] == ':' && s[5] == ':' && unicode.IsDigit(rune(s[0])) &&
+				!looksLikeTraffic(line) {
+				t.Errorf("scene %d (%s) line %d is a traffic row the alignment check skips, "+
+					"and it is not one of the two scenes documented as columnless:\n  %q -> %v",
+					sc.N, sc.Name, i, line, columnStarts(line))
+			}
+		}
+	}
+	if examined != 6 {
+		t.Errorf("the alignment check examines %d rows; it examined 6 when this guard was "+
+			"written, so either a scene gained traffic or the filter narrowed", examined)
+	}
+}
+
+// SB3: the narrow-terminal scene is internally aligned.
+//
+// Scene 25 is excluded from the wide-table check because it drops columns by
+// design, which is correct and also left it unchecked entirely — its rows could
+// shear against each other and nothing would notice. They share a header of
+// their own, so they can be held to it.
+func TestSB3_TheNarrowSceneAlignsWithItself(t *testing.T) {
+	var rows [][]int
+	var text []string
+	for _, sc := range Storyboard() {
+		if sc.N != 25 {
+			continue
+		}
+		for _, line := range sc.Lines {
+			s := strings.TrimSpace(line)
+			if len(s) >= 8 && s[2] == ':' && s[5] == ':' && unicode.IsDigit(rune(s[0])) {
+				rows = append(rows, columnStarts(line))
+				text = append(text, line)
+			}
+		}
+	}
+	if len(rows) < 2 {
+		t.Fatalf("scene 25 has %d traffic rows; with fewer than two there is nothing to "+
+			"align and this guard is measuring nothing", len(rows))
+	}
+	for i := 1; i < len(rows); i++ {
+		if !equal(rows[i], rows[0]) {
+			t.Errorf("scene 25 row %d does not line up with row 0.\n  %s -> %v\n  %s -> %v",
+				i, text[0], rows[0], text[i], rows[i])
+		}
+	}
+}
+
+// SB2: a column start is reported once.
+//
+// columnStarts is the measurement every alignment assertion here is built on.
+// It reported index 2 twice for any indented row — the loop finds it, then the
+// prepend adds it again — which is what pushed every traffic row out of
+// looksLikeTraffic's range and made SB1's parent test vacuous.
+func TestSB2_ColumnStartsAreNotDuplicated(t *testing.T) {
+	for _, line := range append(Header(), "  15:06:44  anthropic  api.anthropic.com        messages          parsed   ") {
+		seen := map[int]bool{}
+		for _, c := range columnStarts(line) {
+			if seen[c] {
+				t.Errorf("column start %d reported twice for %q -> %v", c, line, columnStarts(line))
+			}
+			seen[c] = true
+		}
+	}
+}
+
+// SB4: the traffic table's geometry is pinned to literals.
+//
+// The alignment check above compares each row to Header(), and Header() is
+// built from trafficCols by the same Row() that builds the rows. Both sides of
+// the comparison come from one source, so they agree by construction: no edit
+// to trafficCols can ever make them disagree.
+//
+// That is why fixing looksLikeTraffic was necessary and not sufficient. With
+// rows finally being examined, the mutation the audit reported escaping —
+// {"time",9},{"surface",9},{"endpoint",22}, total width preserved — still left
+// the package green, because it moved the header and the rows together.
+//
+// A check needs an oracle it cannot rewrite. These are the column starts the
+// storyboard was designed around, written out. If a width changes, this fails
+// and someone decides whether the new geometry is intended; the alignment test
+// keeps proving the rows agree with the header, which is the separate property
+// it is good at.
+func TestSB4_TheTrafficGeometryIsPinned(t *testing.T) {
+	const layout = "time 8, surface 9, endpoint 23, wire 16, status 9, two-space gutters"
+	want := []int{2, 12, 23, 48, 66}
+	head := Header()[0]
+	if got := columnStarts(head); !equal(got, want) {
+		t.Errorf("the traffic table's columns start at %v, not %v (%s).\n  %q\n"+
+			"If the new geometry is intended, change the literal here and say why.",
+			got, want, layout, head)
+	}
+	if got := len(head); got != 75 {
+		t.Errorf("the header is %d cells wide, was 75: %q", got, head)
+	}
 }
