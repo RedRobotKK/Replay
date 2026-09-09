@@ -42,6 +42,7 @@ import (
 	"bufio"
 	"fmt"
 	"go/ast"
+	"go/build/constraint"
 	"go/parser"
 	"go/token"
 	"os"
@@ -75,6 +76,19 @@ func main() {
 
 	var guards []guard
 	for file, lines := range changed {
+		// A file excluded from every build has no guard that can affect
+		// anyone, and its package cannot be tested at all.
+		//
+		// Found by running this tool on the pull request that adds it. It
+		// analysed its own source, found 28 conditionals, and tried to
+		// `go test ./scripts/guard-reachability` — a package carrying
+		// //go:build ignore, so the toolchain reports "build constraints
+		// exclude all Go files" and the baseline is red. The refusal worked;
+		// the analysis should never have got that far.
+		if excluded, why := excludedFromBuild(file); excluded {
+			fmt.Printf("guard-reachability: skipping %s (%s)\n", file, why)
+			continue
+		}
 		gs, err := conditionalsIn(file, lines)
 		if err != nil {
 			fail("parsing %s: %v", file, err)
@@ -190,6 +204,42 @@ func changedGoFiles(base string) (map[string]map[int]bool, error) {
 		}
 	}
 	return files, sc.Err()
+}
+
+// excludedFromBuild reports whether a file's //go:build line keeps it out of
+// an ordinary build.
+//
+// Evaluated with no tags set, which is what `go test ./pkg` does. A file
+// guarded by `ignore` — the conventional tag for a standalone tool — is
+// excluded, and so is anything behind a tag this run does not set. Both are
+// correct to skip: the conditionals inside them are not in the binary and no
+// ordinary test run can observe them.
+func excludedFromBuild(file string) (bool, string) {
+	f, err := os.Open(file)
+	if err != nil {
+		return false, ""
+	}
+	defer func() { _ = f.Close() }()
+
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		// Constraints sit above the package clause; stop once it is reached.
+		if strings.HasPrefix(line, "package ") {
+			return false, ""
+		}
+		if !constraint.IsGoBuild(line) {
+			continue
+		}
+		expr, err := constraint.Parse(line)
+		if err != nil {
+			return false, ""
+		}
+		if !expr.Eval(func(string) bool { return false }) {
+			return true, "build constraints exclude it: " + line
+		}
+	}
+	return false, ""
 }
 
 // conditionalsIn finds if-statements whose condition sits on a changed line.
