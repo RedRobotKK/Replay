@@ -116,6 +116,24 @@ type evidence struct {
 	reads int
 }
 
+// sample is one session's reading of one target, and whether there was one.
+//
+// The distinction the previous []float64 could not carry. A map returns the
+// zero value for a key it does not hold, so a session that never touched the
+// target arrived as a hard 0.0 and averaged in as if the target had been
+// measured at nothing. See mean_test.go: that scored a tool going unused for
+// two sessions higher than actually halving its share.
+//
+// seen is false for two different reasons and deliberately does not say which.
+// Either the session did not exercise the target, or note() dropped it for
+// sitting under MinShare. By the time the aggregation runs, that information
+// is already gone — so the honest reading of either is "no measurement here",
+// and an unknown left out of a mean cannot corrupt it.
+type sample struct {
+	share float64
+	seen  bool
+}
+
 // Observation is everything the advisor extracts from one session.
 type Observation struct {
 	at      time.Time
@@ -296,7 +314,7 @@ type agg struct {
 	kind      Kind
 	target    string
 	evidence  []evidence
-	shares    []float64 // per session in time order, zero when absent
+	shares    []sample // per session in time order; seen=false where there was no reading
 	titles    [3]string
 	estimated bool
 	tokens    int
@@ -337,7 +355,10 @@ func Suggest(obs []Observation, applied map[string]bool) []Suggestion {
 	sort.Strings(order)
 	for _, ob := range obs {
 		for k, a := range aggs {
-			a.shares = append(a.shares, ob.targets[k].share)
+			// The comma-ok is the whole fix. Without it this read is
+			// indistinguishable from a measured zero.
+			ev, ok := ob.targets[k]
+			a.shares = append(a.shares, sample{share: ev.share, seen: ok})
 		}
 	}
 	var out []Suggestion
@@ -383,7 +404,7 @@ func Suggest(obs []Observation, applied map[string]bool) []Suggestion {
 // in time order. A drop of appliedDrop on the newest sessions against the
 // earlier mean counts as applied; a realized drop of verifyShare of the
 // prediction counts as verified.
-func track(kind Kind, shares []float64, predicted float64, applied bool) (Status, float64) {
+func track(kind Kind, shares []sample, predicted float64, applied bool) (Status, float64) {
 	if kind == KindHotFile || kind == KindCacheBreaks {
 		return AdviceOnly, 0
 	}
@@ -414,7 +435,23 @@ func track(kind Kind, shares []float64, predicted float64, applied bool) (Status
 		return Pending, 0
 	}
 	earlier, recent := shares[:len(shares)-recentSessions], shares[len(shares)-recentSessions:]
-	before, after := mean(earlier), mean(recent)
+
+	// Averaged over the sessions that saw the target, not over all of them.
+	//
+	// A session that did not exercise a tool says nothing about what that tool
+	// costs when it is used, and counting it as a zero says the opposite. That
+	// arithmetic credited a target with its entire share as a "saving" for the
+	// crime of not appearing — more than it credited actually halving it.
+	before, nBefore := meanSeen(earlier)
+	after, nAfter := meanSeen(recent)
+
+	// No recent reading is not a reduction to nothing, it is the absence of a
+	// measurement, and Pending is what this file says everywhere else when
+	// nothing is known. Claiming a saving here is how the screen came to
+	// report its largest successes for sessions that simply went elsewhere.
+	if nBefore == 0 || nAfter == 0 {
+		return Pending, 0
+	}
 	if before == 0 || after > before*(1-appliedDrop) {
 		return Pending, 0
 	}
@@ -425,15 +462,25 @@ func track(kind Kind, shares []float64, predicted float64, applied bool) (Status
 	return NotVerified, realized
 }
 
-func mean(xs []float64) float64 {
-	if len(xs) == 0 {
-		return 0
-	}
-	sum := 0.0
+// meanSeen averages the readings that exist, and reports how many there were.
+//
+// The count is returned rather than inferred from a zero mean because those
+// are different facts: "measured at nothing" and "not measured" are exactly
+// the pair this whole change exists to keep apart, and a helper that collapsed
+// them again on the way out would put the defect back one level down.
+func meanSeen(xs []sample) (float64, int) {
+	sum, n := 0.0, 0
 	for _, x := range xs {
-		sum += x
+		if !x.seen {
+			continue
+		}
+		sum += x.share
+		n++
 	}
-	return sum / float64(len(xs))
+	if n == 0 {
+		return 0, 0
+	}
+	return sum / float64(n), n
 }
 
 // describe renders the title and the action for a suggestion.

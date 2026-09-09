@@ -31,7 +31,7 @@ import "testing"
 // realized saving of 8 points. Nobody touched anything. The tool tells the
 // reader their change was made and confirmed.
 func TestTK1_DriftIsNotAVerifiedSaving(t *testing.T) {
-	shares := []float64{0.30, 0.30, 0.30, 0.30, 0.22, 0.22}
+	shares := seen(0.30, 0.30, 0.30, 0.30, 0.22, 0.22)
 	status, realized := track(KindLargeResults, shares, 0.15, false)
 	if status == Verified {
 		t.Errorf("a drift from 30%% to 22%% with no recorded application is reported "+
@@ -52,7 +52,7 @@ func TestTK1_DriftIsNotAVerifiedSaving(t *testing.T) {
 // evidence that the advice fails. It is evidence that the verifier is measuring
 // corpus drift and cannot tell which direction it is being fooled in.
 func TestTK1b_NoiseIsNotAFailedPrediction(t *testing.T) {
-	shares := []float64{0.20, 0.40, 0.30, 0.30, 0.23, 0.23}
+	shares := seen(0.20, 0.40, 0.30, 0.30, 0.23, 0.23)
 	status, _ := track(KindLargeResults, shares, 0.15, false)
 	if status == NotVerified {
 		t.Errorf("noise across sessions is reported as %q, telling the reader a change "+
@@ -67,7 +67,7 @@ func TestTK1b_NoiseIsNotAFailedPrediction(t *testing.T) {
 // inference. When it exists, the comparison it was always trying to make
 // becomes legitimate.
 func TestTK1c_ARecordedApplicationStillVerifies(t *testing.T) {
-	shares := []float64{0.30, 0.30, 0.30, 0.30, 0.05, 0.05}
+	shares := seen(0.30, 0.30, 0.30, 0.30, 0.05, 0.05)
 	status, realized := track(KindLargeResults, shares, 0.15, true)
 	if status != Verified {
 		t.Errorf("a recorded application followed by a 25-point drop is %q, want "+
@@ -83,7 +83,7 @@ func TestTK1c_ARecordedApplicationStillVerifies(t *testing.T) {
 // The control. If nothing moved, there is nothing to say, and the existing
 // code gets this right — the test exists so the fix cannot break it.
 func TestTK2_NoMovementIsPending(t *testing.T) {
-	shares := []float64{0.30, 0.30, 0.30, 0.30, 0.30, 0.30}
+	shares := seen(0.30, 0.30, 0.30, 0.30, 0.30, 0.30)
 	if status, _ := track(KindLargeResults, shares, 0.15, false); status != Pending {
 		t.Errorf("an unmoved share is %q, want pending", status)
 	}
@@ -94,7 +94,7 @@ func TestTK2_NoMovementIsPending(t *testing.T) {
 // Also already correct, and also worth pinning: two sessions is not a
 // before-and-after, it is two numbers.
 func TestTK3_TooFewSessionsIsPending(t *testing.T) {
-	if status, _ := track(KindLargeResults, []float64{0.3, 0.1}, 0.15, false); status != Pending {
+	if status, _ := track(KindLargeResults, seen(0.3, 0.1), 0.15, false); status != Pending {
 		t.Errorf("two sessions produced %q rather than pending", status)
 	}
 }
@@ -107,7 +107,7 @@ func TestTK3_TooFewSessionsIsPending(t *testing.T) {
 // not quietly widen it to cover the cases it cannot measure either.
 func TestTK4_UndetectableKindsStayAdviceOnly(t *testing.T) {
 	for _, k := range []Kind{KindHotFile, KindCacheBreaks} {
-		status, realized := track(k, []float64{0.3, 0.3, 0.3, 0.1, 0.1}, 0.15, false)
+		status, realized := track(k, seen(0.3, 0.3, 0.3, 0.1, 0.1), 0.15, false)
 		if status != AdviceOnly || realized != 0 {
 			t.Errorf("%s: got %q/%.2f, want advice only and no realized figure",
 				k, status, realized)
