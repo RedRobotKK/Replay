@@ -16,6 +16,7 @@ here.
   `replay serve` dashboard with 25 states, a width-safe formatter, and a rule
   that nothing renders unless the surface registry backs it. That is option A
   below, already designed.
+
 - [`architecture/mcp-server.md`](../architecture/mcp-server.md) specifies a tool
   surface for agents rather than people, and its own cut list is the sharpest
   writing in this repository about what an agent should not be handed. That is
