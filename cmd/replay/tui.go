@@ -160,7 +160,18 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 			loop.SetRows(sc.Rows)
 			return tui.Frame{Key: k, Lines: sc.Lines}
 		case 'a':
-			sc := tui.AdviseScreen(adviceState())
+			// Cached first. Recomputing took 7.7s of wall clock per keypress.
+			var sc tui.Screen
+			if rows, n, at, ok := adviceFromCache(); ok {
+				sc = tui.AdviseScreen(rows, n)
+				// The age is not decoration. Advice read from disk without a
+				// date is yesterday's answer wearing today's clothes.
+				sc.Lines = append(sc.Lines, fmt.Sprintf(
+					"  as of %s — `replay advise` to refresh",
+					at.Local().Format("15:04 on 2 Jan")))
+			} else {
+				sc = tui.AdviseScreen(adviceState())
+			}
 			loop.SetRows(sc.Rows)
 			return tui.Frame{Key: k, Lines: sc.Lines}
 		case 'c':
@@ -410,6 +421,49 @@ func modelState() (string, []tui.ModelRow, int) {
 // six sessions is a finding — nothing crossed a threshold — and zero rows from
 // zero sessions is an absence. Collapsing them would put "example data" back on
 // a screen that simply had nothing to rank.
+// adviceFromCache reads the advice `replay advise` last wrote.
+//
+// The screen re-ran the whole corpus analysis on every keypress: 7.7 seconds of
+// wall clock and 24.5 of CPU across 1,738 transcripts, to draw four rows. A TUI
+// that takes eight seconds to answer a keystroke is not slow, it is broken —
+// and the answer was already on disk, because `replay advise` writes
+// advice.json every time it runs.
+//
+// Freshness is the whole risk, so the caller shows the timestamp rather than
+// presenting yesterday's advice as today's. A cache that cannot say how old it
+// is would be worse than the delay it saves.
+func adviceFromCache() ([]tui.AdviceRow, int, time.Time, bool) {
+	b, err := os.ReadFile(filepath.Join(tipStateDir(), adviceFileName))
+	if err != nil {
+		return nil, 0, time.Time{}, false
+	}
+	var f adviceFile
+	if json.Unmarshal(b, &f) != nil || f.Schema != advisor.AdviceFileSchema {
+		// A file this build does not understand is not advice. Recompute
+		// rather than render fields that may have moved.
+		return nil, 0, time.Time{}, false
+	}
+	if len(f.Suggestions) == 0 {
+		return nil, 0, time.Time{}, false
+	}
+	return adviceRows(f.Suggestions), f.Sessions, f.Generated, true
+}
+
+// adviceRows converts suggestions to screen rows. Shared so the cached path
+// and the computed path cannot drift into rendering different fields.
+func adviceRows(sgs []advisor.Suggestion) []tui.AdviceRow {
+	rows := make([]tui.AdviceRow, 0, len(sgs))
+	for _, sg := range sgs {
+		rows = append(rows, tui.AdviceRow{
+			Title: sg.Title, Action: sg.Action, Sessions: sg.Sessions,
+			Share: sg.Share, PromptTokens: sg.PromptTokens,
+			PredictedShare: sg.PredictedShare, Estimated: sg.Estimated,
+			Status: string(sg.Status),
+		})
+	}
+	return rows
+}
+
 func adviceState() ([]tui.AdviceRow, int) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -437,16 +491,7 @@ func adviceState() ([]tui.AdviceRow, int) {
 		return nil
 	})
 
-	rows := make([]tui.AdviceRow, 0, 4)
-	for _, sg := range advisor.Suggest(obs) {
-		rows = append(rows, tui.AdviceRow{
-			Title: sg.Title, Action: sg.Action, Sessions: sg.Sessions,
-			Share: sg.Share, PromptTokens: sg.PromptTokens,
-			PredictedShare: sg.PredictedShare, Estimated: sg.Estimated,
-			Status: string(sg.Status),
-		})
-	}
-	return rows, sessions
+	return adviceRows(advisor.Suggest(obs)), sessions
 }
 
 func machineState() tui.Machine {

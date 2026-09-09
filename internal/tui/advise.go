@@ -77,16 +77,37 @@ func AdviseScreen(rows []AdviceRow, sessions int) Screen {
 		// threshold; reporting that as "no data" would throw away the only
 		// thing the run established.
 		lines = append(lines,
-			paint(Good, fmt.Sprintf("  Nothing worth changing across %d session(s).", sessions)), "",
+			paint(Good, fmt.Sprintf("  Nothing worth changing across %d transcript(s).", sessions)), "",
 			paint(Faint, "  Every target measured came in under the threshold."), "")
 		sc.Lines = lines
 		return sc
 	}
 
-	lines = append(lines, fmt.Sprintf("  %d change(s) worth making, across %d session(s)",
-		len(rows), sessions), "")
+	// Transcripts, not sessions. The caller counts once per file and a session
+	// writes one file per agent lane, so this number is an order of magnitude
+	// above the session count doctor reports in the same shell. Naming it
+	// "sessions" is the conflation calibration-corpus-2026-09-06.md retracted in
+	// public — 1450 transcripts from 78 sessions — corrected in the evidence and
+	// left live here.
+	//
+	// Only the top few are shown. 140 findings rendered 704 lines into a 24-row
+	// terminal, so everything past the third scrolled away unread, and a total
+	// is not something a reader can act on. The rest stay in `replay advise`
+	// and advice.json.
+	const onScreen = 4
+	shown := rows
+	if len(shown) > onScreen {
+		shown = shown[:onScreen]
+	}
+	head := fmt.Sprintf("  %d change(s) worth making, across %d transcript(s)",
+		len(rows), sessions)
+	if len(rows) > len(shown) {
+		head = fmt.Sprintf("  Top %d of %d changes worth making, across %d transcript(s)",
+			len(shown), len(rows), sessions)
+	}
+	lines = append(lines, head, "")
 
-	for i, r := range rows {
+	for i, r := range shown {
 		// Titles are written by the analysis and run as long as the finding
 		// needs, so they are cut to the terminal exactly like actions are. The
 		// first version truncated only the action, which is why TestTW2 caught
@@ -99,7 +120,7 @@ func AdviseScreen(rows []AdviceRow, sessions int) Screen {
 		lines = append(lines, fmt.Sprintf("  %s  %s",
 			paint(Faint, num), paint(Strong, fitTo(r.Title, Cols()-prefix))))
 		lines = append(lines, "     "+paint(Faint, cell("evidence", 10))+
-			fitTo(fmt.Sprintf("%d session(s), %s prompt tokens", r.Sessions, commas(r.PromptTokens)), Cols()-15))
+			fitTo(fmt.Sprintf("%d transcript(s), %s prompt tokens", r.Sessions, commas(r.PromptTokens)), Cols()-15))
 
 		pred := "not predicted on this corpus"
 		if r.PredictedShare > 0 {
@@ -131,16 +152,31 @@ func AdviseScreen(rows []AdviceRow, sessions int) Screen {
 		}
 		lines = append(lines, row)
 		if r.Action != "" {
-			// Truncated to the terminal rather than left to wrap. A real action
-			// runs to a sentence and the fixtures in the test are short, which
-			// is how this shipped over-width the first time: the row reads as a
-			// table to the output-boundary wrapper, so it is never folded and
-			// the terminal breaks it mid-word instead.
-			lines = append(lines, "     "+paint(Faint, cell("do", 10))+fitTo(r.Action, Cols()-15))
+			// Wrapped, not truncated. Every action on the real screen ended in
+			// "~" — "or a summarizing wrap~", "pass paths instead of con~" —
+			// and the action is the entire product: the title states a fact,
+			// the action is what the reader does about it. Cutting it tells
+			// somebody they have a problem and withholds the fix.
+			//
+			// Folded here rather than at the output boundary because that
+			// wrapper leaves table-shaped rows alone by design, and this row
+			// is table-shaped.
+			for j, part := range wrapAction(r.Action, Cols()-15) {
+				label := "do"
+				if j > 0 {
+					label = ""
+				}
+				lines = append(lines, "     "+paint(Faint, cell(label, 10))+part)
+			}
 		}
 		lines = append(lines, "")
 	}
 
+	if len(rows) > len(shown) {
+		lines = append(lines,
+			paint(Faint, fmt.Sprintf("  %d more in `replay advise`, ranked the same way.",
+				len(rows)-len(shown))))
+	}
 	sc.Lines = lines
 	return sc
 }
@@ -171,4 +207,27 @@ func AdviceRowsFit(s Screen) bool {
 		}
 	}
 	return !strings.Contains(strings.Join(s.Lines, "\n"), "example data")
+}
+
+// wrapAction folds an action to the width, breaking on spaces.
+//
+// Two lines at most. An action that needs a third is an action nobody reads on
+// a screen, and the full text is in `replay advise` and advice.json either way;
+// the last line is cut so a runaway string cannot push the list off the
+// terminal, which is the failure this screen already had once.
+func wrapAction(action string, width int) []string {
+	if width < 20 {
+		return []string{fitTo(action, width)}
+	}
+	if VisibleLen(action) <= width {
+		return []string{action}
+	}
+	cut := width
+	for cut > 0 && action[cut] != ' ' {
+		cut--
+	}
+	if cut == 0 {
+		return []string{fitTo(action, width)}
+	}
+	return []string{action[:cut], fitTo(strings.TrimSpace(action[cut:]), width)}
 }
