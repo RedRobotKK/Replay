@@ -642,6 +642,40 @@ measurement of money that nobody made.
 
 The marker lives at `~/.replay/seen.json` and holds one timestamp.
 
+### `replay upgrade [--check] [--dry-run]`
+
+Replace this binary with the latest published release.
+
+```sh
+replay upgrade --check     # what is installed, what is latest, nothing else
+replay upgrade --dry-run   # download and verify, touch nothing
+replay upgrade             # verify, then replace the running binary
+```
+
+This is the one command that reaches the network without being asked to proxy anything, and the one
+that writes to the binary you invoked. Both facts are in `docs/CLI.md` under the same two columns
+every other command is classified by, because a command that rewrites itself should not be
+discovered by running it.
+
+**What it verifies, and what it does not.** The archive is fetched over HTTPS from
+`github.com/RedRobotKK/Replay`, `checksums.txt` is fetched from the same release, and the download is
+rejected unless its SHA-256 matches. There is deliberately no `--no-verify`: a checksum you can skip
+is a checksum. That defends against a corrupted download or a mangled CDN copy.
+
+It does **not** defend against a compromised release. The checksums come from the same origin as the
+archive, so anyone who could replace one could replace the other. Closing that needs a signature over
+the checksums with a key that is not stored beside them, and this repository does not publish one
+yet. The limit is stated here rather than left for a reader to infer from the absence of the word
+"signature".
+
+`--check` asks the network and installs nothing. `--dry-run` downloads and verifies and still
+installs nothing, which is the honest way to see what an upgrade would fetch. Neither writes to the
+binary.
+
+The target is `os.Executable()` with symlinks resolved — the file that is running, not where an
+installer would have put one, so an upgrade cannot quietly install beside the copy you actually
+invoke.
+
 ### `replay prefix --before <file> --after <file>`
 
 Answers one question about a diff before it merges: **does this change void the cached prefix?**

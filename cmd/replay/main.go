@@ -181,6 +181,8 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 		return runBudget(args[1:], stdout, stderr)
 	case "serve":
 		return runServe(args[1:], stdout, stderr)
+	case "upgrade":
+		return runUpgrade(args[1:], stdout, stderr)
 	default:
 		// The tool is named for its own first command, so "replay replay
 		// <path>" would be the common invocation. A first argument that
@@ -588,6 +590,7 @@ Setup and maintenance:
   replay budget <ledger-dir>       what this setup costs on every request, as a committable file
   replay redact <transcript>       strip content, keep structure and usage (for bug reports)
   replay version                   print build information
+  replay upgrade [--check]         install the newest release over this binary
 
 With no arguments at all, replay reports cost per task across the transcripts it
 finds on this machine, and prints this list only when it finds none.

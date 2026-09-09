@@ -65,6 +65,7 @@ to test whether `~/.replay` is writable.
 | [`prefix`](#prefix) | Whether a change to a tool-server document voids the cached prefix | none | none |
 | [`since`](#since) | What ran, and what it cost, since you last looked | none | ~/.replay/seen.json, one timestamp; --peek writes nothing |
 | [`budget`](#budget) | What this configuration costs on every request, before any work | none | none |
+| [`upgrade`](#upgrade) | Replace this binary with the latest published release | outbound: github.com, to resolve the latest tag and download the release archive and its checksums | the running binary, in place, after its checksum is verified; --check and --dry-run write nothing |
 
 ### cost
 
@@ -325,6 +326,12 @@ What this configuration costs on every request, before any work.
 |---|---|---|
 | `-json` | bool | emit the artefact as JSON, for committing and for the gate to read |
 
+### upgrade
+
+Replace this binary with the latest published release.
+
+Takes no flags.
+
 ## The TUI covers the same ground
 
 `replay tui` opens the same answers as movable screens. `--screen <name>` opens
@@ -365,4 +372,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-25 commands, 90 flags, read from the binary.
+26 commands, 90 flags, read from the binary.

@@ -32,6 +32,7 @@ COMMANDS = [
     "cost", "diff", "advise", "serve", "tui", "context", "blame", "replay",
     "route", "trim", "codex", "burn", "agents", "mcp", "corpus", "learn",
     "probe", "doctor", "rules", "statusline", "redact", "version", "prefix", "since", "budget",
+    "upgrade",
 ]
 
 # What each command is for, and the two facts an agent needs before running one
@@ -63,6 +64,11 @@ META = {
     "corpus":     ("Calibration across many sessions, as Markdown", "none", "none"),
     "learn":      ("Re-score the policy catalog, select one with held-out checks", "none", "--out writes policy.json"),
     "probe":      ("Measure a model's caching floor", "outbound only with --execute, which sends billable requests", "--record appends to measurements.jsonl; --contribute writes a submission file"),
+    # The only command that reaches the network without being asked to proxy
+    # anything, and the only one that writes to the binary the reader invoked.
+    # Both facts belong in the two columns an agent reads before running a
+    # command unsupervised, stated plainly rather than softened.
+    "upgrade":    ("Replace this binary with the latest published release", "outbound: github.com, to resolve the latest tag and download the release archive and its checksums", "the running binary, in place, after its checksum is verified; --check and --dry-run write nothing"),
     "doctor":     ("What replay can see on this machine and what to do next", "loopback: the local proxy status endpoint, and Ollama on 127.0.0.1:11434", "a temp file, created and removed, to test whether ~/.replay is writable"),
     "rules":      ("Show the provider rules in effect, or install a dated document", "outbound with --update (https) and with --check-prices (fetches LiteLLM's published table)", "with --update, installs a rules document"),
     "statusline": ("Live spend and cache-miss cost, for Claude Code's status line", "none", "none"),

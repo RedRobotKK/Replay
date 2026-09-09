@@ -246,7 +246,18 @@ var allowedImports = map[string]bool{
 	// an image of a screen ends up carrying a broken tspan the day somebody
 	// puts an ampersand in a model name.
 	"html": true,
-	"math": true, "math/rand": true, "math/rand/v2": true, "net": true,
+	// archive/tar, for the release tarball in internal/selfupdate. It reads
+	// and never writes, which is the whole reason it is admissible here: the
+	// hazard with tar is an entry whose name escapes the destination
+	// directory, and unpack() has no destination directory. It matches on
+	// filepath.Base(hdr.Name), reads the one matching regular file into
+	// memory through an io.LimitReader, and refuses a symlink, a hard link or
+	// anything that is not a regular file rather than following it. Nothing in
+	// the archive ever names a path this code writes to.
+	//
+	// It also cannot sign or pay, which is what this test is actually about.
+	"archive/tar": true,
+	"math":        true, "math/rand": true, "math/rand/v2": true, "net": true,
 	"net/http": true, "net/http/httptest": true, "net/http/httputil": true,
 	"net/url": true, "os": true, "os/signal": true, "path": true,
 	"path/filepath": true, "reflect": true, "regexp": true, "runtime": true,
