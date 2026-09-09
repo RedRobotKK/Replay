@@ -4,6 +4,8 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -103,15 +105,25 @@ func TestSW1_TheMaskingHelpersResultsReachTheProxy(t *testing.T) {
 	}
 }
 
-// SW2: the rehydrate flag is documented as doing something serve can do.
+// SW2: the --rehydrate flag exists, and the guide does not promise one that
+// does not.
 //
-// The other half of the same failure: a flag whose help text promises
-// behaviour nothing implements reads exactly like a working feature.
-func TestSW2_TheRehydrateFlagIsWired(t *testing.T) {
+// The first version of this test could not fail on any machine. Flag found, it
+// set a bool and fell off the end asserting nothing; flag absent, it called
+// t.Skip. There was no state of the world in which it reported a failure, and
+// an audit proved it by deleting the flag's declaration outright — the whole
+// package stayed green while docs/guide/commands.md went on documenting a flag
+// the binary no longer had.
+//
+// The direction matters and is why this is not covered elsewhere.
+// TestGuideCoversEveryFlag walks flags and checks each is documented. Nothing
+// walked the documentation and checked each promise is still real, so a flag
+// could vanish and only its absence from a list nobody diffs would say so.
+func TestSW2_TheRehydrateFlagExistsAsDocumented(t *testing.T) {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, "serve.go", nil, 0)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("parsing serve.go: %v", err)
 	}
 	var found bool
 	ast.Inspect(f, func(n ast.Node) bool {
@@ -130,8 +142,26 @@ func TestSW2_TheRehydrateFlagIsWired(t *testing.T) {
 		found = true
 		return false
 	})
-	if !found {
-		t.Skip("serve exposes no --rehydrate flag; SW1 covers the wiring either way")
+
+	// Documented, therefore promised. If the guide stops mentioning it this
+	// stops requiring it, and the two move together instead of drifting.
+	guide, err := os.ReadFile(filepath.Join("..", "..", "docs", "guide", "commands.md"))
+	if err != nil {
+		t.Fatalf("reading the guide: %v", err)
+	}
+	documented := strings.Contains(string(guide), "--rehydrate")
+
+	switch {
+	case documented && !found:
+		t.Error("docs/guide/commands.md documents --rehydrate and serve.go declares no such " +
+			"flag. A reader follows the guide and gets `flag provided but not defined`.")
+	case found && !documented:
+		t.Error("serve declares --rehydrate and the guide does not mention it, so the only " +
+			"way to discover it is reading the source")
+	case !found && !documented:
+		t.Error("neither serve.go nor the guide mentions --rehydrate. If the flag was " +
+			"removed deliberately, delete this test in the same commit; if it vanished by " +
+			"accident, this is the accident.")
 	}
 }
 

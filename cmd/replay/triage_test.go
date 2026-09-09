@@ -60,13 +60,33 @@ func TestTG1_MarkingAFindingPersists(t *testing.T) {
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}
+	// Count first. Both assertions below live inside a loop filtered on ID, so
+	// a markAdvice that KEPT ONLY the marked suggestion would delete every
+	// other finding from the reader's own advice.json and this test would pass
+	// — the loop body for "one" simply never runs. Verified: an audit made
+	// exactly that change and `go test ./cmd/replay/` was green.
+	//
+	// The file is the reader's record of what they have decided. Losing the
+	// rest of it while reporting success is worse than failing to record the
+	// mark at all.
+	if len(got.Suggestions) != 2 {
+		t.Fatalf("marking one finding left %d suggestion(s) in the file, was 2. Marking a "+
+			"finding must not remove the others.", len(got.Suggestions))
+	}
+	seen := map[string]bool{}
 	for _, s := range got.Suggestions {
+		seen[s.ID] = true
 		if s.ID == "two" && s.Status != advisor.Applied {
 			t.Errorf("finding two is %q after being marked applied; the reader was told "+
 				"their decision was recorded and it was not", s.Status)
 		}
 		if s.ID == "one" && s.Status != advisor.Pending {
 			t.Errorf("marking one finding changed another: one is now %q", s.Status)
+		}
+	}
+	for _, id := range []string{"one", "two"} {
+		if !seen[id] {
+			t.Errorf("finding %q is missing from the file after marking", id)
 		}
 	}
 }

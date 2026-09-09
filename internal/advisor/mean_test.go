@@ -1,6 +1,7 @@
 package advisor
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -178,5 +179,56 @@ func TestMN5_TheAggregationDistinguishesAbsenceFromZero(t *testing.T) {
 		t.Errorf("two sessions with no unused tools at all were scored as the target "+
 			"falling to zero: status %s, realized %.3f. Absence is not a measurement.",
 			got.Status, got.RealizedShare)
+	}
+}
+
+// MN6: the unused-tools evidence carries no borrowed error bar.
+//
+// Replaces a source grep with the behaviour it stood in for.
+//
+// DM4 in internal/analysis reads advisor.go for "fit.RelativeError" and for
+// the string "EstimateOutsideFit". Both halves are defeatable and an audit
+// defeated them: the banned names are SUBSTRINGS, so another receiver spelling
+// walks past, and the required call is satisfied by the COMMENT naming it even
+// when the call is gone. The defect #121 exists to fix was restored under a
+// different variable name and the whole tree stayed green.
+//
+// No grep survives that. The next spelling always escapes, because the property
+// is about what the figure CLAIMS, not how the line is written.
+//
+// It could not be asserted behaviourally before, and that is the finding under
+// the finding: note() took an analysis.Figure and kept only its Value, so
+// ErrorMeasured died at the observation boundary. evidence carries it now.
+//
+// Tool definitions are sized with the session's prose ratio because it is the
+// only ratio anyone has. The figure must not also carry that ratio's spread — a
+// standard deviation over prose turns is not evidence about schema density.
+func TestMN6_TheUnusedToolsEvidenceCarriesNoBorrowedSpread(t *testing.T) {
+	base := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	ob, ok := Observe(synthetic(base,
+		[]string{"Bash", "Idle1", "Idle2", "Idle3", "Idle4", "Idle5"},
+		[]string{"Bash", "Bash", "Bash"}, nil, 200))
+	if !ok {
+		t.Fatal("fixture must calibrate")
+	}
+
+	var found bool
+	for k, ev := range ob.targets {
+		if !strings.HasPrefix(k, string(KindUnusedTools)) {
+			continue
+		}
+		found = true
+		if ev.tokens <= 0 {
+			t.Errorf("the unused-tools evidence is sized at %d tokens; with nothing to "+
+				"rank it is not a suggestion", ev.tokens)
+		}
+		if ev.errorMeasured {
+			t.Errorf("the unused-tools evidence for %q claims a measured error bar. It is "+
+				"tool-definition JSON sized with a ratio Fit excludes schema turns from, so "+
+				"any spread attached to it was measured on different content.", k)
+		}
+	}
+	if !found {
+		t.Fatal("the fixture produced no unused-tools target, so this guard is measuring nothing")
 	}
 }
