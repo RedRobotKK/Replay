@@ -992,6 +992,19 @@
         "TestC8_AnUnconfirmedExecuteSendsNothing"
       ],
       "note": "The only gate on the only command that spends the reader's money, and nothing asserted that runProbe called it. confirmSpend was tested thoroughly as a pure function (C1-C5); the call was not. With the guard disabled the whole suite stayed green across 24 packages while two billable requests reached the provider. ADR-0014's 'a paywall no test imported', on real spend. The killing test asserts the request counter rather than the error text, because 'nothing was sent' is a claim about the wire."
+    },
+    {
+      "id": "M75",
+      "name": "cleartext-entry-refusal-never-fires",
+      "class": "guard-removed",
+      "discovered": "2026-09-09",
+      "file": "cmd/replay/rules.go",
+      "anchor": "if u.Scheme != \"https\" {",
+      "replacement": "if false && u.Scheme != \"https\" {",
+      "killedBy": [
+        "TestRC1_APlainHTTPSourceIsNeverFetched"
+      ],
+      "note": "The front door. X11 covered the REDIRECT refusal one scope down — an https server that 302s to plain http — and nothing covered someone typing an http URL to begin with. Rules drive the cost gates and the installed document records the source as typed, so a cleartext fetch means every later report asserts TLS that never happened. The killing test asserts a request counter rather than the error string: a variant that fetched first and complained afterwards returns exactly the right message and is caught only by the count."
     }
   ],
   "knownSurvivors": [
