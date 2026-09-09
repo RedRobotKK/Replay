@@ -292,6 +292,27 @@ This is error seeding, not mutation analysis: the denominator is 72 chosen edits
 operator population, and a first run is a kill by construction. The value is temporal — it asks
 whether each guard still exists and still discriminates on a tree that has moved.
 
+Until 2026-09-09 that catalogue had **never run**. It sits behind a build tag, no CI job passed the
+tag, and the run needs 659 seconds against Go's 10-minute default — so the obvious invocation dies
+around mutant 66 of 72 and looks like a broken harness. Both had to be wrong for it to stay hidden.
+It now runs on every push with a 45-minute ceiling, and three cheap tests in the normal suite assert
+that it is still wired up, because the expensive job proves the mutants die and something has to
+prove the expensive job still exists.
+
+**The test suite does not touch your home directory.** It did: running `go test ./cmd/replay/`
+rewrote this machine's own `~/.replay/advice.json`, replacing 141 findings from 1,744 transcripts
+with three from a two-session fixture, and taking the applied markers with them. A later test then
+read that file back, which is why two screens passed alone and failed together on CI.
+`internal/regression` now computes which packages can reach a home directory — by walking imports,
+not by assuming — and fails if any of them runs tests without replacing `HOME` and `USERPROFILE`
+first. A new package that starts resolving a home directory is caught the day it does.
+
+[ADR-0018](docs/adr/0018-this-is-an-instrument-not-an-app.md) is the companion rule for the output
+rather than the tests: **provenance is a field, not a comment**, and absence, zero and unknown are
+three different values. Nine defects in one day shared that shape, and none of them was a
+miscalculation — the arithmetic was right every time, and nothing on the screen said what the
+numbers were.
+
 ## Documentation
 
 Start at [`docs/`](docs/README.md), indexed by why you came. Highlights:
