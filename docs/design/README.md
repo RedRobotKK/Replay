@@ -21,6 +21,7 @@ ADR and the built thing goes to the architecture.
 | [Quota estimator: blue](quota-estimator-blue.md) | What the captured rate-limit headers can honestly answer for a subscription seat | Forecast yes, avoidable-share refused |
 | [Quota estimator: red](quota-estimator-red.md) | A hostile review of the quota claim | Five findings rated thread-defining; its lead retracted an evidence document of this repository's own |
 | [Quota data census](quota-data-census.md) | What rate-limit data actually exists on this machine | **Zero of 17 ledger records carry any quota header** |
+| [CLI tool integration survey](cli-tool-integration-survey.md) | Which AI CLIs are actually installed on this machine, and which of four integration routes each offers | **Five installed CLIs were missing from the original list**, one "not installed" verdict was wrong, and Grok turns out to be a spend surface the census had written off |
 
 ---
 
