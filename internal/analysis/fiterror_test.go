@@ -3,6 +3,8 @@ package analysis
 import (
 	"strings"
 	"testing"
+
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // An error bar that was never measured must not print as one.
@@ -130,5 +132,32 @@ func TestFE6_TheReportQualifiesAnUnmeasuredBar(t *testing.T) {
 		!strings.Contains(got, "0.20M") {
 		t.Errorf("a measured bar of 200,000 renders as %q; a real measurement must still "+
 			"print as a number", got)
+	}
+}
+
+// FE7: Fit never returns a non-positive ratio.
+//
+// A postcondition nothing stated, and a refusal in cmd/replay depends on it.
+// budget.go declines when fit.TokensPerByte <= 0, and that branch is
+// unreachable: Fit assigns defaultTokensPerByte when sumBytes is zero, and
+// otherwise divides sumTokens by sumBytes where both are positive by
+// construction — a sample is only recorded when newTokens > 0 and userBytes
+// clears minFitBytes.
+//
+// Mutation confirmed the consequence: disabling that refusal leaves the whole
+// suite green, because nothing can reach it.
+//
+// The guard is left in place as defence in depth and this test is what makes
+// that honest. If Fit's contract ever changes, the refusal becomes live code
+// and somebody finds out here rather than in a budget priced from a zero ratio.
+func TestFE7_FitAlwaysReturnsAPositiveRatio(t *testing.T) {
+	if defaultTokensPerByte <= 0 {
+		t.Fatalf("the default ratio is %v; the empty-corpus branch cannot be positive",
+			defaultTokensPerByte)
+	}
+	// The empty case, which is the branch a session with no fittable turn takes.
+	empty := Fit(&Calibration{Lane: &transcript.Lane{}}, false)
+	if empty.TokensPerByte <= 0 {
+		t.Errorf("a fit over no samples returned %v tokens/byte", empty.TokensPerByte)
 	}
 }
