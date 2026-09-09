@@ -164,3 +164,48 @@ func TestSZ8_NoStartFallsBackToTheFirstShortcut(t *testing.T) {
 			got, Shortcuts()[0].Key)
 	}
 }
+
+// SZ9: the screen never renders more lines than the terminal has.
+//
+// The height fix estimated six lines per finding and stopped there. Six is
+// right when the action wraps to two lines and wrong when it wraps to one, so
+// the screen overran on some inputs and under-filled on others — the recorded
+// demo shows a fourth finding clipped by the footer.
+//
+// An estimate that has to be right for every combination of width, action
+// length and terminal height is a constant pretending to be a measurement.
+// This asserts the property instead: whatever the terminal, whatever the
+// content, the frame fits.
+func TestSZ9_TheScreenNeverOverrunsTheTerminal(t *testing.T) {
+	mk := func(n int, action string) []AdviceRow {
+		out := make([]AdviceRow, n)
+		for i := range out {
+			out[i] = AdviceRow{
+				Title:  "a finding about prompt tokens that runs on a bit",
+				Action: action, Sessions: 3, Share: 0.3,
+				PromptTokens: 900000, PredictedShare: 0.15, Status: "pending",
+			}
+		}
+		return out
+	}
+	actions := map[string]string{
+		"short":  "trim it",
+		"onewrap": "truncate outputs before they enter the conversation with limits",
+		"twowrap": "truncate outputs before they enter the conversation: head, tail, " +
+			"grep with limits, or a summarizing wrapper that keeps the shape",
+	}
+	for _, lines := range []string{"14", "24", "40", "60", "100"} {
+		for name, action := range actions {
+			for _, cols := range []string{"60", "80", "120"} {
+				t.Setenv("LINES", lines)
+				t.Setenv("COLUMNS", cols)
+				got := len(AdviseScreenAt(mk(40, action), 1738, 0).Lines)
+				if got > Body() {
+					t.Errorf("LINES=%s COLUMNS=%s action=%s: %d lines for a body of %d — "+
+						"the frame overruns and the last finding is clipped by the footer",
+						lines, cols, name, got, Body())
+				}
+			}
+		}
+	}
+}

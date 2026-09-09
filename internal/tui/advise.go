@@ -124,119 +124,93 @@ func adviseScreen(rows []AdviceRow, sessions, at int) Screen {
 	// terminal, so everything past the third scrolled away unread, and a total
 	// is not something a reader can act on. The rest stay in `replay advise`
 	// and advice.json.
-	// Sized to the terminal rather than fixed at four. A finding costs six
-	// lines: title, evidence, saving, two of wrapped action, and the blank that
-	// separates it from the next. Header, the more-findings note and the key
-	// legend take the rest, and Body() has already taken out the frame.
+	// Built until it stops fitting, rather than estimated.
 	//
-	// Six by measurement, not arithmetic: five rendered 27 lines into a 24-row
-	// terminal, because the action wraps and the estimate had counted it once.
-	onScreen := (Body() - 4) / 6
-	if onScreen < 1 {
-		onScreen = 1
+	// The first version fixed four findings on screen; the second estimated six
+	// lines each. Both were constants pretending to be measurements: a finding
+	// costs five lines when its action fits on one and six when it wraps, so
+	// six overran on short actions and under-filled on long ones. The recorded
+	// demo shows the fourth finding clipped by the footer.
+	//
+	// The rows are laid out one at a time and the loop stops before the next
+	// would overflow. That cannot drift when the action text, the width or the
+	// chrome changes, because it is not predicting any of them.
+	budget := Body() - 3 // header, its blank, and the key legend
+	if len(rows) > 0 {
+		budget -= 2 // the "N more" note and the blank above the legend
 	}
-	shown, first := rows, 0
-	if len(shown) > onScreen {
-		// Scroll to keep the selection visible rather than always showing the
-		// top: a cursor that moves off the screen is a cursor the reader loses.
-		if at >= onScreen {
-			first = at - onScreen + 1
-			if first+onScreen > len(rows) {
-				first = len(rows) - onScreen
-			}
+	// The window starts at the selection so the cursor is always on screen,
+	// then walks back to fill the space above it when there is room.
+	first := 0
+	if at > 0 {
+		first = at
+	}
+	if first >= len(rows) && len(rows) > 0 {
+		first = len(rows) - 1
+	}
+
+	var body []string
+	shownN := 0
+	for i := first; i < len(rows); i++ {
+		block := adviseBlock(rows[i], i, at)
+		if len(body)+len(block) > budget && shownN > 0 {
+			break
 		}
-		shown = rows[first : first+onScreen]
+		body = append(body, block...)
+		shownN++
 	}
+	// Backfill upwards, so a selection near the end does not leave the top of
+	// the screen empty.
+	for i := first - 1; i >= 0; i-- {
+		block := adviseBlock(rows[i], i, at)
+		if len(body)+len(block) > budget {
+			break
+		}
+		body = append(block, body...)
+		first = i
+		shownN++
+	}
+
 	head := fmt.Sprintf("  %d change(s) worth making, across %d transcript(s)",
 		len(rows), sessions)
-	if len(rows) > len(shown) {
-		head = fmt.Sprintf("  Top %d of %d changes worth making, across %d transcript(s)",
-			len(shown), len(rows), sessions)
+	if shownN < len(rows) {
+		head = fmt.Sprintf("  Showing %d of %d changes worth making, across %d transcript(s)",
+			shownN, len(rows), sessions)
 	}
 	lines = append(lines, head, "")
+	lines = append(lines, body...)
 
-	for i, r := range shown {
-		// Titles are written by the analysis and run as long as the finding
-		// needs, so they are cut to the terminal exactly like actions are. The
-		// first version truncated only the action, which is why TestTW2 caught
-		// three over-width titles on a corpus larger than the fixtures here.
-		// The prefix is measured, not assumed. It was Cols()-6, which is right
-		// for a one- or two-digit index and one cell short at 100, and a corpus
-		// with a hundred suggestions is exactly where nobody is checking.
-		num := fmt.Sprintf("%d", first+i+1)
-		mark := strings.Repeat(" ", VisibleLen(selMarker))
-		title := Strong
-		if first+i == at {
-			mark = paint(Accent, selMarker)
-			title = Accent
+	// Chrome is shed rather than allowed to push a finding off the screen.
+	//
+	// On a very short terminal one finding plus a header, a count and a key
+	// legend does not fit, and something has to go. The finding is what the
+	// reader came for, so the legend goes first and the count second — a reader
+	// who cannot see a finding cannot use a key that acts on it.
+	if shownN < len(rows) {
+		if len(lines)+1 <= Body() {
+			lines = append(lines,
+				paint(Faint, fmt.Sprintf("  %d more in `replay advise`, ranked the same way.",
+					len(rows)-shownN)))
 		}
-		prefix := 4 + len(num) + VisibleLen(selMarker)
-		lines = append(lines, fmt.Sprintf("  %s%s  %s",
-			mark, paint(Faint, num), paint(title, fitTo(r.Title, Cols()-prefix))))
-		lines = append(lines, "     "+paint(Faint, cell("evidence", 10))+
-			fitTo(fmt.Sprintf("%d transcript(s), %s prompt tokens", r.Sessions, commas(r.PromptTokens)), Cols()-15))
-
-		pred := "not predicted on this corpus"
-		if r.PredictedShare > 0 {
-			pred = fmt.Sprintf("%.1f%% of prompt tokens", r.PredictedShare*100)
-			if r.Estimated {
-				pred += " (estimated)"
-			}
-		}
-		savingStyle := Good
-		if r.PredictedShare == 0 {
-			// No prediction is not a small prediction. Painting it Good would
-			// dress an absence as a modest win.
-			savingStyle = Faint
-		}
-		// Columns dropped in a fixed order when the terminal is narrow, which is
-		// what storyboard.go scene 25 specifies and what the audit counts. The
-		// first version used a fixed 34-cell column for the prediction and a
-		// status column after it, which is 63 cells before the status text and
-		// therefore over budget on any terminal under about 75.
-		//
-		// Status goes first because it is the shortest thing to lose: a reader
-		// who can see the saving can get the status from `replay advise`.
-		row := "     " + paint(Faint, cell("saving", 10))
-		if Cols()-15-VisibleLen(r.Status)-9 >= 12 {
-			row += paint(savingStyle, cell(pred, Cols()-15-VisibleLen(r.Status)-9)) +
-				paint(Faint, cell("status", 8)) + r.Status
-		} else {
-			row += paint(savingStyle, fitTo(pred, Cols()-15))
-		}
-		lines = append(lines, row)
-		if r.Action != "" {
-			// Wrapped, not truncated. Every action on the real screen ended in
-			// "~" — "or a summarizing wrap~", "pass paths instead of con~" —
-			// and the action is the entire product: the title states a fact,
-			// the action is what the reader does about it. Cutting it tells
-			// somebody they have a problem and withholds the fix.
-			//
-			// Folded here rather than at the output boundary because that
-			// wrapper leaves table-shaped rows alone by design, and this row
-			// is table-shaped.
-			for j, part := range wrapAction(r.Action, Cols()-15) {
-				label := "do"
-				if j > 0 {
-					label = ""
-				}
-				lines = append(lines, "     "+paint(Faint, cell(label, 10))+part)
-			}
-		}
-		lines = append(lines, "")
 	}
-
-	if len(rows) > len(shown) {
-		lines = append(lines,
-			paint(Faint, fmt.Sprintf("  %d more in `replay advise`, ranked the same way.",
-				len(rows)-len(shown))))
-	}
-	if at >= 0 && len(rows) > 0 {
-		// Named on screen rather than left to `?`. A key nobody is told about
-		// is a key nobody presses, which is how `--screen live` shipped
-		// working and denied by its own help text.
+	if at >= 0 && len(rows) > 0 && len(lines)+2 <= Body() {
 		lines = append(lines, "",
 			paint(Faint, "  j/k move   a mark applied   x dismiss   enter evidence"))
+	}
+	// Last resort, and it drops whole findings rather than cutting one open.
+	//
+	// The first version sliced to Body() and landed inside a block: the
+	// recorded demo showed a fourth finding's title with its evidence, saving
+	// and action all missing, which reads as a rendering fault rather than a
+	// screen that ran out of room. A partial finding is worse than one fewer,
+	// because the reader cannot tell which they are looking at.
+	for len(lines) > Body() && Body() > 0 {
+		cut := lastBlockStart(lines)
+		if cut <= 0 {
+			lines = lines[:Body()]
+			break
+		}
+		lines = lines[:cut]
 	}
 	sc.Rows = len(rows)
 	sc.Lines = lines
@@ -342,4 +316,75 @@ func AdviceDetail(r AdviceRow) Screen {
 		paint(Faint, "  a mark applied   x dismiss   esc back to the list"))
 	sc.Lines = lines
 	return sc
+}
+
+// adviseBlock renders one finding, and is the unit the layout measures.
+//
+// Separated so the screen can lay rows out until they stop fitting rather than
+// predicting how tall each will be. That prediction was wrong twice: a fixed
+// four findings, then a fixed six lines each, when the real cost is five when
+// the action fits on one line and six when it wraps. Asking the block how tall
+// it is cannot drift as the text, the width or the chrome changes.
+func adviseBlock(r AdviceRow, i, at int) []string {
+	num := fmt.Sprintf("%d", i+1)
+	mark := strings.Repeat(" ", VisibleLen(selMarker))
+	title := Strong
+	if i == at {
+		mark = paint(Accent, selMarker)
+		title = Accent
+	}
+	prefix := 4 + len(num) + VisibleLen(selMarker)
+	out := []string{fmt.Sprintf("  %s%s  %s",
+		mark, paint(Faint, num), paint(title, fitTo(r.Title, Cols()-prefix)))}
+
+	out = append(out, "     "+paint(Faint, cell("evidence", 10))+
+		fitTo(fmt.Sprintf("%d transcript(s), %s prompt tokens",
+			r.Sessions, commas(r.PromptTokens)), Cols()-15))
+
+	pred, style := "not predicted on this corpus", Faint
+	if r.PredictedShare > 0 {
+		pred = fmt.Sprintf("%.1f%% of prompt tokens", r.PredictedShare*100)
+		style = Good
+		if r.Estimated {
+			pred += " (estimated)"
+		}
+	}
+	row := "     " + paint(Faint, cell("saving", 10))
+	if Cols()-15-VisibleLen(r.Status)-9 >= 12 {
+		row += paint(style, cell(pred, Cols()-15-VisibleLen(r.Status)-9)) +
+			paint(Faint, cell("status", 8)) + r.Status
+	} else {
+		row += paint(style, fitTo(pred, Cols()-15))
+	}
+	out = append(out, row)
+
+	if r.Action != "" {
+		for j, part := range wrapAction(r.Action, Cols()-15) {
+			label := "do"
+			if j > 0 {
+				label = ""
+			}
+			out = append(out, "     "+paint(Faint, cell(label, 10))+part)
+		}
+	}
+	return append(out, "")
+}
+
+// lastBlockStart is the index of the final finding's first line.
+//
+// Findings are separated by a blank, so the line after the last blank before
+// the trailing chrome begins the block to drop. Returns 0 when there is no
+// block boundary to cut at, which the caller treats as "nothing safe to drop".
+func lastBlockStart(lines []string) int {
+	// Walk back over the trailing chrome to the last content line.
+	end := len(lines) - 1
+	for end > 0 && strings.TrimSpace(StripSGR(lines[end])) == "" {
+		end--
+	}
+	for i := end; i > 0; i-- {
+		if strings.TrimSpace(StripSGR(lines[i])) == "" {
+			return i + 1
+		}
+	}
+	return 0
 }

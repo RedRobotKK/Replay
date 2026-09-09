@@ -19,7 +19,10 @@ Output docs/demo/triage.gif
 Set Shell "bash"
 Set FontSize 15
 Set Width 1100
-Set Height 720
+# 900px, not 720. At 720 the pty reported more rows than the window showed and
+# the fourth finding was clipped by the footer — the recording, not the screen:
+# the same binary at LINES=40 renders 37 lines and five findings cleanly.
+Set Height 900
 Set Padding 18
 Set Theme "Catppuccin Mocha"
 Set TypingSpeed 55ms
@@ -30,6 +33,19 @@ Set WindowBar Colorful
 # recording silently used an installed v0.5.4 and showed the cost screen with
 # "0 transcripts" — a demo of a release that predates everything it was meant
 # to show. A tape that does not pin its binary records the wrong software.
+# LINES is pinned rather than left to the pty.
+#
+# VHS sizes its window in pixels and the pty it opens reports more rows than the
+# window actually shows, so the screen laid out for six findings and the
+# recording displayed four — the last one clipped by the footer. The screen is
+# not at fault: the same binary at LINES=24 renders 21 lines and two findings
+# cleanly, and at 40 renders 37 and five.
+#
+# Setting it here makes the terminal and the layout agree on one number, which
+# is the only way a recording is reproducible.
+Type "export LINES=24 COLUMNS=100"
+Enter
+Sleep 300ms
 Type "./docs/demo/.replay-demo-bin tui --screen advise"
 Sleep 400ms
 Enter
