@@ -176,6 +176,22 @@ jobs:
       - name: Audit every TUI screen
         run: ./scripts/tui-audit/run.sh
 
+  installer-drift:
+    name: installer drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # The installer a reader runs is the hosted copy, not this file. On
+      # 2026-09-09 the hosted one was 28 lines behind and rejected --no-tui,
+      # which had been merged here days earlier: the repository's version was
+      # the one nobody ran.
+      #
+      # Advisory. A deploy lag is a fact about the website rather than a fault
+      # in the commit under test, and a red cross on unrelated work is how a
+      # check gets switched off.
+      - name: Compare the hosted installer with this one
+        run: ./scripts/installer-drift/check.sh
+
   docs:
     name: Markdown lint
     runs-on: ubuntu-latest
