@@ -36,8 +36,8 @@
       "class": "attribution-misplacement",
       "discovered": "2026-09-06",
       "file": "internal/analysis/blame.go",
-      "anchor": "shareByBytes(tc.blocks, Estimated(tc.newTokens), carried, get)",
-      "replacement": "shareByBytes(tc.userBlocks, Estimated(tc.newTokens), carried, get)",
+      "anchor": "shareWithinTheFit(tc.blocks, tc.newTokens, carried, fit, get)",
+      "replacement": "shareWithinTheFit(tc.userBlocks, tc.newTokens, carried, fit, get)",
       "killedBy": [
         "TestReconcile_EveryBlockWithBytesIsAttributed"
       ],
@@ -54,8 +54,8 @@
       "also": [
         {
           "file": "internal/analysis/blame.go",
-          "anchor": "shareByBytes(tc.blocks, Estimated(tc.newTokens), carried, get)",
-          "replacement": "shareByBytes(tc.userBlocks, Estimated(tc.newTokens), carried, get)"
+          "anchor": "shareWithinTheFit(tc.blocks, tc.newTokens, carried, fit, get)",
+          "replacement": "shareWithinTheFit(tc.userBlocks, tc.newTokens, carried, fit, get)"
         }
       ],
       "killedBy": [
