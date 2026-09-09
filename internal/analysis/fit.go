@@ -40,6 +40,15 @@ func (t Tokens) Times(n int) Tokens {
 type Figure struct {
 	Value int
 	Error int
+	// ErrorMeasured says whether Error came from a spread that was actually
+	// taken. Fit assigns RelativeError = 1 on two paths that measure nothing —
+	// no fittable turn, or a single one — and a renderer holding only Value and
+	// Error could not tell those from a real spread that landed on 1.0. It
+	// printed all three as the same "±100%".
+	//
+	// True where there is nothing to qualify: a wholly measured figure has no
+	// estimate for the caveat to be about.
+	ErrorMeasured bool
 }
 
 // TokenFit is the session's observed relationship between user-side content
@@ -235,6 +244,19 @@ func weightedSpread(samples []sample, mean float64) float64 {
 	return math.Sqrt(ss/sw) / mean
 }
 
+// ErrorMeasured reports whether RelativeError is a spread or a placeholder.
+//
+// Two fitted turns is the minimum: weightedSpread returns 1 for fewer, because
+// a standard deviation of one sample is not a measurement, and Fit assigns 1
+// outright when no turn was fittable at all. Both print identically to a
+// genuine spread, and 315 of 1734 lanes in the corpus report exactly ±100%.
+//
+// Turns has been on this struct all along. Nothing consulted it.
+func (f TokenFit) ErrorMeasured() bool { return f.Turns >= minFitTurns }
+
+// minFitTurns is the fewest fitted turns that can produce a spread.
+const minFitTurns = 2
+
 // EstimateTokens converts bytes to tokens using the fit.
 func (f TokenFit) EstimateTokens(bytes int) int {
 	return int(math.Round(float64(bytes) * f.TokensPerByte))
@@ -242,7 +264,12 @@ func (f TokenFit) EstimateTokens(bytes int) int {
 
 // Figure turns a count into a printable figure with its uncertainty.
 func (f TokenFit) Figure(t Tokens) Figure {
-	return Figure{Value: t.Total(), Error: int(math.Round(float64(t.Estimated) * f.RelativeError))}
+	return Figure{
+		Value: t.Total(),
+		Error: int(math.Round(float64(t.Estimated) * f.RelativeError)),
+		// Nothing estimated means nothing to qualify, whatever the fit is.
+		ErrorMeasured: t.Estimated == 0 || f.ErrorMeasured(),
+	}
 }
 
 // Labels for content the transcript does not show.

@@ -46,6 +46,23 @@ const (
 	labelColumnWidth = 64
 )
 
+// errorBar renders a figure's uncertainty, or says there is not one.
+//
+// Fit assigns RelativeError = 1 when it measured no spread — no fittable turn,
+// or a single one — and the old `(±%s)` printed that placeholder as a number
+// indistinguishable from a real bar. On one session the top row read
+// `1.50M in prompts (±1.50M)`: an uncertainty equal to the value, presented as
+// a measurement, on the line a reader is most likely to act on.
+//
+// "not measured" is the phrase the rest of this project uses for exactly this,
+// and it is deliberately not a number: there is nothing here to round.
+func errorBar(f Figure) string {
+	if !f.ErrorMeasured {
+		return "not measured"
+	}
+	return formatTokens(f.Error)
+}
+
 // AnalyzeLane runs the analyses every command needs for one lane.
 func AnalyzeLane(s *transcript.Session, lane *transcript.Lane) *LaneReport {
 	cal := Calibrate(lane)
@@ -148,7 +165,14 @@ func (r *LaneReport) header(p *Printer) {
 	case r.Fit.UnseenPrefix.Measured > 0:
 		prefix = "measured from the first request's cache read"
 	}
-	p.Printf("Rules: %s; user-content fit %.3f tokens/byte ±%.0f%% from %d turns; system prefix %s (%s)\n", cachemodel.RulesVersionInEffect(), r.Fit.TokensPerByte, r.Fit.RelativeError*100, r.Fit.Turns, formatTokens(r.Fit.UnseenPrefix.Total()), prefix)
+	// The spread, or the fact that there is not one. This line already printed
+	// the turn count beside the percentage, so a reader who knew that two turns
+	// are needed for a spread could work it out; nobody should have to.
+	spread := fmt.Sprintf("±%.0f%%", r.Fit.RelativeError*100)
+	if !r.Fit.ErrorMeasured() {
+		spread = "spread not measured"
+	}
+	p.Printf("Rules: %s; user-content fit %.3f tokens/byte %s from %d turns; system prefix %s (%s)\n", cachemodel.RulesVersionInEffect(), r.Fit.TokensPerByte, spread, r.Fit.Turns, formatTokens(r.Fit.UnseenPrefix.Total()), prefix)
 	if r.Session.Skipped > 0 {
 		p.Printf("Note: %d transcript lines were not conversation content and were skipped\n", r.Session.Skipped)
 	}
@@ -250,7 +274,7 @@ func (r *LaneReport) reReads(p *Printer) {
 		return
 	}
 	p.Printf("  file re-reads\n")
-	p.Printf("    %d of %d file reads repeated a path already in context (%.0f%%), %s in prompts (±%s)\n", rr.Repeated, rr.Reads, rr.Rate()*100, formatTokens(rr.Tokens.Value), formatTokens(rr.Tokens.Error))
+	p.Printf("    %d of %d file reads repeated a path already in context (%.0f%%), %s in prompts (±%s)\n", rr.Repeated, rr.Reads, rr.Rate()*100, formatTokens(rr.Tokens.Value), errorBar(rr.Tokens))
 	if rr.ContextEdits > 0 {
 		p.Printf("    provider context edits: %d applied, %s prompt tokens cleared; re-read rate after the first clear %.0f%% (%d of %d) vs %.0f%% before\n", rr.ContextEdits, formatTokens(rr.ClearedTokens), rr.RateAfterClear()*100, rr.RepeatedAfterClear, rr.ReadsAfterClear, rr.RateBeforeClear()*100)
 	}
@@ -296,7 +320,7 @@ func (r *LaneReport) errors(p *Printer) {
 		p.Printf("    none detected in tool results\n")
 	}
 	for i, e := range r.Errors {
-		p.Printf("    %d. %-44s x%-3d %s in prompts (±%s)\n", i+1, e.Class, e.Count, formatTokens(e.PromptTokens.Value), formatTokens(e.PromptTokens.Error))
+		p.Printf("    %d. %-44s x%-3d %s in prompts (±%s)\n", i+1, e.Class, e.Count, formatTokens(e.PromptTokens.Value), errorBar(e.PromptTokens))
 	}
 	p.Printf("    provider retries: not visible in transcripts; run the proxy to capture\n")
 }
@@ -311,7 +335,7 @@ func (r *LaneReport) blame(p *Printer, limit int) {
 		if e.Errors > 0 {
 			errs = fmt.Sprintf("  %d errors", e.Errors)
 		}
-		p.Printf("    %2d. %-*s x%-3d %8s once  %9s in prompts (±%s)%s\n", i+1, labelColumnWidth, transcript.TruncateLabel(e.Label, labelColumnWidth), e.Occurrences, formatTokens(e.Tokens.Value), formatTokens(e.PromptTokens.Value), formatTokens(e.PromptTokens.Error), errs)
+		p.Printf("    %2d. %-*s x%-3d %8s once  %9s in prompts (±%s)%s\n", i+1, labelColumnWidth, transcript.TruncateLabel(e.Label, labelColumnWidth), e.Occurrences, formatTokens(e.Tokens.Value), formatTokens(e.PromptTokens.Value), errorBar(e.PromptTokens), errs)
 	}
 }
 
