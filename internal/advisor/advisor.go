@@ -290,6 +290,9 @@ func (ob *Observation) unusedTools(lane *transcript.Lane, fit analysis.TokenFit)
 
 // agg is one target's evidence across the corpus.
 type agg struct {
+	// applied is set by the caller from the reader's own decision, never
+	// inferred from the shares below.
+	applied   bool
 	kind      Kind
 	target    string
 	evidence  []evidence
@@ -356,7 +359,11 @@ func Suggest(obs []Observation) []Suggestion {
 			s.PredictedTokens = int(trimShare * float64(a.tokens))
 		}
 		s.Title, s.Action = describe(a, s)
-		s.Status, s.RealizedShare = track(a.kind, a.shares, s.PredictedShare)
+		// applied comes from the reader, not from the data. Suggest has no
+		// access to the advice file, so the caller reconciles: a suggestion the
+		// reader marked applied keeps that status through the next run and is
+		// the only kind track will judge.
+		s.Status, s.RealizedShare = track(a.kind, a.shares, s.PredictedShare, a.applied)
 		out = append(out, s)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].PredictedTokens > out[j].PredictedTokens })
@@ -367,9 +374,32 @@ func Suggest(obs []Observation) []Suggestion {
 // in time order. A drop of appliedDrop on the newest sessions against the
 // earlier mean counts as applied; a realized drop of verifyShare of the
 // prediction counts as verified.
-func track(kind Kind, shares []float64, predicted float64) (Status, float64) {
+func track(kind Kind, shares []float64, predicted float64, applied bool) (Status, float64) {
 	if kind == KindHotFile || kind == KindCacheBreaks {
 		return AdviceOnly, 0
+	}
+	// Without a recorded application there is no before and after — there are
+	// two windows of a moving corpus.
+	//
+	// This function used to infer the application from the very number it then
+	// measured: a fall of appliedDrop WAS the application, and the size of that
+	// same fall decided whether the prediction held. The circularity is not
+	// subtle once seen, and it was wrong in both directions. A target drifting
+	// 30% to 22% over two sessions of different work returned VERIFIED with a
+	// realized saving of 8 points, telling a reader their change was made and
+	// confirmed when they had made none. Noise of 20/40/30/30 falling to 23
+	// returned NOT VERIFIED, telling them a change they never made had failed.
+	//
+	// That is what produced 20 not-verified against 1 verified on this
+	// machine's 140 suggestions. It is not evidence the advice fails. It is
+	// evidence the verifier was measuring corpus drift and could not tell which
+	// way it was being fooled.
+	//
+	// `replay tui` now lets a reader mark a finding applied, and that keystroke
+	// is a recorded fact. Until one exists, the honest status is Pending: the
+	// suggestion stands and nothing is claimed about it.
+	if !applied {
+		return Pending, 0
 	}
 	if len(shares) <= recentSessions {
 		return Pending, 0
