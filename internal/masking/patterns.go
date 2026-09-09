@@ -85,9 +85,16 @@ func find(text []byte, patterns []Pattern) ([]Match, []bool) {
 	return out, taken
 }
 
+// overlaps reports whether any byte in [start, end) was already claimed.
+//
+// The bounds check is not defensive noise. taken is a caller-supplied slice
+// that is only incidentally the same length as the text, and FindEntropy is
+// exported — a caller passing nil, which the signature permits, panicked this
+// function on 2026-09-09. Out of range means "not claimed by a pattern", which
+// is the correct reading: a byte no pattern covered cannot have been taken.
 func overlaps(taken []bool, start, end int) bool {
-	for i := start; i < end; i++ {
-		if taken[i] {
+	for i := start; i < end && i < len(taken); i++ {
+		if i >= 0 && taken[i] {
 			return true
 		}
 	}
