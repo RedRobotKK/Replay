@@ -35,7 +35,59 @@ const (
 	// does not make a report more legible, it makes one row of every table 400
 	// cells long on an unmaximised window.
 	maxCols = 120
+
+	// defaultLines is a VT100's height, for the same reason defaultCols is 80:
+	// a process with no terminal still has to lay something out, and this is
+	// the number every emulator has defaulted to since.
+	defaultLines = 24
+
+	// minLines is a floor, not a preference. A shell can export LINES=0, and a
+	// screen laid out for zero rows shows nothing at all — the reader sees an
+	// empty frame and concludes the tool is broken.
+	minLines = 10
+
+	// chromeLines is what the frame costs: a title, a blank, and the footer the
+	// reader navigates by. Body subtracts it so no caller has to remember.
+	chromeLines = 4
 )
+
+// Lines reports the height to lay out for.
+//
+// The same contract as Cols, in the same order, deliberately: LINES first
+// because that is what a caller sets on purpose, then the terminal, then the
+// default. Two functions answering the same kind of question by different rules
+// is how a caller comes to trust one and not the other.
+//
+// Unlike Cols there is no cap. maxCols exists because a 400-cell table row is
+// unreadable; height has no equivalent argument, since more rows is strictly
+// more content visible and that is the whole reason somebody maximises a
+// window.
+func Lines() int {
+	n, err := strconv.Atoi(os.Getenv("LINES"))
+	if err != nil || n <= 0 {
+		if _, r, ok := termSize(); ok && r > 0 {
+			n = r
+		} else {
+			return defaultLines
+		}
+	}
+	if n < minLines {
+		return minLines
+	}
+	return n
+}
+
+// Body reports how many rows a screen has for its own content.
+//
+// A screen that lays out for the full height overruns by exactly the chrome it
+// forgot, which is the arithmetic every caller would otherwise repeat and one
+// of them would get wrong.
+func Body() int {
+	if n := Lines() - chromeLines; n > 0 {
+		return n
+	}
+	return 1
+}
 
 // Cols reports the width to lay out for.
 //
@@ -47,7 +99,7 @@ const (
 func Cols() int {
 	n, err := strconv.Atoi(os.Getenv("COLUMNS"))
 	if err != nil || n <= 0 {
-		if c, ok := termCols(); ok {
+		if c, _, ok := termSize(); ok {
 			n = c
 		} else {
 			return defaultCols

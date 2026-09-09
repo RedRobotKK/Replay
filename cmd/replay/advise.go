@@ -23,9 +23,23 @@ const (
 
 // adviceFile is the on-disk record: every suggestion with its status.
 type adviceFile struct {
-	Schema      int                  `json:"schema"`
-	Generated   time.Time            `json:"generated"`
-	Sessions    int                  `json:"sessions"`
+	Schema    int       `json:"schema"`
+	Generated time.Time `json:"generated"`
+	// Sessions is how many sessions CALIBRATED, which is fewer than the
+	// transcripts read — 1,246 of 1,738 on the machine this was written on.
+	Sessions int `json:"sessions"`
+	// Transcripts is how many files were read.
+	//
+	// Recorded so a reader of this file can tell whether it describes the
+	// corpus in front of them. The TUI first compared Sessions against the
+	// file count on disk and rejected every cache it had just written,
+	// because those are different quantities — the same category error this
+	// repository keeps finding, committed into the check written to prevent
+	// a different one.
+	//
+	// Absent in files written before 2026-09-09, which read as 0 and fail the
+	// coverage test, so an old cache is recomputed rather than trusted.
+	Transcripts int                  `json:"transcripts,omitempty"`
 	Suggestions []advisor.Suggestion `json:"suggestions"`
 }
 
@@ -143,7 +157,7 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create advice directory: %w", err)
 	}
-	data, err := json.MarshalIndent(adviceFile{Schema: advisor.AdviceFileSchema, Generated: time.Now().UTC(), Sessions: len(obs), Suggestions: suggestions}, "", "  ")
+	data, err := json.MarshalIndent(adviceFile{Schema: advisor.AdviceFileSchema, Generated: time.Now().UTC(), Sessions: len(obs), Transcripts: len(files), Suggestions: suggestions}, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode advice file: %w", err)
 	}

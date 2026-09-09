@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -54,7 +55,11 @@ func TestAD1_MeasuredCarriesNoBanner(t *testing.T) {
 // screen do not move when the input moves, they are decoration.
 func TestAD2_FiguresComeFromTheInput(t *testing.T) {
 	body := strings.Join(AdviseScreen(rows(), 1).Lines, "\n")
-	for _, want := range []string{"Bash inputs are 28%", "336,060", "3 session"} {
+	// "3 transcript" rather than "3 session": the unit was renamed on 2026-09-09
+	// because the caller counts files and a session writes one per agent lane.
+	// This test is about the figure reaching the screen from its input, and 3
+	// still has to appear beside the noun.
+	for _, want := range []string{"Bash inputs are 28%", "336,060", "3 transcript"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the screen does not carry %q from its input:\n%s", want, body)
 		}
@@ -159,6 +164,131 @@ func TestAD7_EveryBranchPaints(t *testing.T) {
 		if !strings.Contains(body, "\x1b[") {
 			t.Errorf("the %q branch emits no colour; the palette tests pass "+
 				"trivially against a branch that paints nothing", c.name)
+		}
+	}
+}
+
+// AD8: the corpus unit is named correctly.
+//
+// The screen said "140 change(s) worth making, across 1729 session(s)" while
+// `replay doctor`, in the same shell, said "123 sessions across 12 projects,
+// 1738 transcript files". Both cannot be right, and doctor is.
+//
+// adviceState increments once per FILE, and a session writes one file per agent
+// lane, so the number is transcripts wearing the word sessions. That is the
+// exact conflation calibration-corpus-2026-09-06.md retracted in public: "the
+// previous file counted transcript files and called them sessions", 1450
+// transcripts from 78 sessions. It was corrected in the evidence and left live
+// in the product.
+//
+// The count is not wrong. The noun is.
+func TestAD8_TheCorpusUnitIsTranscriptsNotSessions(t *testing.T) {
+	body := strings.Join(AdviseScreen(rows(), 1729).Lines, "\n")
+	if strings.Contains(body, "session(s)") {
+		t.Errorf("the screen calls its corpus \"session(s)\" while counting transcript "+
+			"files. doctor reports both separately and disagrees by an order of "+
+			"magnitude:\n%s", body)
+	}
+	if !strings.Contains(body, "transcript") {
+		t.Errorf("the screen does not name what it counted:\n%s", body)
+	}
+}
+
+// AD9: the screen fits a terminal.
+//
+// 140 findings rendered 705 lines into a 24-row terminal. Everything past the
+// third scrolled away before it could be read, and the count itself is not a
+// finding a reader can act on — "140 changes worth making" is a number to feel
+// bad about, not a list to work through.
+//
+// A screen is a screen. The full set stays available in `replay advise` and in
+// advice.json; what is on the terminal is what someone can act on now.
+func TestAD9_TheScreenFitsATerminal(t *testing.T) {
+	many := make([]AdviceRow, 140)
+	for i := range many {
+		many[i] = AdviceRow{
+			Title: fmt.Sprintf("finding number %d about prompt tokens", i),
+			Action: "truncate outputs before they enter the conversation: head, tail, " +
+				"grep with limits, or a summarizing wrapper",
+			Sessions: 3, Share: 0.3, PromptTokens: 1000, Status: "pending",
+		}
+	}
+	got := AdviseScreen(many, 1729).Lines
+	if len(got) > 40 {
+		t.Errorf("140 findings rendered %d lines; a terminal is about 24 rows, so "+
+			"everything past the top few scrolls away unread", len(got))
+	}
+	body := strings.Join(got, "\n")
+	// And it must say what it left out, or the screen is quietly lying about
+	// how much there is.
+	if !strings.Contains(body, "140") {
+		t.Errorf("the screen shows a subset and does not say how many exist:\n%s", body)
+	}
+}
+
+// AD10: the action is never cut off.
+//
+// Every row on the real screen ended in "~": "or a summarizing wrap~",
+// "and pass paths instead of con~". The action is the entire product — the
+// title states a fact, the action is what the reader does about it — and it was
+// the one field truncated. A finding whose remedy is unreadable has told the
+// reader they have a problem and withheld the fix.
+func TestAD10_TheActionIsNotTruncated(t *testing.T) {
+	t.Setenv("COLUMNS", "100")
+	long := rows()
+	long[0].Action = "truncate outputs before they enter the conversation: head, tail, " +
+		"grep with limits, or a summarizing wrapper"
+	for _, l := range AdviseScreen(long, 12).Lines {
+		if !strings.Contains(l, "truncate outputs") {
+			continue
+		}
+		if strings.HasSuffix(strings.TrimRight(l, " "), "~") {
+			t.Errorf("the action is truncated, so the reader is told what is wrong and "+
+				"not what to do:\n  %s", l)
+		}
+	}
+}
+
+// AD11: nothing this package draws is East Asian Ambiguous.
+//
+// The selection marker shipped as U+25B8. It is one cell in a Latin terminal
+// and two in the operator's ja_JP one, so every column measured against it
+// sheared by one cell for the only person who reads this screen daily — the
+// exact defect TestTW1's comment describes, arriving through the front door of
+// a feature added after that rule was written.
+//
+// TW1 and TC1 in cmd/replay do catch it, by rendering. They caught it four
+// commits late, because they run a binary and this package is where the
+// character is chosen. The rule belongs beside the choice.
+//
+// Braille (U+2800–U+28FF) stays allowed: fixed at one cell in every locale,
+// and the spinner is built from it.
+func TestAD11_TheScreenDrawsNoAmbiguousWidthCharacters(t *testing.T) {
+	long := rows()
+	long[0].Action = "truncate outputs before they enter the conversation: head, tail, " +
+		"grep with limits, or a summarizing wrapper"
+	// AdviseScreenAt, not AdviseScreen. The first version of this test called
+	// only the latter, went green on the first run against the very character
+	// it was written to reject, and would have been filed as evidence: the
+	// unselected block substitutes spaces for the marker, so no frame it built
+	// ever contained one. A check that cannot fail is not a check.
+	frames := map[string][]string{
+		"no corpus":  AdviseScreen(nil, 0).Lines,
+		"none found": AdviseScreen(nil, 7).Lines,
+		"unselected": AdviseScreen(long, 12).Lines,
+		"selected 0": AdviseScreenAt(long, 12, 0).Lines,
+		"selected 1": AdviseScreenAt(long, 12, 1).Lines,
+		"detail":     AdviceDetail(long[0]).Lines,
+	}
+	for name, lines := range frames {
+		for i, l := range lines {
+			for _, r := range l {
+				if r < 0x80 || (r >= 0x2800 && r <= 0x28FF) {
+					continue
+				}
+				t.Errorf("%s line %d draws %q (U+%04X), which is one cell in a Latin "+
+					"terminal and two in a ja_JP one:\n  %s", name, i, r, r, l)
+			}
 		}
 	}
 }

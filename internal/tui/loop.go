@@ -41,6 +41,14 @@ type Loop struct {
 	Now func() time.Time
 	// Source renders the current screen.
 	Source Source
+	// Start is the screen to open on. Zero falls back to the first shortcut.
+	//
+	// `replay tui --screen advise` is documented as "which question to open
+	// on" and was honoured only by --once: StartWith built this struct with no
+	// initial key, so the interactive path fell to Shortcuts()[0] and the flag
+	// was silently dropped. Found by recording a demo, after two renders were
+	// blamed on the wrong binary before the flag itself was suspected.
+	Start rune
 	// Keys carries input. Closing it ends the loop, which is what q does.
 	Keys <-chan rune
 	// Addressable says the destination is a terminal that took raw mode, so
@@ -128,6 +136,22 @@ func (l *Loop) Cursor() Selection {
 	return l.sel
 }
 
+// first settles the opening screen, and paints nothing.
+//
+// Split out so the choice can be tested without a terminal, which is the one
+// thing run.go says it cannot give.
+func (l *Loop) first() {
+	if l.cur == 0 {
+		l.cur = l.Start
+	}
+	if l.cur == 0 {
+		l.cur = Shortcuts()[0].Key
+	}
+	if l.Source != nil {
+		l.Source(l.cur, 0)
+	}
+}
+
 // Run draws until Keys closes or ctx-like stop arrives via a closed channel.
 //
 // The ticker is the liveness cadence, the fastest of the four, because a loop
@@ -139,9 +163,7 @@ func (l *Loop) Run(stop <-chan struct{}) {
 	if l.Now == nil {
 		l.Now = time.Now
 	}
-	if l.cur == 0 {
-		l.cur = Shortcuts()[0].Key
-	}
+	l.first()
 	t := time.NewTicker(TickLiveness)
 	defer t.Stop()
 

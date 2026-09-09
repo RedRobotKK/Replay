@@ -36,3 +36,7 @@ node_modules/
 
 # Git worktrees for parallel agents: full clones of this repo, never source.
 .claude/worktrees/
+
+# Demo binaries are built on demand, never committed: a recording that
+# picks up whatever is on PATH records the wrong software.
+docs/demo/.replay-demo-bin

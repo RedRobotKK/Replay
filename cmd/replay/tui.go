@@ -128,6 +128,10 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 	// screen answers about. Nil until they choose one: a screen that picked a
 	// session for them would be answering a question nobody asked.
 	var opened *tui.Task
+	// adviseOpen is the finding enter was pressed on, and nil when the reader
+	// is looking at the list. Esc clears it by returning to the list render.
+	var adviseOpen *tui.AdviceRow
+	var lastAdviseKey rune
 
 	src := func(k rune, tick int) tui.Frame {
 		mu.Lock()
@@ -160,7 +164,61 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 			loop.SetRows(sc.Rows)
 			return tui.Frame{Key: k, Lines: sc.Lines}
 		case 'a':
-			sc := tui.AdviseScreen(adviceState())
+			// Cached first. Recomputing took 7.7s of wall clock per keypress.
+			var sc tui.Screen
+			if rows, ids, n, at, ok := adviceFromCache(); ok {
+				sel := loop.Cursor().At
+				// Enter opens the evidence. The help line advertised this
+				// before anything was behind it, which is the overpromise
+				// pattern unwired-3-branches-and-docs.md catalogues, written
+				// into a help string while cataloguing it.
+				//
+				// Read-and-clear, so one keystroke opens one finding, and the
+				// detail is shown for exactly the render after the press.
+				if loop.TakeOpened() && sel >= 0 && sel < len(rows) {
+					adviseOpen = &rows[sel]
+				} else if k != lastAdviseKey {
+					adviseOpen = nil
+				}
+				lastAdviseKey = k
+				if adviseOpen != nil {
+					sc = tui.AdviceDetail(*adviseOpen)
+					loop.SetRows(0)
+				} else {
+					sc = tui.AdviseScreenAt(rows, n, sel)
+				}
+				// Local keys, cleared on every render, so `a` and `x` cannot
+				// follow the reader onto a screen where they mean something
+				// else. This is the whole point of the screen: a finding the
+				// reader has judged should stop being offered.
+				loop.SetLocal(func(r rune) bool {
+					var status advisor.Status
+					switch r {
+					case 'a':
+						status = advisor.Applied
+					case 'x':
+						status = advisor.Dismissed
+					default:
+						return false
+					}
+					i := loop.Cursor().At
+					if i < 0 || i >= len(ids) {
+						return false
+					}
+					// A write that fails must not look like one that worked.
+					// The next render re-reads the file, so a silent failure
+					// would show the old status and the reader would press
+					// the key again.
+					return markAdvice(ids[i], status) == nil
+				})
+				// The age is not decoration. Advice read from disk without a
+				// date is yesterday's answer wearing today's clothes.
+				sc.Lines = append(sc.Lines, fmt.Sprintf(
+					"  as of %s; `replay advise` to refresh",
+					at.Local().Format("15:04 on 2 Jan")))
+			} else {
+				sc = tui.AdviseScreen(adviceState())
+			}
 			loop.SetRows(sc.Rows)
 			return tui.Frame{Key: k, Lines: sc.Lines}
 		case 'c':
@@ -230,7 +288,7 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 		}
 		return nil
 	}
-	return tui.StartWith(stdout, src, &loop)
+	return tui.StartWith(stdout, src, &loop, key)
 }
 
 // machineState reads what the local filesystem can answer without a proxy.
@@ -410,6 +468,71 @@ func modelState() (string, []tui.ModelRow, int) {
 // six sessions is a finding — nothing crossed a threshold — and zero rows from
 // zero sessions is an absence. Collapsing them would put "example data" back on
 // a screen that simply had nothing to rank.
+// adviceFromCache reads the advice `replay advise` last wrote.
+//
+// The screen re-ran the whole corpus analysis on every keypress: 7.7 seconds of
+// wall clock and 24.5 of CPU across 1,738 transcripts, to draw four rows. A TUI
+// that takes eight seconds to answer a keystroke is not slow, it is broken —
+// and the answer was already on disk, because `replay advise` writes
+// advice.json every time it runs.
+//
+// Freshness is the whole risk, so the caller shows the timestamp rather than
+// presenting yesterday's advice as today's. A cache that cannot say how old it
+// is would be worse than the delay it saves.
+func adviceFromCache() ([]tui.AdviceRow, []string, int, time.Time, bool) {
+	b, err := os.ReadFile(filepath.Join(tipStateDir(), adviceFileName))
+	if err != nil {
+		return nil, nil, 0, time.Time{}, false
+	}
+	var f adviceFile
+	if json.Unmarshal(b, &f) != nil || f.Schema != advisor.AdviceFileSchema {
+		// A file this build does not understand is not advice. Recompute
+		// rather than render fields that may have moved.
+		return nil, nil, 0, time.Time{}, false
+	}
+	if len(f.Suggestions) == 0 {
+		return nil, nil, 0, time.Time{}, false
+	}
+	// Does this advice describe the corpus that is here now? Counting files is
+	// cheap; analysing them is the 7.7 seconds. So the check costs nothing and
+	// stops the screen being instant and wrong, which is how it shipped an hour
+	// ago: three findings over one transcript, from a fixture run, against a
+	// corpus of 1,729.
+	if home, err := os.UserHomeDir(); err == nil {
+		if files, ferr := transcriptFiles(defaultTranscriptRoots(home)); ferr == nil {
+			if !cacheCoversCorpus(f.Transcripts, len(files)) {
+				return nil, nil, 0, time.Time{}, false
+			}
+		}
+	}
+	ids := make([]string, 0, len(f.Suggestions))
+	for _, sg := range f.Suggestions {
+		ids = append(ids, sg.ID)
+	}
+	// Transcripts, not Sessions. The screen's header says "transcript(s)" and
+	// f.Sessions is the CALIBRATED count — 1,246 against 1,738 files here.
+	// Passing it labelled the smaller number with the larger one's noun, which
+	// is the third time the same category error has landed in this one screen
+	// today: the header said sessions while counting files, the cache check
+	// compared calibrated against files, and then this.
+	return adviceRows(f.Suggestions), ids, f.Transcripts, f.Generated, true
+}
+
+// adviceRows converts suggestions to screen rows. Shared so the cached path
+// and the computed path cannot drift into rendering different fields.
+func adviceRows(sgs []advisor.Suggestion) []tui.AdviceRow {
+	rows := make([]tui.AdviceRow, 0, len(sgs))
+	for _, sg := range sgs {
+		rows = append(rows, tui.AdviceRow{
+			Title: sg.Title, Action: sg.Action, Sessions: sg.Sessions,
+			Share: sg.Share, PromptTokens: sg.PromptTokens,
+			PredictedShare: sg.PredictedShare, Estimated: sg.Estimated,
+			Status: string(sg.Status),
+		})
+	}
+	return rows
+}
+
 func adviceState() ([]tui.AdviceRow, int) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -437,16 +560,7 @@ func adviceState() ([]tui.AdviceRow, int) {
 		return nil
 	})
 
-	rows := make([]tui.AdviceRow, 0, 4)
-	for _, sg := range advisor.Suggest(obs) {
-		rows = append(rows, tui.AdviceRow{
-			Title: sg.Title, Action: sg.Action, Sessions: sg.Sessions,
-			Share: sg.Share, PromptTokens: sg.PromptTokens,
-			PredictedShare: sg.PredictedShare, Estimated: sg.Estimated,
-			Status: string(sg.Status),
-		})
-	}
-	return rows, sessions
+	return adviceRows(advisor.Suggest(obs)), sessions
 }
 
 func machineState() tui.Machine {
