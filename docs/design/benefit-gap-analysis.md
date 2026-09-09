@@ -19,7 +19,7 @@ that the repaired path is currently unreachable and red.
 `~/.replay/advice.json`, generated `2026-09-09T19:29:20.913543Z`, 1246 sessions / 1738 transcripts,
 140 suggestions.
 
-```
+```text
 $ python3 -c "..." # status counts
 'advice only'        117
 'not verified'       20
@@ -37,7 +37,7 @@ $ python3 -c "..." # status counts
 
 Twenty-one carry a `realized_share`. Sorted by realized/predicted:
 
-```
+```text
 target                           sess  share%  pred%  real%  ratio   2s/N
 mcp__claude-in-chrome__javascri     1   12.24   6.12   0.01  0.002  0.002
 Edit                                1   10.07   5.03   0.01  0.002  0.002
@@ -73,7 +73,7 @@ The finding reproduces. It is also, immediately, not what it looks like — see 
 The two rightmost columns are `realized/predicted` and `2 × sessions / 1246`. They agree to three
 decimal places on all 21 rows. Tested directly:
 
-```
+```text
 model: realized_share == sessions * share / N
 max abs error over all 21 rows: 0.000136
 ```
@@ -94,7 +94,7 @@ The mechanism is a denominator mismatch, and it is two lines apart in one functi
 the same scale. Since `after` was zero for all 21 rows (the target simply did not recur in the last
 two sessions), the arithmetic collapses to
 
-```
+```text
 realized = (sessions × share) / N
 realized / predicted = 2 × sessions / N
 ```
@@ -125,7 +125,7 @@ decision"* (`advisor.go:293`), and read (`advisor.go:366`).
 **It is never written.** `Suggest(obs []Observation)` (`advisor.go:308`) has no parameter that could
 carry it, and both production callers pass only observations:
 
-```
+```text
 cmd/replay/advise.go:102   suggestions := advisor.Suggest(obs)
 cmd/replay/tui.go:563      return adviceRows(advisor.Suggest(obs)), sessions
 ```
@@ -133,11 +133,11 @@ cmd/replay/tui.go:563      return adviceRows(advisor.Suggest(obs)), sessions
 So `applied` is always false, `track()` always returns `Pending`, and `Verified` / `NotVerified` are
 unreachable through the public API. The suite says so:
 
-```
+```text
 $ go test ./internal/advisor/
 --- FAIL: TestSuggestionsAreTrackedToClosure (0.00s)
     advisor_test.go:159: a large drop must verify: {... Status:pending RealizedShare:0 ...}
-FAIL	github.com/RedRobotKK/Replay/internal/advisor	0.324s
+FAIL    github.com/RedRobotKK/Replay/internal/advisor    0.324s
 ```
 
 This is the current tree, red, at the time of writing.
@@ -152,7 +152,7 @@ screen that is recording nothing."*
 output of `Suggest()` — and overwrites the file. There is no read-back and no merge; grep for the
 filename constant finds only the writer and two readers:
 
-```
+```text
 cmd/replay/advise.go:155   path = filepath.Join(home, ".replay", adviceFileName)
 cmd/replay/triage.go:24    path := filepath.Join(tipStateDir(), adviceFileName)
 cmd/replay/tui.go:483      b, err := os.ReadFile(filepath.Join(tipStateDir(), adviceFileName))
@@ -172,7 +172,7 @@ against the **new, smaller** total.
 
 Halve a target of share `s` and change nothing else:
 
-```
+```text
 after   = (s/2) / (1 − s/2) = s / (2 − s)
 realized = s − s/(2−s) = s(1−s)/(2−s)
 realized / predicted = 2(1−s)/(2−s)
@@ -257,7 +257,7 @@ by running `replay` twice.
 
 Same machine, same corpus, same day:
 
-```
+```text
 $ replay cost ~/.claude/projects
 Cost per task, across 115 sessions (1729 agent lanes) ...
 
@@ -452,7 +452,7 @@ machine: no historical session recorded whether the operator was trying.
 
 Four ledger sessions have a matching Claude Code transcript by session UUID:
 
-```
+```text
 $ for f in 351d4e3d... 7022b9f2... f11756ad... f79cae6d...; do find ~/.claude/projects -name "$f.jsonl"; done
 /Users/daniel/.claude/projects/-Users-daniel-Development-Replay-clean/351d4e3d-9908-4577-aa11-fdd093c0b21f.jsonl
 /Users/daniel/.claude/projects/-Users-daniel-Development-Replay-clean/7022b9f2-59f7-4356-9a44-f13b211512b7.jsonl
@@ -476,7 +476,7 @@ the total is conserved (that is M2). The split — which is the entire product, 
 
 `replay blame` on the same session localises the disagreement:
 
-```
+```text
 LEDGER      2. tool definitions (224 tools)      x1  21k once   167k in prompts (±167k)
 TRANSCRIPT  2. tool result: Bash echo one        x1  21k once   171k in prompts (±171k)
 ```
@@ -512,7 +512,7 @@ of 91.6% of cache-break causes (§4.4).
 
 **Nothing tests it today.**
 
-```
+```text
 $ grep -rn "EstimateTokens" --include="*_test.go" .
 (no results)
 ```
@@ -532,7 +532,7 @@ no `vendor/`. The only `count_tokens` caller is `internal/probe/run.go:230`, rea
 **How bad is the error?** Measured across the whole corpus by parsing the `Rules:` line
 (`internal/analysis/report.go:151`) from `replay diff ~/.claude/projects`, 1734 lanes:
 
-```
+```text
 median relative error   49%
 p75                     80%
 p90                    100%
@@ -596,7 +596,7 @@ is n = 1.
 **How much rides on the untested fit.** From my run of `replay diff ~/.claude/projects` (763
 classified breaks over 1734 lanes):
 
-```
+```text
 594  77.8%  client re-rendered history after the system prefix
 105  13.8%  prefix diverged inside the message history at an unknown block
  47   6.2%  cache expired (gap longer than the TTL)
