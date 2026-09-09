@@ -10,7 +10,7 @@ INSTALLER_DRIFT_STRICT=1 scripts/installer-drift/check.sh   # exit 1 on drift
 ## Why it exists
 
 On 2026-09-09 it did not match. `install.sh` here carried `--no-tui`, merged in
-#91; the copy served from `redrobot.jp` was **28 lines behind** and rejected the
+the copy served from `redrobot.jp` was **28 lines behind** and rejected the
 flag outright:
 
 ```text
