@@ -177,6 +177,8 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 		return runPrefix(args[1:], stdout, stderr)
 	case "since":
 		return runSince(args[1:], stdout, stderr)
+	case "budget":
+		return runBudget(args[1:], stdout, stderr)
 	case "serve":
 		return runServe(args[1:], stdout, stderr)
 	default:
@@ -583,6 +585,7 @@ Setup and maintenance:
   replay statusline                live spend and cache-miss cost, for Claude Code's status line
   replay since                     what ran and what it cost since you last looked
   replay prefix --before F --after F  does this change void the cached prefix (exit 1 if so)
+  replay budget <ledger-dir>       what this setup costs on every request, as a committable file
   replay redact <transcript>       strip content, keep structure and usage (for bug reports)
   replay version                   print build information
 
