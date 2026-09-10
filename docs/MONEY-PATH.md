@@ -381,6 +381,52 @@ and what they get is enforcement of a budget they set themselves. That is a purc
 survives the customer reading every evidence file in this directory, which is the only kind of
 purchase decision this project can honestly ask for.
 
+### Corrected 2026-09-10: $25 is the right unit and the wrong list price
+
+The reasoning above settles the **unit** — per repository, not per seat — and that
+still stands. What it got wrong is treating $25 as the *published* price rather
+than as the *first cohort's* price. Two facts, both measurable, force the change.
+
+**$25 is anchored to distribution, not to value.** The measured throttling figure
+is that cache-blind budget arithmetic runs **7.94x high on this machine's corpus
+of 57,958 requests**, so a $500/day ceiling halts execution at **$62.94** of real
+spend — roughly $437/day of approved, unusable budget, about $13,000 a month of
+capacity a metered team already paid for and cannot reach. Charging $25 against
+that is **0.2% of the value**. The closest structural comparables — vendor-neutral
+cloud cost tools, which exist precisely because the vendor selling the resource is
+the wrong party to flag overbuying — price at 1-3% of the spend they illuminate.
+
+**A published price is far easier to cut than to raise.** Once $25 is list, every
+customer is anchored there permanently; raising it later means grandfathering,
+resentment, or churn. Discounting from a higher list costs nothing and reads as a
+gift. This asymmetry is the whole argument, and it does not depend on any figure
+above being exactly right.
+
+So the shape, which is what is being decided here — the number remains
+provisional until someone has run the tool and been asked:
+
+| | |
+|---|---|
+| **Individuals** | free, permanently. This is the adoption motion and it is not a trial |
+| **Public / OSS repositories** | free. Distribution, honestly labelled |
+| **List** | $199 per repository per month |
+| **Design partner** | $25, explicitly a time-boxed discount off list, not the price |
+| **Annual prepay** | two months free |
+| **Price lock** | a subscribed price never rises |
+
+The price lock is doing two jobs. It makes early adoption safe, and it frees list
+to move later without churning anyone who was there first — which is the only way
+to hold a high anchor and a low first cohort at the same time.
+
+**What this does not settle, and must not be presented as if it did.** No one has
+been quoted any price. The figures above are measured on one machine and the
+comparables are borrowed from an adjacent category. The instrument for a real
+answer at this stage is not an A/B test — with `from_card_24h` at zero for every
+hour measured, two arms would each receive no traffic — but a Van Westendorp
+series in about ten interviews with people who have actually run the tool. **If
+the "too expensive" threshold clusters below $99, the high anchor is wrong and
+this section should be corrected again rather than defended.**
+
 One thing worth stating so the price does not get blamed for the wrong problem. The
 measurement on 2026-09-07 counted **53 lifetime fetches of the install script from 2 distinct
 IP addresses**, and no external user has ever been observed. At that population there is no
