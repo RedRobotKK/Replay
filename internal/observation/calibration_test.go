@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -207,6 +208,14 @@ func TestCalibrationWriterRefusesASymlink(t *testing.T) {
 // When Lstat fails for a reason other than absence, the writer must refuse
 // rather than treat the path as free.
 func TestCalibrationWriterRefusesWhenItCannotLook(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// chmod 0o000 only toggles the read-only bit on Windows and does not
+		// make a directory un-inspectable, so the "cannot look" condition this
+		// test needs cannot be produced there. The guard is still exercised on
+		// every Unix runner; skipping here is the same category as the root
+		// skip below — an environment that can look anyway.
+		t.Skip("chmod cannot remove directory inspectability on Windows")
+	}
 	dir := t.TempDir()
 	blocked := filepath.Join(dir, "blocked")
 	if err := os.Mkdir(blocked, 0o700); err != nil {
