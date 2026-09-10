@@ -42,7 +42,7 @@ type killableListener struct {
 func TestMD1_AMetricsListenerThatDiesStopsTheProxy(t *testing.T) {
 	var held *killableListener
 	restore := bindMetrics
-	bindMetrics = func(addr string) (net.Listener, error) {
+	bindMetrics = func(_ string) (net.Listener, error) {
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			return nil, err
