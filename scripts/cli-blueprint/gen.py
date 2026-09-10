@@ -32,7 +32,7 @@ COMMANDS = [
     "cost", "ceiling", "diff", "advise", "serve", "tui", "context", "blame", "replay",
     "route", "trim", "codex", "burn", "agents", "mcp", "corpus", "learn",
     "probe", "doctor", "rules", "statusline", "redact", "version", "prefix", "since", "budget",
-    "upgrade", "purge", "privacy",
+    "upgrade", "purge", "privacy", "pool",
 ]
 
 # What each command is for, and the two facts an agent needs before running one
@@ -62,6 +62,7 @@ META = {
     "burn":       ("What each agent surface burned: Codex, Ollama, Claude Code", "loopback: Ollama's version endpoint", "none"),
     "agents":     ("A boot block naming where this project keeps its records", "none", "with --write, splices into the named file"),
     "mcp":        ("Answer an agent's questions mid-session, JSON-RPC on stdio", "none", "none"),
+    "pool":       ("Aggregate corpus submissions into one figure, with its roster", "none", "none"),
     "corpus":     ("Calibration across many sessions, as Markdown", "none", "none"),
     "learn":      ("Re-score the policy catalog, select one with held-out checks", "none", "--out writes policy.json"),
     "probe":      ("Measure a model's caching floor", "outbound only with --execute, which sends billable requests", "--record appends to measurements.jsonl; --contribute writes a submission file"),

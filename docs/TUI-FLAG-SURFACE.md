@@ -28,7 +28,7 @@ All 80 are classified; none are left over.
 | Plumbing, shown once | 16 | A header line, never interactive. Where it listens, where it writes, what it talks to |
 | Threshold that can fire | 20 | A meter with **four** states: unset, armed, approaching, fired |
 | Posture, on or not covered | 14 | A line saying what is on, and more importantly what it does **not** reach |
-| Scope of the question | 11 | The query line. What this screen is about, and what it excludes |
+| Scope of the question | 12 | The query line. What this screen is about, and what it excludes |
 | Action with a consequence | 11 | A confirmation, with the consequence named before the key |
 
 ## Why a threshold needs four screens, not one
@@ -190,10 +190,11 @@ elsewhere in this file. -->
 | `--share` | `cost` | bool |
 | `--trend` | `probe` | bool |
 
-### Scope of the question (11)
+### Scope of the question (12)
 
 | Flag | Command | Type |
 |---|---|---|
+| `--pooled-at` | `pool` | string |
 | `--candidates` | `probe` | string |
 | `--dollars` | `main` | bool |
 | `--max` | `probe` | int |

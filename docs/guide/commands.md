@@ -1,6 +1,6 @@
 # Commands
 
-Twenty-eight commands, listed on thirty-six headings because eight of them have a form worth
+Twenty-nine commands, listed on thirty-seven headings because eight of them have a form worth
 showing separately. Most people use three of them.
 
 The count is checked against the binary rather than kept by hand: `docs/CLI.md` is generated from
@@ -567,6 +567,34 @@ replay corpus ~/.claude/projects > corpus-report.md     # or a directory you nam
 Open it and check that nothing in it identifies your projects before you share it. It judges
 calibration per model with the newest sessions separated, so a provider changing its behaviour shows
 up as a provider change rather than as silent drift.
+
+### `replay pool <submission.json...>`
+
+```sh
+replay pool <submission.json...> [--json] [--pooled-at <date>]
+```
+
+Aggregates the submissions `replay cost --contribute` writes into one figure,
+printed above its own roster. Reads local files and sends nothing: pooling
+happens where the submissions were collected — a pull request, a directory of
+checked-in files — never over a wire.
+
+| Flag | What it does |
+|------|--------------|
+| `--json` | emit the pooled document rather than the table |
+| `--pooled-at <date>` | the date this pool was assembled, recorded in the document. Defaults to today. A flag rather than a clock read, so a regenerated document can be diffed against the one that was published |
+
+The roster is the point. Every row names a tag, a content digest and the file it
+came from, so a total can be walked back to its parts by anyone who disagrees
+with it. The totals are computed from the roster each time they are shown rather
+than stored, so the claim and its evidence cannot come apart.
+
+It refuses rather than rounds. An empty pool prints no figure, because $0.00
+across 0 submissions renders exactly like a measured one. A submission whose
+content no longer matches its own digest is named on stderr and left out, and so
+is one scored under a different rules version — an aggregate of totals computed
+against different price tables is not an aggregate of anything.
+
 
 ### `replay context <transcript|dir>`
 
