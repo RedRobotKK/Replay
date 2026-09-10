@@ -80,6 +80,48 @@ type surfaceBurn struct {
 	problems []string
 }
 
+// pricingNotes says what the cost column is not covering.
+//
+// Split out of the render loop so each branch can be reached from a test. It
+// used to be two conditionals and a pair of counters inside the loop that
+// prints the table, which meant the sentence a reader gets about missing spend
+// was decided by code no test entered — reported by guard-reachability, on a
+// column added specifically to stop unpriced spend being invisible.
+//
+// A surface nobody bills for is not unpriced. Ollama runs locally and its
+// absence from the total is correct, so counting it as missing would send a
+// reader looking for a rules document that would change nothing.
+func pricingNotes(surfaces []surfaceBurn) []string {
+	priced, unpriced := 0, 0
+	for _, s := range surfaces {
+		switch {
+		case s.requests == 0:
+		case s.pricedReqs > 0:
+			priced++
+		case !s.localOnly:
+			unpriced++
+		}
+	}
+	if unpriced == 0 {
+		return nil
+	}
+	out := []string{
+		"",
+		fmt.Sprintf("  %d surface(s) were read and could not be priced. A rules document can", unpriced),
+		"  carry rows for any provider - each row names its own - and none are",
+		"  installed for these. Their spend is real and is not in any figure above.",
+		"    next: replay rules --update <file|https URL>",
+	}
+	// Only worth saying when there is something to compare against. With one
+	// priced surface and one unpriced, the column is a ranking of one.
+	if priced > 0 {
+		out = append(out, "",
+			"  Until then the cost column compares one surface against nothing, which is",
+			"  worth knowing before reading it as a ranking.")
+	}
+	return out
+}
+
 // costCell renders the cost column, and refuses to print a number it cannot
 // stand behind.
 //
@@ -149,18 +191,10 @@ func runBurn(args []string, stdout, stderr io.Writer) error {
 	_, _ = fmt.Fprintf(stdout, hdr,
 		strings.Repeat("-", 14), strings.Repeat("-", 9), strings.Repeat("-", 14),
 		strings.Repeat("-", 17), strings.Repeat("-", 22), strings.Repeat("-", 12))
-	priced, unpriced := 0, 0
 	for _, s := range surfaces {
 		tok := "not read"
 		if s.requests > 0 {
 			tok = comma(s.tokens)
-		}
-		if s.requests > 0 {
-			if s.pricedReqs > 0 {
-				priced++
-			} else if !s.localOnly {
-				unpriced++
-			}
 		}
 		_, _ = fmt.Fprintf(stdout, hdr,
 			s.name, commaOrDash(s.requests), tok, costCell(s), s.unit, s.quota)
@@ -172,15 +206,8 @@ func runBurn(args []string, stdout, stderr io.Writer) error {
 	_, _ = fmt.Fprintf(stdout, "  entirely. Summing them would produce a figure with no unit.\n\n")
 	_, _ = fmt.Fprintf(stdout, "  The cost column is addable, and that is what it is for. It is also the\n")
 	_, _ = fmt.Fprintf(stdout, "  column that is mostly empty.\n")
-	if unpriced > 0 {
-		_, _ = fmt.Fprintf(stdout, "\n  %d surface(s) were read and could not be priced. A rules document can\n", unpriced)
-		_, _ = fmt.Fprintf(stdout, "  carry rows for any provider — each row names its own — and none are\n")
-		_, _ = fmt.Fprintf(stdout, "  installed for these. Their spend is real and is not in any figure above.\n")
-		_, _ = fmt.Fprintf(stdout, "    next: replay rules --update <file|https URL>\n")
-	}
-	if priced+unpriced > 1 && unpriced > 0 {
-		_, _ = fmt.Fprintf(stdout, "\n  Until then the cost column compares one surface against nothing, which is\n")
-		_, _ = fmt.Fprintf(stdout, "  worth knowing before reading it as a ranking.\n")
+	for _, l := range pricingNotes(surfaces) {
+		_, _ = fmt.Fprintln(stdout, l)
 	}
 	_, _ = fmt.Fprintln(stdout)
 

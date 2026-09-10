@@ -10,7 +10,7 @@ has published.
 Phase C added a cost column to `replay burn`, pricing every request in every
 lane. On this machine the two surfaces then disagreed:
 
-```
+```text
 replay cost   $3,721   38,186 requests
 replay burn  $10,499   60,404 requests
 ```
@@ -73,7 +73,7 @@ already found 25 fan-out sessions holding ~95% of avoidable spend. That is why
 
 `replay blame` has been disclosing this the whole time, per session:
 
-```
+```text
 Scope: 1 of 17 lanes; 8336 requests in this session's other lanes are not counted here.
 ```
 

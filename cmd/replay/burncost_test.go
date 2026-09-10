@@ -98,3 +98,56 @@ func TestBC5_CoverageIsFlooredNotRounded(t *testing.T) {
 		t.Errorf("the floored coverage is not shown: %q", got)
 	}
 }
+
+// BC6: what the cost column is not covering, per shape of corpus.
+//
+// This used to be two conditionals and a pair of counters inside the loop that
+// prints the table, so the sentence a reader gets about missing spend was
+// decided by code no test entered — on a column added specifically to stop
+// unpriced spend being invisible.
+func TestBC6_PricingNotesSayWhatIsMissing(t *testing.T) {
+	priced := surfaceBurn{name: "claude-code", requests: 100, pricedReqs: 100, costUSD: 9}
+	unpriced := surfaceBurn{name: "codex", requests: 50, unpricedReqs: 50}
+	local := surfaceBurn{name: "ollama", requests: 20, localOnly: true}
+	unread := surfaceBurn{name: "codex"}
+
+	// Nothing missing: no note at all, because a paragraph printed every run is
+	// one the reader learns to skip.
+	if got := pricingNotes([]surfaceBurn{priced, local, unread}); got != nil {
+		t.Errorf("a fully priced machine was told something is missing: %v", got)
+	}
+
+	// One unpriced surface beside a priced one: both sentences.
+	both := strings.Join(pricingNotes([]surfaceBurn{priced, unpriced, local}), "\n")
+	if !strings.Contains(both, "1 surface(s) were read and could not be priced") {
+		t.Errorf("the count of unpriced surfaces is wrong or missing:\n%s", both)
+	}
+	if !strings.Contains(both, "replay rules --update") {
+		t.Errorf("the note does not name the command that fixes it:\n%s", both)
+	}
+	if !strings.Contains(both, "against nothing") {
+		t.Errorf("with one priced and one unpriced surface, the ranking caveat is "+
+			"missing:\n%s", both)
+	}
+
+	// Unpriced with nothing priced: there is no ranking to caveat.
+	alone := strings.Join(pricingNotes([]surfaceBurn{unpriced, local}), "\n")
+	if !strings.Contains(alone, "could not be priced") {
+		t.Errorf("an entirely unpriced machine is told nothing:\n%s", alone)
+	}
+	if strings.Contains(alone, "against nothing") {
+		t.Errorf("a caveat about comparing surfaces, with only one surface:\n%s", alone)
+	}
+}
+
+// BC7: a surface nobody bills for is not a surface with a missing price.
+//
+// Counting Ollama as unpriced would send a reader after a rules document that
+// would change nothing, which is the same confusion costCell has four states
+// to avoid.
+func TestBC7_LocalSurfacesAreNotCountedAsUnpriced(t *testing.T) {
+	local := surfaceBurn{name: "ollama", requests: 20, localOnly: true}
+	if got := pricingNotes([]surfaceBurn{local}); got != nil {
+		t.Errorf("a machine running only a local model is told a price is missing: %v", got)
+	}
+}

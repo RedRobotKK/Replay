@@ -141,3 +141,50 @@ func TestMP5_APricedForeignModelGetsItsCacheArithmetic(t *testing.T) {
 		t.Errorf("an unpriced model is %v effective tokens, want its input alone", got)
 	}
 }
+
+// MP6: the accessors survive a nil document.
+//
+// Reported by guard-reachability. Both are called from report paths that run
+// before a rules file has been loaded — Provenance already returns the compiled
+// version for a nil receiver — so a nil here is the ordinary first-run state,
+// not a defensive flourish.
+func TestMP6_TheAccessorsSurviveNoDocument(t *testing.T) {
+	var none *Rules
+	if got := none.Providers(); got != nil {
+		t.Errorf("a nil document reports providers %v", got)
+	}
+	if got := (ModelRule{}).ProviderOr(nil); got != "" {
+		t.Errorf("a bare row against no document reports provider %q", got)
+	}
+	if got := (ModelRule{Provider: "openai"}).ProviderOr(nil); got != "openai" {
+		t.Errorf("a row naming its own provider loses it when the document is nil: %q", got)
+	}
+}
+
+// MP7: Providers deduplicates and skips rows attributable to nobody.
+//
+// A document may legitimately carry many rows per publisher, and the list is
+// what a report prints; repeating "anthropic" four times in a provenance line
+// is noise, and printing an empty name is worse than printing nothing.
+func TestMP7_ProvidersDeduplicatesAndSkipsTheUnattributable(t *testing.T) {
+	r := &Rules{Schema: RulesSchema, Version: "v", Provider: "anthropic",
+		Models: []ModelRule{
+			{Match: "opus-5", Priced: true, InputPerMTok: 5, ReadMult: 0.1},
+			{Match: "sonnet-5", Priced: true, InputPerMTok: 2, ReadMult: 0.1},
+			{Match: "gpt-5-codex", Provider: "openai", Priced: true, InputPerMTok: 1.25, ReadMult: 0.1},
+			{Match: "o4", Provider: "openai", Priced: true, InputPerMTok: 1, ReadMult: 0.1},
+		}}
+	got := r.Providers()
+	if len(got) != 2 || got[0] != "anthropic" || got[1] != "openai" {
+		t.Errorf("four rows over two publishers report %v", got)
+	}
+
+	// A row attributable to nobody contributes no name. The document-level
+	// provider is empty here, which validate() permits only when no row names
+	// one — so this is the legacy shape, and it reports nothing rather than "".
+	bare := &Rules{Schema: RulesSchema, Version: "v",
+		Models: []ModelRule{{Match: "opus-5", Priced: true, InputPerMTok: 5, ReadMult: 0.1}}}
+	if got := bare.Providers(); len(got) != 0 {
+		t.Errorf("an unattributed document reports providers %v, want none", got)
+	}
+}
