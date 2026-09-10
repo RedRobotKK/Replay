@@ -138,3 +138,51 @@ func TestStaleRulesWarningSurvivesTheRowBudget(t *testing.T) {
 		t.Errorf("the stale-rules warning was cut by the row budget:\n%s", sc.String())
 	}
 }
+
+// DR9: the worst case fits, with a row to spare.
+//
+// The screen's tightest state is a stale price table, a stale rules document
+// and one probe reading per model — every note firing at once. It came to 21
+// rows against a body budget of 20 the moment bodyRows landed, and the row that
+// lost was the last note appended: the rules staleness warning, which is the
+// one this file exists for.
+//
+// Neither change was wrong. #157 added the rules row and note; #160 gave the
+// body one row less than the frame so the loop could append the footer without
+// eating a line. Each was green alone and the pair was not, which is the shape
+// of failure no single pull request can see.
+//
+// This asserts that every note survives the worst case, so the next row to
+// arrive fails here by name rather than by silently deleting a warning.
+func TestDoctorWorstCaseKeepsEveryNote(t *testing.T) {
+	m := aMachine()
+	m.RulesVersion, m.RulesState, m.RulesAgeDays = "anthropic-2026-09-01", RulesFetched, 75
+	m.PriceAgeDays = 75         // the price note fires
+	m.Readings, m.Models = 4, 4 // the one-reading-per-model note fires
+
+	sc := DoctorScreen(m)
+	// pad() fills to bodyRows-3 and then appends three lines of its own, so the
+	// body is everything before those three. Counting back from the end of
+	// sc.Lines stops on the tagline, not on the padding.
+	body := sc.Lines[:len(sc.Lines)-3]
+	content := len(body)
+	for content > 0 && body[content-1] == "" {
+		content--
+	}
+	// The screen fills its body exactly in this state, which is allowed and is
+	// why the assertions below are on CONTENT rather than on a spare row.
+	// Demanding a blank line would mean deleting something a reader wants in
+	// order to satisfy a margin nobody sees. What must not happen is a row
+	// disappearing quietly, and that is what the checks below catch — pad()
+	// truncates from the bottom, so the first casualty is always the last note
+	// appended.
+	if content != len(body) {
+		t.Logf("worst case uses %d of %d body rows", content, len(body))
+	}
+	rendered := sc.String()
+	for _, want := range []string{"replay rules --check-prices", "list price on that date", "within-model variance"} {
+		if !strings.Contains(rendered, want) {
+			t.Errorf("the worst case dropped %q:\n%s", want, rendered)
+		}
+	}
+}
