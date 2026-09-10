@@ -24,14 +24,52 @@ import (
 // example screen, because the notice is what tells a reader how much to trust,
 // and a partial one tells them wrong.
 
+// RulesAge says which of three answers the caller has about the rules
+// document's date.
+//
+// A day count alone can carry only one of them. Absence, zero and unknown are
+// three values (ADR-0018), and here each is a different sentence: no document
+// installed over the build, a document dated N days ago, and a document whose
+// date this build cannot read. Collapsing the third into "0 days" would make
+// the unreadable case render as the freshest possible one, which is the
+// reading that hides the problem.
+type RulesAge int
+
+const (
+	// RulesUntold is the zero value: the caller populated no rules fields, so
+	// the screen draws no row. A screen that was not told cannot report, and a
+	// default row would announce the compiled-in table on a machine running an
+	// installed one.
+	RulesUntold RulesAge = iota
+	// RulesBuiltIn is the table this build shipped with. That is a floor, not
+	// a stale document: ageing a compiled-in constant prints a number with
+	// nothing behind it.
+	RulesBuiltIn
+	// RulesFetched is a document installed over the build, with a date this
+	// build could read.
+	RulesFetched
+	// RulesUndated is a document carrying a fetch date this build cannot
+	// parse. It must not pass as current.
+	RulesUndated
+)
+
 // Machine is what the local filesystem can answer without a proxy running.
 //
 // Populated by the caller, because internal/tui does no I/O: the boundary that
 // keeps every frame testable without a disk is the same boundary that keeps
 // this package honest about what it knows.
 type Machine struct {
-	// Transcripts, Lanes and Projects come from the same walk `replay doctor`
-	// uses, so the two commands cannot disagree about how much is there.
+	// Sessions, Transcripts, Lanes and Projects come from the same walk
+	// `replay doctor` uses, so the two commands cannot disagree about how much
+	// is there.
+	//
+	// Sessions and Transcripts are different questions and were once reported
+	// under one word. A session writes one transcript per agent lane, so on a
+	// fanned-out corpus the file count is an order of magnitude above the
+	// session count: this screen said "1,809 transcripts across 12 projects"
+	// where the command said "124 sessions across 12 projects", about the same
+	// directory, in the same minute.
+	Sessions    int
 	Transcripts int
 	Lanes       int
 	Projects    int
@@ -43,6 +81,18 @@ type Machine struct {
 	// PriceTableDate and PriceAgeDays date the compiled price table.
 	PriceTableDate string
 	PriceAgeDays   int
+	// RulesVersion, RulesState and RulesAgeDays date the rules document, which
+	// is a different question from the price table above and a more expensive
+	// one to get wrong. The price table moves a column; the rules document
+	// carries the cache-read multiple, and that decides what Replay
+	// RECOMMENDS rather than only what it reports. `replay doctor` has said
+	// this since cmd/replay/doctorrules.go landed. This screen said nothing,
+	// and it is the surface the installer opens for a new operator.
+	//
+	// RulesAgeDays is meaningful only when RulesState is RulesFetched.
+	RulesVersion string
+	RulesState   RulesAge
+	RulesAgeDays int
 	// Readings is how many probe measurements exist, and Models how many
 	// distinct models they cover. One reading per model means no within-model
 	// variance at all, which is worth saying rather than implying.
@@ -135,8 +185,7 @@ func DoctorScreen(m Machine) Screen {
 	lines := make([]string, 0, BudgetRows)
 	lines = append(lines, head...)
 	lines = append(lines,
-		"  "+fmt.Sprintf("%s transcripts across %s projects",
-			commas(m.Transcripts), commas(m.Projects)),
+		"  "+headlineCount(m),
 		"  Everything Replay reads is on this machine.", "",
 		Row(docCols, "check", "result"),
 		Row(docCols, "------------------------------", "-------------------------------"),
@@ -146,6 +195,14 @@ func DoctorScreen(m Machine) Screen {
 		Row(docCols, "ledger", ledgerLine(m)),
 		Row(docCols, "price table", fmt.Sprintf("dated %s, %d days old",
 			m.PriceTableDate, m.PriceAgeDays)),
+	)
+	// Directly under the price table, because it answers the question that row
+	// provokes: priced against what, and how old is that? Conditional rather
+	// than defaulted, so a caller that has not been told draws nothing.
+	if v, ok := rulesLine(m); ok {
+		lines = append(lines, Row(docCols, "rules", v))
+	}
+	lines = append(lines,
 		Row(docCols, "probe readings", readingsLine(m)),
 		"", "  notes")
 
@@ -159,7 +216,40 @@ func DoctorScreen(m Machine) Screen {
 				"that date,", m.PriceAgeDays)),
 			"      not today's.")
 	}
+	if m.RulesState == RulesFetched && m.RulesAgeDays >= rulesStaleDays {
+		// Why this one gets three lines when prices get two: an operator who
+		// reads "prices are old" knows what to discount. The cache-read
+		// multiple is not a column they can discount, it is the term that
+		// picks which policy the comparison calls cheaper — so the note has to
+		// say that the recommendation itself is affected, and name the command
+		// that fixes it. A warning an operator cannot act on is decoration.
+		lines = append(lines,
+			note(false, fmt.Sprintf("the rules document is %d days old: the cache-read multiple is",
+				m.RulesAgeDays)),
+			"      what changes what replay recommends, not only what it reports.",
+			"      next: replay rules --check-prices")
+	}
 	return Screen{Key: 'd', Title: "doctor", Lines: pad(lines), From: Measured}
+}
+
+// headlineCount is the sentence at the top of the doctor screen, in the same
+// words `replay doctor` uses for it.
+//
+// Sessions is the figure, because that is the figure the command prints and a
+// reader moving between the two surfaces is comparing sentences, not fields.
+// The file count keeps its place in the table below, as files.
+//
+// A screen given no session count does not print "0 sessions" beside a
+// four-figure file count: absence and zero are different values (ADR-0018),
+// and of the two numbers in hand the one that was actually measured is the one
+// worth saying.
+func headlineCount(m Machine) string {
+	if m.Sessions == 0 {
+		return fmt.Sprintf("%s transcript files across %s projects",
+			commas(m.Transcripts), commas(m.Projects))
+	}
+	return fmt.Sprintf("%s sessions across %s projects",
+		commas(m.Sessions), commas(m.Projects))
 }
 
 func ledgerLine(m Machine) string {
@@ -170,6 +260,40 @@ func ledgerLine(m Machine) string {
 		return shortPath(m.LedgerDir) + ", NOT writable"
 	}
 	return shortPath(m.LedgerDir) + ", writable"
+}
+
+// rulesStaleDays is the same thirty days cmd/replay/doctorrules.go uses, in the
+// unit this struct carries. Two surfaces answering the same question must cross
+// the same line on the same day, or an operator who checks both is told their
+// table is fine by one and stale by the other.
+const rulesStaleDays = 30
+
+// RulesStaleDays exposes the threshold so the command that owns the other copy
+// of it can assert the two are the same number. Exported for that assertion and
+// for nothing else: a threshold duplicated across two packages is only safe
+// while something is checking.
+func RulesStaleDays() int { return rulesStaleDays }
+
+// rulesLine is the result column for the rules row, and false when there is no
+// row to draw.
+//
+// Every state renders as "<version>, <what we know about its date>", so the
+// version stays in the same place whichever answer applies and a reader
+// scanning the column finds it once. The words are short because docCols gives
+// this column 31 cells and cell() truncates with '~' — and a truncated version
+// string does not read as a cut value, it reads as a different document.
+func rulesLine(m Machine) (string, bool) {
+	if m.RulesVersion == "" || m.RulesState == RulesUntold {
+		return "", false
+	}
+	switch m.RulesState {
+	case RulesBuiltIn:
+		return m.RulesVersion + ", built in", true
+	case RulesUndated:
+		return m.RulesVersion + ", undated", true
+	default:
+		return fmt.Sprintf("%s, %d days", m.RulesVersion, m.RulesAgeDays), true
+	}
 }
 
 func readingsLine(m Machine) string {
@@ -185,11 +309,11 @@ func readingsLine(m Machine) string {
 
 // pad fills a screen to the budget and gives it the footer the loop expects.
 func pad(lines []string) []string {
-	for len(lines) < BudgetRows-3 {
+	for len(lines) < bodyRows-3 {
 		lines = append(lines, "")
 	}
-	if len(lines) > BudgetRows-3 {
-		lines = lines[:BudgetRows-3]
+	if len(lines) > bodyRows-3 {
+		lines = lines[:bodyRows-3]
 	}
 	return append(lines, "", "  ran   replay doctor",
 		"  "+Dim("copy it and you never need this screen again."))
@@ -405,11 +529,11 @@ func money(v float64) string { return fmt.Sprintf("$%.2f", v) }
 
 // padCost fills to the budget and names the command that produced the screen.
 func padCost(lines []string) []string {
-	for len(lines) < BudgetRows-3 {
+	for len(lines) < bodyRows-3 {
 		lines = append(lines, "")
 	}
-	if len(lines) > BudgetRows-3 {
-		lines = lines[:BudgetRows-3]
+	if len(lines) > bodyRows-3 {
+		lines = lines[:bodyRows-3]
 	}
 	return append(lines, "", "  ran   replay cost --per-task",
 		"  "+Dim("copy it and you never need this screen again."))
@@ -486,11 +610,11 @@ func truncate(s string, w int) string {
 }
 
 func padWhy(lines []string) []string {
-	for len(lines) < BudgetRows-3 {
+	for len(lines) < bodyRows-3 {
 		lines = append(lines, "")
 	}
-	if len(lines) > BudgetRows-3 {
-		lines = lines[:BudgetRows-3]
+	if len(lines) > bodyRows-3 {
+		lines = lines[:bodyRows-3]
 	}
 	return append(lines, "", "  ran   replay blame <session>",
 		"  "+Dim("copy it and you never need this screen again."))
