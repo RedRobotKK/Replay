@@ -176,6 +176,38 @@ jobs:
       - name: Audit every TUI screen
         run: ./scripts/tui-audit/run.sh
 
+  guard-reachability:
+    name: guard reachability
+    runs-on: ubuntu-latest
+    # Only meaningful on a pull request, where there is a base to diff against.
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The tool diffs against the base branch, so it needs history and the
+          # base ref present. A shallow clone has neither.
+          fetch-depth: 0
+      - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # Neutralise every conditional this pull request touches and report the
+      # ones no test observes.
+      #
+      # This exists because of what happened on 2026-09-09: 23 pull requests
+      # merged in fourteen hours, authored and merged by the same agent, CI
+      # green throughout, and three of them carrying defects. All three were
+      # found by disabling a guard and watching the suite stay green. None by
+      # reading the diff.
+      #
+      # It is scoped to the diff, so it costs seconds where the full mutant
+      # catalogue costs eleven minutes, and it runs on every pull request
+      # instead of on a tag nobody passes.
+      - name: Neutralise the guards this change touches
+        run: |
+          git fetch --no-tags origin "$GITHUB_BASE_REF"
+          go run scripts/guard-reachability/main.go "origin/$GITHUB_BASE_REF"
+
   mutation:
     name: frozen mutants
     runs-on: ubuntu-latest

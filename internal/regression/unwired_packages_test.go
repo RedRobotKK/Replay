@@ -39,12 +39,13 @@ func TestNoNewlyUnwiredPackages(t *testing.T) {
 	// Every entry needs a reason, and "not got round to it" is a valid one as
 	// long as it is written down and linked. UNWIRED-LOG.md tracks the fix.
 	known := map[string]string{
-		"internal/regression": "this package. Test-only by design, and correctly absent.",
-		"scripts/x402-e2e":    "an end-to-end tool built separately, not part of the binary.",
-		"internal/quota":      "OPEN. The only consumer of ledger Record.Quota, with forecast.go inside it. docs/design/UNWIRED-LOG.md #5.",
-		"internal/usage":      "OPEN, and the worst of them: FromInclusive/Validate guard a live double-count in transcript/codex.go:151. UNWIRED-LOG.md #8.",
-		"internal/otlp":       "OPEN, may be by design — it writes spans to a file and nothing yet asks it to. UNWIRED-LOG.md #9.",
-		"internal/feed":       "OPEN, may be by design — the rules feed is served from the site, not the binary. UNWIRED-LOG.md #9.",
+		"internal/regression":        "this package. Test-only by design, and correctly absent.",
+		"scripts/x402-e2e":           "an end-to-end tool built separately, not part of the binary.",
+		"scripts/guard-reachability": "a developer tool carrying //go:build ignore, run by CI against a pull request diff. Correctly absent: it neutralises the binary's conditionals, so being part of the binary would be the defect.",
+		"internal/quota":             "OPEN. The only consumer of ledger Record.Quota, with forecast.go inside it. docs/design/UNWIRED-LOG.md #5.",
+		"internal/usage":             "OPEN, and the worst of them: FromInclusive/Validate guard a live double-count in transcript/codex.go:151. UNWIRED-LOG.md #8.",
+		"internal/otlp":              "OPEN, may be by design — it writes spans to a file and nothing yet asks it to. UNWIRED-LOG.md #9.",
+		"internal/feed":              "OPEN, may be by design — the rules feed is served from the site, not the binary. UNWIRED-LOG.md #9.",
 	}
 
 	all, inBinary := reachable(t)
