@@ -97,15 +97,15 @@ func TestCW3_AnUnsentSubmissionIsNotOverwritten(t *testing.T) {
 // CW4: a symlinked destination is refused.
 func TestCW4_ASymlinkedDestinationIsRefused(t *testing.T) {
 	dir := t.TempDir()
-	real := filepath.Join(t.TempDir(), "elsewhere.json")
+	target := filepath.Join(t.TempDir(), "elsewhere.json")
 	link := filepath.Join(dir, corpusFileName(sampleCorpus()))
-	if err := os.Symlink(real, link); err != nil {
+	if err := os.Symlink(target, link); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 	if _, err := WriteCorpus(dir, sampleCorpus()); err == nil {
 		t.Error("a submission was written through a symlink")
 	}
-	if _, err := os.Stat(real); err == nil {
+	if _, err := os.Stat(target); err == nil {
 		t.Error("the payload landed at the symlink's target")
 	}
 }
