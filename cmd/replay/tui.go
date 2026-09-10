@@ -208,6 +208,15 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 				// else. This is the whole point of the screen: a finding the
 				// reader has judged should stop being offered.
 				loop.SetLocal(func(r rune) bool {
+					// Escape closes the detail rather than leaving the screen.
+					// The detail's own last line says "esc back to the list",
+					// and until this handler existed escape did nothing at all
+					// there — the reader escaped the detail by navigating away
+					// and coming back.
+					if r == 27 && adviseOpen != nil {
+						adviseOpen = nil
+						return true
+					}
 					var status advisor.Status
 					switch r {
 					case 'a':
@@ -243,6 +252,16 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 			if loop.TakeOpened() {
 				if t := taskAt(cur.TaskRows, loop.Cursor().At); t != nil && t.Path != "" {
 					opened = t
+					// And go there. The row says "enter opens why this one cost
+					// what it did" and the why screen says "enter to open one
+					// here"; between them, enter recorded the task and left the
+					// reader on the cost screen looking at an unchanged frame,
+					// which reads as a keystroke the terminal dropped. Escape
+					// comes back, as the footer has always said it would.
+					loop.Goto('w')
+					sc = tui.WhyScreen(opened, blameFor)
+					loop.SetRows(sc.Rows)
+					return tui.Frame{Key: 'w', Lines: sc.Lines}
 				}
 			}
 			return tui.Frame{Key: k, Lines: sc.Lines}
@@ -453,26 +472,31 @@ func foldSpread(lanes []laneSpend) (usd, tokens []float64, sessions int) {
 }
 
 // safeState scores the default byte cap on tool results.
-func safeState() (tui.TrimSummary, int) {
-	files := corpusFiles()
-	if len(files) == 0 {
-		return tui.TrimSummary{}, 0
+// safeState reads what Replay has written to this machine.
+//
+// The same registry `replay privacy` walks, so a store added there appears on
+// this screen without anybody remembering to add it twice — which is the
+// property that made the registry worth having.
+//
+// The screen used to render a trim byte-cap summary: what capping tool output
+// would have saved. That is a token-savings question and it was answering a key
+// whose declared command is `serve --mask --mask-patterns`. `replay advise`
+// still ranks the same finding, where it belongs.
+func safeState() tui.Privacy {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return tui.Privacy{Err: err.Error()}
 	}
-	var total analysis.TrimPlan
-	sessions := 0
-	_ = forEachSession(files, func(_ string, _ *transcript.Session, rep *analysis.LaneReport, err error) error {
-		if err != nil || rep == nil {
-			return nil
-		}
-		sessions++
-		p := analysis.ScoreTrim(rep.Lane, rep.Fit, defaultTrimCap)
-		total.Blocks += p.Blocks
-		total.RemovedBytes += p.RemovedBytes
-		total.RemovedPromptTokens += p.RemovedPromptTokens
-		return nil
-	})
-	return tui.TrimSummary{CapBytes: defaultTrimCap, Blocks: total.Blocks,
-		RemovedBytes: total.RemovedBytes, RemovedPromptTokens: total.RemovedPromptTokens}, sessions
+	root := filepath.Join(home, ".replay")
+	p := tui.Privacy{Root: root}
+	for _, r := range resolveStores(root) {
+		bytes, files := measureStore(r.Full)
+		p.Stores = append(p.Stores, tui.Store{
+			Name: r.Actual, Bytes: bytes, Files: files,
+			Sensitive: r.Sensitive, Purgeable: r.Purgeable,
+		})
+	}
+	return p
 }
 
 // modelState reports what the corpus actually ran on.

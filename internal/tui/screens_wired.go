@@ -78,33 +78,6 @@ func ContextScreen(rows []ContextRow, sessions int) Screen {
 	return sc
 }
 
-// SafeScreen shows what a byte cap on tool output would have removed.
-func SafeScreen(t TrimSummary, sessions int) Screen {
-	if sessions == 0 {
-		return unavailable("safe", "no sessions were read, so no cap could be scored",
-			"Run an agent, then come back. "+paint(Accent, "replay trim --cap 2000")+" scores a cap.")
-	}
-	sc := Screen{Key: 's', Title: "safe", From: Measured}
-	lines := []string{header("safe"), ""}
-	lines = append(lines, fmt.Sprintf("  A %s-byte cap on tool results, over %d session(s)",
-		commas(t.CapBytes), sessions), "")
-	if t.Blocks == 0 {
-		lines = append(lines,
-			paint(Good, "  Nothing was over the cap."), "",
-			paint(Faint, "  No tool result exceeded it, so this cap would remove nothing."), "")
-		sc.Lines = lines
-		return sc
-	}
-	lines = append(lines,
-		"  "+paint(Faint, cell("over the cap", 18))+paint(Strong, commas(t.Blocks)+" block(s)"),
-		"  "+paint(Faint, cell("removable", 18))+commas(t.RemovedBytes)+" bytes",
-		"  "+paint(Faint, cell("prompt tokens", 18))+paint(Good, commas(t.RemovedPromptTokens)+" once resending is counted"),
-		"",
-		paint(Faint, fitTo("  Removing a result the agent later needs costs a re-read, and that is counted.", Cols())))
-	sc.Lines = lines
-	return sc
-}
-
 // ModelScreen reports what the corpus ran on, and what a switch would compare against.
 //
 // Without a target the screen is Unavailable rather than Example: naming a model
