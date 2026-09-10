@@ -1,11 +1,6 @@
 package analysis
 
-import (
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-)
+import "testing"
 
 // The fit describes prose, and something applies it to schemas.
 //
@@ -85,36 +80,25 @@ func TestDM3_OnlyTheClaimDiffersNotTheArithmetic(t *testing.T) {
 	}
 }
 
-// DM4: nothing hand-rolls a Figure with the fit's error on out-of-domain bytes.
+// DM4 is deleted, not weakened.
 //
-// DM1-DM3 add a method. A method nobody calls is the built-but-unwired shape
-// this repository keeps finding, and the advisor's line is the one that made
-// this a defect rather than a doc comment:
+// It read internal/advisor/advisor.go for the strings "fit.RelativeError" and
+// "EstimateOutsideFit" and treated what it found as proof. An audit defeated
+// both halves at once: the banned names are SUBSTRINGS, so any other receiver
+// spelling walks past, and the required call is satisfied by the COMMENT that
+// names it even when the call itself is gone. #121's defect was restored under
+// a different variable name with the whole tree green.
 //
-//	analysis.Figure{Value: tokens, Error: int(float64(tokens) * fit.RelativeError)}
+// No grep survives that. The property is about what the figure CLAIMS, not how
+// the line is written, and the next spelling always escapes.
 //
-// It bypasses Figure() entirely and attaches the prose spread by hand. This
-// reads the advisor's source and fails if that construction comes back, because
-// the alternative — asserting on a number the screen prints — would pass just
-// as well if somebody rebuilt the same Figure a different way.
-func TestDM4_TheAdvisorDoesNotBorrowTheProseSpread(t *testing.T) {
-	b, err := os.ReadFile(filepath.Join("..", "advisor", "advisor.go"))
-	if err != nil {
-		t.Fatalf("reading the caller: %v", err)
-	}
-	src := string(b)
-	for _, banned := range []string{
-		"fit.RelativeError",
-		"f.RelativeError",
-	} {
-		if strings.Contains(src, banned) {
-			t.Errorf("internal/advisor/advisor.go still reaches for %s. That spread was "+
-				"measured over prose turns, and the bytes it is being applied to are the "+
-				"tool definitions Fit excludes for being denser than prose.", banned)
-		}
-	}
-	if !strings.Contains(src, "EstimateOutsideFit") {
-		t.Error("the advisor does not call EstimateOutsideFit, so the method added here " +
-			"is unreachable and the caller still sizes schemas with the prose fit")
-	}
-}
+// It could not be asserted behaviourally at the time, which is the finding
+// under the finding: note() took an analysis.Figure and kept only its Value, so
+// ErrorMeasured died at the observation boundary and there was nothing left to
+// observe. evidence carries it now, and
+// internal/advisor's MN6 asserts it through Observe — the same mutation that
+// walked past DM4 fails MN6 by name.
+//
+// A grep replaced by a behavioural test in another package is worth a note
+// here, because the obvious repair is to strengthen the grep and that repair
+// does not work.
