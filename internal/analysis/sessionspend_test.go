@@ -148,3 +148,36 @@ func nearly(a, b float64) bool {
 	}
 	return d < 1e-9
 }
+
+// SS6: no session is not a crash and not a cost.
+//
+// forEachSession hands its callback a nil session when a transcript fails to
+// parse — 9 of 1,812 files on the corpus this was written against — so a nil
+// here is an ordinary first-class state rather than a defensive flourish, and
+// it is the state in which returning a cost would be worst.
+func TestSS6_ANilSessionCostsNothingAndSaysSo(t *testing.T) {
+	got := AsRunSession(nil)
+	if got.CostUSD != 0 || got.Requests != 0 || got.Lanes != 0 {
+		t.Errorf("a nil session priced $%.6f over %d requests in %d lanes",
+			got.CostUSD, got.Requests, got.Lanes)
+	}
+	if got.Name != "as-run" {
+		t.Errorf("a nil session produced a result named %q, which a caller "+
+			"matching on the name would skip", got.Name)
+	}
+	if reps := AnalyzeEveryLane(nil); reps != nil {
+		t.Errorf("a nil session produced %d lane report(s)", len(reps))
+	}
+}
+
+// SS7: a session with no lanes at all is zero, not a panic.
+//
+// ParseClaudeCode refuses a transcript with no lanes, so this arrives only
+// from a caller building one — which the corpus tooling does.
+func TestSS7_ASessionWithNoLanesIsZero(t *testing.T) {
+	got := AsRunSession(&transcript.Session{ID: "empty", Source: transcript.SourceTranscript})
+	if got.Requests != 0 || got.Lanes != 0 || got.CostUSD != 0 {
+		t.Errorf("an empty session priced $%.6f over %d requests in %d lanes",
+			got.CostUSD, got.Requests, got.Lanes)
+	}
+}

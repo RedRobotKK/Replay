@@ -45,16 +45,16 @@ func AsRunSession(s *transcript.Session) SessionSpend {
 	if s == nil {
 		return out
 	}
+	// No nil checks on the lanes or the requests. The parser appends only what
+	// it constructed — session.Lane never yields a nil, and a request that
+	// failed to build is counted in Skipped and never appended — so a nil here
+	// is a state nothing produces. AsRun, which this generalises, does not
+	// check for one either. guard-reachability reported both as unobserved and
+	// it was right: they were guarding against nothing.
 	seen := make(map[string]bool)
 	for _, lane := range s.Lanes {
-		if lane == nil {
-			continue
-		}
 		out.Lanes++
 		for _, req := range lane.Requests {
-			if req == nil {
-				continue
-			}
 			switch {
 			case req.ID == "":
 				out.Unidentified++
@@ -85,9 +85,6 @@ func AnalyzeEveryLane(s *transcript.Session) []*LaneReport {
 	}
 	out := make([]*LaneReport, 0, len(s.Lanes))
 	for _, lane := range s.Lanes {
-		if lane == nil {
-			continue
-		}
 		out = append(out, AnalyzeLane(s, lane))
 	}
 	return out

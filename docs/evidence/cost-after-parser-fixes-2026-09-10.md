@@ -8,7 +8,6 @@
 > both arms of this comparison used the same pricing, so the comparison stands.
 > What does not survive is any absolute total quoted from it.
 
-
 **What this measures:** whether merging #133, #136, #137 and #138 changed any
 number `replay cost` prints, measured by running the pre-merge and post-merge
 binaries over the same corpus at the same moment.

@@ -253,6 +253,42 @@ type costSummary struct {
 // lives, and a median with a p90 beside it describes the actual distribution of
 // work. The avoidable share is a share of what was priced, never of what was
 // merely walked past.
+// requestIDs collects a session's request ids across every lane, marking each
+// as seen and counting the ones another file already carried.
+//
+// Every lane, not just the one MainLane picks. Pricing the main lane alone
+// dropped 36.2% of this corpus's requests, concentrated in the fan-out
+// sessions where the money is; see
+// docs/evidence/main-lane-pricing-2026-09-10.md.
+//
+// A request carrying no id is skipped rather than keyed on the empty string.
+// The Claude Code parser cannot produce one — it groups assistant lines BY
+// request id and drops those without — but the ledger and the Codex reader are
+// not bound by that, and keying them all on "" would collapse every anonymous
+// request in the corpus into one and report the rest as duplicates of it. The
+// overlap note would then publish a re-render rate that is an artefact of the
+// key. Such a request is still priced: AsRunSession counts it, because absence
+// is not the same as already-seen.
+//
+// Split out of the walk so that branch can be reached from a test at all.
+func requestIDs(session *transcript.Session, seen map[string]bool) (ids []string, total, duplicated int) {
+	for _, lane := range session.Lanes {
+		for _, r := range lane.Requests {
+			if r.ID == "" {
+				continue
+			}
+			ids = append(ids, r.ID)
+			total++
+			if seen[r.ID] {
+				duplicated++
+				continue
+			}
+			seen[r.ID] = true
+		}
+	}
+	return ids, total, duplicated
+}
+
 func summarise(units []costUnit) costSummary {
 	var s costSummary
 	if len(units) == 0 {
@@ -516,28 +552,9 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		if rep.Lane != nil && len(rep.Lane.Requests) > 0 {
 			model = rep.Lane.Requests[0].Model
 		}
-		var reqIDs []string
-		// Every lane, not just the one MainLane picks. Pricing the main lane
-		// alone dropped 36.2% of this corpus's requests, concentrated in the
-		// fan-out sessions where the money is; see
-		// docs/evidence/main-lane-pricing-2026-09-10.md.
-		for _, lane := range session.Lanes {
-			if lane == nil {
-				continue
-			}
-			for _, r := range lane.Requests {
-				if r == nil || r.ID == "" {
-					continue
-				}
-				reqIDs = append(reqIDs, r.ID)
-				totalReq++
-				if seenReq[r.ID] {
-					duplicated++
-					continue
-				}
-				seenReq[r.ID] = true
-			}
-		}
+		reqIDs, counted, dup := requestIDs(session, seenReq)
+		totalReq += counted
+		duplicated += dup
 		asRun := analysis.AsRunSession(session)
 		if asRun.CostUSD <= 0 {
 			unpriced++

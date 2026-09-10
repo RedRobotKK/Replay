@@ -8,7 +8,6 @@
 > absolute figure below is a floor, not a total. Corrected corpus total:
 > **$10,503**; corrected avoidable: **$297.25** over 61.5M tokens.
 
-
 **What this measures:** where the corpus-wide avoidable figure actually sits.
 The headline is a single percentage over 116 sessions; this asks how it is
 distributed, because a rate that is uniform and a rate that is four sessions
