@@ -112,6 +112,17 @@ type evidence struct {
 	share     float64
 	tokens    int
 	estimated bool
+	// errorMeasured carries analysis.Figure.ErrorMeasured through to the
+	// aggregate, because it was being thrown away here.
+	//
+	// note() takes a Figure and kept only its Value, so the one thing that
+	// distinguishes a spread measured on this content from one borrowed off
+	// different content stopped at this line. That is why the guard on the
+	// unused-tools figure had to be a source grep reading advisor.go for the
+	// name of a function — there was no behaviour left to assert. An audit
+	// then defeated the grep with a rename, and restored the defect #121
+	// exists to fix with the whole tree green.
+	errorMeasured bool
 	// reads counts file reads for hot-file targets.
 	reads int
 }
@@ -210,7 +221,8 @@ func (ob *Observation) note(kind Kind, target string, tokens analysis.Figure, es
 	if tokens.Value <= 0 {
 		return
 	}
-	ob.targets[key(kind, target)] = evidence{at: ob.at, share: share, tokens: tokens.Value, estimated: estimated}
+	ob.targets[key(kind, target)] = evidence{at: ob.at, share: share, tokens: tokens.Value,
+		estimated: estimated, errorMeasured: tokens.ErrorMeasured}
 }
 
 // noteReads records a file read at any size; the corpus decides whether

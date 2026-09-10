@@ -104,20 +104,37 @@ func TestH2_TheRealAdviceFileIsUntouched(t *testing.T) {
 		t.Skip("no HOME in the environment to be protected from")
 	}
 	theirs := filepath.Join(realHome, ".replay", adviceFileName)
+
+	// Absence is a state to defend, not a reason to skip.
+	//
+	// This test used to t.Skipf when the file did not exist, which is every CI
+	// runner — so on the only machine where nobody is watching, the guard
+	// asserted nothing. An audit built the case that proves it matters: a
+	// variant of `advise` resolving ~ at package-init, before TestMain can
+	// redirect it, leaves H1 passing, writes to the runner's real home, and
+	// this test skipped past it with the package green.
+	//
+	// So there are two properties, not one, and the second is the CI one:
+	// a file that exists must be unchanged, and a file that does not exist
+	// must not be created.
 	before, err := os.Stat(theirs)
-	if err != nil {
-		t.Skipf("no advice file on this machine to protect: %v", err)
-	}
+	existed := err == nil
 
 	dir := filepath.Join("..", "..", "internal", "transcript", "testdata")
 	var out, errb discard
 	_ = run([]string{"advise", dir}, &out, &errb)
 
 	after, err := os.Stat(theirs)
-	if err != nil {
+	switch {
+	case !existed:
+		if err == nil {
+			t.Errorf("running `advise` in a test CREATED %s (%d bytes). The suite writes "+
+				"to the machine's real home, and on a runner with no prior file this is "+
+				"the only assertion that can see it.", theirs, after.Size())
+		}
+	case err != nil:
 		t.Fatalf("running advise removed the reader's advice file: %v", err)
-	}
-	if !after.ModTime().Equal(before.ModTime()) || after.Size() != before.Size() {
+	case !after.ModTime().Equal(before.ModTime()) || after.Size() != before.Size():
 		t.Errorf("running `advise` in a test rewrote %s\n  was %d bytes at %s\n  now %d bytes at %s",
 			theirs, before.Size(), before.ModTime(), after.Size(), after.ModTime())
 	}
