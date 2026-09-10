@@ -1,0 +1,7 @@
+mode: count
+tiny/tiny.go:4.23,5.11 1 1
+tiny/tiny.go:5.11,7.3 1 1
+tiny/tiny.go:8.2,8.10 1 0
+tiny/tiny.go:12.25,13.11 1 1
+tiny/tiny.go:13.11,15.3 1 0
+tiny/tiny.go:16.2,16.10 1 1

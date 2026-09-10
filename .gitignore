@@ -7,7 +7,13 @@
 
 # Go
 /vendor/
-coverage.*
+# Coverage artefacts, named exactly. `coverage.*` was the rule here and it
+# matched at any depth, so internal/guardcheck/coverage.go — a source file —
+# was silently untracked: it built locally because it sat on disk, and would
+# have reached CI as a package missing a file.
+coverage.out
+coverage.html
+coverage.txt
 
 # Editors and OS
 .DS_Store
