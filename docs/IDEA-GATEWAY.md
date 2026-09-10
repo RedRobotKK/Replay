@@ -133,7 +133,9 @@ allowable (ADR-0018).
 | Reasoning-token double-bill ledger | **LIKELY INELIGIBLE** — mathematical concept *and* fundamental economic practice. *Electric Power Group* controls. | None found | US 12,699,595 (Mavvrik) meters LLM input/output tokens against a quota; US 8,380,736 (Microsoft) claims double-billing detection in a metered stream | **PUBLISH** |
 | Compaction invoice | **CLOSE** — best pro-eligibility story of the cost line, via *Visual Memory v. NVIDIA*: it measures a caching subsystem. Fails as drafted because it reports and stops. | None. "Context compaction" is essentially absent from the patent record. | **US 9,619,397 (IBM)** — computes probability an item is needed again AND the cost of re-obtaining it, evicts on that weight. Nearly mechanical mapping. | **FILE (only if commercialising)** |
 | Recoverable-token report | **LIKELY INELIGIBLE.** "Without modifying the agent" writes the practical application out of the claim on its face. | None found | US 10,133,557 (Mentor) analyses a trace for repeated activity + estimated gain; and **compiler liveness analysis** — dead-store elimination and dead-value analysis, decades of textbook art | **PUBLISH** |
-| `CACHE-KEEPALIVE`, `CACHE-DEADPOINT`, three-way miss attribution | Not screened (third examiner still running) | — | CDN cache pre-warming, TTL refresh | PENDING |
+| `CACHE-KEEPALIVE` — TTL-optimal client cache warming | **CLOSE.** Eligible only if drafted around avoided prefill computation and latency. Drafted around tokens billed, ineligible. | None. Notably **US12596764 (OpenAI, prompt caching) contains zero occurrences of "idle", "keep-alive", "periodic" or "refresh"** — grepped. | **US7693084 (Microsoft, 2007)** — determine an unknown expiry timeout, set keep-alive to the largest safe value below it, emit during idle. Structurally identical, 18 years early. Plus **US9292073 (Intel)**, break-even time from a cost ratio between two states. | **PUBLISH** |
+| `CACHE-DEADPOINT` — LCP vs declared breakpoint | **LIKELY INELIGIBLE** — weakest of the three. Collect, analyse, display, then advise a human. *Electric Power Group* almost verbatim. | **US11792294 (Cloudflare, priority 2015)** computes the longest common prefix *to determine where the cacheable prefix boundary should be placed*. The heart of it, a decade early. | Cloudflare + OpenAI's declared-prefix cache | **PUBLISH** |
+| Three-way cache-miss attribution | **LIKELY INELIGIBLE, strongest rejection in the set.** Also vulnerable as a mental process — an engineer does these three comparisons by eye. | **US12541443 (UMass)** classifies each miss into exactly one of three types. And the textbook 3C model (compulsory/capacity/conflict) is late-1980s art — flagged NOT VERIFIED, no NPL search was possible, but an examiner with NPL access would cite it. | **Akamai US11445225 / US11743513** — and the motivation to combine is *printed in Akamai's own specification*: root-cause attribution of cache underperformance in order to tune configuration. | **PUBLISH** |
 
 ### The structural finding
 
@@ -166,6 +168,18 @@ to notice its absence — a failure mode that is new, common, and expensive.
 Narrow, and the only limitation in the set that is both non-obvious on the
 record searched and commercially load-bearing.
 
+### The substrate belongs to the counterparty
+
+**US12596764 B2 — "Prompt caching in generative response engines", OpenAI OpCo LLC**, priority 2025-03-12, issued 2026-04-07. Verified by full-text fetch: it discloses prefix caching, hash-based routing to a warm instance, an explicit caching window, cache-read token counts returned in the response, and the cached-token discount. **OpenAI is already patenting the server side of exactly this, including the pricing mechanics.**
+
+Anthropic does hold US patents (US12619815, computer-use agents, verified) but **none surfaced on prompt caching**.
+
+Every cache idea here depends on provider-defined TTL, breakpoint and pricing semantics. Those can be changed in a changelog entry, unilaterally and without notice, and a claim built on them would then cover nothing anyone would build.
+
+### Infringement would be undetectable
+
+The keepalive interval and the miss-attribution logic execute wholly client-side, on a third party's laptop. An unenforceable claim is a decoration. This applies to the cost line generally and is the practical reason `PUBLISH` beats `FILE` even where a claim might issue.
+
 ### Two flags before anyone spends money
 
 1. **The disclosure clock is running and may already have run.** A public
@@ -183,12 +197,57 @@ record searched and commercially load-bearing.
 
 Both examiners recorded the same gaps, and they are recorded here rather than
 papered over. `ppubs.uspto.gov` requires an authenticated session and **was not
-searched**; Google Patents bot-blocked the host and was reached only through a
-proxy or through FPO. Coverage therefore rests on one index. Several promising
-numbers came back **NOT VERIFIED** and are excluded rather than cited. This is
-a screen, not a clearance.
+searched** by any of the three; Google Patents bot-blocked every host and was
+reached only through a proxy or through FreePatentsOnline. Espacenet and
+PATENTSCOPE returned 403. Coverage is therefore **US-only**, resting on one or
+two indices.
+
+**No systematic non-patent-literature search was possible in any of the three
+screens**, and for the cost line the NPL is the more dangerous art: provider
+documentation, OpenTelemetry GenAI conventions, and the observability vendors
+have described token-class accounting publicly since 2023. An examiner will
+miss that. An IPR petitioner will not.
+
+One examiner validated its search tool with a nonsense control query after
+catching it returning stale cached results — negative results are trustworthy
+within US patent text and are not evidence of global novelty. Several promising
+numbers came back **NOT VERIFIED** and are excluded rather than cited.
+
+This is a screen, not a clearance.
 
 ---
+
+## 5b. All nine screened: the answer
+
+**Eight PUBLISH, one FILE, and the FILE is narrow.**
+
+Nothing in the cost line is patentable. Two of three are likely ineligible
+under §101 as pure reporting, the third is close and only if drafted around
+avoided computation rather than tokens billed, and all three fall to §103 art
+that predates the LLM field by a decade or more — Microsoft's 2007 NAT
+keep-alive, Cloudflare's 2015 longest-common-prefix boundary placement,
+Akamai's cache root-cause attribution with the motivation printed in its own
+specification.
+
+The test-adequacy line is eligible — mutate, compile, execute, instrument is
+technical throughout, and post-*Alice* grants exist in that art unit — and it is
+foreclosed by publication instead. Meta published three times and patented
+none of it.
+
+The one thing worth filing is the **oracle-strength interlock**, and only if
+there is a product beyond the CLI. A second candidate exists — the narrow
+keepalive refresh construction, a truncated strict-prefix request with
+generation suppressed so the provider extends the TTL on a cache-read rather
+than a cache-write charge — but it is defined entirely by one provider's
+current billing semantics and would be mooted by a changelog entry.
+
+**What to do instead, and it is not a consolation prize.** The genuine risk to
+a small open-source tool is somebody else patenting this and asserting it. A
+dated defensive publication forecloses that worldwide, for essentially nothing:
+a timestamped post plus a filing to IP.com's Prior Art Database or Technical
+Disclosure Commons. Given that the FinOps and observability portfolios are
+actively expanding into token metering, and that OpenAI already holds
+US12596764 on the server side of prompt caching, this is not theoretical.
 
 ## 6. Standing rules
 
