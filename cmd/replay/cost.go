@@ -281,6 +281,42 @@ type costSummary struct {
 // lives, and a median with a p90 beside it describes the actual distribution of
 // work. The avoidable share is a share of what was priced, never of what was
 // merely walked past.
+// requestIDs collects a session's request ids across every lane, marking each
+// as seen and counting the ones another file already carried.
+//
+// Every lane, not just the one MainLane picks. Pricing the main lane alone
+// dropped 36.2% of this corpus's requests, concentrated in the fan-out
+// sessions where the money is; see
+// docs/evidence/main-lane-pricing-2026-09-10.md.
+//
+// A request carrying no id is skipped rather than keyed on the empty string.
+// The Claude Code parser cannot produce one — it groups assistant lines BY
+// request id and drops those without — but the ledger and the Codex reader are
+// not bound by that, and keying them all on "" would collapse every anonymous
+// request in the corpus into one and report the rest as duplicates of it. The
+// overlap note would then publish a re-render rate that is an artefact of the
+// key. Such a request is still priced: AsRunSession counts it, because absence
+// is not the same as already-seen.
+//
+// Split out of the walk so that branch can be reached from a test at all.
+func requestIDs(session *transcript.Session, seen map[string]bool) (ids []string, total, duplicated int) {
+	for _, lane := range session.Lanes {
+		for _, r := range lane.Requests {
+			if r.ID == "" {
+				continue
+			}
+			ids = append(ids, r.ID)
+			total++
+			if seen[r.ID] {
+				duplicated++
+				continue
+			}
+			seen[r.ID] = true
+		}
+	}
+	return ids, total, duplicated
+}
+
 func summarise(units []costUnit) costSummary {
 	var s costSummary
 	if len(units) == 0 {
@@ -547,27 +583,10 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		if rep.Lane != nil && len(rep.Lane.Requests) > 0 {
 			model = rep.Lane.Requests[0].Model
 		}
-		var reqIDs []string
-		if rep.Lane != nil {
-			for _, r := range rep.Lane.Requests {
-				if r.ID == "" {
-					continue
-				}
-				reqIDs = append(reqIDs, r.ID)
-				totalReq++
-				if seenReq[r.ID] {
-					duplicated++
-					continue
-				}
-				seenReq[r.ID] = true
-			}
-		}
-		var asRun analysis.PolicyResult
-		for _, p := range rep.Policies() {
-			if p.Name == "as-run" {
-				asRun = p
-			}
-		}
+		reqIDs, counted, dup := requestIDs(session, seenReq)
+		totalReq += counted
+		duplicated += dup
+		asRun := analysis.AsRunSession(session)
 		if asRun.CostUSD <= 0 {
 			unpriced++
 			return nil
@@ -579,20 +598,31 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			Model:    model,
 			Requests: asRun.Requests,
 			CostUSD:  asRun.CostUSD,
-			Breaks:   len(rep.Breaks),
-			Repeated: rep.ReReads.Repeated,
 		}
-		for _, e := range rep.Errors {
-			u.Errored += e.Count
+		// Breaks, re-reads, errors and the avoidable deficit are counted over
+		// every lane too. Fixing the dollar figure and leaving these on the
+		// main lane would report a session's whole cost beside a fraction of
+		// its causes — the same defect one column over, and the more
+		// misleading direction: a total that tripled beside an unchanged
+		// avoidable figure reads as "the waste got proportionally smaller".
+		//
+		// One analysis pass, reused for all four, because a second walk of a
+		// seventeen-lane session is the expensive thing here.
+		deficit := 0
+		for _, lr := range analysis.AnalyzeEveryLane(session) {
+			u.Breaks += len(lr.Breaks)
+			u.Repeated += lr.ReReads.Repeated
+			for _, e := range lr.Errors {
+				u.Errored += e.Count
+			}
+			for _, br := range lr.Breaks {
+				deficit += br.Deficit
+			}
 		}
 		// Price only what was demonstrably spent twice. A cache break's deficit
 		// is tokens the provider re-billed, which is spend that already
 		// happened, not a projection of what a different layout might save.
 		if price, ok := cachemodel.PriceFor(model); ok {
-			var deficit int
-			for _, br := range rep.Breaks {
-				deficit += br.Deficit
-			}
 			u.AvoidableUSD = float64(deficit) / 1_000_000 * price.InputPerMTok
 			u.AvoidableTokens = deficit
 		}

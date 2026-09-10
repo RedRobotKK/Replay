@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/RedRobotKK/Replay/internal/facts"
 
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -51,11 +53,107 @@ type surfaceBurn struct {
 	// again, where the surface reports enough to say.
 	cached    float64
 	hasCached bool
+	// costUSD is what the priced part of this surface cost at list price, and
+	// pricedReqs / unpricedReqs say how much of the surface that covers.
+	//
+	// The token columns beside it are famously not addable — Anthropic
+	// partitions the cached share out of the prompt, Codex nests it inside,
+	// Ollama excludes it. All true, and all about tokens. Dollars are a common
+	// unit, and pricing is the thing that makes these surfaces comparable at
+	// all, which is what a report headed "what your agents are consuming" is
+	// for.
+	//
+	// Both counters are kept because a total over part of a surface is not a
+	// total, and a column that shows one without saying so is the same defect
+	// this file already fixed one column to the left.
+	costUSD      float64
+	pricedReqs   int
+	unpricedReqs int
+	// localOnly marks a surface nobody bills for. It is a different cell from
+	// "no price installed": one is free, the other is unknown, and only one of
+	// them has real money behind it.
+	localOnly bool
 	// quota is the live reading, where one exists at all.
 	quota    string
 	first    time.Time
 	last     time.Time
 	problems []string
+}
+
+// pricingNotes says what the cost column is not covering.
+//
+// Split out of the render loop so each branch can be reached from a test. It
+// used to be two conditionals and a pair of counters inside the loop that
+// prints the table, which meant the sentence a reader gets about missing spend
+// was decided by code no test entered — reported by guard-reachability, on a
+// column added specifically to stop unpriced spend being invisible.
+//
+// A surface nobody bills for is not unpriced. Ollama runs locally and its
+// absence from the total is correct, so counting it as missing would send a
+// reader looking for a rules document that would change nothing.
+func pricingNotes(surfaces []surfaceBurn) []string {
+	priced, unpriced := 0, 0
+	for _, s := range surfaces {
+		switch {
+		case s.requests == 0:
+		case s.pricedReqs > 0:
+			priced++
+		case !s.localOnly:
+			unpriced++
+		}
+	}
+	if unpriced == 0 {
+		return nil
+	}
+	out := []string{
+		"",
+		fmt.Sprintf("  %d surface(s) were read and could not be priced. A rules document can", unpriced),
+		"  carry rows for any provider - each row names its own - and none are",
+		"  installed for these. Their spend is real and is not in any figure above.",
+		"    next: replay rules --update <file|https URL>",
+	}
+	// Only worth saying when there is something to compare against. With one
+	// priced surface and one unpriced, the column is a ranking of one.
+	if priced > 0 {
+		out = append(out, "",
+			"  Until then the cost column compares one surface against nothing, which is",
+			"  worth knowing before reading it as a ranking.")
+	}
+	return out
+}
+
+// costCell renders the cost column, and refuses to print a number it cannot
+// stand behind.
+//
+// Four states, because there are four different things that can be true and
+// collapsing any two of them misinforms: not read at all, read but nothing
+// prices it, read and nobody bills for it, and priced. The third and second
+// are the pair that matters — Ollama runs locally and nobody invoices for it,
+// while Codex has a real bill Replay cannot read, and rendering both as "$0.00"
+// or both as a dash says the same thing about opposite situations.
+func costCell(s surfaceBurn) string {
+	switch {
+	case s.requests == 0:
+		return "not read"
+	case s.localOnly:
+		return "no bill"
+	case s.pricedReqs == 0:
+		return "no price"
+	case s.unpricedReqs > 0:
+		// The share, not the counts: the counts are what a partial total needs
+		// to be honest and they do not fit a column beside four others. What
+		// fits is the fact that it IS partial, which is the part a reader must
+		// not miss.
+		// Floored. 60,370 of 60,402 is 99.95%, and %.0f prints that as "100%"
+		// beside a total that is not complete — the same round-up-to-a-false-
+		// claim the outlier note carries a comment about. A partial figure
+		// reporting full coverage is worse than no figure, because the reader
+		// stops looking for the missing part.
+		cover := math.Floor(float64(s.pricedReqs) / float64(s.pricedReqs+s.unpricedReqs) * 100)
+		return fmt.Sprintf("$%.2f (%.0f%%)", s.costUSD, cover)
+	default:
+		return fmt.Sprintf("$%.2f", s.costUSD)
+	}
 }
 
 // perHour is the burn rate over the window actually observed, which is the
@@ -87,24 +185,31 @@ func runBurn(args []string, stdout, stderr io.Writer) error {
 	surfaces = append(surfaces, burnClaudeCode(home, *dir))
 
 	_, _ = fmt.Fprintf(stdout, "\n  %s\n\n", "What your agents are consuming, per surface")
-	_, _ = fmt.Fprintf(stdout, "  %-14s %9s %14s  %-22s %s\n",
-		"surface", "requests", "tokens", "what that counts", "quota")
-	_, _ = fmt.Fprintf(stdout, "  %-14s %9s %14s  %-22s %s\n",
+	const hdr = "  %-14s %9s %14s %17s  %-22s %s\n"
+	_, _ = fmt.Fprintf(stdout, hdr,
+		"surface", "requests", "tokens", "cost", "what that counts", "quota")
+	_, _ = fmt.Fprintf(stdout, hdr,
 		strings.Repeat("-", 14), strings.Repeat("-", 9), strings.Repeat("-", 14),
-		strings.Repeat("-", 22), strings.Repeat("-", 12))
+		strings.Repeat("-", 17), strings.Repeat("-", 22), strings.Repeat("-", 12))
 	for _, s := range surfaces {
 		tok := "not read"
 		if s.requests > 0 {
 			tok = comma(s.tokens)
 		}
-		_, _ = fmt.Fprintf(stdout, "  %-14s %9s %14s  %-22s %s\n",
-			s.name, commaOrDash(s.requests), tok, s.unit, s.quota)
+		_, _ = fmt.Fprintf(stdout, hdr,
+			s.name, commaOrDash(s.requests), tok, costCell(s), s.unit, s.quota)
 	}
 
-	_, _ = fmt.Fprintf(stdout, "\n  These columns are not addable. Anthropic reports the prompt with the\n")
+	_, _ = fmt.Fprintf(stdout, "\n  The token columns are not addable. Anthropic reports the prompt with the\n")
 	_, _ = fmt.Fprintf(stdout, "  cached share partitioned out of it, Codex reports it nested inside, and\n")
 	_, _ = fmt.Fprintf(stdout, "  Ollama reports the work it performed with the cached prefix excluded\n")
 	_, _ = fmt.Fprintf(stdout, "  entirely. Summing them would produce a figure with no unit.\n\n")
+	_, _ = fmt.Fprintf(stdout, "  The cost column is addable, and that is what it is for. It is also the\n")
+	_, _ = fmt.Fprintf(stdout, "  column that is mostly empty.\n")
+	for _, l := range pricingNotes(surfaces) {
+		_, _ = fmt.Fprintln(stdout, l)
+	}
+	_, _ = fmt.Fprintln(stdout)
 
 	for _, s := range surfaces {
 		if s.requests == 0 {
@@ -205,6 +310,10 @@ func burnOllama(home, dir string) surfaceBurn {
 	s := surfaceBurn{
 		name: "ollama", unit: "work done, no bill",
 		quota: "none exists",
+		// Nobody invoices for a local model. That is a different cell from a
+		// surface whose price is merely unknown, and the difference is the
+		// whole reason costCell has four states.
+		localOnly: true,
 	}
 	pat := filepath.Join(home, ".ollama", "logs", "server*.log")
 	if dir != "" {
@@ -288,6 +397,16 @@ func burnClaudeCode(home, dir string) surfaceBurn {
 			s.requests += sess.RequestCount()
 			for _, lane := range sess.Lanes {
 				for _, r := range lane.Requests {
+					// Priced per request, at the row in force for its model.
+					// A request whose model nothing prices is counted as
+					// unpriced rather than as free: excluded and disclosed is
+					// the rule this report already keeps for tokens.
+					if p, ok := cachemodel.PriceFor(r.Model); ok {
+						s.costUSD += cachemodel.CostUSD(r.Usage, p)
+						s.pricedReqs++
+					} else {
+						s.unpricedReqs++
+					}
 					input += r.Usage.Input
 					cacheRead += r.Usage.CacheRead
 					cacheWrite += r.Usage.CacheCreation
