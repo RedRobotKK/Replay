@@ -517,9 +517,16 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			model = rep.Lane.Requests[0].Model
 		}
 		var reqIDs []string
-		if rep.Lane != nil {
-			for _, r := range rep.Lane.Requests {
-				if r.ID == "" {
+		// Every lane, not just the one MainLane picks. Pricing the main lane
+		// alone dropped 36.2% of this corpus's requests, concentrated in the
+		// fan-out sessions where the money is; see
+		// docs/evidence/main-lane-pricing-2026-09-10.md.
+		for _, lane := range session.Lanes {
+			if lane == nil {
+				continue
+			}
+			for _, r := range lane.Requests {
+				if r == nil || r.ID == "" {
 					continue
 				}
 				reqIDs = append(reqIDs, r.ID)
@@ -531,12 +538,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 				seenReq[r.ID] = true
 			}
 		}
-		var asRun analysis.PolicyResult
-		for _, p := range rep.Policies() {
-			if p.Name == "as-run" {
-				asRun = p
-			}
-		}
+		asRun := analysis.AsRunSession(session)
 		if asRun.CostUSD <= 0 {
 			unpriced++
 			return nil
@@ -548,20 +550,31 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			Model:    model,
 			Requests: asRun.Requests,
 			CostUSD:  asRun.CostUSD,
-			Breaks:   len(rep.Breaks),
-			Repeated: rep.ReReads.Repeated,
 		}
-		for _, e := range rep.Errors {
-			u.Errored += e.Count
+		// Breaks, re-reads, errors and the avoidable deficit are counted over
+		// every lane too. Fixing the dollar figure and leaving these on the
+		// main lane would report a session's whole cost beside a fraction of
+		// its causes — the same defect one column over, and the more
+		// misleading direction: a total that tripled beside an unchanged
+		// avoidable figure reads as "the waste got proportionally smaller".
+		//
+		// One analysis pass, reused for all four, because a second walk of a
+		// seventeen-lane session is the expensive thing here.
+		deficit := 0
+		for _, lr := range analysis.AnalyzeEveryLane(session) {
+			u.Breaks += len(lr.Breaks)
+			u.Repeated += lr.ReReads.Repeated
+			for _, e := range lr.Errors {
+				u.Errored += e.Count
+			}
+			for _, br := range lr.Breaks {
+				deficit += br.Deficit
+			}
 		}
 		// Price only what was demonstrably spent twice. A cache break's deficit
 		// is tokens the provider re-billed, which is spend that already
 		// happened, not a projection of what a different layout might save.
 		if price, ok := cachemodel.PriceFor(model); ok {
-			var deficit int
-			for _, br := range rep.Breaks {
-				deficit += br.Deficit
-			}
 			u.AvoidableUSD = float64(deficit) / 1_000_000 * price.InputPerMTok
 			u.AvoidableTokens = deficit
 		}
