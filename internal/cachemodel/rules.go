@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -49,7 +50,22 @@ type Rules struct {
 // ModelRule is one row of the table: what a model id matches, its caching
 // floor, and its prices.
 type ModelRule struct {
-	Match         string  `json:"match"`
+	Match string `json:"match"`
+	// Provider names whose published numbers this row carries. Empty means the
+	// document's own provider, so every single-provider document written
+	// before this field existed is unchanged.
+	//
+	// It exists because Replay reads four providers and could price one. The
+	// limit was not an unfilled table: Provider was a single string on the
+	// document, so one document held one publisher and there was nowhere to
+	// put a second. On the corpus this was written against that left
+	// 610,551,532 Codex tokens with no price and no way to give them one.
+	//
+	// A row's provider is not used to select it — model ids are already
+	// distinct across providers and Match does the selecting. It is used to
+	// say, on a report carrying a dollar figure, whose numbers produced it and
+	// when they were read.
+	Provider      string  `json:"provider,omitempty"`
 	MinPrefix     int     `json:"minPrefix"`
 	InputPerMTok  float64 `json:"inputPerMTok,omitempty"`
 	OutputPerMTok float64 `json:"outputPerMTok,omitempty"`
@@ -71,6 +87,40 @@ type ModelRule struct {
 	// rate and is wrong on one side of the boundary whichever rate it picks.
 	EffectiveFrom  string `json:"effectiveFrom,omitempty"`
 	EffectiveUntil string `json:"effectiveUntil,omitempty"`
+}
+
+// ProviderOr is the row's provider, falling back to the document's.
+func (m ModelRule) ProviderOr(r *Rules) string {
+	if m.Provider != "" {
+		return m.Provider
+	}
+	if r == nil {
+		return ""
+	}
+	return r.Provider
+}
+
+// Providers is every publisher this document carries, sorted and deduplicated.
+//
+// A report names the rules that produced its figures. On a document covering
+// two publishers, naming one of them is a provenance line that credits the
+// wrong source for half the numbers under it.
+func (r *Rules) Providers() []string {
+	if r == nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, m := range r.Models {
+		p := m.ProviderOr(r)
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // windowContains reports whether this row applies at t.
@@ -218,6 +268,31 @@ func (r *Rules) validate() error {
 	}
 	if len(r.Models) == 0 {
 		return errors.New("no model rows: a rules file with nothing in it would silently disable pricing")
+	}
+	// Attribution is required only where it is ambiguous.
+	//
+	// A document that names no provider and whose rows name none either is the
+	// legacy single-provider shape — every document written before rows could
+	// carry a provider — and it is accepted unchanged. What is refused is a
+	// document where SOME rows name a publisher and others do not, with no
+	// document-level default to fall back on: there the unattributed rows
+	// belong to nobody, and a report carrying their dollar figures cannot say
+	// whose published numbers produced them.
+	if r.Provider == "" {
+		named, bare := 0, -1
+		for i, m := range r.Models {
+			if m.Provider != "" {
+				named++
+			} else if bare < 0 {
+				bare = i
+			}
+		}
+		if named > 0 && bare >= 0 {
+			return fmt.Errorf("model %d (%s): no provider, while %d other row(s) name one and "+
+				"the document names no default. A dollar figure has to be able to say whose "+
+				"published numbers produced it, and here this row's belong to nobody",
+				bare, r.Models[bare].Match, named)
+		}
 	}
 	if r.AccountDiscount < 0 || r.AccountDiscount >= 1 {
 		return fmt.Errorf("accountDiscount is %v; it is a multiplier strictly between 0 and 1, and a value outside that "+
