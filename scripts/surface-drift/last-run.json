@@ -65,6 +65,36 @@
   "note": ""
  },
  {
+  "surface": "ceiling",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "ceiling --day-ceiling",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "ceiling --flat-rate",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "ceiling --json",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "ceiling --metered",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "ceiling --subscription",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
   "surface": "diff",
   "verdict": "NEEDS ARGUMENT",
   "note": "refused with a usage message: correct, the harness invoked it bare"
@@ -375,7 +405,17 @@
   "note": "exit 0 on stdin EOF, which is the contract"
  },
  {
+  "surface": "corpus --contribute",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
   "surface": "corpus",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "corpus --contribute-dir",
   "verdict": "OK",
   "note": ""
  },
@@ -623,5 +663,20 @@
   "surface": "privacy --json",
   "verdict": "OK",
   "note": ""
+ },
+ {
+  "surface": "pool",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "pool --json",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "pool --pooled-at",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
  }
 ]

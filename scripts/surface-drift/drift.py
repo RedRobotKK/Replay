@@ -51,7 +51,7 @@ NEEDS_VALUE = {"screen": "cost", "color": "never", "cap": "2000", "to": "claude-
                "ledger": "__TMP__", "policy-file": "__TMP__", "project": "__TMP__",
                "mask-patterns": "__TMP__", "candidates": "512", "max-age": "1h",
                "prior": "0", "relative": "0.1", "resolution": "512", "confirm": "2",
-               "min": "0", "max": "65536", "max-probes": "1", "contribute-dir": "__TMP__"}
+               "min": "0", "max": "65536", "max-probes": "1", "contribute-dir": "__TMP__", "pooled-at": "2026-09-01"}
 
 
 def surfaces(cli_md):
@@ -146,9 +146,10 @@ def main():
             elif cmd == "prefix":
                 results.append(dict(surface=label, verdict="EXPECTED REFUSAL",
                                     note=f"exit {code} is the gate firing, which is the feature"))
-            elif "invalid usage" in low or "is required" in low or "unknown command" in low:
+            elif "invalid usage" in low or "is required" in low or "unknown command" in low or "not measured" in low:
                 # The classifier learns from what the surface printed. A command
-                # that refuses because it was handed no argument is behaving
+                # that refuses because it was handed no argument — or that prints
+                # NOT MEASURED because it was handed no data — is behaving
                 # correctly; calling that drift would report the harness's own
                 # mistake as the product's, which is how a check ends up
                 # measuring the person who wrote it.
