@@ -138,9 +138,23 @@ func homeStores() []store {
 // resolveStores expands the registry against a real directory, so a prefixed
 // entry like ledger also covers ledger-grok.
 func resolveStores(root string) []resolved {
+	out, _ := resolveStoresErr(root)
+	return out
+}
+
+// resolveStoresErr is resolveStores with the reason it found nothing.
+//
+// A nil slice means one of two things and they are not the same: the directory
+// is not there, or it is there and could not be read. `replay privacy` answers
+// "what do you hold about me", and reporting the second as the first is a false
+// absence in the one command where that matters most.
+func resolveStoresErr(root string) ([]resolved, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
-		return nil
+		// Absent and unreadable are different answers. os.IsNotExist is the
+		// only one that means "nothing here"; anything else means "I could not
+		// look", and privacy must not print the first for the second.
+		return nil, err
 	}
 	var out []resolved
 	for _, s := range homeStores() {
@@ -157,7 +171,7 @@ func resolveStores(root string) []resolved {
 			out = append(out, resolved{store: s, Actual: name, Full: filepath.Join(root, name)})
 		}
 	}
-	return out
+	return out, nil
 }
 
 // resolved is a registry entry matched to something that exists on disk.

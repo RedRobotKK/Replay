@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -205,4 +206,40 @@ func treeSnapshot(t *testing.T, root string) string {
 		return nil
 	})
 	return b.String()
+}
+
+// PV10: an unreadable ~/.replay is not reported as an empty one.
+//
+// resolveStores returned nil for both, and privacy printed "Replay has written
+// nothing to this machine" — a false absence claim in the command that answers
+// "what do you hold about me". A subject access request answered with silence
+// about a directory nobody could read is worse than an error.
+func TestPV10_AnUnreadableStoreIsNotReportedAsEmpty(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no Unix mode bits on this platform; a directory cannot be made unreadable here")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("running as root, which can read anything")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	root := filepath.Join(home, ".replay")
+	if err := os.MkdirAll(filepath.Join(root, "ledger"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(root, 0o000); err != nil {
+		t.Skipf("cannot remove directory permissions: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(root, 0o700) })
+
+	var out, errb bytes.Buffer
+	err := runPrivacy(nil, &out, &errb)
+	if err == nil {
+		t.Fatal("an unreadable ~/.replay was accepted; it must not be answered at all " +
+			"rather than answered wrongly")
+	}
+	if strings.Contains(out.String(), "written nothing to this machine") {
+		t.Errorf("an unreadable store was reported as an empty machine:\n%s", out.String())
+	}
 }

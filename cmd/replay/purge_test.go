@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -183,5 +184,47 @@ func TestPG6_AnUnparseableWindowIsRefused(t *testing.T) {
 		if n := countLedger(t, dir); n != 1 {
 			t.Errorf("--older-than %q deleted something before refusing", bad)
 		}
+	}
+}
+
+// PG22: an erasure names what it could not read.
+//
+// The walk skipped an unreadable ledger file and said nothing, then printed
+// "removed N record(s)" or "Nothing to remove". A subject asking for erasure was
+// told it completed over a corpus the command had not fully examined. Absence,
+// zero and unknown are three values, and silence collapsed the third into the
+// first.
+func TestPG22_AnErasureNamesWhatItCouldNotRead(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no Unix mode bits on this platform; a file cannot be made unreadable here")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("running as root, which can read anything")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.jsonl"),
+		[]byte(`{"session_id":"wanted"}`+"\n"+`{"session_id":"other"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	locked := filepath.Join(dir, "locked.jsonl")
+	if err := os.WriteFile(locked, []byte(`{"session_id":"wanted"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0o000); err != nil {
+		t.Skipf("cannot remove file permissions: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o600) })
+
+	var out, errb bytes.Buffer
+	if err := runPurge([]string{dir, "--session", "wanted", "--yes"}, &out, &errb); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "could not be read") {
+		t.Errorf("the erasure did not say a file was skipped, so its report reads as a "+
+			"statement about the whole directory:\n%s", s)
+	}
+	if !strings.Contains(s, "not a statement about those") {
+		t.Errorf("the report must bound its own claim:\n%s", s)
 	}
 }
