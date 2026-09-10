@@ -31,6 +31,7 @@ fact; a new measurement gets a new file.
 | [codex-cache-breaks-2026-09-07](codex-cache-breaks-2026-09-07.md) | Codex cache breaks and their causes | 80 breaks re-read 10,635,679 tokens cold; five client-side causes ruled out, the sixth is not logged |
 | [codex-quota-2026-09-07](codex-quota-2026-09-07.md) | A live quota signal, and its unit | The counter moves, unlike every other surface checked; cached reads weigh far less, by an amount this corpus cannot pin down |
 | [cache-accounting-shapes-2026-09-07](cache-accounting-shapes-2026-09-07.md) | What each provider's usage fields mean arithmetically | The input field names the whole prompt on three surfaces and a remainder on the fourth |
+| [Cost after the parser fixes, 2026-09-10](cost-after-parser-fixes-2026-09-10.md) | Whether merging the four transcript-parser PRs moved any figure `replay cost` prints, run pre- and post-merge over the same corpus in the same minute | **No figure moved, and that is the expected answer.** Cost prices the provider's `usage` object, so the image-block fix (#138) changes attribution and not spend — it shows up as `unaccounted` falling 133k×133 to 132k×132 in `replay context`. The Codex double-count fix (#137) applies to a wire family absent from this corpus, where `route` is first-party on all 116 sessions. The $3,382.13 → $3,411.92 move against an earlier baseline is **one more session**, not code |
 
 > [!IMPORTANT]
 > The calibration corpus is 1450 transcripts from **78 sessions** on one machine, not the independent sessions the
