@@ -167,7 +167,8 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 			loop.SetRows(sc.Rows)
 			return tui.Frame{Key: k, Lines: sc.Lines}
 		case 'g':
-			sc := tui.GuardsScreen(guardsState())
+			advice, sessions := guardsState()
+			sc := tui.GuardsScreen(guardState(), advice, sessions)
 			loop.SetRows(sc.Rows)
 			return tui.Frame{Key: k, Lines: sc.Lines}
 		case 's':
@@ -206,25 +207,12 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 				// follow the reader onto a screen where they mean something
 				// else. This is the whole point of the screen: a finding the
 				// reader has judged should stop being offered.
+				// The cursor is read when the key arrives rather than
+				// captured here: the reader moves it between renders, and a
+				// row index frozen at render time marks the finding they were
+				// looking at a moment ago.
 				loop.SetLocal(func(r rune) bool {
-					var status advisor.Status
-					switch r {
-					case 'a':
-						status = advisor.Applied
-					case 'x':
-						status = advisor.Dismissed
-					default:
-						return false
-					}
-					i := loop.Cursor().At
-					if i < 0 || i >= len(ids) {
-						return false
-					}
-					// A write that fails must not look like one that worked.
-					// The next render re-reads the file, so a silent failure
-					// would show the old status and the reader would press
-					// the key again.
-					return markAdvice(ids[i], status) == nil
+					return adviseKeys(r, &adviseOpen, ids, loop.Cursor().At, markAdvice)
 				})
 				// The age is not decoration. Advice read from disk without a
 				// date is yesterday's answer wearing today's clothes.
@@ -242,6 +230,16 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 			if loop.TakeOpened() {
 				if t := taskAt(cur.TaskRows, loop.Cursor().At); t != nil && t.Path != "" {
 					opened = t
+					// And go there. The row says "enter opens why this one cost
+					// what it did" and the why screen says "enter to open one
+					// here"; between them, enter recorded the task and left the
+					// reader on the cost screen looking at an unchanged frame,
+					// which reads as a keystroke the terminal dropped. Escape
+					// comes back, as the footer has always said it would.
+					loop.Goto('w')
+					sc = tui.WhyScreen(opened, blameFor)
+					loop.SetRows(sc.Rows)
+					return tui.Frame{Key: 'w', Lines: sc.Lines}
 				}
 			}
 			return tui.Frame{Key: k, Lines: sc.Lines}
@@ -386,43 +384,116 @@ func guardsState() ([]string, int) {
 	if len(files) == 0 {
 		return nil, 0
 	}
-	var usd, toks []float64
-	sessions := 0
-	_ = forEachSession(files, func(_ string, _ *transcript.Session, rep *analysis.LaneReport, err error) error {
-		if err != nil || rep == nil {
-			return nil
-		}
-		sessions++
-		if pols := rep.Policies(); len(pols) > 0 {
-			usd = append(usd, pols[0].CostUSD)
-			toks = append(toks, float64(pols[0].PromptTokens))
+	var lanes []laneSpend
+	_ = forEachSession(files, func(_ string, session *transcript.Session, rep *analysis.LaneReport, err error) error {
+		if l, ok := laneOf(session, rep, err); ok {
+			lanes = append(lanes, l)
 		}
 		return nil
 	})
+	usd, toks, sessions := foldSpread(lanes)
 	return guardAdviceLines(usd, toks), sessions
 }
 
-// safeState scores the default byte cap on tool results.
-func safeState() (tui.TrimSummary, int) {
-	files := corpusFiles()
-	if len(files) == 0 {
-		return tui.TrimSummary{}, 0
+// laneOf reads one transcript's as-run spend, or reports that it has none.
+//
+// A transcript that would not parse, a report that came back nil, and a lane
+// whose session could not be identified are all "no measurement", and the
+// walk skips them rather than folding a zero into the spread. A zero is a
+// session that cost nothing, and this spread sets the threshold above which
+// live requests are refused: a parse failure counted as a free session drags
+// the fence down onto traffic the operator meant to allow.
+//
+// Named rather than written inline in the walk, so the three ways a session
+// arrives unusable can be put to it one at a time. As a closure they were
+// unreachable from any test, and guard-reachability reported them so.
+func laneOf(session *transcript.Session, rep *analysis.LaneReport, err error) (laneSpend, bool) {
+	if err != nil || rep == nil || session == nil {
+		return laneSpend{}, false
 	}
-	var total analysis.TrimPlan
-	sessions := 0
-	_ = forEachSession(files, func(_ string, _ *transcript.Session, rep *analysis.LaneReport, err error) error {
-		if err != nil || rep == nil {
-			return nil
+	if pols := rep.Policies(); len(pols) > 0 {
+		return laneSpend{
+			ID:     session.ID,
+			USD:    pols[0].CostUSD,
+			Tokens: float64(pols[0].PromptTokens),
+		}, true
+	}
+	return laneSpend{}, false
+}
+
+// laneSpend is one transcript's spend, with the session it belongs to.
+type laneSpend struct {
+	ID     string
+	USD    float64
+	Tokens float64
+}
+
+// foldSpread turns per-lane spend into per-session spend.
+//
+// The fence these values feed is printed as `--max-session-usd`, and serve
+// applies that to a session. The population therefore has to be sessions. It
+// was lanes: a session writes one transcript per sub-agent lane, so a fanned-out
+// corpus contributed one small value per lane and the derivation line said
+// "over 1803 sessions" where `replay cost` said 116.
+//
+// The error has a direction. A lane is a fraction of its session, so a fence
+// over lanes sits below the distribution it is about to cap — on the corpus
+// this was found on, it recommended $2.23 against a session p90 of $3.41. A cap
+// advertised as an outlier threshold, landing inside the ordinary range, is a
+// refusal the operator did not intend to buy.
+//
+// A lane with no session id is dropped rather than promoted to a session of its
+// own. A value nobody can attribute has no place in a spread that is about to
+// set a threshold for refusing live requests.
+func foldSpread(lanes []laneSpend) (usd, tokens []float64, sessions int) {
+	byID := map[string]*laneSpend{}
+	var order []string
+	for _, l := range lanes {
+		if l.ID == "" {
+			continue
 		}
-		sessions++
-		p := analysis.ScoreTrim(rep.Lane, rep.Fit, defaultTrimCap)
-		total.Blocks += p.Blocks
-		total.RemovedBytes += p.RemovedBytes
-		total.RemovedPromptTokens += p.RemovedPromptTokens
-		return nil
-	})
-	return tui.TrimSummary{CapBytes: defaultTrimCap, Blocks: total.Blocks,
-		RemovedBytes: total.RemovedBytes, RemovedPromptTokens: total.RemovedPromptTokens}, sessions
+		if s, ok := byID[l.ID]; ok {
+			s.USD += l.USD
+			s.Tokens += l.Tokens
+			continue
+		}
+		cp := l
+		byID[l.ID] = &cp
+		order = append(order, l.ID)
+	}
+	for _, id := range order {
+		usd = append(usd, byID[id].USD)
+		tokens = append(tokens, byID[id].Tokens)
+	}
+	return usd, tokens, len(order)
+}
+
+// safeState scores the default byte cap on tool results.
+// safeState reads what Replay has written to this machine.
+//
+// The same registry `replay privacy` walks, so a store added there appears on
+// this screen without anybody remembering to add it twice — which is the
+// property that made the registry worth having.
+//
+// The screen used to render a trim byte-cap summary: what capping tool output
+// would have saved. That is a token-savings question and it was answering a key
+// whose declared command is `serve --mask --mask-patterns`. `replay advise`
+// still ranks the same finding, where it belongs.
+func safeState() tui.Privacy {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return tui.Privacy{Err: err.Error()}
+	}
+	root := filepath.Join(home, ".replay")
+	p := tui.Privacy{Root: root}
+	for _, r := range resolveStores(root) {
+		bytes, files := measureStore(r.Full)
+		p.Stores = append(p.Stores, tui.Store{
+			Name: r.Actual, Bytes: bytes, Files: files,
+			Sensitive: r.Sensitive, Purgeable: r.Purgeable,
+		})
+	}
+	return p
 }
 
 // modelState reports what the corpus actually ran on.
@@ -494,6 +565,48 @@ func modelState() (string, []tui.ModelRow, int) {
 // Freshness is the whole risk, so the caller shows the timestamp rather than
 // presenting yesterday's advice as today's. A cache that cannot say how old it
 // is would be worse than the delay it saves.
+// adviseKeys handles the advice screen's own keys and reports whether it
+// consumed one. A key it declines keeps its loop-wide meaning, which is why
+// escape is claimed only when there is a detail to close: on the list, escape
+// is back.
+//
+// Named rather than written inline in the render function, for the reason
+// binaryName was pulled out of one: a decision that can only be reached by
+// driving the whole surface is a decision no test puts a value to, and
+// guard-reachability reported the escape below as a branch nothing enters
+// while the detail's own last row said "esc back to the list".
+//
+// open points at the variable the render reads, so the key and the next frame
+// cannot disagree about what is open. at is the cursor's row and mark records
+// the reader's verdict; both are parameters so the handler does no I/O of its
+// own and can be put to a test without a state file on disk.
+func adviseKeys(r rune, open **tui.AdviceRow, ids []string, at int, mark func(string, advisor.Status) error) bool {
+	// Escape closes the detail rather than leaving the screen. The detail's own
+	// last line says "esc back to the list", and until this handler existed
+	// escape did nothing at all there — the reader escaped the detail by
+	// navigating away and coming back.
+	if r == 27 && *open != nil {
+		*open = nil
+		return true
+	}
+	var status advisor.Status
+	switch r {
+	case 'a':
+		status = advisor.Applied
+	case 'x':
+		status = advisor.Dismissed
+	default:
+		return false
+	}
+	if at < 0 || at >= len(ids) {
+		return false
+	}
+	// A write that fails must not look like one that worked. The next render
+	// re-reads the file, so a silent failure would show the old status and the
+	// reader would press the key again.
+	return mark(ids[at], status) == nil
+}
+
 func adviceFromCache() ([]tui.AdviceRow, []string, int, time.Time, bool) {
 	b, err := os.ReadFile(filepath.Join(tipStateDir(), adviceFileName))
 	if err != nil {
@@ -845,6 +958,55 @@ func blameFor(path string) (string, error) {
 // Every failure is the unreachable state rather than an error. There is nothing
 // a reader can do about a malformed status body that they would not also do
 // about a refused connection, and the screen already says the useful thing.
+// guardState reads what the proxy is enforcing, for the guards screen.
+//
+// The same status endpoint `replay doctor` reads, through the same loopback
+// rule: this is a GET to whatever the environment names, and a diagnostic must
+// not become a request generator pointed at somebody's network.
+//
+// A proxy that did not answer leaves Reachable false, and the screen renders
+// that as unknown rather than as a clean record. On this screen in particular,
+// silence must not read as safety.
+func guardState() tui.GuardState {
+	base := guardBase()
+	g := tui.GuardState{Addr: strings.TrimPrefix(strings.TrimPrefix(base, "http://"), "https://")}
+	st, ok := probeStatus(base)
+	if !ok {
+		return g
+	}
+	g.Reachable = true
+	g.Refused = st.Requests["refused"]
+	g.Refusals = st.Refusals
+	g.CostUSD, g.DayCostUSD = st.CostUSD, st.DayCostUSD
+	g.SpendCapNotEnforced = st.SpendCapNotEnforced
+	g.Caps = tui.Caps{
+		SessionUSD:    st.Caps.SessionUSD,
+		DayUSD:        st.Caps.DayUSD,
+		SessionTokens: st.Caps.SessionTokens,
+		DayTokens:     st.Caps.DayTokens,
+	}
+	return g
+}
+
+// guardBase is where the guards screen looks for a proxy.
+//
+// The environment names it, and when it does not, the address `replay serve`
+// binds by default is the one to try — the same default the reader would get
+// by running the command the screen tells them to run. Falling through with an
+// empty string would leave the screen reporting "no answer" with no address
+// beside it, which reads as a proxy nobody can name rather than as one that is
+// not running at 127.0.0.1.
+//
+// Split out of guardState so the choice can be tested without a socket: the
+// value it returns decides whether anything is dialled at all.
+func guardBase() string {
+	base := os.Getenv(envBaseURL)
+	if base == "" {
+		return "http://" + defaultListen
+	}
+	return base
+}
+
 func liveState() tui.Live {
 	base := os.Getenv("ANTHROPIC_BASE_URL")
 	if base == "" {

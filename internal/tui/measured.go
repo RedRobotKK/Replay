@@ -211,10 +211,16 @@ func DoctorScreen(m Machine) Screen {
 			note(false, "one reading per model means no within-model variance at all."))
 	}
 	if m.PriceAgeDays > 30 {
+		// One line, not two. The doctor screen's worst case — a stale price
+		// table, a stale rules document and one probe reading per model — came
+		// to 21 rows against a body budget of 20 once bodyRows landed, and the
+		// row that lost was the last note appended, which is the rules
+		// staleness warning. Two changes, each correct alone, arriving in the
+		// same tree. The trailing "not today's." folds onto the sentence above
+		// it without losing a word of the claim.
 		lines = append(lines,
 			note(false, fmt.Sprintf("prices are %d days old: figures are list price on "+
-				"that date,", m.PriceAgeDays)),
-			"      not today's.")
+				"that date, not today's.", m.PriceAgeDays)))
 	}
 	if m.RulesState == RulesFetched && m.RulesAgeDays >= rulesStaleDays {
 		// Why this one gets three lines when prices get two: an operator who

@@ -3,7 +3,11 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/RedRobotKK/Replay/internal/proxy"
+	"github.com/RedRobotKK/Replay/internal/tui"
 )
 
 // The doctor screen and `replay doctor` count the same corpus. This checks they
@@ -99,5 +103,56 @@ func TestTheScreenAndTheCommandCountTheSameSessions(t *testing.T) {
 	}
 	if m.Projects != c.projects {
 		t.Errorf("the screen reports %d projects, the walk found %d", m.Projects, c.projects)
+	}
+}
+
+// The guards screen and `replay doctor` read the same guard state.
+//
+// The screen used to render `advise --guards` — caps suggested from history,
+// written nowhere — under a key promising "every guard, whether it is armed,
+// and whether it can fire". So the one screen named for the budget question
+// could not report proxy.Status.SpendCapNotEnforced: a dollar cap set against
+// traffic that cannot be priced, where the operator believes they have a limit
+// they do not have. doctor reported it, loudly. This asserts both surfaces
+// still take it from the same field.
+func TestBothSurfacesReadTheSameGuardFields(t *testing.T) {
+	st := proxy.Status{
+		Requests:            map[string]int{"refused": 4},
+		Refusals:            map[string]int{"spend_cap": 3, "loop": 1},
+		CostUSD:             12.34,
+		DayCostUSD:          2.10,
+		SpendCapNotEnforced: true,
+		Caps:                proxy.CapStatus{DayUSD: true, SessionTokens: true},
+	}
+	// What doctor says.
+	doctor := strings.Join(guardLines(st), "\n")
+	if !strings.Contains(doctor, "WARNING") {
+		t.Fatal("doctor no longer warns about an unenforced dollar cap; this test is " +
+			"checking nothing")
+	}
+
+	// What the screen says, from a GuardState carrying the same fields.
+	g := tui.GuardState{
+		Reachable: true, Addr: "127.0.0.1:4000",
+		Refused: st.Requests["refused"], Refusals: st.Refusals,
+		CostUSD: st.CostUSD, DayCostUSD: st.DayCostUSD,
+		SpendCapNotEnforced: st.SpendCapNotEnforced,
+		Caps: tui.Caps{
+			SessionUSD: st.Caps.SessionUSD, DayUSD: st.Caps.DayUSD,
+			SessionTokens: st.Caps.SessionTokens, DayTokens: st.Caps.DayTokens,
+		},
+	}
+	screen := tui.GuardsScreen(g, nil, 0).String()
+	if !strings.Contains(screen, "NOT enforced") {
+		t.Errorf("doctor warns about the unenforced cap and the screen does not:\n%s", screen)
+	}
+	// Both name the refusing guard, not just a count.
+	for _, want := range []string{"spend_cap", "loop"} {
+		if !strings.Contains(doctor, want) {
+			t.Errorf("doctor does not name %q", want)
+		}
+		if !strings.Contains(screen, want) {
+			t.Errorf("the screen does not name %q", want)
+		}
 	}
 }
