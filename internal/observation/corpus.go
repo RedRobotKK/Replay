@@ -28,10 +28,12 @@ import (
 // that was already written successfully, and failing the command over it would
 // turn a courtesy into an outage.
 func EarlierSubmissions(dir, tag, exclude string) []string {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil
-	}
+	// The error is discarded and the branch that returned on it is gone: it
+	// could not be observed failing, because ranging over the nil slice a
+	// failed ReadDir returns already yields no submissions. Two spellings of
+	// the same behaviour, one of them untestable, is the shape ADR-0014 rules
+	// out.
+	entries, _ := os.ReadDir(dir)
 	prefix := fmt.Sprintf("replay-corpus-%s-", safe(tag))
 	var found []string
 	for _, e := range entries {
@@ -123,14 +125,15 @@ type Corpus struct {
 // that lists digests cannot be quietly restated after publication.
 func (c Corpus) Digested() Corpus {
 	c.Digest = ""
-	body, err := json.Marshal(c)
-	if err != nil {
-		// Corpus is flat scalars; Marshal cannot fail on it. If that ever
-		// stops being true, an empty digest is the honest result: the pool
-		// refuses a submission it cannot name rather than pooling an unnamed
-		// one.
-		return c
-	}
+	// The error is discarded, and the branch that handled it is deliberately
+	// gone. Corpus is flat scalars — no channels, no funcs, no cycles — so
+	// encoding/json cannot fail on it, which made that branch unreachable and
+	// therefore untestable. ADR-0014's rule is that a check must be able to
+	// fail; a check that cannot is not a safeguard but an unexercised path
+	// that will be wrong whenever it is finally taken. Validate is the real
+	// guard: a Corpus whose digest did not compute has an empty Digest, and
+	// Validate refuses that.
+	body, _ := json.Marshal(c)
 	sum := sha256.Sum256(body)
 	c.Digest = hex.EncodeToString(sum[:])
 	return c
@@ -202,12 +205,16 @@ func WriteCorpus(dir string, c Corpus) (string, error) {
 		}
 		return "", fmt.Errorf("%s already exists; move or delete it rather than replacing a submission that has not been sent", path)
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", err
+		// "I could not look" is not "there is nothing here". Collapsing them
+		// would write into a path nobody has established is free, so this
+		// names itself rather than deferring to whatever the write says next
+		// — the two are distinguishable only by the message.
+		return "", fmt.Errorf("cannot inspect %s, so whether a submission is already there "+
+			"is unknown and it will not be overwritten: %w", path, err)
 	}
-	body, err := json.MarshalIndent(c, "", "  ")
-	if err != nil {
-		return "", err
-	}
+	// Discarded for the reason Digested gives: Corpus cannot fail to marshal,
+	// so the branch was unreachable and could never be observed failing.
+	body, _ := json.MarshalIndent(c, "", "  ")
 	body = append(body, '\n')
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		return "", err

@@ -250,9 +250,10 @@ func contributeCorpus(campaign, dir string, f corpusFigures, now time.Time) (str
 		SourceTag:      tag.Value,
 		TagBasis:       tag.Basis,
 	}.Digested()
-	if dir == "" {
-		dir = "."
-	}
+	// No `dir == ""` default here, and its absence is deliberate: filepath.Join
+	// discards empty elements, so Join("", name) and Join(".", name) are the
+	// same string. The branch that set it could not be observed failing because
+	// removing it changed nothing, which ADR-0014 rules out.
 	path, err := observation.WriteCorpus(dir, c)
 	if err != nil {
 		return "", nil, err
