@@ -827,12 +827,12 @@
       "class": "claim-outruns-evidence",
       "discovered": "2026-09-06",
       "file": "install.sh",
-      "anchor": "printf '\\n%sFree to run, BUSL 1.1, no account, no telemetry. Calibrated against 78 sessions",
-      "replacement": "printf '\\n%sThe corpus cost its author $2851. Free to run, BUSL 1.1, no account, no telemetry. Calibrated against 78 sessions",
+      "anchor": "printf '\\n%sFree to run, BUSL 1.1, no account, no telemetry. Calibrated against ",
+      "replacement": "printf '\\n%sThe corpus cost its author $2851. Free to run, BUSL 1.1, no account, no telemetry. Calibrated against ",
       "killedBy": [
         "TestFrozenFD8_TheInstallerPrintsOnlyFiguresTheEvidenceHolds"
       ],
-      "note": "Puts a cost back on the installer's closing screen, where the tool has measured nothing and the figure can only be the author's. This exact number appeared in install.sh and in no evidence anywhere, and every new user read it."
+      "note": "Puts a cost back on the installer's closing screen, where the tool has measured nothing and the figure can only be the author's. This exact number appeared in install.sh and in no evidence anywhere, and every new user read it. The anchor deliberately stops before the session count: it named 78 until 2026-09-10 and broke the moment the corpus was re-measured, which is a mutant failing for a reason that has nothing to do with the property it guards."
     },
     {
       "id": "M62",
@@ -840,12 +840,12 @@
       "class": "claim-outruns-evidence",
       "discovered": "2026-09-06",
       "file": "install.sh",
-      "anchor": "Calibrated against 78 sessions",
+      "anchor": "Calibrated against 116 sessions",
       "replacement": "Calibrated against 640 sessions",
       "killedBy": [
         "TestFrozenFD8_TheInstallerPrintsOnlyFiguresTheEvidenceHolds"
       ],
-      "note": "Inflates the corpus the installer claims. A weaker version of the guard passed this, because the evidence document is full of numbers and a substring search finds any of them; the cross-check now requires the figure to be counted as sessions."
+      "note": "Inflates the corpus the installer claims. A weaker version of the guard passed this, because the evidence document is full of numbers and a substring search finds any of them; the cross-check now requires the figure to be counted as sessions. This anchor MUST carry the installer's current count, because the mutation is a wrong count and there is no way to write one without naming the right one. So it moves whenever the corpus is re-measured: update it in the same commit as install.sh, which scripts/corpus-figures-check.sh and TestFrozenFD8 both force to happen together."
     },
     {
       "id": "M63",
