@@ -25,7 +25,13 @@ permissions:
 # On a pull request the cancellation is still right: a superseded push is dead
 # work and the next one re-runs everything.
 concurrency:
-  group: ci-${{ github.ref }}
+  # On main every commit gets its OWN group, which is what actually stops the
+  # cancelling. cancel-in-progress alone was not enough: with a shared group,
+  # GitHub cancels a PENDING run when a newer one queues behind it, so with a
+  # 25-minute job and merges minutes apart most main runs still ended cancelled
+  # — cancelled while queued rather than while running, indistinguishable in the
+  # run list and equally unverified.
+  group: ci-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:

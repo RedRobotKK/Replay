@@ -193,6 +193,33 @@ func TestMC3_EveryMutantNamesItsKiller(t *testing.T) {
 //
 // On a pull request the cancellation is still correct, so this asserts the
 // exemption rather than the absence of the setting.
+// MC5: main's runs are not superseded while queued either.
+//
+// cancel-in-progress only governs a RUNNING job. With a shared concurrency
+// group, GitHub cancels a PENDING run when a newer one queues behind it, so a
+// 25-minute job and merges minutes apart still left most main runs cancelled —
+// while queued rather than while running, which reads identically in the run
+// list and leaves the same gap in verification. Giving each main commit its own
+// group is the half that actually does the work.
+func TestMC5_MainGetsItsOwnConcurrencyGroup(t *testing.T) {
+	for _, l := range ciCommands(t) {
+		if !strings.Contains(l, "group:") || !strings.Contains(l, "concurrency") && !strings.Contains(l, "ci-") {
+			continue
+		}
+		if !strings.Contains(l, "group:") {
+			continue
+		}
+		if strings.Contains(l, "github.sha") {
+			return // main is keyed per commit
+		}
+		t.Errorf("the concurrency group does not vary by commit on main, so a queued run "+
+			"is superseded by the next merge and cancel-in-progress never gets a say:\n  %s",
+			strings.TrimSpace(l))
+		return
+	}
+	t.Error("no concurrency group line found in the workflow")
+}
+
 func TestMC4_MainCIRunsAreNotCancelled(t *testing.T) {
 	var line string
 	for _, l := range ciCommands(t) {
@@ -205,6 +232,15 @@ func TestMC4_MainCIRunsAreNotCancelled(t *testing.T) {
 		// No setting at all means nothing is cancelled, which satisfies the
 		// property this test is about.
 		return
+	}
+	// The POLARITY is asserted, not the presence of two words. `github.ref ==
+	// 'refs/heads/main'` cancels main and nothing else — the maximally wrong
+	// setting — and the first version of this test passed for it, because it
+	// only grepped for the substrings `github.ref` and `refs/heads/main`.
+	if strings.Contains(line, "github.ref") && strings.Contains(line, "refs/heads/main") &&
+		!strings.Contains(line, "!=") {
+		t.Errorf("cancel-in-progress names main but not with `!=`, so it may be cancelling "+
+			"exactly the ref it should protect:\n  %s", strings.TrimSpace(line))
 	}
 	if strings.Contains(line, "true") && !strings.Contains(line, "github.ref") {
 		t.Error("cancel-in-progress is unconditionally true, so every merge to main " +
