@@ -38,6 +38,18 @@ import "strings"
 // anything taller has to earn the scroll.
 const (
 	BudgetRows = 24
+
+	// bodyRows is how many of those rows a screen's body may use.
+	//
+	// The loop appends the footer, so a body that fills BudgetRows leaves it
+	// nothing to add and one of the two has to give. It used to be the body:
+	// every pad helper produced BudgetRows lines, the loop cut to
+	// BudgetRows-1, and every screen silently lost its last line — the "copy
+	// it and you never need this screen again" tagline under `ran replay
+	// <cmd>`. Down a pipe, --once does not trim, so the same screen came out
+	// one row taller with the line intact. The committed screen images are
+	// made through the pipe, so they showed a line no live reader ever saw.
+	bodyRows = BudgetRows - 1
 )
 
 // Shortcut is one question, the key that asks it, and the command that answers.

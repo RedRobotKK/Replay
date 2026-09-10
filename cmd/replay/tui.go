@@ -28,15 +28,30 @@ import (
 
 // runTUI opens the question-first surface.
 //
-// The nine questions are the whole point: most people will never type a flag,
+// The questions are the whole point: most people will never type a flag,
 // so the tool runs the command for them and every screen prints what it ran.
 // See docs/TUI-FLAG-SURFACE.md for the classification and
 // docs/DASHBOARD-DESIGN.md for the states.
+// screenNames lists the screens, in the order the keys are laid out.
+//
+// One list, read from the declaration, so a screen cannot exist and be denied
+// by the two messages a reader consults when they cannot find it.
+func screenNames() string {
+	names := make([]string, 0, len(tui.Shortcuts()))
+	for _, s := range tui.Shortcuts() {
+		names = append(names, s.Label)
+	}
+	return strings.Join(names, ", ")
+}
+
 func runTUI(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("tui", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	screen := fs.String("screen", "cost", "which question to open on: "+
-		"cost, why, context, advise, guards, model, safe, doctor, share")
+	// The list of screens is built from Shortcuts() rather than written out.
+	// It used to be written out here and again in the error below, and the
+	// tenth screen was added to neither: `--screen live` worked while both of
+	// these said it did not exist.
+	screen := fs.String("screen", "cost", "which question to open on: "+screenNames())
 	once := fs.Bool("once", false,
 		"render one frame and exit, for a pipe or a screenshot")
 	// auto is the only default that is safe in both directions: colour when a
@@ -73,8 +88,8 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 		}
 	}
 	if key == 0 {
-		return fmt.Errorf("no screen called %q. The nine are: cost, why, context, "+
-			"advise, guards, model, safe, doctor, share: %w", *screen, errUsage)
+		return fmt.Errorf("no screen called %q. The screens are: %s: %w",
+			*screen, screenNames(), errUsage)
 	}
 
 	// Every screen is rendered from the same source, so the loop has no
@@ -586,7 +601,11 @@ func machineState() tui.Machine {
 	m.ProjectsDir = projects
 
 	c := countTranscripts(projects)
-	m.Transcripts, m.Lanes, m.Projects = c.sessions+c.lanes, c.lanes, c.projects
+	// Sessions and files are both carried, under their own names. Folding them
+	// into one field and calling it Transcripts is what let this screen and
+	// `replay doctor` print different magnitudes for one directory.
+	m.Sessions, m.Transcripts = c.sessions, c.sessions+c.lanes
+	m.Lanes, m.Projects = c.lanes, c.projects
 	m.Found = m.Transcripts > 0
 
 	if dir, err := defaultLedgerDir(); err == nil {

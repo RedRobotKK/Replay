@@ -59,8 +59,17 @@ const (
 // keeps every frame testable without a disk is the same boundary that keeps
 // this package honest about what it knows.
 type Machine struct {
-	// Transcripts, Lanes and Projects come from the same walk `replay doctor`
-	// uses, so the two commands cannot disagree about how much is there.
+	// Sessions, Transcripts, Lanes and Projects come from the same walk
+	// `replay doctor` uses, so the two commands cannot disagree about how much
+	// is there.
+	//
+	// Sessions and Transcripts are different questions and were once reported
+	// under one word. A session writes one transcript per agent lane, so on a
+	// fanned-out corpus the file count is an order of magnitude above the
+	// session count: this screen said "1,809 transcripts across 12 projects"
+	// where the command said "124 sessions across 12 projects", about the same
+	// directory, in the same minute.
+	Sessions    int
 	Transcripts int
 	Lanes       int
 	Projects    int
@@ -176,8 +185,7 @@ func DoctorScreen(m Machine) Screen {
 	lines := make([]string, 0, BudgetRows)
 	lines = append(lines, head...)
 	lines = append(lines,
-		"  "+fmt.Sprintf("%s transcripts across %s projects",
-			commas(m.Transcripts), commas(m.Projects)),
+		"  "+headlineCount(m),
 		"  Everything Replay reads is on this machine.", "",
 		Row(docCols, "check", "result"),
 		Row(docCols, "------------------------------", "-------------------------------"),
@@ -222,6 +230,26 @@ func DoctorScreen(m Machine) Screen {
 			"      next: replay rules --check-prices")
 	}
 	return Screen{Key: 'd', Title: "doctor", Lines: pad(lines), From: Measured}
+}
+
+// headlineCount is the sentence at the top of the doctor screen, in the same
+// words `replay doctor` uses for it.
+//
+// Sessions is the figure, because that is the figure the command prints and a
+// reader moving between the two surfaces is comparing sentences, not fields.
+// The file count keeps its place in the table below, as files.
+//
+// A screen given no session count does not print "0 sessions" beside a
+// four-figure file count: absence and zero are different values (ADR-0018),
+// and of the two numbers in hand the one that was actually measured is the one
+// worth saying.
+func headlineCount(m Machine) string {
+	if m.Sessions == 0 {
+		return fmt.Sprintf("%s transcript files across %s projects",
+			commas(m.Transcripts), commas(m.Projects))
+	}
+	return fmt.Sprintf("%s sessions across %s projects",
+		commas(m.Sessions), commas(m.Projects))
 }
 
 func ledgerLine(m Machine) string {
@@ -281,11 +309,11 @@ func readingsLine(m Machine) string {
 
 // pad fills a screen to the budget and gives it the footer the loop expects.
 func pad(lines []string) []string {
-	for len(lines) < BudgetRows-3 {
+	for len(lines) < bodyRows-3 {
 		lines = append(lines, "")
 	}
-	if len(lines) > BudgetRows-3 {
-		lines = lines[:BudgetRows-3]
+	if len(lines) > bodyRows-3 {
+		lines = lines[:bodyRows-3]
 	}
 	return append(lines, "", "  ran   replay doctor",
 		"  "+Dim("copy it and you never need this screen again."))
@@ -501,11 +529,11 @@ func money(v float64) string { return fmt.Sprintf("$%.2f", v) }
 
 // padCost fills to the budget and names the command that produced the screen.
 func padCost(lines []string) []string {
-	for len(lines) < BudgetRows-3 {
+	for len(lines) < bodyRows-3 {
 		lines = append(lines, "")
 	}
-	if len(lines) > BudgetRows-3 {
-		lines = lines[:BudgetRows-3]
+	if len(lines) > bodyRows-3 {
+		lines = lines[:bodyRows-3]
 	}
 	return append(lines, "", "  ran   replay cost --per-task",
 		"  "+Dim("copy it and you never need this screen again."))
@@ -582,11 +610,11 @@ func truncate(s string, w int) string {
 }
 
 func padWhy(lines []string) []string {
-	for len(lines) < BudgetRows-3 {
+	for len(lines) < bodyRows-3 {
 		lines = append(lines, "")
 	}
-	if len(lines) > BudgetRows-3 {
-		lines = lines[:BudgetRows-3]
+	if len(lines) > bodyRows-3 {
+		lines = lines[:bodyRows-3]
 	}
 	return append(lines, "", "  ran   replay blame <session>",
 		"  "+Dim("copy it and you never need this screen again."))
