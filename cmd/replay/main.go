@@ -133,6 +133,8 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 		return runReport("diff", args[1:], stdout, stderr, (*analysis.LaneReport).WriteDiff)
 	case "corpus":
 		return runCorpus(args[1:], stdout, stderr)
+	case "pool":
+		return runPool(args[1:], stdout, stderr)
 	case "codex":
 		return runCodex(args[1:], stdout, stderr)
 	case "mcp":
@@ -586,6 +588,7 @@ Look closer:
 Corpus and calibration:
   replay corpus <dir...>           calibration across many sessions, as Markdown (no paths or content)
   replay learn  <dir...>           re-score the policy catalog, select one with held-out checks
+  replay pool   <submission...>    aggregate corpus submissions into one figure, with its roster
   replay probe  --model <id>       measure a model's caching floor; plans by default, --execute sends
 
 Setup and maintenance:

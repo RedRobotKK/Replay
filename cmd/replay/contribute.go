@@ -8,8 +8,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
+
+	"github.com/RedRobotKK/Replay/internal/analysis"
 
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/consent"
@@ -184,6 +187,11 @@ type corpusFigures struct {
 	AvoidableUSD   float64
 	AvoidableShare float64
 	MedianTaskUSD  float64
+	// The waste distribution. Nil means this build did not measure it, which
+	// is not the same as measuring zero — see the Corpus fields.
+	CacheBreaks *int
+	ReReads     *int
+	ErrorShare  *float64
 }
 
 // contributeCorpus builds a corpus submission from the figures the cost report
@@ -247,6 +255,9 @@ func contributeCorpus(campaign, dir string, f corpusFigures, now time.Time) (str
 		PricedAt:       money.RatesDate,
 		RulesVersion:   cachemodel.RulesVersion,
 		Unpriced:       f.Unpriced,
+		CacheBreaks:    f.CacheBreaks,
+		ReReads:        f.ReReads,
+		ErrorShare:     f.ErrorShare,
 		SourceTag:      tag.Value,
 		TagBasis:       tag.Basis,
 	}.Digested()
@@ -293,4 +304,81 @@ func corpusContributionNote(path string, supersedes []string) string {
 			"disk; nothing here deletes your files.\n")
 	}
 	return b.String()
+}
+
+// contributeCalibration writes the report ADR-0007 specified as the unit of
+// contribution: what the provider's caching did, not what it cost the operator.
+//
+// It takes the rows and calibrations the corpus report just computed rather
+// than recomputing them, for the reason contributeCorpus gives — a second
+// implementation of the arithmetic is free to disagree with the one on the
+// contributor's screen.
+func contributeCalibration(campaign, dir string, rows []corpusRow, cals []analysis.ModelCalibration, now time.Time) (string, error) {
+	decision, err := readCorpusConsent()
+	if err != nil {
+		return "", fmt.Errorf("the corpus consent file cannot be read, so it is not a decision: %w", err)
+	}
+	if decision.ShouldAsk() {
+		return "", fmt.Errorf("contributing is off until you turn it on. Write `corpus_opt_in = true` in %s, "+
+			"or run the installer with --corpus-opt-in. Nothing was built: %w", decision.Path, errUsage)
+	}
+	if !decision.Allowed() {
+		return "", fmt.Errorf("corpus contribution is declined in %s. Nothing was built: %w", decision.Path, errUsage)
+	}
+	secret, err := contributorSecret()
+	if err != nil {
+		return "", err
+	}
+	tag, err := observation.LocalTag(campaign, secret)
+	if err != nil {
+		return "", err
+	}
+
+	seen := map[string]bool{}
+	var clients []string
+	causes := map[string]int{}
+	for _, r := range rows {
+		if r.client != "" && !seen[r.client] {
+			seen[r.client] = true
+			clients = append(clients, r.client)
+		}
+		for _, c := range r.causes {
+			causes[string(c)]++
+		}
+	}
+	sort.Strings(clients)
+
+	c := observation.Calibration{
+		Schema:         observation.CalibrationSchema,
+		TakenAt:        now.UTC().Truncate(time.Hour).Format(time.RFC3339),
+		RulesVersion:   cachemodel.RulesVersionInEffect(),
+		ClientVersions: clients,
+		BreakCauses:    causes,
+		SourceTag:      tag.Value,
+		TagBasis:       tag.Basis,
+	}
+	for _, m := range cals {
+		c.Models = append(c.Models, observation.ModelCalibrationRow{
+			Model: m.Model, Sessions: m.Sessions, Compared: m.Compared, Matched: m.Matched,
+			RuleMinPrefix:   m.MinPrefix.Rule,
+			LargestUncached: m.MinPrefix.LargestUncached,
+			SmallestCached:  m.MinPrefix.SmallestCached,
+			Stale:           m.Stale,
+		})
+	}
+	return observation.WriteCalibration(dir, c.Digested())
+}
+
+// calibrationContributionNote is what the contributor is told before they
+// attach anything anywhere.
+//
+// It is a separate sentence from the money submission's because it discloses
+// something different. This one carries no spend at all, and saying so is the
+// point: a reader who declined the other one has not thereby declined this.
+func calibrationContributionNote() string {
+	return "\nThis report is about the PROVIDER, not about you. It carries, per model: how many\n" +
+		"sessions and turns were compared, how many the engine reproduced, the bounds your\n" +
+		"usage puts on the minimum cacheable prefix, and the counts of why caches broke.\n" +
+		"It carries NO spend, no paths, no project names, no session ids and no content.\n" +
+		"Nothing was sent. The file is on disk and moving it anywhere is your decision.\n"
 }

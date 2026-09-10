@@ -159,7 +159,7 @@ read the transcript root `replay doctor` already discovers, and say on stderr wh
 argument still wins when you give it. This is not a convenience — a first command that needs a path
 the reader does not know yet is a command they do not run.
 
-`replay --help` lists all twenty-eight, grouped and ordered by what they are worth rather than
+`replay --help` lists all twenty-nine, grouped and ordered by what they are worth rather than
 alphabetically, because the list is what a person reads before they know which of them matters. Full
 reference: [`docs/guide/commands.md`](docs/guide/commands.md).
 

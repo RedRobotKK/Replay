@@ -244,6 +244,42 @@ jobs:
       - name: Thaw every frozen mutant and confirm it still dies
         run: go test -tags mutation -timeout 45m -count=1 ./internal/mutation/
 
+  surface-drift:
+    name: surface drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # Every command and flag in docs/CLI.md, run three times, with the exit
+      # code compared against what that surface is supposed to do rather than
+      # against zero. `replay prefix` exits 1 when a diff voids the prefix, and
+      # a harness that called that a failure would report the product's most
+      # deliberate behaviour as a bug.
+      #
+      # It had never run here. Two things had to change before wiring it was
+      # worth anything. It returned 0 unconditionally, so a job running it would
+      # have been a check that could not fail. And `serve` was exercised blind:
+      # a long-running listener either binds and blocks to the 45s timeout or
+      # reports the port already in use, so eight serve surfaces times four
+      # invocations spent roughly twenty-four minutes measuring the runner --
+      # and on the machine where that was first measured, the port was held by a
+      # stray serve the harness itself had leaked. Both are fixed in the script;
+      # it now finishes in about four seconds and exits 1 on DRIFT, FLAKY or
+      # TIMEOUT.
+      #
+      # --out keeps the JSON record off the working tree, which is tracked.
+      - name: Exercise every documented surface
+        run: |
+          go build -o /tmp/replay ./cmd/replay
+          python3 scripts/surface-drift/drift.py --bin /tmp/replay --out /tmp/surface-drift.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: surface-drift
+          path: /tmp/surface-drift.json
+
   installer-drift:
     name: installer drift
     runs-on: ubuntu-latest

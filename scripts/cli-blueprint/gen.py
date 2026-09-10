@@ -32,7 +32,7 @@ COMMANDS = [
     "cost", "ceiling", "diff", "advise", "serve", "tui", "context", "blame", "replay",
     "route", "trim", "codex", "burn", "agents", "mcp", "corpus", "learn",
     "probe", "doctor", "rules", "statusline", "redact", "version", "prefix", "since", "budget",
-    "upgrade", "purge", "privacy",
+    "upgrade", "purge", "privacy", "pool",
 ]
 
 # What each command is for, and the two facts an agent needs before running one
@@ -47,7 +47,7 @@ COMMANDS = [
 #   net:    "none" | "loopback: ..." | "outbound: ..."
 #   writes: "none" | what it can write
 META = {
-    "cost":       ("Cost per task from transcripts already on disk", "none", "a transcript index cache and the tip-frequency file under ~/.replay; --png writes a card"),
+    "cost":       ("Cost per task from transcripts already on disk", "none", "a transcript index cache and the tip-frequency file under ~/.replay; --png writes a card; --contribute writes a corpus submission"),
     "ceiling":    ("What a cache-blind budget ceiling halts your agents at, in your billing basis", "none", "none"),
     "diff":       ("Locate and classify every cache break, with its cause", "none", "none"),
     "advise":     ("Rank the largest token sources, with predicted savings", "none", "with --apply --yes, a settings file; --out writes advice.json"),
@@ -62,7 +62,8 @@ META = {
     "burn":       ("What each agent surface burned: Codex, Ollama, Claude Code", "loopback: Ollama's version endpoint", "none"),
     "agents":     ("A boot block naming where this project keeps its records", "none", "with --write, splices into the named file"),
     "mcp":        ("Answer an agent's questions mid-session, JSON-RPC on stdio", "none", "none"),
-    "corpus":     ("Calibration across many sessions, as Markdown", "none", "none"),
+    "pool":       ("Aggregate corpus submissions into one figure, with its roster", "none", "none"),
+    "corpus":     ("Calibration across many sessions, as Markdown", "none", "--contribute writes a calibration report"),
     "learn":      ("Re-score the policy catalog, select one with held-out checks", "none", "--out writes policy.json"),
     "probe":      ("Measure a model's caching floor", "outbound only with --execute, which sends billable requests", "--record appends to measurements.jsonl; --contribute writes a submission file"),
     # The two commands that exist because the tool keeps something. purge is

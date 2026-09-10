@@ -25,6 +25,24 @@ DANGER = {"execute", "update", "apply", "yes", "write", "record", "contribute",
 # Surfaces whose non-zero exit is the feature, not the fault.
 EXPECT_NONZERO = {("prefix", None)}
 
+# Long-running listeners. Exercising these blind measures the harness or the
+# machine, never the product: `serve` blocks until the 45s timeout when it can
+# bind, and reports "bind: address already in use" when anything already holds
+# :4000. Eight serve surfaces times four invocations is roughly twenty-four
+# minutes of a CI job learning nothing, which is why the first attempt to run
+# this harness was killed rather than read.
+#
+# When this was first measured the thing holding :4000 was a stray `serve` left
+# behind by an earlier run of THIS harness, not a proxy the developer had
+# started. The harness was reading a port it had dirtied itself, and the first
+# write-up of this said otherwise. Both readings are facts about the port.
+SERVERS = {"serve"}
+
+# Stdio servers. `mcp` speaks JSON-RPC on stdin; handed /dev/null it sees EOF,
+# exits 0 and prints nothing. That is correct, and calling it SILENT reports
+# the harness's own choice of stdin as the product's defect.
+EXPECT_SILENT = {"mcp"}
+
 # Needs a value; a bare flag would be a usage error rather than a surface test.
 NEEDS_VALUE = {"screen": "cost", "color": "never", "cap": "2000", "to": "claude-haiku-4-5",
                "top": "5", "model": "claude-opus-5", "compare": "2026-09-01",
@@ -33,7 +51,7 @@ NEEDS_VALUE = {"screen": "cost", "color": "never", "cap": "2000", "to": "claude-
                "ledger": "__TMP__", "policy-file": "__TMP__", "project": "__TMP__",
                "mask-patterns": "__TMP__", "candidates": "512", "max-age": "1h",
                "prior": "0", "relative": "0.1", "resolution": "512", "confirm": "2",
-               "min": "0", "max": "65536", "max-probes": "1", "contribute-dir": "__TMP__"}
+               "min": "0", "max": "65536", "max-probes": "1", "contribute-dir": "__TMP__", "pooled-at": "2026-09-01"}
 
 
 def surfaces(cli_md):
@@ -59,6 +77,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", required=True)
     ap.add_argument("--runs", type=int, default=3)
+    ap.add_argument("--out", default="", help="where to write the JSON record")
     a = ap.parse_args()
 
     work = tempfile.mkdtemp(prefix="drift-")
@@ -84,6 +103,13 @@ def main():
 
     results = []
     for cmd, flags in surfaces(os.path.join(root, "docs", "CLI.md")):
+        if cmd in SERVERS:
+            results.append(dict(surface=cmd, verdict="NOT RUN",
+                                note="long-running listener; a blind run measures the port, not the surface"))
+            for fname, _ in flags:
+                results.append(dict(surface=f"{cmd} --{fname}", verdict="NOT RUN",
+                                    note="long-running listener; a blind run measures the port, not the surface"))
+            continue
         cases = [(cmd, [])]
         for fname, ftype in flags:
             if fname in DANGER:
@@ -112,15 +138,18 @@ def main():
                 results.append(dict(surface=label, verdict="TIMEOUT", note="did not return in 45s"))
             elif code == 0 and produced:
                 results.append(dict(surface=label, verdict="OK", note=""))
+            elif code == 0 and not produced and cmd in EXPECT_SILENT:
+                results.append(dict(surface=label, verdict="OK", note="exit 0 on stdin EOF, which is the contract"))
             elif code == 0 and not produced:
                 results.append(dict(surface=label, verdict="SILENT",
                                     note="exit 0 and printed nothing: a success indistinguishable from a no-op"))
             elif cmd == "prefix":
                 results.append(dict(surface=label, verdict="EXPECTED REFUSAL",
                                     note=f"exit {code} is the gate firing, which is the feature"))
-            elif "invalid usage" in low or "is required" in low or "unknown command" in low:
+            elif "invalid usage" in low or "is required" in low or "unknown command" in low or "not measured" in low:
                 # The classifier learns from what the surface printed. A command
-                # that refuses because it was handed no argument is behaving
+                # that refuses because it was handed no argument — or that prints
+                # NOT MEASURED because it was handed no data — is behaving
                 # correctly; calling that drift would report the harness's own
                 # mistake as the product's, which is how a check ends up
                 # measuring the person who wrote it.
@@ -143,7 +172,17 @@ def main():
                 print(f"    {r['surface']:<34} {r['note']}")
             if len(rows) > 14:
                 print(f"    ... and {len(rows)-14} more")
-    json.dump(results, open(os.path.join(here, "last-run.json"), "w"), indent=1)
+    json.dump(results, open(a.out or os.path.join(here, "last-run.json"), "w"), indent=1)
+
+    # A harness that always returns 0 cannot fail, and a check that cannot fail
+    # is not evidence. DRIFT, FLAKY and TIMEOUT each mean the surface did not do
+    # what docs/CLI.md says it does, or did not do the same thing twice.
+    # SILENT is deliberately not fatal: a success indistinguishable from a no-op
+    # is worth reporting and is not by itself a broken surface.
+    failed = sum(counts.get(k, 0) for k in ("DRIFT", "FLAKY", "TIMEOUT"))
+    if failed:
+        print(f"\n{failed} surface(s) drifted, flaked or timed out.")
+        return 1
     return 0
 
 
