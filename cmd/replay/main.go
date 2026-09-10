@@ -161,6 +161,8 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 		return runStatusline(args[1:], stdout, stderr)
 	case "cost":
 		return runCost(args[1:], stdout, stderr)
+	case "ceiling":
+		return runCeiling(args[1:], stdout, stderr)
 	case "trim":
 		return runTrim(args[1:], stdout, stderr)
 	case "route":
@@ -568,6 +570,7 @@ Start here:
 Look closer:
   replay cost   <dir...>           cost per task, and --compare <date> for before/after
   replay cost   <dir> --share      a card that is safe to post: a rate, no total, no paths
+  replay ceiling <dir...>          what a cache-blind budget ceiling halts your agents at
   replay context <transcript|dir>  what entered a session's context, by tool
   replay blame  <transcript|dir>   rank what is eating prompt tokens
   replay <transcript|dir>          reproduce caching, then score alternative layouts
