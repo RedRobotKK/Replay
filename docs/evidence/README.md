@@ -1,14 +1,21 @@
 # Evidence
 
 Measurements behind the claims in the README. Each file records the method as well as the result, so
-a reader can decide whether the number means what it says. Files are dated and never edited after the
-fact; a new measurement gets a new file.
+a reader can decide whether the number means what it says. A new measurement gets a new file.
+
+**These files are dated, but "never edited after the fact" is not true of the history and this page
+said it was until 2026-09-10.** Sixteen of the twenty-five dated files carry more than one commit.
+Most of those edits are appended retractions, which is the intended shape. Several are not:
+`rehydration-boundary-2026-09-05.md` lost an eight-line section at `ad7e884`, and
+`routing-baseline-2026-09-06.md` lost a published `85.10%` at `a6b259b`. Read a file as its reading
+on its date plus whatever was appended, and `git log -p docs/evidence/` as the only complete record.
 
 | Document | What it measures | Headline |
 |---|---|---|
 | [Calibration corpus, 2026-09-03](calibration-corpus-2026-09-03.md) | How well the replay engine reproduces the provider's own cache reads | 398 of 402 turns across 11 sessions, all from this repository's own development on one machine |
 | [Calibration corpus, 2026-09-05](calibration-corpus-2026-09-05.md) | How well the engine reproduces the provider's own numbers, across 1363 transcripts from many unrelated projects rather than this repository's own development work. **It called those transcripts "sessions"; see the 2026-09-06 correction** | Supersedes the 2026-09-03 corpus, which covered 11 self-referential sessions |
 | [Calibration corpus, 2026-09-06](calibration-corpus-2026-09-06.md) | The same engine, re-read, and a correction: the previous file counted transcript files and called them sessions | **1450 transcripts from 78 sessions**, 97.46%. The 1363 published as "sessions" was a file count; one session supplied 1020 of them |
+| [Calibration corpus, 2026-09-10](calibration-corpus-2026-09-10.md) | A later reading of the same engine on a grown corpus, not a correction of the 2026-09-06 figures. Records one defect it did not fix: the per-model `Sessions` column still carries lane counts | **1751 transcripts from 116 sessions**, 97.79%. The rate moved 0.33 points across both a larger corpus and 67 engine commits, and this reading cannot separate those causes |
 | [The fan-out premium, 2026-09-06](fan-out-premium-2026-09-06.md) | What parallel subagent lanes cost, against a baseline where siblings share the cache write. **Corrected the same day: most of the number is arithmetic** | 1.68x / 2.56x / 3.34x, sitting at 88-99% of a ceiling fixed by the group size and the provider's own multipliers. No corpus can produce a premium below 1, so the rise with width is the shape of the estimator. Only the dispersion ratio (~0.9, flat) is empirical |
 | [Compaction and the index, 2026-09-06](compaction-and-index-2026-09-06.md) | What context compaction discards, and what indexing transcripts saves | **39 compactions keep a median 2.55%**, discarding 30.5M tokens over 73.5 minutes of wall clock; the index takes `replay cost` from 6.474s to 0.046s |
 | [Wire families, 2026-09-06](wire-families-2026-09-06.md) | Which request shapes a terminal GenAI client actually sends, captured off the wire from a live session | **Three families, not two.** *Partly retracted 2026-09-08: the "no local transcript" finding was wrong, `~/.grok/sessions` holds 3.8 GB across 6,787 files, and a $406.07 figure derived from a claim about that store is withdrawn.* The Grok CLI speaks OpenAI *Responses* (`/responses`), which Replay does not parse. It returns the four `x-ratelimit-*` headers this project had never captured, and **`remaining` equalled `limit` on every call**, so they did not measure consumption. An earlier version of the file called them a better instrument, on header names before any value was read |

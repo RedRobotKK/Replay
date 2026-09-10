@@ -24,6 +24,7 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | [0016](0016-business-source-license.md) | Relicense under the Business Source License 1.1 | Accepted |
 | [0017](0017-the-unintelligent-router.md) | Routing decided by cache structure, not by reading the prompt | Rejected |
 | [0018](0018-this-is-an-instrument-not-an-app.md) | Provenance is a field, not a comment: absence, zero and unknown are three values | Accepted |
+| [0019](0019-surfaces-declare-what-they-can-be-asked.md) | Surfaces declare what they can be asked, and the declaration is probed | Proposed |
 
 ---
 
