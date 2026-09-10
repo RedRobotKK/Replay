@@ -91,7 +91,7 @@ asking you to trust a summary of the thing rather than the thing.
 
 ## The full mapping
 
-### Replaces the surface (10)
+### Replaces the surface (12)
 
 | Flag | Command | Type |
 |---|---|---|
@@ -105,6 +105,14 @@ asking you to trust a summary of the thing rather than the thing.
 | `--color` | `tui` | string |
 | `--check` | `upgrade` | bool |
 | `--version` | `upgrade` | string |
+| `--older-than` | `purge` | string |
+| `--session` | `purge` | string |
+
+<!-- Both belong here for the same reason `--check` does: each replaces what the
+command produces rather than tuning how it behaves. `--older-than` makes purge a
+retention policy; `--session` makes it an erasure request; the command refuses if
+given both, because they describe different deletions. `--export` and `--yes` are
+plumbing and classified with the rest. -->
 
 <!-- Both belong here rather than under a posture or a threshold. `--check`
 replaces the act of upgrading with a report about it, and `--version` replaces

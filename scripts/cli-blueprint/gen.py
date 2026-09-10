@@ -32,7 +32,7 @@ COMMANDS = [
     "cost", "diff", "advise", "serve", "tui", "context", "blame", "replay",
     "route", "trim", "codex", "burn", "agents", "mcp", "corpus", "learn",
     "probe", "doctor", "rules", "statusline", "redact", "version", "prefix", "since", "budget",
-    "upgrade",
+    "upgrade", "purge", "privacy",
 ]
 
 # What each command is for, and the two facts an agent needs before running one
@@ -64,6 +64,11 @@ META = {
     "corpus":     ("Calibration across many sessions, as Markdown", "none", "none"),
     "learn":      ("Re-score the policy catalog, select one with held-out checks", "none", "--out writes policy.json"),
     "probe":      ("Measure a model's caching floor", "outbound only with --execute, which sends billable requests", "--record appends to measurements.jsonl; --contribute writes a submission file"),
+    # The two commands that exist because the tool keeps something. purge is
+    # the only one that removes it, and privacy the only one that discloses it;
+    # both are answers to questions an auditor and a subject access request ask.
+    "purge":      ("Remove ledger records past a retention window, or one session's", "none", "removes ledger records under the directory given; nothing unless --yes"),
+    "privacy":    ("Everything Replay has written to this machine, and what each store holds", "none", "nothing: it reports and never removes"),
     # The only command that reaches the network without being asked to proxy
     # anything, and the only one that writes to the binary the reader invoked.
     # Both facts belong in the two columns an agent reads before running a

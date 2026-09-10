@@ -889,6 +889,18 @@ func TestFeedVerifiesAndNeverSigns(t *testing.T) {
 	root := filepath.Join("..", "..")
 	var importers, production, signers []string
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		// The same exclusions its two siblings use, and for the same reason.
+		// .claude holds agent worktrees: whole copies of this repository, which
+		// this walk otherwise reads as if they were source. It reported
+		// internal/feed twice per worktree and failed a check about where the
+		// signing capability lives — a true statement about a copy, and a
+		// false one about the tree under test.
+		if err == nil && info.IsDir() {
+			switch info.Name() {
+			case ".git", ".claude", "node_modules", "dist", "bin":
+				return filepath.SkipDir
+			}
+		}
 		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") {
 			return nil
 		}

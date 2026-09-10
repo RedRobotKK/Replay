@@ -642,6 +642,58 @@ measurement of money that nobody made.
 
 The marker lives at `~/.replay/seen.json` and holds one timestamp.
 
+### `replay privacy [--json]`
+
+Everything Replay has written to this machine, and what each store holds.
+
+```sh
+replay privacy          # the list, with sizes and what each one contains
+replay privacy --json   # the same, for a script or an auditor
+```
+
+The question a subject access request asks, and one this tool could not answer until it existed. A
+local-first tool is unusually well placed to: nothing has to be requested from anyone, because the
+whole answer is a directory on your own disk.
+
+Eleven stores sit under `~/.replay`, and the report says what each holds in plain terms — including
+what it does **not** hold. The ledger carries timings, token counts, cache outcomes, a request path
+and a session id, and never message content.
+
+One is marked with `!`: the **masking vault**, which holds the real values behind placeholders sent
+to a provider. It is the only store here that keeps your secrets rather than counts about them, and
+it is never removed by a retention window, because deleting it breaks rehydration for every
+transcript that referenced it.
+
+It reports and never removes. Every path it names is one `replay purge` can act on, and keeping the
+two commands apart means reading what you hold is never one keystroke from destroying it.
+
+### `replay purge <dir> --older-than <window> | --session <id> [--export <file>] [--yes]`
+
+Remove records you no longer want kept.
+
+```sh
+replay purge ~/.replay/ledger --older-than 30d              # what it would remove
+replay purge ~/.replay/ledger --older-than 30d --yes        # remove it
+replay purge ~/.replay --session <id> --export out.jsonl --yes
+```
+
+Two different questions, and the command refuses to guess which you meant if you give both.
+`--older-than` is a **retention policy**: what is old enough to go. `--session` is an **erasure
+request**: what is about one session, whatever its age.
+
+Three decisions, all because this is the one command whose mistake cannot be undone by running it
+again:
+
+- **`--dry-run` is the default.** It reports and changes nothing until `--yes`.
+- **There is no default window.** A default would decide what to delete for somebody who never
+  chose one, and the person who most needs a retention policy is the one who has not thought about
+  it yet.
+- **A window removes whole session files; an erasure edits inside them.** Taking the whole file for
+  a session request would erase the requester and everybody who shared the file with them.
+
+`--export` writes what is about to be removed, first. Under GDPR that is the portability half of an
+erasure request; in practice it is what you want before any irreversible command.
+
 ### `replay upgrade [--check] [--dry-run]`
 
 Replace this binary with the latest published release.

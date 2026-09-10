@@ -51,7 +51,12 @@ func textFiles(t *testing.T, exts ...string) map[string]string {
 		}
 		if d.IsDir() {
 			switch d.Name() {
-			case ".git", "testdata", "node_modules":
+			// .claude holds agent worktrees: whole copies of this
+			// repository. Without it every frozen claim is checked once per
+			// worktree, and a claim retracted here is reported as live because
+			// a copy of the retraction still contains the words it retracts.
+			// Every other tree-walk in this project already excludes it.
+			case ".git", ".claude", "testdata", "node_modules", "vendor", "dist", "bin":
 				return filepath.SkipDir
 			}
 			return nil
