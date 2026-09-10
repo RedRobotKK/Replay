@@ -17,7 +17,7 @@ reach the network, and does it write. Both are answered per command below, and
 summarised here.
 
 **Opens no socket and writes nothing** — safe to run at will:
-`diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `mcp`, `corpus`, `statusline`, `redact`, `version`, `prefix`, `budget`, `pool`.
+`diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `mcp`, `statusline`, `redact`, `version`, `prefix`, `budget`, `pool`.
 
 **Leaves the machine:** `serve` proxies every request to the provider.
 `probe --execute` sends billable requests, and without `--execute` it prints a
@@ -40,7 +40,7 @@ to test whether `~/.replay` is writable.
 
 | Command | What it answers | Network | Writes |
 |---|---|---|---|
-| [`cost`](#cost) | Cost per task from transcripts already on disk | none | a transcript index cache and the tip-frequency file under ~/.replay; --png writes a card |
+| [`cost`](#cost) | Cost per task from transcripts already on disk | none | a transcript index cache and the tip-frequency file under ~/.replay; --png writes a card; --contribute writes a corpus submission |
 | [`diff`](#diff) | Locate and classify every cache break, with its cause | none | none |
 | [`advise`](#advise) | Rank the largest token sources, with predicted savings | none | with --apply --yes, a settings file; --out writes advice.json |
 | [`serve`](#serve) | Local proxy: byte-for-byte passthrough, records a ledger | outbound: proxies every request to the provider | ~/.replay/ledger/<session>.jsonl |
@@ -54,7 +54,7 @@ to test whether `~/.replay` is writable.
 | [`burn`](#burn) | What each agent surface burned: Codex, Ollama, Claude Code | loopback: Ollama's version endpoint | none |
 | [`agents`](#agents) | A boot block naming where this project keeps its records | none | with --write, splices into the named file |
 | [`mcp`](#mcp) | Answer an agent's questions mid-session, JSON-RPC on stdio | none | none |
-| [`corpus`](#corpus) | Calibration across many sessions, as Markdown | none | none |
+| [`corpus`](#corpus) | Calibration across many sessions, as Markdown | none | --contribute writes a calibration report |
 | [`learn`](#learn) | Re-score the policy catalog, select one with held-out checks | none | --out writes policy.json |
 | [`probe`](#probe) | Measure a model's caching floor | outbound only with --execute, which sends billable requests | --record appends to measurements.jsonl; --contribute writes a submission file |
 | [`doctor`](#doctor) | What replay can see on this machine and what to do next | loopback: the local proxy status endpoint, and Ollama on 127.0.0.1:11434 | a temp file, created and removed, to test whether ~/.replay is writable |
@@ -231,7 +231,10 @@ Takes no flags.
 
 Calibration across many sessions, as Markdown.
 
-Takes no flags.
+| Flag | Type | What it does |
+|---|---|---|
+| `-contribute` | string | write a calibration report for this campaign: what the provider's caching did, not what it cost you |
+| `-contribute-dir` | string | directory to write the report into (default ".") |
 
 ### learn
 
@@ -405,4 +408,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-29 commands, 99 flags, read from the binary.
+29 commands, 101 flags, read from the binary.

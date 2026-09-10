@@ -66,6 +66,13 @@ func distinctSessions(rows []corpusRow) int {
 func runCorpus(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("corpus", flag.ContinueOnError)
 	fs.SetOutput(stderr)
+	// ADR-0007 named this report the unit of contribution and ADR-0007's own
+	// implementation note records that `replay corpus --submit` exited with
+	// "flag provided but not defined" because this command defined no flags at
+	// all. It defines one now, and it writes rather than submits: nothing here
+	// transmits, and internal/observation's import allowlist keeps it that way.
+	contributeTo := fs.String("contribute", "", "write a calibration report for this campaign: what the provider's caching did, not what it cost you")
+	contributeDir := fs.String("contribute-dir", ".", "directory to write the report into")
 	if err := parseArgs(fs, args, stdout); err != nil {
 		return err
 	}
@@ -126,7 +133,16 @@ func runCorpus(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("no session could be analyzed (%d failures)", len(failures))
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].requests > rows[j].requests })
-	return writeCorpus(stdout, rows, analysis.ModelCalibrations(reports), failures)
+	cals := analysis.ModelCalibrations(reports)
+	if *contributeTo != "" {
+		path, err := contributeCalibration(*contributeTo, *contributeDir, rows, cals, time.Now())
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(stderr, "wrote %s\n", path)
+		fmt.Fprintf(stderr, "%s", calibrationContributionNote())
+	}
+	return writeCorpus(stdout, rows, cals, failures)
 }
 
 func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibration, failures []string) error {

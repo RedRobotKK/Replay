@@ -568,6 +568,22 @@ Open it and check that nothing in it identifies your projects before you share i
 calibration per model with the newest sessions separated, so a provider changing its behaviour shows
 up as a provider change rather than as silent drift.
 
+| Flag | What it does |
+|------|--------------|
+| `--contribute <campaign>` | write a calibration report for this campaign: what the provider's caching did, not what it cost you. Opt-in, and it writes a file rather than sending one |
+| `--contribute-dir <dir>` | directory to write the report into. Defaults to the working directory |
+
+The report is the unit of contribution ADR-0007 specified and that did not ship.
+Per model it carries sessions and turns compared, how many the engine
+reproduced, the bounds your usage puts on the minimum cacheable prefix, and the
+counts of why caches broke. It carries no spend, no paths, no project names, no
+session ids and no content — it is a measurement of the provider that you
+happened to observe, rather than a measurement of you.
+
+The prefix bounds are the point. Your usage says the floor for a model lies
+between the largest prompt that was never cached and the smallest prefix that
+was, and one machine reports a wide interval. A hundred machines close it.
+
 ### `replay pool <submission.json...>`
 
 ```sh
