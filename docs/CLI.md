@@ -66,6 +66,8 @@ to test whether `~/.replay` is writable.
 | [`since`](#since) | What ran, and what it cost, since you last looked | none | ~/.replay/seen.json, one timestamp; --peek writes nothing |
 | [`budget`](#budget) | What this configuration costs on every request, before any work | none | none |
 | [`upgrade`](#upgrade) | Replace this binary with the latest published release | outbound: github.com, to resolve the latest tag and download the release archive and its checksums | the running binary, in place, after its checksum is verified; --check and --dry-run write nothing |
+| [`purge`](#purge) | Remove ledger records past a retention window, or one session's | none | removes ledger records under the directory given; nothing unless --yes |
+| [`privacy`](#privacy) | Everything Replay has written to this machine, and what each store holds | none | nothing: it reports and never removes |
 
 ### cost
 
@@ -332,6 +334,25 @@ Replace this binary with the latest published release.
 
 Takes no flags.
 
+### purge
+
+Remove ledger records past a retention window, or one session's.
+
+| Flag | Type | What it does |
+|---|---|---|
+| `-export` | string | write what is about to be removed to this file first |
+| `-older-than` | string | remove records older than this window: 30d, 12h, 90m |
+| `-session` | string | remove every record for one session id, whatever its age |
+| `-yes` | bool | actually remove them; without this the command reports and changes nothing |
+
+### privacy
+
+Everything Replay has written to this machine, and what each store holds.
+
+| Flag | Type | What it does |
+|---|---|---|
+| `-json` | bool | emit the report as JSON |
+
 ## The TUI covers the same ground
 
 `replay tui` opens the same answers as movable screens. `--screen <name>` opens
@@ -372,4 +393,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-26 commands, 90 flags, read from the binary.
+28 commands, 95 flags, read from the binary.

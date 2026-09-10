@@ -17,6 +17,38 @@ In scope: anything in this repository, including the daemon, its build and relea
 
 Out of scope: vulnerabilities in the model providers, IDEs, or agents Replay talks to. Report those upstream.
 
+## What Replay keeps, and for how long
+
+Replay runs on your machine and sends nothing anywhere. Everything it keeps lives under
+`~/.replay`, and `replay privacy` lists all of it — every store, its size, and what it holds in
+plain terms.
+
+**The ledger holds counts and timings, never message content.** Per request: a timestamp, a session
+id, the request path, the status, token counts and cache outcomes. No prompts, no responses, no
+file contents. Paths in derived findings are HMAC'd.
+
+**One store is different.** The masking vault (`~/.replay/vault`) holds the real values behind
+placeholders sent to a provider. It is the only store here that keeps your secrets rather than
+counts about them, it is never removed by a retention window, and `replay privacy` marks it.
+
+**Retention: 90 days is the recommended default, and nothing is deleted unless you ask.** Replay
+sets no automatic expiry, because silently deleting a reader's own measurements is not a decision a
+tool should make for them. What it gives you instead is the means to enforce whatever period you
+choose:
+
+```sh
+replay privacy                                        # what is held, and where
+replay purge ~/.replay/ledger --older-than 90d        # what would go
+replay purge ~/.replay/ledger --older-than 90d --yes  # remove it
+```
+
+**Erasure by subject.** `replay purge ~/.replay --session <id> --yes` removes every record for one
+session from inside the files that hold it, leaving other sessions in those files intact. Add
+`--export <file>` to write a copy of what is about to be removed — the portability half of an
+erasure request, and worth having before any irreversible command.
+
+Both default to reporting and change nothing without `--yes`.
+
 ## Supported versions
 
 Until 1.0, only the latest minor release receives security fixes.
