@@ -72,7 +72,16 @@ func textFiles(t *testing.T, exts ...string) map[string]string {
 		if err != nil {
 			return err
 		}
-		out[rel] = string(body)
+		// Keyed with forward slashes on every platform.
+		//
+		// filepath.Rel returns the OS separator, so on Windows this map was keyed
+		// `cmd\replay\x.go` while every guard that looks a file up writes the
+		// literal `cmd/replay/x.go`. The lookup missed, and FD-11 reported the
+		// detector it could not find as DELETED — a frozen guard failing on a
+		// defect nobody had reintroduced, on the one platform nobody reads the
+		// logs for. Every consumer of this map compares against forward slashes,
+		// including the paths printed in their failure messages.
+		out[filepath.ToSlash(rel)] = string(body)
 		return nil
 	})
 	if err != nil {
@@ -122,4 +131,48 @@ func containsAny(s string, needles ...string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// textFiles keys with forward slashes, and every guard looks up that way.
+//
+// This is the contract FD-11 broke on. filepath.Rel returns the OS separator,
+// so on Windows the map was keyed `cmd\replay\othersurfaces.go` while the guard
+// looked up the literal `cmd/replay/othersurfaces.go`. The lookup missed and the
+// guard reported the file as DELETED — a frozen defect failing on a defect
+// nobody had reintroduced. It failed on main for at least two days before
+// anybody read a windows-latest log.
+//
+// **Half of this test cannot fail on Unix and that is stated rather than
+// hidden.** filepath.ToSlash is the identity function where the separator is
+// already '/', so the no-backslash assertion below is vacuous on macOS and
+// Linux and is real only on the windows-latest runner. The other half — that
+// the paths guards actually look up resolve — fails anywhere, and is what
+// catches a rename.
+func TestKeysAreSlashSeparatedAndResolve(t *testing.T) {
+	files := textFiles(t, ".go")
+	if len(files) < 50 {
+		t.Fatalf("textFiles returned %d files; it is not reading the tree and every "+
+			"assertion below is vacuous", len(files))
+	}
+
+	// Vacuous on Unix, load-bearing on Windows.
+	for path := range files {
+		if strings.ContainsRune(path, '\\') {
+			t.Errorf("%q is keyed with a backslash; every guard in this package looks up "+
+				"a forward-slash literal and will miss it", path)
+		}
+	}
+
+	// Falsifiable everywhere: the lookups guards actually perform.
+	for _, want := range []string{
+		"cmd/replay/othersurfaces.go",
+		"internal/analysis/predictor.go",
+		"internal/proxy/preflight.go",
+	} {
+		if _, ok := files[want]; !ok {
+			t.Errorf("%s does not resolve in the file map. Either it was renamed and a "+
+				"guard that looks it up now fails for the wrong reason, or the keying "+
+				"changed and every path lookup in this package is broken", want)
+		}
+	}
 }
