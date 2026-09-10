@@ -87,6 +87,10 @@ func knownSurfaces(home string) []otherSurface {
 // which once installed an agent looks like, and pointing its owner at a second
 // command only to show them a second empty report is worse than saying nothing.
 func findOtherSurfaces(home string) []otherSurface {
+	// Without a home there is nothing to look in, and looking anyway is worse
+	// than not looking: filepath.Join("", ".codex") is the relative path
+	// ".codex", so every probe below would resolve against the working
+	// directory and report whatever the reader happened to `cd` into.
 	if home == "" {
 		return nil
 	}
@@ -113,11 +117,13 @@ func firstWithEntries(dir string) string {
 }
 
 // hasEntries reports whether a directory exists and holds at least one file.
+//
+// The read error is deliberately not branched on. ReadDir returns no entries
+// for a directory that is missing or unreadable, so the loop below already
+// answers false; and where it returns partial entries alongside an error,
+// those entries are a true answer to the question being asked.
 func hasEntries(dir string) bool {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return false
-	}
+	entries, _ := os.ReadDir(dir)
 	for _, e := range entries {
 		if !e.IsDir() {
 			return true
@@ -131,9 +137,6 @@ func hasEntries(dir string) bool {
 // Nothing is the common case and must stay silent: a machine with no other
 // agent data would otherwise carry this paragraph on every empty run.
 func writeOtherSurfaces(found []otherSurface, w io.Writer) {
-	if len(found) == 0 {
-		return
-	}
 	for _, s := range found {
 		if s.cmd != "" {
 			_, _ = fmt.Fprintf(w, "%s records are on this machine, and Replay reads them:\n", s.name)

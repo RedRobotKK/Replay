@@ -181,3 +181,24 @@ func TestOS7_TheFoundSurfaceLeads(t *testing.T) {
 		t.Errorf("the reader is told what they do not have before what they do:\n%s", out)
 	}
 }
+
+// OS8: with no home, nothing is looked for — and the working directory in
+// particular is not looked in.
+//
+// os.UserHomeDir can fail. Carrying "" forward turns every probe into a
+// relative path — filepath.Join("", ".codex") is ".codex" — so detection would
+// resolve against whatever directory the reader ran Replay from. A repository
+// that vendors a .codex fixture would make Replay announce Codex records that
+// belong to the checkout, not the machine.
+func TestOS8_NoHomeDoesNotSearchTheWorkingDirectory(t *testing.T) {
+	// A working directory that would match every relative probe.
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, ".codex", "sessions", "s.jsonl"), "{}\n")
+	mustWrite(t, filepath.Join(dir, ".ollama", "logs", "server.log"), "x\n")
+	t.Chdir(dir)
+
+	if found := findOtherSurfaces(""); len(found) != 0 {
+		t.Errorf("with no home, %d surface(s) were reported out of the working "+
+			"directory: %+v", len(found), found)
+	}
+}
