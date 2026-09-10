@@ -1,8 +1,11 @@
 package regression
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -170,5 +173,51 @@ func TestTextFilesKeysAreSlashSeparated(t *testing.T) {
 	if nested == 0 {
 		t.Error("no key names a subdirectory, so these are not repository-relative " +
 			"paths and the separator check above asserts nothing")
+	}
+}
+
+// Nothing compares a textFiles key against a host-built path.
+//
+// textFiles keys are forward-slash on every host. A comparison built with
+// filepath.Join produces the HOST's separator, so on Windows
+// `filepath.Join("internal", "regression")` is `internal\regression` and a
+// HasPrefix against a slash key is false. The comparison does not error — it
+// quietly stops matching, and whatever it was skipping gets checked, or
+// whatever it was checking gets skipped.
+//
+// Both happened. FD-6 skipped this package on Linux and macOS and, once the
+// keys were normalised, started firing on the retracted phrasings it names on
+// purpose; the docs/evidence local-citation fallback stopped applying on
+// Windows for the same reason. Neither showed up as a path bug. They showed up
+// as claims apparently violated.
+//
+// PASS: no path comparison in this package is built from filepath.Join.
+// FAIL: one is, and it means something different depending on who ran it.
+func TestNoHostPathComparisonsAgainstTextFileKeys(t *testing.T) {
+	pattern := regexp.MustCompile(`strings\.(HasPrefix|HasSuffix|Contains|EqualFold)\(\s*\w+\s*,\s*filepath\.Join\(`)
+
+	files := textFiles(t, ".go")
+	if len(files) < 10 {
+		t.Fatalf("textFiles returned %d files; this test proves nothing", len(files))
+	}
+
+	var offences []string
+	for path, body := range files {
+		if !strings.HasPrefix(path, "internal/regression/") {
+			continue
+		}
+		for i, line := range strings.Split(body, "\n") {
+			if pattern.MatchString(line) {
+				offences = append(offences, fmt.Sprintf("%s:%d  %s", path, i+1, strings.TrimSpace(line)))
+			}
+		}
+	}
+	sort.Strings(offences)
+
+	if len(offences) > 0 {
+		t.Errorf("these compare a forward-slash textFiles key against a host-built "+
+			"path, so they match on Linux and macOS and silently stop matching on "+
+			"Windows:\n  %s\nUse a \"a/b/\" literal instead.",
+			strings.Join(offences, "\n  "))
 	}
 }

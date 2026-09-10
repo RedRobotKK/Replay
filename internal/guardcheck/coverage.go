@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -141,9 +142,14 @@ func (c *Coverage) BranchTaken(g Guard) (taken bool, known bool) {
 	// Blocks are keyed by base name because the profile names files by import
 	// path and a Guard names them relative to the repository root: the two
 	// agree on the file name and on nothing else. The lookup below therefore
-	// already establishes the match — a second name comparison here could
-	// never be false, and said so when this tool was pointed at itself.
-	for _, b := range c.blocks[path.Base(g.File)] {
+	// already establishes the match.
+	//
+	// filepath.Base, not path.Base, for the guard: a Guard carries a host
+	// path, and path.Base does not split on a backslash, so on Windows it
+	// returned the whole "C:\...\tiny.go" and every lookup missed. The
+	// profile side stays path.Base because Go writes import paths there,
+	// forward slashes on every host.
+	for _, b := range c.blocks[filepath.Base(g.File)] {
 		if !within(b, g) {
 			continue
 		}

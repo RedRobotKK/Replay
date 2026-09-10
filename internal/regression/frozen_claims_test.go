@@ -113,7 +113,7 @@ func TestFrozenFD6_ARateLimitHeaderClaimCarriesItsMeasurement(t *testing.T) {
 	citeLocal := regexp.MustCompile(`\(([A-Za-z0-9._-]+-\d{4}-\d{2}-\d{2}\.md)\)`)
 
 	for path, body := range textFiles(t, ".go", ".md") {
-		if strings.HasPrefix(path, filepath.Join("internal", "regression")) {
+		if strings.HasPrefix(path, "internal/regression/") {
 			continue // this file names the retracted phrasings on purpose
 		}
 		for _, p := range claimUnits(body) {
@@ -130,7 +130,7 @@ func TestFrozenFD6_ARateLimitHeaderClaimCarriesItsMeasurement(t *testing.T) {
 				}
 			}
 			m := cite.FindStringSubmatch(p)
-			if m == nil && strings.HasPrefix(path, filepath.Join("docs", "evidence")) {
+			if m == nil && strings.HasPrefix(path, "docs/evidence/") {
 				m = citeLocal.FindStringSubmatch(p)
 			}
 			if m == nil {
@@ -344,7 +344,7 @@ func TestFrozenFD9_PlatformClaimsMatchTheReleaseConfig(t *testing.T) {
 		isBuilt := regexp.MustCompile(`(?i)(^|[^"\x60])\*{0,2}` + pretty + ` is built`)
 		notBuilt := regexp.MustCompile(`(?i)(^|[^"\x60])\*{0,2}` + pretty + ` is not built`)
 		for path, body := range docs {
-			if strings.HasPrefix(path, filepath.Join("internal", "regression")) {
+			if strings.HasPrefix(path, "internal/regression/") {
 				continue
 			}
 			if isBuilt.MatchString(body) && !built[goos] {

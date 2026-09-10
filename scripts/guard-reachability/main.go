@@ -57,6 +57,24 @@
 // A mutant the compiler rejects was never put to the suite, so it is counted
 // and reported as UNCHECKED rather than passed over. An unchecked guard is the
 // false green this tool exists to prevent, in the tool itself.
+//
+// # What a verdict here does not mean
+//
+// Every verdict is scoped to the host that produced it. Coverage is measured
+// by running this machine's tests on this machine's OS, so a branch that only
+// fires elsewhere is UNREACHED here and load-bearing there.
+//
+// This is not hypothetical. On the run that introduced these verdicts, the
+// tool reported a name comparison in its own coverage matcher as never true,
+// the comparison was deleted as dead, and Windows CI went red: the deleted
+// line was the one normalising a backslash path, and it could not be true on
+// a host whose separator is already a slash. The verdict was accurate and the
+// conclusion drawn from it was wrong.
+//
+// So UNREACHED means "no test on THIS host makes this true". Before deleting
+// a branch on its authority, ask whether the condition is one another
+// platform, another build tag, or another configuration could satisfy. The
+// tool cannot ask that question; it only runs here.
 package main
 
 import (
