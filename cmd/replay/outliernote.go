@@ -24,6 +24,16 @@ import (
 // version compared against the median and, on a real corpus, printed "1363.2x
 // your median session" — exact, and a category error wearing a number.
 //
+// What the instruction promises is bounded by what the command delivers.
+// `replay blame <transcript>` reports the session's MAIN LANE and discloses the
+// rest ("Scope: 1 of 17 lanes"). On a fanned-out session that is a small share
+// of the cost the finding just quoted: the corpus figure for one session here
+// was $1,056.14, of which the main transcript accounted for $286.59 and 1,013
+// sub-agent transcripts for $769.55. Saying "ranks what filled it" over that
+// would be the same defect as naming a command that does not exist — an
+// instruction the reader takes at face value and a result that answers a
+// narrower question than the one they asked.
+//
 // The instruction names the transcript rather than the session id. It used to
 // print `replay why <id>`, and `replay why` was never a command: it is a TUI
 // screen label that reached CLI output and shipped, firing on the one line a
@@ -60,5 +70,5 @@ func outlierNote(units []costUnit, s costSummary) string {
 		// remove.
 		return finding
 	}
-	return finding + fmt.Sprintf("  replay blame %s   ranks what filled it.\n", peak.path)
+	return finding + fmt.Sprintf("  replay blame %s   ranks what filled its main lane.\n", peak.path)
 }

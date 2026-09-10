@@ -144,3 +144,24 @@ func TestON8_TheFoldKeepsTheSessionsOwnTranscript(t *testing.T) {
 		t.Errorf("the folded session points at %q, not its own transcript", got[0].path)
 	}
 }
+
+// ON9: the instruction does not promise more than the command delivers.
+//
+// `replay blame` reports one lane and says so. On a fanned-out session that
+// lane can be a minority of the cost the finding above it just quoted — measured
+// here, $286.59 of a $1,056.14 session, the remaining $769.55 sitting in 1,013
+// sub-agent transcripts. "ranks what filled it" over that is an instruction the
+// reader takes at face value for an answer to a narrower question.
+func TestON9_TheInstructionDoesNotOverclaimItsScope(t *testing.T) {
+	u := units(0.50, 0.80, 0.85, 0.90, 3.40)
+	for i := range u {
+		u[i].path = "/corpus/" + u[i].ID + ".jsonl"
+	}
+	note := outlierNote(u, costSummary{TotalUSD: 6.45, Tasks: len(u)})
+	if !strings.Contains(note, "main lane") {
+		t.Errorf("the instruction does not say blame is scoped to one lane:\n%s", note)
+	}
+	if strings.Contains(note, "ranks what filled it.") {
+		t.Errorf("the instruction still claims blame ranks the whole session:\n%s", note)
+	}
+}
