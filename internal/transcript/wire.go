@@ -48,14 +48,22 @@ type RawMessage struct {
 // RawBlock is a content block as it appears on the wire. Unknown fields are
 // ignored so a provider addition never breaks decoding.
 type RawBlock struct {
-	Type         string          `json:"type"`
-	Text         string          `json:"text"`
-	Thinking     string          `json:"thinking"`
-	ID           string          `json:"id"`
-	Name         string          `json:"name"`
-	Input        json.RawMessage `json:"input"`
-	ToolUseID    string          `json:"tool_use_id"`
-	Content      json.RawMessage `json:"content"`
+	Type      string          `json:"type"`
+	Text      string          `json:"text"`
+	Thinking  string          `json:"thinking"`
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Input     json.RawMessage `json:"input"`
+	ToolUseID string          `json:"tool_use_id"`
+	Content   json.RawMessage `json:"content"`
+	// Source carries an image or document payload on the Anthropic shape,
+	// where OpenAI-derived clients use Content.
+	//
+	// It was absent, so DecodeBlock's image arm read Content and every image
+	// in a Claude Code transcript measured zero. The provider billed for the
+	// bytes; the fit was told they weighed nothing, which drags the ratio for
+	// every other block in the same session.
+	Source       json.RawMessage `json:"source"`
 	IsError      bool            `json:"is_error"`
 	CacheControl json.RawMessage `json:"cache_control"`
 }
@@ -139,7 +147,17 @@ func DecodeBlock(rb RawBlock, role string, toolNames map[string]string, label La
 		}
 		return Block{Kind: KindToolResult, Label: LabelToolResultPrefix + name, Bytes: len(text), Text: text, ToolUseID: rb.ToolUseID, ToolName: name, IsError: rb.IsError}
 	case KindImage, KindDocument:
-		return Block{Kind: rb.Type, Label: rb.Type, Bytes: len(rb.Content)}
+		// Whichever shape carries the payload. Anthropic nests it under
+		// source; OpenAI-derived clients put it in content. Measured as the
+		// bytes that crossed the wire, so base64 counts as encoded rather than
+		// decoded: the provider was handed the encoding.
+		//
+		// A url-referenced image has neither, and zero is the honest answer
+		// there — the payload is not in the transcript to measure. BI4 pins
+		// that distinction so a later change cannot let one stand for the
+		// other.
+		return Block{Kind: rb.Type, Label: rb.Type,
+			Bytes: ContentBytes(rb.Content) + ContentBytes(rb.Source)}
 	default:
 		return Block{Kind: KindOther, Label: LabelOtherPrefix + rb.Type, Bytes: ContentBytes(rb.Content) + len(rb.Text)}
 	}
