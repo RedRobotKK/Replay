@@ -64,9 +64,18 @@ done
 # help text. Allowing the whole host was a real hole: the beacon reverted on
 # 2026-09-09 posted to redrobot.jp/Replay/installed, so a host-level allowlist
 # would have waved through the precise change this file exists to stop.
+#
+# The allowed path is the CANONICAL one, and this check spent a while demanding
+# the other. internal/regression/install_url_test.go collapsed three working
+# addresses onto https://redrobot.jp/replay.sh, install.sh moved with it, and
+# this list did not, so T2 failed on the single URL the installer is supposed to
+# print. Two guards wanting opposite things is the shape the FD8 comment in
+# install.sh describes, and a check that fails on correct code is a check
+# somebody switches off. The canonical address is asserted in that test; this
+# file allows it and nothing else.
 for u in $(grep -oE 'https://redrobot\.jp[^" ]*' "$root/install.sh" | sort -u); do
   case "$u" in
-    https://redrobot.jp/Replay/install.sh) ;;
+    https://redrobot.jp/replay.sh) ;;
     *) say "FAIL T2: an undocumented redrobot.jp URL: $u"; fail=1; t2=1 ;;
   esac
 done
