@@ -694,6 +694,15 @@ func adviceState() ([]tui.AdviceRow, int) {
 func machineState() tui.Machine {
 	m := tui.Machine{}
 
+	// The rules document first, and above the early return, because it
+	// describes the BINARY rather than the machine: it needs no home
+	// directory and there is no filesystem failure that should leave the
+	// screen unable to say which table its figures were computed against.
+	// Asked of the same two functions `replay doctor` asks, so the command
+	// and the screen cannot report different tables.
+	m.RulesVersion = cachemodel.RulesVersionInEffect()
+	m.RulesState, m.RulesAgeDays = rulesAge(cachemodel.FetchedAtInEffect(), timeNow())
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return m

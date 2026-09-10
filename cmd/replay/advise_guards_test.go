@@ -71,3 +71,53 @@ func TestGuardFloorMatchesTheAdvisor(t *testing.T) {
 		t.Fatalf("the printed floor must track advisor.MinGuardSessions (%d)", advisor.MinGuardSessions)
 	}
 }
+
+// The assembled command carries only the caps the spread actually supports.
+//
+// Reported by guard-reachability as INERT: the `if okTok` arm ran and no test
+// depended on whether it had. It is not dead code — it decides whether the
+// printed invocation carries a token cap — so the fix is the assertion, not a
+// deletion. A command that names a flag with no number behind it is one the
+// reader pastes and the tool rejects.
+func TestGuardAdviceCommandCarriesOnlyTheCapsItHas(t *testing.T) {
+	usd := costs(20, func(i int) float64 { return float64(i+1) * 0.5 })
+	tok := costs(20, func(i int) float64 { return float64((i + 1) * 40_000) })
+
+	// Asserted on the assembled command LINE, not on the output as a whole.
+	// Each cap also appears in the derivation block above the command, so a
+	// whole-output check passes whether or not the command carries the flag —
+	// which is exactly how this branch stayed inert while a test looked like
+	// it covered it.
+	cmdLine := func(usd, tok []float64) string {
+		for _, l := range guardAdviceLines(usd, tok) {
+			if strings.Contains(l, "replay serve") {
+				return l
+			}
+		}
+		return ""
+	}
+
+	both := cmdLine(usd, tok)
+	if !strings.Contains(both, "--max-session-usd") || !strings.Contains(both, "--max-session-tokens") {
+		t.Fatalf("the command does not carry both caps: %q", both)
+	}
+
+	// A spread with dollars and no token history prints one cap, not two.
+	usdOnly := cmdLine(usd, nil)
+	if !strings.Contains(usdOnly, "replay serve --max-session-usd") {
+		t.Errorf("the dollar cap is missing from the command:\n%s", usdOnly)
+	}
+	if strings.Contains(usdOnly, "--max-session-tokens") {
+		t.Errorf("a token cap was printed with no token spread behind it:\n%s", usdOnly)
+	}
+
+	// And the reverse, so the assertion cannot pass by the token arm never
+	// running at all.
+	tokOnly := cmdLine(nil, tok)
+	if !strings.Contains(tokOnly, "--max-session-tokens") {
+		t.Errorf("the token cap is missing from the command:\n%s", tokOnly)
+	}
+	if strings.Contains(tokOnly, "--max-session-usd") {
+		t.Errorf("a dollar cap was printed with no dollar spread behind it:\n%s", tokOnly)
+	}
+}

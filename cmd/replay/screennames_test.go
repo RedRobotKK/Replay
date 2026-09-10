@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 
@@ -98,5 +99,51 @@ func TestMCPInstallStillPrintsTheConfiguration(t *testing.T) {
 		if strings.Contains(got, `"jsonrpc"`) {
 			t.Errorf("%s served instead of printing the snippet:\n%s", spelling, got)
 		}
+	}
+}
+
+// SN5: the snippet names something runnable even when the OS will not say what
+// this binary is.
+//
+// os.Executable does not fail on demand, so the fallback lived in a branch no
+// test could enter — reported by the guard-reachability check, which
+// neutralises every conditional a change touches and names the ones nothing
+// observes. The name is the entire output of `mcp --install`: an empty one
+// produces a configuration that launches nothing, and it would be found by
+// whoever pasted it, not by us.
+func TestBinaryNameFallsBackToACommandThatExists(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		exe  string
+		err  error
+		want string
+	}{
+		{"the usual case", "/usr/local/bin/replay", nil, "/usr/local/bin/replay"},
+		{"the OS refused", "", errNoExe, "replay"},
+		{"an error with a path anyway", "/some/path", errNoExe, "replay"},
+		{"no error but no path", "", nil, "replay"},
+	} {
+		if got := binaryName(c.exe, c.err); got != c.want {
+			t.Errorf("%s: binaryName(%q, %v) = %q, want %q", c.name, c.exe, c.err, got, c.want)
+		}
+	}
+}
+
+var errNoExe = errors.New("cannot determine executable path")
+
+// SN6: `replay mcp` with a flag it does not have fails instead of serving.
+//
+// Reported by guard-reachability as INERT. It matters more here than the
+// verdict suggests: runMCP blocks reading stdin, so a mis-typed flag that fell
+// through to it would hang rather than tell anybody why. The command that
+// serves an agent over a pipe is the worst one to have hang on a typo.
+func TestMCPRefusesAFlagItDoesNotHave(t *testing.T) {
+	var out, errs bytes.Buffer
+	err := runMCPCommand([]string{"--no-such-flag"}, &out, &errs)
+	if err == nil {
+		t.Fatal("an unknown flag was accepted; the command would have served instead")
+	}
+	if strings.Contains(out.String(), `"jsonrpc"`) {
+		t.Errorf("the server started despite the bad flag:\n%s", out.String())
 	}
 }
