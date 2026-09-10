@@ -387,11 +387,11 @@ The reasoning above settles the **unit** — per repository, not per seat — an
 still stands. What it got wrong is treating $25 as the *published* price rather
 than as the *first cohort's* price. Two facts, both measurable, force the change.
 
-**$25 is anchored to distribution, not to value.** The measured throttling figure
-is that cache-blind budget arithmetic runs **7.94x high on this machine's corpus
-of 57,958 requests**, so a $500/day ceiling halts execution at **$62.94** of real
-spend — roughly $437/day of approved, unusable budget, about $13,000 a month of
-capacity a metered team already paid for and cannot reach. Charging $25 against
+**\$25 is anchored to distribution, not to value.** The measured throttling
+figure is that cache-blind budget arithmetic runs
+**7.94x high on this machine's corpus of 57,958 requests**, so a \$500/day
+ceiling halts execution at **\$62.94** of real spend — roughly \$437/day of approved, unusable budget, about \$13,000 a month of
+capacity a metered team already paid for and cannot reach. Charging \$25 against
 that is **0.2% of the value**. The closest structural comparables — vendor-neutral
 cloud cost tools, which exist precisely because the vendor selling the resource is
 the wrong party to flag overbuying — price at 1-3% of the spend they illuminate.
