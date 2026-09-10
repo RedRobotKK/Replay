@@ -37,6 +37,16 @@ const UnixScheme = "unix://"
 // routinely permissive.
 const socketMode = 0o600
 
+// socketGOOS is the platform the transport judges itself against.
+//
+// It is a variable rather than runtime.GOOS read inline because the Windows
+// refusal below is otherwise unreachable from any test: nothing on a Unix
+// machine or a Linux CI runner can execute it, and the alternative — grepping
+// the source for the refusal's text — is the first defect ADR-0014
+// catalogues, a search standing in for a guarantee. A variable makes the
+// platform an input to the decision, so the decision can be observed to fail.
+var socketGOOS = runtime.GOOS
+
 // maxSocketPath is the shortest sun_path any supported platform offers, less
 // the terminating NUL: 104 on macOS, 108 on Linux. Using the smaller keeps a
 // path that works on one from failing on the other.
@@ -59,7 +69,7 @@ func listenUnix(addr string) (net.Listener, error) {
 	if path == "" {
 		return nil, errors.New("a unix:// listen address needs a socket path")
 	}
-	if runtime.GOOS == "windows" {
+	if socketGOOS == "windows" {
 		// Windows has AF_UNIX, but not the permission semantics this
 		// transport is for. Offering it there would be offering the name of
 		// a guarantee without the guarantee.
