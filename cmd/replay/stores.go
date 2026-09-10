@@ -102,6 +102,36 @@ func homeStores() []store {
 			Name: "serve.log", Prefix: true, Purgeable: true,
 			Holds: "the proxy's own log. Request paths, statuses and refusals; no request bodies.",
 		},
+		{
+			// Registered 2026-09-10, after SC1 found it by reading the source
+			// rather than by anyone remembering. It had been written since the
+			// contribution path shipped and disclosed by nothing.
+			//
+			// Sensitive, and beside the vault rather than beside a cache:
+			// anyone who can read this can compute this machine's contributor
+			// tag for ANY campaign, which is precisely the linkage the
+			// per-campaign tag exists to prevent.
+			//
+			// Not purgeable by a window, for the vault's reason: the tag has to
+			// be stable or one contributor looks like many, which destroys the
+			// only thing the tag is for. Deleting it is a decision, not a
+			// schedule.
+			Name: contributorSecretName, Sensitive: true, Purgeable: false,
+			Holds: "the machine-local secret your contributor tag is derived from. Not sent " +
+				"anywhere and not derived from your account: it exists so two submissions " +
+				"from this machine can be recognised as one contributor. Anyone who can read " +
+				"it can compute this machine's tag for any campaign, so it is owner-only. " +
+				"Deleting it is safe and makes your next contribution look like a new " +
+				"contributor.",
+		},
+		{
+			// Also found by SC1. A cache of the price rules, fetched only when
+			// the reader asks for it.
+			Name: rulesFileName, Purgeable: true,
+			Holds: "the price and caching rules last fetched by `replay rules --update`. " +
+				"Provider figures and a version, nothing about you. Deleting it means the " +
+				"next report uses the table compiled into the binary.",
+		},
 	}
 }
 
