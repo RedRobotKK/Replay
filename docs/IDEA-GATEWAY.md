@@ -125,17 +125,68 @@ prior-art search is still running — recorded as pending rather than guessed,
 because an unsearched idea has no verdict, and unknown is not the same as
 allowable (ADR-0018).
 
-| Idea | §101 read | §102 known risk | §103 nearest art | Verdict |
+| Idea | §101 | §102 nearest | §103 nearest | Verdict |
 |---|---|---|---|---|
-| `CACHE-KEEPALIVE` — TTL-optimal client cache warming | Close. A timer is a technical act, but the inventive step is choosing an interval, which is arithmetic. | Published 2026-07 as a paper. **The paper itself is prior art against anyone, including us.** | CDN cache pre-warming, TTL refresh | PENDING |
-| `CACHE-DEADPOINT` — LCP vs declared breakpoint offset | Weakest link is that the comparison is a string operation. Strongest is that the result changes what the provider bills, not what a person reads. | — | Prefix matching, cache key validation | PENDING |
-| Three-way cache-miss attribution | Likely ineligible. Classify observations, display result — *Electric Power Group* squarely. | — | Root-cause analysis, log correlation | PENDING |
-| Reasoning-token double-bill ledger | Likely ineligible. Accounting method. | — | Metering, chargeback | PENDING |
-| Compaction invoice | Likely ineligible. Same shape. | — | FinOps waste detection | PENDING |
-| Recoverable-token report | Likely ineligible. Same shape. | `WASTE-TRAJECTORY` (2509.23586) discloses the waste classes | Deduplication, redundant-request detection | PENDING |
-| Guard-reachability with coverage classification | Genuine argument. Compile, execute, observe — technical throughout. | **`MUTATE-META` (2010.13464). Treat as anticipating until distinguished.** | Mutation testing + coverage | PENDING |
-| Oracle-signal classification of covering tests | Same argument, and the newest element. | `ORACLE-SMOKE` (2606.18168) discloses the taxonomy and the 80.2% measurement | Static assertion analysis | PENDING |
-| Mechanically gated test remediation | Strongest §101 position: the acceptance criterion is a compile-and-execute result, not a judgement. | `CRITIC-LOOP` (2607.23002) discloses the loop | LLM test generation (crowded, recent) | PENDING |
+| Guard-reachability + coverage classification | **LIKELY ELIGIBLE** — mutate, compile, execute, instrument. Post-*Alice* grants exist in this art unit. | `MUTATE-META` discloses mutation plus instrumentation of which tests visited the mutated code | US12072790B1 (State Farm, diff-scoping); US12321257B2 (DevFactory, coverage analysis of survivors); US8997034B2 (Synopsys, activation vs detection) | **PUBLISH** |
+| Oracle-strength interlock | Eligible **only** as a dependent refinement of the pipeline above; ineligible standalone | Schuler & Zeller checked coverage (2011); Zhang & Mesbah assertions (2015) | DevFactory + Zhang & Mesbah + Schuler & Zeller | **FILE (provisional, narrow)** |
+| Mechanically gated test remediation | Eligible, and irrelevant | **arXiv:2501.12862 (ACH, Meta, Jan 2025) — anticipated.** LLM mutant, LLM test, acceptance = test kills mutant. arXiv:2402.09171 (TestGen-LLM) discloses the mechanical-filter architecture verbatim in substance | Fraser & Zeller ISSTA 2010 supplies the gate itself | **KEEP** |
+| Reasoning-token double-bill ledger | **LIKELY INELIGIBLE** — mathematical concept *and* fundamental economic practice. *Electric Power Group* controls. | None found | US 12,699,595 (Mavvrik) meters LLM input/output tokens against a quota; US 8,380,736 (Microsoft) claims double-billing detection in a metered stream | **PUBLISH** |
+| Compaction invoice | **CLOSE** — best pro-eligibility story of the cost line, via *Visual Memory v. NVIDIA*: it measures a caching subsystem. Fails as drafted because it reports and stops. | None. "Context compaction" is essentially absent from the patent record. | **US 9,619,397 (IBM)** — computes probability an item is needed again AND the cost of re-obtaining it, evicts on that weight. Nearly mechanical mapping. | **FILE (only if commercialising)** |
+| Recoverable-token report | **LIKELY INELIGIBLE.** "Without modifying the agent" writes the practical application out of the claim on its face. | None found | US 10,133,557 (Mentor) analyses a trace for repeated activity + estimated gain; and **compiler liveness analysis** — dead-store elimination and dead-value analysis, decades of textbook art | **PUBLISH** |
+| `CACHE-KEEPALIVE`, `CACHE-DEADPOINT`, three-way miss attribution | Not screened (third examiner still running) | — | CDN cache pre-warming, TTL refresh | PENDING |
+
+### The structural finding
+
+**Meta holds no mutation-testing patents.** Zero results under assignee Meta or
+Facebook; inventor searches for the `MUTATE-META` authors return nothing in
+software testing. They published three times instead — 2020, 2024, 2025.
+
+That cuts both ways, and the direction decides the strategy:
+
+- **Against filing:** those papers are §102(a)(1) printed publications. They are
+  not ours, so no grace period applies. They block.
+- **For building:** there is no Meta patent to be asserted against us. Freedom
+  to operate in this space is excellent *because* they published.
+
+### The one thing worth owning
+
+Not the classification — that is obvious over Zhang & Mesbah plus Schuler &
+Zeller. The **interlock**:
+
+> classifying each covering test by oracle strength, and **conditioning
+> emission of a code-removal recommendation on that classification, suppressing
+> it when no covering test contains a value assertion**, emitting a
+> test-remediation recommendation instead.
+
+Every reference found stops at diagnosis. None claims suppressing a destructive
+action on the basis of oracle strength. It is the interlock that stops an
+autonomous agent deleting correct production code because a vacuous test failed
+to notice its absence — a failure mode that is new, common, and expensive.
+
+Narrow, and the only limitation in the set that is both non-obvious on the
+record searched and commercially load-bearing.
+
+### Two flags before anyone spends money
+
+1. **The disclosure clock is running and may already have run.** A public
+   repository starts a 12-month US grace period under §102(b)(1) and is an
+   **immediate absolute bar in the EPO and JPO**, which have no grace period.
+   This project is Tokyo-based. If non-US rights matter, the first public
+   commit date may already govern.
+2. **The §102 case against two inventions rests on abstracts.** `MUTATE-META`
+   and arXiv:2501.12862 were not read in full. If `MUTATE-META` does not
+   actually articulate the unreached/inert split as a *reported classification*,
+   that posture improves — though the §103 case over DevFactory plus Synopsys
+   stands regardless.
+
+### What the screens could not do
+
+Both examiners recorded the same gaps, and they are recorded here rather than
+papered over. `ppubs.uspto.gov` requires an authenticated session and **was not
+searched**; Google Patents bot-blocked the host and was reached only through a
+proxy or through FPO. Coverage therefore rests on one index. Several promising
+numbers came back **NOT VERIFIED** and are excluded rather than cited. This is
+a screen, not a clearance.
 
 ---
 
