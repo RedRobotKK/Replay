@@ -335,6 +335,22 @@ func RulesVersionInEffect() string {
 	return override.Version
 }
 
+// FetchedAtInEffect is when the loaded document was fetched, or "" when the
+// compiled table is in force.
+//
+// Empty means the compiled table, which is a floor rather than an undated
+// document: there is nothing to age, and reporting an age for it would be a
+// number with nothing behind it. A loaded document with no fetchedAt returns ""
+// too, and the caller must not read that as fresh.
+func FetchedAtInEffect() string {
+	overrideMu.RLock()
+	defer overrideMu.RUnlock()
+	if override == nil {
+		return ""
+	}
+	return override.FetchedAt
+}
+
 // activeRow finds a loaded rule for a model id, matched the same way the
 // compiled table is: by substring, most specific first, in file order.
 func activeRow(model string) (ModelRule, bool) {

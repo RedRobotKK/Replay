@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"io"
 	"io/fs"
 	"net"
@@ -101,6 +102,13 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 		p.Printf("              %d of %d can be priced; the rest are conversation only\n",
 			priceable, len(found))
 	}
+
+	// The rules document, before the proxy, because it answers the question the
+	// pricing line above provokes: "priced against what, and how old is it?"
+	// `replay upgrade` tells an operator when the BINARY is stale; nothing told
+	// them when the TABLE was, and the table is what every dollar figure here
+	// was computed against.
+	p.Printf("%s", rulesNotice(cachemodel.RulesVersionInEffect(), cachemodel.FetchedAtInEffect(), timeNow()))
 
 	// Proxy configuration.
 	base := os.Getenv(envBaseURL)
