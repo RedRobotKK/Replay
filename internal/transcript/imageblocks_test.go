@@ -38,8 +38,26 @@ import (
 // the session — the "denser than prose" problem from ADR-0018, running the
 // other way and far harder.
 //
-// So this fixes what Bytes reports and deliberately does not feed it anywhere
-// new. See BI4.
+// So this fixes what Bytes reports and deliberately feeds it nowhere new.
+//
+// One correction, recorded because the mistake is the one this project keeps
+// finding. I first reported that the image never appears as a row in `blame` or
+// `context`, and filed that as a second, open defect. It does appear:
+//
+//	blame row: "image"  once=2656  prompt=18592
+//
+// I had grepped truncated output. `blame` prints replayBlameLimit = 5 rows and
+// `context` ended with "... and 2 more"; the row sat inside the elision both
+// times. Reading a display limit as an absence — while investigating a defect
+// about content measured at zero.
+//
+// The attribution was right all along, and the ratio says why it looks small:
+// 2,656 tokens for 675,873 bytes is 0.0039 tokens/byte, which is what a
+// provider charges for an image — by its dimensions, not the length of its
+// base64. Against prose at 0.715 an image is roughly 180x less dense per byte.
+//
+// So there is no second defect. The source field was missing; everything
+// downstream of it was already correct. See BI4.
 //
 // Base64 is measured as the encoded bytes, which is what was sent. The decoded
 // image is smaller and irrelevant: the provider was handed the encoding, and
