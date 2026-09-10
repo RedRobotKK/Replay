@@ -328,10 +328,25 @@ func percentile(sorted []float64, p float64) float64 {
 	return sorted[i]
 }
 
-func renderCost(s costSummary, unpriced int, out io.Writer, stateDir string) string {
+// renderCost writes the report. unpriced is transcripts that were READ and
+// priced to nothing, because their model is not in the price table; unreadable
+// is transcripts that could not be read at all, because the parser found no
+// provider request in them. They are two counts because they have two causes
+// and two fixes, and one sentence over both says something untrue about one of
+// them: for a while this function was handed only the first, and a run over a
+// single unreadable file reported "0 were read", which was absence rendered as
+// zero about a file with 183 assistant turns in it.
+func renderCost(s costSummary, unpriced, unreadable int, out io.Writer, stateDir string) string {
 	var b strings.Builder
 	if s.Tasks == 0 {
-		fmt.Fprintf(&b, "No transcript could be priced. %d were read but their model is not in the price table.\n", unpriced)
+		b.WriteString("No transcript could be priced.")
+		if unpriced > 0 {
+			fmt.Fprintf(&b, " %d were read but their model is not in the price table.", unpriced)
+		}
+		if unreadable > 0 {
+			fmt.Fprintf(&b, " %d transcript(s) could not be read at all: no provider request was found.", unreadable)
+		}
+		b.WriteString("\n")
 		return b.String()
 	}
 	fmt.Fprintf(&b, "%s\n\n", costHeaderLine(s))
@@ -392,6 +407,9 @@ func renderCost(s costSummary, unpriced int, out io.Writer, stateDir string) str
 	}
 	if unpriced > 0 {
 		fmt.Fprintf(&b, "\n%d further transcripts were read but not priced, because their model is not in\nthe price table. They are excluded rather than counted as free.\n", unpriced)
+	}
+	if unreadable > 0 {
+		fmt.Fprintf(&b, "\n%d further transcript(s) could not be read: no provider request was found.\nAbsent from every figure above, not zero in it.\n", unreadable)
 	}
 	// tipLine names a coffee count and returns nothing below its floor, so a
 	// modest corpus produced a result and no ask at all. Below the floor the
@@ -485,7 +503,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			// be asserted over nothing: a CI runner has no transcripts, so a
 			// gate that stayed silent here would go green having measured
 			// nothing, which is the failure this flag exists to prevent.
-			return checkAvoidableCeiling(*maxAvoidable, costSummary{Unit: unitSession}, 0, stdout)
+			return checkAvoidableCeiling(*maxAvoidable, costSummary{Unit: unitSession}, 0, 0, stdout)
 		}
 		_, _ = fmt.Fprintf(stderr, "reading %s\n", roots[0])
 		args = append(args, roots...)
@@ -535,9 +553,16 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	}
 	warm := len(units)
 	files = cold
-	unpriced := 0
+	unpriced, unreadable := 0, 0
 	_ = forEachSession(files, func(path string, session *transcript.Session, rep *analysis.LaneReport, err error) error {
+		// A file that produced no session is not a file that cost nothing.
+		// This arm used to drop the error and return, so an unreadable
+		// transcript reached no counter and no sentence, and the report said
+		// "0 were read" about files it had never read. Nothing is cached for
+		// them either — cache.put runs only on success — so a cold count is
+		// the whole count.
 		if err != nil || rep == nil || session == nil {
+			unreadable++
 			return nil
 		}
 		// The model is a property of the requests, not the session: a session
@@ -741,7 +766,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		// handed one row per agent lane under that key; handing them session
 		// rows under the same version string would be the silent kind of
 		// break, where nothing errors and every figure moves.
-		out := map[string]any{"schema": "replay.cost.v2", "summary": s, "unpriced": unpriced,
+		out := map[string]any{"schema": "replay.cost.v2", "summary": s, "unpriced": unpriced, "unreadable": unreadable,
 			"duplicatedRequests": duplicated, "totalRequests": totalReq}
 		// A key rather than a printed line, because stdout on this branch is a
 		// document a machine parses. The statement the human needs still has to
@@ -771,7 +796,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	if _, err := io.WriteString(stdout, renderCost(s, unpriced, stdout, tipStateDir())); err != nil {
+	if _, err := io.WriteString(stdout, renderCost(s, unpriced, unreadable, stdout, tipStateDir())); err != nil {
 		return err
 	}
 	if note := overlapNote(duplicated, totalReq); note != "" {
@@ -814,7 +839,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 				u.Requests, fmt.Sprintf("$%.2f", u.CostUSD), fmt.Sprintf("$%.2f", u.AvoidableUSD), u.Breaks)
 		}
 	}
-	return checkAvoidableCeiling(gateCeiling, s, unpriced, stdout)
+	return checkAvoidableCeiling(gateCeiling, s, unpriced, unreadable, stdout)
 }
 
 // sessionTime is when a session ran, taken from its first request.
