@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -67,7 +68,7 @@ func TestED1_ADiscardedErrorSaysWhy(t *testing.T) {
 						return true
 					}
 					// `if err != nil { return nil }` or `{ continue }`.
-					if !strings.Contains(exprText(fset, ifs.Cond), "err != nil") {
+					if !comparesErrToNil(ifs.Cond) {
 						return true
 					}
 					swallow := false
@@ -91,7 +92,7 @@ func TestED1_ADiscardedErrorSaysWhy(t *testing.T) {
 						return true
 					}
 					undocumented = append(undocumented, finding{
-						pos: rel + ":" + itoa(line),
+						pos: rel + ":" + strconv.Itoa(line),
 						src: strings.TrimSpace(lines[line-1]),
 					})
 					return true
@@ -159,34 +160,27 @@ func TestED1_ADiscardedErrorSaysWhy(t *testing.T) {
 	}
 }
 
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b []byte
-	for n > 0 {
-		b = append([]byte{byte('0' + n%10)}, b...)
-		n /= 10
-	}
-	return string(b)
-}
-
-func exprText(fset *token.FileSet, e ast.Expr) string {
-	var sb strings.Builder
+// comparesErrToNil reports whether a condition tests an error against nil.
+//
+// Matched on the AST rather than on the rendered text: `err != nil` and
+// `err != nil || info.IsDir()` are the same decision, and a substring search
+// over a flattened expression could not tell either from a variable that
+// merely happens to be spelled err in a comment.
+func comparesErrToNil(e ast.Expr) bool {
+	found := false
 	ast.Inspect(e, func(n ast.Node) bool {
-		switch v := n.(type) {
-		case *ast.Ident:
-			sb.WriteString(v.Name + " ")
-		case *ast.BinaryExpr:
-			sb.WriteString(v.Op.String() + " ")
+		be, ok := n.(*ast.BinaryExpr)
+		if !ok || be.Op != token.NEQ {
+			return true
+		}
+		lhs, lok := be.X.(*ast.Ident)
+		rhs, rok := be.Y.(*ast.Ident)
+		if lok && rok && rhs.Name == "nil" && strings.HasSuffix(strings.ToLower(lhs.Name), "err") {
+			found = true
 		}
 		return true
 	})
-	s := sb.String()
-	if strings.Contains(s, "err ") && strings.Contains(s, "!= ") && strings.Contains(s, "nil ") {
-		return "err != nil"
-	}
-	return s
+	return found
 }
 
 // commentedAbove reports whether a comment sits within three lines above.

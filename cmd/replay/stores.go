@@ -137,11 +137,6 @@ func homeStores() []store {
 
 // resolveStores expands the registry against a real directory, so a prefixed
 // entry like ledger also covers ledger-grok.
-func resolveStores(root string) []resolved {
-	out, _ := resolveStoresErr(root)
-	return out
-}
-
 // resolveStoresErr is resolveStores with the reason it found nothing.
 //
 // A nil slice means one of two things and they are not the same: the directory
