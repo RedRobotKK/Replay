@@ -148,11 +148,41 @@ func ModelCalibrations(reports []*LaneReport) []ModelCalibration {
 	return out
 }
 
+// distinctSessions counts the sessions that wrote these lanes, not the lanes.
+//
+// A session writes one transcript per lane — the main one plus one for every
+// subagent it spawns — and they all carry the same session id, so a fan-out
+// session contributes several lanes and one draw. This value is printed under
+// a column headed "Sessions", and reporting lanes there overstated the
+// independent sample by the fan-out width.
+//
+// A report with no session attached is its own session. Callers that build a
+// LaneReport straight from a lane leave Session nil, and folding those into one
+// anonymous session would collapse unrelated lanes into a single draw.
+func distinctSessions(reps []*LaneReport) int {
+	n, seen := 0, map[string]bool{}
+	for _, rep := range reps {
+		if rep.Session == nil || rep.Session.ID == "" {
+			n++
+			continue
+		}
+		if seen[rep.Session.ID] {
+			continue
+		}
+		seen[rep.Session.ID] = true
+		n++
+	}
+	return n
+}
+
 func modelCalibration(model string, reps []*LaneReport) ModelCalibration {
 	sort.SliceStable(reps, func(i, j int) bool {
 		return reps[i].Lane.Requests[0].Timestamp.Before(reps[j].Lane.Requests[0].Timestamp)
 	})
-	m := ModelCalibration{Model: model, Sessions: len(reps), MinPrefix: MinPrefixFit{Rule: cachemodel.MinCacheablePrefix(model)}}
+	m := ModelCalibration{Model: model, Sessions: distinctSessions(reps), MinPrefix: MinPrefixFit{Rule: cachemodel.MinCacheablePrefix(model)}}
+	// The window below still slices LANES, and RecentSessions still counts
+	// them. Only the published Sessions count is corrected here; see
+	// TestRecentWindowIsStillLaneBased for why the rest is deliberate.
 	recentFrom := len(reps) - StalenessRecentSessions
 	if recentFrom < 0 {
 		recentFrom = 0
