@@ -339,6 +339,33 @@ threshold fitted to that data is not a threshold. This is exactly why the gate c
 against **its own** measured baseline rather than against a number this project supplies. There is
 no threshold to be wrong about. The product is the comparison, and the baseline is the customer's.
 
+### Added 2026-09-10: where the money actually sits
+
+A distribution measurement over 116 sessions
+([avoidable concentration](evidence/avoidable-concentration-2026-09-10.md))
+sharpens both sides of the objection above and settles neither.
+
+**Twenty-five fan-out sessions hold 98.8% of all avoidable spend; the ninety-one
+single-lane sessions hold 1.2%** — $2.03 in total. So the exposure is not a
+uniform tax on agent work. It is a property of fanning out to sub-agent lanes,
+and it recurs per session rather than sitting still waiting to be fixed once.
+
+That does not rescue the subscription on its own, and the document should not
+pretend it does. Establishing *where* the money is says nothing about *why* each
+break happened: `replay cost` estimates from usage fields, and attributing a
+cause needs the proxy. If client-side sequencing does fix it, the fix must be
+re-applied by every project that adds a connector; if it does not, the exposure
+continues. **Which of those is true is a proxy measurement nobody has taken**,
+and it is the single measurement that would most change the answer below.
+
+What it does do is corroborate the unit. A developer running single-lane
+sessions has two dollars to find across ninety-one sessions — there is no
+subscription in that, under any pricing. A repository whose work fans out
+carries a recurring exposure concentrated in a handful of sessions it cannot
+identify in advance, which is the case for a standing instrument rather than a
+one-off audit. The unit was argued to be the repository on other grounds; the
+money agrees.
+
 ## The price, straight
 
 **No for $25 per developer per month. Yes for $25 per repository per month.**
