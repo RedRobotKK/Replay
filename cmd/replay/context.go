@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/reference"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -21,6 +22,37 @@ import (
 // What it does NOT claim is in the name of the type it prints. See
 // analysis.ContextEntry: the underlying attribution never subtracts, so this is
 // content that entered the context, not content still in it.
+// systemPromptLine places this corpus's system-prompt share against a
+// published population, and returns "" when there is nothing to place.
+//
+// Split out of the walk so the empty cases can be reached from a test. They
+// cannot be reached from a Claude Code transcript: every one observed produces
+// a system row, because a request carrying a cache read implies a prefix the
+// transcript cannot see. The ledger and the Codex reader are not bound by that,
+// and a zero share of a system prompt is not the same claim as a session that
+// carried none — absence, zero and unknown are three values (ADR-0018).
+func systemPromptLine(sysTokens, allTokens int) string {
+	return referenceLine("system prompt", "systemPromptShare", sysTokens, allTokens)
+}
+
+// referenceLine places a part of the corpus against a published figure for the
+// same metric, and returns "" when it cannot.
+//
+// The metric is a parameter rather than a literal so the not-found branch can
+// be entered from a test. It is unreachable today — Compiled() carries
+// systemPromptShare and CR6 pins that it does — and a branch no test can enter
+// is one guard-reachability reports and this repository does not keep.
+func referenceLine(name, metric string, part, whole int) string {
+	if whole <= 0 || part <= 0 {
+		return ""
+	}
+	ref, ok := reference.For(metric)
+	if !ok {
+		return ""
+	}
+	return name + ": " + ref.Compare(float64(part)/float64(whole)).Line()
+}
+
 func runContext(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("context", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -38,6 +70,9 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 	}
 
 	printed := 0
+	// sysTokens and allTokens accumulate across the walk so the population
+	// comparison below is printed once per run rather than once per transcript.
+	sysTokens, allTokens := 0, 0
 	err = forEachSession(files, func(path string, session *transcript.Session, rep *analysis.LaneReport, err error) error {
 		if err != nil || rep == nil {
 			return nil
@@ -85,6 +120,17 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 			_, _ = fmt.Fprintf(stdout, "  %-*s %5.1f%%  %10s  x%-5d%s\n",
 				analysis.MaxContextLabel, r.Label, r.Share*100, formatCount(r.Tokens), r.Occurrences, mark)
 		}
+		// Accumulated across the walk, not printed per session. `replay context
+		// <dir>` reads every transcript, and a comparison under each of 1,800
+		// tables is one the reader learns to skip — the objection
+		// internal/analysis/outlier.go raises about printing a comparison on
+		// every run, at a smaller scale.
+		for _, r := range rows {
+			if r.Label == transcript.RoleSystem {
+				sysTokens += r.Tokens
+			}
+		}
+		allTokens += total
 		gap := analysis.MeasureGap(session, rep.Lane, total)
 		_, _ = fmt.Fprintf(stdout, "\n  %s\n", analysis.FitNote(rep.Fit))
 		_, _ = fmt.Fprintf(stdout, "\n  %s\n", gap.Note())
@@ -102,6 +148,27 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 	// already returned without counting -- which is a dead guard by ADR-0014's
 	// standard and would have come back to life the day somebody moved the
 	// increment.
+	// Where this reader's system prompt sits against a published population.
+	//
+	// The pooled corpus has one member, so this tool cannot supply a reference
+	// from its own contributors. It can carry somebody else's, with their
+	// citation and their population attached — see
+	// docs/design/reference-distribution.md. The population travels with the
+	// figure on the same line, every time, because "28.8% here, 14.0% across
+	// 13.5M sessions" is a sentence a reader can weigh and "roughly double the
+	// average" is not.
+	//
+	// Not on --json: a citation inside machine-readable output is corruption,
+	// for the same reason the funding line below is gated.
+	//
+	// A corpus with no system block prints nothing rather than a zero share.
+	// Absence, zero and unknown are three values, and a transcript that carried
+	// no system prompt has not measured a 0% share of one.
+	if printed > 0 && !*asJSON {
+		if line := systemPromptLine(sysTokens, allTokens); line != "" {
+			_, _ = fmt.Fprintf(stdout, "\n  %s\n", line)
+		}
+	}
 	if printed > 0 && !*asJSON {
 		_, _ = io.WriteString(stdout, supportLine(describeResult("context"), stdout))
 	}
