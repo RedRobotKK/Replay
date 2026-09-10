@@ -247,6 +247,26 @@ var defects = []Defect{
 			"claimed Windows was verified'; INCIDENTS.md 2026-09-06 RECORD-LAG",
 	},
 	{
+		ID:    "FD-10",
+		Title: "The paid feed's freshness claim has no detector behind it",
+		Looked: "Current. Back-checking ADR-0013 against ADR-0019 on 2026-09-10 found that " +
+			"0013 sells a rules feed 'corrected within hours of a provider changing a " +
+			"published number', but nothing produces the observed-versus-documented column " +
+			"(0019's probe is unbuilt) and nothing detects the change (the drift routine is " +
+			"unbuilt). The freshness promise is a claim with no mechanism. It is legitimate " +
+			"inside the ADRs, which weigh it; it is not legitimate in anything a user reads. " +
+			"0019's 2026-09-10 extension narrows the activation gate to require a detector " +
+			"that can be observed to fire.",
+		Symptom: "A README, guide, or shipped output string would promise the rules are " +
+			"continuously corrected, with no detector in the tree a test could watch fire.",
+		Status: StatusGuarded,
+		Guards: []string{"TestFrozenFD10_NoFreshnessSLAUntilADetectorExists"},
+		Fix: "this branch: ADR-0019 extended to record the 0013 coupling and narrow the " +
+			"activation gate; no user surface carries the claim.",
+		Evidence: "docs/adr/0019 'Extension, 2026-09-10'; ADR-0013 'observed column is the " +
+			"moat and the obligation'; the claim appears in no user-facing surface today.",
+	},
+	{
 		ID:    "FD-11",
 		Title: "The empty state was blind to every agent but one",
 		Looked: "Current. `replay` with no arguments walked the Claude Code roots, found " +

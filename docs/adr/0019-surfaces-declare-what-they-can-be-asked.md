@@ -294,6 +294,48 @@ each is a precondition for trusting the next:
   of invisible, and it is strictly better than the current situation, where the
   question is not asked at all.
 
+## Extension, 2026-09-10: this ADR is the producer for ADR-0013's moat
+
+Back-checking ADR-0013 against the code found a dependency neither record
+stated. It is set down here because leaving it implicit hides what has to be
+built before the paid feed can honour its own description.
+
+ADR-0013 sells a rules feed whose named moat is *"the observed-versus-documented
+column, which can only be produced by replaying real traffic,"* and it promises
+that column is *"corrected within hours of a provider changing a published
+number."* **This ADR is what would produce that column.** The `Reports`
+capability set, probed and dated by `ProbedAt`, is the observed side of
+0013's observed-versus-documented; without it, 0013 has a documented column and
+nothing to set it against.
+
+Two facts follow, and both are constraints rather than nice-to-haves:
+
+- **The hand-maintained table is a stand-in, not the design.**
+  `docs/platform-prompt-handling.md` currently records per-surface caching
+  models, levers and telemetry by hand, tagged measured / model-knowledge /
+  unknown. That table is exactly what this ADR argues must be *probed* rather
+  than *asserted* — a hand table rots, and a rotted capability claim reads as a
+  zero. It is the worked example the probe must replace, not evidence that the
+  probe is unnecessary.
+
+- **The paid feed's activation gate is wrong as written, and this narrows it.**
+  ADR-0013's `differsFromFree` opens the paywall when the observed column merely
+  *exists*. But "corrected within hours" is a claim about a *continuous
+  process*, not a one-time document, and there is no detector behind it today —
+  the drift routine that would notice a provider moving a number is unbuilt.
+  A promise of freshness with no mechanism to keep it is the "a check that
+  cannot fail is not evidence" defect (ADR-0014) raised to the level of a
+  product claim. **So the gate is hereby narrowed: the paid feed does not sell
+  a freshness claim until a drift detector exists that can be observed to fire.**
+  Selling "corrected within hours" without it would be fraud with a subscription
+  attached, which is 0013's own phrase for a feed that stops being verified.
+
+The order of construction that falls out: probe (this ADR) → drift detector
+(the routine that diffs the probe and the public price database against the
+compiled rules and reports, never applies) → only then the feed activates its
+freshness claim. Until all three exist, `differsFromFree` stays 503 and the
+hand table stands in, dated and honest about being a stand-in.
+
 ## Alternatives considered
 
 **A `Provider` interface with a `Parse` method.** The obvious design, and it
