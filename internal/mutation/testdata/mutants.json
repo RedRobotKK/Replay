@@ -165,12 +165,12 @@
       "class": "guard-removed",
       "discovered": "2026-09-06",
       "file": "cmd/replay/contribute.go",
-      "anchor": "\tif !decision.Allowed() {",
-      "replacement": "\tif false {",
+      "anchor": "\tif !decision.Allowed() {\n\t\treturn fmt.Errorf(\"corpus contribution is declined",
+      "replacement": "\tif false {\n\t\treturn fmt.Errorf(\"corpus contribution is declined",
       "killedBy": [
         "TestC2_ContributeHonoursARecordedRefusal"
       ],
-      "note": "The command-level gate. internal/consent was dead code in the shipped binary until this wiring; the mutant is what stops it going dead again."
+      "note": "The command-level gate on the PROBE contribution path. internal/consent was dead code in the shipped binary until this wiring; the mutant is what stops it going dead again. The anchor carries the return line because a second contribution path landed on 2026-09-10 with a byte-identical gate, and a one-line anchor then matched both — the mutation would have landed on whichever came first in the file, which is not the one this mutant is about."
     },
     {
       "id": "M12",
@@ -1005,6 +1005,20 @@
         "TestRC1_APlainHTTPSourceIsNeverFetched"
       ],
       "note": "The front door. X11 covered the REDIRECT refusal one scope down — an https server that 302s to plain http — and nothing covered someone typing an http URL to begin with. Rules drive the cost gates and the installed document records the source as typed, so a cleartext fetch means every later report asserts TLS that never happened. The killing test asserts a request counter rather than the error string: a variant that fetched first and complained afterwards returns exactly the right message and is caught only by the count."
+    },
+    {
+      "id": "M76",
+      "name": "corpus-contribute-gate-removed",
+      "class": "guard-removed",
+      "discovered": "2026-09-10",
+      "file": "cmd/replay/contribute.go",
+      "anchor": "\tif !decision.Allowed() {\n\t\treturn \"\", nil, fmt.Errorf(\"corpus contribution is declined",
+      "replacement": "\tif false {\n\t\treturn \"\", nil, fmt.Errorf(\"corpus contribution is declined",
+      "killedBy": [
+        "TestOI1_OnlyTheExactAffirmativeContributes",
+        "TestCGA_EachConsentStateGivesItsOwnRefusal"
+      ],
+      "note": "The same gate on the CORPUS contribution path, which carries aggregate spend. M11 guards the probe path and could not guard this one: two mutants because there are two gates, and a catalogue with one entry for two call sites is a catalogue that tests whichever the parser reaches first."
     }
   ],
   "knownSurvivors": [
