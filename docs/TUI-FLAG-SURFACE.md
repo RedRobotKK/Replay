@@ -221,6 +221,10 @@ elsewhere in this file. -->
 | `--x402-json` | `rules` | bool |
 | `--yes` | `advise` | bool |
 | `--yes` | `probe` | bool |
+| `--metered` | `ceiling` | bool |
+| `--subscription` | `ceiling` | bool |
+| `--day-ceiling` | `ceiling` | float64 |
+| `--flat-rate` | `ceiling` | float64 |
 
 ## What this does not answer
 

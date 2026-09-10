@@ -29,7 +29,7 @@ import argparse, os, re, subprocess, sys, tempfile
 # this list against the dispatch table. TestCLIBlueprintCoversEveryCommand now
 # does, so the list stays explicit and can no longer fall behind.
 COMMANDS = [
-    "cost", "diff", "advise", "serve", "tui", "context", "blame", "replay",
+    "cost", "ceiling", "diff", "advise", "serve", "tui", "context", "blame", "replay",
     "route", "trim", "codex", "burn", "agents", "mcp", "corpus", "learn",
     "probe", "doctor", "rules", "statusline", "redact", "version", "prefix", "since", "budget",
     "upgrade", "purge", "privacy",
@@ -48,6 +48,7 @@ COMMANDS = [
 #   writes: "none" | what it can write
 META = {
     "cost":       ("Cost per task from transcripts already on disk", "none", "a transcript index cache and the tip-frequency file under ~/.replay; --png writes a card"),
+    "ceiling":    ("What a cache-blind budget ceiling halts your agents at, in your billing basis", "none", "none"),
     "diff":       ("Locate and classify every cache break, with its cause", "none", "none"),
     "advise":     ("Rank the largest token sources, with predicted savings", "none", "with --apply --yes, a settings file; --out writes advice.json"),
     "serve":      ("Local proxy: byte-for-byte passthrough, records a ledger", "outbound: proxies every request to the provider", "~/.replay/ledger/<session>.jsonl"),

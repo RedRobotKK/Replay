@@ -17,7 +17,7 @@ reach the network, and does it write. Both are answered per command below, and
 summarised here.
 
 **Opens no socket and writes nothing** — safe to run at will:
-`diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `mcp`, `corpus`, `statusline`, `redact`, `version`, `prefix`, `budget`.
+`ceiling`, `diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `mcp`, `corpus`, `statusline`, `redact`, `version`, `prefix`, `budget`.
 
 **Leaves the machine:** `serve` proxies every request to the provider.
 `probe --execute` sends billable requests, and without `--execute` it prints a
@@ -41,6 +41,7 @@ to test whether `~/.replay` is writable.
 | Command | What it answers | Network | Writes |
 |---|---|---|---|
 | [`cost`](#cost) | Cost per task from transcripts already on disk | none | a transcript index cache and the tip-frequency file under ~/.replay; --png writes a card |
+| [`ceiling`](#ceiling) | What a cache-blind budget ceiling halts your agents at, in your billing basis | none | none |
 | [`diff`](#diff) | Locate and classify every cache break, with its cause | none | none |
 | [`advise`](#advise) | Rank the largest token sources, with predicted savings | none | with --apply --yes, a settings file; --out writes advice.json |
 | [`serve`](#serve) | Local proxy: byte-for-byte passthrough, records a ledger | outbound: proxies every request to the provider | ~/.replay/ledger/<session>.jsonl |
@@ -87,6 +88,18 @@ Cost per task from transcripts already on disk.
 | `-predicted` | float | with --compare, the fractional change you predicted (e.g. -0.2 for a 20% saving) |
 | `-share` | bool | print a paste-ready summary: the avoidable rate and the task spread, with no spend total, no paths and no project names |
 | `-tone` | string | the register the card is written in: measured (what was found, stated, the default) or rekt (the same figures, exact and deadpan) |
+
+### ceiling
+
+What a cache-blind budget ceiling halts your agents at, in your billing basis.
+
+| Flag | Type | What it does |
+|---|---|---|
+| `-day-ceiling` | float | a daily spend ceiling in dollars; report where cache-blind arithmetic halts you under it (0 = do not compute a halt point) |
+| `-flat-rate` | float | the flat $/MTok a cache-blind budget prices every token at (default 5) |
+| `-json` | bool | emit the figures as JSON |
+| `-metered` | bool | you are billed per token: report the ratio and where a ceiling halts you |
+| `-subscription` | bool | you are on a Pro/Max/Team/Enterprise seat: report tokens, not dollars |
 
 ### diff
 
@@ -395,4 +408,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-28 commands, 97 flags, read from the binary.
+29 commands, 102 flags, read from the binary.

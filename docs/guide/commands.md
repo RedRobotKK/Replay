@@ -290,6 +290,37 @@ prediction: it means the model does not understand the effect it claims.
 
 This is list price against transcripts, not your invoice. It says so in its own output.
 
+### `replay ceiling`
+
+What a cache-blind budget ceiling actually halts your agents at.
+
+Some agent platforms enforce a spend ceiling against their own accounting, and that accounting is
+often cache-blind: it collapses the provider's four usage fields into one token count and prices
+every cache **read** as fresh input, though the provider charges a fraction of the input price for a
+read. Measured against this project's own corpus the arithmetic runs 7.94x high, so a ceiling set
+under it halts execution far below where the operator thinks it will.
+
+`replay ceiling` walks your transcripts, prices them both ways over the same reported usage, and
+reports the ratio. It derives nothing of its own — both figures come from the same functions
+`replay cost` uses — so it cannot disagree with the cost report.
+
+It refuses to run without a billing basis, because the same number means opposite things to
+different readers and nothing in a transcript settles which you are:
+
+- `--metered` — you are billed per token. With `--day-ceiling <n>` it names the real spend a
+  ceiling of `<n>` dollars halts you at: *"a $500 ceiling halts execution at $62.98 of real
+  spend."*
+- `--subscription` — a Pro, Max, Team or Enterprise seat. None of the dollar figures are yours;
+  the report is in tokens, and it says plainly that how cache reads weigh against a usage allowance
+  is **not measured** — the one parameter every quota percentage would turn on, and one this
+  project has refused to guess.
+- `--flat-rate <n>` sets the flat dollars-per-million-tokens the cache-blind arithmetic assumes
+  (default 5). It is a knob because the finding is that the rate is *not* where the error lives:
+  move it and the ratio barely changes, because the cache is the error.
+
+An empty corpus reports **not measured**, never a ratio of one — nothing measured is not a clean
+bill of health.
+
 ### `replay statusline`
 
 Live spend, cache health, and what the misses are costing, in Claude Code's status line.
