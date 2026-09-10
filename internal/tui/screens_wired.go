@@ -78,34 +78,6 @@ func ContextScreen(rows []ContextRow, sessions int) Screen {
 	return sc
 }
 
-// GuardsScreen shows spend caps drawn from this machine's own spread.
-//
-// The lines arrive already rendered, because the fence arithmetic and the
-// wording that explains it live together on the command side and splitting them
-// would let the two drift.
-func GuardsScreen(advice []string, sessions int) Screen {
-	if sessions == 0 {
-		return unavailable("guards", "no sessions were read, so no spread to draw a cap from",
-			"A cap from one session is a cap from an accident. "+paint(Accent, "replay cost")+" shows what is there.")
-	}
-	sc := Screen{Key: 'g', Title: "guards", From: Measured}
-	lines := []string{header("guards"), ""}
-	if len(advice) == 0 {
-		lines = append(lines,
-			paint(Good, fmt.Sprintf("  No cap suggested from %d session(s).", sessions)), "",
-			paint(Faint, "  Too few sessions, or a spread too flat to fence."), "")
-		sc.Lines = lines
-		return sc
-	}
-	lines = append(lines, fmt.Sprintf("  Caps drawn from %d session(s) on this machine", sessions), "")
-	for _, l := range advice {
-		lines = append(lines, fitTo(l, Cols()))
-	}
-	lines = append(lines, "", paint(Faint, "  Printed only. Nothing here is written to your configuration."))
-	sc.Lines = lines
-	return sc
-}
-
 // SafeScreen shows what a byte cap on tool output would have removed.
 func SafeScreen(t TrimSummary, sessions int) Screen {
 	if sessions == 0 {

@@ -167,7 +167,8 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 			loop.SetRows(sc.Rows)
 			return tui.Frame{Key: k, Lines: sc.Lines}
 		case 'g':
-			sc := tui.GuardsScreen(guardsState())
+			advice, sessions := guardsState()
+			sc := tui.GuardsScreen(guardState(), advice, sessions)
 			loop.SetRows(sc.Rows)
 			return tui.Frame{Key: k, Lines: sc.Lines}
 		case 's':
@@ -386,20 +387,69 @@ func guardsState() ([]string, int) {
 	if len(files) == 0 {
 		return nil, 0
 	}
-	var usd, toks []float64
-	sessions := 0
-	_ = forEachSession(files, func(_ string, _ *transcript.Session, rep *analysis.LaneReport, err error) error {
-		if err != nil || rep == nil {
+	var lanes []laneSpend
+	_ = forEachSession(files, func(_ string, session *transcript.Session, rep *analysis.LaneReport, err error) error {
+		if err != nil || rep == nil || session == nil {
 			return nil
 		}
-		sessions++
 		if pols := rep.Policies(); len(pols) > 0 {
-			usd = append(usd, pols[0].CostUSD)
-			toks = append(toks, float64(pols[0].PromptTokens))
+			lanes = append(lanes, laneSpend{
+				ID:     session.ID,
+				USD:    pols[0].CostUSD,
+				Tokens: float64(pols[0].PromptTokens),
+			})
 		}
 		return nil
 	})
+	usd, toks, sessions := foldSpread(lanes)
 	return guardAdviceLines(usd, toks), sessions
+}
+
+// laneSpend is one transcript's spend, with the session it belongs to.
+type laneSpend struct {
+	ID     string
+	USD    float64
+	Tokens float64
+}
+
+// foldSpread turns per-lane spend into per-session spend.
+//
+// The fence these values feed is printed as `--max-session-usd`, and serve
+// applies that to a session. The population therefore has to be sessions. It
+// was lanes: a session writes one transcript per sub-agent lane, so a fanned-out
+// corpus contributed one small value per lane and the derivation line said
+// "over 1803 sessions" where `replay cost` said 116.
+//
+// The error has a direction. A lane is a fraction of its session, so a fence
+// over lanes sits below the distribution it is about to cap — on the corpus
+// this was found on, it recommended $2.23 against a session p90 of $3.41. A cap
+// advertised as an outlier threshold, landing inside the ordinary range, is a
+// refusal the operator did not intend to buy.
+//
+// A lane with no session id is dropped rather than promoted to a session of its
+// own. A value nobody can attribute has no place in a spread that is about to
+// set a threshold for refusing live requests.
+func foldSpread(lanes []laneSpend) (usd, tokens []float64, sessions int) {
+	byID := map[string]*laneSpend{}
+	var order []string
+	for _, l := range lanes {
+		if l.ID == "" {
+			continue
+		}
+		if s, ok := byID[l.ID]; ok {
+			s.USD += l.USD
+			s.Tokens += l.Tokens
+			continue
+		}
+		cp := l
+		byID[l.ID] = &cp
+		order = append(order, l.ID)
+	}
+	for _, id := range order {
+		usd = append(usd, byID[id].USD)
+		tokens = append(tokens, byID[id].Tokens)
+	}
+	return usd, tokens, len(order)
 }
 
 // safeState scores the default byte cap on tool results.
@@ -836,6 +886,39 @@ func blameFor(path string) (string, error) {
 // Every failure is the unreachable state rather than an error. There is nothing
 // a reader can do about a malformed status body that they would not also do
 // about a refused connection, and the screen already says the useful thing.
+// guardState reads what the proxy is enforcing, for the guards screen.
+//
+// The same status endpoint `replay doctor` reads, through the same loopback
+// rule: this is a GET to whatever the environment names, and a diagnostic must
+// not become a request generator pointed at somebody's network.
+//
+// A proxy that did not answer leaves Reachable false, and the screen renders
+// that as unknown rather than as a clean record. On this screen in particular,
+// silence must not read as safety.
+func guardState() tui.GuardState {
+	base := os.Getenv(envBaseURL)
+	if base == "" {
+		base = "http://" + defaultListen
+	}
+	g := tui.GuardState{Addr: strings.TrimPrefix(strings.TrimPrefix(base, "http://"), "https://")}
+	st, ok := probeStatus(base)
+	if !ok {
+		return g
+	}
+	g.Reachable = true
+	g.Refused = st.Requests["refused"]
+	g.Refusals = st.Refusals
+	g.CostUSD, g.DayCostUSD = st.CostUSD, st.DayCostUSD
+	g.SpendCapNotEnforced = st.SpendCapNotEnforced
+	g.Caps = tui.Caps{
+		SessionUSD:    st.Caps.SessionUSD,
+		DayUSD:        st.Caps.DayUSD,
+		SessionTokens: st.Caps.SessionTokens,
+		DayTokens:     st.Caps.DayTokens,
+	}
+	return g
+}
+
 func liveState() tui.Live {
 	base := os.Getenv("ANTHROPIC_BASE_URL")
 	if base == "" {

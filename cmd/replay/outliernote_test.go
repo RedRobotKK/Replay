@@ -28,7 +28,7 @@ func TestON1_TheOutlierIsNamedWithItsBasis(t *testing.T) {
 	if note == "" {
 		t.Fatal("a 4x session against a 5-session median produced no note")
 	}
-	for _, want := range []string{"53%", "6.45", "5 sessions"} {
+	for _, want := range []string{"52%", "6.45", "5 sessions"} {
 		if !strings.Contains(note, want) {
 			t.Errorf("the note does not carry %q so the reader cannot check it:\n%s", want, note)
 		}
@@ -49,7 +49,7 @@ func TestON2_AnUnremarkableCorpusIsSilent(t *testing.T) {
 
 // ON3: too few sessions, or a zero median, says nothing.
 //
-// The refusals live in analysis.CompareToMedian; this is the check that the
+// The refusals live in analysis.CompareToTotal; this is the check that the
 // caller honours them rather than rendering an infinity or a ratio of one.
 func TestON3_RefusalsAreHonoured(t *testing.T) {
 	if note := outlierNote(units(1.0, 5.0), costSummary{TotalUSD: 6.0, Tasks: 2}); note != "" {
@@ -116,10 +116,10 @@ func TestON7_NoPathMeansNoInstruction(t *testing.T) {
 	if note == "" {
 		t.Fatal("the finding was dropped along with the instruction")
 	}
-	if !strings.Contains(note, "53%") {
+	if !strings.Contains(note, "52%") {
 		t.Errorf("the finding is gone:\n%s", note)
 	}
-	if strings.Contains(note, "replay ") {
+	if strings.Contains(note, "replay blame") {
 		t.Errorf("an instruction was printed with no transcript behind it:\n%s", note)
 	}
 }
@@ -163,5 +163,76 @@ func TestON9_TheInstructionDoesNotOverclaimItsScope(t *testing.T) {
 	}
 	if strings.Contains(note, "ranks what filled it.") {
 		t.Errorf("the instruction still claims blame ranks the whole session:\n%s", note)
+	}
+}
+
+// ON10: a share is floored, never rounded up.
+//
+// %.0f turns 99.5% into "100%", and "100% of everything replay priced" asserts
+// that every other row cost nothing. The dollar figures beside it are printed
+// to the cent, so a near-total prints "$199.00 of $199.00" and the arithmetic
+// appears to confirm the false claim. Flooring can understate by less than a
+// point; it cannot state something untrue.
+func TestON10_ASharesRoundingCannotMakeItFalse(t *testing.T) {
+	note := outlierNote(
+		[]costUnit{
+			{ID: "a0000000", CostUSD: 1.0, path: "/c/a.jsonl"},
+			{ID: "b0000000", CostUSD: 199.0, path: "/c/b.jsonl"},
+			{ID: "c0000000", CostUSD: 0.5, path: "/c/c.jsonl"},
+		},
+		costSummary{TotalUSD: 199.6, Tasks: 3},
+	)
+	if strings.Contains(note, "100%") {
+		t.Errorf("a session that is not all of the spend is reported as all of it:\n%s", note)
+	}
+	if !strings.Contains(note, "99%") {
+		t.Errorf("the share is not reported at all:\n%s", note)
+	}
+}
+
+// ON11: the noun follows the report's unit.
+//
+// Under --per-lane a row is an agent lane. cost.go already switches "task" to
+// "lane" for the median and p90 five lines above this note, with a comment
+// warning that calling a lane a task under a header that said lanes "is how one
+// word came to mean two things here in the first place". The note then did
+// exactly that, twice, on the same stdout.
+func TestON11_TheNounFollowsTheReportsUnit(t *testing.T) {
+	u := []costUnit{
+		{ID: "a0000000", CostUSD: 1.0, path: "/c/a.jsonl"},
+		{ID: "b0000000", CostUSD: 9.0, path: "/c/b.jsonl"},
+		{ID: "c0000000", CostUSD: 1.0, path: "/c/c.jsonl"},
+	}
+	lanes := outlierNote(u, costSummary{TotalUSD: 11.0, Tasks: 3, Unit: unitLane})
+	if !strings.Contains(lanes, "largest lane") || strings.Contains(lanes, "largest session") {
+		t.Errorf("a --per-lane report calls its rows sessions:\n%s", lanes)
+	}
+	if !strings.Contains(lanes, "3 lanes") {
+		t.Errorf("the denominator is not in the report's unit:\n%s", lanes)
+	}
+	sessions := outlierNote(u, costSummary{TotalUSD: 11.0, Tasks: 3, Unit: unitSession})
+	if !strings.Contains(sessions, "largest session") {
+		t.Errorf("a session report calls its rows something else:\n%s", sessions)
+	}
+}
+
+// ON12: the denominator is named for what it is.
+//
+// The total excludes sessions whose model is not in the price table, covers
+// only the directories this walk was given, and is the estimated tier rather
+// than an invoice. "everything you spent" is false in all three directions at
+// once, and it is the only clause in the line a reader could act on wrongly.
+func TestON12_TheDenominatorIsNotCalledEverythingYouSpent(t *testing.T) {
+	note := outlierNote(
+		[]costUnit{{ID: "a0000000", CostUSD: 1.0, path: "/c/a.jsonl"},
+			{ID: "b0000000", CostUSD: 9.0, path: "/c/b.jsonl"},
+			{ID: "c0000000", CostUSD: 1.0, path: "/c/c.jsonl"}},
+		costSummary{TotalUSD: 11.0, Tasks: 3},
+	)
+	if strings.Contains(note, "everything you spent") {
+		t.Errorf("the note claims a total it does not have:\n%s", note)
+	}
+	if !strings.Contains(note, "everything replay priced") {
+		t.Errorf("the note does not name its denominator:\n%s", note)
 	}
 }
