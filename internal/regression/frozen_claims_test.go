@@ -458,8 +458,12 @@ func TestFrozenFD10_NoFreshnessSLAUntilADetectorExists(t *testing.T) {
 		// The ADRs are where the claim is deliberated; they may name it. This
 		// guard, which lists the phrases, must not flag itself. Everything else
 		// — README, docs/guide, shipped output — is a user surface.
-		if strings.Contains(path, "adr/0013") || strings.Contains(path, "adr/0019") ||
-			strings.HasSuffix(path, "_test.go") {
+		// filepath.ToSlash first: on Windows these arrive as docs\adr\0013-... and a
+		// forward-slash match silently fails, so the guard flags the very ADRs it
+		// exempts. Fourth OS-path assumption in this session; normalise, always.
+		norm := filepath.ToSlash(path)
+		if strings.Contains(norm, "adr/0013") || strings.Contains(norm, "adr/0019") ||
+			strings.HasSuffix(norm, "_test.go") {
 			continue
 		}
 		if marker, ok := containsAny(strings.ToLower(body), sla...); ok {
