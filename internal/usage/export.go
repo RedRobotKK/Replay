@@ -94,7 +94,13 @@ type Group struct {
 func ParseExport(b []byte) (*Export, error) {
 	var e Export
 	if err := json.Unmarshal(b, &e); err != nil {
-		return nil, fmt.Errorf("this is not a usage export (%s): %w", ExportSchema, err)
+		// Deliberately does not mention the schema. Three different mistakes
+		// arrive here and each needs its own door: not JSON at all (most often
+		// the wrong file entirely, or an error page an export endpoint
+		// returned with a 200), JSON of a foreign schema, and a real export
+		// whose counts disagree. Sending the first reader off to check their
+		// schema is the message costing more than saying nothing.
+		return nil, fmt.Errorf("this file is not readable JSON, so nothing in it could be a usage record: %w", err)
 	}
 	if e.Schema != ExportSchema {
 		got := e.Schema

@@ -31,6 +31,12 @@ All notable changes to this project are documented here. The format follows [Kee
 - `--max-avoidable-usd` refuses to pass when the avoidable figure was not
   measured. `--share`, `--png`, `--compare`, `--contribute` and `--per-lane` are
   refused on this path rather than served with a blank.
+- A file that is not readable JSON is refused for that reason, in its own
+  words: not JSON at all, a foreign schema, and counts that disagree are three
+  different mistakes and a reader sent to check the wrong one is worse off than
+  one told nothing. A failed write of either report form is returned and says a
+  write is what failed — a truncated JSON document a pipeline parses, or a
+  printed report that stops before the NOT MEASURED block, must not exit 0.
 - `internal/usage` is wired into the binary for the first time
   (UNWIRED-LOG #8): the export decodes into `usage.Entry` and `Validate` runs on
   every record at the door.

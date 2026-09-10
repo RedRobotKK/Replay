@@ -853,3 +853,95 @@ func TestUO27_TheCauseBlockAppearsOnlyWhenThereIsSomethingToExplain(t *testing.T
 		t.Errorf("the unmeasured-cause line printed with a count of zero:\n%s", out)
 	}
 }
+
+// errWriteRefused is what a failing writer returns, so a test can prove the
+// error travelled rather than matching on prose.
+var errWriteRefused = errors.New("the pipe closed")
+
+// refusingWriter fails every write. A closed pipe, a full disk, and a reader
+// that walked away all look like this.
+type refusingWriter struct{}
+
+func (refusingWriter) Write([]byte) (int, error) { return 0, errWriteRefused }
+
+// UO29: a failed write of the JSON report is returned, never swallowed.
+//
+// `replay cost --usage ... --json` is read by a pipeline. A broken pipe or a
+// full disk that produced a truncated document and exit 0 is the worst
+// available outcome: the consumer parses what arrived, or worse, parses a
+// prefix that happens to be valid, and nothing anywhere says the report is
+// incomplete. Half a measurement presented as a whole one is the defect
+// ADR-0018 is about, arriving through the io layer.
+//
+// PASS: an error, naming the write, wrapping the writer's own.
+// FAIL: nil. Reintroduce by dropping the writeJSON error check in
+// runCostUsage.
+func TestUO29_AFailedJSONWriteIsReturned(t *testing.T) {
+	path := writeExport(t, exportDoc(true, true, usageFixture()))
+	err := runCostUsage(path, true, false, 0, refusingWriter{})
+	if err == nil {
+		t.Fatal("the JSON report failed to write and the command reported success; a pipeline reads a truncated document and nothing says so")
+	}
+	if !errors.Is(err, errWriteRefused) {
+		t.Errorf("the writer's own error did not survive: %v", err)
+	}
+	if !strings.Contains(err.Error(), "writ") {
+		t.Errorf("the error does not say a write is what failed, so it reads as a problem with the export: %v", err)
+	}
+}
+
+// UO30: a failed write of the printed report is returned, never swallowed.
+//
+// Same defect, the other branch. Here the reader is a person and the failure
+// is quieter still: a report that stops halfway looks like a report that had
+// less to say, and the block it stops before is the NOT MEASURED block.
+//
+// PASS: an error, naming the write, wrapping the writer's own.
+// FAIL: nil. Reintroduce by dropping the io.WriteString error check.
+func TestUO30_AFailedReportWriteIsReturned(t *testing.T) {
+	path := writeExport(t, exportDoc(true, true, usageFixture()))
+	err := runCostUsage(path, false, false, 0, refusingWriter{})
+	if err == nil {
+		t.Fatal("the report failed to write and the command reported success; a report truncated before the NOT MEASURED block reads as a report with nothing to declare")
+	}
+	if !errors.Is(err, errWriteRefused) {
+		t.Errorf("the writer's own error did not survive: %v", err)
+	}
+	if !strings.Contains(err.Error(), "writ") {
+		t.Errorf("the error does not say a write is what failed: %v", err)
+	}
+}
+
+// UO31: a reader outside the dollar zone gets the conversion note.
+//
+// The local figure is an indication of size and is not the reader's bill: a
+// card issuer converts at its own rate on its settlement date and adds a
+// foreign transaction fee. The note is what says so, and a converted figure
+// printed without it is a number claiming to be a bill it is not — the same
+// family of defect as every other figure on this screen, arriving through the
+// currency column instead of the token counts.
+//
+// PASS: under ja_JP with an explicit rate, the yen column appears and the note
+// under the block explains what it is.
+// FAIL: the column prints and the note does not. Reintroduce by deleting the
+// fx.Note() branch in renderUsageCost.
+func TestUO31_AConvertedFigureCarriesItsNote(t *testing.T) {
+	t.Setenv("LC_ALL", "ja_JP.UTF-8")
+	t.Setenv("REPLAY_FX_JPY", "150")
+
+	rep, rows := priceUsage(parsedFixture(t, true, true))
+	out := renderUsageCost(rep, rows, false)
+
+	if !strings.Contains(out, "JPY") {
+		t.Fatalf("a ja_JP reader sees no local figure at all, so this test cannot say anything about its note:\n%s", out)
+	}
+	if !strings.Contains(out, "card issuer") {
+		t.Errorf("the yen figure is printed with nothing saying it is not the reader's bill:\n%s", out)
+	}
+
+	// And a dollar-zone reader gets neither, or the note is furniture.
+	t.Setenv("LC_ALL", "en_US.UTF-8")
+	if plain := renderUsageCost(rep, rows, false); strings.Contains(plain, "card issuer") {
+		t.Errorf("a conversion note printed with no conversion:\n%s", plain)
+	}
+}

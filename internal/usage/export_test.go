@@ -301,3 +301,62 @@ func mustParse(t *testing.T, doc string) *Export {
 	}
 	return e
 }
+
+// UO28: a file that is not JSON is refused for THAT reason.
+//
+// This test lives in internal/usage and not beside the command, deliberately.
+// The reviewer that neutralises a guard runs only the package the guard is in,
+// so a test for this one written in cmd/replay would never be put to it: the
+// guard came back SURVIVED with the test passing three packages away. A guard
+// and the test that observes it have to share a package.
+//
+// Three different mistakes land on ParseExport and each needs its own door.
+// The file is not JSON at all — most likely the wrong file entirely, a CSV, a
+// gzip, an HTML error page an export endpoint returned with a 200. The file is
+// JSON but a foreign schema — the right kind of file from the wrong producer.
+// The file is the right schema but the counts disagree — a real export from a
+// producer that counts inclusively. UO8 established that two refusals reading
+// identically is a message the reader cannot act on; this is the third door
+// into the same room.
+//
+// PASS: refused, the message says the file is not readable JSON, and it does
+// not read like either of the other two.
+// FAIL: the JSON error is swallowed and the decode carries on into a zero
+// Export, which then trips the schema check and reports the wrong problem.
+// Reintroduce by deleting the json.Unmarshal error check in ParseExport.
+func TestUO28_AFileThatIsNotJSONIsRefusedForThatReason(t *testing.T) {
+	notJSON := []string{
+		"session,model,prompt\ns1,claude-sonnet-4-5,9000\n", // a CSV export
+		"<html><body>502 Bad Gateway</body></html>",         // an error page with a 200
+		"{\"schema\":\"replay.usage.v1\",\"records\":[",     // truncated mid-write
+	}
+	var reasons []string
+	for _, doc := range notJSON {
+		_, err := ParseExport([]byte(doc))
+		if err == nil {
+			t.Fatalf("this was accepted as a usage export:\n%s", doc)
+		}
+		reasons = append(reasons, err.Error())
+		if !strings.Contains(err.Error(), "JSON") {
+			t.Errorf("the refusal never says the file is not JSON, so a reader goes looking for a schema problem it does not have: %v", err)
+		}
+	}
+
+	// And it must not read like the other two refusals. Distinctness is the
+	// whole value: three identical sentences would send every reader to the
+	// same wrong place.
+	foreign, err := ParseExport([]byte(`{"schema":"vendor.usage.v3","records":[{"session":"s1","model":"m","prompt":1,"fresh":1}]}`))
+	if err == nil {
+		t.Fatalf("the foreign-schema guard has stopped working, so this test is comparing against nothing: %+v", foreign)
+	}
+	arith, err2 := ParseExport([]byte(`{"schema":"replay.usage.v1","complete":true,"records":[
+	  {"session":"s1","at":"2026-09-01T10:00:00Z","model":"m","prompt":1000,"fresh":1000,"cached_read":800}]}`))
+	if err2 == nil {
+		t.Fatalf("the arithmetic guard has stopped working, so this test is comparing against nothing: %+v", arith)
+	}
+	for _, r := range reasons {
+		if r == err.Error() || r == err2.Error() {
+			t.Errorf("a malformed-JSON refusal is word for word one of the other two:\n  %s", r)
+		}
+	}
+}

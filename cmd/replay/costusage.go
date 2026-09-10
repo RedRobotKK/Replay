@@ -387,14 +387,21 @@ func runCostUsage(path string, asJSON, perTask bool, ceiling float64, stdout io.
 		if perTask {
 			out["tasks"] = rows
 		}
+		// Wrapped, not returned bare. A broken pipe or a full disk here
+		// leaves a truncated JSON document that a consumer may well parse, so
+		// the one thing the operator must not have to infer is that a WRITE is
+		// what failed rather than the export being bad.
 		if err := writeJSON(stdout, out); err != nil {
-			return err
+			return fmt.Errorf("writing the usage report as JSON: %w", err)
 		}
 		return checkUsageCeiling(ceiling, rep, stdout)
 	}
 
+	// Same reasoning as the JSON branch, and the quieter failure of the two: a
+	// report that stops halfway reads as a report with less to say, and the
+	// block it stops before is the one listing what was NOT MEASURED.
 	if _, err := io.WriteString(stdout, renderUsageCost(rep, rows, perTask)); err != nil {
-		return err
+		return fmt.Errorf("writing the usage report: %w", err)
 	}
 	return checkUsageCeiling(ceiling, rep, stdout)
 }
