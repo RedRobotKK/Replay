@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+
+- **The installer prints the ending it actually performs.** Two "Next:" commands
+  were printed unconditionally, and then, on a terminal, the script `exec`d
+  `replay tui` over the top of them: the reader was told to run one thing and
+  handed another, and the surface that took the terminal was named nowhere in the
+  output. The exec was kept and the printed line moved. On a terminal the block
+  now names `replay tui`, says it opens on `cost`, and offers the two commands as
+  what to type after quitting; off a terminal — CI, a `Dockerfile RUN`, cron, a
+  container built without `-t` — nothing opens and the two commands are the next
+  step exactly as before. `--no-tui` and `REPLAY_NO_OPEN=1` are unchanged.
+
+### Added
+
+- [The first run, end to end](docs/guide/first-run-journey.md): install to first
+  finding to acting on it to verifying the change, as one document, with every
+  block pasted from a run against the redacted session this repository ships so a
+  reader can reproduce it. It names the three places the route does not complete
+  on a new machine, including that the verification step in step 7 has not been
+  observed to fire on any corpus this project holds.
+
 ## [0.5.4] - 2026-09-09
 
 ### Changed

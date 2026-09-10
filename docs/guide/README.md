@@ -5,6 +5,7 @@ Using Replay, in the order you will need it.
 | Document | What is in it |
 |---|---|
 | [Getting started](getting-started.md) | The first ten minutes. Install, see what Replay can find, read a session you have already paid for |
+| [The first run, end to end](first-run-journey.md) | The whole loop in one document: install, first finding, act on it, verify the change. Real output throughout, and the three places the route stops |
 | [Commands](commands.md) | Every subcommand, and every flag on `serve`, grouped by what it guards |
 | [Troubleshooting](troubleshooting.md) | What goes wrong, what it means, and what to do about it |
 | [Alerting](alerting.md) | Prometheus expressions for the metrics endpoint |
