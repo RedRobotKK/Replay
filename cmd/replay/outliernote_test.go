@@ -165,3 +165,26 @@ func TestON9_TheInstructionDoesNotOverclaimItsScope(t *testing.T) {
 		t.Errorf("the instruction still claims blame ranks the whole session:\n%s", note)
 	}
 }
+
+// ON13: an unnamed transcript or an unnamed session is not the main transcript.
+//
+// Reported by guard-reachability as INERT: the branch ran and nothing depended
+// on it. It is load-bearing in the fold — the zero value has to LOSE to any
+// real candidate, or a session with one lane missing a path would keep the
+// empty string and the outlier note would print no instruction at all.
+func TestON13_TheZeroValueIsNeverTheMainTranscript(t *testing.T) {
+	for _, c := range []struct {
+		path, id string
+		want     bool
+	}{
+		{"/corpus/facfd32e.jsonl", "facfd32e", true},
+		{"/corpus/agent-9c11.jsonl", "facfd32e", false},
+		{"", "facfd32e", false},
+		{"/corpus/facfd32e.jsonl", "", false},
+		{"", "", false},
+	} {
+		if got := mainTranscript(c.path, c.id); got != c.want {
+			t.Errorf("mainTranscript(%q, %q) = %v, want %v", c.path, c.id, got, c.want)
+		}
+	}
+}
