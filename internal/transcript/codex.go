@@ -71,6 +71,11 @@ type CodexSession struct {
 	ContextWindow int
 	// Breaks are the turns where the cache stopped holding.
 	Breaks []CodexBreak
+	// Turns is how many per-turn usage deltas were accepted: the number of
+	// provider calls this rollout records. A rollout FILE is one session, and
+	// a session is many turns, so the two are not interchangeable and the
+	// count of files is not a count of anything a provider was asked to do.
+	Turns int
 	// prevShare carries the previous turn's cached share so a collapse can be
 	// seen. Unexported: it is scaffolding for the walk, not a result.
 	prevShare float64
@@ -81,7 +86,13 @@ type CodexSession struct {
 }
 
 // Total is every token in the snapshot that the provider counted.
-func (u Usage) Total() int { return u.Input + u.Output }
+//
+// It is PromptTotal plus Output, not Input plus Output. Input is the UNCACHED
+// remainder of the prompt on every surface this package reads, so adding it to
+// Output leaves out the cache entirely — the whole prompt on a warm turn. The
+// method's own sentence has said "every token the provider counted" since it
+// was written; this is the arithmetic that keeps it.
+func (u Usage) Total() int { return u.PromptTotal() + u.Output }
 
 type codexLine struct {
 	Timestamp string          `json:"timestamp"`
@@ -130,6 +141,19 @@ type codexRateLimits struct {
 // share of output_tokens. Either exceeding its parent describes a state that
 // cannot occur, so the record is refused rather than added to a total someone
 // is billed against. Negative counters are refused for the same reason.
+//
+// Codex counts INCLUSIVELY and this package's Usage is EXCLUSIVE, so the cached
+// share is SUBTRACTED out of Input rather than copied beside it. openai.go
+// states the same rule for the OpenAI adapter; this reader used to break it,
+// putting the inclusive prompt into Input while also filling CacheRead. Nothing
+// on the Codex path called PromptTotal(), so the error was invisible — but
+// PromptTotal() is Input+CacheCreation+CacheRead, and on a well-cached turn
+// (1,000 prompt, 800 cached) it returned 1,800 for a 1,000-token prompt. That
+// is the 1.94x recorded as UNWIRED-LOG.md #8, waiting for its first caller.
+//
+// The conversion is what usage.FromInclusive does. It is done here rather than
+// there because internal/usage imports this package, so this package cannot
+// import it back.
 func (c *codexUsage) usage() (Usage, bool) {
 	if c == nil {
 		return Usage{}, false
@@ -148,7 +172,7 @@ func (c *codexUsage) usage() (Usage, bool) {
 		return Usage{}, false
 	}
 	return Usage{
-		Input:          c.Input,
+		Input:          c.Input - c.Cached,
 		CacheRead:      c.Cached,
 		Output:         c.Output,
 		ThinkingTokens: c.Reasoning,
@@ -235,6 +259,7 @@ func (s *CodexSession) event(p codexPayload) {
 		}
 		if u, ok := p.Info.Last.usage(); ok {
 			s.Billed.add(u)
+			s.Turns++
 			s.observeCache(u)
 		} else if p.Info.Last != nil {
 			s.Skipped++
@@ -273,17 +298,22 @@ const (
 	codexMinColdRead = 2000
 )
 
+// The share is cached over the WHOLE prompt, which is PromptTotal now that
+// Input is the uncached remainder. Dividing by Input instead would give
+// 800/200 = 4.0 on the turn that used to read 0.8, so every warm turn would
+// clear the warm threshold and no turn could ever look cold.
 func (s *CodexSession) observeCache(u Usage) {
-	if u.Input <= 0 {
+	prompt := u.PromptTotal()
+	if prompt <= 0 {
 		return
 	}
-	share := float64(u.CacheRead) / float64(u.Input)
-	if s.prevShare > codexWarmShare && share < codexColdShare && u.Input >= codexMinColdRead {
+	share := float64(u.CacheRead) / float64(prompt)
+	if s.prevShare > codexWarmShare && share < codexColdShare && prompt >= codexMinColdRead {
 		s.Breaks = append(s.Breaks, CodexBreak{
 			Line:        s.line,
 			BeforeShare: s.prevShare,
 			AfterShare:  share,
-			ColdTokens:  u.Input - u.CacheRead,
+			ColdTokens:  u.Input,
 		})
 	}
 	s.prevShare = share

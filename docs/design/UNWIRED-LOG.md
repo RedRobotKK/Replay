@@ -30,7 +30,7 @@ Found incidentally over 2026-09-08/09 while doing other work. Every one cited.
 | 5 | `internal/quota` (whole package) | `go list -deps ./cmd/replay` → absent | Zero importers. The only consumer of `Record.Quota` | OPEN |
 | 6 | `saveQuota` | Blue-team review | No production caller; the quota line always answers "no reading stored" | OPEN |
 | 7 | `internal/proxy/preflight.go` | `Config.PreFlight` never assigned; `serve.go:136` omits it | **120 lines, a refusal kind and a counter that can never fire. Eight tests, all calling `s.preFlight` directly** | OPEN |
-| 8 | `internal/usage` (`FromInclusive`, `Validate`) | Zero importers | **The guard against a live ~1.94x double-count in `codex.go:151`** | OPEN |
+| 8 | `internal/usage` (`FromInclusive`, `Validate`) | Zero importers | Still zero importers. The double-count it was written for is **fixed at source**: `codexUsage.usage()` now subtracts, `internal/usage/codex_normalises_test.go` asserts it across the package boundary. See the correction below | OPEN |
 | 9 | `internal/otlp`, `internal/feed` | `go list -deps` → absent | Not determined; may be by design | OPEN |
 
 ## Adjacent defects found the same way
@@ -49,7 +49,18 @@ Not unwired, but the same family — a thing that looks connected and is not.
 
 1. **The guard** — stop the bleeding, catch the rest. *This branch.*
 2. `withUsageReporting` splice — repairs a documented promise.
-3. Wire `usage.FromInclusive` into the Codex reader — kills the 1.94x before something calls `PromptTotal()`.
+3. ~~Wire `usage.FromInclusive` into the Codex reader~~ — **done differently, and the plan was wrong.**
+   `internal/usage` imports `internal/transcript`, so the reader cannot call
+   `FromInclusive`; the subtraction is now in `codexUsage.usage()` itself.
+   More importantly, wiring alone would have closed nothing. `Validate` compares
+   `Fresh + read + write` against `Prompt`, and the reader's `Prompt` came from
+   `PromptTotal()` — the same sum. Both sides moved together, so `Validate`
+   returned nil for the exact defect this row calls it "the guard against", and
+   the row would have been marked WIRED with the 1.94x intact. That is
+   ADR-0018's "an oracle may not derive from the thing it checks", one level up.
+   `TestUC3_WhatValidateCatchesAndWhatItCannot` states both halves. The guard
+   only bites where `Prompt` is the provider's own figure, independently read.
+   Wiring the package remains open, on its own merits.
 4. Retry header capture (`Attempts` field) — unblocks the quota work.
 
 ## Audit in flight
