@@ -193,7 +193,31 @@ worth declaring.
   of this file.
 - **The ledger never stores message text.** It stores block kinds, sizes, timings and usage counts.
   Tool names are kept in the clear; the path argument is HMAC'd with a machine-local key, so two
-  lanes reading the same file are visibly the same file without the file ever being named.
+  lanes reading the same file are visibly the same file without the file ever being named. Tool
+  calls are HMAC'd too, on **both** halves of a record since 2026-09-10. The response half used to
+  be a plain SHA-256 of the tool input, which meant anyone holding a ledger file could test a
+  guessed shell command or file path against it offline and get a yes or no.
+- **What the local listener refuses, and what it does not.** It binds loopback only. It refuses any
+  request carrying `Origin` or `Sec-Fetch-Mode`, and — since 2026-09-10 — any request whose `Host`
+  header names somewhere other than this machine, which is what a page at a name pointed at
+  `127.0.0.1` necessarily sends. `/replay/healthz` carries both checks and **not** the token, so
+  `replay doctor` can still tell you why your agent is failing; what it discloses to a local
+  process is that something answers here, which `connect(2)` already tells it. **What it does not
+  do:** `/replay/status` and `/replay/metrics` are unauthenticated unless you set `--token`, so any
+  process on the machine can read your model names, token counts and per-session list-price
+  dollars. Set a token if that matters to you.
+- **`~/.replay` is checked, not assumed.** The ledger and vault directories and their key files are
+  verified owner-only every time they are opened, tightened when they are not, and Replay refuses
+  to start when they cannot be. They used to be created `0700` and never looked at again, so a
+  directory that arrived from an archive or a `mkdir -m 777` stayed readable by every account on
+  the machine.
+- **Masked secrets expire.** `--mask` writes the secrets it replaces into `~/.replay/vault`, which
+  turns a transient credential into one at rest. Entries are evicted after 24 hours (`--mask-ttl`;
+  `0` keeps them indefinitely). This bounds the window and nothing more: **the vault key file sits
+  next to the ciphertext it decrypts**, so anyone who can read that directory within the window can
+  read the secrets. Masking is a control on what leaves the machine, not storage you should rely
+  on. This is a known open finding, recorded in
+  [the security review](docs/evidence/security-review-2026-09-04.md).
 - **A break says which tools changed.** Not "system prompt or tool definitions changed", which names
   two causes and settles neither. It names the ones that arrived: *added 3 tool(s):
   mcp__claude_ai_Otter_ai__otter_fetch, otter_get_user_info, otter_search; removed 1 tool(s):

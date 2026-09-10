@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -49,7 +50,55 @@ func TestOutboundSurfacesAreAllDocumented(t *testing.T) {
 		// what the README's promise actually says; a background version check
 		// would be the drift this test exists to catch.
 		"internal/selfupdate": "replay upgrade, which resolves and downloads a release you asked for",
+		// internal/feed fetches a signed rules bundle and its detached
+		// signature (feed.go:172). It has no non-test caller yet — the
+		// capability is compiled in and nothing types a command that reaches
+		// it — and it is written down anyway, because "unwired" is a fact
+		// about today's call graph and this list is about what the binary can
+		// do.
+		//
+		// It was NOT in this list until 2026-09-10, and the reason is the
+		// whole point of the second check below: it sends with `c.Get(u)` on
+		// an *http.Client parameter, which the call-expression matcher cannot
+		// see. A package with a live outbound sender sat outside an inventory
+		// whose job is to be complete, and the test guarding that inventory
+		// reported success.
+		"internal/feed": "the signed rules feed: fetches a bundle and its signature, verifies, never signs",
 	}
+
+	// Packages that may import the network stack at all. This is the check
+	// that does not depend on spelling.
+	//
+	// Added 2026-09-10, after the matcher below was shown to miss a live
+	// sender. Every one of these gets through it:
+	//
+	//	http.DefaultClient.Get(u)      // receiver is a selector, not an ident
+	//	c := &http.Client{}; c.Do(req) // "c.Do" is not in the name list
+	//	import h "net/http"; h.Get(u)  // one-word alias defeats the list
+	//	(&net.Dialer{}).DialContext()  // not a name in the list either
+	//
+	// Each is one line, none is exotic, and none is caught by any other test
+	// in this repository: cmd/replay/x402_test.go's allowlist permits `net`
+	// and `net/http` repo-wide on purpose — its subject is signing, not
+	// egress — and internal/observation's and internal/otlp's import bans are
+	// scoped to those two packages.
+	//
+	// So the rule is capability, not spelling, and it is the same argument
+	// x402_test.go makes for its own list: a call shape is something you can
+	// rename, and an import is a line somebody has to add. You cannot reach
+	// the network without one of these imports, so a package holding one is
+	// outbound-capable until argued otherwise, and the argument goes here.
+	networkCapable := map[string]string{
+		"cmd/replay":          "the commands that fetch: rules, doctor, upgrade's driver, burn's Ollama probe",
+		"internal/proxy":      "the proxy itself",
+		"internal/probe":      "probe --execute",
+		"internal/selfupdate": "replay upgrade",
+		"internal/feed":       "the signed rules feed",
+		// A build-tagged fixture, excluded from every build of the module: it
+		// is the mock x402 seller the end-to-end harness runs against.
+		"scripts/x402-e2e": "a mock seller for the x402 end-to-end harness; not part of any build of the binary",
+	}
+	netImports := map[string]bool{"net": true, "net/http": true, "net/url": true}
 
 	// Call expressions that construct or perform an outbound request.
 	senders := map[string]bool{
@@ -58,6 +107,7 @@ func TestOutboundSurfacesAreAllDocumented(t *testing.T) {
 	}
 
 	found := map[string]bool{}
+	capable := map[string]bool{}
 	fset := token.NewFileSet()
 	walkErr := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -82,6 +132,14 @@ func TestOutboundSurfacesAreAllDocumented(t *testing.T) {
 		}
 		rel, _ := filepath.Rel(root, path)
 		pkg := filepath.ToSlash(filepath.Dir(rel))
+		for _, imp := range f.Imports {
+			// The PATH, not the local name: an alias changes the name and
+			// cannot change the path, which is why this reads the path.
+			p, uerr := strconv.Unquote(imp.Path.Value)
+			if uerr == nil && netImports[p] {
+				capable[pkg] = true
+			}
+		}
 		ast.Inspect(f, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
 			if !ok {
@@ -109,6 +167,40 @@ func TestOutboundSurfacesAreAllDocumented(t *testing.T) {
 	if len(found) == 0 {
 		t.Fatal("no outbound call sites were found at all, so this test asserts nothing. " +
 			"Either the walk is broken or the sender list no longer matches the code.")
+	}
+	if len(capable) == 0 {
+		t.Fatal("no package imports the network stack at all, so the capability check asserts nothing. " +
+			"The walk is broken.")
+	}
+
+	var unaccounted []string
+	for pkg := range capable {
+		if _, ok := networkCapable[pkg]; !ok {
+			unaccounted = append(unaccounted, pkg)
+		}
+	}
+	sort.Strings(unaccounted)
+	if len(unaccounted) > 0 {
+		t.Errorf("these packages import the network stack and are not accounted for:\n  %s\n\n"+
+			"Importing net, net/http or net/url is the capability; the call that uses it can be spelled "+
+			"in ways no matcher enumerates. If the package genuinely cannot send — it parses URLs, or it "+
+			"only reads an inbound request — say so in networkCapable above and say why.",
+			strings.Join(unaccounted, "\n  "))
+	}
+	// Stale entries matter as much as missing ones: an inventory that keeps
+	// naming a capability the code no longer has trains a reader to discount
+	// it. The same reasoning as x402_test.go's stale-exemption check.
+	var gone []string
+	for pkg := range networkCapable {
+		if !capable[pkg] {
+			gone = append(gone, pkg)
+		}
+	}
+	sort.Strings(gone)
+	if len(gone) > 0 {
+		t.Errorf("these packages are listed as network-capable and no longer import the network stack:\n  %s\n\n"+
+			"Remove the entry rather than leaving the list describing a capability that is gone.",
+			strings.Join(gone, "\n  "))
 	}
 
 	var undocumented []string

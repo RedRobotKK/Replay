@@ -4,6 +4,66 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Security
+
+Closes three of the four findings the 2026-09-04 adversarial review left open,
+and half of the fourth. Every closure is a test that fails when the guard is
+removed: each guard was neutralised in the source and the suite watched to go
+red before the fix was believed. `docs/evidence/security-review-2026-09-04.md`
+records what changed and what is still open.
+
+- **Finding 6, DNS rebinding.** The `Host` header is now checked on every route
+  the TCP listener serves, including the passthrough. Before this the only
+  anti-rebinding defence was the `Origin` header, which a plain `<form>` post
+  does not send: the test written against the unfixed code recorded five
+  rebound `/v1/messages` requests reaching the provider. Accepted: an empty
+  `Host`, a loopback IP literal, `localhost`, and names under `.localhost`.
+  Exempt on a Unix socket, which has no DNS to rebind and whose clients send a
+  placeholder authority. `/replay/healthz` now carries the browser guard too, so
+  a page can no longer use it to fingerprint that Replay is running.
+- **Finding 4, the ledger's two halves.** Response-side tool call keys are now
+  HMAC'd under the ledger secret at `Store.Append`, like the request side
+  already was. They were a plain SHA-256 of the tool input, so anyone holding a
+  ledger file could confirm a guessed shell command or file path offline. The
+  streaming parser is covered separately, since it is the path most traffic
+  takes.
+- **Finding 7, directory permissions.** The ledger and vault directories and
+  their key files are verified owner-only on every open, tightened when they are
+  not, and refused when they cannot be. `os.MkdirAll` applies its mode only when
+  it creates and `os.WriteFile` leaves an existing file's mode alone, so a
+  `~/.replay` that arrived from an archive kept whatever it had. A chmod that
+  reports success while the bits do not change — a network mount, an exFAT
+  volume — is a refusal, not a pass.
+- **Finding 3, partly.** Masking vault entries now expire, 24 hours by default,
+  settable with the new `serve --mask-ttl` (`0` keeps the previous unbounded
+  behaviour). The vault used to hold every secret the proxy had ever masked for
+  the life of the machine. Eviction is close to free: the placeholder is derived
+  from the secret, so re-sending one whose entry lapsed restores it unchanged.
+  **Still open: the vault key file sits beside the ciphertext**, so within the
+  window the vault is plaintext-equivalent to anyone who can read the directory.
+  The OS keychain is not reachable without `os/exec`, which
+  `TestX402_ExecIsConfinedToTheMutationHarness` keeps out of ordinary builds.
+- **Trim output is pinned to carry no prompt content.** `ScoreTrim` reads tool
+  result text, computes which bytes a cap would remove, and looks for those
+  lines quoted in later turns — every comparison has a line of your source on
+  both sides. It emitted a label and an offset and nothing said so; one added
+  format argument would have put a removed line into the terminal, scrollback
+  and any session recording. Now asserted, in the prose and in the `--json`
+  form.
+- **The outbound inventory was incomplete, and the test guarding it could not
+  see why.** `cmd/replay/outbound_drift_test.go` matched six call expressions
+  by name, so `http.DefaultClient.Get(u)`, `c.Do(req)` on a client value, an
+  aliased `import h "net/http"`, and `net.Dial` all passed it — verified by
+  adding one to a package and watching the suite stay green. `internal/feed`
+  had been sending with `c.Get(u)` on an `*http.Client` parameter and was
+  absent from the inventory the README and `docs/SURFACES.md` rest on. The test
+  now also requires every package importing `net`, `net/http` or `net/url` to
+  be accounted for, by import path so an alias cannot hide it, and flags a
+  listed package that no longer imports any of them. `internal/feed` is now
+  written down, including that nothing calls it yet.
+- No network call, telemetry, or version check was added. The binary still
+  originates only the requests the README enumerates.
+
 ## [0.5.4] - 2026-09-09
 
 ### Changed
