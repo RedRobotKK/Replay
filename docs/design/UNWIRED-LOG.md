@@ -32,6 +32,7 @@ Found incidentally over 2026-09-08/09 while doing other work. Every one cited.
 | 7 | `internal/proxy/preflight.go` | `Config.PreFlight` never assigned; `serve.go:136` omits it | **120 lines, a refusal kind and a counter that can never fire. Eight tests, all calling `s.preFlight` directly** | OPEN |
 | 8 | `internal/usage` (`FromInclusive`, `Validate`) | Zero importers | Still zero importers. The double-count it was written for is **fixed at source**: `codexUsage.usage()` now subtracts, `internal/usage/codex_normalises_test.go` asserts it across the package boundary. See the correction below | OPEN |
 | 9 | `internal/otlp`, `internal/feed` | `go list -deps` → absent | Not determined; may be by design | OPEN |
+| 10 | `selfupdate.StaleNotice` | `upgrade.go:131-141`; no non-test caller in the tree | Exported, tested, and reachable by nobody. The only way to learn a newer release existed was `replay upgrade --check`, a command you type when you already suspect the answer | WIRED |
 
 ## Adjacent defects found the same way
 
@@ -62,6 +63,17 @@ Not unwired, but the same family — a thing that looks connected and is not.
    only bites where `Prompt` is the provider's own figure, independently read.
    Wiring the package remains open, on its own merits.
 4. Retry header capture (`Attempts` field) — unblocks the quota work.
+5. `StaleNotice` into `replay doctor` — **done**, and the delay was the point.
+   `upgrade.go:131-141` had removed the hint rather than carried it forward,
+   because *where* an unprompted staleness line belongs is a product decision
+   and that commit had arrived by accident. Row 10 is the deliberate answer:
+   `doctor`, which is asked rather than volunteered, and which was already the
+   surface ageing the rules document. Not the bare report, because README's
+   Footprint promises one ask at most once every thirty days and a line on every
+   run is one a reader learns to skip. Not the TUI doctor screen either — its
+   worst case fills the body exactly (`TestDoctorWorstCaseKeepsEveryNote`), and
+   an eleventh row there deletes the rules warning silently, which is the defect
+   #169 had just finished fixing.
 
 ## Audit in flight
 

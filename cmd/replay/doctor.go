@@ -18,6 +18,7 @@ import (
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/proxy"
+	"github.com/RedRobotKK/Replay/internal/version"
 )
 
 // doctorTimeout bounds the probe of a running proxy.
@@ -47,6 +48,14 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 	}
 
 	p.Printf("replay doctor\n\n")
+
+	// The instrument, before its readings. An operator pasting this report into
+	// an issue has said which build produced it without being asked, and the one
+	// running a binary from three releases ago is told here rather than by typing
+	// `replay upgrade --check`, which is a command you run when you already
+	// suspect the answer. Local arithmetic on the compiled-in stamp; it reaches
+	// nothing.
+	p.Printf("%s", buildNotice(version.Version, version.Commit, version.Date, timeNow()))
 
 	// Transcripts.
 	projects := filepath.Join(claudeConfigDir(home), "projects")
@@ -106,9 +115,10 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 
 	// The rules document, before the proxy, because it answers the question the
 	// pricing line above provokes: "priced against what, and how old is it?"
-	// `replay upgrade` tells an operator when the BINARY is stale; nothing told
-	// them when the TABLE was, and the table is what every dollar figure here
-	// was computed against.
+	// The build line at the top of this report says when the BINARY is stale;
+	// this one says when the TABLE is, and the table is what every dollar figure
+	// here was computed against. Until buildNotice landed the first half of that
+	// sentence named `replay upgrade`, which only says it when you type it.
 	p.Printf("%s", rulesNotice(cachemodel.RulesVersionInEffect(), cachemodel.FetchedAtInEffect(), timeNow()))
 
 	// Proxy configuration.

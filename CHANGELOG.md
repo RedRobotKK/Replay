@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- **`replay doctor` now says how old this binary is.** `selfupdate.StaleNotice` has
+  been exported and tested since the package landed and nothing called it, so the
+  only way to learn a newer release existed was to type `replay upgrade --check` —
+  a command you run when you already suspect the answer, and the operator the
+  package was written for is the one who did not. This project ran 0.4.0 for three
+  days while 0.5.4 was published.
+- It reaches nothing. The age is arithmetic on the RFC 3339 stamp linked in at
+  release time, so the promise that replay originates no request you did not type
+  is unchanged; the report says how old your build is, not what the newest one is.
+- Three states rather than two: a build inside the window is named and dated with
+  no warning; one past thirty days carries `selfupdate`'s own sentence and the
+  command that checks; a source build, an unreadable stamp, and a stamp dated
+  ahead of the clock each say which of those they are and are never aged. A dev
+  build is not stale — `replay upgrade` refuses to overwrite one.
+- On `doctor` and nowhere else. A staleness line under every report is one a
+  reader learns to skip, which is what the Footprint section's "one ask at most
+  once every thirty days" is protecting.
+
 ## [0.5.4] - 2026-09-09
 
 ### Changed
