@@ -2,10 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // A cap on a session must be drawn from what sessions cost.
@@ -165,5 +169,61 @@ func writeTranscript(t *testing.T, path, session, reqID string) {
 	}
 	if err := os.WriteFile(path, append(b, '\n'), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A session that could not be read is not a session that cost nothing.
+//
+// The walk that builds the spread is handed an error, a nil report and a nil
+// session for every transcript it could not parse, and each of those has to
+// leave the spread alone. Folding a zero in would be worse than dropping the
+// file: the spread sets the dollar figure above which live requests are
+// refused, so a parse failure counted as a free session pulls the fence down
+// onto traffic the operator meant to allow.
+//
+// These three cases were unreachable from any test while the check lived
+// inside the walk's closure; laneOf is the same check where a test can put a
+// value to it.
+func TestLaneOfDropsWhatCouldNotBeMeasured(t *testing.T) {
+	good := func() *analysis.LaneReport {
+		return &analysis.LaneReport{
+			Lane: &transcript.Lane{Requests: []*transcript.Request{{
+				Model: "claude-opus-5",
+				Usage: transcript.Usage{Input: 1000, Output: 100},
+			}}},
+			Calibration: &analysis.Calibration{},
+		}
+	}
+	sess := &transcript.Session{ID: "aaaa1111"}
+
+	for _, c := range []struct {
+		name    string
+		session *transcript.Session
+		rep     *analysis.LaneReport
+		err     error
+	}{
+		{"a transcript that would not parse", sess, good(), errors.New("bad json")},
+		{"a lane with no report", sess, nil, nil},
+		{"a report with no session", nil, good(), nil},
+	} {
+		if l, ok := laneOf(c.session, c.rep, c.err); ok {
+			t.Errorf("%s reached the spread as $%.2f over %.0f tokens", c.name, l.USD, l.Tokens)
+		}
+	}
+
+	// And a session that WAS measured carries its own id and its own as-run
+	// spend, so the drops above are not a function that drops everything.
+	l, ok := laneOf(sess, good(), nil)
+	if !ok {
+		t.Fatal("a parsed session with a priced request produced no spend")
+	}
+	if l.ID != "aaaa1111" {
+		t.Errorf("the lane carries session id %q, so the fold has nothing to key on", l.ID)
+	}
+	if l.Tokens != 1000 {
+		t.Errorf("the lane carries %.0f prompt tokens, want 1000", l.Tokens)
+	}
+	if l.USD <= 0 {
+		t.Errorf("a priced request folded to $%.2f", l.USD)
 	}
 }

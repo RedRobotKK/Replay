@@ -139,6 +139,21 @@ func mcpTools() []mcpTool {
 // session ends. Printing the snippet rather than describing it exists because
 // the question "how do I wire this in" was asked three times before anyone
 // noticed the guide answered it for the status line and for nothing else.
+// binaryName is the path to name in the snippet, and what to say instead when
+// the operating system will not tell us where this binary is.
+//
+// Split out so the fallback can be tested. It used to sit inline as
+// `if err != nil || bin == ""`, which no test could enter: os.Executable does
+// not fail on demand, so the branch that decides what a broken install prints
+// was unobserved. The name is the whole output of `mcp --install` — an empty
+// one produces a configuration that launches nothing.
+func binaryName(exe string, err error) string {
+	if err != nil || exe == "" {
+		return "replay"
+	}
+	return exe
+}
+
 // runMCPCommand is the command surface in front of the server.
 //
 // --install used to be matched by hand in the dispatch switch, before any
@@ -155,11 +170,7 @@ func runMCPCommand(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if *install {
-		bin, err := os.Executable()
-		if err != nil || bin == "" {
-			bin = "replay"
-		}
-		_, err = fmt.Fprint(stdout, "\n"+mcpInstallSnippet(bin))
+		_, err := fmt.Fprint(stdout, "\n"+mcpInstallSnippet(binaryName(os.Executable())))
 		return err
 	}
 	return runMCP(os.Stdin, stdout, stderr)

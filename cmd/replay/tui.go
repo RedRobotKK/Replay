@@ -207,34 +207,12 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 				// follow the reader onto a screen where they mean something
 				// else. This is the whole point of the screen: a finding the
 				// reader has judged should stop being offered.
+				// The cursor is read when the key arrives rather than
+				// captured here: the reader moves it between renders, and a
+				// row index frozen at render time marks the finding they were
+				// looking at a moment ago.
 				loop.SetLocal(func(r rune) bool {
-					// Escape closes the detail rather than leaving the screen.
-					// The detail's own last line says "esc back to the list",
-					// and until this handler existed escape did nothing at all
-					// there — the reader escaped the detail by navigating away
-					// and coming back.
-					if r == 27 && adviseOpen != nil {
-						adviseOpen = nil
-						return true
-					}
-					var status advisor.Status
-					switch r {
-					case 'a':
-						status = advisor.Applied
-					case 'x':
-						status = advisor.Dismissed
-					default:
-						return false
-					}
-					i := loop.Cursor().At
-					if i < 0 || i >= len(ids) {
-						return false
-					}
-					// A write that fails must not look like one that worked.
-					// The next render re-reads the file, so a silent failure
-					// would show the old status and the reader would press
-					// the key again.
-					return markAdvice(ids[i], status) == nil
+					return adviseKeys(r, &adviseOpen, ids, loop.Cursor().At, markAdvice)
 				})
 				// The age is not decoration. Advice read from disk without a
 				// date is yesterday's answer wearing today's clothes.
@@ -408,20 +386,39 @@ func guardsState() ([]string, int) {
 	}
 	var lanes []laneSpend
 	_ = forEachSession(files, func(_ string, session *transcript.Session, rep *analysis.LaneReport, err error) error {
-		if err != nil || rep == nil || session == nil {
-			return nil
-		}
-		if pols := rep.Policies(); len(pols) > 0 {
-			lanes = append(lanes, laneSpend{
-				ID:     session.ID,
-				USD:    pols[0].CostUSD,
-				Tokens: float64(pols[0].PromptTokens),
-			})
+		if l, ok := laneOf(session, rep, err); ok {
+			lanes = append(lanes, l)
 		}
 		return nil
 	})
 	usd, toks, sessions := foldSpread(lanes)
 	return guardAdviceLines(usd, toks), sessions
+}
+
+// laneOf reads one transcript's as-run spend, or reports that it has none.
+//
+// A transcript that would not parse, a report that came back nil, and a lane
+// whose session could not be identified are all "no measurement", and the
+// walk skips them rather than folding a zero into the spread. A zero is a
+// session that cost nothing, and this spread sets the threshold above which
+// live requests are refused: a parse failure counted as a free session drags
+// the fence down onto traffic the operator meant to allow.
+//
+// Named rather than written inline in the walk, so the three ways a session
+// arrives unusable can be put to it one at a time. As a closure they were
+// unreachable from any test, and guard-reachability reported them so.
+func laneOf(session *transcript.Session, rep *analysis.LaneReport, err error) (laneSpend, bool) {
+	if err != nil || rep == nil || session == nil {
+		return laneSpend{}, false
+	}
+	if pols := rep.Policies(); len(pols) > 0 {
+		return laneSpend{
+			ID:     session.ID,
+			USD:    pols[0].CostUSD,
+			Tokens: float64(pols[0].PromptTokens),
+		}, true
+	}
+	return laneSpend{}, false
 }
 
 // laneSpend is one transcript's spend, with the session it belongs to.
@@ -568,6 +565,48 @@ func modelState() (string, []tui.ModelRow, int) {
 // Freshness is the whole risk, so the caller shows the timestamp rather than
 // presenting yesterday's advice as today's. A cache that cannot say how old it
 // is would be worse than the delay it saves.
+// adviseKeys handles the advice screen's own keys and reports whether it
+// consumed one. A key it declines keeps its loop-wide meaning, which is why
+// escape is claimed only when there is a detail to close: on the list, escape
+// is back.
+//
+// Named rather than written inline in the render function, for the reason
+// binaryName was pulled out of one: a decision that can only be reached by
+// driving the whole surface is a decision no test puts a value to, and
+// guard-reachability reported the escape below as a branch nothing enters
+// while the detail's own last row said "esc back to the list".
+//
+// open points at the variable the render reads, so the key and the next frame
+// cannot disagree about what is open. at is the cursor's row and mark records
+// the reader's verdict; both are parameters so the handler does no I/O of its
+// own and can be put to a test without a state file on disk.
+func adviseKeys(r rune, open **tui.AdviceRow, ids []string, at int, mark func(string, advisor.Status) error) bool {
+	// Escape closes the detail rather than leaving the screen. The detail's own
+	// last line says "esc back to the list", and until this handler existed
+	// escape did nothing at all there — the reader escaped the detail by
+	// navigating away and coming back.
+	if r == 27 && *open != nil {
+		*open = nil
+		return true
+	}
+	var status advisor.Status
+	switch r {
+	case 'a':
+		status = advisor.Applied
+	case 'x':
+		status = advisor.Dismissed
+	default:
+		return false
+	}
+	if at < 0 || at >= len(ids) {
+		return false
+	}
+	// A write that fails must not look like one that worked. The next render
+	// re-reads the file, so a silent failure would show the old status and the
+	// reader would press the key again.
+	return mark(ids[at], status) == nil
+}
+
 func adviceFromCache() ([]tui.AdviceRow, []string, int, time.Time, bool) {
 	b, err := os.ReadFile(filepath.Join(tipStateDir(), adviceFileName))
 	if err != nil {
@@ -654,6 +693,15 @@ func adviceState() ([]tui.AdviceRow, int) {
 
 func machineState() tui.Machine {
 	m := tui.Machine{}
+
+	// The rules document first, and above the early return, because it
+	// describes the BINARY rather than the machine: it needs no home
+	// directory and there is no filesystem failure that should leave the
+	// screen unable to say which table its figures were computed against.
+	// Asked of the same two functions `replay doctor` asks, so the command
+	// and the screen cannot report different tables.
+	m.RulesVersion = cachemodel.RulesVersionInEffect()
+	m.RulesState, m.RulesAgeDays = rulesAge(cachemodel.FetchedAtInEffect(), timeNow())
 
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -920,10 +968,7 @@ func blameFor(path string) (string, error) {
 // that as unknown rather than as a clean record. On this screen in particular,
 // silence must not read as safety.
 func guardState() tui.GuardState {
-	base := os.Getenv(envBaseURL)
-	if base == "" {
-		base = "http://" + defaultListen
-	}
+	base := guardBase()
 	g := tui.GuardState{Addr: strings.TrimPrefix(strings.TrimPrefix(base, "http://"), "https://")}
 	st, ok := probeStatus(base)
 	if !ok {
@@ -941,6 +986,25 @@ func guardState() tui.GuardState {
 		DayTokens:     st.Caps.DayTokens,
 	}
 	return g
+}
+
+// guardBase is where the guards screen looks for a proxy.
+//
+// The environment names it, and when it does not, the address `replay serve`
+// binds by default is the one to try — the same default the reader would get
+// by running the command the screen tells them to run. Falling through with an
+// empty string would leave the screen reporting "no answer" with no address
+// beside it, which reads as a proxy nobody can name rather than as one that is
+// not running at 127.0.0.1.
+//
+// Split out of guardState so the choice can be tested without a socket: the
+// value it returns decides whether anything is dialled at all.
+func guardBase() string {
+	base := os.Getenv(envBaseURL)
+	if base == "" {
+		return "http://" + defaultListen
+	}
+	return base
 }
 
 func liveState() tui.Live {
