@@ -97,19 +97,66 @@ func TestCC2_NothingIdentifyingTravels(t *testing.T) {
 
 // CC3: an unpriced corpus is refused rather than submitted as free.
 //
-// PASS: a contribution with no priced tasks does not validate.
+// PASS: a contribution with no priced tasks does not validate, refused BY the
+// zero-tasks guard and by name.
 // FAIL: zeroes aggregated as though somebody measured them, which is the
 // "nothing measured is not a pass" rule this repository applies everywhere else.
+//
+// The fixture is the whole test, and the first version had it wrong in the way
+// ADR-0014 warns about. It validated `Corpus{Schema: CorpusSchema, Tasks: 0}`
+// and asserted only `err == nil`. That value has no Digest, so Validate refused
+// at the FIRST case — "the submission has no content digest" — and the
+// zero-tasks case three cases below was never reached at all. Measured by
+// scripts/refusal-reachability: forcing `case c.Tasks <= 0` false left this
+// test green, and forcing `case c.TotalUSD <= 0` false left it green too,
+// because it never reached either.
+//
+// Reaching a case in a `switch { case ... }` means satisfying every case above
+// it. So each fixture below is a corpus that is valid in every respect except
+// the one under test, and each assertion names the sentence only that case
+// produces — never the shared "NOT MEASURED" tier, which the case below it
+// carries as well.
 func TestCC3_AnEmptyCorpusIsNotAContribution(t *testing.T) {
-	if err := (Corpus{Schema: CorpusSchema, Tasks: 0}).Validate(); err == nil {
-		t.Error("a corpus with zero tasks validated; aggregating it would add a measured " +
-			"zero to somebody's total")
-	}
-	ok := Corpus{
+	// Valid in everything but the field each case names.
+	base := Corpus{
 		Schema: CorpusSchema, Tasks: 115, TotalUSD: 3382.13,
 		PricedAt: "2026-09-07", RulesVersion: "anthropic-2026-09-01", SourceTag: "a", TagBasis: "b",
-	}.Digested()
-	if err := ok.Validate(); err != nil {
+	}
+
+	noTasks := base
+	noTasks.Tasks = 0
+	noTasks.TotalUSD = 0
+	err := noTasks.Digested().Validate()
+	if err == nil {
+		t.Fatal("a corpus with zero tasks validated; aggregating it would add a measured " +
+			"zero to somebody's total")
+	}
+	if strings.Contains(err.Error(), "no content digest") {
+		t.Fatalf("the digest case refused first, so this fixture never reaches the "+
+			"zero-tasks guard and the test cannot see it: %v", err)
+	}
+	// The sentence only `case c.Tasks <= 0` produces. The case below it also
+	// says NOT MEASURED, so asserting the tier accepts the wrong refusal.
+	if !strings.Contains(err.Error(), "priced no tasks") {
+		t.Errorf("zero tasks was refused, but not by the zero-tasks guard: %v", err)
+	}
+
+	// Tasks priced, all of them to nothing. This is the case below, and it has
+	// to be reachable on its own or the guard above is doing both jobs.
+	noMoney := base
+	noMoney.TotalUSD = 0
+	err = noMoney.Digested().Validate()
+	if err == nil {
+		t.Fatal("a corpus whose tasks all priced to $0.00 validated")
+	}
+	if strings.Contains(err.Error(), "priced no tasks") {
+		t.Fatalf("the zero-tasks guard refused a corpus with %d tasks: %v", noMoney.Tasks, err)
+	}
+	if !strings.Contains(err.Error(), "priced to $0.00") {
+		t.Errorf("a $0.00 total was refused, but not by the guard that names it: %v", err)
+	}
+
+	if err := base.Digested().Validate(); err != nil {
 		t.Errorf("a real corpus was refused: %v", err)
 	}
 }
