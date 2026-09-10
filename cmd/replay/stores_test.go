@@ -115,3 +115,68 @@ func TestST3_EveryStoreResolvesUnderTheHomeDirectory(t *testing.T) {
 		}
 	}
 }
+
+// ST4: the registry resolves against a real directory, and every branch of the
+// match was unobserved.
+//
+// resolveStores expands a prefixed entry like `ledger` so it also covers
+// `ledger-grok`, skips what does not match, and returns nothing when the root
+// cannot be read. All three decide what `replay privacy` discloses and what
+// `replay purge` can reach, and none was observed.
+func TestST4_ResolveStoresMatchesPrefixesAndSkipsTheRest(t *testing.T) {
+	root := t.TempDir()
+	for _, d := range []string{"ledger", "ledger-grok", "vault", "somebody-elses-dir"} {
+		if err := os.Mkdir(filepath.Join(root, d), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, f := range []string{"tip.json", "unrelated.txt"} {
+		if err := os.WriteFile(filepath.Join(root, f), []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := map[string]bool{}
+	for _, r := range resolveStores(root) {
+		got[r.Actual] = true
+	}
+	for _, want := range []string{"ledger", "ledger-grok", "vault", "tip.json"} {
+		if !got[want] {
+			t.Errorf("%s is on disk and was not resolved; a store the registry misses is a\n"+
+				"store privacy does not disclose and purge does not reach", want)
+		}
+	}
+	// A directory Replay did not write is not Replay's to disclose or delete.
+	for _, unwanted := range []string{"somebody-elses-dir", "unrelated.txt"} {
+		if got[unwanted] {
+			t.Errorf("%s was claimed by the registry and is not Replay's", unwanted)
+		}
+	}
+}
+
+// ST5: a root that cannot be read resolves to nothing rather than to a guess.
+func TestST5_AnUnreadableRootResolvesToNothing(t *testing.T) {
+	if got := resolveStores(filepath.Join(t.TempDir(), "absent")); len(got) != 0 {
+		t.Errorf("resolveStores over a missing root returned %d store(s), want none", len(got))
+	}
+}
+
+// ST6: with no home directory a store has no path, and the empty string is the
+// signal rather than a path relative to nowhere.
+//
+// Returning filepath.Join("", ".replay", name) would produce `.replay/<name>`,
+// a relative path that resolves against whatever directory the process happens
+// to be in — which for a deletion command is the worst available outcome.
+func TestST6_NoHomeGivesNoPath(t *testing.T) {
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+	s := store{Name: "ledger"}
+	got := s.Path()
+	if got == "" {
+		return // the platform refused, which is the branch under test
+	}
+	if !filepath.IsAbs(got) {
+		t.Errorf("Path() = %q with no home: a relative store path resolves against the\n"+
+			"working directory, and purge would delete from wherever it was run", got)
+	}
+}
