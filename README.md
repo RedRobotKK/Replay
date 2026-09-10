@@ -1,5 +1,18 @@
 # Replay
 
+[![CI](https://github.com/RedRobotKK/Replay/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/RedRobotKK/Replay/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/RedRobotKK/Replay?display_name=tag&sort=semver)](https://github.com/RedRobotKK/Replay/releases)
+[![Go](https://img.shields.io/github/go-mod/go-version/RedRobotKK/Replay)](go.mod)
+[![Licence: BUSL 1.1 → Apache 2.0 in 2029](https://img.shields.io/badge/licence-BUSL%201.1%20%E2%86%92%20Apache%202.0%20(2029)-blue)](LICENSE)
+[![Dependencies: none](https://img.shields.io/badge/dependencies-none-brightgreen)](go.mod)
+
+<!-- The licence badge is written out rather than generated. GitHub's detector
+     returns NOASSERTION for BUSL 1.1, so the repository shows no licence at
+     all and a reader is left to assume the most restrictive reading. The
+     actual grant is broad — running it inside your organisation, commercially
+     and in production, is free and unrestricted — and the badge says which
+     licence and when it converts rather than leaving that to a click. -->
+
 **Your prompt cache expired while you were at lunch.** Replay finds the turn it happened on, and
 what that one turn cost.
 
@@ -19,7 +32,12 @@ curl -fsSL https://redrobot.jp/replay.sh | sh
 
 ![The cost screen: what one task cost, and the share of it nobody chose](docs/screens/cost.svg)
 
-`replay tui` puts the same answers on ten screens, one keystroke apart. The images in this README
+`replay tui` puts the same answers on ten screens, one keystroke apart. Selecting a finding and
+acting on it, recorded from a real session:
+
+![Triage: select a finding, read its evidence, mark it applied](docs/demo/triage.gif)
+
+The images in this README
 are generated from those screens and checked against them by a test, so a screenshot here cannot
 drift from what the tool prints. Every screen is in [docs/screens](docs/screens).
 
@@ -312,6 +330,26 @@ rather than the tests: **provenance is a field, not a comment**, and absence, ze
 three different values. Nine defects in one day shared that shape, and none of them was a
 miscalculation — the arithmetic was right every time, and nothing on the screen said what the
 numbers were.
+
+## Before every release
+
+The surfaces a stranger meets first rot silently, because none of them has a build step. So they
+are checked mechanically rather than remembered, in `internal/regression`:
+
+| What | Guard |
+|---|---|
+| Content images describe themselves | `DS1` |
+| The opening paragraph stands alone when quoted | `DS2` |
+| `llms.txt` exists and is well formed | `DS3` |
+| Badges point at things that exist | `DS4` |
+| Every repository-relative link resolves | `DL1` |
+| Every document is linked from an index | `TestNoOrphanedDocuments` |
+| Every command has a section in the guide | `TestCT2` |
+| The published installer matches this one | `scripts/installer-drift` |
+| The released binary prints what the tree says | `scripts/release-check.sh` |
+
+[llms.txt](llms.txt) is the machine-readable summary: the fixed path answer engines and crawlers
+look for, so a model does not have to infer the project from prose written for a person.
 
 ## Documentation
 

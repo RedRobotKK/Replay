@@ -1,0 +1,50 @@
+# Replay
+
+> Finds the turn your coding agent's prompt cache broke, what that turn cost, and what a
+> different context layout would have saved. Runs entirely on your machine, reads transcripts
+> already on disk, and needs no account.
+
+Replay is a command-line tool and local proxy for people running coding agents (Claude Code,
+Codex, Cursor, Grok, Ollama and others). When a prompt cache breaks, the provider re-bills the
+whole conversation history at write prices. Nothing errors and nothing warns; the only trace is
+a bill that looks like ordinary growth. Replay replays recorded sessions against the provider's
+caching rules, turn by turn, and names the turn that broke.
+
+It is deliberately narrower than a usage dashboard. `ccusage` and similar tools answer what you
+spent. Replay answers which turn was billed twice and what changed on that turn to cause it.
+
+## What makes it unusual
+
+- **Every figure says how it was obtained.** Measured, estimated, or not measured — the tier is
+  printed beside the number, and a screen that cannot measure says so rather than showing a
+  plausible figure.
+- **It retracts its own numbers in public.** A headline 98.8% was corrected to 4.2%. A sample
+  described as 1,363 sessions was restated as 78. A quota measurement was published as a null
+  result after the counter did not move across 3.09M tokens.
+- **No dependencies.** `go.mod` is three lines with zero requires; there is no `go.sum` and no
+  vendor directory.
+- **No telemetry in the binary.** Two outbound calls exist and both are typed by the user.
+
+## Documentation
+
+- [README](README.md): what it does, what it costs, and how far to trust it
+- [Command guide](docs/guide/commands.md): every command, its flags, and what each writes
+- [CLI reference](docs/CLI.md): generated from the binary, including which commands touch the network
+- [Architecture decisions](docs/adr/README.md): why the design is what it is
+- [Evidence](docs/evidence/README.md): dated measurements, including the retracted ones
+- [Security policy](SECURITY.md): what to report and how
+- [Contributing](CONTRIBUTING.md): the CLA and the bar for a change
+
+## Install
+
+```sh
+curl -fsSL https://redrobot.jp/replay.sh | sh
+```
+
+The installer is written to be read before it is run. `--dry-run` prints what it would do.
+
+## Licence
+
+Business Source License 1.1, converting to Apache 2.0 on 2029-09-06. Running it inside your own
+organisation — including commercially and in production, in CI, and modified for internal use —
+is free and unrestricted. Selling Replay itself as a hosted service is what the licence withholds.
