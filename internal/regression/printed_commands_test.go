@@ -62,6 +62,7 @@ var prose = map[string]string{
 	"recommends": `"what replay recommends"`,
 	"reports":    `"what replay reports"`,
 	"engine":     `"the replay engine"`,
+	"priced":     `"of everything replay priced", the outlier note's denominator`,
 }
 
 // notOurs is every "--flag" the tool prints that is deliberately not one of its

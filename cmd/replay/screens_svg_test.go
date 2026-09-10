@@ -51,12 +51,26 @@ const screenDir = "../../docs/screens"
 // 2026-09-07, 1 days old" counts from the compiled table to the current date,
 // so an image of it is correct for one day and wrong every day after.
 //
+// safe joined it for the same reason by a different route. It lists what
+// Replay has written to this machine — store names, byte sizes, file counts —
+// and the only store present under the pinned HOME is the cost index the test
+// run creates for itself. Its size is a property of the run, so the committed
+// image was correct on the machine that generated it and wrong on the next
+// one: it passed here and failed on windows-latest, which is the good outcome
+// of a bad image.
+//
+// Pinning it harder was available and is the wrong trade. The screen's whole
+// job is to answer "what does this thing know about me", and an image of
+// somebody else's disk is not an answer to that question — it is a picture of
+// a screen nobody sees, which is the same objection that keeps doctor off this
+// list.
+//
 // The options were to inject a clock into production code so a screenshot
 // could be stable, or to normalise the line in the image and publish a
 // rendering of a screen nobody sees. Both are worse than not shipping this
 // one image. A test that fails every morning is a test somebody switches off,
 // and it would take the nine that do work with it.
-var unpinnable = map[string]bool{"doctor": true}
+var unpinnable = map[string]bool{"doctor": true, "safe": true}
 
 // sgrColour maps the palette to what the SVG paints.
 //
