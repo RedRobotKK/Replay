@@ -107,8 +107,6 @@ func (l *Loop) SetLocal(f func(rune) bool) {
 	l.local = f
 }
 
-// TakeOpened reports whether enter was pressed since the last call, and clears
-// it. Read-and-clear so one keystroke opens one row.
 // Current is the screen on show. Exported so a test can assert where a key
 // left the reader, which is the only thing "esc back" is a claim about.
 func (l *Loop) Current() rune {
@@ -139,6 +137,8 @@ func (l *Loop) Helping() bool {
 	return l.help
 }
 
+// TakeOpened reports whether enter was pressed since the last call, and clears
+// it. Read-and-clear so one keystroke opens one row.
 func (l *Loop) TakeOpened() bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
