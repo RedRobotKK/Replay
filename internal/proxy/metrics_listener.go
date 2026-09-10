@@ -41,6 +41,17 @@ func (s *Server) readOnlyMux() http.Handler {
 	return mux
 }
 
+// bindMetrics is the metrics bind step, indirected once.
+//
+// ListenAndServe's "metrics listener stopped" arm is the loudest thing this
+// file does — it takes the whole proxy down rather than let a scrape target
+// die quietly — and nothing could reach it. A listener the server owns cannot
+// be closed from outside the process, so the arm had no way to be observed,
+// which under ADR-0014 makes it indistinguishable from an arm that is not
+// there. This is the seam a test uses to hand the server a listener it can
+// kill; production reaches listenMetrics through it unchanged.
+var bindMetrics = listenMetrics
+
 // listenMetrics binds the metrics listener, or returns nil when none was asked
 // for. It accepts the same address forms as the proxy: a loopback host:port,
 // or unix:// for a socket that is owner-only like any other.

@@ -284,7 +284,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	// Bind the metrics listener before announcing readiness. Ready has to mean
 	// both listeners are up, or a caller that waits on Addr and then reads
 	// MetricsAddr races the bind and sees an empty string.
-	mln, merr := listenMetrics(s.cfg.MetricsListen)
+	mln, merr := bindMetrics(s.cfg.MetricsListen)
 	if merr != nil {
 		_ = ln.Close()
 		return merr
