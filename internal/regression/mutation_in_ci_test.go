@@ -176,3 +176,43 @@ func TestMC3_EveryMutantNamesItsKiller(t *testing.T) {
 		}
 	}
 }
+
+// MC4: main's CI runs are never cancelled.
+//
+// cancel-in-progress applied to every ref, so each merge killed the previous
+// merge's run. Measured on 2026-09-09: of fourteen consecutive main commits,
+// eleven had a CANCELLED run and two completed. The branch every release is cut
+// from was the least-verified ref in the repository.
+//
+// "Every pull request was green" is a different claim. A pull request is tested
+// against its base; main is what those merges add up to, and with six PRs
+// touching the same three files that difference is where an interaction would
+// show. The job most likely to be killed is the slowest — here the 25-minute
+// mutation catalogue, whose entire purpose is catching a guard that stopped
+// working while nobody was looking.
+//
+// On a pull request the cancellation is still correct, so this asserts the
+// exemption rather than the absence of the setting.
+func TestMC4_MainCIRunsAreNotCancelled(t *testing.T) {
+	var line string
+	for _, l := range ciCommands(t) {
+		if strings.Contains(l, "cancel-in-progress") {
+			line = l
+			break
+		}
+	}
+	if line == "" {
+		// No setting at all means nothing is cancelled, which satisfies the
+		// property this test is about.
+		return
+	}
+	if strings.Contains(line, "true") && !strings.Contains(line, "github.ref") {
+		t.Error("cancel-in-progress is unconditionally true, so every merge to main " +
+			"cancels the previous merge's run and main is the least-verified ref in the " +
+			"repository. Exempt main: cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}")
+	}
+	if strings.Contains(line, "github.ref") && !strings.Contains(line, "refs/heads/main") {
+		t.Errorf("cancel-in-progress is conditional but does not name main:\n  %s",
+			strings.TrimSpace(line))
+	}
+}

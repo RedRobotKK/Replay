@@ -9,9 +9,24 @@ on:
 permissions:
   contents: read
 
+# Supersede a branch's own in-flight run, never main's.
+#
+# cancel-in-progress used to apply everywhere, and on 2026-09-09 that meant 11
+# of 14 consecutive main commits had a CANCELLED run and two had a completed
+# one. Merges landed minutes apart and each cancelled the last, so the branch
+# every release is cut from was the least-verified ref in the repository.
+#
+# Every pull request was green before merging, which is not the same claim: a
+# PR is tested against its base, and main is what those merges add up to. The
+# job most likely to be killed is the slowest, and the slowest here is the
+# 25-minute mutation catalogue — the one job whose whole purpose is catching a
+# guard that stopped working while nobody was looking.
+#
+# On a pull request the cancellation is still right: a superseded push is dead
+# work and the next one re-runs everything.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   go:
