@@ -8,8 +8,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/consent"
+	"github.com/RedRobotKK/Replay/internal/money"
 	"github.com/RedRobotKK/Replay/internal/observation"
 	"github.com/RedRobotKK/Replay/internal/probe"
 )
@@ -164,4 +168,129 @@ func contributorSecret() (string, error) {
 		return "", err
 	}
 	return secret, nil
+}
+
+// corpusFigures is what a contribution is made of: the five figures the money
+// argument rests on, and what priced them.
+//
+// It is a struct rather than eight parameters because the failure this whole
+// repository keeps finding is a value standing in for a different value it is
+// not, and four consecutive float64s in a call signature is that defect waiting
+// for a refactor.
+type corpusFigures struct {
+	Tasks          int
+	Unpriced       int
+	TotalUSD       float64
+	AvoidableUSD   float64
+	AvoidableShare float64
+	MedianTaskUSD  float64
+}
+
+// contributeCorpus builds a corpus submission from the figures the cost report
+// just computed, writes it, and returns the path.
+//
+// It takes the summary rather than recomputing it. A contribution path with its
+// own arithmetic would be a second implementation of the money argument, free
+// to disagree with the one on the contributor's screen, and the disagreement
+// would surface as a pooled figure nobody could reproduce from their own
+// terminal.
+//
+// The probe path's statement ends "no prompts, no paths, no spend". This
+// payload breaks that sentence deliberately — aggregate money is the whole
+// point — so it gets its own flag, its own writer, its own file name and its
+// own statement. Reusing the probe's would have made one true sentence false
+// for everyone who had already read it.
+// It returns the path written and any earlier submissions from this machine
+// that it supersedes — see EarlierSubmissions for why the contributor has to be
+// told about those before they attach anything anywhere.
+func contributeCorpus(campaign, dir string, f corpusFigures, now time.Time) (string, []string, error) {
+	// Opt-in only, and every one of these three branches is a refusal.
+	//
+	// consent.readDecision returns Granted for exactly one thing: a file
+	// containing the line `corpus_opt_in = true`. A missing file is Unset, an
+	// explicit false is Declined, and a file that is a symlink, writable by
+	// anyone else, self-contradictory, empty of decisions, or holding a line it
+	// cannot parse is an ERROR — never a yes. Nothing below runs until one of
+	// those has passed, so there is no arrangement of the filesystem that
+	// builds a submission the user did not ask for.
+	decision, err := readCorpusConsent()
+	if err != nil {
+		return "", nil, fmt.Errorf("the corpus consent file cannot be read, so it is not a decision: %w", err)
+	}
+	if decision.ShouldAsk() {
+		return "", nil, fmt.Errorf("contributing is off until you turn it on. Write `corpus_opt_in = true` in %s, "+
+			"or run the installer with --corpus-opt-in. Nothing was built: %w", decision.Path, errUsage)
+	}
+	if !decision.Allowed() {
+		return "", nil, fmt.Errorf("corpus contribution is declined in %s. Nothing was built: %w", decision.Path, errUsage)
+	}
+
+	secret, err := contributorSecret()
+	if err != nil {
+		return "", nil, err
+	}
+	tag, err := observation.LocalTag(campaign, secret)
+	if err != nil {
+		return "", nil, err
+	}
+	c := observation.Corpus{
+		Schema: observation.CorpusSchema,
+		// Truncated to the hour, as Observation's is: the hour is enough to
+		// order submissions and to say which price table was current, and a
+		// minute is closer to a keystroke timestamp than to a measurement.
+		TakenAt:        now.UTC().Truncate(time.Hour).Format(time.RFC3339),
+		Tasks:          f.Tasks,
+		TotalUSD:       f.TotalUSD,
+		AvoidableUSD:   f.AvoidableUSD,
+		AvoidableShare: f.AvoidableShare,
+		MedianTaskUSD:  f.MedianTaskUSD,
+		PricedAt:       money.RatesDate,
+		RulesVersion:   cachemodel.RulesVersion,
+		Unpriced:       f.Unpriced,
+		SourceTag:      tag.Value,
+		TagBasis:       tag.Basis,
+	}.Digested()
+	// No `dir == ""` default here, and its absence is deliberate: filepath.Join
+	// discards empty elements, so Join("", name) and Join(".", name) are the
+	// same string. The branch that set it could not be observed failing because
+	// removing it changed nothing, which ADR-0014 rules out.
+	path, err := observation.WriteCorpus(dir, c)
+	if err != nil {
+		return "", nil, err
+	}
+	// Earlier submissions from this machine are reported, never deleted. The
+	// contributor may have kept one deliberately, and a tool that tidied up
+	// somebody's evidence directory on their behalf would be doing the one
+	// thing this whole path exists to avoid.
+	return path, observation.EarlierSubmissions(dir, tag.Value, path), nil
+}
+
+// corpusContributionNote is what the contributor is told, and the first
+// sentence is the whole reason this path is separate from the probe's.
+func corpusContributionNote(path string, supersedes []string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "\nwrote %s\n", path)
+	b.WriteString("This one carries SPEND: the total, the avoidable total and share, the median\n" +
+		"task, the task count, and which price table produced them. No prompts, no\n" +
+		"paths, no project or session names, and no per-task rows — the five figures\n" +
+		"and their basis, nothing else.\n" +
+		"Nothing was sent. Read it, and if you are happy with it, attach it to a pull\n" +
+		"request against the campaign's corpus file. Its digest is in the filename, so\n" +
+		"a pooled figure can name this submission and a reader can check it.\n")
+	if len(supersedes) > 0 {
+		// Said plainly, because the failure mode is a contributor helpfully
+		// attaching all of them. A corpus is cumulative, so the older files
+		// are contained in this one; a pooler that summed them would count
+		// this machine's money more than once, and the avoidable share would
+		// barely move while it happened.
+		fmt.Fprintf(&b, "\nThis SUPERSEDES %d earlier submission(s) from this machine:\n", len(supersedes))
+		for _, name := range supersedes {
+			fmt.Fprintf(&b, "  %s\n", name)
+		}
+		b.WriteString("Send only the newest. Each run reads your whole transcript root, so this\n" +
+			"file already contains everything the earlier ones did — sending both would\n" +
+			"have your spend counted twice in the pooled total. They have been left on\n" +
+			"disk; nothing here deletes your files.\n")
+	}
+	return b.String()
 }
