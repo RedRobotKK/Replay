@@ -184,6 +184,11 @@ type corpusFigures struct {
 	AvoidableUSD   float64
 	AvoidableShare float64
 	MedianTaskUSD  float64
+	// The waste distribution. Nil means this build did not measure it, which
+	// is not the same as measuring zero — see the Corpus fields.
+	CacheBreaks *int
+	ReReads     *int
+	ErrorShare  *float64
 }
 
 // contributeCorpus builds a corpus submission from the figures the cost report
@@ -247,6 +252,9 @@ func contributeCorpus(campaign, dir string, f corpusFigures, now time.Time) (str
 		PricedAt:       money.RatesDate,
 		RulesVersion:   cachemodel.RulesVersion,
 		Unpriced:       f.Unpriced,
+		CacheBreaks:    f.CacheBreaks,
+		ReReads:        f.ReReads,
+		ErrorShare:     f.ErrorShare,
 		SourceTag:      tag.Value,
 		TagBasis:       tag.Basis,
 	}.Digested()

@@ -9,6 +9,29 @@ Written because [`SURFACES.md`](../SURFACES.md) records that these artifacts
 exist and not what is in them. A reader deciding whether to contribute needs the
 field list and the size, not an assurance.
 
+> **Amended later the same day.** The payload described below was 13 scalars.
+> Three optional waste fields were added afterwards — `cacheBreaks`, `reReads`
+> and `errorShare`, the distribution ADR-0009 asks the corpus to carry — taking
+> a populated submission to **16 fields and 502 bytes**. A real one, generated
+> against this machine's corpus in an isolated home:
+>
+> ```json
+>   "cacheBreaks": 768,
+>   "reReads": 428,
+>   "errorShare": 0.07984523390784383,
+> ```
+>
+> They are pointers, absent when nil, for two reasons that happen to coincide.
+> ADR-0018: a build that did not measure an error share and a corpus whose share
+> is genuinely zero are different states. And `Pool.Add` recomputes the digest
+> rather than trusting it, so a field that serialised when absent would have
+> invalidated every submission written before it existed. A test pins that: an
+> old-shape payload re-digests to the value already in its file.
+>
+> Everything below about what is NOT in the payload still holds — the three new
+> fields are a ratio and two counts, with no path from any of them back to code,
+> prompts or a project.
+
 ## The payload: 13 scalars, 394-432 bytes
 
 `observation.Corpus` (`internal/observation/corpus.go:81-119`), serialized with

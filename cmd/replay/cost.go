@@ -63,14 +63,18 @@ type costUnit struct {
 	// Lanes is how many agent lanes were folded into this row. Present only on
 	// a session row, where it is the fan-out, and it is the number that makes
 	// the difference between the two units visible instead of inferred.
-	Lanes           int       `json:"lanes,omitempty"`
-	Model           string    `json:"model"`
-	Requests        int       `json:"requests"`
-	CostUSD         float64   `json:"costUsd"`
-	AvoidableUSD    float64   `json:"avoidableUsd"`
-	AvoidableTokens int       `json:"avoidableTokens,omitempty"`
-	Breaks          int       `json:"breaks"`
-	At              time.Time `json:"at"`
+	Lanes           int     `json:"lanes,omitempty"`
+	Model           string  `json:"model"`
+	Requests        int     `json:"requests"`
+	CostUSD         float64 `json:"costUsd"`
+	AvoidableUSD    float64 `json:"avoidableUsd"`
+	AvoidableTokens int     `json:"avoidableTokens,omitempty"`
+	Breaks          int     `json:"breaks"`
+	// Repeated and Errored are the waste distribution ADR-0009 asks the corpus
+	// to carry: content-free counts, additive across lanes like Breaks.
+	Repeated int       `json:"repeated,omitempty"`
+	Errored  int       `json:"errored,omitempty"`
+	At       time.Time `json:"at"`
 }
 
 // costLaneRow is a --per-lane row on its way to JSON.
@@ -147,6 +151,22 @@ const unitMain = "main"
 // duplicatedRequests, and it was already inside the corpus total, which sums
 // every lane. Folding changes which row a figure is shown on, not what is in
 // the figure: the grand total is identical before and after.
+// errorShare is errored requests over requests, or nothing.
+//
+// A share over no requests is a division, not a measurement. Returning 0.0
+// would tell a pooled figure "this corpus had no errors" when what happened is
+// that nothing was counted, and ADR-0018 is that absence and zero are different
+// values. It is a function rather than three lines at the call site because a
+// decision inlined into a caller cannot be tested at the boundary where it is
+// wrong — ADR-0014.
+func errorShare(errored, requests int) *float64 {
+	if requests <= 0 {
+		return nil
+	}
+	share := float64(errored) / float64(requests)
+	return &share
+}
+
 func foldSessions(units []costUnit) []costUnit {
 	var order []string
 	by := map[string]*costUnit{}
@@ -171,6 +191,8 @@ func foldSessions(units []costUnit) []costUnit {
 		s.AvoidableUSD += u.AvoidableUSD
 		s.AvoidableTokens += u.AvoidableTokens
 		s.Breaks += u.Breaks
+		s.Repeated += u.Repeated
+		s.Errored += u.Errored
 		// Earliest, not first-seen: files arrive in directory order, which is
 		// not time order.
 		if !u.At.IsZero() && (s.At.IsZero() || u.At.Before(s.At)) {
@@ -527,6 +549,10 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			Requests: asRun.Requests,
 			CostUSD:  asRun.CostUSD,
 			Breaks:   len(rep.Breaks),
+			Repeated: rep.ReReads.Repeated,
+		}
+		for _, e := range rep.Errors {
+			u.Errored += e.Count
 		}
 		// Price only what was demonstrably spent twice. A cache break's deficit
 		// is tokens the provider re-billed, which is spend that already
@@ -612,11 +638,26 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	// the kind of absence nobody notices until the pool is short.
 	contribution, supersedes := "", []string(nil)
 	if *contributeTo != "" {
-		p, old, err := contributeCorpus(*contributeTo, *contributeDir, corpusFigures{
+		// The waste distribution is totalled from the same units the summary
+		// above was reduced from, never recomputed, for the reason
+		// contributeCorpus states: a second implementation of the arithmetic is
+		// free to disagree with the one on the contributor's screen.
+		breaks, repeated, errored, requests := 0, 0, 0, 0
+		for _, u := range units {
+			breaks += u.Breaks
+			repeated += u.Repeated
+			errored += u.Errored
+			requests += u.Requests
+		}
+		f := corpusFigures{
 			Tasks: s.Tasks, Unpriced: unpriced, TotalUSD: s.TotalUSD,
 			AvoidableUSD: s.AvoidableUSD, AvoidableShare: s.AvoidableShare,
 			MedianTaskUSD: s.MedianUSD,
-		}, time.Now())
+			CacheBreaks:   &breaks,
+			ReReads:       &repeated,
+		}
+		f.ErrorShare = errorShare(errored, requests)
+		p, old, err := contributeCorpus(*contributeTo, *contributeDir, f, time.Now())
 		if err != nil {
 			return err
 		}

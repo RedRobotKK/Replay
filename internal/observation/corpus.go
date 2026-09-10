@@ -103,6 +103,26 @@ type Corpus struct {
 	// reported so a pooled figure can say what it does not cover.
 	Unpriced int `json:"unpriced"`
 
+	// The waste distribution (ADR-0009). Content-free by construction: a ratio
+	// and two counts, with no path from any of them back to code, prompts or a
+	// project.
+	//
+	// These are what make a contribution worth making to the contributor rather
+	// than only to the maintainer. The money figures above answer "how much did
+	// this cost", which is a fact about the tool once it is pooled; a
+	// distribution answers "is my error share normal", which is a fact about
+	// the contributor's afternoon and is the reason to run the command twice.
+	//
+	// Pointers, because ADR-0018: a build that did not measure an error share
+	// and a corpus whose error share is genuinely zero are different states,
+	// and a pooled figure that cannot tell them apart reads an absence as a
+	// finding. Absent when nil, which is also what keeps every submission
+	// written before these existed poolable — Add recomputes the digest, so a
+	// field that serialised when absent would invalidate all of them.
+	CacheBreaks *int     `json:"cacheBreaks,omitempty"`
+	ReReads     *int     `json:"reReads,omitempty"`
+	ErrorShare  *float64 `json:"errorShare,omitempty"`
+
 	SourceTag string `json:"sourceTag"`
 	TagBasis  string `json:"tagBasis"`
 

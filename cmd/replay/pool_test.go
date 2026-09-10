@@ -163,3 +163,28 @@ func TestPoolRosterNamesTheFileNotThePath(t *testing.T) {
 			"meant to be published:\n%s", dir, out.String())
 	}
 }
+
+// An error share over no requests is absent, not zero.
+//
+// The guard was three lines inlined at the call site, where nothing could reach
+// it: a mutation that computed the share unconditionally survived because no
+// test could construct a corpus with zero requests through the cost path. ADR-
+// 0014's rule is that the untestable shape is the vulnerability, so the
+// decision is a function now.
+func TestErrorShareOverNoRequestsIsAbsent(t *testing.T) {
+	if got := errorShare(0, 0); got != nil {
+		t.Errorf("errorShare(0, 0) = %v, want nil: a share over no requests is a "+
+			"division, and 0.0 would tell a pool this corpus had no errors when "+
+			"nothing was counted", *got)
+	}
+	if got := errorShare(5, 0); got != nil {
+		t.Errorf("errorShare(5, 0) = %v, want nil", *got)
+	}
+	got := errorShare(0, 100)
+	if got == nil || *got != 0 {
+		t.Errorf("a measured zero must be reported as zero, not dropped: %v", got)
+	}
+	if got := errorShare(8, 100); got == nil || *got != 0.08 {
+		t.Errorf("errorShare(8, 100) = %v, want 0.08", got)
+	}
+}
