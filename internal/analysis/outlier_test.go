@@ -73,3 +73,30 @@ func TestOL4_NotableScalesWithTheCorpus(t *testing.T) {
 			tiny.Share*100, minShareFloor*100)
 	}
 }
+
+// OL-N: an Outlier assembled by hand still honours the session minimum.
+//
+// CompareToTotal refuses n < minSessions before it builds anything, so through
+// that path Notable's own check never fires. Outlier is exported, though, and
+// the check is not redundant for a value someone constructs directly: with two
+// sessions where one carries the whole bill, Share is 1.0 and the evenness
+// multiple is 2 x 0.5 = 1.0, so the concentration test passes and Notable
+// would call a two-session corpus notable — under a floor the package states
+// is three.
+//
+// The concentration arithmetic is what makes the smallest corpora look most
+// extreme, which is exactly why the floor exists rather than being implied.
+func TestOutlierNotableHonoursTheMinimumWhenBuiltDirectly(t *testing.T) {
+	// One of two sessions holds every dollar: the most concentrated a corpus
+	// can be, and still too few sessions to mean anything.
+	o := Outlier{Share: 1.0, Total: 100, Cost: 100, N: 2}
+
+	if got := o.Share; got < concentrationMultiple/float64(o.N) {
+		t.Fatalf("the fixture does not reach the concentration threshold (share %v), "+
+			"so this test would pass without the guard it exists to observe", got)
+	}
+	if o.Notable() {
+		t.Errorf("a %d-session corpus was called notable; the package requires %d",
+			o.N, minSessions)
+	}
+}
