@@ -115,11 +115,18 @@ type codexTokenInfo struct {
 }
 
 type codexUsage struct {
-	Input     int `json:"input_tokens"`
-	Cached    int `json:"cached_input_tokens"`
-	Output    int `json:"output_tokens"`
-	Reasoning int `json:"reasoning_output_tokens"`
-	Total     int `json:"total_tokens"`
+	Input  int `json:"input_tokens"`
+	Cached int `json:"cached_input_tokens"`
+	// CacheWrite is what the provider says it wrote to cache on this turn.
+	//
+	// Codex states it; Anthropic's surface does not, and a write there has to
+	// be inferred by hashing the prefix and noticing it changed. This reader
+	// carried every other counter in TokenUsage and not this one, so every
+	// Codex session reported a write of zero.
+	CacheWrite int `json:"cache_write_input_tokens"`
+	Output     int `json:"output_tokens"`
+	Reasoning  int `json:"reasoning_output_tokens"`
+	Total      int `json:"total_tokens"`
 }
 
 type codexWindow struct {
@@ -158,10 +165,14 @@ func (c *codexUsage) usage() (Usage, bool) {
 	if c == nil {
 		return Usage{}, false
 	}
-	if c.Input < 0 || c.Output < 0 || c.Cached < 0 || c.Reasoning < 0 {
+	if c.Input < 0 || c.Output < 0 || c.Cached < 0 || c.Reasoning < 0 || c.CacheWrite < 0 {
 		return Usage{}, false
 	}
-	if c.Cached > c.Input || c.Reasoning > c.Output {
+	// cache_write_input_tokens is a share of the same prompt as
+	// cached_input_tokens, so it takes the same ceiling. Without it, the one
+	// counter with no upper bound is how a bad record gets into a total
+	// somebody is billed against.
+	if c.Cached > c.Input || c.Reasoning > c.Output || c.Cached+c.CacheWrite > c.Input {
 		return Usage{}, false
 	}
 	// A total with no breakdown is absent, not zero. Fifteen records in a
@@ -172,7 +183,8 @@ func (c *codexUsage) usage() (Usage, bool) {
 		return Usage{}, false
 	}
 	return Usage{
-		Input:          c.Input - c.Cached,
+		Input:          c.Input - c.Cached - c.CacheWrite,
+		CacheCreation:  c.CacheWrite,
 		CacheRead:      c.Cached,
 		Output:         c.Output,
 		ThinkingTokens: c.Reasoning,
@@ -181,6 +193,11 @@ func (c *codexUsage) usage() (Usage, bool) {
 
 func (u *Usage) add(o Usage) {
 	u.Input += o.Input
+	// CacheCreation was omitted here while nothing on this surface produced
+	// one, so the omission was invisible: every field it dropped was already
+	// zero. An accumulator that silently ignores a field is a defect waiting
+	// for the field to arrive.
+	u.CacheCreation += o.CacheCreation
 	u.CacheRead += o.CacheRead
 	u.Output += o.Output
 	u.ThinkingTokens += o.ThinkingTokens
