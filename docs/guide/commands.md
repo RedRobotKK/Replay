@@ -611,7 +611,6 @@ content no longer matches its own digest is named on stderr and left out, and so
 is one scored under a different rules version — an aggregate of totals computed
 against different price tables is not an aggregate of anything.
 
-
 ### `replay context <transcript|dir>`
 
 What entered a session's context, by tool, ranked by share of content bytes.

@@ -139,8 +139,8 @@ func runCorpus(args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(stderr, "wrote %s\n", path)
-		fmt.Fprintf(stderr, "%s", calibrationContributionNote())
+		_, _ = fmt.Fprintf(stderr, "wrote %s\n", path)
+		_, _ = fmt.Fprintf(stderr, "%s", calibrationContributionNote())
 	}
 	return writeCorpus(stdout, rows, cals, failures)
 }

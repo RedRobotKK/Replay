@@ -211,10 +211,19 @@ func TestPoolDistinguishesUnreadableFromUnparseable(t *testing.T) {
 	if !strings.Contains(e, "not a submission") {
 		t.Errorf("a file that is not JSON must say so, not merely be named:\n%s", e)
 	}
-	// The read failure must report the filesystem's own reason, which is a
-	// different sentence from a parse failure.
-	if !strings.Contains(e, "gone.json") || !strings.Contains(e, "no such file") {
-		t.Errorf("an unreadable file must report why it could not be read:\n%s", e)
+	// The read failure must be reported and kept distinct from a parse failure.
+	// It is NOT asserted against the OS's own phrasing of "file not found" —
+	// that string is "no such file" on Unix and "cannot find the file" on
+	// Windows, and pinning either makes a portable test fail on the other
+	// platform. The portable invariant is that the missing file is named and
+	// takes the read branch, so "not a submission" (the parse branch) appears
+	// exactly once, for the junk file alone.
+	if !strings.Contains(e, "gone.json") {
+		t.Errorf("an unreadable file must be named on stderr:\n%s", e)
+	}
+	if n := strings.Count(e, "not a submission"); n != 1 {
+		t.Errorf("the parse-failure message should appear once (the junk file), not %d — "+
+			"the missing file must take the read branch, not the parse branch:\n%s", n, e)
 	}
 }
 

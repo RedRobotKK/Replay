@@ -35,7 +35,7 @@ func runPool(args []string, stdout, stderr io.Writer) error {
 	pooledAt := fs.String("pooled-at", timeNow().UTC().Format("2006-01-02"),
 		"the date this pool was assembled, recorded in the document")
 	fs.Usage = func() {
-		fmt.Fprint(stderr, "Usage: replay pool <submission.json...> [--json] [--pooled-at <date>]\n\n"+
+		_, _ = fmt.Fprint(stderr, "Usage: replay pool <submission.json...> [--json] [--pooled-at <date>]\n\n"+
 			"Aggregate corpus submissions written by `replay cost --contribute`.\n"+
 			"Reads local files. Sends nothing.\n\n")
 		fs.PrintDefaults()
@@ -50,12 +50,12 @@ func runPool(args []string, stdout, stderr io.Writer) error {
 	for _, f := range files {
 		body, err := os.ReadFile(f)
 		if err != nil {
-			fmt.Fprintf(stderr, "replay pool: %s: %v\n", f, err)
+			_, _ = fmt.Fprintf(stderr, "replay pool: %s: %v\n", f, err)
 			continue
 		}
 		var c observation.Corpus
 		if err := json.Unmarshal(body, &c); err != nil {
-			fmt.Fprintf(stderr, "replay pool: %s: not a submission: %v\n", f, err)
+			_, _ = fmt.Fprintf(stderr, "replay pool: %s: not a submission: %v\n", f, err)
 			continue
 		}
 		// A refusal is reported and the run continues. Failing the whole pool
@@ -64,7 +64,7 @@ func runPool(args []string, stdout, stderr io.Writer) error {
 		// publish a figure covering fewer submissions than the operator handed
 		// over, which is the failure the roster exists to prevent.
 		if err := p.Add(c, filepath.Base(f)); err != nil {
-			fmt.Fprintf(stderr, "replay pool: %s: %v\n", f, err)
+			_, _ = fmt.Fprintf(stderr, "replay pool: %s: %v\n", f, err)
 			continue
 		}
 		admitted++
@@ -80,7 +80,7 @@ func runPool(args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(stdout, "%s\n", b)
+		_, _ = fmt.Fprintf(stdout, "%s\n", b)
 		return nil
 	}
 
@@ -88,6 +88,6 @@ func runPool(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprint(stdout, out)
+	_, _ = fmt.Fprint(stdout, out)
 	return nil
 }
