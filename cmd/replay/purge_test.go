@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -468,6 +469,13 @@ func TestPG17_TheVerbFollowsWhetherAnythingWasRemoved(t *testing.T) {
 // and the file would be rewritten to nothing — the erasure command deleting a
 // file it could not even read.
 func TestPG18_AnUnreadableLedgerFileIsLeftAlone(t *testing.T) {
+	// Windows first: os.Geteuid returns -1 there, so a root check never skips,
+	// and os.Chmod only toggles the read-only bit rather than denying a read.
+	// The file would be readable, the erasure would proceed, and this test
+	// would fail for a reason that is not the product's.
+	if runtime.GOOS == "windows" {
+		t.Skip("no Unix mode bits on this platform; a file cannot be made unreadable here")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("running as root, which can read anything")
 	}
