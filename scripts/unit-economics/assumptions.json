@@ -1,0 +1,32 @@
+{
+  "_provenance": {
+    "M": "measured on this machine or in this repo; cite the file",
+    "D": "a decision we made; true by construction, not by observation",
+    "A": "assumed from an adjacent category; NOT measured here",
+    "?": "unknown; the model must refuse any figure that depends on it"
+  },
+  "_dated": "2026-09-10",
+  "inputs": {
+    "list_price_usd_repo_month":      {"v": 199,   "p": "D", "src": "docs/MONEY-PATH.md 'Corrected 2026-09-10'"},
+    "design_partner_price_usd":       {"v": 25,    "p": "D", "src": "same; explicitly a time-boxed discount"},
+    "design_partner_share":           {"v": 1.0,   "p": "D", "src": "first cohort is 100% discounted, by design"},
+    "gross_margin":                   {"v": 0.90,  "p": "A", "src": "analysis runs on the customer's CI; we host baseline+history only"},
+
+    "monthly_churn":                  {"v": null,  "p": "?", "src": "no customer has ever subscribed"},
+    "free_to_paid_conversion":        {"v": null,  "p": "?", "src": "no free user has ever converted"},
+    "repos_per_paying_account":       {"v": null,  "p": "?", "src": "no account exists"},
+    "cac_usd":                        {"v": null,  "p": "?", "src": "nothing has ever been acquired"},
+
+    "attributed_installs_per_hour":   {"v": 0,     "p": "M", "src": "replay-metrics.jsonl: from_card_24h = 0 every hour measured"},
+    "external_stars":                 {"v": 0,     "p": "M", "src": "stargazers = [RedRobotKK] only"},
+    "distinct_install_ips":           {"v": 1,     "p": "M", "src": "uniq_ip_24h = 1 across 328 installs"},
+
+    "throttle_ratio":                 {"v": 7.94,  "p": "M", "src": "cachemodel.CeilingEffect over 57,958 requests"},
+    "stranded_daily_usd_at_500_cap":  {"v": 437.06,"p": "M", "src": "500 - 62.94, same corpus"},
+    "avoidable_share_of_spend":       {"v": 0.0475,"p": "M", "src": "docs/evidence/cost-after-parser-fixes-2026-09-10.md"}
+  },
+  "scenarios": {
+    "churn_bands":  {"weak": 0.05, "healthy": 0.03, "sticky": 0.02},
+    "cac_bands":    {"organic": 50, "content": 400, "paid_dev": 1000, "outbound": 5000}
+  }
+}
