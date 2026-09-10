@@ -4,6 +4,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -44,6 +45,7 @@ func TestNoNewlyUnwiredPackages(t *testing.T) {
 		"internal/regression":        "this package. Test-only by design, and correctly absent.",
 		"scripts/x402-e2e":           "an end-to-end tool built separately, not part of the binary.",
 		"scripts/guard-reachability": "a developer tool carrying //go:build ignore, run by CI against a pull request diff. Correctly absent: it neutralises the binary's conditionals, so being part of the binary would be the defect.",
+		"internal/guardcheck":        "the analysis behind scripts/guard-reachability, split out so it can be tested at all — the script carries //go:build ignore, so nothing could reach a line of it. Correctly absent for the same reason the script is: it exists to disable the binary's conditionals, and shipping that capability inside the binary would be the defect. The split also keeps os/exec out of an importable package (cmd/replay/x402_test.go X6c).",
 		"internal/quota":             "OPEN. The only consumer of ledger Record.Quota, with forecast.go inside it. docs/design/UNWIRED-LOG.md #5.",
 		"internal/otlp":              "OPEN, may be by design — it writes spans to a file and nothing yet asks it to. UNWIRED-LOG.md #9.",
 		"internal/feed":              "OPEN, may be by design — the rules feed is served from the site, not the binary. UNWIRED-LOG.md #9.",
@@ -178,4 +180,110 @@ func reachable(t *testing.T) (all []string, inBinary map[string]bool) {
 	}
 	sort.Strings(all)
 	return all, inBinary
+}
+
+// No ignore rule may match a Go source file.
+//
+// .gitignore carried `coverage.*`, a rule meant for coverage artefacts. Git
+// patterns without a slash match at any depth, so it also matched
+// internal/guardcheck/coverage.go — an ordinary source file, silently
+// untracked. It built locally because it sat on disk. Committed and pushed,
+// CI would have compiled a package missing a file, and the error would have
+// pointed at the package rather than at the ignore rule.
+//
+// This asks the question directly rather than asking git, because os/exec is
+// confined to the mutation build tag (cmd/replay/x402_test.go X6c) and this
+// package may not start a process. Asking directly is also the better
+// question: it names the broad pattern, which is the defect, instead of the
+// missing file, which is a symptom.
+//
+// PASS: no .gitignore pattern matches any .go file in the tree.
+// FAIL: one does, and a source file is one `git add` away from vanishing.
+func TestNoIgnoreRuleSwallowsGoSource(t *testing.T) {
+	root := repoRoot(t)
+
+	body, err := os.ReadFile(filepath.Join(root, ".gitignore"))
+	if err != nil {
+		t.Skipf("no .gitignore to check: %v", err)
+	}
+
+	var goFiles []string
+	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			switch info.Name() {
+			// .claude holds agent worktrees: full copies of this repo.
+			case ".git", ".claude", "node_modules", "dist", "bin", "vendor":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filepath.Ext(path) == ".go" {
+			rel, rerr := filepath.Rel(root, path)
+			if rerr != nil {
+				return rerr
+			}
+			goFiles = append(goFiles, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking the tree: %v", err)
+	}
+	// No Go files means the walk failed rather than that the repository has
+	// none, and asserting over an empty list would prove nothing.
+	if len(goFiles) < 10 {
+		t.Fatalf("found %d Go files; the walk is not working and this test proves "+
+			"nothing", len(goFiles))
+	}
+
+	var offences []string
+	for _, raw := range strings.Split(string(body), "\n") {
+		pattern := strings.TrimSpace(raw)
+		// Comments, blanks, and negations. A negation re-includes rather than
+		// excludes, so it cannot swallow anything.
+		if pattern == "" || strings.HasPrefix(pattern, "#") || strings.HasPrefix(pattern, "!") {
+			continue
+		}
+		// Directory-only rules end in a slash and cannot match a file.
+		if strings.HasSuffix(pattern, "/") {
+			continue
+		}
+		anchored := strings.HasPrefix(pattern, "/")
+		trimmed := strings.TrimPrefix(pattern, "/")
+
+		for _, f := range goFiles {
+			// A pattern with no slash matches a name at any depth, which is
+			// how `coverage.*` reached a file six directories down.
+			candidates := []string{f}
+			if !anchored && !strings.Contains(trimmed, "/") {
+				candidates = append(candidates, path.Base(f))
+			}
+			for _, c := range candidates {
+				if ok, merr := path.Match(trimmed, c); merr == nil && ok {
+					offences = append(offences, pattern+" matches "+f)
+				}
+			}
+		}
+	}
+	sort.Strings(offences)
+
+	if len(offences) > 0 {
+		t.Errorf("these .gitignore rules match Go source files, so the tree builds "+
+			"for whoever wrote them and for nobody else:\n  %s",
+			strings.Join(unique(offences), "\n  "))
+	}
+}
+
+// unique collapses a sorted slice.
+func unique(in []string) []string {
+	out := in[:0]
+	for i, s := range in {
+		if i == 0 || s != in[i-1] {
+			out = append(out, s)
+		}
+	}
+	return out
 }
