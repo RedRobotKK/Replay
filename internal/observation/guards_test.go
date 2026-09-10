@@ -1,6 +1,7 @@
 package observation
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -242,13 +243,24 @@ func TestGD10_AnUninspectableDestinationIsAnError(t *testing.T) {
 	if err := os.WriteFile(notADir, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := WriteCorpus(filepath.Join(notADir, "under"), sampleCorpus())
+	dest := filepath.Join(notADir, "under")
+	_, err := WriteCorpus(dest, sampleCorpus())
 	if err == nil {
 		t.Fatal("a destination whose parent is a file was treated as an empty directory")
 	}
-	if !strings.Contains(err.Error(), "cannot inspect") {
-		t.Errorf("the refusal came from the write rather than from the inspection, so the "+
-			"could-not-look branch is not what stopped it: %v", err)
+
+	// Whether THIS branch is the one that refused depends on the platform, so
+	// the test asks rather than assumes. Unix reports ENOTDIR for a path
+	// beneath a regular file; Windows reports ERROR_PATH_NOT_FOUND, which maps
+	// to os.ErrNotExist, so there the guard correctly does not fire and the
+	// write refuses instead. Asserting the message unconditionally is how a
+	// portable-looking test becomes a Windows-only failure.
+	_, probe := os.Lstat(filepath.Join(dest, corpusFileName(sampleCorpus())))
+	if probe != nil && !errors.Is(probe, os.ErrNotExist) {
+		if !strings.Contains(err.Error(), "cannot inspect") {
+			t.Errorf("Lstat failed with %v, which is not \"nothing is here\", so the "+
+				"could-not-look branch should have refused and named itself: %v", probe, err)
+		}
 	}
 }
 
