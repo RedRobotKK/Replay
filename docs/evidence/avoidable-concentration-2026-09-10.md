@@ -19,13 +19,21 @@ avoidable spend.** The ninety-one single-lane sessions hold 1.2%.
 Concentration inside the fan-out group is sharper still: the **top five sessions
 carry 91%** of all avoidable spend.
 
-| session | lanes | requests | cost | avoidable | share | breaks |
-|---|---:|---:|---:|---:|---:|---:|
-| `facfd32e` | 1,014 | 14,070 | $1,056.14 | $61.03 | 5.8% | 558 |
-| `fee79714` | 53 | 3,026 | $405.83 | $34.11 | 8.4% | 34 |
-| `f191c330` | 158 | 6,586 | $505.12 | $29.79 | 5.9% | 115 |
-| `eec05948` | 297 | 8,162 | $728.30 | $15.90 | 2.2% | 33 |
-| `bad7cd55` | 2 | 694 | $215.53 | $7.33 | 3.4% | 2 |
+| session | lanes | requests | cost | avoidable | of own spend | of all avoidable | breaks |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `facfd32e` | 1,014 | 14,070 | $1,056.14 | $61.03 | 5.8% | **37.5%** | 558 |
+| `fee79714` | 53 | 3,026 | $405.83 | $34.11 | 8.4% | **20.9%** | 34 |
+| `f191c330` | 158 | 6,586 | $505.12 | $29.79 | 5.9% | **18.3%** | 115 |
+| `eec05948` | 297 | 8,162 | $728.30 | $15.90 | 2.2% | **9.8%** | 33 |
+| `bad7cd55` | 2 | 694 | $215.53 | $7.33 | 3.4% | **4.5%** | 2 |
+
+> **Column corrected 2026-09-10.** The two rightmost percentages were published
+> as one column headed `share`, carrying the of-own-spend figures. The paragraph
+> above the table claims the top five hold 91% of all avoidable spend, and that
+> column sums to 25.7% — so a reader who added it up got a number contradicting
+> the sentence two lines earlier. The values are unchanged and nothing was
+> re-derived; the of-all-avoidable column is new, and it is the one the finding
+> rests on. It sums to 91.0%.
 
 ## The two true sentences that point opposite ways
 
@@ -71,9 +79,13 @@ conclusion from an independent direction.
 
 A developer running single-lane sessions has **$2.03 of avoidable spend across
 91 sessions** to find. There is no subscription in that. A repository whose work
-fans out has a recurring five-figure-lane exposure concentrated in a handful of
-sessions it cannot predict in advance — which is exactly the case for a standing
+fans out has **$160.79 across 25 fan-out sessions, 91% of it in five it could
+not have picked in advance** — which is exactly the case for a standing
 instrument rather than a one-off audit.
+
+*This sentence read "a recurring five-figure-lane exposure" until 2026-09-10.
+Nothing in the corpus is five figures: the largest lane count is 1,014 and the
+avoidable total is $160.79. The measured figures replace it.*
 
 The unit was argued to be the repository on other grounds. This says the money
 agrees.
