@@ -86,11 +86,19 @@ func rulesNotice(version, fetchedAt string, now time.Time) string {
 // of them can read and the other cannot would tell one operator their table is
 // current and the other that it is undated — from the same file, on the same
 // machine, in the same minute.
+//
+// A blank date has no early return of its own. It does not need one: neither
+// layout parses the empty string, so it leaves by the same door as "nope",
+// which is the answer it should get. An `if s == ""` above the parse attempts
+// returns the identical pair and is therefore unobservable — no test can tell
+// the two versions apart, and a test written to cover it would only freeze the
+// dead line in place. What must stay true is the contract, not the branch: a
+// document carrying no fetch date must come back not-ok, never ok at the zero
+// instant, which would render an unreadable document as one dated to the year
+// one and aged by two millennia. TestParseFetchedAtRefusesAnEmptyDate holds
+// that, and holds it against this function however it is spelled.
 func parseFetchedAt(s string) (time.Time, bool) {
 	s = strings.TrimSpace(s)
-	if s == "" {
-		return time.Time{}, false
-	}
 	if t, err := time.Parse(time.RFC3339, s); err == nil {
 		return t, true
 	}
