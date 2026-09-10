@@ -15,14 +15,21 @@ func costs(n int, f func(i int) float64) []float64 {
 	return xs
 }
 
-// The threshold has to arrive with its derivation. A cap a user cannot check
-// is one they take on faith, and every other number this tool prints can be
-// checked.
+// The threshold has to arrive with its derivation, under a flag name that
+// exists. A cap a user cannot check is one they take on faith, and every other
+// number this tool prints can be checked.
+//
+// This test used to pin --spend-session-usd and --spend-session-tokens, which
+// serve has never defined. The test agreed with the defect, so the suite was
+// green while the tool recommended a command that fails. The names are now
+// checked against the flag surface by
+// internal/regression.TestEveryPrintedFlagIsDefined, which reads what the
+// FlagSets define rather than what anyone wrote down twice.
 func TestGuardAdvicePrintsItsDerivation(t *testing.T) {
 	usd := costs(20, func(i int) float64 { return float64(i+1) * 0.5 })
 	tok := costs(20, func(i int) float64 { return float64((i + 1) * 40_000) })
 	got := strings.Join(guardAdviceLines(usd, tok), "\n")
-	for _, want := range []string{"Q3", "IQR", "20 sessions", "--spend-session-usd", "--spend-session-tokens"} {
+	for _, want := range []string{"Q3", "IQR", "20 sessions", "--max-session-usd", "--max-session-tokens", "replay serve --max-session-usd"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
 		}
@@ -35,7 +42,7 @@ func TestGuardAdviceSaysNothingBelowTheFloor(t *testing.T) {
 	for _, n := range []int{0, 3} {
 		usd := costs(n, func(i int) float64 { return float64(i+1) * 0.5 })
 		got := strings.Join(guardAdviceLines(usd, nil), "\n")
-		if strings.Contains(got, "--spend-session-usd") {
+		if strings.Contains(got, "--max-session-usd") {
 			t.Fatalf("%d sessions produced a cap:\n%s", n, got)
 		}
 		if !strings.Contains(got, "not enough") {

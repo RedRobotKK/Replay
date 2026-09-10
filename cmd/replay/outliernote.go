@@ -24,6 +24,13 @@ import (
 // version compared against the median and, on a real corpus, printed "1363.2x
 // your median session" — exact, and a category error wearing a number.
 //
+// The instruction names the transcript rather than the session id. It used to
+// print `replay why <id>`, and `replay why` was never a command: it is a TUI
+// screen label that reached CLI output and shipped, firing on the one line a
+// first-time reader is most likely to act on. A session id prefix is enough to
+// recognise a row and not enough to open one, so the note now carries the path
+// the row was priced from and names the command that reads it.
+//
 // Silence is the common case and is deliberate. A comparison printed on every
 // run is one the reader learns to skip, so nothing is said unless the peak is
 // far enough from the median to be worth acting on.
@@ -44,7 +51,14 @@ func outlierNote(units []costUnit, s costSummary) string {
 	if !ok || !o.Notable() {
 		return ""
 	}
-	return fmt.Sprintf("\n  One session was %.0f%% of everything you spent: %s, $%.2f of $%.2f across %d sessions.\n"+
-		"  replay why %s   shows what filled it.\n",
-		o.Share*100, prefixID(peak.ID), o.Cost, o.Total, o.N, prefixID(peak.ID))
+	finding := fmt.Sprintf("\n  One session was %.0f%% of everything you spent: %s, $%.2f of $%.2f across %d sessions.\n",
+		o.Share*100, prefixID(peak.ID), o.Cost, o.Total, o.N)
+	if peak.path == "" {
+		// No transcript to name, so no instruction. The finding is still true
+		// and still worth printing; an instruction with nothing runnable in it
+		// is not, and printing one is the defect this line was rewritten to
+		// remove.
+		return finding
+	}
+	return finding + fmt.Sprintf("  replay blame %s   ranks what filled it.\n", peak.path)
 }
