@@ -4,6 +4,37 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- **`replay cost --usage <file>` prices a usage export: token counts per
+  request, no conversation content anywhere in the file.** Three readers cannot
+  use the transcript path — an operator whose security review will not approve a
+  tool that reads prompt content, a finance owner who wants a reconciliation
+  figure and not a conversation, and anyone whose transcripts were rotated away
+  before the question was asked.
+- **The cost is Measured and the cause is not, in the same row.** Cache
+  arithmetic never needed the content: the expected read is the previous
+  request's prompt minus its uncached tail, both provider-reported, so the break
+  deficit is a measurement. Why the prefix stopped matching is not — usage and
+  timing settle only three causes (expired, model changed, nothing read) and
+  every other break is counted with its deficit and its cause marked
+  `NOT MEASURED`. The transcript path's fourth answer is located by the
+  byte-to-token fit and is not borrowed here, because there are no bytes.
+- **The export declares two things it cannot prove and is refused without
+  them.** A record missing from the export is indistinguishable from a cache
+  break, so the exporter asserts `complete`; undated records cannot be put in
+  the order a break is defined against. Without either, the cost still prints
+  and the break figures say `NOT MEASURED` with the reason. `fresh + cached_read
+  + cached_write` must equal `prompt`, which refuses an export copied from a
+  provider that counts inclusively — the error is largest on exactly the
+  sessions that cache best.
+- `--max-avoidable-usd` refuses to pass when the avoidable figure was not
+  measured. `--share`, `--png`, `--compare`, `--contribute` and `--per-lane` are
+  refused on this path rather than served with a blank.
+- `internal/usage` is wired into the binary for the first time
+  (UNWIRED-LOG #8): the export decodes into `usage.Entry` and `Validate` runs on
+  every record at the door.
+
 ## [0.5.4] - 2026-09-09
 
 ### Changed

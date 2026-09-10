@@ -45,7 +45,6 @@ func TestNoNewlyUnwiredPackages(t *testing.T) {
 		"scripts/x402-e2e":           "an end-to-end tool built separately, not part of the binary.",
 		"scripts/guard-reachability": "a developer tool carrying //go:build ignore, run by CI against a pull request diff. Correctly absent: it neutralises the binary's conditionals, so being part of the binary would be the defect.",
 		"internal/quota":             "OPEN. The only consumer of ledger Record.Quota, with forecast.go inside it. docs/design/UNWIRED-LOG.md #5.",
-		"internal/usage":             "OPEN. Still zero importers, but the double-count it was written for is fixed at source and asserted across the package boundary by internal/usage/codex_normalises_test.go. Wiring it would NOT have closed #8: Validate compares a sum against the same sum, so it returned nil for the very defect it is named the guard against. UNWIRED-LOG.md #8.",
 		"internal/otlp":              "OPEN, may be by design — it writes spans to a file and nothing yet asks it to. UNWIRED-LOG.md #9.",
 		"internal/feed":              "OPEN, may be by design — the rules feed is served from the site, not the binary. UNWIRED-LOG.md #9.",
 	}
