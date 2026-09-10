@@ -416,3 +416,56 @@ func newestCalibrationCorpus(t *testing.T, root string) string {
 	sort.Strings(found)
 	return found[len(found)-1]
 }
+
+// FD-10, frozen. The paid feed's freshness claim has no detector behind it yet.
+//
+// ADR-0013 sells a rules feed "corrected within hours of a provider changing a
+// published number." Back-checking the ADRs on 2026-09-10 found that nothing
+// produces the observed-versus-documented column (ADR-0019's probe is unbuilt)
+// and nothing detects a provider's change (the drift routine is unbuilt). So
+// the freshness promise is, today, a claim with no mechanism — the ADR-0014
+// defect ("a check that cannot fail is not evidence") raised to a product
+// claim. ADR-0019's 2026-09-10 extension narrows the activation gate: the feed
+// does not sell a freshness claim until a drift detector exists that can be
+// observed to fire.
+//
+// This freezes that: no user-facing surface may promise rules-feed freshness
+// until the detector ships. The claim is legitimate INSIDE the ADRs, which
+// weigh it as a decision; it is not legitimate in a README, a guide, or a
+// string the binary prints, where it reads as a promise being kept.
+//
+// What would be true again if it returned: a page a user reads, or a line the
+// tool prints, promising the rules are continuously corrected — with no
+// detector in the tree that a test could watch fire.
+//
+// PASS: no user surface carries the freshness SLA.
+// FAIL: it leaked out of the ADRs into something a user reads. Either ship the
+// detector and delete this guard with the commit that does, or remove the
+// claim.
+func TestFrozenFD10_NoFreshnessSLAUntilADetectorExists(t *testing.T) {
+	sla := []string{
+		"corrected within hours",
+		"continuously verified",
+		"continuously re-verified",
+		"updated continuously",
+		"real-time updates",
+		"real time updates",
+		"freshness guarantee",
+		"always up to date",
+		"always up-to-date",
+	}
+	for path, body := range textFiles(t, ".go", ".md") {
+		// The ADRs are where the claim is deliberated; they may name it. This
+		// guard, which lists the phrases, must not flag itself. Everything else
+		// — README, docs/guide, shipped output — is a user surface.
+		if strings.Contains(path, "adr/0013") || strings.Contains(path, "adr/0019") ||
+			strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		if marker, ok := containsAny(strings.ToLower(body), sla...); ok {
+			t.Errorf("%s promises rules-feed freshness (%q) to a user, but no drift detector "+
+				"exists to keep it — ADR-0019's activation gate forbids this until one does. "+
+				"Ship the detector and delete this guard, or remove the claim.", path, marker)
+		}
+	}
+}
