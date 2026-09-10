@@ -221,3 +221,31 @@ func TestCE9_AllowanceCountsUnpricedModels(t *testing.T) {
 		t.Errorf("the allowance note does not report the unpriced model's tokens:\n%s", e.AllowanceNote())
 	}
 }
+
+// CE10: both notes say NOT MEASURED over an empty effect.
+//
+// The Note dispatch has two "nothing here" branches — one in MeteredNote when
+// there is no ratio, one in AllowanceNote when no tokens were read — and each
+// is the guard that stops the command telling a reader their budget is fine on
+// a corpus it never measured. An empty CeilingEffect must reach both.
+func TestCE10_EmptyNotesSayNotMeasured(t *testing.T) {
+	var e CeilingEffect
+	metered := e.Note(BasisMetered, 500)
+	if !strings.Contains(metered, "NOT MEASURED") {
+		t.Errorf("an empty metered note does not say NOT MEASURED:\n%s", metered)
+	}
+	if strings.Contains(metered, "halts execution") {
+		t.Errorf("an empty corpus was given a throttle point:\n%s", metered)
+	}
+	allowance := e.Note(BasisSubscription, 0)
+	// The POPULATED allowance sentence also contains "NOT MEASURED" (its
+	// allowance caveat), so asserting that phrase is vacuous — it passes with
+	// the empty branch disabled. Assert the phrase unique to the empty branch,
+	// and that the populated token report is absent.
+	if !strings.Contains(allowance, "no tokens were read") {
+		t.Errorf("an empty allowance note does not say no tokens were read:\n%s", allowance)
+	}
+	if strings.Contains(allowance, "written to cache") {
+		t.Errorf("an empty corpus reported cache tokens it never read:\n%s", allowance)
+	}
+}

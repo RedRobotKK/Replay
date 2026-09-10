@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -139,5 +141,45 @@ func TestCM6_JSONCarriesRatioAndBasis(t *testing.T) {
 	}
 	if doc.Ratio <= 1 {
 		t.Errorf("the ratio is %v; a corpus that uses the cache prices higher blind than correct", doc.Ratio)
+	}
+}
+
+// CM7: a path that does not exist is an error, not an empty measurement.
+//
+// transcriptFiles refuses a path it cannot stat. Without that refusal the
+// command would report NOT MEASURED for a typo'd directory, which tells the
+// reader "your budget is fine" when the truth is "I looked nowhere."
+func TestCM7_ABadPathIsAnError(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"ceiling", "--metered", "/no/such/path/here"}, &stdout, &stderr)
+	if err == nil {
+		t.Error("a nonexistent path was accepted and measured as if empty")
+	}
+}
+
+// CM8: a file that parses to no session is skipped, not fatal, and does not panic.
+//
+// The per-file guard skips a file that will not parse. Neutralised, the walk
+// runs the pricing loop over a nil session and panics on the first field
+// access — so a corpus with one junk file beside a good one is the test: it
+// must still produce a report.
+func TestCM8_AMalformedFileIsSkipped(t *testing.T) {
+	corpus(t) // lays down a good transcript under REPLAY_TRANSCRIPTS
+	dir := os.Getenv("REPLAY_TRANSCRIPTS")
+	// An EMPTY file makes ParseClaudeCode return (nil, "no conversation lines
+	// found"), which is the path that hands the walk a nil session — the case
+	// the guard exists for. A file of junk instead parses to a non-nil session
+	// with zero lanes, whose pricing loop is a harmless no-op, so it would not
+	// reach the guard and neutralising it would go unnoticed.
+	junk := filepath.Join(dir, "proj", "empty.jsonl")
+	if err := os.WriteFile(junk, []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"ceiling", "--metered", "--day-ceiling", "500"}, &stdout, &stderr); err != nil {
+		t.Fatalf("a nil-session file made the run fail rather than being skipped: %v", err)
+	}
+	if stdout.Len() == 0 {
+		t.Error("no report was produced alongside the skipped file")
 	}
 }

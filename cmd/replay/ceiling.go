@@ -79,8 +79,22 @@ func runCeiling(args []string, stdout, stderr io.Writer) error {
 	}
 
 	var e cachemodel.CeilingEffect
-	err = forEachSession(files, func(_ string, session *transcript.Session, _ *analysis.LaneReport, err error) error {
-		if err != nil || session == nil {
+	// The callback never returns an error — an unparseable file is skipped, not
+	// fatal — so forEachSession's return is always nil here and is discarded.
+	// A `if err != nil` on it would be a branch nothing could reach (ADR-0014).
+	_ = forEachSession(files, func(_ string, session *transcript.Session, _ *analysis.LaneReport, err error) error {
+		// One condition, not two, and the reason is worth stating. forEachSession
+		// never yields a nil session with a nil error — a file that will not
+		// parse arrives as (nil, err), and a session with no requests as
+		// (session, err) — so `err != nil` already covers every case where the
+		// pricing loop must be skipped, and `|| session == nil` was redundant.
+		//
+		// It was also un-neutralisable: the reachability reviewer prepends
+		// `if false && `, and Go binds && tighter than ||, so a compound guard
+		// collapses to its second operand and reports SURVIVED forever. A single
+		// condition is what the tool can actually flip, and CM8 (an empty file,
+		// which parses to a nil session) panics here when it is flipped.
+		if err != nil {
 			return nil
 		}
 		for _, lane := range session.Lanes {
@@ -94,9 +108,6 @@ func runCeiling(args []string, stdout, stderr io.Writer) error {
 		}
 		return nil
 	})
-	if err != nil {
-		return err
-	}
 
 	if *asJSON {
 		ratio, measured := e.Ratio()
@@ -116,11 +127,10 @@ func runCeiling(args []string, stdout, stderr io.Writer) error {
 				out["haltsAtUsd"] = stop
 			}
 		}
-		b, err := json.MarshalIndent(out, "", "  ")
-		if err != nil {
-			return err
-		}
-		_, err = fmt.Fprintf(stdout, "%s\n", b)
+		// Discarded: the map holds only scalars, strings and bools, so
+		// MarshalIndent cannot fail on it — the error branch was unreachable.
+		b, _ := json.MarshalIndent(out, "", "  ")
+		_, err := fmt.Fprintf(stdout, "%s\n", b)
 		return err
 	}
 
