@@ -76,7 +76,7 @@ It is the wrong lever here by roughly 7×.
 `replay blame` on the single largest session in the corpus, independently of the
 paper:
 
-```
+```text
 1. tool result: mcp__claude-in-chrome__javascript_tool   x407  176k once  77.93M in prompts
 2. unaccounted: prefix grew where the transcript cannot see it  x132  132k once  69.77M
 3. tool result: mcp__claude-in-chrome__computer          x317  127k once  60.58M in prompts
