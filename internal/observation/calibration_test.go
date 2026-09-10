@@ -2,6 +2,9 @@ package observation
 
 import (
 	"encoding/json"
+	"math"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -103,5 +106,128 @@ func TestCalibrationRefusesWhatCannotBePooled(t *testing.T) {
 
 	if err := base.Validate(); err != nil {
 		t.Errorf("a well-formed report was refused: %v", err)
+	}
+}
+
+// Each refusal in Validate must be reachable on its own.
+//
+// guard-reachability neutralises a whole conditional rather than one clause,
+// and it found these removable with no test noticing. Asserting the message,
+// not merely that something failed, is what makes each one falsifiable: several
+// of these refusals catch overlapping inputs, so a test that only checks "an
+// error happened" is satisfied by whichever guard fires first.
+func TestCalibrationRefusalsAreIndividuallyReachable(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mut  func(*Calibration)
+		want string
+	}{
+		{"a row with no model id", func(c *Calibration) {
+			c.Models = []ModelCalibrationRow{{Model: "", Sessions: 1, Compared: 10, Matched: 9}}
+		}, "no model id"},
+		{"negative sessions", func(c *Calibration) {
+			c.Models = []ModelCalibrationRow{{Model: "m", Sessions: -1, Compared: 10, Matched: 9}}
+		}, "negative counters"},
+		{"negative compared", func(c *Calibration) {
+			c.Models = []ModelCalibrationRow{{Model: "m", Sessions: 1, Compared: -1}}
+		}, "negative counters"},
+		{"negative matched", func(c *Calibration) {
+			c.Models = []ModelCalibrationRow{{Model: "m", Sessions: 1, Compared: 10, Matched: -1}}
+		}, "negative counters"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := sampleCalibration()
+			tc.mut(&c)
+			err := c.Digested().Validate()
+			if err == nil {
+				t.Fatalf("%s was accepted", tc.name)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("refused for the wrong reason: want a message containing %q, got %v",
+					tc.want, err)
+			}
+		})
+	}
+}
+
+// shortHex must actually shorten.
+//
+// The file name carries a digest prefix so a reader can match a file to a
+// roster row. Returning the whole digest would make every name 64 characters
+// and the branch that prevents it was unobserved.
+func TestShortHexTruncates(t *testing.T) {
+	long := strings.Repeat("a", 64)
+	if got := shortHex(long); len(got) != 12 {
+		t.Errorf("shortHex(64 chars) = %q (%d), want 12 characters", got, len(got))
+	}
+	if got := shortHex("abc"); got != "abc" {
+		t.Errorf("shortHex(%q) = %q, want it returned whole", "abc", got)
+	}
+}
+
+// A fit that is not a number must not be written.
+//
+// FitTokensPerByte is a float from a regression, and a fit over zero bytes is
+// NaN. encoding/json refuses NaN, so the marshal error in WriteCalibration is
+// reachable — it is not the unfalsifiable branch it looks like, and a report
+// carrying one must fail loudly rather than write a truncated file.
+func TestCalibrationRefusesANaNFit(t *testing.T) {
+	nan := math.NaN()
+	c := sampleCalibration()
+	c.Models[0].FitTokensPerByte = &nan
+	if _, err := WriteCalibration(t.TempDir(), c.Digested()); err == nil {
+		t.Error("a report carrying a NaN fit was written; encoding/json cannot represent " +
+			"it, so this must fail rather than produce a file nobody can read")
+	}
+}
+
+// The writer refuses a redirected path and refuses to guess.
+func TestCalibrationWriterRefusesASymlink(t *testing.T) {
+	dir := t.TempDir()
+	c := sampleCalibration()
+	name := "replay-calibration-" + c.SourceTag + "-" + shortHex(c.Digest) + ".json"
+	target := filepath.Join(dir, "elsewhere.json")
+	if err := os.WriteFile(target, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(dir, name)); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	_, err := WriteCalibration(dir, c)
+	if err == nil {
+		t.Fatal("a report was written through a symlink")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Errorf("refused for the wrong reason: %v", err)
+	}
+}
+
+// "I could not look" is not "there is nothing here".
+//
+// When Lstat fails for a reason other than absence, the writer must refuse
+// rather than treat the path as free.
+func TestCalibrationWriterRefusesWhenItCannotLook(t *testing.T) {
+	dir := t.TempDir()
+	blocked := filepath.Join(dir, "blocked")
+	if err := os.Mkdir(blocked, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(blocked, 0o000); err != nil {
+		t.Skipf("cannot remove directory permissions: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(blocked, 0o700) })
+	if os.Geteuid() == 0 {
+		t.Skip("running as root, which can look anyway")
+	}
+	_, err := WriteCalibration(blocked, sampleCalibration())
+	if err == nil {
+		t.Fatal("a report was written into a directory the writer could not inspect")
+	}
+	// The message is asserted because the write would fail anyway: without it
+	// this guard is shadowed by os.WriteFile, and neutralising it changes
+	// nothing any assertion notices.
+	if !strings.Contains(err.Error(), "could not establish whether") {
+		t.Errorf("refusing to look and failing to write are different states and must\n"+
+			"say different things. got: %v", err)
 	}
 }

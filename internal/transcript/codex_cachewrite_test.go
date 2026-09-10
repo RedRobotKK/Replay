@@ -61,3 +61,39 @@ func TestCodexRefusesAWriteLargerThanItsPrompt(t *testing.T) {
 		t.Error("a write exactly equal to the prompt was refused; the boundary is legal")
 	}
 }
+
+// Both refusals in usage() must be reachable as whole guards.
+//
+// The clause tests above pin the clauses this change added; neither pins the
+// conditional they live in. guard-reachability neutralises the whole `if` and
+// found both removable with no test noticing — which is the difference between
+// mutating a clause and mutating a guard, and the reason a clause-level pass is
+// not the coverage it appears to be.
+func TestCodexUsageRefusalsAreReachableAsGuards(t *testing.T) {
+	// The negative-counter guard, one field at a time.
+	for name, c := range map[string]*codexUsage{
+		"negative input":     {Input: -1, Output: 10},
+		"negative output":    {Input: 10, Output: -1},
+		"negative cached":    {Input: 10, Cached: -1, Output: 10},
+		"negative reasoning": {Input: 10, Output: 10, Reasoning: -1},
+		"negative write":     {Input: 10, Output: 10, CacheWrite: -1},
+	} {
+		if _, ok := c.usage(); ok {
+			t.Errorf("%s was accepted; a counter below zero describes a state that cannot occur", name)
+		}
+	}
+	// The subset-ceiling guard, one relation at a time.
+	for name, c := range map[string]*codexUsage{
+		"cached over input":       {Input: 10, Cached: 11, Output: 10},
+		"reasoning over output":   {Input: 10, Output: 10, Reasoning: 11},
+		"cached+write over input": {Input: 10, Cached: 6, CacheWrite: 5, Output: 10},
+	} {
+		if _, ok := c.usage(); ok {
+			t.Errorf("%s was accepted; a subset larger than its parent cannot occur", name)
+		}
+	}
+	// And the boundary is legal, so the guard is a ceiling rather than a ban.
+	if _, ok := (&codexUsage{Input: 10, Cached: 6, CacheWrite: 4, Output: 10}).usage(); !ok {
+		t.Error("cached+write exactly equal to input was refused; the boundary is legal")
+	}
+}

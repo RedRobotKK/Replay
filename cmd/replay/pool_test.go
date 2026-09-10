@@ -188,3 +188,59 @@ func TestErrorShareOverNoRequestsIsAbsent(t *testing.T) {
 		t.Errorf("errorShare(8, 100) = %v, want 0.08", got)
 	}
 }
+
+// The unreadable-file refusal and the not-a-submission refusal are different
+// guards, and each must be reachable on its own.
+//
+// They print the same shape of line, so a test that only checks "the file was
+// named" is satisfied whichever one fired. Neutralising the read check let the
+// nil body fall through to the parse check, which refused it anyway — a guard
+// shadowed by the one after it, which is the failure this repository has hit
+// before.
+func TestPoolDistinguishesUnreadableFromUnparseable(t *testing.T) {
+	dir := t.TempDir()
+	good := writeSubmission(t, dir, "good.json", corpusFixture("1111111111111111", 10, 100, 5))
+	junk := writeSubmission(t, dir, "junk.json", "this is not json at all\n")
+	missing := filepath.Join(dir, "gone.json")
+
+	var out, errOut strings.Builder
+	if err := runPool([]string{missing, junk, good}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	e := errOut.String()
+	if !strings.Contains(e, "not a submission") {
+		t.Errorf("a file that is not JSON must say so, not merely be named:\n%s", e)
+	}
+	// The read failure must report the filesystem's own reason, which is a
+	// different sentence from a parse failure.
+	if !strings.Contains(e, "gone.json") || !strings.Contains(e, "no such file") {
+		t.Errorf("an unreadable file must report why it could not be read:\n%s", e)
+	}
+}
+
+// --json emits the pooled document, and refuses an empty pool before it.
+func TestPoolJSONOutput(t *testing.T) {
+	dir := t.TempDir()
+	f := writeSubmission(t, dir, "one.json", corpusFixture("2222222222222222", 10, 100, 5))
+
+	var out, errOut strings.Builder
+	if err := runPool([]string{"--json", f}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(out.String()), &doc); err != nil {
+		t.Fatalf("--json did not emit a document: %v\n%s", err, out.String())
+	}
+	if doc["schema"] == nil || doc["roster"] == nil {
+		t.Errorf("the pooled document must carry its schema and roster:\n%s", out.String())
+	}
+	// The table must NOT be what --json prints.
+	if strings.Contains(out.String(), "contributed corpora") {
+		t.Errorf("--json printed the table as well:\n%s", out.String())
+	}
+
+	var out2, err2 strings.Builder
+	if err := runPool([]string{"--json"}, &out2, &err2); err == nil {
+		t.Error("--json over an empty pool emitted a document; a roster of nothing is not a figure")
+	}
+}

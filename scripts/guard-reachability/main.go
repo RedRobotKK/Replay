@@ -297,7 +297,24 @@ func neutralise(g guard) (func(), error) {
 	if strings.Contains(line, "if false &&") {
 		return nil, fmt.Errorf("already neutralised")
 	}
-	lines[g.line-1] = line[:idx] + "if false && " + strings.TrimSpace(line[idx+3:])
+	// The condition is parenthesised, and the reason is a defect this tool
+	// reported for months.
+	//
+	// `if false && A || B` is not a neutralised guard. Go binds && tighter than
+	// ||, so it parses as `(false && A) || B` and only the FIRST clause is
+	// disabled: every other clause still fires, the suite stays green, and this
+	// tool reports SURVIVED for a guard that was never actually neutralised.
+	// Measured on internal/transcript/codex.go:175 — three tests catch the
+	// parenthesised form and none catch the unparenthesised one.
+	//
+	// Every multi-clause `||` guard this tool has ever passed judgement on was
+	// judged on its first clause alone.
+	cond := strings.TrimSpace(line[idx+3:])
+	brace := ""
+	if strings.HasSuffix(cond, "{") {
+		cond, brace = strings.TrimSpace(strings.TrimSuffix(cond, "{")), " {"
+	}
+	lines[g.line-1] = line[:idx] + "if false && (" + cond + ")" + brace
 	if err := os.WriteFile(g.file, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
 		return nil, err
 	}

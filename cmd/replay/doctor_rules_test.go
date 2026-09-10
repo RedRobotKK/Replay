@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
 )
 
 // Doctor says nothing about the rules document, and the rules document is what
@@ -70,5 +72,24 @@ func TestRulesNoticeRefusesToTreatAnUnreadableDateAsFresh(t *testing.T) {
 	if !strings.Contains(got, "unreadable") {
 		t.Errorf("an unreadable fetch date must say so rather than be dropped, or the\n"+
 			"absence of a warning means two different things. got:\n%s", got)
+	}
+}
+
+// FetchedAtInEffect must distinguish a loaded document from the compiled table.
+//
+// The branch returning "" for the compiled case was unobserved: every test
+// reached rulesNotice directly, and none went through the accessor that decides
+// which of the two states doctor is describing.
+func TestFetchedAtInEffectSeparatesLoadedFromCompiled(t *testing.T) {
+	if got := cachemodel.FetchedAtInEffect(); got != "" {
+		t.Errorf("with no document loaded, FetchedAtInEffect() = %q, want \"\": the "+
+			"compiled table is a floor and has no fetch date", got)
+	}
+	restore := cachemodel.Override(&cachemodel.Rules{
+		Version: "test-2026-09-10", FetchedAt: "2026-09-01T00:00:00Z",
+	})
+	defer restore()
+	if got := cachemodel.FetchedAtInEffect(); got != "2026-09-01T00:00:00Z" {
+		t.Errorf("with a document loaded, FetchedAtInEffect() = %q, want its fetchedAt", got)
 	}
 }

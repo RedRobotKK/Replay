@@ -71,12 +71,11 @@ func runPool(args []string, stdout, stderr io.Writer) error {
 	}
 
 	if *asJSON {
-		// Totals refuses an empty pool, and MarshalJSON is built on the same
-		// roster. Ask first so the refusal is the error rather than a document
-		// stating nothing.
-		if _, err := p.Totals(); err != nil {
-			return err
-		}
+		// No Totals pre-check here. Pool.MarshalJSON calls Totals itself and
+		// propagates its refusal, so asking first was a second guard shadowing
+		// the one below: neutralising the error check changed nothing, because
+		// the pre-check had already returned. One reachable guard beats two
+		// where only the first can fire.
 		b, err := json.MarshalIndent(p, "", "  ")
 		if err != nil {
 			return err
