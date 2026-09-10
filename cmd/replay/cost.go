@@ -747,6 +747,13 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 	}
+	// The one line a first-time reader can act on: their peak session against
+	// their own median. Silent unless it is far enough out to be worth saying.
+	if note := outlierNote(units, s); note != "" {
+		if _, err := io.WriteString(stdout, note); err != nil {
+			return err
+		}
+	}
 	if contribution != "" {
 		if _, err := io.WriteString(stdout, corpusContributionNote(contribution, supersedes)); err != nil {
 			return err
