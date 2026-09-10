@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="704" height="498" viewBox="0 0 704 498" role="img" aria-label="replay cost">
 <rect width="704" height="498" rx="8" fill="#14161a"/>
 <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="14">
-<text x="16.0" y="26.0" xml:space="preserve" fill="#d9dce1">  replay cost                                                                dev</text>
+<text x="16.0" y="26.0" xml:space="preserve" fill="#d9dce1">  What did this cost me?                                        replay cost  dev</text>
 <text x="16.0" y="45.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="64.0" xml:space="preserve" fill="#d9dce1">  <tspan fill="#e6e8ec">$32.25</tspan> across 1 tasks</text>
-<text x="16.0" y="83.0" xml:space="preserve" fill="#d9dce1">  Median $32.25, p90 $32.25, <tspan fill="#e08585">$1.89</tspan> avoidable. List price, not your bill.</text>
+<text x="16.0" y="64.0" xml:space="preserve" fill="#d9dce1">  Median <tspan fill="#e6e8ec">$32.25</tspan>, p90 <tspan fill="#e6e8ec">$32.25</tspan> per task. List price, not your bill.</text>
+<text x="16.0" y="83.0" xml:space="preserve" fill="#d9dce1">  <tspan fill="#e6e8ec">$32.25</tspan> across 1 tasks, <tspan fill="#e08585">$1.89</tspan> avoidable.</text>
 <text x="16.0" y="102.0" xml:space="preserve" fill="#d9dce1"></text>
 <text x="16.0" y="121.0" xml:space="preserve" fill="#d9dce1">    <tspan fill="#767d87">task      cost        breaks  model</tspan></text>
 <text x="16.0" y="140.0" xml:space="preserve" fill="#d9dce1">    <tspan fill="#767d87">--------  ----------  ------  ----------------------</tspan></text>
