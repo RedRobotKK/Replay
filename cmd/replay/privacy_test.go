@@ -283,7 +283,11 @@ func TestPV7_NoHomeIsAnErrorNotAnEmptyReport(t *testing.T) {
 	var out, errb bytes.Buffer
 	err := runPrivacy(nil, &out, &errb)
 	if err == nil {
-		t.Skip("this platform resolves a home directory without HOME set")
+		// Not a skip. `os.UserHomeDir` returns an error when HOME is empty on
+		// unix, so a nil error here means the guard was removed, not that the
+		// platform differs — and a skip would swallow exactly that regression.
+		t.Fatal("privacy resolved a home directory with HOME unset, so the error " +
+			"branch is gone: an unlocatable home would be reported as an empty machine")
 	}
 	if !strings.Contains(err.Error(), "home directory") {
 		t.Errorf("refused for the wrong reason: %v", err)

@@ -207,6 +207,13 @@ func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 	var matched, scanned int
 	var removedFrom []string
 	var exported [][]byte
+	// Rewrites the walk found and did not perform. Held until the export is
+	// safely on disk, so a failure there costs nothing.
+	type rewrite struct {
+		path string
+		kept []string
+	}
+	var pending []rewrite
 
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".jsonl") {
@@ -244,17 +251,17 @@ func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 		if !yes {
 			return nil
 		}
-		out := strings.Join(kept, "\n")
-		if out != "" {
-			out += "\n"
-		}
-		// Through a sibling and renamed: a half-written ledger read on the next
-		// keystroke would lose every session in the file, not just this one.
-		tmp := path + ".tmp"
-		if werr := os.WriteFile(tmp, []byte(out), 0o600); werr != nil {
-			return werr
-		}
-		return os.Rename(tmp, path)
+		// The rewrite is DEFERRED, not done here, because the export has to be
+		// on disk before a single record is removed.
+		//
+		// It used to happen inline and the export was written after the walk.
+		// With --export pointing somewhere unwritable that erased every matched
+		// record and then failed, leaving no copy — the exact outcome --export
+		// exists to prevent. Reproduced 2026-09-10: a two-record ledger came
+		// back holding one, the export never existed, and the command exited 1
+		// having already destroyed what it promised to save first.
+		pending = append(pending, rewrite{path: path, kept: kept})
+		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("walking the ledger: %w", err)
@@ -276,6 +283,23 @@ func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 			return fmt.Errorf("writing the export: %w", werr)
 		}
 		_, _ = fmt.Fprintf(stdout, "Wrote %d record(s) to %s before removing them.\n", matched, export)
+	}
+
+	// Only now, with the export written or not requested, is anything removed.
+	for _, r := range pending {
+		out := strings.Join(r.kept, "\n")
+		if out != "" {
+			out += "\n"
+		}
+		// Through a sibling and renamed: a half-written ledger read on the next
+		// keystroke would lose every session in the file, not just this one.
+		tmp := r.path + ".tmp"
+		if werr := os.WriteFile(tmp, []byte(out), 0o600); werr != nil {
+			return fmt.Errorf("rewriting %s: %w", r.path, werr)
+		}
+		if rerr := os.Rename(tmp, r.path); rerr != nil {
+			return fmt.Errorf("replacing %s: %w", r.path, rerr)
+		}
 	}
 
 	verb := "would remove"

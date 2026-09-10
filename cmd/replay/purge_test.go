@@ -319,13 +319,53 @@ func TestPG13_AnEmptySessionIDIsRefused(t *testing.T) {
 	}
 }
 
-// PG14: the export is written before anything is removed.
-func TestPG14_ExportIsWrittenBeforeRemoval(t *testing.T) {
+// PG14: an export that cannot be written removes nothing.
+//
+// This test used to assert the substring "before removing them" — the sentence
+// the command prints — which certified the bug instead of catching it. The
+// export was written AFTER the walk had already rewritten every ledger, so
+// --export pointing somewhere unwritable erased the records and then failed,
+// leaving no copy. That is the exact outcome --export exists to prevent, and
+// asserting the reassuring sentence is how a test can make a defect look
+// guarded.
+//
+// Reproduced before the fix: a two-record ledger came back holding one, the
+// export never existed, and the command exited 1.
+func TestPG14_AFailedExportRemovesNothing(t *testing.T) {
+	dir := ledgerSessions(t, map[string][]string{"a.jsonl": {"wanted", "other"}})
+	before, err := os.ReadFile(filepath.Join(dir, "a.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	unwritable := filepath.Join(dir, "no-such-dir", "out.jsonl")
+
+	var out, errb bytes.Buffer
+	if err := runPurge([]string{dir, "--session", "wanted", "--export", unwritable, "--yes"}, &out, &errb); err == nil {
+		t.Fatal("an unwritable export path was accepted")
+	}
+	after, err := os.ReadFile(filepath.Join(dir, "a.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Errorf("records were erased with no export to show for it.\nbefore: %q\nafter:  %q\n"+
+			"--export exists so an erasure is recoverable; writing it after the deletion "+
+			"makes it a promise the command breaks exactly when it matters", before, after)
+	}
+}
+
+// PG21: a successful export is on disk and the records are gone.
+//
+// The pairing matters: PG14 pins that a failed export removes nothing, and this
+// pins that a successful one still removes. Without it, refusing to delete at
+// all would pass PG14.
+func TestPG21_ASuccessfulExportStillRemoves(t *testing.T) {
 	dir := ledgerSessions(t, map[string][]string{"a.jsonl": {"wanted", "other"}})
 	export := filepath.Join(t.TempDir(), "exported.jsonl")
+
 	var out, errb bytes.Buffer
 	if err := runPurge([]string{dir, "--session", "wanted", "--export", export, "--yes"}, &out, &errb); err != nil {
-		t.Fatalf("erasure failed: %v", err)
+		t.Fatal(err)
 	}
 	body, err := os.ReadFile(export)
 	if err != nil {
@@ -334,8 +374,12 @@ func TestPG14_ExportIsWrittenBeforeRemoval(t *testing.T) {
 	if !strings.Contains(string(body), "wanted") {
 		t.Errorf("the export does not carry the removed records:\n%s", body)
 	}
-	if !strings.Contains(out.String(), "before removing them") {
-		t.Errorf("the export was not reported:\n%s", out.String())
+	led, err := os.ReadFile(filepath.Join(dir, "a.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(led), "wanted") {
+		t.Errorf("the records were exported and then left in place:\n%s", led)
 	}
 }
 
