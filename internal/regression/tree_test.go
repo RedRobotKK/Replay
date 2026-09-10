@@ -72,7 +72,13 @@ func textFiles(t *testing.T, exts ...string) map[string]string {
 		if err != nil {
 			return err
 		}
-		out[rel] = string(body)
+		// Keys are forward-slash on every host. Callers compare them against
+		// literals like "cmd/replay/othersurfaces.go", and a backslash key
+		// makes that lookup miss on Windows — silently, since a missing key
+		// reads as a missing file. FD-11 shipped with exactly that bug and
+		// reported the file it was looking for as deleted, which is a
+		// confident answer to a question nobody asked.
+		out[filepath.ToSlash(rel)] = string(body)
 		return nil
 	})
 	if err != nil {
@@ -122,4 +128,47 @@ func containsAny(s string, needles ...string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// textFiles keys are forward-slash on every host.
+//
+// Callers compare those keys against literals like
+// "cmd/replay/othersurfaces.go". On Windows the walk produced backslash keys,
+// so the lookup missed and FD-11 reported the file it was looking for as
+// deleted — a confident diagnosis of something that had not happened, which is
+// worse than a plain failure because it sends the reader after the wrong
+// defect. It passed on macOS and Linux and failed only on the host nobody
+// runs locally.
+//
+// The fix belongs in textFiles rather than at each call site, and this is what
+// makes that true for the next caller as well as the current ones.
+//
+// PASS: no key carries a host separator.
+// FAIL: one does, and every literal path comparison in this package is a
+// coin flip decided by which machine ran it.
+func TestTextFilesKeysAreSlashSeparated(t *testing.T) {
+	files := textFiles(t, ".go")
+	// A walk that found nothing would pass this by measuring nothing.
+	if len(files) < 10 {
+		t.Fatalf("textFiles returned %d files; the walk is broken and this test "+
+			"proves nothing", len(files))
+	}
+
+	var nested int
+	for path := range files {
+		if strings.ContainsRune(path, '\\') {
+			t.Errorf("%q carries a backslash, so a literal path lookup misses on this "+
+				"host and reads as a missing file", path)
+		}
+		if strings.Contains(path, "/") {
+			nested++
+		}
+	}
+	// Keys must be relative paths into subdirectories, not bare file names:
+	// if the walk returned only base names, the check above would pass while
+	// every path comparison in this package still failed.
+	if nested == 0 {
+		t.Error("no key names a subdirectory, so these are not repository-relative " +
+			"paths and the separator check above asserts nothing")
+	}
 }

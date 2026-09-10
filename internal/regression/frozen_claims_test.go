@@ -499,6 +499,10 @@ func TestFrozenFD10_NoFreshnessSLAUntilADetectorExists(t *testing.T) {
 func TestFrozenFD11_TheEmptyStateSeesEveryAgentThisBuildKnows(t *testing.T) {
 	const detector = "cmd/replay/othersurfaces.go"
 
+	// textFiles keys on forward slashes for every host, so this literal
+	// lookup holds on Windows too. It did not before: the key carried the
+	// host's separator, the lookup missed, and the test reported the detector
+	// as deleted — a confident diagnosis of something that had not happened.
 	files := textFiles(t, ".go")
 	detection, ok := files[detector]
 	if !ok {
@@ -518,10 +522,10 @@ func TestFrozenFD11_TheEmptyStateSeesEveryAgentThisBuildKnows(t *testing.T) {
 
 	seen := map[string][]string{}
 	for path, body := range files {
-		if !strings.HasPrefix(filepath.ToSlash(path), "cmd/replay/") {
+		if !strings.HasPrefix(path, "cmd/replay/") {
 			continue
 		}
-		if strings.HasSuffix(path, "_test.go") || filepath.ToSlash(path) == detector {
+		if strings.HasSuffix(path, "_test.go") || path == detector {
 			continue
 		}
 		for _, m := range root.FindAllStringSubmatch(body, -1) {
