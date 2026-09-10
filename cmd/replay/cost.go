@@ -391,6 +391,8 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	png := fs.String("png", "", "with --share, also write the same figures as a 1200x630 social card at this path")
 	design := fs.String("card", "", "which card design --png writes: b (the dark receipt) or c (the paper statement, the default)")
 	tone := fs.String("tone", "", "the register the card is written in: measured (what was found, stated, the default) or rekt (the same figures, exact and deadpan)")
+	contributeTo := fs.String("contribute", "", "build a corpus submission for this campaign from the figures below; writes a file, sends nothing. Unlike the probe submission, this one CARRIES SPEND")
+	contributeDir := fs.String("contribute-dir", ".", "where --contribute writes its file")
 	if err := parseArgs(fs, args, stdout); err != nil {
 		return err
 	}
@@ -603,6 +605,24 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		_, _ = fmt.Fprintf(stderr, "%d transcript(s) reused from the index, %d re-read\n", warm, len(files))
 	}
 
+	// The submission is built from the summary just computed, never recomputed,
+	// so what is pooled is what the contributor's own terminal printed. It runs
+	// before every rendering branch because --share short-circuits them, and a
+	// contribution that silently did not happen under one flag combination is
+	// the kind of absence nobody notices until the pool is short.
+	contribution, supersedes := "", []string(nil)
+	if *contributeTo != "" {
+		p, old, err := contributeCorpus(*contributeTo, *contributeDir, corpusFigures{
+			Tasks: s.Tasks, Unpriced: unpriced, TotalUSD: s.TotalUSD,
+			AvoidableUSD: s.AvoidableUSD, AvoidableShare: s.AvoidableShare,
+			MedianTaskUSD: s.MedianUSD,
+		}, time.Now())
+		if err != nil {
+			return err
+		}
+		contribution, supersedes = p, old
+	}
+
 	// --share short-circuits every other rendering. A card that also printed
 	// the full report would defeat its own purpose: the point is that what is
 	// on screen is exactly what is safe to paste.
@@ -625,6 +645,14 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		if _, err := io.WriteString(stderr, shareNote()); err != nil {
 			return err
 		}
+		// To stderr, not stdout. --share exists so that what is on screen is
+		// exactly what is safe to paste, and a path under the contributor's
+		// home is the one thing on this branch that is not.
+		if contribution != "" {
+			if _, err := io.WriteString(stderr, corpusContributionNote(contribution, supersedes)); err != nil {
+				return err
+			}
+		}
 		if *png == "" {
 			return nil
 		}
@@ -642,6 +670,16 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		// break, where nothing errors and every figure moves.
 		out := map[string]any{"schema": "replay.cost.v2", "summary": s, "unpriced": unpriced,
 			"duplicatedRequests": duplicated, "totalRequests": totalReq}
+		// A key rather than a printed line, because stdout on this branch is a
+		// document a machine parses. The statement the human needs still has to
+		// reach a human, so it goes to stderr alongside it.
+		if contribution != "" {
+			out["contribution"] = contribution
+			if len(supersedes) > 0 {
+				out["supersedes"] = supersedes
+			}
+			_, _ = io.WriteString(stderr, corpusContributionNote(contribution, supersedes))
+		}
 		if *perTask {
 			// Lanes never appear under `tasks`. A separate key, with rows whose
 			// id field is `ofSession`, means a consumer cannot be handed one
@@ -665,6 +703,11 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	}
 	if note := overlapNote(duplicated, totalReq); note != "" {
 		if _, err := io.WriteString(stdout, note); err != nil {
+			return err
+		}
+	}
+	if contribution != "" {
+		if _, err := io.WriteString(stdout, corpusContributionNote(contribution, supersedes)); err != nil {
 			return err
 		}
 	}
