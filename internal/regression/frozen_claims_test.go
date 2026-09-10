@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -229,7 +230,18 @@ func TestFrozenFD8_TheInstallerPrintsOnlyFiguresTheEvidenceHolds(t *testing.T) {
 		}
 	}
 
-	corpus := filepath.Join(root, "docs", "evidence", "calibration-corpus-2026-09-06.md")
+	// The NEWEST calibration document, not a dated one.
+	//
+	// This named calibration-corpus-2026-09-06.md until 2026-09-10, and that
+	// pin is what broke: scripts/corpus-figures-check.sh resolves the newest
+	// document, so the moment a newer corpus was published the two checks
+	// wanted opposite things — the shell script demanded the installer be
+	// updated, and this test failed it for having been. A corpus on one laptop
+	// grows every day its owner works, so a new document is routine and a
+	// hard-coded filename here guarantees a false red on the day of every
+	// re-measurement. The property being frozen is that the installer's
+	// figures have a source, not that they have one particular source.
+	corpus := newestCalibrationCorpus(t, root)
 	ev, err := os.ReadFile(corpus)
 	if err != nil {
 		t.Fatalf("reading the corpus evidence the installer's figures come from: %v", err)
@@ -381,4 +393,26 @@ func claimUnits(body string) []string {
 		}
 	}
 	return out
+}
+
+// newestCalibrationCorpus returns the most recent calibration document, which
+// is the one the installer is expected to quote.
+//
+// Same resolution as scripts/corpus-figures-check.sh, deliberately: two checks
+// over the same claim that disagree about which document is authoritative will
+// eventually contradict each other, and did.
+func newestCalibrationCorpus(t *testing.T, root string) string {
+	t.Helper()
+	found, err := filepath.Glob(filepath.Join(root, "docs", "evidence", "calibration-corpus-*.md"))
+	if err != nil {
+		t.Fatalf("looking for the calibration corpus: %v", err)
+	}
+	if len(found) == 0 {
+		t.Fatal("no calibration-corpus document exists, so the installer's figures have " +
+			"nothing under them at all")
+	}
+	// Names are calibration-corpus-YYYY-MM-DD.md, so lexical order is date
+	// order.
+	sort.Strings(found)
+	return found[len(found)-1]
 }

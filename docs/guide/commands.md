@@ -1,7 +1,11 @@
 # Commands
 
-Twenty commands, listed on twenty-four lines because four of them have a form worth showing
-separately. Most people use three of them.
+Twenty-eight commands, listed on thirty-six headings because eight of them have a form worth
+showing separately. Most people use three of them.
+
+The count is checked against the binary rather than kept by hand: `docs/CLI.md` is generated from
+`replay --help` and states its own totals at the foot. This page said **twenty** until 2026-09-10,
+by which point `purge`, `privacy` and `upgrade` had all shipped.
 
 `replay --help` prints them in four groups — **start here**, **look closer**, **corpus and
 calibration**, **setup and maintenance** — ordered by what they are worth rather than alphabetically.

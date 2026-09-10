@@ -470,7 +470,7 @@ fi
 # document. That is the $2851 shape again, introduced by the change meant to
 # prevent it. Readers are told to read this script, so a figure in a comment is
 # a claim the installer makes.
-printf '\n%sFree to run, BUSL 1.1, no account, no telemetry. Calibrated against 78 sessions\nacross 1,450 transcripts on one machine as of 2026-09-06, and every figure says\nhow it was obtained.%s\n' \
+printf '\n%sFree to run, BUSL 1.1, no account, no telemetry. Calibrated against 116 sessions\nacross 1,751 transcripts on one machine as of 2026-09-10, and every figure says\nhow it was obtained.%s\n' \
   "$C_DIM" "$C_0" >&2
 
 printf '\n%sDocs%s https://github.com/%s#readme   %sUninstall%s rm %s/%s\n' \

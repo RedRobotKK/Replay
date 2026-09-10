@@ -28,6 +28,15 @@ of the document.
 | `~/.replay/rules.json` | **read and write** | Written by `rules --update`, read at startup by every command that prices anything. Like `policy.json`, anything that can write this file changes the figures Replay reports — and unlike it, a wrong file here is refused at load rather than trusted | Read |
 | `$GOMODCACHE`, `$GOCACHE` | write | **Only via the installer's `go install` fallback**, which since v0.1.2 runs only when the releases API reports nothing published. Hundreds of MB | Read |
 | `${XDG_CONFIG_HOME:-~/.config}/replay/corpus-consent.toml` | write | Only from `install.sh --corpus-opt-in`. Sends nothing | **Verified** |
+| `~/.replay/contributor-secret` | write | Added 2026-09-09. **32 random bytes, minted once, and a persistent per-machine identifier** — `sourceTag` in a corpus submission is `HMAC(campaign, this secret)` (`cmd/replay/contribute.go:44,138`). It is what lets a contributor prove a row is theirs, and deleting it destroys that ability permanently with no warning. `0600`. **Not registered in `cmd/replay/stores.go`**, so `replay privacy` does not disclose it and `replay purge` does not cover it. Compare the `tip.json` row above, which explains at length why a hardware id would be an identifier | **Added 2026-09-10; the gap is real and still open** |
+| `~/.replay/ledger/spend-day.json` | write | The proxy's daily spend counter for `--max-session-*` guards (`internal/proxy/guards.go:416`). Amounts and a date, no request detail | **Added 2026-09-10** |
+| `~/.replay/quota.json` | **read and write** | Subscription allowance state (`cmd/replay/quotastore.go:99`). Not registered in `stores.go` | **Added 2026-09-10** |
+| `~/.replay/seen.json` | **read and write** | One timestamp: when `replay since` last reported (`cmd/replay/since.go:37`) | **Added 2026-09-10** |
+| `~/.replay/archive/` | write | Ledger records rotated out of the active directory. Same shape, same absence of content | **Added 2026-09-10** |
+| any directory `serve --ledger` names | write | The ledger path is a flag, so a second upstream gets a second directory beside `~/.replay/ledger`. **Its HMAC label key is per-directory**, so the same file is not comparable across them | **Added 2026-09-10** |
+| `<--contribute-dir>`, default the working directory | write | The corpus submission JSON (`internal/observation/corpus.go:212`), `0600`. Thirteen scalars, no paths, no content. It is written, never sent — `internal/observation` cannot import `net/http` and a test enforces that | **Added 2026-09-10** |
+| `<--png>` output path | write | `cost --png` writes the share card at **`0644`** (`cmd/replay/sharepng.go:111`), not `0600` like the rest. Deliberate for a file meant to be posted, but it is the one artifact here that is world-readable by design | **Added 2026-09-10** |
+| `<dest>/.replay.new.<pid>` | write | `upgrade` stages the downloaded binary beside the destination at `0755` before renaming over it (`internal/selfupdate/fetch.go:200`) | **Added 2026-09-10** |
 | `/usr/local/bin/replay` or `~/.local/bin/replay` | write | The binary, at install. Since 2026-09-05 the installer runs `replay version` before reporting success, so a binary that lands but cannot execute fails the install instead of being announced as one | **Verified** end to end |
 
 **Adjacent directories that exist on a normal machine and are NOT Replay's business.** Both were
@@ -50,8 +59,14 @@ found by scanning a real install, and confusing them is the likely support quest
 > **This page has now been wrong twice, in the same section, about the same claim.** Both corrections
 > came from re-checking rather than re-reading. Treat it as a working document, not an assurance.
 
-**Outbound: the provider you configured, unless the environment says otherwise — and, behind one
-explicit flag, a price database.**
+**Outbound: the provider you configured, unless the environment says otherwise — plus three
+requests behind typed flags: a price database (`rules --check-prices`), a host you name
+(`rules --update`), and GitHub releases (`upgrade`).**
+
+> **This summary said "one explicit flag" until 2026-09-10.** It counted the price database and
+> missed `upgrade` and `rules --update`, the same undercount the README carried as "two network
+> requests". The table below is the list; this sentence is a summary of it and has now been wrong
+> about that twice.
 
 **`replay rules --check-prices` fetches `raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json`.**
 Added 2026-09-05. It is the only outbound request the binary makes that is not the operator's own
@@ -106,14 +121,17 @@ not on the map.
 | Direction | Endpoint | When | Status |
 |---|---|---|---|
 | out | the configured provider | every proxied request, byte for byte | **Verified** against a fake upstream |
-| out | `api.github.com`, `github.com` | **installer only**, never the binary | **Verified** |
-| out | corpus endpoint | **None. There is no such request, and no flag that could make one.** `corpus` takes directories and defines zero flags, so `replay corpus --submit` exits with `flag provided but not defined: -submit`. The submission path in ADR-0007 and ADR-0008 is a design, not a build | **Verified absent** |
+| out | `api.github.com`, `github.com` | **The installer, and `replay upgrade`.** This row said "installer only, never the binary" and that was wrong: `upgrade` resolves `/releases/latest` (`internal/selfupdate/fetch.go:68`), then fetches the archive and `checksums.txt` (`:94`), then **executes the binary it just staged** (`:215`). Three GETs and an exec, all behind the typed command; `--check` stops after the first | **Corrected 2026-09-10.** The row below it in this table already marked `upgrade` as outbound |
+| out | corpus endpoint | **Still none, and the guarantee is now structural rather than incidental.** `cost --contribute <campaign>` (2026-09-09) builds a submission and **writes it to a file**; you attach it to a pull request yourself. `internal/observation` cannot reach the network — an import allowlist test (`observation_test.go:275`) bans `net`, `net/http`, `os/exec` and `net/url`, and asserts the ban is not vacuous. The wording here used to rest on `corpus` defining zero flags, which stopped being the mechanism when the flag landed on `cost` instead | **Verified absent**, restated 2026-09-10 |
 | in | `127.0.0.1:4000` `/` | the proxy itself. Loopback enforced at construction | **Verified**: a non-loopback `-listen` refuses to start |
 | in | `/replay/status` | JSON per-session totals, plus per-lane breakdowns under `context_by_lane`, `re_reads_by_lane` and `what_if_by_lane`. `Origin` and `Sec-Fetch-Mode` refused | **Verified** |
 | in | `/replay/metrics` | Prometheus text, aggregate only | Read |
 | in | `/replay/healthz` | **no origin check, no token check** | **Verified as a gap** |
 | out | `$ANTHROPIC_BASE_URL/replay/healthz` | `doctor` only, probing for a running proxy. No credential, 64-byte read, timeout | **Verified**, and missing from the first version of this page |
 | out | the configured provider, `/v1/messages` and `/v1/messages/count_tokens` | **`probe --execute` only.** The one command that ORIGINATES traffic rather than forwarding it: synthetic, cache-defeating, billable, on your own key. It refuses to run without `--execute`, prints the plan first, and asks for confirmation unless `--yes`. `count_tokens` is unbilled; `/v1/messages` is not | **Verified**, and missing until 2026-09-06 — see the note below |
+| out | **any host you name** | `rules --update <https url>` (`cmd/replay/rules.go:216`). The destination is an argument, so this page cannot enumerate it. `https` is enforced (`:212`) and a redirect to `http` is refused (`:232`); a 402 payment-terms response is parsed. **Missing from every earlier version of this page** | **Added 2026-09-10** |
+| out | `raw.githubusercontent.com` | `rules --check-prices` only. A plain GET compared against the compiled table; nothing is installed from it | **Verified** |
+| out (loopback) | `127.0.0.1:11434/api/version` | **Not typed.** `replay burn` probes for a local Ollama on every run (`cmd/replay/ollamaversion.go:26`, called from `burn.go:111`), 2s timeout. It never leaves the machine, which is why it is easy to omit — and why it was omitted | **Added 2026-09-10** |
 
 **Known gaps here, all recorded in the security review:** `/replay/status` and `/replay/metrics` are
 **unauthenticated unless `--token` is set**, so any local process can read model names, token counts

@@ -159,7 +159,7 @@ read the transcript root `replay doctor` already discovers, and say on stderr wh
 argument still wins when you give it. This is not a convenience — a first command that needs a path
 the reader does not know yet is a command they do not run.
 
-`replay --help` lists all twenty, grouped and ordered by what they are worth rather than
+`replay --help` lists all twenty-eight, grouped and ordered by what they are worth rather than
 alphabetically, because the list is what a person reads before they know which of them matters. Full
 reference: [`docs/guide/commands.md`](docs/guide/commands.md).
 
@@ -180,10 +180,15 @@ worth declaring.
   asked and a random local seed, and the seed only picks which of two wordings you see. Once a
   month, because asking every run would train you to skip the last paragraph, and the last
   paragraph is often where the caveat is.
-- **The binary originates two network requests, both of which you type**: `rules --check-prices`
-  fetches a public price table, and `probe --execute` sends billable measurement requests to your
-  own provider on your own key, after printing the plan and asking. The proxy forwards your own
-  traffic and nothing else. Every outbound and on-disk surface is enumerated in
+- **The binary originates four network requests, each of which you type**: `rules --check-prices`
+  fetches a public price table; `probe --execute` sends billable measurement requests to your own
+  provider on your own key, after printing the plan and asking; `upgrade` fetches the release index
+  and an archive from `github.com` and then executes the binary it just wrote; and
+  `rules --update <url>` fetches from whatever host you name. The proxy forwards your own traffic
+  and nothing else. One request is *not* typed: `replay burn` probes `127.0.0.1:11434` for a local
+  Ollama on every run, which never leaves the machine. **Earlier versions of this file said "two
+  network requests"**, omitting `upgrade` and `rules --update`; `docs/SURFACES.md` documented
+  `upgrade` while this file denied it. Every outbound and on-disk surface is enumerated in
   [`docs/SURFACES.md`](docs/SURFACES.md), including the ones that were wrong in earlier versions
   of this file.
 - **The ledger never stores message text.** It stores block kinds, sizes, timings and usage counts.
@@ -202,16 +207,26 @@ worth declaring.
 
 ## How far to trust it
 
-The engine reproduces the provider's own cache reads on **97.46%** of compared turns across 1450
-transcripts — but those transcripts come from **78 distinct sessions on one machine, one account and
-one operator**. A session writes one transcript per lane, so subagents multiply the file count
-without adding an independent draw. Read the sample as 78, not 1450.
+The engine reproduces the provider's own cache reads on **97.79%** of compared turns across 1751
+transcripts — but those transcripts come from **116 distinct sessions on one machine, one account
+and one operator**. A session writes one transcript per lane, so subagents multiply the file count
+without adding an independent draw. Read the sample as 116, not 1751. Figures as of **2026-09-10**:
+[`docs/evidence/calibration-corpus-2026-09-10.md`](docs/evidence/calibration-corpus-2026-09-10.md).
 
 Earlier versions of this document said "1363 sessions" while counting files, overstating the
 independent sample roughly twentyfold. The correction, with the reasoning, is in
 [`docs/evidence/calibration-corpus-2026-09-06.md`](docs/evidence/calibration-corpus-2026-09-06.md).
-Every evidence file is dated and never edited after the fact; corrections are new files, and there
-are several.
+This document then carried that file's **97.46% across 1450 transcripts** in the present tense for
+four days after the corpus and the engine had both moved, which is a dated reading presented as a
+current one. Every figure above now names the date it was read on.
+
+Every evidence file is dated, and a correction that leaves the original reading standing is a new
+file. **That rule has not held uniformly, and the exceptions are in the history rather than in the
+files.** Sixteen of the twenty-five dated files under `docs/evidence/` carry more than one commit,
+and several replace rather than append: `rehydration-boundary-2026-09-05.md` lost an eight-line
+section at `ad7e884`, and `routing-baseline-2026-09-06.md` lost a published `85.10%` at `a6b259b`.
+Read a dated file as its reading on that date plus whatever was appended to it, and `git log -p`
+as the only complete record.
 
 **The open gap is independence, and no amount of data from this machine closes it.** That is
 stated in the roadmap rather than buried.
