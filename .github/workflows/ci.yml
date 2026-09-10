@@ -179,7 +179,9 @@ jobs:
   mutation:
     name: frozen mutants
     runs-on: ubuntu-latest
-    # 659 seconds on an M-series laptop for 72 mutants, because the harness
+    # Two measurements of the same tree: 659 seconds on a quiet M-series
+    # laptop, and 1531 seconds on the same laptop under concurrent load. The
+    # harness
     # copies the tree and runs the suite once per mutant. A CI runner is
     # slower, so the ceiling is generous — the job failing on the clock would
     # say nothing about the commit under test.
