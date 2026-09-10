@@ -29,6 +29,13 @@ type Turn struct {
 	Actual   int
 	// Gap is the time since the previous request started.
 	Gap time.Duration
+	// Correlation is how firmly Previous can be called this request's
+	// predecessor. Calibrate pairs request i with request i-1 in the lane
+	// slice, and that slice is in the order the records were written, which
+	// is the order the responses finished. Where those two requests were in
+	// flight together the pairing is a coin toss, and every per-event claim
+	// built on it inherits that.
+	Correlation string
 }
 
 // Calibration is the per-lane result of checking every turn.
@@ -87,6 +94,26 @@ func (c *Calibration) Passes() bool {
 	return c.MatchRate() >= CalibrationThreshold
 }
 
+// correlationOf says how firmly this turn's request can be joined to the one
+// the lane order puts before it.
+//
+// The proxy takes the reading directly — it is the only thing that can, since
+// it is the only thing that sees both requests open at once — and puts it on
+// the record. A transcript carries no such field and never will, so the
+// fallback is the one thing a transcript does say: a request that began before
+// its supposed predecessor had answered was in flight beside it. That is a
+// weaker instrument than the proxy's counter and it is not nothing, and where
+// it says neither, the answer is that nobody looked.
+func correlationOf(prev, cur *transcript.Request) string {
+	if cur.Correlation != transcript.CorrelationUnmeasured {
+		return cur.Correlation
+	}
+	if prev.Output != nil && !prev.Output.Timestamp.IsZero() && cur.Timestamp.Before(prev.Output.Timestamp) {
+		return transcript.CorrelationLaneOverlap
+	}
+	return transcript.CorrelationUnmeasured
+}
+
 // Calibrate checks every turn of a lane against the expected-read invariant.
 func Calibrate(lane *transcript.Lane) *Calibration {
 	cal := &Calibration{Lane: lane}
@@ -100,6 +127,7 @@ func Calibrate(lane *transcript.Lane) *Calibration {
 		prev := lane.Requests[i-1]
 		t.Previous = prev
 		t.Gap = req.Timestamp.Sub(prev.Timestamp)
+		t.Correlation = correlationOf(prev, req)
 		t.Outcome, t.Expected = cachemodel.ClassifyRead(prev.Usage, req.Usage)
 		switch t.Outcome {
 		case cachemodel.ReadReproduced:

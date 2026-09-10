@@ -4,6 +4,38 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- **Per-event cause attribution no longer reports a race as a finding.** A cache
+  break's cause is a claim about a PAIR — this request and the one whose entry it
+  read — and the predecessor was taken as whichever response of the lane finished
+  most recently. Nothing on the wire says that is the same request. Coding agents
+  fan out by construction, so two requests of a lane in flight together is the
+  normal case, not a corner, and their usage records could be transposed with the
+  cause following the transposition.
+- The proxy now counts what is open in each lane while it is open, and writes
+  `correlation: lane-serial` or `lane-overlap` on the record. Where it overlapped,
+  the cause degrades to `NOT MEASURED (requests overlapped in this lane; the
+  predecessor is not determined)` rather than naming one — live, offline, in the
+  ledger and on the break line, which now states how the pair was correlated.
+  Where a transcript has no such field, a request that began before its supposed
+  predecessor answered is read the same way.
+- **This does not make any break figure more accurate.** `Expected` and `Deficit`
+  rest on the same pairing and are unchanged; what stops is building a further
+  claim on top of them. Naming that gap is the change working, not a hole in it.
+
+### Added
+
+- `x-request-id` is captured alongside `request-id`, so a session on the
+  OpenAI-compatible family (OpenAI, Cursor, DeepSeek) carries the provider's own
+  id at last. Every record on that family previously carried none.
+- `transcript.Request.IDMeasured` separates a provider id from the `ledger-<n>`
+  this reader synthesises from a record's position in its file. `replay cost`
+  matches only on the former — every ledger file has a `ledger-0`, and joining on
+  it reported unrelated sessions' first requests as one request seen twice — and
+  discloses how many requests it could not consider, in the printed note and as
+  `unjoinableRequests` in the JSON.
+
 ## [0.5.4] - 2026-09-09
 
 ### Changed

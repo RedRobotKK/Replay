@@ -248,7 +248,12 @@ func (b *SessionBuilder) Session() *transcript.Session { return b.session }
 
 func requestFromRecord(rec Record, index int, memo map[string]*transcript.Message) *transcript.Request {
 	req := &transcript.Request{
-		ID:            rec.RequestID,
+		ID: rec.RequestID,
+		// The provider sent an id, or it did not. Recorded rather than
+		// inferred from the string below, which is deliberately id-shaped and
+		// would otherwise be indistinguishable from one.
+		IDMeasured:    rec.RequestID != "",
+		Correlation:   rec.Correlation,
 		Model:         rec.Model,
 		Effort:        rec.Effort,
 		Timestamp:     rec.Timestamp,
@@ -258,6 +263,10 @@ func requestFromRecord(rec Record, index int, memo map[string]*transcript.Messag
 		Tools:         rec.Prompt.Tools,
 	}
 	if req.ID == "" {
+		// A name for this record within this file, and nothing more. It is
+		// the record's arrival position, so the same string names a different
+		// request in every other ledger file; IDMeasured above is what stops
+		// a consumer joining on it across files.
 		req.ID = fmt.Sprintf("ledger-%d", index)
 	}
 	// The prefix ahead of the messages is one synthetic system message so

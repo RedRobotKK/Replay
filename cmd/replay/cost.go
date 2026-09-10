@@ -474,8 +474,12 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	// parent's requests, so the same requestId can appear in several files;
 	// MainLane skips sidechains and absorbs most of that, and the residue is
 	// disclosed rather than silently carried.
-	seenReq := map[string]bool{}
-	duplicated, totalReq := 0, 0
+	//
+	// Only a PROVIDER id is matched on. A ledger record whose provider sent
+	// none is named for its position in its file, so every ledger file has a
+	// `ledger-0` and matching on it would report unrelated sessions' first
+	// requests as one request seen twice.
+	join := newRequestJoin()
 
 	// An index over transcripts already understood. Transcripts are
 	// append-only and most never change again, so re-deriving all of them to
@@ -488,16 +492,9 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	var cold []string
 	var units []costUnit
 	for _, f := range files {
-		if u, ids, ok := cache.get(f); ok {
+		if u, ids, unjoinable, ok := cache.get(f); ok {
 			units = append(units, u)
-			for _, id := range ids {
-				totalReq++
-				if seenReq[id] {
-					duplicated++
-					continue
-				}
-				seenReq[id] = true
-			}
+			join.addCached(ids, unjoinable)
 			continue
 		}
 		cold = append(cold, f)
@@ -517,18 +514,18 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			model = rep.Lane.Requests[0].Model
 		}
 		var reqIDs []string
+		unjoinable := 0
 		if rep.Lane != nil {
 			for _, r := range rep.Lane.Requests {
 				if r.ID == "" {
 					continue
 				}
-				reqIDs = append(reqIDs, r.ID)
-				totalReq++
-				if seenReq[r.ID] {
-					duplicated++
+				join.add(r.ID, r.IDMeasured)
+				if !r.IDMeasured {
+					unjoinable++
 					continue
 				}
-				seenReq[r.ID] = true
+				reqIDs = append(reqIDs, r.ID)
 			}
 		}
 		var asRun analysis.PolicyResult
@@ -566,7 +563,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			u.AvoidableTokens = deficit
 		}
 		units = append(units, u)
-		cache.put(path, u, reqIDs)
+		cache.put(path, u, reqIDs, unjoinable)
 		return nil
 	})
 
@@ -709,8 +706,13 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		// handed one row per agent lane under that key; handing them session
 		// rows under the same version string would be the silent kind of
 		// break, where nothing errors and every figure moves.
+		// unjoinableRequests alongside the other two: a consumer computing an
+		// overlap RATE has to know the numerator could never have included
+		// these, because nothing observable says whether they appear in
+		// another file.
 		out := map[string]any{"schema": "replay.cost.v2", "summary": s, "unpriced": unpriced,
-			"duplicatedRequests": duplicated, "totalRequests": totalReq}
+			"duplicatedRequests": join.duplicated, "totalRequests": join.total,
+			"unjoinableRequests": join.unjoinable}
 		// A key rather than a printed line, because stdout on this branch is a
 		// document a machine parses. The statement the human needs still has to
 		// reach a human, so it goes to stderr alongside it.
@@ -742,7 +744,14 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	if _, err := io.WriteString(stdout, renderCost(s, unpriced, stdout, tipStateDir())); err != nil {
 		return err
 	}
-	if note := overlapNote(duplicated, totalReq); note != "" {
+	// Two disclosures about the same join, printed together: a reader handed a
+	// match rate needs the count the denominator could not consider. Each
+	// helper returns empty when it has nothing to say and writing empty writes
+	// nothing, so there is no emptiness test here to get wrong.
+	for _, note := range []string{
+		overlapNote(join.duplicated, join.total),
+		unjoinableNote(join.unjoinable, join.total),
+	} {
 		if _, err := io.WriteString(stdout, note); err != nil {
 			return err
 		}

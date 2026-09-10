@@ -227,12 +227,16 @@ func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
 		return nil, "", err
 	}
 	req := &Request{
-		ID:        first.RequestID,
-		Model:     first.Message.Model,
-		Effort:    first.Effort,
-		Timestamp: ts,
-		Usage:     first.Message.Usage.Usage(),
-		Output:    out,
+		ID: first.RequestID,
+		// The provider's own id. This decoder groups assistant lines BY
+		// requestId and skips every line that carries none, so an id that
+		// reaches here came off the wire and was never synthesised.
+		IDMeasured: true,
+		Model:      first.Message.Model,
+		Effort:     first.Effort,
+		Timestamp:  ts,
+		Usage:      first.Message.Usage.Usage(),
+		Output:     out,
 	}
 
 	// Context: walk the parent chain from the first output line back to the

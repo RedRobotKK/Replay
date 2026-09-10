@@ -552,6 +552,17 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// This request is in flight in its lane from here until its response is
+	// finished. Everything downstream that names a cause for it is comparing
+	// it against the request before it, and only this counter can say whether
+	// there WAS one request before it or two racing it. Registered after the
+	// guards, so a refusal that never reaches the provider is not counted as
+	// traffic, and released after the bookkeeping below has read it: deferred
+	// functions run last-registered-first, and the bookkeeping defer comes
+	// after this one.
+	overlapped, leaveLane := s.stats.enterLane(rec.SessionID, rec.AgentID)
+	defer leaveLane()
+
 	r, retries := withRetryCounter(r)
 
 	tap := &responseTap{ResponseWriter: w, openai: openai}
@@ -591,7 +602,8 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		rec.Status = tap.status
 		rec.Retries = retries.n
 		rec.LatencyMS = time.Since(start).Milliseconds()
-		rec.RequestID = tap.Header().Get("request-id")
+		rec.RequestID = providerRequestID(tap.Header())
+		rec.Correlation = s.stats.correlation(overlapped)
 		rec.Quota = quotaFrom(tap.Header())
 		if readable {
 			rec.Response = tap.result()
@@ -636,7 +648,12 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			if rec.Cache.CauseDetail != "" {
 				detail = " (" + rec.Cache.CauseDetail + ")"
 			}
-			s.cfg.Logger.Printf("cache break session=%s lane=%s: read %d of %d expected, %d tokens re-billed; likely cause: %s%s", short(rec.SessionID), laneName(rec.AgentID), rec.Response.Usage.CacheRead, rec.Cache.Expected, rec.Cache.Deficit, rec.Cache.Cause, detail)
+			// The correlation is on the line, not in the documentation.
+			// Naming a cause is naming a PREDECESSOR, and a reader who never
+			// opens the ledger has only this line to tell them whether that
+			// predecessor was the one request that could have been or the one
+			// that happened to finish first.
+			s.cfg.Logger.Printf("cache break session=%s lane=%s: read %d of %d expected, %d tokens re-billed; correlated by %s; likely cause: %s%s", short(rec.SessionID), laneName(rec.AgentID), rec.Response.Usage.CacheRead, rec.Cache.Expected, rec.Cache.Deficit, rec.Correlation, rec.Cache.Cause, detail)
 		}
 		if whatIf != "" {
 			s.cfg.Logger.Print(whatIf)

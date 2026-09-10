@@ -42,8 +42,8 @@ func TestCC1_UnchangedFileIsReused(t *testing.T) {
 	touch(t, f, "{}\n", mod)
 
 	c := newCostCache(filepath.Join(dir, "idx.json"), "v1")
-	c.put(f, costUnit{ID: "a", CostUSD: 1.5}, []string{"req_1"})
-	if u, _, ok := c.get(f); !ok || u.CostUSD != 1.5 {
+	c.put(f, costUnit{ID: "a", CostUSD: 1.5}, []string{"req_1"}, 0)
+	if u, _, _, ok := c.get(f); !ok || u.CostUSD != 1.5 {
 		t.Fatalf("an unchanged file was not served from the index: %+v ok=%v", u, ok)
 	}
 }
@@ -57,10 +57,10 @@ func TestCC2_ChangedFileIsRederived(t *testing.T) {
 	f := filepath.Join(dir, "a.jsonl")
 	touch(t, f, "{}\n", time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
 	c := newCostCache(filepath.Join(dir, "idx.json"), "v1")
-	c.put(f, costUnit{ID: "a", CostUSD: 1.5}, []string{"req_1"})
+	c.put(f, costUnit{ID: "a", CostUSD: 1.5}, []string{"req_1"}, 0)
 
 	touch(t, f, "{}\n{}\n", time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC))
-	if _, _, ok := c.get(f); ok {
+	if _, _, _, ok := c.get(f); ok {
 		t.Error("a file that grew was still served from the index")
 	}
 }
@@ -76,10 +76,10 @@ func TestCC3_SizeChangeAloneInvalidates(t *testing.T) {
 	mod := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	touch(t, f, "{}\n", mod)
 	c := newCostCache(filepath.Join(dir, "idx.json"), "v1")
-	c.put(f, costUnit{ID: "a", CostUSD: 1.5}, []string{"req_1"})
+	c.put(f, costUnit{ID: "a", CostUSD: 1.5}, []string{"req_1"}, 0)
 
 	touch(t, f, "{}\n{}\n{}\n", mod) // same mtime, different size
-	if _, _, ok := c.get(f); ok {
+	if _, _, _, ok := c.get(f); ok {
 		t.Error("a file whose size changed under an unchanged mtime was reused")
 	}
 }
@@ -100,7 +100,7 @@ func TestCC4_SchemaChangeInvalidatesEverything(t *testing.T) {
 	path := filepath.Join(dir, "idx.json")
 
 	old := newCostCache(path, "rules-2026-09-01")
-	old.put(f, costUnit{ID: "a", CostUSD: 1.5}, []string{"req_1"})
+	old.put(f, costUnit{ID: "a", CostUSD: 1.5}, []string{"req_1"}, 0)
 	if err := old.save(); err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestCC4_SchemaChangeInvalidatesEverything(t *testing.T) {
 	if err := fresh.load(); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, ok := fresh.get(f); ok {
+	if _, _, _, ok := fresh.get(f); ok {
 		t.Error("a figure derived under an older schema was served to a newer binary")
 	}
 }
@@ -122,7 +122,7 @@ func TestCC5_IndexRoundTrips(t *testing.T) {
 	path := filepath.Join(dir, "idx.json")
 
 	a := newCostCache(path, "v1")
-	a.put(f, costUnit{ID: "a", CostUSD: 2.25}, []string{"req_1"})
+	a.put(f, costUnit{ID: "a", CostUSD: 2.25}, []string{"req_1"}, 0)
 	if err := a.save(); err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestCC5_IndexRoundTrips(t *testing.T) {
 	if err := b.load(); err != nil {
 		t.Fatal(err)
 	}
-	u, _, ok := b.get(f)
+	u, _, _, ok := b.get(f)
 	if !ok || u.CostUSD != 2.25 {
 		t.Errorf("the index did not survive a round trip: %+v ok=%v", u, ok)
 	}
@@ -199,7 +199,7 @@ func TestCC8_AnIndexFromAnOlderShapeIsDiscarded(t *testing.T) {
 
 	// Written by a binary whose costUnit had a different shape.
 	old := newCostCache(path, "replay.cost.v1/prices/rules/OLDSHAPE")
-	old.put(f, costUnit{ID: "a", CostUSD: 1.5}, []string{"req_1"})
+	old.put(f, costUnit{ID: "a", CostUSD: 1.5}, []string{"req_1"}, 0)
 	if err := old.save(); err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestCC8_AnIndexFromAnOlderShapeIsDiscarded(t *testing.T) {
 	if err := fresh.load(); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, ok := fresh.get(f); ok {
+	if _, _, _, ok := fresh.get(f); ok {
 		t.Error("served an entry written under a different struct shape")
 	}
 }

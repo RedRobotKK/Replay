@@ -117,14 +117,53 @@ func (u Usage) PromptTotal() int {
 	return u.Input + u.CacheCreation + u.CacheRead
 }
 
+// How a request may be joined to the one before it in its lane.
+//
+// Every per-event claim this project makes about a request — why its cache
+// broke, what a break cost — is a claim about a PAIR: this request, and the
+// one whose cache entry it was supposed to read. Nothing on the Anthropic or
+// OpenAI wire names that predecessor. It has always been taken as whichever
+// request of the lane finished most recently, which is arrival order, which
+// stops being a fact the moment two requests are in flight at once. Coding
+// agents fan out by construction — sub-agents, parallel tool calls — so the
+// concurrent case is not a corner.
+//
+// These are a provenance field in ADR-0018's sense: absence, serial and
+// overlap are three different things and no consumer may read one as another.
+const (
+	// CorrelationUnmeasured is the zero value: nothing recorded whether this
+	// request had its lane to itself. A ledger written before this field
+	// existed reads as this, and so does a transcript with no usable timings.
+	CorrelationUnmeasured = ""
+	// CorrelationLaneSerial means no other request of the lane was open at
+	// any point during this one. The request that completed before it is its
+	// only candidate predecessor, so a cause named against it is measured.
+	CorrelationLaneSerial = "lane-serial"
+	// CorrelationLaneOverlap means another request of the lane was open at
+	// the same time. Which of them wrote the entry this one read is not
+	// determined by anything observable, so per-event attribution against a
+	// predecessor is NOT MEASURED rather than guessed.
+	CorrelationLaneOverlap = "lane-overlap"
+)
+
 // Request is one call to the provider: its input context, its output, and
 // the usage the provider reported for it.
 type Request struct {
-	ID        string
-	Model     string
-	Effort    string
-	Timestamp time.Time
-	Usage     Usage
+	ID string
+	// IDMeasured reports whether ID is the provider's own request id. False
+	// means it was synthesised locally, from the record's position in its
+	// file, and identifies the request only within that file: two files both
+	// have a first record, so an unmeasured id is not a join key. The field
+	// exists because "ledger-0" and "req_011CenqQTy2oUZRGuFhUzqTw" are the
+	// same type and the same shape and mean entirely different things.
+	IDMeasured bool
+	// Correlation is how firmly this request can be joined to its
+	// predecessor in the lane: one of the three constants above.
+	Correlation string
+	Model       string
+	Effort      string
+	Timestamp   time.Time
+	Usage       Usage
 	// Context is every message the request carried as input, oldest first.
 	Context []*Message
 	// Output is the assistant message the request produced.

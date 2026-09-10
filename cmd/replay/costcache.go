@@ -38,6 +38,15 @@ type cachedUnit struct {
 	// disclosure silently dropped, which is worse than the slow run it
 	// replaced.
 	ReqIDs []string `json:"reqIds,omitempty"`
+	// Unjoinable is how many of this transcript's requests carried no
+	// provider request id.
+	//
+	// Stored alongside ReqIDs and not derived from it: those requests are
+	// deliberately absent from the id list, because the name they do have is
+	// their position in this file and every other file has the same names. A
+	// warm run that could not say how many there were would report the corpus
+	// as fully joinable, which is the disclosure quietly dropped again.
+	Unjoinable int `json:"unjoinable,omitempty"`
 }
 
 type costCache struct {
@@ -94,24 +103,24 @@ func stat(path string) (int64, int64, bool) {
 // Size is checked as well as mtime because a restore from backup, a checkout or
 // clock skew all produce a changed file under an unchanged timestamp, and an
 // index that trusts a timestamp alone trusts anything that can set one.
-func (c *costCache) get(path string) (costUnit, []string, bool) {
+func (c *costCache) get(path string) (costUnit, []string, int, bool) {
 	e, ok := c.entries[path]
 	if !ok {
-		return costUnit{}, nil, false
+		return costUnit{}, nil, 0, false
 	}
 	size, mod, ok := stat(path)
 	if !ok || e.Size != size || e.Mod != mod {
-		return costUnit{}, nil, false
+		return costUnit{}, nil, 0, false
 	}
-	return e.Unit, e.ReqIDs, true
+	return e.Unit, e.ReqIDs, e.Unjoinable, true
 }
 
-func (c *costCache) put(path string, u costUnit, reqIDs []string) {
+func (c *costCache) put(path string, u costUnit, reqIDs []string, unjoinable int) {
 	size, mod, ok := stat(path)
 	if !ok {
 		return
 	}
-	c.entries[path] = cachedUnit{Size: size, Mod: mod, Unit: u, ReqIDs: reqIDs}
+	c.entries[path] = cachedUnit{Size: size, Mod: mod, Unit: u, ReqIDs: reqIDs, Unjoinable: unjoinable}
 	c.dirty = true
 }
 
@@ -159,7 +168,7 @@ func (c *costCache) save() error {
 // costUnit gained a field, the key did not change, and the same binary on the
 // same machine reported 763k tokens warm against 31.4M cold.
 func costIndexKey() string {
-	return "replay.cost.v1/" + cachemodel.PriceTableVersion + "/" +
+	return "replay.cost.v2/" + cachemodel.PriceTableVersion + "/" +
 		cachemodel.RulesVersion + "/" + unitSchema()
 }
 
