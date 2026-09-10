@@ -410,6 +410,38 @@ if [ "$CORPUS_OPT_IN" -eq 1 ]; then
   info "Nothing is sent: no command in this release transmits it."
 fi
 
+# Open the surface, if there is a terminal to open it on.
+#
+# Most people who install this will not go on to learn eleven commands and
+# seventy-odd flags, and the value is in what the binary already knows about
+# their machine. So it opens on the answer rather than leaving them at a prompt
+# holding a list of things to type.
+#
+# `curl … | sh` hands this script a pipe on stdin. The binary would find no
+# terminal there, fall back to line mode and paint a single static frame. That
+# is the worst outcome, because a frozen surface looks like the product.
+# /dev/tty is the controlling terminal and survives the pipe, so keys arrive
+# as keys.
+#
+# The probe is an open of /dev/tty, not a test of stdin: stdin is the script
+# and says nothing about whether a person is watching. Where there is no
+# controlling terminal the open is skipped and the closing lines name the two
+# commands instead: CI, a Dockerfile RUN, cron, a provisioner, a container built
+# without -t. --no-tui or REPLAY_NO_OPEN=1 skips it for anyone who wants the
+# old ending; the flag exists because --help is where a reader looks first, and
+# an opt-out only documented in a source comment is one nobody finds.
+#
+# The answer is needed before the closing lines are printed, not after, which
+# is why this sits above them: those lines say what happens next, and what
+# happens next is this decision.
+should_open() {
+  [ "$NO_OPEN" = "1" ] && return 1
+  [ -n "${CI:-}" ] && return 1
+  [ -t 1 ] || return 1
+  (: < /dev/tty) 2>/dev/null || return 1
+  return 0
+}
+
 # -------------------------------------------------------------------- finish
 printf '\n' >&2
 if [ -n "$previous" ]; then
@@ -427,10 +459,32 @@ fi
 # template with a placeholder the reader has to go and resolve before anything
 # happens. Bare `replay` discovers the transcript root itself and says on
 # stderr which one it used, so the first thing a new user runs can be pasted.
-printf '%sNext:%s  %s%s%s   %s# what your agent already spent, and how much was billed twice%s\n' \
-  "$C_B" "$C_0" "$C_ACCENT$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
-printf '        %s%s doctor%s   %s# if that found nothing, this says why%s\n' \
-  "$C_ACCENT$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
+#
+# Both lines used to print unconditionally, and then, on a terminal, the block
+# at the end of this file exec'd `replay tui` over the top of them. The reader
+# was told to run one thing and handed another, and the surface that took the
+# terminal was never named anywhere in the output. Each half was defensible; the
+# two printed together were a contradiction the reader had to resolve.
+#
+# The exec is what survived. What this tool is worth is what it already knows
+# about the machine it was just installed on, and an answer is a better place to
+# leave someone than a prompt and a list. So the printed line moved instead: on a
+# terminal it names the surface that is about to open and what it opens on, and
+# the two commands become what to type after quitting. Off a terminal nothing
+# opens, and they are the next step exactly as before.
+if should_open; then
+  printf '%sNext:%s  %s%s tui%s      %s# opening now, on cost: what your agent already spent%s\n' \
+    "$C_B" "$C_0" "$C_ACCENT$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
+  printf '       %s%s%s          %s# after you quit: the same figures, as one report%s\n' \
+    "$C_ACCENT$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
+  printf '       %s%s doctor%s   %s# if that found nothing, this says why%s\n' \
+    "$C_ACCENT$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
+else
+  printf '%sNext:%s  %s%s%s          %s# what your agent already spent, and how much was billed twice%s\n' \
+    "$C_B" "$C_0" "$C_ACCENT$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
+  printf '       %s%s doctor%s   %s# if that found nothing, this says why%s\n' \
+    "$C_ACCENT$C_B" "$BIN" "$C_0" "$C_DIM" "$C_0" >&2
+fi
 # Discovery, not consent. Naming the local report is the installer's job. There
 # is no submission path to point at: the binary sends nothing anywhere.
 if [ "$CORPUS_OPT_IN" -eq 0 ]; then
@@ -475,34 +529,6 @@ printf '\n%sFree to run, BUSL 1.1, no account, no telemetry. Calibrated against 
 
 printf '\n%sDocs%s https://github.com/%s#readme   %sUninstall%s rm %s/%s\n' \
   "$C_DIM" "$C_0" "$REPO" "$C_DIM" "$C_0" "$BIN_DIR" "$BIN" >&2
-
-# Open the surface, if there is a terminal to open it on.
-#
-# Most people who install this will not go on to learn eleven commands and
-# seventy-odd flags, and the value is in what the binary already knows about
-# their machine. So it opens on the answer rather than leaving them at a prompt
-# holding a list of things to type.
-#
-# `curl … | sh` hands this script a pipe on stdin. The binary would find no
-# terminal there, fall back to line mode and paint a single static frame. That
-# is the worst outcome, because a frozen surface looks like the product.
-# /dev/tty is the controlling terminal and survives the pipe, so keys arrive
-# as keys.
-#
-# The probe is an open of /dev/tty, not a test of stdin: stdin is the script
-# and says nothing about whether a person is watching. Where there is no
-# controlling terminal the open is skipped and the Next: lines above stand on
-# their own: CI, a Dockerfile RUN, cron, a provisioner, a container built
-# without -t. --no-tui or REPLAY_NO_OPEN=1 skips it for anyone who wants the
-# old ending; the flag exists because --help is where a reader looks first, and
-# an opt-out only documented in a source comment is one nobody finds.
-should_open() {
-  [ "$NO_OPEN" = "1" ] && return 1
-  [ -n "${CI:-}" ] && return 1
-  [ -t 1 ] || return 1
-  (: < /dev/tty) 2>/dev/null || return 1
-  return 0
-}
 
 if should_open; then
   printf '\n%sOpening %s. %sq%s quits, %s?%s lists the keys.%s\n' \
