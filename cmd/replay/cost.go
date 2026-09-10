@@ -75,6 +75,14 @@ type costUnit struct {
 	Repeated int       `json:"repeated,omitempty"`
 	Errored  int       `json:"errored,omitempty"`
 	At       time.Time `json:"at"`
+	// path is the transcript this unit was priced from.
+	//
+	// Unexported, so it stays out of the JSON contract: it exists to make one
+	// printed instruction runnable, not to be published. The outlier note used
+	// to print a session id prefix, which is enough for a person to recognise
+	// a row and not enough for any command to open one — and the command it
+	// printed did not exist either.
+	path string
 }
 
 // costLaneRow is a --per-lane row on its way to JSON.
@@ -202,6 +210,12 @@ func foldSessions(units []costUnit) []costUnit {
 			dominant[u.ID] = u.CostUSD
 			s.Model = u.Model
 		}
+		// Prefer the session's own transcript over a sub-agent lane's. Both
+		// are readable, and only one of them is the whole session; a lane
+		// file answers a narrower question than the row it was folded into.
+		if !mainTranscript(s.path, s.ID) && mainTranscript(u.path, u.ID) {
+			s.path = u.path
+		}
 	}
 	// First-seen order, so the fold is deterministic before the callers sort.
 	out := make([]costUnit, 0, len(order))
@@ -209,6 +223,20 @@ func foldSessions(units []costUnit) []costUnit {
 		out = append(out, *by[id])
 	}
 	return out
+}
+
+// mainTranscript reports whether a path is the session's own transcript rather
+// than one of its sub-agent lanes.
+//
+// Claude Code names a session's file for the session and a lane's file
+// agent-<id>.jsonl, so the base name carrying the session id is the test. A
+// path that is empty is not the main transcript, which makes the zero value
+// lose to any real candidate.
+func mainTranscript(path, id string) bool {
+	if path == "" || id == "" {
+		return false
+	}
+	return strings.HasPrefix(filepath.Base(path), id)
 }
 
 type costSummary struct {
@@ -525,6 +553,9 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	var units []costUnit
 	for _, f := range files {
 		if u, ids, ok := cache.get(f); ok {
+			// The cache stores what was priced, not where it was read from,
+			// so the path is reattached here rather than trusted from disk.
+			u.path = f
 			units = append(units, u)
 			for _, id := range ids {
 				totalReq++
@@ -595,6 +626,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			u.AvoidableUSD = float64(deficit) / 1_000_000 * price.InputPerMTok
 			u.AvoidableTokens = deficit
 		}
+		u.path = path
 		units = append(units, u)
 		cache.put(path, u, reqIDs)
 		return nil

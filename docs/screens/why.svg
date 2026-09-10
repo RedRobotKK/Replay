@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="704" height="517" viewBox="0 0 704 517" role="img" aria-label="replay why">
-<rect width="704" height="517" rx="8" fill="#14161a"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="704" height="498" viewBox="0 0 704 498" role="img" aria-label="replay why">
+<rect width="704" height="498" rx="8" fill="#14161a"/>
 <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="14">
 <text x="16.0" y="26.0" xml:space="preserve" fill="#d9dce1">  replay why                                                                 dev</text>
 <text x="16.0" y="45.0" xml:space="preserve" fill="#d9dce1"></text>
@@ -22,9 +22,8 @@
 <text x="16.0" y="368.0" xml:space="preserve" fill="#d9dce1"></text>
 <text x="16.0" y="387.0" xml:space="preserve" fill="#d9dce1"></text>
 <text x="16.0" y="406.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="425.0" xml:space="preserve" fill="#d9dce1"></text>
-<text x="16.0" y="444.0" xml:space="preserve" fill="#d9dce1">  ran   replay blame &lt;session&gt;</text>
-<text x="16.0" y="463.0" xml:space="preserve" fill="#d9dce1">  <tspan fill="#767d87">copy it and you never need this screen again.</tspan></text>
-<text x="16.0" y="482.0" xml:space="preserve" fill="#d9dce1">  why   ? keys  esc back  q quit</text>
+<text x="16.0" y="425.0" xml:space="preserve" fill="#d9dce1">  ran   replay blame &lt;session&gt;</text>
+<text x="16.0" y="444.0" xml:space="preserve" fill="#d9dce1">  <tspan fill="#767d87">copy it and you never need this screen again.</tspan></text>
+<text x="16.0" y="463.0" xml:space="preserve" fill="#d9dce1">  why   ? keys  esc back  q quit</text>
 </g>
 </svg>
