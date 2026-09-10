@@ -1,5 +1,10 @@
 [
  {
+  "surface": "cost --contribute",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
   "surface": "cost --png",
   "verdict": "NOT RUN",
   "note": "network, write or config change; not exercised blind"
@@ -20,9 +25,19 @@
   "note": ""
  },
  {
+  "surface": "cost --contribute-dir",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
   "surface": "cost --json",
   "verdict": "OK",
   "note": ""
+ },
+ {
+  "surface": "cost --max-avoidable-usd",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
  },
  {
   "surface": "cost --per-lane",
@@ -90,159 +105,159 @@
   "note": "refused with a usage message: correct, the harness invoked it bare"
  },
  {
+  "surface": "serve",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --breaker-cooldown",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --breaker-failures",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --context-edit-keep",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --context-edit-trigger",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --error-budget",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --guardrail-reread",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --hold-siblings",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --ledger",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
   "surface": "serve --listen",
   "verdict": "NOT RUN",
-  "note": "network, write or config change; not exercised blind"
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --loop-block",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --loop-warn",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --mask",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --mask-entropy",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --mask-patterns",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --max-day-tokens",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --max-day-usd",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --max-session-tokens",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --max-session-usd",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
  },
  {
   "surface": "serve --metrics-listen",
   "verdict": "NOT RUN",
-  "note": "network, write or config change; not exercised blind"
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --policy-file",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --project",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --rehydrate",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --rehydrate-scope",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --retries",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --retry-base",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --retry-max",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --revert-after",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --token",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
+ },
+ {
+  "surface": "serve --trial-share",
+  "verdict": "NOT RUN",
+  "note": "long-running listener; a blind run measures the port, not the surface"
  },
  {
   "surface": "serve --upstream",
   "verdict": "NOT RUN",
-  "note": "network, write or config change; not exercised blind"
- },
- {
-  "surface": "serve",
-  "verdict": "DRIFT",
-  "note": "exit 1, reproducible across 3 runs: replay serve listening on http:// -> https://api.anthropic.com"
- },
- {
-  "surface": "serve --breaker-cooldown",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --breaker-failures",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --context-edit-keep",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --context-edit-trigger",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --error-budget",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --guardrail-reread",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --hold-siblings",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --ledger",
-  "verdict": "DRIFT",
-  "note": "exit 1, reproducible across 3 runs: replay serve listening on http:// -> https://api.anthropic.com"
- },
- {
-  "surface": "serve --loop-block",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --loop-warn",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --mask",
-  "verdict": "DRIFT",
-  "note": "exit 1, reproducible across 3 runs: masking: on (experimental); rehydration scope text,edit, project /User"
- },
- {
-  "surface": "serve --mask-entropy",
-  "verdict": "DRIFT",
-  "note": "exit 1, reproducible across 3 runs: replay serve listening on http:// -> https://api.anthropic.com"
- },
- {
-  "surface": "serve --mask-patterns",
-  "verdict": "DRIFT",
-  "note": "exit 1, reproducible across 3 runs: replay serve listening on http:// -> https://api.anthropic.com"
- },
- {
-  "surface": "serve --max-day-tokens",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --max-day-usd",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --max-session-tokens",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --max-session-usd",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --policy-file",
-  "verdict": "DRIFT",
-  "note": "exit 1, reproducible across 3 runs: policy: from /var/folders/d3/k4p6m6410_592dy5x8l8jws40000gn/T/drift-1l"
- },
- {
-  "surface": "serve --project",
-  "verdict": "DRIFT",
-  "note": "exit 1, reproducible across 3 runs: replay serve listening on http:// -> https://api.anthropic.com"
- },
- {
-  "surface": "serve --rehydrate",
-  "verdict": "DRIFT",
-  "note": "exit 1, reproducible across 3 runs: replay serve listening on http:// -> https://api.anthropic.com"
- },
- {
-  "surface": "serve --rehydrate-scope",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --retries",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --retry-base",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --retry-max",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --revert-after",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --token",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
- },
- {
-  "surface": "serve --trial-share",
-  "verdict": "NEEDS ARGUMENT",
-  "note": "refused with a usage message: correct, the harness invoked it bare"
+  "note": "long-running listener; a blind run measures the port, not the surface"
  },
  {
   "surface": "tui",
@@ -356,8 +371,8 @@
  },
  {
   "surface": "mcp",
-  "verdict": "SILENT",
-  "note": "exit 0 and printed nothing: a success indistinguishable from a no-op"
+  "verdict": "OK",
+  "note": "exit 0 on stdin EOF, which is the contract"
  },
  {
   "surface": "corpus",
@@ -556,6 +571,56 @@
  },
  {
   "surface": "since --peek",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "budget",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "budget --json",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "upgrade",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "purge --yes",
+  "verdict": "NOT RUN",
+  "note": "network, write or config change; not exercised blind"
+ },
+ {
+  "surface": "purge",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "purge --export",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "purge --older-than",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "purge --session",
+  "verdict": "NEEDS ARGUMENT",
+  "note": "refused with a usage message: correct, the harness invoked it bare"
+ },
+ {
+  "surface": "privacy",
+  "verdict": "OK",
+  "note": ""
+ },
+ {
+  "surface": "privacy --json",
   "verdict": "OK",
   "note": ""
  }
