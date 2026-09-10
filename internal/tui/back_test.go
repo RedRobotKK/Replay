@@ -124,3 +124,41 @@ func TestALocalHandlerClaimsEscapeFirst(t *testing.T) {
 		t.Errorf("escape navigated to %q despite being claimed", got)
 	}
 }
+
+// BK6: going to the screen already showing does not eat the way back.
+//
+// Goto is press's twin — the cost screen calls it when enter opens a row —
+// and press already refuses to record a move to the screen it is on. Goto has
+// to refuse the same way: recording "you came from w" while standing on w
+// makes prev equal cur, and back-one-step from there is a keystroke that does
+// nothing, on a footer that says "esc back".
+func TestGotoTheScreenAlreadyShowingKeepsTheWayBack(t *testing.T) {
+	l := loopFor(t)
+	l.cur = 'c'
+	l.press('w')
+	if l.Current() != 'w' {
+		t.Fatalf("pressing w moved to %q", l.Current())
+	}
+	l.Goto('w') // already there: nothing to record
+	l.press(27)
+	if got := l.Current(); got != 'c' {
+		t.Errorf("escape landed on %q, want c. Going to the screen already on "+
+			"show overwrote where the reader came from, so back had nowhere "+
+			"to go", got)
+	}
+}
+
+// And Goto to a different screen still records the move, so the guard above
+// cannot be satisfied by a Goto that records nothing at all.
+func TestGotoRecordsWhereTheReaderCameFrom(t *testing.T) {
+	l := loopFor(t)
+	l.cur = 'c'
+	l.Goto('w')
+	if got := l.Current(); got != 'w' {
+		t.Fatalf("Goto('w') landed on %q", got)
+	}
+	l.press(27)
+	if got := l.Current(); got != 'c' {
+		t.Errorf("escape after Goto landed on %q, want c", got)
+	}
+}

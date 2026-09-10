@@ -114,3 +114,36 @@ func TestAdviceLinesAreIndentedToTheScreen(t *testing.T) {
 			"screen element:\n%s", body)
 	}
 }
+
+// The notes block says a silent proxy is enforcing nothing, in its own words.
+//
+// G3 in guards_test.go looks for "replay serve" anywhere on the screen, and the
+// suggestion block at the bottom carries `replay serve --max-session-usd`
+// whether or not a proxy answered. So the note could be removed entirely and
+// the test named for silence-is-not-safety still passed: the string it checks
+// was being produced by the other half of the screen. These are the note's own
+// rows.
+func TestGuardsNotesSayTheProxyNeverAnswered(t *testing.T) {
+	const claim = "  - no proxy answered: nothing here is enforcing"
+	const fix = "      next: replay serve"
+
+	silent := GuardsScreen(GuardState{}, someAdvice(), 20).Lines
+	if n := countLines(silent, claim); n != 1 {
+		t.Errorf("an unreachable proxy produced the note %q %d times:\n%s",
+			claim, n, strings.Join(silent, "\n"))
+	}
+	// And the note carries the fix on a row of its own, rather than leaving the
+	// reader to find `replay serve` inside a suggested cap further down.
+	if n := countLines(silent, fix); n != 1 {
+		t.Errorf("the note does not hand over to the command that starts a proxy "+
+			"(%q appears %d times):\n%s", fix, n, strings.Join(silent, "\n"))
+	}
+
+	// A proxy that answered gets neither row: a note every reader learns to
+	// skip is a note nobody reads on the day it is true.
+	live := GuardsScreen(liveGuards(), someAdvice(), 20).Lines
+	if n := countLines(live, claim); n != 0 {
+		t.Errorf("a proxy that answered is reported as silent %d times:\n%s",
+			n, strings.Join(live, "\n"))
+	}
+}
