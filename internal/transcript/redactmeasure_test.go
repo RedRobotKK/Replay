@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -209,5 +210,65 @@ func TestRM5_ADocumentMeasuresItsDecodedContent(t *testing.T) {
 	}
 	if plain.Bytes != 5 {
 		t.Errorf(`"abcde" measured %d, want 5`, plain.Bytes)
+	}
+}
+
+// RM-6: a compactMetadata that is not an object is REMOVED, not kept as null.
+//
+// Found by the guard-reachability reviewer on 2026-09-10, which reported
+// redact.go:99 — `if !ok { return nil }` in (*redactor).compaction — as
+// SURVIVED: neutralising it left every test green.
+//
+// The reason it matters is a Go detail that reads as a no-op and is not one.
+// compaction returns `any`. With the guard, a non-object returns an untyped
+// nil, the caller's `kept != nil` is false, and the key is deleted. Without it,
+// `m` is a nil map[string]any, and returning that boxes a TYPED nil into the
+// interface — so `kept != nil` is TRUE, and the caller writes the key back.
+// A field whose shape the redactor could not verify survives into the redacted
+// file as `compactMetadata: null`.
+//
+// That inverts the rule the redactor exists to enforce. Its allowlist keeps
+// what it can name and drops everything else; a branch that silently converts
+// "cannot verify this" into "emit a placeholder for it" means the allowlist did
+// not hold, and the one place that would show up is a shape nobody wrote a
+// fixture for.
+//
+// Four shapes stand in for "not an object", because the assertion fails
+// identically for all of them and a test that only tried one would not notice a
+// future guard that special-cased strings.
+//
+// PASS: none of the four leaves a compactMetadata key behind.
+// FAIL: the key survives as null, which is what removing the guard produces.
+func TestRM6_ANonObjectCompactMetadataIsRemoved(t *testing.T) {
+	for _, shape := range []struct{ name, json string }{
+		{"a string", `"SECRETWORD"`},
+		{"a number", `42`},
+		{"an array", `["SECRETWORD"]`},
+		{"null", `null`},
+	} {
+		t.Run(shape.name, func(t *testing.T) {
+			in := `{"uuid":"u1","type":"system","subtype":"compact_boundary","sessionId":"s","cwd":"/home/real","timestamp":"2026-01-01T00:00:01Z","compactMetadata":` + shape.json + `}` + "\n"
+
+			var buf bytes.Buffer
+			if err := Redact(strings.NewReader(in), &buf); err != nil {
+				t.Fatalf("redact: %v", err)
+			}
+			out := buf.String()
+			if strings.Contains(out, "SECRETWORD") {
+				t.Fatalf("content survived redaction:\n%s", out)
+			}
+
+			var obj map[string]any
+			if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &obj); err != nil {
+				t.Fatalf("the redacted line will not parse: %v\n%s", err, out)
+			}
+			if _, present := obj["compactMetadata"]; present {
+				t.Errorf("compactMetadata (%s) survived redaction as %q. The redactor could "+
+					"not verify its shape, so the key must be deleted rather than written "+
+					"back — a typed nil map returned through an `any` is not nil at the "+
+					"call site, which is exactly how a placeholder gets emitted for a field "+
+					"nothing validated.", shape.name, out)
+			}
+		})
 	}
 }
