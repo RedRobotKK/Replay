@@ -173,3 +173,38 @@ func TestRF7_LinesAreASCII(t *testing.T) {
 		}
 	}
 }
+
+// RF8: For returns the metric asked for, and false for one nothing publishes.
+//
+// Reported inert by guard-reachability, which neutralises the match inside the
+// lookup loop. The cmd/replay tests that depend on the distinction live in
+// another package, so the branch had no test beside it — and a lookup that
+// returns any reference for any metric renders a perfectly well-formed line
+// citing the wrong paper, which is the failure mode a reader cannot see.
+func TestRF8_TheLookupDiscriminatesByMetric(t *testing.T) {
+	seen := map[string]bool{}
+	for _, want := range Compiled() {
+		got, ok := For(want.Metric)
+		if !ok {
+			t.Errorf("For(%q) found nothing", want.Metric)
+			continue
+		}
+		if got.Metric != want.Metric {
+			t.Errorf("For(%q) returned %q", want.Metric, got.Metric)
+		}
+		if got.Value != want.Value || got.Citation != want.Citation {
+			t.Errorf("For(%q) returned another entry's figures: %+v", want.Metric, got)
+		}
+		seen[got.Metric] = true
+	}
+	if len(seen) < 2 {
+		t.Fatalf("only %d distinct metric(s) compiled, so this test cannot show the "+
+			"lookup discriminating between them", len(seen))
+	}
+	if _, ok := For("no-such-metric"); ok {
+		t.Error("For returned a reference for a metric nothing publishes")
+	}
+	if _, ok := For(""); ok {
+		t.Error("For returned a reference for the empty metric")
+	}
+}

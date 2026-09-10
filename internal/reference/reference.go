@@ -156,6 +156,20 @@ func (c Comparison) Line() string {
 		format(c.Local, r.Unit), format(r.Value, r.Unit), r.Population, r.Citation)
 }
 
+// Against is the published half alone, for a caller that has already rendered
+// the local figure in its own words.
+//
+// It exists because rendering the local figure twice is the defect this package
+// is meant to help find. `replay burn` prints "99% of the prompt served from
+// cache" with its own precision; a comparison line that restated the same
+// measurement as "98.6% here" put two renderings of one number on consecutive
+// rows, which is precisely the two-surfaces-disagree failure the reference is
+// supposed to make visible.
+func (c Comparison) Against() string {
+	r := c.Reference
+	return fmt.Sprintf("%s across %s (%s)", format(r.Value, r.Unit), r.Population, r.Citation)
+}
+
 func format(v float64, u Unit) string {
 	if u == UnitShare {
 		return fmt.Sprintf("%.1f%%", v*100)
