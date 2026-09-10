@@ -1,6 +1,9 @@
 package regression
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -77,11 +80,66 @@ func TestHI1_NoPackageTestsAgainstTheRealHome(t *testing.T) {
 		t.Errorf("these packages have tests that can reach a home directory and do not "+
 			"replace HOME for the run, so a command under test can write to the reader's "+
 			"own files:\n  %s\n\nHome resolution starts in: %s\n\n"+
-			"Add a TestMain that points HOME and USERPROFILE at a temporary directory. "+
-			"cmd/replay/home_test.go is the worked example, including why USERPROFILE "+
-			"matters on Windows.",
+			"Add a TestMain whose body calls os.Setenv for BOTH \"HOME\" and \"USERPROFILE\", "+
+			"pointing them at a temporary directory. cmd/replay/home_test.go is the worked "+
+			"example. USERPROFILE is not optional: os.UserHomeDir reads it on Windows and "+
+			"ignores HOME.",
 			strings.Join(exposed, "\n  "), strings.Join(seeds, ", "))
 	}
+}
+
+// isolatesHome reports whether a file declares a TestMain that replaces BOTH
+// home-directory variables.
+//
+// Parsed, not grepped, and the difference is the finding. This used to be two
+// substring checks over the raw source — "func TestMain(" and `Setenv("HOME"`
+// anywhere in the file — and an audit satisfied it with a comment:
+//
+//	// was: os.Setenv("HOME", dir)
+//	func TestMain(m *testing.M) { ... sets nothing ... }
+//
+// A comment about isolation is not isolation. It is the same edit that
+// defeated MC1, MC2 and GR1 — three guards written days apart, all reading a
+// file as text and taking a match as proof — and this is the fourth.
+//
+// USERPROFILE is required too, which the old check never asked for. os.UserHomeDir
+// reads it on Windows and ignores HOME, so a package isolating only HOME
+// reintroduces FD-4 on the one platform nobody here develops on, and the old
+// guard would have passed it.
+func isolatesHome(src string) bool {
+	f, err := parser.ParseFile(token.NewFileSet(), "", src, 0)
+	if err != nil {
+		return false
+	}
+	var home, profile bool
+	for _, decl := range f.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Name == nil || fn.Name.Name != "TestMain" || fn.Body == nil {
+			continue
+		}
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || len(call.Args) == 0 {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "Setenv" {
+				return true
+			}
+			lit, ok := call.Args[0].(*ast.BasicLit)
+			if !ok || lit.Kind != token.STRING {
+				return true
+			}
+			switch lit.Value {
+			case `"HOME"`:
+				home = true
+			case `"USERPROFILE"`:
+				profile = true
+			}
+			return true
+		})
+	}
+	return home && profile
 }
 
 func reaches(pkgs map[string]*pkgInfo, name string, seen map[string]bool) bool {
@@ -147,10 +205,7 @@ func scanPackages(t *testing.T) map[string]*pkgInfo {
 		}
 		if strings.HasSuffix(path, "_test.go") {
 			p.hasTests = true
-			// A TestMain that both declares itself and replaces HOME. Either
-			// half alone is not isolation: a TestMain that does not set HOME
-			// leaves the run pointed at the real one.
-			if strings.Contains(src, "func TestMain(") && strings.Contains(src, `Setenv("HOME"`) {
+			if isolatesHome(src) {
 				p.isolates = true
 			}
 			return nil
