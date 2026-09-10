@@ -83,6 +83,9 @@ var (
 	reEval       = regexp.MustCompile(`\beval time =\s*([\d.]+) ms /\s*(\d+) tokens`)
 	reTotal      = regexp.MustCompile(`total time =\s*([\d.]+) ms /\s*(\d+) tokens`)
 	reSlotTask   = regexp.MustCompile(`id\s+(\d+) \| task (-?\d+)`)
+	// reSlotStart marks the launch of a new task on a slot. It is the only
+	// line that opens a block; every other marker merely fills one in.
+	reSlotStart = regexp.MustCompile(`processing task`)
 )
 
 // ParseOllamaLogFile reads one server log.
@@ -109,34 +112,82 @@ func ParseOllamaLog(r io.Reader) ([]OllamaRequest, error) {
 
 	model := ""
 	cur := OllamaRequest{CachedPrefix: -1, PromptEval: -1, Generated: -1}
-	reset := func() { cur = OllamaRequest{CachedPrefix: -1, PromptEval: -1, Generated: -1} }
+	// unreadable marks a block holding a number the parser could not read. It
+	// is dropped at the close rather than reported with whatever the failed
+	// conversion left behind. See atoiOK.
+	unreadable := false
+	reset := func() {
+		cur = OllamaRequest{CachedPrefix: -1, PromptEval: -1, Generated: -1}
+		unreadable = false
+	}
 
 	for sc.Scan() {
 		line := sc.Text()
 		if m := reModel.FindStringSubmatch(line); m != nil {
 			model = m[1]
 		}
+		// A slot launching a task opens a new block, and whatever the previous
+		// one had collected is abandoned with it.
+		//
+		// Only a total used to clear the state, so a block killed mid-request
+		// — a rotated log, a killed process — left its n_past standing, and
+		// the NEXT request inherited it. That request then reported a measured
+		// cached prefix belonging to a different prompt: not a coercion of
+		// unknown to zero, which OU-1 already guards, but a coercion of
+		// unknown to a specific plausible number that was measured elsewhere.
+		if reSlotStart.MatchString(line) {
+			reset()
+		}
 		if m := reNPast.FindStringSubmatch(line); m != nil {
-			cur.CachedPrefix = atoiOr(m[1], 0)
+			// An unreadable n_past leaves the prefix UNMEASURED. It used to
+			// default to 0, which is the same defect OU-1 fixed at the other
+			// end of this function: 0 asserts a full cache miss, and the
+			// distinction between "reused nothing" and "could not read the
+			// number" is the whole point of the sentinel.
+			if n, ok := atoiOK(m[1]); ok {
+				cur.CachedPrefix = n
+			}
 		}
 		if m := rePromptEval.FindStringSubmatch(line); m != nil {
 			cur.PromptMS = atofOr(m[1])
-			cur.PromptEval = atoiOr(m[2], 0)
+			if n, ok := atoiOK(m[2]); ok {
+				cur.PromptEval = n
+			} else {
+				unreadable = true
+			}
 		} else if m := reEval.FindStringSubmatch(line); m != nil && !strings.Contains(line, "prompt eval") {
 			cur.EvalMS = atofOr(m[1])
-			cur.Generated = atoiOr(m[2], 0)
+			if n, ok := atoiOK(m[2]); ok {
+				cur.Generated = n
+			} else {
+				unreadable = true
+			}
 		}
 		if m := reTotal.FindStringSubmatch(line); m != nil {
 			cur.TotalMS = atofOr(m[1])
-			cur.Total = atoiOr(m[2], 0)
+			if n, ok := atoiOK(m[2]); ok {
+				cur.Total = n
+			} else {
+				unreadable = true
+			}
 			// A total closes the block. Keep it only when both halves of the
-			// conservation law are present: a total with no eval line is a
-			// truncated record, not a request that produced nothing.
-			if cur.PromptEval >= 0 && cur.Generated >= 0 {
+			// conservation law are PRESENT and every number in it was
+			// readable: a total with no eval line is a truncated record, not
+			// a request that produced nothing, and a total whose count did not
+			// convert is not a request that used no tokens.
+			//
+			// Presence is what is checked, not the law itself. A block whose
+			// halves are all present but do not sum to the total is kept, and
+			// TestOllamaConservationHoldsOnTheLocalLogs is what says the law
+			// holds on real logs rather than this line.
+			if cur.PromptEval >= 0 && cur.Generated >= 0 && !unreadable {
 				cur.Model = model
+				// Slot and task are identifiers, not measurements: an
+				// unreadable one leaves the zero value and costs nothing
+				// downstream, which is why they alone still default.
 				if s := reSlotTask.FindStringSubmatch(line); s != nil {
-					cur.Slot = atoiOr(s[1], 0)
-					cur.Task = atoiOr(s[2], 0)
+					cur.Slot, _ = atoiOK(s[1])
+					cur.Task, _ = atoiOK(s[2])
 				}
 				// CachedPrefix stays -1 when no n_past line appeared.
 				//
@@ -155,12 +206,21 @@ func ParseOllamaLog(r io.Reader) ([]OllamaRequest, error) {
 	return out, sc.Err()
 }
 
-func atoiOr(s string, d int) int {
+// atoiOK converts a captured count and says whether it converted.
+//
+// It replaced atoiOr(s, 0), which turned a number it could not read into the
+// number zero. Every count these regexes capture is (\d+), so the only way to
+// fail is overflow — a value above 2^63, which cannot be a real token count.
+// That does not make the default safe: an unreadable number silently became a
+// measured zero, and on the prefix that is a full cache miss asserted about a
+// request nobody observed. There is no defensible default here, so there is
+// no default.
+func atoiOK(s string) (int, bool) {
 	n, err := strconv.Atoi(s)
 	if err != nil {
-		return d
+		return 0, false
 	}
-	return n
+	return n, true
 }
 
 func atofOr(s string) float64 {

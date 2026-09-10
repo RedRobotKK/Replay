@@ -63,10 +63,56 @@ func Redact(r io.Reader, w io.Writer) error {
 
 // Top-level fields kept verbatim; everything else at the top level is
 // dropped unless listed in replaced.
+//
+// isCompactSummary and compactMetadata are here because a compaction is
+// structure, and its sizes are counts rather than content. Without them a
+// redacted transcript reports ZERO compactions where the original reported
+// several, so the fixtures this repository keeps — every one of them a redacted
+// transcript, by the doc comment on Redact — could not express a compaction at
+// all, and a user attaching a redacted transcript to a bug report about
+// compaction would be attaching the evidence with the compaction removed. The
+// records the compaction tests exist for are the ones holding 31.8% of all
+// re-billed tokens in the measured corpus.
 var keptTop = map[string]bool{
 	"type": true, "uuid": true, "parentUuid": true, "timestamp": true,
 	"requestId": true, "apiBlockIndex": true, "isSidechain": true,
 	"effort": true, "message": true, "version": true, "userType": true,
+	"isCompactSummary": true, "compactMetadata": true,
+}
+
+// compactSizes are the compactMetadata fields kept: four token counts and the
+// millisecond duration, all of them numbers the client computed.
+var compactSizes = map[string]bool{
+	"preTokens": true, "postTokens": true,
+	"cumulativeDroppedTokens": true, "durationMs": true,
+}
+
+// plainTrigger bounds the one string kept out of compactMetadata. The trigger
+// is a client-chosen enum ("auto", "manual"), not user content, but keeping a
+// string verbatim needs a reason narrower than "it looked fine": anything that
+// is not a short lowercase identifier is dropped rather than trusted.
+var plainTrigger = regexp.MustCompile(`^[a-z_]{1,32}$`)
+
+// compaction keeps a compaction record's sizes and discards everything else.
+func (rd *redactor) compaction(v any) any {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return nil
+	}
+	for k, val := range m {
+		switch {
+		case compactSizes[k]:
+			// A JSON number; keep it. json.Unmarshal gave it to us as a
+			// float64 and will write it back the same way.
+		case k == "trigger":
+			if s, ok := val.(string); !ok || !plainTrigger.MatchString(s) {
+				delete(m, k)
+			}
+		default:
+			delete(m, k)
+		}
+	}
+	return m
 }
 
 // saltBytes sizes the per-file salt that keys every filler string.
@@ -89,6 +135,13 @@ func (rd *redactor) line(obj map[string]any) {
 	}
 	obj["sessionId"] = "redacted"
 	obj["cwd"] = "/redacted"
+	if cm, ok := obj["compactMetadata"]; ok {
+		if kept := rd.compaction(cm); kept != nil {
+			obj["compactMetadata"] = kept
+		} else {
+			delete(obj, "compactMetadata")
+		}
+	}
 	if t, _ := obj["type"].(string); t != lineTypeUser && t != lineTypeAssistant {
 		delete(obj, "message")
 		return

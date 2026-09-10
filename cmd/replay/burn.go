@@ -23,8 +23,27 @@ import (
 // headline figures do not even agree on whether the cached prefix is inside
 // them. A grand total would be a number with no unit.
 type surfaceBurn struct {
-	name     string
+	name string
+	// requests is the number of calls made to a provider.
+	//
+	// It used to be the number of FILES read, on two of the three surfaces,
+	// under a column header that said "requests". Ollama counted requests
+	// because its log has no file-per-session shape to confuse them with; the
+	// Codex and Claude Code readers incremented once per transcript. So one
+	// column held two different quantities and the reader had no way to tell:
+	// a machine with 148 Codex rollouts covering thousands of turns reported
+	// "148 requests", next to an Ollama row where the same column meant what
+	// it said.
+	//
+	// A session is not a transcript is not a request. This project has
+	// retracted a published figure over that conflation once already.
 	requests int
+	// sessions is how many transcripts or rollouts were read to get there. It
+	// is reported separately rather than folded in, because a surface with no
+	// per-session file (Ollama) genuinely has none and must say so rather than
+	// borrow the request count.
+	sessions    int
+	hasSessions bool
 	// tokens is the surface's own headline figure, and Unit says what it means.
 	tokens int
 	unit   string
@@ -92,6 +111,10 @@ func runBurn(args []string, stdout, stderr io.Writer) error {
 			continue
 		}
 		_, _ = fmt.Fprintf(stdout, "  %s\n", s.name)
+		if s.hasSessions {
+			_, _ = fmt.Fprintf(stdout, "    %s request(s) across %s session transcript(s)\n",
+				comma(s.requests), comma(s.sessions))
+		}
 		if r, ok := s.perHour(); ok {
 			_, _ = fmt.Fprintf(stdout, "    %s tokens/hour over the %s observed\n",
 				comma(int(r)), humanWindow(s.last.Sub(s.first)))
@@ -152,7 +175,9 @@ func burnCodex(home, dir string) surfaceBurn {
 		if err != nil {
 			continue
 		}
-		s.requests++
+		s.sessions++
+		s.hasSessions = true
+		s.requests += r.Turns
 		billed += r.Billed.Total()
 		breaks += len(r.Breaks)
 		if r.Quota != nil {
@@ -258,7 +283,9 @@ func burnClaudeCode(home, dir string) surfaceBurn {
 			if err != nil || sess == nil {
 				return nil //nolint:nilerr // a file that will not parse is counted nowhere
 			}
-			s.requests++
+			s.sessions++
+			s.hasSessions = true
+			s.requests += sess.RequestCount()
 			for _, lane := range sess.Lanes {
 				for _, r := range lane.Requests {
 					input += r.Usage.Input
