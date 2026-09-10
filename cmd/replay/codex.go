@@ -24,7 +24,7 @@ func codexRoots(home string) []string {
 	if home == "" {
 		return nil
 	}
-	base := filepath.Join(home, ".codex")
+	base := filepath.Join(home, codexHome)
 	return []string{
 		filepath.Join(base, "sessions"),
 		filepath.Join(base, "archived_sessions"),

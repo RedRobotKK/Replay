@@ -266,6 +266,28 @@ var defects = []Defect{
 		Evidence: "docs/adr/0019 'Extension, 2026-09-10'; ADR-0013 'observed column is the " +
 			"moat and the obligation'; the claim appears in no user-facing surface today.",
 	},
+	{
+		ID:    "FD-11",
+		Title: "The empty state was blind to every agent but one",
+		Looked: "Current. `replay` with no arguments walked the Claude Code roots, found " +
+			"nothing, and printed 'Claude Code is not installed here, or has never run' — " +
+			"while `replay codex` had known ~/.codex/sessions since it was written, `replay " +
+			"burn` had known ~/.ollama/logs, and `discover` had known ~/.grok and ~/.cursor. " +
+			"A reader holding hundreds of Codex rollout logs was told, accurately, about a " +
+			"product they had not installed and nothing about the data they had. Codex is the " +
+			"richest surface this build can read: a cache-write field Anthropic's own wire " +
+			"omits, reasoning tokens split out, and a quota counter that moves. The blind " +
+			"spot turned away the reader whose corpus could answer the most.",
+		Symptom: "A surface is taught to burn, codex or discover and the empty state is left " +
+			"where it was, so its owner is told nothing exists.",
+		Status: StatusGuarded,
+		Guards: []string{"TestFrozenFD11_TheEmptyStateSeesEveryAgentThisBuildKnows"},
+		Fix: "this branch: cmd/replay/othersurfaces.go owns the set of agent homes, the " +
+			"found surface leads the message, and a surface this build cannot read is " +
+			"named without a command rather than sent to a second empty report",
+		Evidence: "cmd/replay/otherSurfaces_test.go OS1-OS7; end-to-end run on a " +
+			"Codex-only HOME",
+	},
 }
 
 // testFuncs indexes every test function declared in the repository.
