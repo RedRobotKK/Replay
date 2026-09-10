@@ -263,9 +263,11 @@ jobs:
       # have been a check that could not fail. And `serve` was exercised blind:
       # a long-running listener either binds and blocks to the 45s timeout or
       # reports the port already in use, so eight serve surfaces times four
-      # invocations spent roughly twenty-four minutes measuring the runner. Both
-      # are fixed in the script; it now finishes in about four seconds and
-      # exits 1 on DRIFT, FLAKY or TIMEOUT.
+      # invocations spent roughly twenty-four minutes measuring the runner --
+      # and on the machine where that was first measured, the port was held by a
+      # stray serve the harness itself had leaked. Both are fixed in the script;
+      # it now finishes in about four seconds and exits 1 on DRIFT, FLAKY or
+      # TIMEOUT.
       #
       # --out keeps the JSON record off the working tree, which is tracked.
       - name: Exercise every documented surface

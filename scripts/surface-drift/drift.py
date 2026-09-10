@@ -26,12 +26,16 @@ DANGER = {"execute", "update", "apply", "yes", "write", "record", "contribute",
 EXPECT_NONZERO = {("prefix", None)}
 
 # Long-running listeners. Exercising these blind measures the harness or the
-# machine, never the product: on a developer's box `serve` reports "bind:
-# address already in use" because their own proxy holds :4000, and on a clean
-# runner it blocks until the 45s timeout instead. Eight serve surfaces times
-# four invocations is roughly twenty-four minutes of a CI job learning nothing,
-# which is why the first attempt to run this harness was killed rather than
-# read. Both readings are facts about the port.
+# machine, never the product: `serve` blocks until the 45s timeout when it can
+# bind, and reports "bind: address already in use" when anything already holds
+# :4000. Eight serve surfaces times four invocations is roughly twenty-four
+# minutes of a CI job learning nothing, which is why the first attempt to run
+# this harness was killed rather than read.
+#
+# When this was first measured the thing holding :4000 was a stray `serve` left
+# behind by an earlier run of THIS harness, not a proxy the developer had
+# started. The harness was reading a port it had dirtied itself, and the first
+# write-up of this said otherwise. Both readings are facts about the port.
 SERVERS = {"serve"}
 
 # Stdio servers. `mcp` speaks JSON-RPC on stdin; handed /dev/null it sees EOF,
