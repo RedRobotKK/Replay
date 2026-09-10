@@ -116,10 +116,10 @@ func holdsTranscripts(root string) bool {
 
 // explainNoCorpus says what kind of empty this is, and what to do about it.
 //
-// Three situations produce no transcripts and they are not the same. The agent
-// was never installed here. It is installed and has recorded nothing yet. Or
-// there is a corpus somewhere Replay did not look. The next step differs for
-// each, and printing one message over all three tells the reader that the tool
+// Four situations produce no transcripts and they are not the same. Another
+// agent's records are sitting here unread. The agent was never installed. It is
+// installed and has recorded nothing yet. Or there is a corpus somewhere Replay
+// did not look. The next step differs for each, and printing one message over all three tells the reader that the tool
 // does not know which they are in.
 //
 // This is the installer's advertised first command, so on a fresh machine this
@@ -183,6 +183,18 @@ func onPath(name string) bool {
 func explainNoCorpusIn(e env, home string, w io.Writer) {
 	p := func(format string, a ...any) { _, _ = fmt.Fprintf(w, format, a...) }
 	roots := candidateTranscriptRoots(home)
+
+	// Another agent's records on this machine outrank every message below,
+	// so they lead.
+	//
+	// Detection alone was not the fix. Printed underneath "Claude Code is not
+	// installed here", the Codex paragraph reached only the readers who kept
+	// reading past a sentence about a product they do not use — which is not
+	// the reader this exists for. What they have comes before what they lack.
+	if found := findOtherSurfaces(home); len(found) > 0 {
+		p("No Claude Code transcripts here, but this machine has other agent records.\n\n")
+		writeOtherSurfaces(found, w)
+	}
 
 	// An image running some other agent is the case the installer never
 	// considered. There is no corpus on disk there and there may never be one,

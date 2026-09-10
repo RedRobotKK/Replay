@@ -416,3 +416,91 @@ func newestCalibrationCorpus(t *testing.T, root string) string {
 	sort.Strings(found)
 	return found[len(found)-1]
 }
+
+// FD-11, frozen. The empty state was blind to every agent but one.
+//
+// `replay` with no arguments walked the Claude Code transcript roots, found
+// nothing, and printed "Claude Code is not installed here, or has never run."
+// Meanwhile `replay codex` had known `~/.codex/sessions` since it was written,
+// and `replay burn` had known `~/.ollama/logs`. A reader holding hundreds of
+// Codex rollout logs ran the tool and was told, accurately, about a product
+// they had not installed — and nothing about the data they had.
+//
+// It is the worst surface to be blind to. Codex reports a cache-write field
+// Anthropic's own wire does not, separates reasoning tokens, and carries a
+// quota counter that moves. The blind spot pointed away the one reader whose
+// corpus could answer the most.
+//
+// The defect is drift, not a typo: it returns the next time a surface is
+// taught to `burn` or a subcommand and the empty state is left where it was.
+// So the claim is over the set, not the call — every agent home directory
+// this build knows about must be one the empty state can find.
+//
+// PASS: every `~/.<agent>` root named anywhere in cmd/replay is named in the
+// empty state's own detection.
+// FAIL: a surface was added somewhere else and the empty state cannot see it.
+func TestFrozenFD11_TheEmptyStateSeesEveryAgentThisBuildKnows(t *testing.T) {
+	const detector = "cmd/replay/othersurfaces.go"
+
+	files := textFiles(t, ".go")
+	detection, ok := files[detector]
+	if !ok {
+		t.Fatalf("%s is gone; the empty state's other-surface detection was removed "+
+			"wholesale, which is the FD-11 defect in its original form", detector)
+	}
+
+	// A home-relative agent root, as it is written in Go source. Only this
+	// shape counts: a bare ".foo" string elsewhere is a file extension, a
+	// temp dir, or Replay's own store, none of which is an agent.
+	root := regexp.MustCompile(`filepath\.Join\(\s*home\s*,\s*"\.([a-z][a-z0-9-]{2,})"`)
+
+	// Two roots are not other agents. Claude Code's own is what the empty
+	// state walks directly rather than naming as an alternative, and
+	// ~/.replay is where this tool keeps its own state.
+	covered := map[string]bool{"claude": true, "config": true, "replay": true}
+
+	seen := map[string][]string{}
+	for path, body := range files {
+		if !strings.HasPrefix(filepath.ToSlash(path), "cmd/replay/") {
+			continue
+		}
+		if strings.HasSuffix(path, "_test.go") || filepath.ToSlash(path) == detector {
+			continue
+		}
+		for _, m := range root.FindAllStringSubmatch(body, -1) {
+			if agent := m[1]; !covered[agent] {
+				seen[agent] = append(seen[agent], path)
+			}
+		}
+	}
+
+	var missing []string
+	for agent, where := range seen {
+		if strings.Contains(detection, `".`+agent+`"`) {
+			continue
+		}
+		sort.Strings(where)
+		where = uniqueStrings(where)
+		missing = append(missing, agent+" (named in "+strings.Join(where, ", ")+")")
+	}
+	sort.Strings(missing)
+
+	if len(missing) > 0 {
+		t.Errorf("these agent roots are known to cmd/replay and invisible to the empty "+
+			"state, so a reader holding their data is told nothing exists:\n  %s\n"+
+			"Teach %s about them, or the FD-11 blind spot is back for that surface.",
+			strings.Join(missing, "\n  "), detector)
+	}
+}
+
+// uniqueStrings collapses a sorted slice, so a file naming a root twice is
+// reported once.
+func uniqueStrings(in []string) []string {
+	out := in[:0]
+	for i, s := range in {
+		if i == 0 || s != in[i-1] {
+			out = append(out, s)
+		}
+	}
+	return out
+}
