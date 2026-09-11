@@ -242,7 +242,7 @@ func priceUsage(e *usage.Export) (usageReport, []usageRow) {
 func renderUsageCost(rep usageReport, rows []usageRow, perTask bool) string {
 	var b strings.Builder
 	if rep.Sessions == 0 {
-		fmt.Fprintf(&b, "No usage record could be priced. %d were read but their model is not in the\nprice table. They are excluded rather than counted as free.\n", rep.UnpricedRequests)
+		fmt.Fprintf(&b, "No usage record could be priced. %s\nThey are excluded rather than counted as free.\n", unpricedClause(rep.UnpricedRequests))
 		return b.String()
 	}
 	fmt.Fprintf(&b, "Cost per task, across %d session(s) and %d request(s) priced from usage records\nalone, at list prices dated %s (caching rules %s).%s\n\n",
