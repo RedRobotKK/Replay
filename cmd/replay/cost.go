@@ -852,6 +852,25 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	}
 	// The one line a first-time reader can act on: their peak session against
 	// their own median. Silent unless it is far enough out to be worth saying.
+	// What this total does NOT cover.
+	//
+	// `replay cost` prices Claude Code transcripts. A machine that also runs
+	// Codex has real spend outside this figure — 610,551,532 tokens on the
+	// corpus this was written against — and a report that names one agent while
+	// silently omitting another is a total the reader will take for everything.
+	//
+	// Printed only when another surface actually has records. A caveat on a
+	// single-agent machine would be both noise and false: there the total IS
+	// everything.
+	if !*asJSON {
+		if home, err := os.UserHomeDir(); err == nil {
+			if note := otherSurfacesNote(findOtherSurfaces(home)); note != "" {
+				if _, err := io.WriteString(stdout, note); err != nil {
+					return err
+				}
+			}
+		}
+	}
 	if note := outlierNote(units, s); note != "" {
 		if _, err := io.WriteString(stdout, note); err != nil {
 			return err
@@ -901,6 +920,50 @@ func sessionTime(rep *analysis.LaneReport) time.Time {
 // This previously cited the rules version beside a dollar total, which reads
 // as the price date: the rules govern what gets cached, the price table
 // governs what that costs, and on 2026-09-05 they were 73 days apart.
+// otherSurfacesNote names the agents on this machine that the total leaves out.
+//
+// It names them rather than counting them: "Codex" tells a reader where to
+// look, "1 other surface" does not. The command that prices every surface it
+// can is named too, because a caveat a reader cannot act on is decoration.
+func otherSurfacesNote(others []otherSurface) string {
+	if len(others) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(others))
+	for _, o := range others {
+		names = append(names, o.name)
+	}
+	// "nothing they did is counted" rather than "none of that spend", because
+	// one of these is usually Ollama, which runs locally and has no bill at
+	// all. Calling its work spend would be the same category error `replay
+	// burn` avoids by giving it its own column.
+	return fmt.Sprintf("\nThis total is Claude Code only. %s also %s records here, and\n"+
+		"nothing they did is counted above.\n  next: replay burn\n",
+		andList(names), haveOrHas(len(others)))
+}
+
+// andList joins names the way a sentence does: "A", "A and B", "A, B and C".
+func andList(names []string) string {
+	switch len(names) {
+	case 0:
+		return ""
+	case 1:
+		return names[0]
+	case 2:
+		return names[0] + " and " + names[1]
+	default:
+		return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+	}
+}
+
+// haveOrHas keeps the sentence grammatical for one surface or several.
+func haveOrHas(n int) string {
+	if n == 1 {
+		return "has"
+	}
+	return "have"
+}
+
 func costHeaderLine(s costSummary) string {
 	// Both counts, named, whenever they differ.
 	//
@@ -919,7 +982,12 @@ func costHeaderLine(s costSummary) string {
 	} else if s.Lanes > s.Tasks {
 		subject = fmt.Sprintf("%d sessions (%d agent lanes)", s.Tasks, s.Lanes)
 	}
-	line := fmt.Sprintf("Cost per %s, across %s at list prices dated %s (caching rules %s).",
+	// The agent is named rather than assumed. This command reads Claude Code
+	// transcripts and prices them; on a machine that also runs Codex it printed
+	// one figure and named no agent at all, so a reader had no way to tell
+	// whether it was everything they spend or one surface of three. Silence
+	// reads as completeness.
+	line := fmt.Sprintf("Cost per %s, across %s of Claude Code, at list prices dated %s (caching rules %s).",
 		per, subject, cachemodel.PriceTableVersion, cachemodel.RulesVersionInEffect())
 	return line + cachemodel.PriceTableAgeNote(time.Now())
 }
