@@ -622,6 +622,12 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			s.noteRehydration(&rec, tap.rehydrate)
 		}
 		rec.Cache = s.stats.observe(&rec)
+		// Release the lane before the ledger write. waitLedger in tests (and
+		// a client that posts the next turn as soon as the body is closed)
+		// unblocks on Append; if we are still in-flight then, sequential
+		// turns are marked overlapping and the cause is NOT MEASURED.
+		// correlation() has already read the flag.
+		leaveLane()
 		if readable && rec.SessionID != "" {
 			if err := s.cfg.Store.Append(rec); err != nil {
 				s.cfg.Logger.Printf("ledger write failed: %v", err)
