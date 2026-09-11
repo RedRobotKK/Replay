@@ -111,3 +111,49 @@ func TestME2_TheDatedLookupRefusesAnUnknownVersionToo(t *testing.T) {
 		}
 	}
 }
+
+// TestME3 pins order-independence, which is a property this fix created.
+//
+// Raised in review: "the opus-4-1 row sitting before opus-4 is load-bearing;
+// if table order flips, does 4.1 still price as 4.1?" It was load-bearing
+// before this change — lookup is first-hit-wins and `claude-opus-4-1` contains
+// `claude-opus-4`, so a general row placed first swallowed the specific one.
+//
+// It is not load-bearing now, and that is worth a test rather than a reply.
+// The general row REFUSES the specific id: `-1` is a hyphen and one digit, so
+// continuesWithVersion says this is a different version and matchesModel
+// declines. Both orders therefore price both ids correctly.
+//
+// The fragility was real and is gone. Without this test it comes back the
+// first time someone sorts the rules document alphabetically.
+func TestME3_PricingDoesNotDependOnRowOrder(t *testing.T) {
+	general := ModelRule{Match: "claude-opus-4", MinPrefix: 1024, InputPerMTok: 15, OutputPerMTok: 75, ReadMult: 0.1, Priced: true}
+	specific := ModelRule{Match: "claude-opus-4-1", MinPrefix: 1024, InputPerMTok: 99, OutputPerMTok: 999, ReadMult: 0.1, Priced: true}
+	when := time.Date(2026, 9, 11, 0, 0, 0, 0, time.UTC)
+
+	for _, tc := range []struct {
+		name string
+		r    *Rules
+	}{
+		{"specific row first", rules(specific, general)},
+		{"general row first", rules(general, specific)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, want := range []struct {
+				id    string
+				input float64
+			}{
+				{"claude-opus-4-1", 99},
+				{"claude-opus-4", 15},
+			} {
+				p, ok := tc.r.PriceAt(want.id, when)
+				if !ok || p.InputPerMTok != want.input {
+					t.Errorf("PriceAt(%q) = $%.0f priced=%v, want $%.0f. Row order changed "+
+						"the price, so the rules document cannot be reordered or sorted "+
+						"without repricing somebody's invoice",
+						want.id, p.InputPerMTok, ok, want.input)
+				}
+			}
+		})
+	}
+}
