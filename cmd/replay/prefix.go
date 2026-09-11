@@ -30,9 +30,10 @@ import (
 // mechanism instead, which is structural and cannot rot: one prefix, every
 // warm session, at the same moment.
 //
-// For figures, run the command that produces them. `replay diff` prints the
-// cause table for a corpus, and a number read there is dated by the run that
-// made it. internal/regression FC-PX fails if a count comes back here.
+// For figures, run the command that produces them. `replay diff` prints each
+// break and its cause, one line per event rather than a rollup — a reader
+// wanting totals counts them, and gets a number dated by the run that made it.
+// internal/regression FC-PX fails if a count comes back here.
 //
 // It watches the tool set, not the system prompt, and that is a measured choice
 // rather than an obvious one. internal/proxy/causedetail.go records that across
