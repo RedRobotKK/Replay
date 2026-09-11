@@ -23,6 +23,8 @@ import (
 //	after  chain reuse    1013.7 ms   214.1 MB   615,003 allocs
 //	after  label truncate   989.0 ms   201.9 MB   611,786 allocs
 //	after  label once       918.0 ms   193.5 MB   587,147 allocs
+//	after  scanner          935.0 ms   158.8 MB   386,573 allocs
+//	after  measured source  947.0 ms   129.4 MB   386,292 allocs
 //
 // The scanner ContentBytes uses is checked against the decoder it replaced by
 // FuzzContentBytesMatchesTheDecoder. What that is worth is not the execution

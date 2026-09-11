@@ -70,10 +70,49 @@ type RawBlock struct {
 	// in a Claude Code transcript measured zero. The provider billed for the
 	// bytes; the fit was told they weighed nothing, which drags the ratio for
 	// every other block in the same session.
-	Source       json.RawMessage `json:"source"`
+	// Source is measured where it is decoded and then dropped. It is the one
+	// field on this struct whose bytes nothing reads: its only use in the
+	// repo is the measurement in DecodeBlock's image arm, and an image
+	// payload is a few hundred kilobytes of base64, so keeping it meant
+	// copying the whole screenshot to hand back an int.
+	//
+	// A json.RawMessage cannot avoid that copy. Its UnmarshalJSON is
+	// append((*m)[0:0], data...), and it is written that way because the
+	// Unmarshaler contract forbids retaining the bytes it is given.
+	Source       MeasuredBytes   `json:"source"`
 	IsError      bool            `json:"is_error"`
 	CacheControl json.RawMessage `json:"cache_control"`
 }
+
+// MeasuredBytes is a JSON value replaced by its own measurement at decode
+// time. The bytes reach UnmarshalJSON, are measured, and are not retained,
+// so the field costs an int however large the value was.
+//
+// It measures through ContentBytes rather than reimplementing it, so the
+// number is the same number by construction rather than by argument —
+// including the fallback where a value that will not parse measures as its
+// raw length.
+//
+// It never returns an error, and that is deliberate rather than lazy. A
+// malformed value cannot reach here: encoding/json validates the document
+// before any field is stored, and ContentBytes answers for whatever arrives.
+// An error returned from here would fail the whole LINE, turning a quirk in
+// one image block into a dropped request.
+//
+// Two states that look alike and are not: encoding/json calls UnmarshalJSON
+// for a JSON null, so `"source":null` measures the four bytes of the keyword
+// — which is what a json.RawMessage holding null measured. An absent key
+// never calls the method, so the field keeps its zero value. MS2 pins both.
+type MeasuredBytes int
+
+// UnmarshalJSON measures data and keeps nothing else.
+func (m *MeasuredBytes) UnmarshalJSON(data []byte) error {
+	*m = MeasuredBytes(ContentBytes(data))
+	return nil
+}
+
+// Int reports the measurement.
+func (m MeasuredBytes) Int() int { return int(m) }
 
 // WireUsage is the provider's usage object as serialized on the wire.
 type WireUsage struct {
@@ -186,7 +225,7 @@ func DecodeBlock(rb RawBlock, role string, toolNames map[string]string, label La
 		// that distinction so a later change cannot let one stand for the
 		// other.
 		return Block{Kind: rb.Type, Label: rb.Type,
-			Bytes: ContentBytes(rb.Content) + ContentBytes(rb.Source)}
+			Bytes: ContentBytes(rb.Content) + rb.Source.Int()}
 	default:
 		return Block{Kind: KindOther, Label: LabelOtherPrefix + rb.Type, Bytes: ContentBytes(rb.Content) + len(rb.Text)}
 	}
