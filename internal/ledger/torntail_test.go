@@ -211,14 +211,36 @@ func TestTL6_AnUnreadableLedgerErrorsRatherThanReadingEmpty(t *testing.T) {
 		}
 	})
 
-	t.Run("directory fails at readat", func(t *testing.T) {
-		d, err := os.Open(t.TempDir())
+	// The directory case is asserted through ReadRecords rather than on the
+	// helper directly, because the helper's answer for a directory is
+	// platform-dependent and the caller's is not.
+	//
+	// On Unix a directory opens, stats with a non-zero size, and fails ReadAt:
+	// unknown. On Windows a directory stats with Size() == 0, which is the
+	// empty-file case, so the helper answers "clean, known" — truthfully, for
+	// the question it was asked. Either way the scan that follows refuses the
+	// directory, so ReadRecords errors on both, and that is the property
+	// callers depend on.
+	//
+	// Asserting known == false here would have been a test that passes on the
+	// machine it was written on and fails on a platform the project ships to,
+	// which is the FD-11 shape this repository keeps finding.
+	t.Run("write-only handle fails at readat", func(t *testing.T) {
+		// Reaches the ReadAt branch on every platform.
+		//
+		// A directory reaches it on Unix and not on Windows, where a directory
+		// stats with Size() == 0 and takes the empty-file exit instead. A
+		// write-only handle stats fine, reports a real size, and refuses to be
+		// read anywhere — so the branch is entered on the machine this was
+		// written on and on the ones it ships to.
+		p := writeLines(t, goodLine(t, "a"))
+		f, err := os.OpenFile(p, os.O_WRONLY, 0)
 		if err != nil {
-			t.Skipf("cannot open a directory on this platform: %v", err)
+			t.Skipf("cannot open write-only here: %v", err)
 		}
-		defer d.Close() //nolint:errcheck // read-only probe
-		if _, known := endsWithNewline(d); known {
-			t.Error("a directory reported its last byte as known")
+		defer f.Close() //nolint:errcheck // test handle
+		if _, known := endsWithNewline(f); known {
+			t.Error("a handle that cannot be read reported its last byte as known")
 		}
 	})
 
