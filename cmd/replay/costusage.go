@@ -116,7 +116,7 @@ var usageNotMeasured = [][2]string{
 	{"repeated tool results", "needs the tool result blocks; a usage record has no content"},
 	{"tool errors", "needs the is_error flag on each result block"},
 	{"blame, per block", "needs the byte size of every block, and the fit built from them"},
-	{"alternative layouts", "needs each request's context to replay it a different way"},
+	{"alternative layouts", "needs each request's context to re-run it a different way"},
 	{"agent lane fan-out", "needs a lane id on each record; this export carries none"},
 }
 
