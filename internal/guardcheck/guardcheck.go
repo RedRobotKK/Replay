@@ -41,6 +41,16 @@ type Guard struct {
 	// suite and the verdict was neither caught nor survived.
 	CondStart, CondEnd int
 	BodyStart, BodyEnd token.Position
+
+	// Func is the name of the function the conditional sits in, receiver
+	// type included for a method, and empty for one that sits outside any
+	// function declaration. Cond is the condition's source text with runs of
+	// whitespace collapsed to one space.
+	//
+	// Together with Pkg they are what survives a file being split: see
+	// Identity, which is the only thing that reads them.
+	Func string
+	Cond string
 }
 
 // ParseDiff maps a changed non-test .go file to the lines a diff touched.
@@ -132,6 +142,12 @@ func ExcludedFromBuild(file string) (bool, string) {
 }
 
 // Conditionals finds if-statements whose condition sits on a changed line.
+//
+// A nil lines map means every line, which is how the base tree is indexed: the
+// question there is not what a diff touched but where a moved guard went, and
+// there is no diff to ask. An empty — but non-nil — map still collects nothing,
+// because that is a diff that touched no line of this file, and losing the
+// distinction would turn the diff scoping off by accident.
 func Conditionals(file string, lines map[int]bool) ([]Guard, error) {
 	// Read once and hand the bytes to the parser, rather than letting the
 	// parser open the file and then opening it again for the source lines.
@@ -152,6 +168,33 @@ func Conditionals(file string, lines map[int]bool) ([]Guard, error) {
 		return nil, err
 	}
 	byLine := strings.Split(string(src), "\n")
+	// A nil map means every line; an empty one means none. See the doc comment.
+	changed := func(line int) bool { return lines == nil || lines[line] }
+	// Top-level declarations only. A func literal nests inside one, so
+	// containment by offset still names the declaration it was written in.
+	var decls []*ast.FuncDecl
+	for _, d := range f.Decls {
+		if fd, ok := d.(*ast.FuncDecl); ok {
+			decls = append(decls, fd)
+		}
+	}
+	// describe reads the two fields a move cannot change.
+	describe := func(cond ast.Expr) (fn, text string) {
+		// The offsets are the parser's own, over the bytes it was handed, so
+		// they are in range by construction. A bounds check here would be a
+		// branch no test could enter — the shape this package exists to
+		// report in other people's code.
+		start := fset.Position(cond.Pos()).Offset
+		end := fset.Position(cond.End()).Offset
+		text = strings.Join(strings.Fields(string(src[start:end])), " ")
+		for _, d := range decls {
+			if start < fset.Position(d.Pos()).Offset || start >= fset.Position(d.End()).Offset {
+				continue
+			}
+			return funcName(d), text
+		}
+		return "", text
+	}
 
 	var out []Guard
 	// A conditional is an `if`, and it is also a tagless switch's case.
@@ -169,9 +212,10 @@ func Conditionals(file string, lines map[int]bool) ([]Guard, error) {
 	// for the wrong reason.
 	collect := func(cond ast.Expr, at token.Pos, lbrace, rbrace token.Pos) {
 		pos := fset.Position(at)
-		if !lines[pos.Line] || pos.Line > len(byLine) {
+		if !changed(pos.Line) || pos.Line > len(byLine) {
 			return
 		}
+		fn, text := describe(cond)
 		out = append(out, Guard{
 			File:      file,
 			Line:      pos.Line,
@@ -181,6 +225,8 @@ func Conditionals(file string, lines map[int]bool) ([]Guard, error) {
 			CondEnd:   fset.Position(cond.End()).Offset,
 			BodyStart: fset.Position(lbrace),
 			BodyEnd:   fset.Position(rbrace),
+			Func:      fn,
+			Cond:      text,
 		})
 	}
 
@@ -198,9 +244,10 @@ func Conditionals(file string, lines map[int]bool) ([]Guard, error) {
 			return true
 		}
 		pos := fset.Position(is.Pos())
-		if !lines[pos.Line] || pos.Line > len(byLine) {
+		if !changed(pos.Line) || pos.Line > len(byLine) {
 			return true
 		}
+		fn, text := describe(is.Cond)
 		out = append(out, Guard{
 			File:      file,
 			Line:      pos.Line,
@@ -210,6 +257,8 @@ func Conditionals(file string, lines map[int]bool) ([]Guard, error) {
 			CondEnd:   fset.Position(is.Cond.End()).Offset,
 			BodyStart: fset.Position(is.Body.Lbrace),
 			BodyEnd:   fset.Position(is.Body.Rbrace),
+			Func:      fn,
+			Cond:      text,
 		})
 		return true
 	})
