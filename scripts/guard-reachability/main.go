@@ -120,7 +120,7 @@ func main() {
 		return
 	}
 
-	var guards []guardcheck.Guard
+	var guards, unbuilt []guardcheck.Guard
 	for file, lines := range changed {
 		// A file excluded from every build has no guard that can affect
 		// anyone, and its package cannot be tested at all.
@@ -131,8 +131,34 @@ func main() {
 		// //go:build ignore, so the toolchain reports "build constraints
 		// exclude all Go files" and the baseline is red. The refusal worked;
 		// the analysis should never have got that far.
-		if excluded, why := guardcheck.ExcludedFromBuild(file); excluded {
+		// Order matters, and the two questions are different.
+		//
+		// ExcludedFromBuild evaluates with every tag false, under which
+		// //go:build ignore and //go:build linux both come back excluded. Only
+		// the first is correct to skip: an ignore file is built nowhere and
+		// ships in no binary, while a linux file ships on Linux and skipping
+		// it silently here hides a guard that reaches users.
+		if excluded, why := guardcheck.ExcludedFromBuild(file); excluded &&
+			!guardcheck.BuiltOnSomePlatform(file) {
 			fmt.Printf("guard-reachability: skipping %s (%s)\n", file, why)
+			continue
+		}
+		// A file this host does not compile is not skipped silently.
+		//
+		// Its conditionals cannot be neutralised — there is no build to run
+		// them against — but leaving them out of the count entirely is how a
+		// pass reports "0 survived, 0 unchecked" over guards nothing looked
+		// at. They are counted and named instead.
+		if buildable, why := guardcheck.BuildableHere(file); !buildable {
+			gs, err := guardcheck.Conditionals(file, lines)
+			if err != nil {
+				fmt.Printf("guard-reachability: %s is not built here (%s) and will not parse: %v\n", file, why, err)
+				continue
+			}
+			for _, g := range gs {
+				g.Src = g.Src + "   [" + why + "]"
+				unbuilt = append(unbuilt, g)
+			}
 			continue
 		}
 		gs, err := guardcheck.Conditionals(file, lines)
@@ -141,9 +167,17 @@ func main() {
 		}
 		guards = append(guards, gs...)
 	}
-	if len(guards) == 0 {
+	if len(guards) == 0 && len(unbuilt) == 0 {
 		fmt.Printf("guard-reachability: %d changed file(s), no new or changed conditionals\n", len(changed))
 		return
+	}
+	if len(guards) == 0 {
+		fmt.Printf("guard-reachability: %d changed file(s), and every conditional is in a "+
+			"file this host does not build\n", len(changed))
+		report("These were not scored. They are in files this host does not compile, so no\n"+
+			"build exists to neutralise them against. Run the reviewer on a host that\n"+
+			"builds them, or treat them as unreviewed:", unbuilt)
+		os.Exit(1)
 	}
 
 	// A red baseline makes every guard look caught, which is the failure this
@@ -209,9 +243,9 @@ func main() {
 	}
 
 	total := len(unreached) + len(inert) + len(unobserved)
-	fmt.Printf("\nguard-reachability: %d guard(s), %d survived, %d unchecked\n",
-		len(guards), total, len(unchecked))
-	if total == 0 && len(unchecked) == 0 {
+	fmt.Printf("\nguard-reachability: %d guard(s), %d survived, %d unchecked, %d not built here\n",
+		len(guards), total, len(unchecked), len(unbuilt))
+	if total == 0 && len(unchecked) == 0 && len(unbuilt) == 0 {
 		return
 	}
 
@@ -223,6 +257,11 @@ func main() {
 		"written to satisfy this verdict can freeze dead code in place:", inert)
 	report("These survived and coverage carried no block for them, so which of the\n"+
 		"two above they are is NOT MEASURED:", unobserved)
+	report("These were not scored at all. They are in files this host does not\n"+
+		"compile, so there is no build to neutralise them against — and a pass that\n"+
+		"left them out of the count would print a clean line over guards nothing\n"+
+		"looked at. Run the reviewer on a host that builds them, or treat them as\n"+
+		"unreviewed:", unbuilt)
 	report("These were never put to the suite at all: the compiler rejected the\n"+
 		"neutralised form, so nothing about them was measured. An unchecked guard\n"+
 		"is the false green this tool exists to prevent:", unchecked)
