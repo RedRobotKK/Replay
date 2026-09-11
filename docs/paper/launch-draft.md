@@ -134,18 +134,38 @@ defensible in a thread where someone will ask.
 
 ## Where the bad numbers came from
 
-Worth recording, because the failure is systematic rather than careless.
+Worth recording, because the failure is systematic rather than careless — and
+because the first diagnosis written here was itself wrong.
 
-- **"13.5 million production sessions"** and **"3.2M users"** — the second is a
-  real figure from `TRACE-COPILOT` (arXiv:2608.00101), a paper in our research
-  index. It is *their* corpus, not ours. A cited paper's scale migrating into
-  first-person copy is the specific mechanism here.
-- **"1.5M+ simulated sessions"** — almost certainly `1,506` transcripts with
-  the comma read as a magnitude separator. "Simulated" is also wrong: these are
-  real transcripts from unrelated work.
-- **"Agentic Coding in the Wild"** as the title of arXiv:2608.00101 — not the
-  title we recorded for that identifier.
+- **"13.5 million production sessions."** The figure is real and it is
+  published: arXiv:2608.00101, *Agentic Coding in the Wild*, 13.5M sessions,
+  760.5M LLM calls, 95T tokens. It is recorded in
+  `docs/design/reference-distribution.md`. **It is Copilot's corpus, not
+  ours.** The draft's sentence was "we parsed 13.5 million production
+  sessions", and the error is attribution, not arithmetic: a cited paper's
+  population migrating into the first person.
 
-Our whole claim is that we do not print numbers we cannot source. The launch
-post is the worst possible place to break it: it is the one document that will
-be read adversarially by people who can check.
+  `reference-distribution.md` already anticipated exactly this: "Copilot's
+  13.5M sessions are Copilot users on Copilot's harness, with Copilot's system
+  prompt and Copilot's tool set... Neither is a sample of 'people who run
+  coding agents'; each is a census of one product's traffic." The design
+  document makes `Population` a mandatory field for this reason, and
+  `validate()` refuses a reference without one. The launch copy did by hand
+  what the code refuses to do.
+
+  A first pass at this note claimed the title and the figure were invented,
+  having grepped only `RESEARCH-INDEX.md` — which records the same paper under
+  a different facet, 3.2M users. Both are true: 13.5M sessions from 3.2M users.
+  Checking one index and concluding a number does not exist is the same class
+  of error as the one being documented, committed while documenting it.
+
+- **"1.5M+ simulated sessions."** No published figure matches. Almost certainly
+  `1,506` transcripts with the comma read as a magnitude separator.
+  "Simulated" is wrong twice over: these are real transcripts from unrelated
+  work, and nothing here is simulated except the counterfactual replays, which
+  are labelled as such.
+
+The rule this project actually holds is that a figure carries its population.
+Neither struck number broke it by being false; both broke it by arriving
+without the population attached, at which point the nearest available
+population was assumed to be ours.
