@@ -18,6 +18,11 @@ All notable changes to this project are documented here. The format follows [Kee
   rewrite (Claude Code's billing header swapping `cc_version` hashes is the
   published case) is consistent with that and is not named as a size move or a
   history re-render.
+- **A nested 1h cache write is priced at 2×, not the 5m rate.** The wire
+  object `ephemeral_1h_input_tokens` already reached `writeEquivalent` when
+  present; a test now pins that path through `CostUSD`. **What it does not
+  fix:** a write with no TTL split is still priced at 1.25×. Codex records
+  take that branch. That is ccusage #899 on a different surface.
 
 ### Fixed
 

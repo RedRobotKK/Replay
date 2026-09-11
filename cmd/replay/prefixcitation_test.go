@@ -82,7 +82,13 @@ func TestPX8_TheInvalidationDoesNotClaimEveryModelWillMiss(t *testing.T) {
 		t.Errorf("the invalidation does not name %s, so a reader on a model that accepts\n"+
 			"it is told the prefix will miss when the command cannot know that:\n%s", beta, out)
 	}
-	if strings.Contains(out, "always forfeits") {
-		t.Errorf("the invalidation claims a miss on every model:\n%s", out)
+	// The property, not a phrasing nobody wrote: the command names the beta
+	// and says it does not know whether it is on. "always forfeits" was a
+	// grep for a string that never existed in prefix.go; replacing the
+	// paragraph with a universal claim still passed.
+	// The printed line wraps: "it does not\\n  know whether that beta is on".
+	if !strings.Contains(out, "know whether that beta is on") {
+		t.Errorf("the invalidation names the beta but does not say the command cannot\n"+
+			"know whether it is in force:\n%s", out)
 	}
 }
