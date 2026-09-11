@@ -94,6 +94,27 @@ contains a closing parenthesis, so the field split put the second number two
 fields further along than the script read. Recounted with an explicit regex:
 586 of 586.
 
+## The suppression this file justified did not hold (2026-09-11)
+
+`burnOllama` withheld the cached share, citing this document. It withheld it on
+the wrong condition: `unmeasured > 0`, meaning some *other* request in the same
+log lacked an `n_past` line. The reason written directly above that check is a
+property of the field itself — `n_past` appears only when the prompt was already
+resident, so any share over the requests carrying one measures a population
+selected for having been cached.
+
+The two came apart on a log where every block carries `n_past`. That is not an
+exotic input; it is what a handful of turns on one slot produces. On such a log
+`burn` reported a cached share of **99.98%** — the disqualified quantity, at its
+most flattering, presented as a measurement.
+
+On this machine's corpus the condition happened to hold (2,682 of 3,294 requests
+lack the field), which is why the log this file was written from never showed
+it. A guard that passes because of the corpus in front of it is not a guard.
+
+Fixed by never computing the share on this surface. `TestBO1` builds the
+fully-labelled log and fails if a share comes back.
+
 ---
 
 [Evidence](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

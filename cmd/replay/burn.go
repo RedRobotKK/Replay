@@ -361,7 +361,7 @@ func burnOllama(home, dir string) surfaceBurn {
 		pat = filepath.Join(dir, "ollama", "server*.log")
 	}
 	logs, _ := filepath.Glob(pat)
-	var ctx, cached, unmeasured int
+	var measured, unmeasured int
 	for _, p := range logs {
 		rs, err := transcript.ParseOllamaLogFile(p)
 		if err != nil {
@@ -370,27 +370,19 @@ func burnOllama(home, dir string) surfaceBurn {
 		for _, r := range rs {
 			s.requests++
 			s.tokens += r.Total
-			// Only requests whose reuse was actually observed reach the
-			// aggregate. Ollama's prompt_eval_count excludes the reused
-			// prefix, so the n_past line is the only place it appears, and a
-			// block without one has an unknown prefix rather than a zero.
+			// Ollama's prompt_eval_count excludes the reused prefix, so the
+			// n_past line is the only place it appears, and a block without
+			// one has an unknown prefix rather than a zero.
 			//
-			// Averaging the unknown ones in as zero would drag the cached
-			// share toward a full miss in proportion to how much of the log
-			// went unlabelled, and the resulting figure would look like a
-			// measurement of the cache instead of a measurement of the
-			// logging.
-			c, ok := r.ContextTokens()
-			if !ok {
+			// The two are counted and neither is divided by the other. The
+			// share this used to compute is disqualified below, and the
+			// division was the thing that leaked it.
+			if _, ok := r.ContextTokens(); ok {
+				measured++
+			} else {
 				unmeasured++
-				continue
 			}
-			ctx += c
-			cached += r.CachedPrefix
 		}
-	}
-	if ctx > 0 {
-		s.cached, s.hasCached = float64(cached)/float64(ctx), true
 	}
 	// Say what the share is a share of, and on this surface that turns out to
 	// disqualify the share entirely.
@@ -405,11 +397,21 @@ func burnOllama(home, dir string) surfaceBurn {
 	//
 	// The honest report is two counts and no average. See
 	// docs/evidence/ollama-cache-ceiling-2026-09-08.md.
-	if unmeasured > 0 {
-		s.hasCached = false
+	//
+	// The suppression used to be conditional on unmeasured > 0 — on some OTHER
+	// request in the same log lacking an n_past line. That is not the reason
+	// written above it. On the corpus this was built against, 2,682 of 3,294
+	// requests lacked one, so the condition happened to hold and the share
+	// stayed hidden; a log where every block carries n_past satisfied neither
+	// the condition nor the reason, and printed a 99.98% cached share. Not an
+	// exotic log — that is what a few turns on a single slot look like.
+	//
+	// So the share is never reported on this surface, and s.hasCached is never
+	// set. What is reported is the two counts, which is what the log supports.
+	if s.requests > 0 {
 		s.problems = append(s.problems, fmt.Sprintf(
-			"%d of %d requests were served entirely from cache apart from the one token the server re-evaluates by rule; the other %d log no reuse figure, so no cache hit rate is reported",
-			s.requests-unmeasured, s.requests, unmeasured))
+			"%d of %d requests were served entirely from cache apart from the one token the server re-evaluates by rule; the other %d log no reuse figure. No cache hit rate is reported: a share over the first group measures a population selected for having been cached",
+			measured, s.requests, unmeasured))
 	}
 	return s
 }
