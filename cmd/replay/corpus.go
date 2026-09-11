@@ -195,9 +195,15 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 	}
 
 	p.Printf("\n## Per model\n\n")
-	p.Printf("Calibration by the model of each session's first request, with the newest %d sessions judged on their own so a provider rule change shows as a drop (ST-1). The minimum cacheable prefix is bounded from usage: the largest uncached prompt lies below it, the smallest cached prefix at or above it.\n\n", analysis.StalenessRecentSessions)
-	p.Printf("| Model | Sessions | Match rate | Recent sessions | Recent match rate | Verdict |\n")
-	p.Printf("|---|---:|---:|---:|---:|---|\n")
+	// Two denominations, two column headings. `Sessions` is the independent
+	// count and `Lanes` is how many transcripts those sessions wrote; the
+	// recent window slices lanes, so its column says lanes. The column headed
+	// `Sessions` held lane counts until 2026-09-10 and this one held them
+	// under a heading that said sessions until 2026-09-11 — the same
+	// conflation, one column to the right, which is where a reviewer found it.
+	p.Printf("Calibration by the model of each session's first request, with the newest %d LANES judged on their own so a provider rule change shows as a drop (ST-1). A session writes one lane per subagent, so the two counts differ on a fan-out corpus and the window is the lane one. The minimum cacheable prefix is bounded from usage: the largest uncached prompt lies below it, the smallest cached prefix at or above it.\n\n", analysis.StalenessRecentLanes)
+	p.Printf("| Model | Sessions | Lanes | Match rate | Recent lanes | Recent match rate | Verdict |\n")
+	p.Printf("|---|---:|---:|---:|---:|---:|---|\n")
 	for _, m := range models {
 		// A model with nothing compared is not a model that scored badly, and
 		// printing a percentage for it says it was measured. `<synthetic>` is
@@ -216,7 +222,7 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 		case m.MatchRate() < analysis.CalibrationThreshold:
 			verdict = "below threshold"
 		}
-		p.Printf("| %s | %d | %s | %d | %s | %s |\n", m.Model, m.Sessions, matchRateCell(m.Matched, m.Compared), m.RecentSessions, matchRateCell(m.RecentMatched, m.RecentCompared), verdict)
+		p.Printf("| %s | %d | %d | %s | %d | %s | %s |\n", m.Model, m.Sessions, m.Lanes, matchRateCell(m.Matched, m.Compared), m.RecentLanes, matchRateCell(m.RecentMatched, m.RecentCompared), verdict)
 	}
 	for _, m := range models {
 		p.Printf("\n- %s: %s", m.Model, m.MinPrefix)

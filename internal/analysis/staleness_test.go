@@ -50,7 +50,7 @@ func TestModelCalibrationsDetectARuleChange(t *testing.T) {
 		byModel[c.Model] = c
 	}
 	opus := byModel["claude-opus-5"]
-	if !opus.Stale || opus.Sessions != 9 || opus.RecentSessions != StalenessRecentSessions || opus.RecentFailing != 3 || opus.RecentMatchRate() >= CalibrationThreshold {
+	if !opus.Stale || opus.Sessions != 9 || opus.RecentLanes != StalenessRecentLanes || opus.RecentFailing != 3 || opus.RecentMatchRate() >= CalibrationThreshold {
 		t.Fatalf("opus must be stale: %+v", opus)
 	}
 	if !strings.Contains(opus.Reason, "provider behavior changed") || !strings.Contains(opus.Reason, "not scored") {

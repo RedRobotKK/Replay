@@ -21,16 +21,30 @@
 > **The sample is still one machine, one account, one operator.** 116 is the independent count and
 > 1751 is not. The concentration remains severe.
 >
-> **Known defect, still live in this document.** The per-model table below heads a column
-> `Sessions` whose values sum to **1751** — the transcript count. Those are lane counts, set at
-> `internal/analysis/staleness.go:155` (`Sessions: len(reps)`). This is the same file-count-as-
-> session-count conflation the 2026-09-06 header retracts, surviving in the generator four lines
-> below the retraction. It is recorded here rather than silently fixed, because the figures in
-> that column were produced by the code as it stands on this date.
+> **Known defect in the figures below. Fixed in the generator on 2026-09-11; these numbers
+> predate the fix.** The per-model table below heads a column `Sessions` whose values sum to
+> **1751** — the transcript count. Those are lane counts. It was the same file-count-as-session-
+> count conflation the 2026-09-06 header retracts, surviving in the generator four lines below the
+> retraction.
+>
+> The generator no longer does this, in two steps. `Sessions` became a distinct-session count
+> (`internal/analysis/staleness.go`, `distinctSessions`). The recent window still slices lanes on
+> purpose, and on 2026-09-11 it stopped calling them sessions: the field is `RecentLanes`, the
+> table gained a `Lanes` column, and the column that read `Recent sessions` reads `Recent lanes`.
+> `TestPerModelColumnsAreNamedForWhatTheyCount` fails if a heading naming sessions is put back
+> over a lane count.
+>
+> **These figures are not regenerated.** A dated evidence document is a reading taken on its date;
+> re-running the generator today over a corpus that has grown would produce a different document,
+> not a correction of this one. Read the `Sessions` column here as lanes and the Totals line as
+> the session count it always was.
 >
 > **One substantive finding.** `claude-opus-4-8` is marked *stale: provider behavior changed* —
-> 3 of the newest 5 sessions fall below the calibration threshold, 94% together, after 96% across
-> the 144 before them. Alternatives are not scored for that model as a result.
+> 3 of the newest 5 **lanes** fall below the calibration threshold, 94% together, after 96% across
+> the 144 before them. Alternatives are not scored for that model as a result. The generator called
+> those lanes "sessions" on this date, and the arithmetic behind the "144" was corrected on
+> 2026-09-11: it subtracted the lane window from the session count, which on a fan-out model can
+> and did go negative.
 
 How well the replay engine reproduces the provider's cache reads across 1751 transcripts, from 116 distinct sessions, found on one machine on 2026-09-10. **One row is one transcript, not one session**: a session writes one per lane, so a session that spawned subagents contributes several rows that share its id and its conditions. Rows carry a session id prefix, never a path, project name, or content.
 
