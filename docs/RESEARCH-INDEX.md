@@ -139,7 +139,7 @@ swapped without breaking every reference.
 
 | K | arXiv | Finding in one line | B | C | D | E | Tier |
 |---|---|---|---|---|---|---|---|
-| `CACHE-KEEPALIVE` | 2607.19214 | Replaying the prefix on a ~4-minute timer (not the 30s convention) cuts post-pause cost up to 12.5x; break-even ~46 min idle on Anthropic | ADVISE | METERED-ONLY | TRANSCRIPT | BENCHMARK | CLAIM |
+| `CACHE-KEEPALIVE` | 2607.19214 | Replaying the prefix on a ~4-minute timer (not the 30s convention) cuts post-pause cost up to 12.5x; break-even ~46 min idle on Anthropic. **REFUTED FOR THIS WORKLOAD** — see §6a | ADVISE | METERED-ONLY | TRANSCRIPT | BENCHMARK | CLAIM |
 | `CACHE-DEADPOINT` | 2607.15516 | A breakpoint downstream of a per-request mutation can never hit; two-tier cache with a ~3,500-token threshold, hit rate plateauing ~0.83 not 1.0 | MUTATE-SAFE | BASIS-FREE | PROXY | BENCHMARK | ID |
 | `COST-NOT-TOKENS` | 2607.12161 | Compression cut tool-output tokens 38.4% and RAISED billed cost 6.8%; token/cost correlation r=0.15; cache traffic dominates input spend | MEASURE | BASIS-FREE | TRANSCRIPT | BENCHMARK | CLAIM |
 | `COMPACT-INVOICE` | 2608.16370 | Compression left completion unchanged (p=1.0) while retrieval calls went 21.0 → 63.9 (p=.002) — the agent silently reacquires | MEASURE | BASIS-FREE | TRANSCRIPT | SYNTHETIC | CLAIM |
@@ -221,7 +221,7 @@ project — and the local-inference user is also the one least likely to pay.
 | FD-11 empty state | `TRACE-LAB` (Codex and Claude Code sessions, the surfaces it now names) |
 | `internal/guardcheck` | `MUTATE-META` (prior art for UNREACHED/INERT), `MUTATE-GOOGLE`, `ORACLE-SMOKE` |
 | `internal/cachemodel` | `COST-NOT-TOKENS`, `CACHE-DEADPOINT` |
-| task #11 keep-alive experiment | `CACHE-KEEPALIVE` — **largely answers it**; see §7 |
+| task #11 keep-alive experiment | `CACHE-KEEPALIVE` — answered it, and the answer was no; see §6a |
 | task #19 request id | `TELEMETRY-GAP` below |
 
 `TELEMETRY-GAP` = 2608.07899, TelemetrySuffBench: OTel-shaped agent telemetry
@@ -267,11 +267,36 @@ Six statements the catalogue supports that no single paper does.
 
 ---
 
+## 6a. The first ranking this index made, and its refutation
+
+**`CACHE-KEEPALIVE` was ranked the strongest idea in the whole catalogue** —
+"the only paper here that is a product", the one thing Replay could *do* rather
+than report. That ranking is now wrong, and it was decided by this
+repository's own corpus rather than by another paper.
+
+`docs/evidence/keepalive-2026-09-10.md` applied the paper's own break-even
+horizon, `I_max ≈ τ(w/r − 1)`, to 60 main-lane transcripts — 26,675
+consecutive assistant-turn pairs carrying a prefix, 120.7M observed
+`cache_creation_input_tokens`. For a coding-agent workload the gaps are mostly
+too short for a keepalive to pay, and the lever that does pay is prefix
+composition, where `SELECTIVE-CACHE` reports 78.5% on the same provider.
+
+Two things worth keeping from this, because they outlive the verdict.
+
+**A paper's headline is a claim about its corpus, not about yours.** 12.5x was
+measured on a pause distribution, and the pause distribution is the whole
+finding. Nothing in the abstract said which workload it was measured on, and
+nothing in this index's first pass asked.
+
+**The index ranked before it measured.** The ranking was an honest read of the
+literature and it survived eleven hours. The entry above is left in place with
+its refutation attached rather than deleted, because a catalogue that quietly
+drops what it got wrong is a catalogue nobody can check.
+
 ## 7. Open items this index creates
 
 | Item | Why |
 |---|---|
-| Read `CACHE-KEEPALIVE` in full before task #11 | It may already answer the $0.10 experiment, and it says the folk 30-second interval is ~8x wasteful. Cheaper to read than to run. |
 | Read `COST-NOT-TOKENS`, `CACHE-DEADPOINT`, `TOKENIZE-TTFT` in full | The three papers under the strongest idea. Nothing from them ships until someone has read past the abstract. |
 | Run our parser over `TRACE-LAB` | The 7.94x rests on one private corpus from one machine. A public corpus makes it independently checkable — or refutes it, which is worth knowing before a launch. |
 | Re-verify `REPORTED` tier ids | Two thirds of this catalogue has not been re-fetched. |
