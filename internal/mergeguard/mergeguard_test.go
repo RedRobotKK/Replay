@@ -1,7 +1,6 @@
 package mergeguard_test
 
 import (
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,8 +31,8 @@ func TestMG1_TheMergeThatBrokeMainIsCaught(t *testing.T) {
 	repo := repoRoot(t)
 	requireCommits(t, repo, mainWith184, head185)
 
-	out, err := run(t, repo, "git", "merge-tree", "--write-tree", mainWith184, head185)
-	tree, conflicts := mergeguard.Conflicted(out, err)
+	out, _ := run(t, repo, "git", "merge-tree", "--write-tree", mainWith184, head185)
+	tree, conflicts := mergeguard.Conflicted(out)
 	if len(conflicts) != 0 {
 		t.Fatalf("expected a CLEAN merge, got conflicts in %v.\n"+
 			"If git has started reporting this as a conflict the test is still "+
@@ -84,7 +83,7 @@ func TestMG1_TheMergeThatBrokeMainIsCaught(t *testing.T) {
 // collapse. A conflict is the easy case — git says so and nobody merges
 // through it. The case worth tooling is the one where git says nothing.
 func TestMG2_ACleanMergeIsNotAConflict(t *testing.T) {
-	tree, conflicts := mergeguard.Conflicted("fc8c8880217125b746116babd5821bf0d5cc046c\n", nil)
+	tree, conflicts := mergeguard.Conflicted("fc8c8880217125b746116babd5821bf0d5cc046c\n")
 	if tree != "fc8c8880217125b746116babd5821bf0d5cc046c" {
 		t.Errorf("tree = %q", tree)
 	}
@@ -96,11 +95,15 @@ func TestMG2_ACleanMergeIsNotAConflict(t *testing.T) {
 // TestMG3_ConflictedPathsAreNamed covers the other arm, in the format git
 // prints: the tree, then mode/oid/stage, a tab, and the path.
 func TestMG3_ConflictedPathsAreNamed(t *testing.T) {
+	// The blank lines are git's, not decoration: it separates the tree from
+	// the conflict section with one and prints another after it.
 	out := "abc123\n" +
+		"\n" +
 		"100644 aaa 1\tinternal/transcript/wire.go\n" +
 		"100644 bbb 2\tinternal/transcript/wire.go\n" +
-		"100644 ccc 3\tcmd/replay/cost.go\n"
-	tree, conflicts := mergeguard.Conflicted(out, errors.New("exit status 1"))
+		"100644 ccc 3\tcmd/replay/cost.go\n" +
+		"\n"
+	tree, conflicts := mergeguard.Conflicted(out)
 	if tree != "abc123" {
 		t.Errorf("tree = %q, want abc123", tree)
 	}

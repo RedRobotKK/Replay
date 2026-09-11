@@ -51,7 +51,7 @@ func main() {
 	head = strings.TrimSpace(head)
 
 	out, mergeErr := output("git", "merge-tree", "--write-tree", base, head)
-	tree, conflicts := mergeguard.Conflicted(out, mergeErr)
+	tree, conflicts := mergeguard.Conflicted(out)
 	if len(conflicts) > 0 {
 		fmt.Printf("merge-guard: %s and %s conflict in %d file(s):\n", base, short(head), len(conflicts))
 		for _, p := range conflicts {

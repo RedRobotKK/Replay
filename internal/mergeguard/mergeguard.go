@@ -31,31 +31,32 @@ func Checks() [][]string {
 	}
 }
 
-// Conflicted reports whether a `git merge-tree --write-tree` run found
-// conflicts, and names the paths.
+// Conflicted reports the tree a `git merge-tree --write-tree` run wrote, and
+// the paths it could not merge.
 //
 // The distinction that matters: a conflict is the EASY case. git reports it,
 // a person expects it, and nobody merges through it. The case this tool
 // exists for produces no conflict at all — the merge of #184 and #185 was
 // clean, wrote a tree, exited zero, and did not compile. So a caller must
 // not treat "no conflict" as "safe"; it means "now go build it".
-func Conflicted(out string, exitErr error) (tree string, paths []string) {
+//
+// It reads the output alone and not the exit status. The two say the same
+// thing — git exits non-zero exactly when it prints a conflict section — and
+// taking both meant a branch that could not change an answer, which the
+// reviewer duly reported as inert. A command that failed for some other
+// reason prints no tree, and the caller checks for that.
+func Conflicted(out string) (tree string, paths []string) {
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	if len(lines) == 0 {
-		return "", nil
-	}
-	// With conflicts, git prints the tree, then an informational section
-	// listing conflicted paths. Without, it prints the tree and nothing else.
+	// strings.Split never returns an empty slice, so there is always a first
+	// line to read: for empty input it is the empty string, which is not a
+	// tree and which the caller refuses.
 	tree = strings.TrimSpace(lines[0])
-	if exitErr == nil && len(lines) == 1 {
-		return tree, nil
-	}
 	for _, l := range lines[1:] {
 		l = strings.TrimSpace(l)
-		if l == "" {
-			continue
-		}
-		// Informational lines are "<mode> <oid> <stage>\t<path>".
+		// Informational lines are "<mode> <oid> <stage>\t<path>". git also
+		// prints a blank line either side of the conflict section; those
+		// trim to empty and are dropped by the check below, which the
+		// reviewer pointed out makes a skip here redundant.
 		if i := strings.IndexByte(l, '\t'); i >= 0 {
 			l = l[i+1:]
 		}
