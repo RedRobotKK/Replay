@@ -379,7 +379,20 @@ func TestO8_TheFileIsOwnerOnlyAndNeverOverwrites(t *testing.T) {
 	if err := os.Symlink("/etc/passwd", filepath.Join(link, observationFileName(obs))); err != nil {
 		t.Skipf("cannot create a symlink here: %v", err)
 	}
-	if _, err := WriteObservation(link, obs); err == nil {
-		t.Error("a symlink at the target path was followed")
+	_, err = WriteObservation(link, obs)
+	if err == nil {
+		t.Fatal("a symlink at the target path was followed")
+	}
+	// Asserting the sentence, not the refusal. The symlink check sits directly
+	// above the exists check inside the same `if info, err := os.Lstat(path)`,
+	// and Lstat succeeds on a symlink — so with the symlink check removed the
+	// exists check refuses instead, also non-nil, and a bare `err == nil` test
+	// stays green over a guard that is gone. Measured by
+	// scripts/refusal-reachability, which reported this line SURVIVED. The
+	// difference is not cosmetic: "already exists; move or delete it" tells a
+	// contributor to delete the link, and deleting a link to /etc/passwd and
+	// retrying is exactly the write this guard exists to refuse.
+	if !strings.Contains(err.Error(), "refusing to write a submission through a redirected path") {
+		t.Errorf("the write was refused, but not by the symlink guard: %v", err)
 	}
 }
