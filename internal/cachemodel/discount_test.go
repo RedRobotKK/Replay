@@ -77,3 +77,39 @@ func TestDC2_BothPricePathsAgree(t *testing.T) {
 			pf, pa)
 	}
 }
+
+// DC3: an installed document's cache floor is the documented one.
+//
+// DocumentedMinPrefix answers "what does the rules document say the minimum
+// cacheable prefix is", and it consults the installed document first. That
+// branch was entered by no test: every caller tested the compiled fallback,
+// so nothing established that installing a document actually changes the
+// answer.
+//
+// It matters because the figure is used to say whether a MEASURED floor
+// disagrees with a DOCUMENTED one. If the documented side silently ignored the
+// installed document, the comparison would be measurement against the compiled
+// default while reporting the feed's version beside it — a disagreement
+// attributed to the provider that belongs to the reader's own config.
+func TestDC3_AnInstalledDocumentSuppliesTheDocumentedFloor(t *testing.T) {
+	const want = 4096
+	r := &Rules{
+		Schema: RulesSchema, Version: "test",
+		Models: []ModelRule{{
+			Match: "claude-opus-5", MinPrefix: want,
+			InputPerMTok: 10, OutputPerMTok: 100, ReadMult: 0.1, Priced: true,
+		}},
+	}
+	// Before installing: the compiled table answers, and it is not 4096.
+	if before := DocumentedMinPrefix("claude-opus-5"); before == want {
+		t.Fatalf("the compiled table already says %d, so this test cannot show the "+
+			"installed document was consulted", want)
+	}
+	defer Override(r)()
+
+	if got := DocumentedMinPrefix("claude-opus-5"); got != want {
+		t.Errorf("DocumentedMinPrefix = %d, want %d from the installed document. "+
+			"A documented floor that ignores the document attributes the reader's "+
+			"own configuration to the provider", got, want)
+	}
+}
