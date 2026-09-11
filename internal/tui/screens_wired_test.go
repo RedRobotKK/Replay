@@ -53,8 +53,8 @@ func ctxRows() []ContextRow {
 func TestWS1_WithDataThereIsNoNotice(t *testing.T) {
 	for name, lines := range map[string][]string{
 		"context": ContextScreen(ctxRows(), 1).Lines,
-		"guards":  GuardsScreen([]string{"  session cap  $4.10", "  daily cap    $18.00"}, 12).Lines,
-		"safe":    SafeScreen(TrimSummary{CapBytes: 2000, Blocks: 12, RemovedBytes: 73000, RemovedPromptTokens: 1940000}, 1).Lines,
+		"guards":  GuardsScreen(liveGuards(), []string{"  session cap  $4.10", "  daily cap    $18.00"}, 12).Lines,
+		"safe":    SafeScreen(Privacy{Root: "~/.replay", Stores: stores()}).Lines,
 		"model":   ModelScreen("claude-haiku-4-5", []ModelRow{{Model: "claude-opus-5", Turns: 40, Share: 0.9}}, 1).Lines,
 	} {
 		body := strings.Join(lines, "\n")
@@ -74,9 +74,12 @@ func TestWS1_WithDataThereIsNoNotice(t *testing.T) {
 func TestWS2_NoCorpusIsUnavailable(t *testing.T) {
 	for name, lines := range map[string][]string{
 		"context": ContextScreen(nil, 0).Lines,
-		"guards":  GuardsScreen(nil, 0).Lines,
-		"safe":    SafeScreen(TrimSummary{}, 0).Lines,
-		"model":   ModelScreen("", nil, 0).Lines,
+		"guards":  GuardsScreen(GuardState{}, nil, 0).Lines,
+		// The safe screen no longer depends on a corpus: it reads the
+		// filesystem, and an empty ~/.replay is a measured finding rather than
+		// an absence. Its Unavailable state is a directory it could not read.
+		"safe":  SafeScreen(Privacy{Root: "~/.replay", Err: "permission denied"}).Lines,
+		"model": ModelScreen("", nil, 0).Lines,
 	} {
 		body := strings.Join(lines, "\n")
 		if strings.Contains(body, "example data") {
@@ -97,8 +100,8 @@ func TestWS3_EveryBranchPaints(t *testing.T) {
 	paintOn(t)
 	cases := map[string][][]string{
 		"context": {ContextScreen(nil, 0).Lines, ContextScreen(nil, 9).Lines, ContextScreen(ctxRows(), 1).Lines},
-		"guards":  {GuardsScreen(nil, 0).Lines, GuardsScreen(nil, 9).Lines, GuardsScreen([]string{"  cap  $4"}, 12).Lines},
-		"safe":    {SafeScreen(TrimSummary{}, 0).Lines, SafeScreen(TrimSummary{CapBytes: 2000}, 9).Lines},
+		"guards":  {GuardsScreen(GuardState{}, nil, 0).Lines, GuardsScreen(GuardState{}, nil, 9).Lines, GuardsScreen(liveGuards(), []string{"  cap  $4"}, 12).Lines},
+		"safe":    {SafeScreen(Privacy{Root: "~/.replay"}).Lines, SafeScreen(Privacy{Root: "~/.replay", Err: "permission denied"}).Lines, SafeScreen(Privacy{Root: "~/.replay", Stores: stores()}).Lines},
 		"model":   {ModelScreen("", nil, 0).Lines, ModelScreen("claude-haiku-4-5", nil, 9).Lines},
 	}
 	for name, branches := range cases {
@@ -121,9 +124,9 @@ func TestWS4_RealisticStringsFit(t *testing.T) {
 		Tokens: 209000123, Share: 0.432, Occurrences: 1061}}
 	all := map[string][]string{
 		"context": ContextScreen(long, 3).Lines,
-		"guards": GuardsScreen([]string{
+		"guards": GuardsScreen(liveGuards(), []string{
 			"  a guard line long enough to run past an eighty column terminal if nothing cuts it"}, 12).Lines,
-		"safe":  SafeScreen(TrimSummary{CapBytes: 2000, Blocks: 1234567, RemovedBytes: 987654321, RemovedPromptTokens: 123456789}, 4).Lines,
+		"safe":  SafeScreen(Privacy{Root: "~/.replay", Stores: stores()}).Lines,
 		"model": ModelScreen("claude-a-model-identifier-that-is-unusually-long-indeed", []ModelRow{{Model: "claude-another-very-long-model-identifier", Turns: 4000, Share: 0.9}}, 2).Lines,
 	}
 	for name, lines := range all {
@@ -139,7 +142,7 @@ func TestWS4_RealisticStringsFit(t *testing.T) {
 func TestWS5_NothingFoundIsMeasured(t *testing.T) {
 	for name, lines := range map[string][]string{
 		"context": ContextScreen(nil, 6).Lines,
-		"guards":  GuardsScreen(nil, 6).Lines,
+		"guards":  GuardsScreen(GuardState{}, nil, 6).Lines,
 	} {
 		body := strings.Join(lines, "\n")
 		if strings.Contains(body, "not measured here") {

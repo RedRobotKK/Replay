@@ -95,7 +95,7 @@ func AdviseScreenAt(rows []AdviceRow, sessions, at int) Screen {
 func adviseScreen(rows []AdviceRow, sessions, at int) Screen {
 	sc := Screen{Key: 'a', Title: "advise", From: Measured}
 	lines := make([]string, 0, BudgetRows)
-	lines = append(lines, header("advise"), "")
+	lines = append(lines, screenHead("advise")...)
 
 	if sessions == 0 {
 		sc.From = Unavailable

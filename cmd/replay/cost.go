@@ -75,6 +75,14 @@ type costUnit struct {
 	Repeated int       `json:"repeated,omitempty"`
 	Errored  int       `json:"errored,omitempty"`
 	At       time.Time `json:"at"`
+	// path is the transcript this unit was priced from.
+	//
+	// Unexported, so it stays out of the JSON contract: it exists to make one
+	// printed instruction runnable, not to be published. The outlier note used
+	// to print a session id prefix, which is enough for a person to recognise
+	// a row and not enough for any command to open one — and the command it
+	// printed did not exist either.
+	path string
 }
 
 // costLaneRow is a --per-lane row on its way to JSON.
@@ -202,6 +210,12 @@ func foldSessions(units []costUnit) []costUnit {
 			dominant[u.ID] = u.CostUSD
 			s.Model = u.Model
 		}
+		// Prefer the session's own transcript over a sub-agent lane's. Both
+		// are readable, and only one of them is the whole session; a lane
+		// file answers a narrower question than the row it was folded into.
+		if !mainTranscript(s.path, s.ID) && mainTranscript(u.path, u.ID) {
+			s.path = u.path
+		}
 	}
 	// First-seen order, so the fold is deterministic before the callers sort.
 	out := make([]costUnit, 0, len(order))
@@ -209,6 +223,20 @@ func foldSessions(units []costUnit) []costUnit {
 		out = append(out, *by[id])
 	}
 	return out
+}
+
+// mainTranscript reports whether a path is the session's own transcript rather
+// than one of its sub-agent lanes.
+//
+// Claude Code names a session's file for the session and a lane's file
+// agent-<id>.jsonl, so the base name carrying the session id is the test. A
+// path that is empty is not the main transcript, which makes the zero value
+// lose to any real candidate.
+func mainTranscript(path, id string) bool {
+	if path == "" || id == "" {
+		return false
+	}
+	return strings.HasPrefix(filepath.Base(path), id)
 }
 
 type costSummary struct {
@@ -253,6 +281,42 @@ type costSummary struct {
 // lives, and a median with a p90 beside it describes the actual distribution of
 // work. The avoidable share is a share of what was priced, never of what was
 // merely walked past.
+// requestIDs collects a session's request ids across every lane, marking each
+// as seen and counting the ones another file already carried.
+//
+// Every lane, not just the one MainLane picks. Pricing the main lane alone
+// dropped 36.2% of this corpus's requests, concentrated in the fan-out
+// sessions where the money is; see
+// docs/evidence/main-lane-pricing-2026-09-10.md.
+//
+// A request carrying no id is skipped rather than keyed on the empty string.
+// The Claude Code parser cannot produce one — it groups assistant lines BY
+// request id and drops those without — but the ledger and the Codex reader are
+// not bound by that, and keying them all on "" would collapse every anonymous
+// request in the corpus into one and report the rest as duplicates of it. The
+// overlap note would then publish a re-render rate that is an artefact of the
+// key. Such a request is still priced: AsRunSession counts it, because absence
+// is not the same as already-seen.
+//
+// Split out of the walk so that branch can be reached from a test at all.
+func requestIDs(session *transcript.Session, seen map[string]bool) (ids []string, total, duplicated int) {
+	for _, lane := range session.Lanes {
+		for _, r := range lane.Requests {
+			if r.ID == "" {
+				continue
+			}
+			ids = append(ids, r.ID)
+			total++
+			if seen[r.ID] {
+				duplicated++
+				continue
+			}
+			seen[r.ID] = true
+		}
+	}
+	return ids, total, duplicated
+}
+
 func summarise(units []costUnit) costSummary {
 	var s costSummary
 	if len(units) == 0 {
@@ -300,10 +364,25 @@ func percentile(sorted []float64, p float64) float64 {
 	return sorted[i]
 }
 
-func renderCost(s costSummary, unpriced int, out io.Writer, stateDir string) string {
+// renderCost writes the report. unpriced is transcripts that were READ and
+// priced to nothing, because their model is not in the price table; unreadable
+// is transcripts that could not be read at all, because the parser found no
+// provider request in them. They are two counts because they have two causes
+// and two fixes, and one sentence over both says something untrue about one of
+// them: for a while this function was handed only the first, and a run over a
+// single unreadable file reported "0 were read", which was absence rendered as
+// zero about a file with 183 assistant turns in it.
+func renderCost(s costSummary, unpriced, unreadable int, out io.Writer, stateDir string) string {
 	var b strings.Builder
 	if s.Tasks == 0 {
-		fmt.Fprintf(&b, "No transcript could be priced. %d were read but their model is not in the price table.\n", unpriced)
+		b.WriteString("No transcript could be priced.")
+		if unpriced > 0 {
+			fmt.Fprintf(&b, " %d were read but their model is not in the price table.", unpriced)
+		}
+		if unreadable > 0 {
+			fmt.Fprintf(&b, " %d transcript(s) could not be read at all: no provider request was found.", unreadable)
+		}
+		b.WriteString("\n")
 		return b.String()
 	}
 	fmt.Fprintf(&b, "%s\n\n", costHeaderLine(s))
@@ -364,6 +443,9 @@ func renderCost(s costSummary, unpriced int, out io.Writer, stateDir string) str
 	}
 	if unpriced > 0 {
 		fmt.Fprintf(&b, "\n%d further transcripts were read but not priced, because their model is not in\nthe price table. They are excluded rather than counted as free.\n", unpriced)
+	}
+	if unreadable > 0 {
+		fmt.Fprintf(&b, "\n%d further transcript(s) could not be read: no provider request was found.\nAbsent from every figure above, not zero in it.\n", unreadable)
 	}
 	// tipLine names a coffee count and returns nothing below its floor, so a
 	// modest corpus produced a result and no ask at all. Below the floor the
@@ -457,7 +539,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			// be asserted over nothing: a CI runner has no transcripts, so a
 			// gate that stayed silent here would go green having measured
 			// nothing, which is the failure this flag exists to prevent.
-			return checkAvoidableCeiling(*maxAvoidable, costSummary{Unit: unitSession}, 0, stdout)
+			return checkAvoidableCeiling(*maxAvoidable, costSummary{Unit: unitSession}, 0, 0, stdout)
 		}
 		_, _ = fmt.Fprintf(stderr, "reading %s\n", roots[0])
 		args = append(args, roots...)
@@ -489,6 +571,9 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	var units []costUnit
 	for _, f := range files {
 		if u, ids, ok := cache.get(f); ok {
+			// The cache stores what was priced, not where it was read from,
+			// so the path is reattached here rather than trusted from disk.
+			u.path = f
 			units = append(units, u)
 			for _, id := range ids {
 				totalReq++
@@ -504,9 +589,16 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	}
 	warm := len(units)
 	files = cold
-	unpriced := 0
+	unpriced, unreadable := 0, 0
 	_ = forEachSession(files, func(path string, session *transcript.Session, rep *analysis.LaneReport, err error) error {
+		// A file that produced no session is not a file that cost nothing.
+		// This arm used to drop the error and return, so an unreadable
+		// transcript reached no counter and no sentence, and the report said
+		// "0 were read" about files it had never read. Nothing is cached for
+		// them either — cache.put runs only on success — so a cold count is
+		// the whole count.
 		if err != nil || rep == nil || session == nil {
+			unreadable++
 			return nil
 		}
 		// The model is a property of the requests, not the session: a session
@@ -516,27 +608,10 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		if rep.Lane != nil && len(rep.Lane.Requests) > 0 {
 			model = rep.Lane.Requests[0].Model
 		}
-		var reqIDs []string
-		if rep.Lane != nil {
-			for _, r := range rep.Lane.Requests {
-				if r.ID == "" {
-					continue
-				}
-				reqIDs = append(reqIDs, r.ID)
-				totalReq++
-				if seenReq[r.ID] {
-					duplicated++
-					continue
-				}
-				seenReq[r.ID] = true
-			}
-		}
-		var asRun analysis.PolicyResult
-		for _, p := range rep.Policies() {
-			if p.Name == "as-run" {
-				asRun = p
-			}
-		}
+		reqIDs, counted, dup := requestIDs(session, seenReq)
+		totalReq += counted
+		duplicated += dup
+		asRun := analysis.AsRunSession(session)
 		if asRun.CostUSD <= 0 {
 			unpriced++
 			return nil
@@ -548,23 +623,35 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			Model:    model,
 			Requests: asRun.Requests,
 			CostUSD:  asRun.CostUSD,
-			Breaks:   len(rep.Breaks),
-			Repeated: rep.ReReads.Repeated,
 		}
-		for _, e := range rep.Errors {
-			u.Errored += e.Count
+		// Breaks, re-reads, errors and the avoidable deficit are counted over
+		// every lane too. Fixing the dollar figure and leaving these on the
+		// main lane would report a session's whole cost beside a fraction of
+		// its causes — the same defect one column over, and the more
+		// misleading direction: a total that tripled beside an unchanged
+		// avoidable figure reads as "the waste got proportionally smaller".
+		//
+		// One analysis pass, reused for all four, because a second walk of a
+		// seventeen-lane session is the expensive thing here.
+		deficit := 0
+		for _, lr := range analysis.AnalyzeEveryLane(session) {
+			u.Breaks += len(lr.Breaks)
+			u.Repeated += lr.ReReads.Repeated
+			for _, e := range lr.Errors {
+				u.Errored += e.Count
+			}
+			for _, br := range lr.Breaks {
+				deficit += br.Deficit
+			}
 		}
 		// Price only what was demonstrably spent twice. A cache break's deficit
 		// is tokens the provider re-billed, which is spend that already
 		// happened, not a projection of what a different layout might save.
 		if price, ok := cachemodel.PriceFor(model); ok {
-			var deficit int
-			for _, br := range rep.Breaks {
-				deficit += br.Deficit
-			}
 			u.AvoidableUSD = float64(deficit) / 1_000_000 * price.InputPerMTok
 			u.AvoidableTokens = deficit
 		}
+		u.path = path
 		units = append(units, u)
 		cache.put(path, u, reqIDs)
 		return nil
@@ -709,7 +796,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		// handed one row per agent lane under that key; handing them session
 		// rows under the same version string would be the silent kind of
 		// break, where nothing errors and every figure moves.
-		out := map[string]any{"schema": "replay.cost.v2", "summary": s, "unpriced": unpriced,
+		out := map[string]any{"schema": "replay.cost.v2", "summary": s, "unpriced": unpriced, "unreadable": unreadable,
 			"duplicatedRequests": duplicated, "totalRequests": totalReq}
 		// A key rather than a printed line, because stdout on this branch is a
 		// document a machine parses. The statement the human needs still has to
@@ -739,10 +826,17 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	if _, err := io.WriteString(stdout, renderCost(s, unpriced, stdout, tipStateDir())); err != nil {
+	if _, err := io.WriteString(stdout, renderCost(s, unpriced, unreadable, stdout, tipStateDir())); err != nil {
 		return err
 	}
 	if note := overlapNote(duplicated, totalReq); note != "" {
+		if _, err := io.WriteString(stdout, note); err != nil {
+			return err
+		}
+	}
+	// The one line a first-time reader can act on: their peak session against
+	// their own median. Silent unless it is far enough out to be worth saying.
+	if note := outlierNote(units, s); note != "" {
 		if _, err := io.WriteString(stdout, note); err != nil {
 			return err
 		}
@@ -775,7 +869,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 				u.Requests, fmt.Sprintf("$%.2f", u.CostUSD), fmt.Sprintf("$%.2f", u.AvoidableUSD), u.Breaks)
 		}
 	}
-	return checkAvoidableCeiling(gateCeiling, s, unpriced, stdout)
+	return checkAvoidableCeiling(gateCeiling, s, unpriced, unreadable, stdout)
 }
 
 // sessionTime is when a session ran, taken from its first request.

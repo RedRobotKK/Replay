@@ -152,7 +152,13 @@ func (rd *redactor) line(obj map[string]any) {
 	}
 	for k := range msg {
 		switch k {
-		case "role", "model", "usage", "content", "stop_reason", "type":
+		// "id" is the provider's identifier for the response, the same class
+		// of value as the top-level requestId kept above, and on a transcript
+		// from a non-`cli` entrypoint it is the ONLY per-request identifier
+		// the file carries. Dropping it made a redacted SDK transcript
+		// unreadable by the parser that had just read the original, so a bug
+		// report about SDK transcripts arrived with the evidence removed.
+		case "role", "id", "model", "usage", "content", "stop_reason", "type":
 		default:
 			delete(msg, k)
 		}
