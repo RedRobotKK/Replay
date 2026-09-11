@@ -56,6 +56,21 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- **New evidence: [does the ±10% band decide the re-render headline?](docs/evidence/rerender-band-sensitivity-2026-09-11.md).**
+  An external reviewer put it that `rerenderTolerance = 0.10` in `diff.go` is
+  what produces the 50.8% re-render share, because it is a band around a
+  byte-to-token estimate whose published error runs ±29% to ±170%. Swept over
+  the whole corpus at ten values from 0% to infinity: the band decides **8 of
+  597** classifications and 1.52 points of the share, the full range across
+  every possible tolerance is 8.1 points, and `benefit-gap-analysis.md`'s own
+  pre-registered refutation — "0.10 to 0.15 moves more than 10% of breaks" —
+  moves **zero**. The reason is that `UnseenPrefix` is measured from the first
+  request's `cache_read` whenever the lane started warm, so 589 of the 597 land
+  on exact integer equality between two provider-reported numbers; exactly one
+  break in the corpus is both band-decided and fit-estimated, worth 4,045
+  tokens. **Not softened: the same measurement today reads 42.4%, not 50.8%**,
+  against a corpus grown by 310 transcripts and 234 engine commits, and this
+  reading cannot separate those. No production code changed.
 - **`replay cost --usage <file>` prices a usage export: token counts per
   request, no conversation content anywhere in the file.** Three readers cannot
   use the transcript path — an operator whose security review will not approve a
