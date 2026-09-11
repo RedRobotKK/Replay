@@ -28,7 +28,7 @@ var errGate = errors.New("avoidable spend is over the ceiling")
 // the exit code would go green on a CI runner with no transcripts and report a
 // clean bill of health nobody earned. Zero priced tasks is refused, loudly,
 // because an absence is not a number under a ceiling.
-func checkAvoidableCeiling(ceiling float64, s costSummary, unpriced int, stdout io.Writer) error {
+func checkAvoidableCeiling(ceiling float64, s costSummary, unpriced, unreadable int, stdout io.Writer) error {
 	if ceiling == 0 {
 		return nil // not asked for
 	}
@@ -56,6 +56,14 @@ func checkAvoidableCeiling(ceiling float64, s costSummary, unpriced int, stdout 
 			// many. Excluded is not free.
 			_, _ = fmt.Fprintf(stdout,
 				"  %d transcript(s) were excluded as unpriced, so the real figure is higher.\n", unpriced)
+		}
+		if unreadable > 0 {
+			// Same hole, different cause. A transcript the parser could not
+			// read is excluded from the total this ceiling was compared
+			// against exactly as completely as an unpriced one, and until
+			// this line it was named on no surface at all.
+			_, _ = fmt.Fprintf(stdout,
+				"  %d transcript(s) could not be read at all, so the real figure is higher still.\n", unreadable)
 		}
 		return fmt.Errorf("%w: $%.2f over $%.2f", errGate, s.AvoidableUSD, ceiling)
 	}
