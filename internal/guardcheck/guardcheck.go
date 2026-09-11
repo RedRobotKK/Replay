@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Guard is one conditional the reviewer will put to the suite.
@@ -261,6 +262,39 @@ func Neutralise(g Guard) (func(), error) {
 		return nil, err
 	}
 	return func() { _ = os.WriteFile(g.File, orig, 0o644) }, nil
+}
+
+// NeutralisingEnv is set by the reviewer while a guard is neutralised, so a
+// test that refuses a neutralised tree can tell the reviewer's own scratch
+// work from someone's forgotten scratch work. Nothing else may set it.
+const NeutralisingEnv = "GUARD_REACHABILITY_NEUTRALISING"
+
+// NeutralisedTimeout bounds how long one neutralised guard may take.
+//
+// The baseline run has to finish; a neutralised one does not. Disabling a
+// guard can turn a bounded walk into a loop that never ends — it has happened
+// three times in this repo, every time in the same scanner — and a suite that hangs
+// is a mutant that was caught, not one that needs waiting on. Without a bound
+// each such guard costs `go test`'s ten-minute default, and a change touching
+// forty conditionals exhausts a CI runner before it reaches the twentieth.
+//
+// The bound is derived from the baseline rather than picked: four times what
+// the suite actually took, with a floor so a fast suite still tolerates a
+// loaded machine, and a ceiling at the default so this can only ever make the
+// reviewer faster than it was.
+func NeutralisedTimeout(baseline time.Duration) time.Duration {
+	const (
+		floor   = 60 * time.Second
+		ceiling = 10 * time.Minute
+	)
+	d := baseline * 4
+	if d < floor {
+		d = floor
+	}
+	if d > ceiling {
+		d = ceiling
+	}
+	return d
 }
 
 // taglessCases returns the case clauses of a tagless switch that carry a

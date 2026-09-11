@@ -101,6 +101,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/RedRobotKK/Replay/internal/guardcheck"
 )
@@ -189,7 +190,9 @@ func main() {
 	fmt.Printf("guard-reachability: baseline over %d guard(s) in %d file(s)\n", len(guards), len(changed))
 	profile := filepath.Join(os.TempDir(), fmt.Sprintf("guard-cover-%d.out", os.Getpid()))
 	defer func() { _ = os.Remove(profile) }()
+	baselineStart := time.Now()
 	out, ok := runTestsWithCoverage(pkgsOf(guards), profile)
+	baseline := time.Since(baselineStart)
 	if !ok {
 		fail("the baseline is red, so every mutant would look caught:\n%s", out)
 	}
@@ -216,7 +219,7 @@ func main() {
 			fmt.Printf("        skipped: %v\n", err)
 			continue
 		}
-		out, green := runTests([]string{g.Pkg})
+		out, green := runTests([]string{g.Pkg}, guardcheck.NeutralisedTimeout(baseline))
 		restore()
 		switch {
 		case strings.Contains(out, "build failed") || strings.Contains(out, "cannot use"):
@@ -335,10 +338,26 @@ func changedGoFiles(base string) (map[string]map[int]bool, error) {
 	return guardcheck.ParseDiff(string(out)), nil
 }
 
-// runTests runs the packages and reports whether they passed.
-func runTests(pkgs []string) (string, bool) {
-	args := append([]string{"test", "-count=1"}, pkgs...)
-	out, err := exec.Command("go", args...).CombinedOutput()
+// runTests runs the packages under a bound and reports whether they passed.
+//
+// The bound matters here and not at the baseline. A neutralised guard can turn
+// a bounded walk into one that never ends, and a suite that hangs is a mutant
+// caught, not one worth waiting on: without the bound each such guard costs
+// `go test`'s ten-minute default, and a change touching forty conditionals
+// exhausts a CI runner before it reaches the twentieth. That is not a
+// hypothetical — it is why this reviewer was killed at exit 143 on the change
+// that added it.
+func runTests(pkgs []string, limit time.Duration) (string, bool) {
+	args := append([]string{"test", "-count=1", "-timeout", limit.String()}, pkgs...)
+	cmd := exec.Command("go", args...)
+	// Declare the neutralisation to the suite being run. A tree with a
+	// `false &&` in it is exactly what guardcheck.GC6 refuses, and without
+	// this the reviewer fails that test on every guard — which makes every
+	// mutant look caught and the whole verdict worthless. The marker is set
+	// only while a guard is neutralised; the baseline runs without it, so
+	// GC6 still guards the tree the reviewer started from.
+	cmd.Env = append(os.Environ(), guardcheck.NeutralisingEnv+"=1")
+	out, err := cmd.CombinedOutput()
 	return string(out), err == nil
 }
 

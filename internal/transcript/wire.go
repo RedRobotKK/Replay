@@ -9,6 +9,9 @@ import (
 	"io"
 	"path"
 	"strings"
+	"unicode"
+	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // Scanner sizing for line-oriented files (transcripts, ledgers). Tool
@@ -233,36 +236,380 @@ func CallKey(name string, input json.RawMessage) string {
 // and object keys by their length, numbers by their literal, booleans and
 // null by their keyword. It is independent of escaping and key order, so a
 // redacted transcript measures exactly like the original.
+//
+// It reads the bytes without decoding them. The obvious implementation —
+// a json.Decoder and a loop over Token() — costs far more than it looks:
+// Token calls Decode once per scalar, which boxes every string and number
+// on the heap and constructs a syntax error at the end of each value that
+// it then discards. Measuring one small object allocated 98 times. Across a
+// parse it was 26% of every allocation the parser made, for a function whose
+// whole output is one int.
+//
+// A malformed value measures as its raw length. That is a different measure
+// from the one above, and it is deliberate: something crossed the wire and
+// was paid for, so the honest floor is the bytes that were sent. The scanner
+// reproduces it exactly, including discarding whatever it had counted before
+// the error.
 func ContentBytes(raw json.RawMessage) int {
 	if len(raw) == 0 {
 		return 0
 	}
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.UseNumber()
-	n := 0
+	n, ok := measureContent(raw)
+	if !ok {
+		return len(raw)
+	}
+	return n
+}
+
+// How a scan ended. The distinction between the last two is not a detail:
+// running out of bytes is where the decoder this replaced returned io.EOF,
+// which its caller read as a clean finish and kept the partial count for.
+// `{"a":1` measures 2, not 6. Only a byte that cannot be there is an error.
+type scanEnd int
+
+const (
+	scanComplete  scanEnd = iota // a whole value was read
+	scanTruncated                // the input ran out at a boundary
+	scanBad                      // a byte that cannot be there
+)
+
+// measureContent sums every top-level value in raw. There may be more than
+// one — the decoder this replaced did not stop at the first, and `1 2`
+// measured 2 — and trailing space after the last is not an error.
+func measureContent(b []byte) (int, bool) {
+	n, i := 0, 0
 	for {
-		tok, err := dec.Token()
-		if err != nil {
-			if err == io.EOF {
-				return n
-			}
-			return len(raw)
-		}
-		switch v := tok.(type) {
-		case string:
-			n += len(v)
-		case json.Number:
-			n += len(v.String())
-		case bool:
-			if v {
-				n += len("true")
-			} else {
-				n += len("false")
-			}
-		case nil:
-			n += len("null")
+		// No end-of-input check here. measureJSONValue makes the same one
+		// and reports scanTruncated, which the switch below already turns
+		// into the same answer, so a check here can never change a result.
+		m, next, how := measureJSONValue(b, i)
+		n += m
+		switch how {
+		case scanComplete:
+			i = next
+		case scanTruncated:
+			return n, true
+		default:
+			return 0, false
 		}
 	}
+}
+
+func skipJSONSpace(b []byte, i int) int {
+	for i < len(b) {
+		switch b[i] {
+		case ' ', '\t', '\n', '\r':
+			i++
+		default:
+			return i
+		}
+	}
+	return i
+}
+
+// measureJSONValue measures one complete value starting at i and returns the
+// index just past it. It walks containers with an explicit stack rather than
+// recursion: this path has no nesting limit — twenty thousand open brackets
+// are measured, not refused — and a recursive scanner would make the depth of
+// a transcript's tool input a property of the goroutine stack.
+func measureJSONValue(b []byte, i int) (n, end int, how scanEnd) {
+	var inline [32]byte
+	stack := inline[:0]
+	wantValue := true
+
+	for {
+		if wantValue {
+			i = skipJSONSpace(b, i)
+			if i >= len(b) {
+				return n, i, scanTruncated
+			}
+			switch b[i] {
+			case '{':
+				stack = append(stack, '{')
+				i++
+				i = skipJSONSpace(b, i)
+				if i >= len(b) {
+					return n, i, scanTruncated
+				}
+				if b[i] == '}' {
+					i++
+					stack = stack[:len(stack)-1]
+					wantValue = false
+					break
+				}
+				m, next, k := measureJSONKey(b, i)
+				n += m
+				if k != scanComplete {
+					return n, next, k
+				}
+				i = next
+				continue
+			case '[':
+				stack = append(stack, '[')
+				i++
+				i = skipJSONSpace(b, i)
+				if i >= len(b) {
+					return n, i, scanTruncated
+				}
+				if b[i] == ']' {
+					i++
+					stack = stack[:len(stack)-1]
+					wantValue = false
+					break
+				}
+				continue
+			case '"':
+				m, next, ok := measureJSONString(b, i)
+				if !ok {
+					return 0, 0, scanBad
+				}
+				n += m
+				i = next
+				wantValue = false
+			case 't':
+				if !jsonWord(b, i, "true") {
+					return 0, 0, scanBad
+				}
+				n += len("true")
+				i += len("true")
+				wantValue = false
+			case 'f':
+				if !jsonWord(b, i, "false") {
+					return 0, 0, scanBad
+				}
+				n += len("false")
+				i += len("false")
+				wantValue = false
+			case 'n':
+				if !jsonWord(b, i, "null") {
+					return 0, 0, scanBad
+				}
+				n += len("null")
+				i += len("null")
+				wantValue = false
+			default:
+				m, next, ok := measureJSONNumber(b, i)
+				if !ok {
+					return 0, 0, scanBad
+				}
+				n += m
+				i = next
+				wantValue = false
+			}
+		}
+
+		if len(stack) == 0 {
+			return n, i, scanComplete
+		}
+		i = skipJSONSpace(b, i)
+		if i >= len(b) {
+			return n, i, scanTruncated
+		}
+		top := stack[len(stack)-1]
+		switch b[i] {
+		case ',':
+			i++
+			if top == '{' {
+				i = skipJSONSpace(b, i)
+				if i >= len(b) {
+					return n, i, scanTruncated
+				}
+				m, next, k := measureJSONKey(b, i)
+				n += m
+				if k != scanComplete {
+					return n, next, k
+				}
+				i = next
+			}
+			wantValue = true
+		case '}':
+			if top != '{' {
+				return 0, 0, scanBad
+			}
+			stack = stack[:len(stack)-1]
+			i++
+		case ']':
+			if top != '[' {
+				return 0, 0, scanBad
+			}
+			stack = stack[:len(stack)-1]
+			i++
+		default:
+			return 0, 0, scanBad
+		}
+	}
+}
+
+// measureJSONKey measures an object key and consumes the colon after it.
+// Keys count toward the total, and a repeated key counts each time.
+func measureJSONKey(b []byte, i int) (n, end int, how scanEnd) {
+	n, i, ok := measureJSONString(b, i)
+	if !ok {
+		return 0, 0, scanBad
+	}
+	i = skipJSONSpace(b, i)
+	if i >= len(b) {
+		// The key was read whole and counted; the colon after it never
+		// arrived. The decoder counted the key and stopped.
+		return n, i, scanTruncated
+	}
+	if b[i] != ':' {
+		return 0, 0, scanBad
+	}
+	return n, i + 1, scanComplete
+}
+
+func jsonWord(b []byte, i int, word string) bool {
+	return i+len(word) <= len(b) && string(b[i:i+len(word)]) == word
+}
+
+// measureJSONString reports the length of the string literal at i once
+// decoded, without decoding it.
+//
+// Failure returns the index it had reached, not zero. Zero sent a caller
+// that ignored ok back to the start of the buffer, where the rescan reached
+// the same answer by another route and the caller's own check became
+// unobservable — the same trap readHex4 carried.
+func measureJSONString(b []byte, i int) (n, end int, ok bool) {
+	if i >= len(b) || b[i] != '"' {
+		return 0, i, false
+	}
+	i++
+	for i < len(b) {
+		c := b[i]
+		switch {
+		case c == '"':
+			return n, i + 1, true
+		case c == '\\':
+			i++
+			if i >= len(b) {
+				return 0, i, false
+			}
+			switch b[i] {
+			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
+				n++
+				i++
+			case 'u':
+				r, next, good := readHex4(b, i+1)
+				if !good {
+					return 0, i, false
+				}
+				i = next
+				if utf16.IsSurrogate(r) {
+					// A high surrogate followed by a valid low one is one
+					// rune and six more bytes consumed. Anything else is
+					// the replacement character, and the escape that
+					// failed to pair is left where it is to be read again.
+					if r2, next2, good2 := readHex4Escape(b, i); good2 {
+						if dec := utf16.DecodeRune(r, r2); dec != unicode.ReplacementChar {
+							n += utf8.RuneLen(dec)
+							i = next2
+							break
+						}
+					}
+					n += utf8.RuneLen(unicode.ReplacementChar)
+					break
+				}
+				n += utf8.RuneLen(r)
+			default:
+				return 0, i, false
+			}
+		case c < 0x20:
+			// A raw control character in a string literal is a syntax
+			// error to the scanner this replaced, not a character.
+			return 0, i, false
+		default:
+			r, size := utf8.DecodeRune(b[i:])
+			if r == utf8.RuneError && size == 1 {
+				// Not valid UTF-8. The decoder substituted the replacement
+				// character, so one bad byte measures three.
+				n += utf8.RuneLen(unicode.ReplacementChar)
+				i++
+				continue
+			}
+			n += size
+			i += size
+		}
+	}
+	return 0, i, false
+}
+
+// readHex4 reads four hex digits at i.
+func readHex4(b []byte, i int) (rune, int, bool) {
+	// Failure returns the index it was given, not zero. Returning zero sent
+	// a caller that ignored ok back to the start of the buffer, where the
+	// rescan happened to reach the same answer by a different route — which
+	// made the caller's own check unobservable and hid it from the reviewer.
+	if i+4 > len(b) {
+		return 0, i, false
+	}
+	var r rune
+	for k := 0; k < 4; k++ {
+		c := b[i+k]
+		switch {
+		case '0' <= c && c <= '9':
+			r = r*16 + rune(c-'0')
+		case 'a' <= c && c <= 'f':
+			r = r*16 + rune(c-'a'+10)
+		case 'A' <= c && c <= 'F':
+			r = r*16 + rune(c-'A'+10)
+		default:
+			return 0, i, false
+		}
+	}
+	return r, i + 4, true
+}
+
+// readHex4Escape reads a full \uXXXX escape at i, for the low half of a
+// surrogate pair.
+func readHex4Escape(b []byte, i int) (rune, int, bool) {
+	if i+2 > len(b) || b[i] != '\\' || b[i+1] != 'u' {
+		return 0, i, false
+	}
+	return readHex4(b, i+2)
+}
+
+// measureJSONNumber validates a JSON number and reports the length of its
+// literal, which is what json.Number.String returned for it.
+func measureJSONNumber(b []byte, i int) (n, end int, ok bool) {
+	start := i
+	if i < len(b) && b[i] == '-' {
+		i++
+	}
+	switch {
+	case i >= len(b):
+		return 0, 0, false
+	case b[i] == '0':
+		i++
+	case '1' <= b[i] && b[i] <= '9':
+		for i < len(b) && '0' <= b[i] && b[i] <= '9' {
+			i++
+		}
+	default:
+		return 0, 0, false
+	}
+	if i < len(b) && b[i] == '.' {
+		i++
+		if i >= len(b) || b[i] < '0' || b[i] > '9' {
+			return 0, 0, false
+		}
+		for i < len(b) && '0' <= b[i] && b[i] <= '9' {
+			i++
+		}
+	}
+	if i < len(b) && (b[i] == 'e' || b[i] == 'E') {
+		i++
+		if i < len(b) && (b[i] == '+' || b[i] == '-') {
+			i++
+		}
+		if i >= len(b) || b[i] < '0' || b[i] > '9' {
+			return 0, 0, false
+		}
+		for i < len(b) && '0' <= b[i] && b[i] <= '9' {
+			i++
+		}
+	}
+	return i - start, i, true
 }
 
 // Tool-call argument names, in the order they are consulted for labels.
