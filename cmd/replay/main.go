@@ -641,13 +641,23 @@ func ollamaLogsUnder(paths []string) int {
 		// that the directory is empty. The caller still prints the plain refusal,
 		// and transcriptFiles has already returned the real error for a root that
 		// could not be read at all.
-		_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
-				return nil
-			}
-			if !strings.HasSuffix(path, ".log") {
-				return nil
-			}
+		_ = filepath.WalkDir(root, func(path string, _ fs.DirEntry, _ error) error {
+			// Every entry is offered to the parser, and the parser decides.
+			//
+			// Two filters stood here and guard-reachability called both INERT,
+			// correctly: a d.IsDir() check, and a .log suffix check. Neutralise
+			// either and nothing changes, because ParseOllamaLogFile already
+			// returns no requests for a directory, a README or a JPEG. They
+			// were also the wrong shape for this function — it exists to count
+			// by parsing rather than by name, which is what AO4 pins down, and
+			// a name filter in front of it is that same heuristic wearing a
+			// different hat.
+			//
+			// The walk error went the same way, for the same reason. An entry
+			// that could not be reached cannot be opened either, so the parser
+			// returns an error for it and it is not counted — which is the
+			// treatment the error branch was there to give it. Checking first
+			// only moved the decision somewhere less authoritative.
 			if rs, perr := transcript.ParseOllamaLogFile(path); perr == nil && len(rs) > 0 {
 				n++
 			}

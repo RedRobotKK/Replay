@@ -140,3 +140,33 @@ func TestAO4_ANonOllamaLogDoesNotSendTheReaderToBurn(t *testing.T) {
 		t.Errorf("the plain refusal is the right answer here and was not given:\n%s", out)
 	}
 }
+
+// AO5: other files beside the log do not change the count.
+//
+// This began as a test for a .log suffix filter, written because
+// guard-reachability reported that filter UNREACHED. Forcing the condition
+// showed the filter was INERT as well: neutralise it and the count is
+// identical, because the parser already returns nothing for a README. The
+// filter went, and this stayed — it asserts the property the filter was
+// supposed to provide, which the parser provides on its own.
+//
+// That is the AO4 principle applied to its own implementation. A function
+// whose whole point is to count by parsing rather than by name had a name
+// check in front of it.
+func TestAO5_NonLogFilesAreSkippedByName(t *testing.T) {
+	dir := ollamaDir(t)
+	// Two files the parser opens and finds no request block in.
+	for name, body := range map[string]string{
+		"README.md":  "# notes\n",
+		"config.yml": "model: llama3\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out := adviseSaw(t, dir)
+	if !strings.Contains(out, "1 Ollama server log(s)") {
+		t.Errorf("the count changed when non-log files were added beside the log, so "+
+			"something other than an Ollama request block is being counted as one:\n%s", out)
+	}
+}
