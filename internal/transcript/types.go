@@ -120,11 +120,20 @@ func (u Usage) PromptTotal() int {
 // Request is one call to the provider: its input context, its output, and
 // the usage the provider reported for it.
 type Request struct {
-	ID        string
-	Model     string
-	Effort    string
-	Timestamp time.Time
-	Usage     Usage
+	ID string
+	// IDFromMessage records that ID is the provider's message id rather than
+	// its request id. Transcripts written by the `cli` entrypoint carry a
+	// top-level `requestId`; `sdk-cli`, `sdk-ts` and `claude-desktop` do not,
+	// and the message id groups the same lines. Provenance is a field, not a
+	// comment (ADR-0018): a consumer that needs the request id specifically -
+	// a correlation against a provider's own logs, say - can tell that it does
+	// not have one, and a consumer that only needs a stable per-request key
+	// does not have to care.
+	IDFromMessage bool
+	Model         string
+	Effort        string
+	Timestamp     time.Time
+	Usage         Usage
 	// Context is every message the request carried as input, oldest first.
 	Context []*Message
 	// Output is the assistant message the request produced.

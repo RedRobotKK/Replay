@@ -54,7 +54,7 @@ func Outcome(key rune) Screen {
 			sc = s
 		}
 	}
-	head := []string{header(sc.Label), ""}
+	head := screenHead(sc.Label)
 
 	var body []string
 	switch key {

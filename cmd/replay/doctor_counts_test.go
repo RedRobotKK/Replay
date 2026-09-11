@@ -165,11 +165,11 @@ func TestTC4_NoReconciliationLineWhenThereIsNothingToReconcile(t *testing.T) {
 // very same files, so the command contradicted itself inside one page of
 // output.
 func TestTC5_CostCallsUnpricedFilesTranscriptsLikeItsOwnHeadline(t *testing.T) {
-	priced := renderCost(summarise([]costUnit{{CostUSD: 1}}), 7, io.Discard, "")
+	priced := renderCost(summarise([]costUnit{{CostUSD: 1}}), 7, 0, io.Discard, "")
 	if !strings.Contains(priced, "7 further transcripts") {
 		t.Errorf("the unpriced note must count the same unit the headline counts:\n%s", priced)
 	}
-	none := renderCost(summarise(nil), 7, io.Discard, "")
+	none := renderCost(summarise(nil), 7, 0, io.Discard, "")
 	if strings.Contains(none, "session") {
 		t.Errorf("nothing priced is still a count of transcripts, not sessions:\n%s", none)
 	}

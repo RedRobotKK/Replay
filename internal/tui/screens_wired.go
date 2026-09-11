@@ -42,11 +42,10 @@ type ModelRow struct {
 
 // unavailable builds the no-corpus frame every wired screen shares.
 func unavailable(cmd, why, next string) Screen {
-	return Screen{Key: 0, Title: cmd, From: Unavailable, Lines: []string{
-		header(cmd), "",
+	lines := append(screenHead(cmd),
 		paint(Warn, Banner(Unavailable, why)), "",
-		"  " + fitTo(next, Cols()-2), "",
-	}}
+		"  "+fitTo(next, Cols()-2), "")
+	return Screen{Key: 0, Title: cmd, From: Unavailable, Lines: lines}
 }
 
 // ContextScreen ranks what entered the context, by tool.
@@ -56,7 +55,7 @@ func ContextScreen(rows []ContextRow, sessions int) Screen {
 			"Run an agent, then come back. "+paint(Accent, "replay doctor")+" says what is visible.")
 	}
 	sc := Screen{Key: 'x', Title: "context", From: Measured}
-	lines := []string{header("context"), ""}
+	lines := screenHead("context")
 	if len(rows) == 0 {
 		lines = append(lines,
 			paint(Good, fmt.Sprintf("  Nothing attributable across %d session(s).", sessions)), "",
@@ -89,7 +88,7 @@ func ModelScreen(target string, rows []ModelRow, sessions int) Screen {
 			"Run an agent, then come back. "+paint(Accent, "replay route --to <model>")+" compares one.")
 	}
 	sc := Screen{Key: 'm', Title: "model", From: Measured}
-	lines := []string{header("model"), ""}
+	lines := screenHead("model")
 	if len(rows) == 0 {
 		lines = append(lines,
 			paint(Good, fmt.Sprintf("  No model named in %d session(s).", sessions)), "",

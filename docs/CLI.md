@@ -381,7 +381,7 @@ Aggregate corpus submissions into one figure, with its roster.
 | Flag | Type | What it does |
 |---|---|---|
 | `-json` | bool | emit the pooled document rather than the table |
-| `-pooled-at` | string | the date this pool was assembled, recorded in the document (default "2026-09-10") |
+| `-pooled-at` | string | the date this pool was assembled, recorded in the document (default "<today, in UTC>") |
 
 ## The TUI covers the same ground
 
