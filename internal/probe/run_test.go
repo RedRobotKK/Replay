@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -118,15 +122,75 @@ func TestR2_TheCredentialIsNeverPrinted(t *testing.T) {
 // R3: PASS: the key is taken from the environment only.
 // FAIL: a flag. A credential on a command line lands in shell history and in
 // the process table, where every other user on the box can read it.
+//
+// This test used to grep run.go for three literal strings: `flag.String("api-key`,
+// `flag.String("key` and `--api-key`. A denylist of names cannot see a name
+// nobody put on it. Adding
+//
+//	var credentialFlag = flag.String("token", "", "provider API key")
+//
+// to run.go, with
+//
+//	if *credentialFlag != "" {
+//		r.APIKey = *credentialFlag
+//	}
+//
+// at the top of Run, compiled, answered to `go test -token=sk-ant-...` — so
+// the key really was on the command line and really did reach the field — and
+// left this test PASSING. The property was never "no flag is called api-key".
+// It is "no flag reaches the credential field", which is a question about the
+// syntax tree rather than about the bytes of the file.
+//
+// So the check parses. Every flag definition binds a name, every name that
+// takes its value from one is tainted, and any write into Runner.APIKey fails
+// whatever the flag is called — an assignment, a struct literal, a pointer
+// handed to StringVar, or an assignment inside a flag's callback.
+//
+// It reads two directories: this package, which owns the field, and
+// cmd/replay, which is the only place that fills it. Guarding this package
+// alone watches files that have no flags in them and never will; the
+// realistic leak is a flag in the command, wired into the Runner literal.
 func TestR3_TheCredentialComesFromTheEnvironment(t *testing.T) {
-	src, err := os.ReadFile("run.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, banned := range []string{"flag.String(\"api-key", "flag.String(\"key", "--api-key"} {
-		if strings.Contains(string(src), banned) {
-			t.Errorf("a credential flag (%s) puts the key in shell history and the process table", banned)
+	defs := 0
+	for _, dir := range []string{".", filepath.Join("..", "..", "cmd", "replay")} {
+		found, n := scanForCredentialFlags(t, dir)
+		defs += n
+		for _, f := range found {
+			t.Errorf("a credential flag puts the key in shell history and the process table: %s", f)
 		}
+	}
+	// The scan has to be able to see a flag at all. cmd/replay defines dozens
+	// of them; finding none means the walk missed the files, or the detector
+	// stopped matching how flags are written, either of which makes every pass
+	// above vacuous.
+	if defs == 0 {
+		t.Fatal("no flag definitions found in either directory; this check is reading nothing")
+	}
+
+	// And it has to be able to fail. The first fixture is the mutation that
+	// survived the denylist, plus the two shapes it did not use: a pointer
+	// straight to the field, and a callback that assigns to it.
+	leaked, leakyDefs := credentialFlagsIn(t, "mutation.go", credentialFlagMutation)
+	if len(leaked) != 3 || leakyDefs != 3 {
+		t.Errorf("the check saw %d of the 3 credential flags in the mutation fixture, from %d of its 3 flag definitions: %v",
+			len(leaked), leakyDefs, leaked)
+	}
+	// A command that takes flags and reads the key from the environment must
+	// come back clean, or the check is not discriminating between them, it is
+	// only failing.
+	clean, cleanDefs := credentialFlagsIn(t, "clean.go", flagsThatAreNotCredentials)
+	if len(clean) != 0 || cleanDefs != 2 {
+		t.Errorf("a flag that never touches the credential was reported (%v), or its 2 definitions counted as %d",
+			clean, cleanDefs)
+	}
+	// A file that writes the field and declares no flag at all is the other
+	// half of that: the flag is what makes the write a defect, so a count of
+	// zero here is what stops this check from condemning `APIKey:
+	// os.Getenv(…)` everywhere it appears.
+	envOnly, envDefs := credentialFlagsIn(t, "env.go", credentialFromTheEnvironment)
+	if len(envOnly) != 0 || envDefs != 0 {
+		t.Errorf("a credential read from the environment was reported (%v), or %d flags were counted in a file with none",
+			envOnly, envDefs)
 	}
 }
 
@@ -570,4 +634,299 @@ func TestR15_MixedProvenanceIsReported(t *testing.T) {
 	if !r.Provenance().Mixed {
 		t.Error("two snapshots answered one run; a reading that does not say so implies a single subject it did not have")
 	}
+}
+
+// The machinery behind R3.
+//
+// It is kept here rather than beside the test so the numbered narrative above
+// reads without interruption; nothing else in the package uses it.
+
+// credentialField is the field on Runner that holds the provider key.
+const credentialField = "APIKey"
+
+// The mutation that passed the literal denylist, kept verbatim as a fixture so
+// the check is tested against the thing it was written for, and extended with
+// the two other ways a flag can reach a field.
+const credentialFlagMutation = `package probe
+
+import "flag"
+
+var credentialFlag = flag.String("token", "", "provider API key")
+
+func (r *Runner) Run() {
+	if *credentialFlag != "" {
+		r.APIKey = *credentialFlag
+	}
+}
+
+func register(fs *flag.FlagSet, r *Runner) {
+	fs.StringVar(&r.APIKey, "secret", "", "provider API key")
+	fs.Func("pass", "provider API key", func(s string) error {
+		r.APIKey = s
+		return nil
+	})
+}
+`
+
+// A command that takes flags and still reads the key from the environment.
+// Without this, a check that reported every flag would look identical to a
+// check that reported the right ones.
+const flagsThatAreNotCredentials = `package main
+
+import (
+	"flag"
+	"os"
+)
+
+func run(fs *flag.FlagSet) *Runner {
+	model := fs.String("model", "", "model id to measure")
+	max := fs.Int("max", 65536, "largest prefix size the floor could be")
+	_ = max
+	return &Runner{BaseURL: *model, APIKey: os.Getenv("ANTHROPIC_API_KEY")}
+}
+`
+
+// A file that writes the credential and takes no flag. What R2 and the
+// command already do, and what this check must not condemn.
+const credentialFromTheEnvironment = `package main
+
+import "os"
+
+func run() *Runner {
+	return &Runner{BaseURL: os.Getenv("ANTHROPIC_BASE_URL"), APIKey: os.Getenv("ANTHROPIC_API_KEY")}
+}
+`
+
+// flagDefiners are the methods that define a command-line flag, on the flag
+// package and on any *flag.FlagSet. The receiver is deliberately not checked:
+// a FlagSet can be held in a variable, a field or a parameter, and a guard
+// that only recognises `flag.String` is the same denylist in another form.
+// What is checked is the shape of the call, below.
+var flagDefiners = map[string]bool{
+	"Bool": true, "BoolFunc": true, "BoolVar": true,
+	"Duration": true, "DurationVar": true,
+	"Float64": true, "Float64Var": true,
+	"Func": true,
+	"Int":  true, "IntVar": true,
+	"Int64": true, "Int64Var": true,
+	"String": true, "StringVar": true,
+	"TextVar": true,
+	"Uint":    true, "UintVar": true,
+	"Uint64": true, "Uint64Var": true,
+	"Var": true,
+}
+
+// isFlagDefinition reports whether a call declares a flag.
+//
+// Two shapes, and both need a flag name as a string literal, which is what
+// separates `fs.String("model", "", "…")` from `buf.String()`:
+//
+//	x := fs.String("model", "", "usage")   // returns the value
+//	fs.StringVar(&x, "model", "", "usage") // fills it through a pointer
+func isFlagDefinition(call *ast.CallExpr) bool {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || !flagDefiners[sel.Sel.Name] {
+		return false
+	}
+	if len(call.Args) < 2 {
+		return false
+	}
+	if isStringLit(call.Args[0]) {
+		return true
+	}
+	// The Var forms take the destination first and the name second.
+	return isAddressOf(call.Args[0]) && isStringLit(call.Args[1])
+}
+
+func isStringLit(e ast.Expr) bool {
+	lit, ok := e.(*ast.BasicLit)
+	return ok && lit.Kind == token.STRING
+}
+
+func isAddressOf(e ast.Expr) bool {
+	u, ok := e.(*ast.UnaryExpr)
+	return ok && u.Op == token.AND
+}
+
+// credWrite is one place the credential field is written or handed out by
+// address. val is the expression written, when there is one to trace.
+type credWrite struct {
+	pos token.Pos
+	val ast.Expr
+}
+
+// credentialWrites finds every write into the credential field under n.
+func credentialWrites(n ast.Node) []credWrite {
+	var out []credWrite
+	ast.Inspect(n, func(node ast.Node) bool {
+		switch x := node.(type) {
+		case *ast.AssignStmt:
+			for i, lhs := range x.Lhs {
+				sel, ok := lhs.(*ast.SelectorExpr)
+				if !ok || sel.Sel.Name != credentialField {
+					continue
+				}
+				w := credWrite{pos: sel.Pos()}
+				if len(x.Rhs) == len(x.Lhs) {
+					w.val = x.Rhs[i]
+				}
+				out = append(out, w)
+			}
+		case *ast.CompositeLit:
+			for _, el := range x.Elts {
+				kv, ok := el.(*ast.KeyValueExpr)
+				if !ok {
+					continue
+				}
+				if k, ok := kv.Key.(*ast.Ident); ok && k.Name == credentialField {
+					out = append(out, credWrite{pos: kv.Pos(), val: kv.Value})
+				}
+			}
+		case *ast.UnaryExpr:
+			// &r.APIKey: whoever holds this pointer writes the field, and
+			// StringVar is exactly such a holder.
+			if x.Op != token.AND {
+				return true
+			}
+			if sel, ok := x.X.(*ast.SelectorExpr); ok && sel.Sel.Name == credentialField {
+				out = append(out, credWrite{pos: x.Pos()})
+			}
+		}
+		return true
+	})
+	return out
+}
+
+// flagFed reports the writes into the credential field that a flag feeds, and
+// how many flag definitions the file contains.
+func flagFed(fset *token.FileSet, f *ast.File) ([]string, int) {
+	defs := 0
+	tainted := map[string]bool{}
+	type span struct{ from, to token.Pos }
+	var flagCalls []span
+
+	ast.Inspect(f, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok || !isFlagDefinition(call) {
+			return true
+		}
+		defs++
+		flagCalls = append(flagCalls, span{call.Pos(), call.End()})
+		// The Var forms name their destination.
+		if isAddressOf(call.Args[0]) {
+			if id, ok := call.Args[0].(*ast.UnaryExpr).X.(*ast.Ident); ok {
+				tainted[id.Name] = true
+			}
+		}
+		return true
+	})
+
+	// Names that take their value from a flag, transitively: `key := *tok`
+	// carries the credential exactly as far as `*tok` did.
+	for changed := true; changed; {
+		changed = false
+		ast.Inspect(f, func(n ast.Node) bool {
+			var lhs, rhs []ast.Expr
+			switch x := n.(type) {
+			case *ast.AssignStmt:
+				lhs, rhs = x.Lhs, x.Rhs
+			case *ast.ValueSpec:
+				for _, name := range x.Names {
+					lhs = append(lhs, name)
+				}
+				rhs = x.Values
+			default:
+				return true
+			}
+			if !carriesFlagValue(rhs, tainted) {
+				return true
+			}
+			for _, l := range lhs {
+				id, ok := l.(*ast.Ident)
+				if !ok || id.Name == "_" || tainted[id.Name] {
+					continue
+				}
+				tainted[id.Name] = true
+				changed = true
+			}
+			return true
+		})
+	}
+
+	var found []string
+	for _, w := range credentialWrites(f) {
+		inFlagCall := false
+		for _, s := range flagCalls {
+			if w.pos >= s.from && w.pos < s.to {
+				inFlagCall = true
+				break
+			}
+		}
+		if !inFlagCall && (w.val == nil || !carriesFlagValue([]ast.Expr{w.val}, tainted)) {
+			continue
+		}
+		found = append(found, fset.Position(w.pos).String()+": "+credentialField+" is written from a flag")
+	}
+	return found, defs
+}
+
+// carriesFlagValue reports whether any of these expressions mentions a
+// flag-bound name or declares a flag itself.
+func carriesFlagValue(exprs []ast.Expr, tainted map[string]bool) bool {
+	hit := false
+	for _, e := range exprs {
+		ast.Inspect(e, func(n ast.Node) bool {
+			switch x := n.(type) {
+			case *ast.Ident:
+				if tainted[x.Name] {
+					hit = true
+				}
+			case *ast.CallExpr:
+				if isFlagDefinition(x) {
+					hit = true
+				}
+			}
+			return !hit
+		})
+	}
+	return hit
+}
+
+// scanForCredentialFlags runs the check over every non-test Go file in dir.
+func scanForCredentialFlags(t *testing.T, dir string) ([]string, int) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("reading %s: %v", dir, err)
+	}
+	var found []string
+	defs := 0
+	fset := token.NewFileSet()
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		path := filepath.Join(dir, name)
+		f, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			t.Fatalf("parsing %s: %v", path, err)
+		}
+		hits, n := flagFed(fset, f)
+		found = append(found, hits...)
+		defs += n
+	}
+	return found, defs
+}
+
+// credentialFlagsIn runs the check over source held in the test itself, and
+// returns what it found along with the number of flag definitions it saw.
+func credentialFlagsIn(t *testing.T, name, src string) ([]string, int) {
+	t.Helper()
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, name, src, 0)
+	if err != nil {
+		t.Fatalf("parsing the %s fixture: %v", name, err)
+	}
+	return flagFed(fset, f)
 }
