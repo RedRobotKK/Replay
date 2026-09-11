@@ -133,6 +133,24 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 	}
 	if len(suggestions) > 0 {
 		p.Printf("* = estimated via the byte-to-token fit. Statuses: pending, applied, verified, not verified, advice only.\n")
+		// How much of this report the verifier cannot reach.
+		//
+		// advisor.track returns AdviceOnly for hot-file and cache-breaks
+		// before any other logic runs: their target comes and goes with the
+		// work rather than with a change somebody made, so there is nothing to
+		// detect. That is an honest label and it was the whole story a reader
+		// got.
+		//
+		// On this machine those two kinds were 118 of 141 suggestions. So a
+		// reader looking at a list and a verifier had no way to learn that
+		// five sixths of the list would never be marked verified however long
+		// they waited — the footer named the statuses and stopped, and a list
+		// of names is not a coverage figure.
+		if n := countAdviceOnly(suggestions); n > 0 {
+			p.Printf("%d of %d are advice only: their effect is not something Replay can "+
+				"observe, so they will never be marked verified. The verifier covers the "+
+				"other %d.\n", n, len(suggestions), len(suggestions)-n)
+		}
 	}
 	if err := p.Err(); err != nil {
 		return err
@@ -288,4 +306,17 @@ var manualSteps = []map[string]string{
 		"why": "Run scripts from files instead of inline heredocs."},
 	{"id": "delegate-long-work", "title": "Give long work to subagents.",
 		"why": "Their transcripts do not become your prefix."},
+}
+
+// countAdviceOnly is how many suggestions the verifier structurally cannot
+// reach. Counted from the rendered status rather than from the kind list, so
+// it cannot drift out of step with what the reader was shown.
+func countAdviceOnly(ss []advisor.Suggestion) int {
+	n := 0
+	for _, s := range ss {
+		if s.Status == advisor.AdviceOnly {
+			n++
+		}
+	}
+	return n
 }
