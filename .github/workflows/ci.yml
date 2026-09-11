@@ -197,6 +197,25 @@ jobs:
       - name: Audit every TUI screen
         run: ./scripts/tui-audit/run.sh
 
+  merge-guard:
+    name: merge result
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      # Every other job here checks this branch. This one checks the branch
+      # merged into its base, which is the only thing that will exist after
+      # the button is pressed and the only thing nothing else looks at.
+      - name: Compile the merge, not the branch
+        run: |
+          git fetch --no-tags origin "$GITHUB_BASE_REF"
+          go run scripts/merge-guard/main.go "origin/$GITHUB_BASE_REF"
+
   guard-reachability:
     name: guard reachability
     runs-on: ubuntu-latest

@@ -288,6 +288,34 @@ var execExempt = map[string]bool{
 	// from walking cmd/ and internal/ for .go files. Adding it here is a second
 	// entry a reviewer reads, which is the intended cost.
 	"scripts/refusal-reachability/main.go": true,
+	// scripts/merge-guard is the third tool of that kind, under the same
+	// //go:build ignore, and earns its exemption the same way. It runs
+	// `git merge-tree` to compute the merge of a branch into its base
+	// without touching the working tree, `git archive | tar` to extract the
+	// resulting tree into a temporary directory, and `go vet` inside it.
+	// The exec is the job: no CI check here compiles a merge, and two
+	// individually green PRs have put main in the red twice because of it.
+	//
+	// It takes one argument, a git revision, from the operator or from
+	// GITHUB_BASE_REF. It writes nothing outside a directory it created with
+	// os.MkdirTemp and removes on every exit path.
+	"scripts/merge-guard/main.go": true,
+	// internal/mergeguard's test is the one entry here that is not a
+	// build-ignored script, so it needs a different argument.
+	//
+	// It is a _test.go. Test files are not linked into any binary this
+	// module builds, so it cannot reach the shipped one by the same
+	// structural fact that excludes the scripts above — not by a tag anyone
+	// could add.
+	//
+	// What it execs is `git` against this repository's own history and `go
+	// vet` inside a temporary directory, to reconstruct the merge of two
+	// named commits that put main in the red and prove the tool catches it.
+	// Reconstructing a real merge is the point: a constructed fixture would
+	// prove the parser works and not that the incident is covered. No path
+	// or revision reaches it from outside — both commits are constants in
+	// the file.
+	"internal/mergeguard/mergeguard_test.go": true,
 }
 
 var allowedImports = map[string]bool{
