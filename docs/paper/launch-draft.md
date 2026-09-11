@@ -1,5 +1,9 @@
 # Launch drafts
 
+The preprint that shares these figures is [`replay-preprint.tex`](replay-preprint.tex)
+in this directory. It has not been compiled — no LaTeX toolchain was available
+where it was written — and is checked structurally only.
+
 Every figure below is traceable to a dated file under `docs/evidence/`. The
 number beside each claim is the corpus it came from, and corpora are not
 merged. A draft of this text carried "1.5M+ simulated sessions" and
