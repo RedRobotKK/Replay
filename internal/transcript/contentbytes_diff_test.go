@@ -75,6 +75,21 @@ func diffCorpus() []string {
 		// Structure that is not structure.
 		`{"a":1,}`, "[1,]", "{a:1}", "'x'", "nul", "[1 2]", "1 ]", `{"a"}`, `{"a":}`,
 		`{:1}`, "[,]", "}", "]", "{", "[", `{"a":1`, `["a"`,
+		// Input that runs out at a boundary. Each of these stops cleanly and
+		// keeps what it counted, because Decoder.Token returns a plain io.EOF
+		// there rather than a syntax error. Four separate boundaries, each
+		// its own return in the scanner, and a mutation pass found every one
+		// of them unguarded when only `{"a":1` was here:
+		//   `{"a"`    the key was read, the colon never arrived
+		//   `{"a":`   a value was expected and the input ended
+		//   `{"a":1`  a value was read, the comma or brace never arrived
+		//   `{"a":1,` a comma was read, the next key never arrived
+		`{"a"`, `{"a":`, `{"a":1,`, `{"a":{`, `{"a":{"b"`, "[", "[1,", `["a",`, "[{",
+		// Numbers starting with zero, nested so that measuring them correctly
+		// and failing to parse them give different answers. Bare `0` measures
+		// 1 and len("0") is also 1, so a top-level zero cannot tell the two
+		// apart and the leading-zero arm sat unguarded behind it.
+		"[0]", "[-0]", "[0.0]", `{"z":0}`, "[0,0]", "[01]",
 		// More than one top-level value, which this path allows.
 		"1 2", "{} {}", `"a" "b"`, "null true", "1\n2\n3",
 		// Trailing rubbish after a complete value.
@@ -95,6 +110,33 @@ func diffCorpus() []string {
 		`{"file_path":"/tmp/x.go","content":"package x\n"}`,
 		`[{"type":"text","text":"hello"}]`,
 		`{"command":"ls -la","description":"list"}`,
+	}
+}
+
+// base64ish builds n bytes of the base64 alphabet, deterministically, and
+// includes the '+' and '/' a real payload carries. '/' is the interesting
+// one: it is legal raw inside a JSON string and legal as "\/", so the two
+// spellings have to measure the same, and no hand-typed corpus entry is long
+// enough to contain one by accident.
+func base64ish(n int) string {
+	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = alphabet[i%len(alphabet)]
+	}
+	return string(b)
+}
+
+// payloadShapes returns the forms a source payload of n bytes arrives in: a
+// bare string, the object RawBlock.Source actually holds, and the same object
+// with every forward slash escaped. The last pairs with the second: both
+// spellings of '/' must measure the same.
+func payloadShapes(n int) []string {
+	payload := base64ish(n)
+	return []string{
+		`"` + payload + `"`,
+		`{"type":"base64","media_type":"image/png","data":"` + payload + `"}`,
+		`{"type":"base64","data":"` + strings.ReplaceAll(payload, "/", `\/`) + `"}`,
 	}
 }
 
@@ -120,6 +162,24 @@ func TestCB5ScannerAgreesWithTheDecoderItReplaced(t *testing.T) {
 			t.Errorf("ContentBytes(depth %d) = %d, decoder said %d", depth, got, want)
 		}
 	}
+
+	// Payload scale. RawBlock.Source carries base64 image data at a few
+	// hundred kilobytes a block, and the longest entry in the corpus above is
+	// three hundred bytes — three orders of magnitude short of the thing the
+	// field actually holds. The scanner has no length threshold today, which
+	// is exactly why a case at the real size has to exist: a future one would
+	// otherwise land unmeasured, and the corpus would not notice.
+	for _, n := range []int{1 << 10, 100 << 10, 400 << 10} {
+		for i, shape := range payloadShapes(n) {
+			raw := json.RawMessage(shape)
+			if got, want := ContentBytes(raw), contentBytesReference(raw); got != want {
+				// Never print the payload. A 400 KB failure message is a
+				// failure nobody reads.
+				t.Fatalf("ContentBytes(%d-byte payload, shape %d, %q…) = %d, decoder said %d",
+					n, i, shape[:min(24, len(shape))], got, want)
+			}
+		}
+	}
 }
 
 // TestCB6MeasuringDoesNotAllocate pins why the scanner exists. The decoder
@@ -141,6 +201,22 @@ func TestCB6MeasuringDoesNotAllocate(t *testing.T) {
 	if allocs != 0 {
 		t.Fatalf("ContentBytes allocates %.0f times, want 0: measuring is reading, not decoding", allocs)
 	}
+
+	// And at the size the field actually carries. Zero allocations on a
+	// 200-byte object says nothing about whether the scanner starts
+	// allocating when the input grows, which is the whole reason
+	// RawBlock.Source can stop being a json.RawMessage.
+	big := json.RawMessage(payloadShapes(400 << 10)[1])
+	wantBig := contentBytesReference(big)
+	var gotBig int
+	bigAllocs := testing.AllocsPerRun(5, func() { gotBig = ContentBytes(big) })
+	if gotBig != wantBig {
+		t.Fatalf("ContentBytes(400 KB) = %d, decoder said %d", gotBig, wantBig)
+	}
+	if bigAllocs != 0 {
+		t.Fatalf("ContentBytes allocates %.0f times on a %d-byte payload, want 0", bigAllocs, len(big))
+	}
+	t.Logf("%.0f allocations measuring %d bytes", bigAllocs, len(big))
 }
 
 // FuzzContentBytesMatchesTheDecoder is the part that covers what neither of

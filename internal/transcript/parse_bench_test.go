@@ -24,6 +24,15 @@ import (
 //	after  label truncate   989.0 ms   201.9 MB   611,786 allocs
 //	after  label once       918.0 ms   193.5 MB   587,147 allocs
 //
+// The scanner ContentBytes uses is checked against the decoder it replaced by
+// FuzzContentBytesMatchesTheDecoder. What that is worth is not the execution
+// count: 145 million executions is a number, and a number is not a bound. What
+// bounds it is that the corpus stopped growing — 489 interesting inputs after
+// ten minutes, 512 after three more, nine of them new. A discovery curve that
+// has flattened is evidence; a big number on its own is not.
+//
+// Both real defects came from the hand-written corpus, not the fuzzer.
+//
 // Read no timing signal out of this benchmark at this scale. Twelve runs of
 // one unchanged binary spanned 955 to 1193 ms on this machine, a band of 12%
 // either side of the middle, which is wider than any of the three changes
