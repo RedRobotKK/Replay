@@ -10,8 +10,10 @@ import (
 
 // The help overlay is drawn on every screen, and it advertised `--json` as
 // "the same answer for a machine, no screen at all" with nothing qualifying
-// it. Three of the commands behind those screens have no such flag, so the
-// line was a promise on ten screens that four of them break:
+// it. Three of the commands behind those screens have no such flag, and
+// that is four of the ten SCREENS, not three: guards and live are both
+// `replay serve`. Four keys, three commands. The line was a promise on ten
+// screens that four of them break:
 //
 //	replay doctor --json   flag provided but not defined: -json
 //	replay blame  --json   flag provided but not defined: -json

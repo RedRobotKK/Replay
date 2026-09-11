@@ -92,9 +92,18 @@ func Bindings() []Binding {
 // caught this said two when it is four. So the exceptions are derived from
 // Shortcut.JSON, and cmd/replay TestJC1 pins that field to what the binary
 // actually accepts. Nothing here is maintained by hand.
-func jsonLine() string {
+func jsonLine() string { return jsonLineFrom(Shortcuts()) }
+
+// jsonLineFrom takes the table rather than reading it, so both arms can be
+// reached from a test. The no-exceptions arm is not reachable through
+// Shortcuts() today — four screens lack the flag — and a conditional that no
+// test can make true is one guard-reachability correctly refuses to pass.
+// Taking the slice is the honest fix: the arm is real, it is what the line
+// should say once those commands gain --json, and now it is exercised
+// instead of asserted.
+func jsonLineFrom(screens []Shortcut) string {
 	var missing []string
-	for _, s := range Shortcuts() {
+	for _, s := range screens {
 		if !s.JSON {
 			missing = append(missing, string(s.Key))
 		}
