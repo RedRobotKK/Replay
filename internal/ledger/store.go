@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -156,14 +157,38 @@ func IsLedgerFile(path string) bool {
 
 // ReadRecords reads every record in a ledger file and counts lines it could
 // not decode.
-func ReadRecords(path string) (records []Record, skipped int, err error) {
+// ReadRecords reads a ledger file.
+//
+// Three return values because there are three different facts, and they used
+// to be two. `skipped` counts complete lines that are not records of the
+// current schema — data loss, or an upgrade. `incomplete` says the file does
+// not end in a newline, which means the last record had not finished being
+// written when it was read.
+//
+// Collapsing the second into the first told a reader of a LIVE ledger that
+// records had been skipped. Store.Append writes one record per os.File.Write,
+// and Go loops on a short write, so any reader polling a ledger that
+// `replay serve` is still writing can land inside that loop. Nothing is lost
+// there; the record arrives a moment later. Reporting it as skipped is the
+// difference between "your data is fine" and "your data is gone".
+func ReadRecords(path string) (records []Record, skipped int, incomplete bool, err error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, 0, fmt.Errorf("open ledger: %w", err)
+		return nil, 0, false, fmt.Errorf("open ledger: %w", err)
 	}
 	defer f.Close() //nolint:errcheck // read-only file; a close error carries no information we can act on
+	// Whether the file ends on a newline is what separates a torn write from a
+	// corrupt record, and the scanner cannot answer it: it strips the
+	// terminator, so the last line looks identical either way. Asked of the
+	// file directly, before reading.
+	endsClean, err := endsWithNewline(f)
+	if err != nil {
+		return nil, 0, false, fmt.Errorf("read ledger: %w", err)
+	}
 	scanner := transcript.NewLineScanner(f)
+	var lastWasSkip bool
 	for scanner.Scan() {
+		lastWasSkip = false
 		line := bytes.TrimSpace(scanner.Bytes())
 		if len(line) == 0 {
 			// A file exists before its first record is flushed.
@@ -175,19 +200,29 @@ func ReadRecords(path string) (records []Record, skipped int, err error) {
 			// current one would produce figures that look measured and
 			// are not.
 			skipped++
+			lastWasSkip = true
 			continue
 		}
 		records = append(records, rec)
 	}
-	if err := scanner.Err(); err != nil {
-		return nil, skipped, fmt.Errorf("read ledger: %w", err)
+	// A line the parser rejected, sitting last in a file with no terminating
+	// newline, is a record still being written rather than a broken one.
+	if lastWasSkip && !endsClean {
+		skipped--
+		incomplete = true
 	}
-	return records, skipped, nil
+	if err := scanner.Err(); err != nil {
+		return nil, skipped, incomplete, fmt.Errorf("read ledger: %w", err)
+	}
+	return records, skipped, incomplete, nil
 }
 
 // ReadFile turns one ledger file into a Session at the measured tier.
 func ReadFile(path string) (*transcript.Session, error) {
-	records, skipped, err := ReadRecords(path)
+	// The incomplete flag is deliberately not folded into Session.Skipped.
+	// A record still in flight is not a record the reader lost, and the count
+	// they see must mean only the second thing.
+	records, skipped, _, err := ReadRecords(path)
 	if err != nil {
 		return nil, err
 	}
@@ -481,4 +516,28 @@ func loadPins(path string) (map[string]Pin, error) {
 		return nil, fmt.Errorf("read pins file: %w", err)
 	}
 	return pins, nil
+}
+
+// endsWithNewline reports whether the file's final byte is a newline, and
+// leaves the offset where it found it.
+//
+// An empty file counts as clean: it has no unterminated last line, because it
+// has no last line. Treating it as torn would make every ledger incomplete
+// for the moment between creation and its first record.
+func endsWithNewline(f *os.File) (bool, error) {
+	info, err := f.Stat()
+	if err != nil {
+		return false, err
+	}
+	if info.Size() == 0 {
+		return true, nil
+	}
+	var last [1]byte
+	if _, err := f.ReadAt(last[:], info.Size()-1); err != nil {
+		return false, err
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return false, err
+	}
+	return last[0] == '\n', nil
 }
