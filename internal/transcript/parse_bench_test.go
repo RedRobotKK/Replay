@@ -20,6 +20,10 @@ import (
 //
 //	before decode-once   1010.0 ms   292.8 MB   744,534 allocs
 //	after  decode-once   1008.4 ms   283.7 MB   657,522 allocs
+//	after  chain reuse    1013.7 ms   214.1 MB   615,003 allocs
+//
+// The time has not moved across either change and the individual runs straddle
+// the baseline in both directions, so nothing should be read into it.
 //
 // The time difference there is noise — the individual runs straddle the
 // baseline — and saying so is the point of writing both down.

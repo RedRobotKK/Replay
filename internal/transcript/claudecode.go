@@ -295,6 +295,18 @@ type decoder struct {
 	toolNames map[string]string
 	byUUID    map[string]*rawLine
 	messages  map[string]*Message
+
+	// chain is scratch for the parent walk in buildRequest, reused across
+	// requests. Every request walks its whole ancestry from scratch, so a
+	// fresh slice per request grew by doubling once per request and the
+	// total was quadratic in the depth of the chain: 225 MB for a chain of
+	// 2000 turns, most of it slice headers thrown away immediately.
+	//
+	// Nothing may retain it. buildRequest hands sub-slices of it to
+	// assistantMessage, which reads them and returns a Message built from
+	// its own storage; decodeAssistantRun reorders the sub-slice in place
+	// but keeps no reference to it.
+	chain []*rawLine
 }
 
 func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
@@ -327,7 +339,7 @@ func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
 	// Context: walk the parent chain from the first output line back to the
 	// root, collecting conversation messages. Consecutive assistant lines
 	// with one request id collapse into one message.
-	var chain []*rawLine
+	chain := d.chain[:0]
 	for cur := d.byUUID[first.ParentUUID]; cur != nil; cur = d.byUUID[cur.ParentUUID] {
 		chain = append(chain, cur)
 		if len(chain) > len(d.byUUID) {
@@ -337,6 +349,13 @@ func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
 	for i, j := 0, len(chain)-1; i < j; i, j = i+1, j-1 {
 		chain[i], chain[j] = chain[j], chain[i]
 	}
+	d.chain = chain
+
+	// One context message per chain line at most: user lines contribute
+	// one, a run of assistant lines contributes one between them, and hook
+	// summaries contribute none. Sizing it here replaces the doubling
+	// growth of a slice that is appended to once per ancestor.
+	req.Context = make([]*Message, 0, len(chain))
 
 	laneID := ""
 	for i := 0; i < len(chain); i++ {
