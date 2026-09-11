@@ -74,7 +74,7 @@ func ShareScreen(s ShareState) Screen {
 			note(false, "point it at a corpus with priced traffic in it, or run the"),
 			"      agent for a while and come back.")
 		lines = WithBanner(lines, Unavailable, "nothing priced well enough to post")
-		return Screen{Key: shareKey, Title: "share", Lines: padShare(lines, s), From: Unavailable}
+		return Screen{Key: shareKey, Title: "share", Lines: padShare(lines, s), BodyRows: len(lines), From: Unavailable}
 	}
 
 	said := card.Say(s.Variant, s.Tone, s.Data)
@@ -87,7 +87,7 @@ func ShareScreen(s ShareState) Screen {
 	lines = append(lines, "",
 		"  t tone   d design   w write the png",
 		"  "+Dim("d and w belong to this screen. c first, then d or w, for the others."))
-	return Screen{Key: shareKey, Title: "share", Lines: padShare(lines, s), From: Measured}
+	return Screen{Key: shareKey, Title: "share", Lines: padShare(lines, s), BodyRows: len(lines), From: Measured}
 }
 
 // framed draws the card's words inside an ASCII box.

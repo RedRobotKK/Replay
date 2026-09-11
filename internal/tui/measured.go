@@ -179,7 +179,7 @@ func DoctorScreen(m Machine) Screen {
 			note(false, "point a client at replay serve, or name a corpus:"),
 			"      REPLAY_TRANSCRIPTS=/path/to/projects replay tui")
 		lines = WithBanner(lines, Unavailable, "no transcripts under "+shortPath(m.ProjectsDir))
-		return Screen{Key: 'd', Title: "doctor", Lines: pad(lines), From: Unavailable}
+		return Screen{Key: 'd', Title: "doctor", Lines: pad(lines), BodyRows: len(lines), From: Unavailable}
 	}
 
 	lines := make([]string, 0, BudgetRows)
@@ -235,7 +235,7 @@ func DoctorScreen(m Machine) Screen {
 			"      what changes what replay recommends, not only what it reports.",
 			"      next: replay rules --check-prices")
 	}
-	return Screen{Key: 'd', Title: "doctor", Lines: pad(lines), From: Measured}
+	return Screen{Key: 'd', Title: "doctor", Lines: pad(lines), BodyRows: len(lines), From: Measured}
 }
 
 // headlineCount is the sentence at the top of the doctor screen, in the same
@@ -389,7 +389,7 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 			"", "  notes",
 			note(false, "REPLAY_TRANSCRIPTS=/path/to/projects replay tui"))
 		lines = WithBanner(lines, Unavailable, "no transcripts under "+shortPath(m.ProjectsDir))
-		return Screen{Key: 'c', Title: "cost", Lines: padCost(lines), From: Unavailable}
+		return Screen{Key: 'c', Title: "cost", Lines: padCost(lines), BodyRows: len(lines), From: Unavailable}
 	}
 
 	if !m.CostReady {
@@ -404,7 +404,7 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 			"", "  notes",
 			note(false, "the keys still work while this counts. Nothing is blocked."))
 		lines = WithBanner(lines, Unavailable, "still counting")
-		return Screen{Key: 'c', Title: "cost", Lines: padCost(lines), From: Unavailable}
+		return Screen{Key: 'c', Title: "cost", Lines: padCost(lines), BodyRows: len(lines), From: Unavailable}
 	}
 
 	lines := make([]string, 0, BudgetRows)
@@ -457,7 +457,7 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 	rows := TaskLines(m.TaskRows)
 	if len(rows) == 0 {
 		lines = append(lines, "  No per-task breakdown available.")
-		return Screen{Key: 'c', Title: "cost", Lines: padCost(lines), From: Measured}
+		return Screen{Key: 'c', Title: "cost", Lines: padCost(lines), BodyRows: len(lines), From: Measured}
 	}
 	// The list is capped so the notes below it survive the budget.
 	//
@@ -515,7 +515,7 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 	if rn := m.FX.RateNote(); rn != "" {
 		lines = append(lines, note(false, rn))
 	}
-	return Screen{Key: 'c', Title: "cost", Lines: padCost(lines), From: Measured, Rows: len(rows)}
+	return Screen{Key: 'c', Title: "cost", Lines: padCost(lines), BodyRows: len(lines), From: Measured, Rows: len(rows)}
 }
 
 // TaskLines renders the per-task rows, most expensive first.
@@ -584,7 +584,7 @@ func WhyScreen(t *Task, run func(path string) (string, error)) Screen {
 			"", "  notes",
 			note(false, "averaged over every task this question has no useful answer."))
 		lines = WithBanner(lines, Unavailable, "no session chosen yet")
-		return Screen{Key: 'w', Title: "why", Lines: padWhy(lines), From: Unavailable}
+		return Screen{Key: 'w', Title: "why", Lines: padWhy(lines), BodyRows: len(lines), From: Unavailable}
 	}
 
 	out, err := run(t.Path)
@@ -594,7 +594,7 @@ func WhyScreen(t *Task, run func(path string) (string, error)) Screen {
 			"  "+cell("session", 10)+t.Session,
 			"  "+cell("error", 10)+truncate(err.Error(), Cols()-14))
 		lines = WithBanner(lines, Unavailable, "the transcript could not be read")
-		return Screen{Key: 'w', Title: "why", Lines: padWhy(lines), From: Unavailable}
+		return Screen{Key: 'w', Title: "why", Lines: padWhy(lines), BodyRows: len(lines), From: Unavailable}
 	}
 
 	lines = append(lines,
@@ -603,7 +603,7 @@ func WhyScreen(t *Task, run func(path string) (string, error)) Screen {
 	for _, l := range blameBody(out) {
 		lines = append(lines, "  "+truncate(l, Cols()-2))
 	}
-	return Screen{Key: 'w', Title: "why", Lines: padWhy(lines), From: Measured}
+	return Screen{Key: 'w', Title: "why", Lines: padWhy(lines), BodyRows: len(lines), From: Measured}
 }
 
 // blameBody keeps the lines of a blame report that answer the question, and
