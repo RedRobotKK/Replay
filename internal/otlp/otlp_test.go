@@ -179,8 +179,18 @@ func TestOT5_WriteRefusesSymlinkAndOverwrite(t *testing.T) {
 	if err := os.Symlink(path, link); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
-	if _, err := writeTo(link, sp); err == nil {
-		t.Error("writing through a symlink must refuse")
+	_, err = writeTo(link, sp)
+	if err == nil {
+		t.Fatal("writing through a symlink must refuse")
+	}
+	// The reasoning three lines up, applied to the branch it skipped. The
+	// symlink check and the exists check share one `if info, err :=
+	// os.Lstat(path)`, and Lstat succeeds on a symlink, so removing the symlink
+	// check leaves the exists check refusing instead — non-nil, and the bare
+	// `err == nil` this replaces stayed green over it. Reported SURVIVED by
+	// scripts/refusal-reachability.
+	if !strings.Contains(err.Error(), "refusing to write through a redirected path") {
+		t.Errorf("refused, but not by the symlink guard: %v", err)
 	}
 }
 

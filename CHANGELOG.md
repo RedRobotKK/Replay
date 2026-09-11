@@ -35,6 +35,7 @@ All notable changes to this project are documented here. The format follows [Kee
   `replay cost` goes from 116 sessions and $3766.87 to 118 sessions and
   $3771.32, and from disclosing 6 transcripts read but not priced to disclosing
   13 that could not be read at all.
+
 ### Added
 
 - **`replay cost --usage <file>` prices a usage export: token counts per
@@ -56,7 +57,7 @@ All notable changes to this project are documented here. The format follows [Kee
   break, so the exporter asserts `complete`; undated records cannot be put in
   the order a break is defined against. Without either, the cost still prints
   and the break figures say `NOT MEASURED` with the reason. `fresh + cached_read
-  + cached_write` must equal `prompt`, which refuses an export copied from a
+  - cached_write` must equal `prompt`, which refuses an export copied from a
   provider that counts inclusively — the error is largest on exactly the
   sessions that cache best.
 - `--max-avoidable-usd` refuses to pass when the avoidable figure was not

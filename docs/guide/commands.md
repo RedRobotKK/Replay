@@ -801,8 +801,12 @@ and a session id, and never message content.
 
 One is marked with `!`: the **masking vault**, which holds the real values behind placeholders sent
 to a provider. It is the only store here that keeps your secrets rather than counts about them, and
-it is never removed by a retention window, because deleting it breaks rehydration for every
-transcript that referenced it.
+since 2026-09-10 it is the only one with an automatic expiry: entries are evicted after 24 hours
+(`serve --mask-ttl`, `0` to keep them). This paragraph used to say it is never removed by a
+retention window, "because deleting it breaks rehydration for every transcript that referenced it".
+That reason turned out not to hold: the placeholder is derived from the secret, so a client
+re-sending a secret whose entry lapsed gets the same placeholder and the entry comes back. What was
+being paid for was an unbounded store of credentials on disk with its key file beside it.
 
 It reports and never removes. Every path it names is one `replay purge` can act on, and keeping the
 two commands apart means reading what you hold is never one keystroke from destroying it.
@@ -1361,6 +1365,7 @@ is not resent. And nothing is ever retried once a byte of the *response* has rea
 | Flag | What it does |
 |---|---|
 | `--mask`, `--mask-patterns`, `--mask-entropy` | Detect and mask secrets in traffic, using a maintained pattern set, your own patterns, and an optional entropy heuristic |
+| `--mask-ttl` | With `--mask`, how long a masked secret stays in the vault before it is evicted. Default 24h. Masking turns a transient secret into one at rest, and the vault key file sits next to the ciphertext, so this is the window a compromised host hands over. `0` keeps entries forever. Eviction is close to free: the placeholder is derived from the secret, so re-sending a secret whose entry lapsed restores it and the placeholder does not change |
 | `--rehydrate` | With `--mask`, restore placeholders in responses. On by default. Turning it **off** leaves the placeholders in place, which is how you evaluate coverage: whatever the agent then trips over was masked, and whatever still works was not |
 | `--project` | With `--mask`, the directory under which file-edit tool inputs may receive real secrets. Defaults to the current directory. It is the boundary that stops a rehydrated secret being written into a file outside the project you are working in |
 | `--rehydrate-scope` | With `--mask`, where a pattern's secrets may be restored, as `name=dest[,dest]` with `dest` one of `text`, `edit`, `tool:NAME` or `none`. `name=*` sets the default (`text,edit`). Repeatable. Narrowing a scope keeps a secret out of destinations that persist it — a file write, a named tool — while still letting the agent read it in conversation |
