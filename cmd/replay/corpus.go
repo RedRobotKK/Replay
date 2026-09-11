@@ -26,6 +26,13 @@ type corpusRow struct {
 	requests int
 	compared int
 	matched  int
+	// exact is the subset of matched whose read was reproduced EXACTLY, and
+	// exceeded is the rest of it: turns where the provider served MORE cached
+	// prefix than the model predicted. Both are carried because matched alone
+	// cannot be decomposed by a reader, and the published evidence document
+	// never broke it out. See analysis.Calibration.ExactRate.
+	exact    int
+	exceeded int
 	breaks   int
 	fit      analysis.TokenFit
 	source   transcript.Source
@@ -42,6 +49,16 @@ func (r corpusRow) matchRate() float64 {
 		return 0
 	}
 	return float64(r.matched) / float64(r.compared)
+}
+
+// exactRate is the share reproduced EXACTLY, with exceeded reads excluded.
+//
+// Zero when nothing was compared, for the same reason matchRate gives.
+func (r corpusRow) exactRate() float64 {
+	if r.compared == 0 {
+		return 0
+	}
+	return float64(r.exact) / float64(r.compared)
 }
 
 // distinctSessions counts session ids, not transcripts.
@@ -119,6 +136,8 @@ func runCorpus(args []string, stdout, stderr io.Writer) error {
 			requests: len(rep.Lane.Requests),
 			compared: rep.Calibration.Compared(),
 			matched:  rep.Calibration.Reproduced + rep.Calibration.Exceeded,
+			exact:    rep.Calibration.Reproduced,
+			exceeded: rep.Calibration.Exceeded,
 			breaks:   rep.Calibration.Broken,
 			fit:      rep.Fit,
 			source:   session.Source,
@@ -154,9 +173,16 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 		"several rows that share its id and its conditions. Rows carry a session id prefix, never a "+
 		"path, project name, or content.\n\n",
 		len(rows), distinctSessions(rows), time.Now().UTC().Format("2006-01-02"))
-	p.Printf("| Session | Client | Tier | Requests | Compared | Matched | Breaks | Match rate | Fit tokens/byte | Fit ±%% |\n")
-	p.Printf("|---|---|---|---:|---:|---:|---:|---:|---:|---:|\n")
-	totalTurns, totalMatched, totalBreaks, below := 0, 0, 0, 0
+	// Matched is split into Exact and Exceeded in the table itself, not only
+	// in the totals. An exceeded turn is one the provider served MORE cached
+	// prefix for than the model predicted; it is counted as a match because
+	// the predicted prefix was served, and it is still a prediction that was
+	// wrong. Every row of the published evidence document reported the folded
+	// figure alone, so a reader could not tell an exactly reproduced lane from
+	// one carried by its siblings.
+	p.Printf("| Session | Client | Tier | Requests | Compared | Exact | Exceeded | Matched | Breaks | Exact rate | Match rate | Fit tokens/byte | Fit ±%% |\n")
+	p.Printf("|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
+	totalTurns, totalMatched, totalExact, totalExceeded, totalBreaks, below := 0, 0, 0, 0, 0, 0
 	causes := map[cachemodel.BreakCause]int{}
 	for _, r := range rows {
 		rate := r.matchRate()
@@ -165,15 +191,18 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 		}
 		totalTurns += r.compared
 		totalMatched += r.matched
+		totalExact += r.exact
+		totalExceeded += r.exceeded
 		totalBreaks += r.breaks
 		for _, c := range r.causes {
 			causes[c]++
 		}
-		p.Printf("| %s | %s | %s | %d | %d | %d | %d | %.1f%% | %.3f | %.0f |\n", r.id, r.client, tierName(r.source), r.requests, r.compared, r.matched, r.breaks, rate*100, r.fit.TokensPerByte, r.fit.RelativeError*100)
+		p.Printf("| %s | %s | %s | %d | %d | %d | %d | %d | %d | %.1f%% | %.1f%% | %.3f | %.0f |\n", r.id, r.client, tierName(r.source), r.requests, r.compared, r.exact, r.exceeded, r.matched, r.breaks, r.exactRate()*100, rate*100, r.fit.TokensPerByte, r.fit.RelativeError*100)
 	}
-	overall := 0.0
+	overall, exactOverall := 0.0, 0.0
 	if totalTurns > 0 {
 		overall = float64(totalMatched) / float64(totalTurns)
+		exactOverall = float64(totalExact) / float64(totalTurns)
 	}
 	sessions := distinctSessions(rows)
 	p.Printf("\n## Totals\n\n")
@@ -185,7 +214,17 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 			"  an account, a machine and one person's habits, and are not independent draws.\n")
 	}
 	p.Printf("- Compared turns: %d, matched: %d, breaks: %d\n", totalTurns, totalMatched, totalBreaks)
-	p.Printf("- Overall match rate: %.2f%%", overall*100)
+	// The decomposition, stated rather than left for the reader to subtract.
+	// Until 2026-09-11 this report printed only the line above, and the
+	// published evidence document inherited that: it gave a matched total and
+	// never said how much of it was exact.
+	p.Printf("  Of those matched, reproduced exactly: %d; read more than predicted: %d\n", totalExact, totalExceeded)
+	if totalExceeded > 0 {
+		p.Printf("  A read larger than predicted usually means a concurrent sibling lane extended the\n" +
+			"  prefix. It is counted as a match because the provider served at least what was\n" +
+			"  predicted, and it is still a prediction that was wrong, so it is NOT counted as exact.\n")
+	}
+	p.Printf("- Overall match rate: %.2f%% (exact reproduction rate: %.2f%%)", overall*100, exactOverall*100)
 	if totalTurns == 0 {
 		p.Printf(" (nothing was compared, so this is an absence rather than a result)")
 	}
@@ -196,8 +235,8 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 
 	p.Printf("\n## Per model\n\n")
 	p.Printf("Calibration by the model of each session's first request, with the newest %d sessions judged on their own so a provider rule change shows as a drop (ST-1). The minimum cacheable prefix is bounded from usage: the largest uncached prompt lies below it, the smallest cached prefix at or above it.\n\n", analysis.StalenessRecentSessions)
-	p.Printf("| Model | Sessions | Match rate | Recent sessions | Recent match rate | Verdict |\n")
-	p.Printf("|---|---:|---:|---:|---:|---|\n")
+	p.Printf("| Model | Sessions | Exact rate | Match rate | Recent sessions | Recent exact rate | Recent match rate | Verdict |\n")
+	p.Printf("|---|---:|---:|---:|---:|---:|---:|---|\n")
 	for _, m := range models {
 		// A model with nothing compared is not a model that scored badly, and
 		// printing a percentage for it says it was measured. `<synthetic>` is
@@ -216,7 +255,11 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 		case m.MatchRate() < analysis.CalibrationThreshold:
 			verdict = "below threshold"
 		}
-		p.Printf("| %s | %d | %s | %d | %s | %s |\n", m.Model, m.Sessions, matchRateCell(m.Matched, m.Compared), m.RecentSessions, matchRateCell(m.RecentMatched, m.RecentCompared), verdict)
+		p.Printf("| %s | %d | %s | %s | %d | %s | %s | %s |\n", m.Model, m.Sessions,
+			matchRateCell(m.Exact, m.Compared), matchRateCell(m.Matched, m.Compared),
+			m.RecentSessions,
+			matchRateCell(m.RecentExact, m.RecentCompared), matchRateCell(m.RecentMatched, m.RecentCompared),
+			verdict)
 	}
 	for _, m := range models {
 		p.Printf("\n- %s: %s", m.Model, m.MinPrefix)

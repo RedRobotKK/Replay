@@ -30,10 +30,17 @@ type ModelCalibration struct {
 	Sessions int
 	Compared int
 	Matched  int
+	// Exact counts only the turns whose read was reproduced exactly. Matched
+	// above also counts turns the provider served MORE prefix for than the
+	// model predicted, which is a prediction that was wrong; carrying both
+	// lets a reader of the per-model table and of a pooled contribution see
+	// how much of a match rate is exact. See Calibration.ExactRate.
+	Exact int
 	// The recent window: the newest sessions judged on their own.
 	RecentSessions int
 	RecentCompared int
 	RecentMatched  int
+	RecentExact    int
 	// RecentFailing counts recent sessions that individually fall below
 	// the calibration threshold.
 	RecentFailing int
@@ -52,6 +59,12 @@ func (m ModelCalibration) MatchRate() float64 { return rate(m.Matched, m.Compare
 
 // RecentMatchRate is the same over the recent window.
 func (m ModelCalibration) RecentMatchRate() float64 { return rate(m.RecentMatched, m.RecentCompared) }
+
+// ExactRate is the share reproduced exactly, with exceeded reads excluded.
+func (m ModelCalibration) ExactRate() float64 { return rate(m.Exact, m.Compared) }
+
+// RecentExactRate is the same over the recent window.
+func (m ModelCalibration) RecentExactRate() float64 { return rate(m.RecentExact, m.RecentCompared) }
 
 // rate is the share of compared turns that matched, and it reports 0 when
 // nothing was compared.
@@ -192,10 +205,12 @@ func modelCalibration(model string, reps []*LaneReport) ModelCalibration {
 		matched := cal.Reproduced + cal.Exceeded
 		m.Compared += cal.Compared()
 		m.Matched += matched
+		m.Exact += cal.Reproduced
 		if i >= recentFrom {
 			m.RecentSessions++
 			m.RecentCompared += cal.Compared()
 			m.RecentMatched += matched
+			m.RecentExact += cal.Reproduced
 			if !cal.Passes() {
 				m.RecentFailing++
 			}

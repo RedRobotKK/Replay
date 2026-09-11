@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **The match rate never said how much of it was exact.** `MatchRate` counts a
+  turn as matched when the provider's cache read was reproduced exactly OR
+  exceeded — more prefix served than the model predicted, usually because a
+  concurrent sibling lane extended it. The second kind is a prediction that was
+  wrong in the generous direction, and no report broke the two apart, so the
+  published `97.79%` could not be decomposed by a reader. `Calibration.ExactRate`
+  and `ModelCalibration.Exact` are new and are printed beside the match rate
+  everywhere it appears: the `replay corpus` totals, its per-transcript and
+  per-model tables, the lane header `replay replay` and `replay diff` print, and
+  the poolable calibration record, which refuses a row claiming more exact turns
+  than matched ones. `MatchRate` keeps its published meaning; redefining a
+  quoted statistic underneath its readers would be a second defect on the first.
+  Measured on the corpus root on 2026-09-11 — 1816 transcripts, 118 sessions,
+  38111 compared turns — the 97.89% match rate is **94.10% reproduced exactly,
+  3.78% read more than predicted, 2.12% broken**, and **258 transcripts clear
+  the 95% calibration gate only because an exceeded read counts as a match**.
+  The 2026-09-10 evidence file carries the split as a dated addendum rather than
+  a rewrite.
 - **`replay cost` read seven transcripts it had been discarding whole.** The
   Claude Code parser grouped assistant lines into requests by the top-level
   `requestId` and skipped any line without one. Only the `cli` entrypoint writes

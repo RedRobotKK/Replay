@@ -31,6 +31,56 @@
 > **One substantive finding.** `claude-opus-4-8` is marked *stale: provider behavior changed* —
 > 3 of the newest 5 sessions fall below the calibration threshold, 94% together, after 96% across
 > the 144 before them. Alternatives are not scored for that model as a result.
+>
+> **Addendum, 2026-09-11: this file's headline never said how much of it was exact.**
+> Every figure above, and every row below, calls a turn *matched* when the provider's cache read
+> was **reproduced** — exactly the prefix the model predicted — **or exceeded** — more prefix than
+> the model predicted, usually because a concurrent sibling lane extended it. The two were never
+> broken out, not in this file and not in the generator that wrote it, so a reader of
+> "34750 compared, 33983 matched, 767 breaks" could not tell how much of 97.79% was exact
+> reproduction. That omission is this file's. It is recorded here rather than edited out of it.
+>
+> An exceeded read is not a neutral rounding in the tool's favour. The generator's justification
+> was that "the provider served at least the prefix the model predicted", which is true and is a
+> weaker claim than the one the headline makes. A read larger than predicted is still evidence the
+> predecessor model was wrong — wrong in the generous direction, but wrong — and folding it into
+> the number the README quotes inflates that number.
+>
+> **The 2026-09-10 corpus cannot be re-read.** Transcripts are append-only and the machine kept
+> working, so the 34750 turns above no longer exist as a set and no split of exactly them can be
+> produced. The split below is a fresh reading of the same corpus root on **2026-09-11**, taken
+> with the generator that now reports it (`replay corpus`). It is a larger corpus, not the same
+> one, and the two columns are therefore not a before-and-after of anything:
+>
+> | | 2026-09-10 (this file) | 2026-09-11 (split reading) |
+> |---|---:|---:|
+> | Transcripts | 1751 | 1816 |
+> | Distinct sessions | 116 | 118 |
+> | Compared turns | 34750 | 38111 |
+> | Matched | 33983 | 37305 |
+> | — reproduced exactly | *not reported* | **35864** (94.10%) |
+> | — read more than predicted | *not reported* | **1441** (3.78%) |
+> | Breaks | 767 | **806** (2.12%) |
+> | Overall match rate | 97.79% | 97.89% |
+> | Exact reproduction rate | *not reported* | **94.10%** |
+>
+> So 3.78% of every compared turn — 3.86% of everything counted as a match — is a turn where the
+> provider served more prefix than the model predicted. The published headline sits 3.79 points
+> above the exact rate.
+>
+> **Where the fold changes a verdict, not just a decimal.** 491 of the 1816 transcripts fall below
+> the 95% calibration threshold on the match rate. A further **258** fall below it on the exact
+> rate alone: 749 in total. Those 258 transcripts are admitted to alternative scoring only because
+> an exceeded read counts as a match. Per model, `claude-haiku-4-5-20251001`'s recent window reads
+> **100.0% match against 87.5% exact**, and its *calibrated* verdict rests entirely on the folded
+> figure. `claude-opus-5` reads 98.0% match against 94.0% exact across 74 sessions.
+>
+> **What did not change.** `MatchRate` still means reproduced-or-exceeded over compared. It is
+> quoted in the README and in two earlier evidence files, and redefining a published statistic
+> underneath its readers would be a second defect laid on top of the first. The exact rate is now
+> printed beside it everywhere a match rate appears: in `replay corpus` totals, in its
+> per-transcript and per-model tables, in the lane header `replay replay` and `replay diff` print,
+> and in the poolable contribution record ADR-0007 specifies.
 
 How well the replay engine reproduces the provider's cache reads across 1751 transcripts, from 116 distinct sessions, found on one machine on 2026-09-10. **One row is one transcript, not one session**: a session writes one per lane, so a session that spawned subagents contributes several rows that share its id and its conditions. Rows carry a session id prefix, never a path, project name, or content.
 

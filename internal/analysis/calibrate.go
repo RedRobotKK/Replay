@@ -78,6 +78,33 @@ func (c *Calibration) MatchRate() float64 {
 	return float64(c.Reproduced+c.Exceeded) / float64(c.Compared())
 }
 
+// ExactRate is the share of compared turns whose read was reproduced exactly,
+// with Exceeded left out of the numerator.
+//
+// MatchRate above keeps its published meaning and this sits beside it, because
+// the two answer different questions and the headline was only ever reporting
+// one of them. An exceeded read is the provider serving MORE cached prefix
+// than the model predicted — usually a concurrent sibling lane extended it —
+// and "the provider served at least what we predicted" is a weaker claim than
+// "we predicted the read". A larger-than-predicted read is still a prediction
+// that was wrong, in the other direction, and until 2026-09-11 every surface
+// folded it into the number that sells the tool without saying so.
+//
+// On the corpus measured 2026-09-11 — 37925 compared turns, 1816 transcripts,
+// 118 distinct sessions — the headline 97.87% match is 94.10% exact: 1433
+// exceeded turns, 3.86% of everything counted as a match. Redefining MatchRate
+// would have moved a number other documents quote; reporting both moves
+// nothing and hides nothing.
+//
+// Zero when nothing was compared, for the reason MatchRate gives: an absent
+// measurement must not read as a good one.
+func (c *Calibration) ExactRate() float64 {
+	if !c.HasEvidence() {
+		return 0
+	}
+	return float64(c.Reproduced) / float64(c.Compared())
+}
+
 // Passes reports whether alternatives may be scored for this lane.
 //
 // "The check never ran" must not be inside the passing case, and it is kept
