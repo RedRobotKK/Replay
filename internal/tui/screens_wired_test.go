@@ -26,11 +26,6 @@ import (
 //   - "no data" and "nothing found" collapsed into one message, which throws
 //     away the only thing a clean run established
 
-// paintOn turns colour on for a test, and the way it does so is the point.
-//
-// NewPainter asks os.LookupEnv("NO_COLOR"), which tests whether the variable
-// EXISTS. Setting it to "" switches colour off. t.Setenv runs first only so the
-// testing package restores the caller's environment afterwards.
 // paintOn forces colour on for a test, whatever the ambient environment is.
 //
 // It clears TERM as well as NO_COLOR, and that second line is the whole point.
@@ -56,12 +51,21 @@ import (
 // helper's to answer.
 func paintOn(t *testing.T) {
 	t.Helper()
-	for _, k := range []string{"NO_COLOR", "TERM"} {
-		t.Setenv(k, "x")
-		if err := os.Unsetenv(k); err != nil {
-			t.Fatal(err)
-		}
+	t.Setenv("NO_COLOR", "x")
+	if err := os.Unsetenv("NO_COLOR"); err != nil {
+		t.Fatal(err)
 	}
+	// TERM is SET to a real terminal, not unset.
+	//
+	// NewPainter matches "dumb" exactly, so an empty TERM would do here. Other
+	// code in this repository does not: cmd/replay/tipline.go:59 treats
+	// TERM=="" the same as "dumb". A helper that leaves TERM empty is a trap
+	// for whoever reuses it near that code, and it would spring quietly —
+	// a suppressed tip line is not a failure, it is a missing sentence.
+	//
+	// Naming a real terminal satisfies both rules and asserts what the test
+	// actually means: a terminal that can paint.
+	t.Setenv("TERM", "xterm-256color")
 	old := active
 	active = NewPainter("always", true)
 	t.Cleanup(func() { active = old })

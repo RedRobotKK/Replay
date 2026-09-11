@@ -60,15 +60,18 @@ var anyEscape = regexp.MustCompile("\x1b\\[[0-9;?]*[a-zA-Z]")
 // changes behaviour a user can see and is not a test helper's to decide.
 func colourEnv(t *testing.T) {
 	t.Helper()
-	for _, k := range []string{"NO_COLOR", "TERM"} {
-		// Setenv first so the testing package restores the original at
-		// cleanup; Unsetenv is what actually clears it, because NewPainter
-		// asks whether the variable EXISTS, not what it holds.
-		t.Setenv(k, "x")
-		if err := os.Unsetenv(k); err != nil {
-			t.Fatal(err)
-		}
+	// NO_COLOR is cleared: NewPainter asks whether it EXISTS, not what it
+	// holds, so setting it to "" would switch colour off rather than on.
+	// Setenv runs first only so the testing package restores the original.
+	t.Setenv("NO_COLOR", "x")
+	if err := os.Unsetenv("NO_COLOR"); err != nil {
+		t.Fatal(err)
 	}
+	// TERM is SET to a real terminal rather than cleared. tipline.go:59 treats
+	// an empty TERM the same as "dumb", so a helper that empties it would
+	// suppress the tip line for any test that reuses this near that code —
+	// and a missing sentence is not a failure anyone would notice.
+	t.Setenv("TERM", "xterm-256color")
 }
 
 func render(t *testing.T, args ...string) string {
