@@ -229,7 +229,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      # 72 mutants, frozen as data in internal/mutation/testdata/mutants.json,
+      # 75 mutants, frozen as data in internal/mutation/testdata/mutants.json,
       # thawed one at a time against a scratch copy of the tree to ask whether
       # the check that caught each one still works.
       #

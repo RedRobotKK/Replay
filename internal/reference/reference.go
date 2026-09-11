@@ -41,16 +41,16 @@ const (
 type Verdict string
 
 const (
-	// Unmeasured: this machine did not compute the figure. Absence, zero and
+	// Unmeasured means this machine did not compute the figure. Absence, zero and
 	// unknown are three values (ADR-0018), and this is the first.
 	Unmeasured Verdict = "unmeasured"
-	// NoReference: nothing published covers this metric.
+	// NoReference means nothing published covers this metric.
 	NoReference Verdict = "no-reference"
-	// Within: the local figure falls inside a published spread.
+	// Within means the local figure falls inside a published spread.
 	Within Verdict = "within"
-	// Outside: it falls outside a published spread.
+	// Outside means it falls outside a published spread.
 	Outside Verdict = "outside"
-	// Differs: no spread was published, so only direction and magnitude can be
+	// Differs means no spread was published, so only direction and magnitude can be
 	// stated. This is the common case, because most papers report a median and
 	// not a distribution.
 	Differs Verdict = "differs"
