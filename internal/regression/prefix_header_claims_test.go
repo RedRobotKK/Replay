@@ -22,13 +22,34 @@ import (
 //	Nobody catches this by watching, because it happens five times and each
 //	time it happens to everyone at once.
 //
-// Re-measured on 2026-09-11 over 1,820 transcripts — 808 breaks, 40,178,269
+// Re-measured on 2026-09-11 over 1,820 transcripts — 808 breaks, ~40.2M
 // tokens — three of those four specifics were wrong and one was flatly false:
 //
+// That total is written to three figures on purpose, and the reason belongs
+// here rather than in a commit message. Four of the five per-cause token
+// figures it sums are exact multiples of a thousand and only one is not, so
+// they were rounded before they reached me; the run that produced them said
+// so. Adding them gives an exact sum of inexact parts. Writing 40,178,269
+// would assert nine significant figures on inputs carrying four — false
+// precision, in the doc comment of the test that exists to stop false
+// precision rotting in doc comments. Review caught it. The break count is
+// exact and the orderings below survive the rounding by three orders of
+// magnitude.
+//
+// WHICH ROW, because two causes both say "prefix" and only one of them
+// makes the sentence above true. The 11 breaks are CausePrefixChange,
+// "system prompt or tool definitions changed" — the cause `replay prefix`
+// exists for, since it watches the tool set. They are NOT CauseUnknown,
+// "prefix diverged inside the message history at an unknown block", which
+// is the 110-break row: 2,646,269 tokens, mean 24,057. A reader who maps
+// the word "prefix" to that row gets a mean an order of magnitude BELOW
+// the TTL row's 203,667 and every ordinal here inverts. The mapping is
+// load-bearing, so it is written down rather than assumed.
+//
 //	rarest break cause          FALSE. Model change is rarer, 6 against 11.
-//	most expensive per event    still true, 234,182 is the top mean.
+//	most expensive per event    still true, ~234,000 is the top mean.
 //	higher than a TTL expiry    still true, 15% higher rather than 78%.
-//	5 / 1,807,000 / 361,400     now 11 / 2,576,000 / 234,182.
+//	5 / 1,807,000 / 361,400     now 11 breaks at ~2.58M, mean ~234,000.
 //	"it happens five times"     stale for the same reason.
 //
 // The argument survived. Rare and enormous is still why a gate is the right
