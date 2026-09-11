@@ -267,6 +267,68 @@ rather than a repeat; a forty-percent rise is not. Two wordings are split by a r
 stored in the same file — random and local, since a hostname or a hardware id would be an identifier
 and this is a coin flip, not a cohort.
 
+#### No transcript at all: `--usage`
+
+```sh
+replay cost --usage usage-export.json
+replay cost --usage usage-export.json --per-task --json
+```
+
+`--usage` prices a **usage export**: token counts per request, and no conversation content
+anywhere in the file. Three situations produce one. A regulated or enterprise operator often
+cannot let a tool read prompt content at all and can still export a usage ledger — for that
+reader this is the difference between an approval and a rejection in security review, and no
+assurance about what the parser does with the bytes substitutes for not having the bytes. A
+finance owner wants a reconciliation figure and the conversation is not evidence for anything
+they are being asked. And transcripts get rotated away, which leaves the usage records as the
+only surviving evidence that the spend happened.
+
+The file is one JSON document:
+
+```json
+{
+  "schema": "replay.usage.v1",
+  "complete": true,
+  "records": [
+    {"session": "s1", "at": "2026-09-01T10:00:00Z", "model": "claude-sonnet-4-5",
+     "prompt": 9000, "fresh": 1000, "cached_read": 0, "cached_write": 8000, "output": 100}
+  ]
+}
+```
+
+| Field | Required | What happens without it |
+|---|---|---|
+| `schema` | yes | the file is refused: a foreign shape decodes into zeros and reports a corpus that cost nothing |
+| `session` | yes, per record | refused, by record index. The session is the unit of the report and a record that cannot be placed cannot be counted |
+| `model` | yes, per record | refused. It is the key into the price table, and it is how a model change is told apart from a cache break |
+| `prompt`, `fresh`, `cached_read`, `cached_write` | yes | refused unless `fresh + cached_read + cached_write == prompt`. Anthropic counts exclusively and OpenAI inclusively, and an exporter that copied an inclusive total has double-counted the cache — worst on exactly the sessions that cache best |
+| `at` | for the break figures | the cost is still measured; **breaks and avoidable print NOT MEASURED**, because a break is defined against the request before it and undated records have no "before" |
+| `complete` | for the break figures | same. A request missing from the export is indistinguishable from a cache break, and nothing in the file settles it, so the exporter declares it |
+| `output`, `cached_write_5m`, `cached_write_1h`, `lane`, `id` | no | priced or labelled where present |
+
+**The cost is Measured and the cause is not, in the same row.** That is not a hedge, it is where
+the evidence actually divides. Cost is the provider's own token counts against a dated price
+table. So is the break deficit: the expected read is the previous request's prompt minus its
+uncached tail, both provider-reported, and the shortfall against it is arithmetic on measured
+values. What needs the conversation is *why* the prefix stopped matching — and usage and timing
+settle only three of those on their own: the cache expired, the model changed, or nothing was read
+at all. Any other break is counted with its deficit and its cause marked NOT MEASURED. The
+transcript path's fourth answer, which locates the divergence with the byte-to-token fit, is not
+borrowed here: there is no fit, because there are no bytes.
+
+Five figures a transcript run prints are structurally absent, and the report names all five rather
+than omitting them: repeated tool results, tool errors, per-block blame, alternative layouts, and
+agent-lane fan-out. In `--json` they are `null`, never `0`.
+
+`--max-avoidable-usd` still gates, and **refuses to pass when the avoidable figure was not
+measured**. An export that could not support a break figure is not an export with no waste in it,
+and a build going green there would be a clean bill of health nobody earned.
+
+`--share`, `--png`, `--compare`, `--contribute` and `--per-lane` are refused on this path rather
+than served with a blank. Each would carry a figure this run did not measure somewhere it cannot
+be retracted from: a card that gets posted, a change that is the whole claim, or somebody else's
+calibration corpus.
+
 ### `replay cost --compare <date>`
 
 The only measurement here that a provider invoice could contradict, which is what makes it the one
@@ -739,8 +801,12 @@ and a session id, and never message content.
 
 One is marked with `!`: the **masking vault**, which holds the real values behind placeholders sent
 to a provider. It is the only store here that keeps your secrets rather than counts about them, and
-it is never removed by a retention window, because deleting it breaks rehydration for every
-transcript that referenced it.
+since 2026-09-10 it is the only one with an automatic expiry: entries are evicted after 24 hours
+(`serve --mask-ttl`, `0` to keep them). This paragraph used to say it is never removed by a
+retention window, "because deleting it breaks rehydration for every transcript that referenced it".
+That reason turned out not to hold: the placeholder is derived from the secret, so a client
+re-sending a secret whose entry lapsed gets the same placeholder and the entry comes back. What was
+being paid for was an unbounded store of credentials on disk with its key file beside it.
 
 It reports and never removes. Every path it names is one `replay purge` can act on, and keeping the
 two commands apart means reading what you hold is never one keystroke from destroying it.
@@ -1299,6 +1365,7 @@ is not resent. And nothing is ever retried once a byte of the *response* has rea
 | Flag | What it does |
 |---|---|
 | `--mask`, `--mask-patterns`, `--mask-entropy` | Detect and mask secrets in traffic, using a maintained pattern set, your own patterns, and an optional entropy heuristic |
+| `--mask-ttl` | With `--mask`, how long a masked secret stays in the vault before it is evicted. Default 24h. Masking turns a transient secret into one at rest, and the vault key file sits next to the ciphertext, so this is the window a compromised host hands over. `0` keeps entries forever. Eviction is close to free: the placeholder is derived from the secret, so re-sending a secret whose entry lapsed restores it and the placeholder does not change |
 | `--rehydrate` | With `--mask`, restore placeholders in responses. On by default. Turning it **off** leaves the placeholders in place, which is how you evaluate coverage: whatever the agent then trips over was masked, and whatever still works was not |
 | `--project` | With `--mask`, the directory under which file-edit tool inputs may receive real secrets. Defaults to the current directory. It is the boundary that stops a rehydrated secret being written into a file outside the project you are working in |
 | `--rehydrate-scope` | With `--mask`, where a pattern's secrets may be restored, as `name=dest[,dest]` with `dest` one of `text`, `edit`, `tool:NAME` or `none`. `name=*` sets the default (`text,edit`). Repeatable. Narrowing a scope keeps a secret out of destinations that persist it — a file write, a named tool — while still letting the agent read it in conversation |

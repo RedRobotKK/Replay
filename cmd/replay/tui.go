@@ -468,7 +468,6 @@ func foldSpread(lanes []laneSpend) (usd, tokens []float64, sessions int) {
 	return usd, tokens, len(order)
 }
 
-// safeState scores the default byte cap on tool results.
 // safeState reads what Replay has written to this machine.
 //
 // The same registry `replay privacy` walks, so a store added there appears on
@@ -486,10 +485,23 @@ func safeState() tui.Privacy {
 	}
 	root := filepath.Join(home, ".replay")
 	p := tui.Privacy{Root: root}
-	for _, r := range resolveStores(root) {
-		bytes, files := measureStore(r.Full)
+
+	stores, rerr := resolveStoresErr(root)
+	// Absent and unreadable are different answers, and SafeScreen already
+	// renders them differently — it just had no way to be told which it had.
+	// os.IsNotExist is the only error that means "nothing here"; anything else
+	// means "I could not look", and the empty state of this screen reads
+	// "Replay has written nothing to this machine", which is the most
+	// reassuring possible rendering of that.
+	if rerr != nil && !os.IsNotExist(rerr) {
+		p.Err = rerr.Error()
+		return p
+	}
+
+	for _, r := range stores {
+		bytes, files, unmeasured := measureStore(r.Full)
 		p.Stores = append(p.Stores, tui.Store{
-			Name: r.Actual, Bytes: bytes, Files: files,
+			Name: r.Actual, Bytes: bytes, Files: files, Unmeasured: unmeasured,
 			Sensitive: r.Sensitive, Purgeable: r.Purgeable,
 		})
 	}

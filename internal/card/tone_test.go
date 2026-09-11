@@ -369,3 +369,32 @@ func TestNoCardOverrunsItsRightMargin(t *testing.T) {
 		}
 	}
 }
+
+// commas keeps the sign in front of the group separators.
+//
+// Found by mutation: both `if neg` branches in commas were removable with this
+// package green. Every caller today passes a token or task count, which cannot
+// be negative, so the branches are not merely untested — nothing in the binary
+// reaches them. ADR-0014 says an unreachable conditional and an untested one
+// both matter, and the way to settle which this is, is to call the function.
+//
+// Without the first branch the "-" is fed to the grouping loop as a digit, so
+// -1234567 groups from the wrong offset and prints "-1,234,567" as "-1,23,4567"
+// — wrong in a way that still looks like a number. Without the second, the sign
+// is dropped and a debit reads as a credit.
+func TestCommasKeepsTheSign(t *testing.T) {
+	for _, tc := range []struct {
+		in   int
+		want string
+	}{
+		{0, "0"},
+		{999, "999"},
+		{1234567, "1,234,567"},
+		{-1234567, "-1,234,567"},
+		{-999, "-999"},
+	} {
+		if got := commas(tc.in); got != tc.want {
+			t.Errorf("commas(%d) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}

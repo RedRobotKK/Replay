@@ -249,3 +249,46 @@ func TestCE10_EmptyNotesSayNotMeasured(t *testing.T) {
 		t.Errorf("an empty corpus reported cache tokens it never read:\n%s", allowance)
 	}
 }
+
+// CE11: with no ceiling given, the metered note says the halt point was not
+// computed rather than leaving a reader to assume it could not be.
+//
+// Found by hand-mutation after scripts/refusal-reachability reported this
+// return UNVERIFIED — it is the unconditional tail of MeteredNote, behind no
+// `if`, so the tool could not force anything false and correctly refused to
+// call it covered. Deleting the sentence outright left this package green.
+//
+// It is the third refusal in a function that already has two, and the only one
+// that is not about missing data. The other two say the corpus priced nothing;
+// this one says the corpus is fine and the READER did not say what their
+// ceiling is. A metered reader who sees a bare multiplier and no halt point has
+// no way to tell which of the three happened, and the action differs: fix the
+// corpus, or pass --ceiling.
+func TestCE11_ANoteWithNoCeilingSaysWhyThereIsNoHaltPoint(t *testing.T) {
+	e := CeilingEffect{Requests: 10, CorrectUSD: 100, BlindUSD: 794}
+
+	note := e.Note(BasisMetered, 0)
+	if strings.Contains(note, "halts execution at $") {
+		t.Fatalf("a halt point was computed with no ceiling to compute it from:\n%s", note)
+	}
+	if !strings.Contains(note, "where it would halt is not computed") {
+		t.Errorf("no ceiling was given and the note does not say so, so a reader cannot "+
+			"tell a missing argument from a corpus that priced nothing:\n%s", note)
+	}
+	// The ratio is the part that IS measured here, and it must still be
+	// reported — this is not the "nothing priced" refusal wearing another hat.
+	if !strings.Contains(note, "7.94x high") {
+		t.Errorf("the ratio was withheld along with the halt point, so a reader who "+
+			"omitted --ceiling learns nothing at all:\n%s", note)
+	}
+
+	// And with a ceiling, the same effect does compute one. Without this the
+	// assertion above passes for a note that never computes a halt point.
+	withCeiling := e.Note(BasisMetered, 500)
+	if !strings.Contains(withCeiling, "halts execution at $") {
+		t.Errorf("a ceiling was given and no halt point came back:\n%s", withCeiling)
+	}
+	if strings.Contains(withCeiling, "is not computed") {
+		t.Errorf("a halt point was computed and the note still says it was not:\n%s", withCeiling)
+	}
+}

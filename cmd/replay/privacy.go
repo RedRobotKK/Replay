@@ -32,6 +32,10 @@ type privacyStore struct {
 	Purgeable bool   `json:"purgeable"`
 	Bytes     int64  `json:"bytes"`
 	Files     int    `json:"files"`
+	// Unmeasured is how many entries under this store could not be walked.
+	// A store printed as "0 B" because nobody could read it is not a store
+	// known to be empty, and the reader has to be able to tell those apart.
+	Unmeasured int `json:"unmeasured,omitempty"`
 }
 
 type privacyReport struct {
@@ -59,13 +63,21 @@ func runPrivacy(args []string, stdout, stderr io.Writer) error {
 	}
 	root := filepath.Join(home, ".replay")
 
+	stores, rerr := resolveStoresErr(root)
+	// "I could not look" is not "there is nothing here". Printing the empty
+	// message for an unreadable directory is a false absence claim in the
+	// command that answers "what do you hold about me".
+	if rerr != nil && !os.IsNotExist(rerr) {
+		return fmt.Errorf("reading %s: %w", root, rerr)
+	}
+
 	rep := privacyReport{Root: root}
-	for _, r := range resolveStores(root) {
-		bytes, files := measureStore(r.Full)
+	for _, r := range stores {
+		bytes, files, unmeasured := measureStore(r.Full)
 		rep.Stores = append(rep.Stores, privacyStore{
 			Name: r.Actual, Path: r.Full, Holds: r.Holds,
 			Sensitive: r.Sensitive, Purgeable: r.Purgeable,
-			Bytes: bytes, Files: files,
+			Bytes: bytes, Files: files, Unmeasured: unmeasured,
 		})
 	}
 
@@ -87,6 +99,9 @@ func runPrivacy(args []string, stdout, stderr io.Writer) error {
 			mark = "!"
 		}
 		_, _ = fmt.Fprintf(stdout, "%s %-20s %8s", mark, s.Name, formatBytes(s.Bytes))
+		if s.Unmeasured > 0 {
+			_, _ = fmt.Fprintf(stdout, "  (%d entr(ies) could not be measured)", s.Unmeasured)
+		}
 		if s.Files > 1 {
 			_, _ = fmt.Fprintf(stdout, "  %d files", s.Files)
 		}
@@ -102,23 +117,31 @@ func runPrivacy(args []string, stdout, stderr io.Writer) error {
 }
 
 // measureStore totals a file or a directory of them.
-func measureStore(path string) (int64, int) {
+func measureStore(path string) (int64, int, int) {
 	info, err := os.Stat(path)
 	if err != nil {
-		return 0, 0
+		return 0, 0, 0
 	}
 	if !info.IsDir() {
-		return info.Size(), 1
+		return info.Size(), 1, 0
 	}
 	var total int64
-	var n int
+	var n, unmeasured int
 	_ = filepath.Walk(path, func(_ string, fi os.FileInfo, err error) error {
-		if err != nil || fi.IsDir() {
+		// An entry that cannot be walked is not an entry known to be empty.
+		// measureStore's caller prints the total as a size, so a swallow here
+		// renders an unmeasurable store as "0 B" — indistinguishable from one
+		// holding nothing. Counted as unmeasured so the caller can say so.
+		if err != nil {
+			unmeasured++
+			return nil
+		}
+		if fi.IsDir() {
 			return nil
 		}
 		total += fi.Size()
 		n++
 		return nil
 	})
-	return total, n
+	return total, n, unmeasured
 }

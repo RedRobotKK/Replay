@@ -21,11 +21,16 @@ type Privacy struct {
 
 // Store is one thing on disk, and enough to decide what to do about it.
 type Store struct {
-	Name      string
-	Bytes     int64
-	Files     int
-	Sensitive bool
-	Purgeable bool
+	Name  string
+	Bytes int64
+	Files int
+	// Unmeasured is how many entries under this store could not be walked.
+	// Bytes is a total over what was readable, so without this a store that
+	// nobody could open renders as the size of the part that was — or as
+	// "0 B", which reads as a store known to be empty.
+	Unmeasured int
+	Sensitive  bool
+	Purgeable  bool
 }
 
 // storeCols is this screen's table. Narrow enough for a 60-column terminal,
@@ -136,11 +141,20 @@ func SafeScreen(p Privacy) Screen {
 }
 
 // storeSize renders a store's footprint, and says nothing it did not measure.
+//
+// Bytes totals the entries the walk could read. A store with unreadable ones is
+// therefore reported smaller than it is, and the gap is the reader's to know
+// about: "0 B" for a directory nobody could open is the same false absence
+// `replay privacy` was printing, one surface along.
 func storeSize(s Store) string {
+	size := humanBytes(s.Bytes)
 	if s.Files > 1 {
-		return fmt.Sprintf("%s, %d files", humanBytes(s.Bytes), s.Files)
+		size = fmt.Sprintf("%s, %d files", size, s.Files)
 	}
-	return humanBytes(s.Bytes)
+	if s.Unmeasured > 0 {
+		size = fmt.Sprintf("%s, %d unread", size, s.Unmeasured)
+	}
+	return size
 }
 
 // humanBytes formats a size in the units `replay privacy` uses, so the screen

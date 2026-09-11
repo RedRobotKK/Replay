@@ -136,6 +136,56 @@ number of turns actually measured, which is the case a comparison of two price-p
 cannot see at all. Dollar figures also carry the age of the table they came from, because a date
 tells a reader what was used and only a subtraction tells them it is stale.
 
+## Where you sit, against somebody else's population
+
+A figure about one machine is not actionable on its own. "This session cost $3.40" leaves you asking
+whether that is high, and until now this tool could not answer: the pooled corpus it collects from
+contributors has one member, and publishing a population figure derived from one machine is the
+shape of claim this project has already retracted twice.
+
+Two 2026 papers supply a population without anyone contributing anything.
+
+| Source | Population | What it measures |
+|---|---|---|
+| [TraceLab, arXiv:2606.30560](https://arxiv.org/abs/2606.30560) | 4,265 sessions, 43 developers, Claude Code and Codex | prefix cache hit rate, prefill amplification, prefix share of cost |
+| [Agentic Coding in the Wild, arXiv:2608.00101](https://arxiv.org/abs/2608.00101) | 13.5M sessions, 760.5M LLM calls, 95T tokens | cache hit rate within and across turns, idle-gap decay, prompt composition |
+
+`replay context` now ends with one line placing your system prompt against the second of those:
+
+```text
+  system prompt: 8.0% here, 14.0% across 13.5M sessions, 760.5M LLM calls (arXiv:2608.00101)
+```
+
+The population travels with the figure on the same line, every time. That is the whole design:
+"8.0% here, 14.0% across 13.5M sessions" is a sentence you can weigh, and "8.0%, well under average"
+is not. Copilot's 13.5M sessions are Copilot users on Copilot's harness, so a difference is in the
+first instance a difference in what the two are doing — not evidence that anyone is doing it wrong.
+There is no "high", no "typical" and no "should" anywhere in the vocabulary, and a test asserts
+there never will be.
+
+The verdict is computed from the two figures and is never written into the reference, for the same
+reason a provider claim's verdict is not: a hand-written "typical" is another claim wearing a
+verdict's clothes. See [docs/design/reference-distribution.md](docs/design/reference-distribution.md).
+
+### What those papers say that this tool independently found
+
+Two of their results were reproduced here by different methods, on a different corpus, before the
+papers were read.
+
+**Tool results dominate the prompt.** *Don't Break the Cache* ([arXiv:2601.06007](https://arxiv.org/abs/2601.06007))
+reports 78.5% cost savings on Sonnet 4.5 from excluding dynamic tool results from the cached prefix.
+`replay blame` puts tool results and tool calls at ranks 1, 3 and 4 on the largest session in this
+repository's own corpus — theirs by A/B-ing three providers, this by attributing carried prompt
+tokens in transcripts nobody wrote for the purpose.
+
+**Caches die of prefix churn, not idleness.** *Keeping the Cache Warm Pays*
+([arXiv:2607.19214](https://arxiv.org/abs/2607.19214)) derives a break-even horizon for holding a
+cache open with periodic pings. Measured against this corpus, 87% of cache-creation spend happens on
+gaps under five minutes, where the cache had not expired at all — $509 against $77 in the bands any
+ping could bridge. The published Copilot decay curve says the same thing from the other side: a
+plateau above 95% under two minutes, a cliff between two and ten. The conclusion is *do not build keepalive*: it is the wrong lever here by roughly seven times, and
+the measurement behind that is filed under `docs/evidence/`.
+
 ## What it does
 
 ```sh
@@ -195,7 +245,31 @@ worth declaring.
   of this file.
 - **The ledger never stores message text.** It stores block kinds, sizes, timings and usage counts.
   Tool names are kept in the clear; the path argument is HMAC'd with a machine-local key, so two
-  lanes reading the same file are visibly the same file without the file ever being named.
+  lanes reading the same file are visibly the same file without the file ever being named. Tool
+  calls are HMAC'd too, on **both** halves of a record since 2026-09-10. The response half used to
+  be a plain SHA-256 of the tool input, which meant anyone holding a ledger file could test a
+  guessed shell command or file path against it offline and get a yes or no.
+- **What the local listener refuses, and what it does not.** It binds loopback only. It refuses any
+  request carrying `Origin` or `Sec-Fetch-Mode`, and — since 2026-09-10 — any request whose `Host`
+  header names somewhere other than this machine, which is what a page at a name pointed at
+  `127.0.0.1` necessarily sends. `/replay/healthz` carries both checks and **not** the token, so
+  `replay doctor` can still tell you why your agent is failing; what it discloses to a local
+  process is that something answers here, which `connect(2)` already tells it. **What it does not
+  do:** `/replay/status` and `/replay/metrics` are unauthenticated unless you set `--token`, so any
+  process on the machine can read your model names, token counts and per-session list-price
+  dollars. Set a token if that matters to you.
+- **`~/.replay` is checked, not assumed.** The ledger and vault directories and their key files are
+  verified owner-only every time they are opened, tightened when they are not, and Replay refuses
+  to start when they cannot be. They used to be created `0700` and never looked at again, so a
+  directory that arrived from an archive or a `mkdir -m 777` stayed readable by every account on
+  the machine.
+- **Masked secrets expire.** `--mask` writes the secrets it replaces into `~/.replay/vault`, which
+  turns a transient credential into one at rest. Entries are evicted after 24 hours (`--mask-ttl`;
+  `0` keeps them indefinitely). This bounds the window and nothing more: **the vault key file sits
+  next to the ciphertext it decrypts**, so anyone who can read that directory within the window can
+  read the secrets. Masking is a control on what leaves the machine, not storage you should rely
+  on. This is a known open finding, recorded in
+  [the security review](docs/evidence/security-review-2026-09-04.md).
 - **A break says which tools changed.** Not "system prompt or tool definitions changed", which names
   two causes and settles neither. It names the ones that arrived: *added 3 tool(s):
   mcp__claude_ai_Otter_ai__otter_fetch, otter_get_user_info, otter_search; removed 1 tool(s):
