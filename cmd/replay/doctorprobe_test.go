@@ -33,7 +33,7 @@ import (
 // the half that cannot rot.
 func TestDP1_ANonLoopbackBaseIsNeverContacted(t *testing.T) {
 	var hits int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(&hits, 1)
 		_, _ = w.Write([]byte("replay"))
 	}))
@@ -104,7 +104,7 @@ func TestDP2_ALoopbackProxyIsStillFound(t *testing.T) {
 // message must say which — an operator who is told "healthy" about their own
 // dev server learns nothing and trusts it.
 func TestDP4_SomethingElseOnThePortIsNotAProxy(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("<!doctype html><title>my dev server</title>"))
 	}))
 	defer srv.Close()
