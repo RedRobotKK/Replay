@@ -43,12 +43,21 @@ func systemPromptLine(sysTokens, allTokens int) string {
 // systemPromptShare and CR6 pins that it does — and a branch no test can enter
 // is one guard-reachability reports and this repository does not keep.
 func referenceLine(name, metric string, part, whole int) string {
-	if whole <= 0 || part <= 0 {
-		return ""
-	}
 	ref, ok := reference.For(metric)
 	if !ok {
 		return ""
+	}
+	// Three values, three renderings. This used to be
+	// `if whole <= 0 || part <= 0 { return "" }`, which collapsed the last
+	// two into the first and printed nothing for all three — in a function
+	// whose caller's doc comment cites ADR-0018 by name.
+	//
+	// No denominator is the UNKNOWN case: nothing counted the tokens, so
+	// there is no local figure and CompareMissing renders the published half
+	// alone. A part of zero against a real whole is a MEASUREMENT, and 0% is
+	// an answer a reader is entitled to see.
+	if whole <= 0 {
+		return name + ": " + ref.CompareMissing().Line()
 	}
 	return name + ": " + ref.Compare(float64(part)/float64(whole)).Line()
 }
