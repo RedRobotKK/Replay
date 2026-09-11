@@ -465,9 +465,14 @@ func jsonWord(b []byte, i int, word string) bool {
 
 // measureJSONString reports the length of the string literal at i once
 // decoded, without decoding it.
+//
+// Failure returns the index it had reached, not zero. Zero sent a caller
+// that ignored ok back to the start of the buffer, where the rescan reached
+// the same answer by another route and the caller's own check became
+// unobservable — the same trap readHex4 carried.
 func measureJSONString(b []byte, i int) (n, end int, ok bool) {
 	if i >= len(b) || b[i] != '"' {
-		return 0, 0, false
+		return 0, i, false
 	}
 	i++
 	for i < len(b) {
@@ -478,7 +483,7 @@ func measureJSONString(b []byte, i int) (n, end int, ok bool) {
 		case c == '\\':
 			i++
 			if i >= len(b) {
-				return 0, 0, false
+				return 0, i, false
 			}
 			switch b[i] {
 			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
@@ -487,7 +492,7 @@ func measureJSONString(b []byte, i int) (n, end int, ok bool) {
 			case 'u':
 				r, next, good := readHex4(b, i+1)
 				if !good {
-					return 0, 0, false
+					return 0, i, false
 				}
 				i = next
 				if utf16.IsSurrogate(r) {
@@ -507,12 +512,12 @@ func measureJSONString(b []byte, i int) (n, end int, ok bool) {
 				}
 				n += utf8.RuneLen(r)
 			default:
-				return 0, 0, false
+				return 0, i, false
 			}
 		case c < 0x20:
 			// A raw control character in a string literal is a syntax
 			// error to the scanner this replaced, not a character.
-			return 0, 0, false
+			return 0, i, false
 		default:
 			r, size := utf8.DecodeRune(b[i:])
 			if r == utf8.RuneError && size == 1 {
@@ -526,13 +531,17 @@ func measureJSONString(b []byte, i int) (n, end int, ok bool) {
 			i += size
 		}
 	}
-	return 0, 0, false
+	return 0, i, false
 }
 
 // readHex4 reads four hex digits at i.
 func readHex4(b []byte, i int) (rune, int, bool) {
+	// Failure returns the index it was given, not zero. Returning zero sent
+	// a caller that ignored ok back to the start of the buffer, where the
+	// rescan happened to reach the same answer by a different route — which
+	// made the caller's own check unobservable and hid it from the reviewer.
 	if i+4 > len(b) {
-		return 0, 0, false
+		return 0, i, false
 	}
 	var r rune
 	for k := 0; k < 4; k++ {
@@ -545,7 +554,7 @@ func readHex4(b []byte, i int) (rune, int, bool) {
 		case 'A' <= c && c <= 'F':
 			r = r*16 + rune(c-'A'+10)
 		default:
-			return 0, 0, false
+			return 0, i, false
 		}
 	}
 	return r, i + 4, true
@@ -555,7 +564,7 @@ func readHex4(b []byte, i int) (rune, int, bool) {
 // surrogate pair.
 func readHex4Escape(b []byte, i int) (rune, int, bool) {
 	if i+2 > len(b) || b[i] != '\\' || b[i+1] != 'u' {
-		return 0, 0, false
+		return 0, i, false
 	}
 	return readHex4(b, i+2)
 }

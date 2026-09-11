@@ -86,6 +86,14 @@ func diffCorpus() []string {
 		"{}", "[]", "[[]]", "{\"a\":{}}", `{"a":1}`, `[1,2,3]`,
 		`{"a":{"b":[1,2,{"c":"d"}]}}`, "[[[[1]]]]",
 		`{"dup":1,"dup":2}`,
+		// An unquoted key that closes into a colon. Rejecting it is what the
+		// quote check in measureJSONString and its propagation in
+		// measureJSONKey are both for, and neither was observed by anything:
+		// every other malformed key here ends in scanBad either way, so the
+		// answer is len(raw) whichever layer catches it. This one does not —
+		// with the checks gone the scan mistakes `a"` for a key and the whole
+		// object parses to 1.
+		`{a":1}`, `{a":1,"b":2}`, `[{a":1}]`, `{ a":1}`, `{a":"v"}`,
 		// Structure that is not structure.
 		`{"a":1,}`, "[1,]", "{a:1}", "'x'", "nul", "[1 2]", "1 ]", `{"a"}`, `{"a":}`,
 		`{:1}`, "[,]", "}", "]", "{", "[", `{"a":1`, `["a"`,
@@ -135,6 +143,14 @@ func diffCorpus() []string {
 		// slice.
 		`"\u00`, `"\u0`, `"\u`, `"\u000`,
 		`["\u00`, `{"k":"\u0`,
+		// A high surrogate whose low half is NOT an escape, but where four
+		// valid hex digits sit two bytes later anyway. readHex4Escape checks
+		// that what follows is literally \u before reading; without that
+		// check it would read "DC00" out of the middle of the text, pair it
+		// with the high surrogate, and measure one four-byte rune where the
+		// decoder measures a replacement character and six plain bytes.
+		// Nothing else in this corpus separates those two.
+		`"\ud800xxDC00"`, `"\ud800  DC00"`, `"\ud800\xDC00"`, `"\ud83dyyDE00"`,
 		// A high surrogate at the very end, which is what readHex4Escape's
 		// bounds check is for: there is no room left for the low half.
 		`"\ud800`, `"\ud800\`, `"\ud800\u`, `"\ud83d\ude0`,
