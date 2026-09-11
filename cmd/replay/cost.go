@@ -382,7 +382,12 @@ func renderCost(s costSummary, unpriced, unreadable int, out io.Writer, stateDir
 	if s.Tasks == 0 {
 		b.WriteString("No transcript could be priced.")
 		if unpriced > 0 {
-			fmt.Fprintf(&b, " %d were read but their model is not in the price table.", unpriced)
+			// "1 were read" is what a reader sees when exactly one transcript
+			// is unpriced, which is the commonest case for somebody trying a
+			// new model — the first run after a release carries one session.
+			// Found by reading the output as a first-time operator rather than
+			// by reading the code.
+			fmt.Fprintf(&b, " %s", unpricedClause(unpriced))
 		}
 		if unreadable > 0 {
 			fmt.Fprintf(&b, " %d transcript(s) could not be read at all: no provider request was found.", unreadable)
@@ -1029,4 +1034,24 @@ func fxCol(fx money.Display, usd float64) string {
 		return strings.TrimRight(base, " ") + "  = " + a
 	}
 	return strings.TrimRight(base, " ")
+}
+
+// unpricedClause says how many transcripts went unpriced, in a sentence that
+// agrees with itself.
+//
+// The original read "%d were read but their model is not in the price table",
+// which for one transcript printed "1 were read but their model". Fixing the
+// verb alone left "1 was read but THEIR model" — singular subject, plural
+// possessive — so the whole clause is built together rather than patched a
+// word at a time.
+//
+// Both call sites explain why a figure is missing, which is the sentence a
+// reader studies hardest: they are looking for the reason their number did not
+// appear. Broken agreement there costs more trust than it does in a heading
+// nobody stops on.
+func unpricedClause(n int) string {
+	if n == 1 {
+		return "1 was read but its model is not in the price table."
+	}
+	return fmt.Sprintf("%d were read but their models are not in the price table.", n)
 }
