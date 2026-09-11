@@ -136,6 +136,56 @@ number of turns actually measured, which is the case a comparison of two price-p
 cannot see at all. Dollar figures also carry the age of the table they came from, because a date
 tells a reader what was used and only a subtraction tells them it is stale.
 
+## Where you sit, against somebody else's population
+
+A figure about one machine is not actionable on its own. "This session cost $3.40" leaves you asking
+whether that is high, and until now this tool could not answer: the pooled corpus it collects from
+contributors has one member, and publishing a population figure derived from one machine is the
+shape of claim this project has already retracted twice.
+
+Two 2026 papers supply a population without anyone contributing anything.
+
+| Source | Population | What it measures |
+|---|---|---|
+| [TraceLab, arXiv:2606.30560](https://arxiv.org/abs/2606.30560) | 4,265 sessions, 43 developers, Claude Code and Codex | prefix cache hit rate, prefill amplification, prefix share of cost |
+| [Agentic Coding in the Wild, arXiv:2608.00101](https://arxiv.org/abs/2608.00101) | 13.5M sessions, 760.5M LLM calls, 95T tokens | cache hit rate within and across turns, idle-gap decay, prompt composition |
+
+`replay context` now ends with one line placing your system prompt against the second of those:
+
+```text
+  system prompt: 8.0% here, 14.0% across 13.5M sessions, 760.5M LLM calls (arXiv:2608.00101)
+```
+
+The population travels with the figure on the same line, every time. That is the whole design:
+"8.0% here, 14.0% across 13.5M sessions" is a sentence you can weigh, and "8.0%, well under average"
+is not. Copilot's 13.5M sessions are Copilot users on Copilot's harness, so a difference is in the
+first instance a difference in what the two are doing — not evidence that anyone is doing it wrong.
+There is no "high", no "typical" and no "should" anywhere in the vocabulary, and a test asserts
+there never will be.
+
+The verdict is computed from the two figures and is never written into the reference, for the same
+reason a provider claim's verdict is not: a hand-written "typical" is another claim wearing a
+verdict's clothes. See [docs/design/reference-distribution.md](docs/design/reference-distribution.md).
+
+### What those papers say that this tool independently found
+
+Two of their results were reproduced here by different methods, on a different corpus, before the
+papers were read.
+
+**Tool results dominate the prompt.** *Don't Break the Cache* ([arXiv:2601.06007](https://arxiv.org/abs/2601.06007))
+reports 78.5% cost savings on Sonnet 4.5 from excluding dynamic tool results from the cached prefix.
+`replay blame` puts tool results and tool calls at ranks 1, 3 and 4 on the largest session in this
+repository's own corpus — theirs by A/B-ing three providers, this by attributing carried prompt
+tokens in transcripts nobody wrote for the purpose.
+
+**Caches die of prefix churn, not idleness.** *Keeping the Cache Warm Pays*
+([arXiv:2607.19214](https://arxiv.org/abs/2607.19214)) derives a break-even horizon for holding a
+cache open with periodic pings. Measured against this corpus, 87% of cache-creation spend happens on
+gaps under five minutes, where the cache had not expired at all — $509 against $77 in the bands any
+ping could bridge. The published Copilot decay curve says the same thing from the other side: a
+plateau above 95% under two minutes, a cliff between two and ten. The conclusion is *do not build keepalive*: it is the wrong lever here by roughly seven times, and
+the measurement behind that is filed under `docs/evidence/`.
+
 ## What it does
 
 ```sh
