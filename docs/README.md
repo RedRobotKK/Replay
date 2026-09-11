@@ -8,6 +8,7 @@ back to this index.
 | Document | What is in it |
 |---|---|
 | [Getting started](guide/getting-started.md) | The first ten minutes. Install, see what Replay can find, read a session you have already paid for |
+| [The first run, end to end](guide/first-run-journey.md) | The whole loop in one document: install, first finding, act on it, verify the change, and the three places the route stops |
 | [Commands](guide/commands.md) | Every subcommand, and every flag on `serve` |
 | [Troubleshooting](guide/troubleshooting.md) | What goes wrong, what it means, and what to do |
 | [Alerting](guide/alerting.md) | Prometheus expressions for `/replay/metrics`, and the two thresholds you should derive from your own data rather than copy |

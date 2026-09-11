@@ -19,6 +19,24 @@ func TestStoreSizeNamesFilesOnlyWhenThereAreSeveral(t *testing.T) {
 	}
 }
 
+// A store whose entries could not be walked is not a store known to be empty.
+//
+// measureStore counts what it could not read rather than discarding it, and
+// `replay privacy` prints that count. Without it here, a directory rendered as
+// "0 B" because nobody could open it is indistinguishable from one holding
+// nothing — on the screen whose whole question is whether the setup is safe.
+func TestStoreSizeSaysWhatItCouldNotMeasure(t *testing.T) {
+	whole := storeSize(Store{Bytes: 2048, Files: 4})
+	if strings.Contains(whole, "unread") {
+		t.Errorf("a fully measured store claims something was missed: %q", whole)
+	}
+	got := storeSize(Store{Bytes: 2048, Files: 4, Unmeasured: 3})
+	if !strings.Contains(got, "3") || !strings.Contains(got, "unread") {
+		t.Errorf("a store with three unreadable entries renders as %q, which the "+
+			"reader cannot tell from one measured whole", got)
+	}
+}
+
 func TestHumanBytesUsesTheUnitTheReaderExpects(t *testing.T) {
 	for _, c := range []struct {
 		in   int64

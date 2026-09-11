@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -137,7 +138,14 @@ func TestST4_ResolveStoresMatchesPrefixesAndSkipsTheRest(t *testing.T) {
 	}
 
 	got := map[string]bool{}
-	for _, r := range resolveStores(root) {
+	// resolveStoresErr since #155: the read error reaches the caller now,
+	// because a store the walk could not enter must not render as a clean
+	// disk. Nothing here should produce one.
+	rs, err := resolveStoresErr(root)
+	if err != nil {
+		t.Fatalf("resolving stores under a directory this test just built: %v", err)
+	}
+	for _, r := range rs {
 		got[r.Actual] = true
 	}
 	for _, want := range []string{"ledger", "ledger-grok", "vault", "tip.json"} {
@@ -155,9 +163,25 @@ func TestST4_ResolveStoresMatchesPrefixesAndSkipsTheRest(t *testing.T) {
 }
 
 // ST5: a root that cannot be read resolves to nothing rather than to a guess.
+//
+// A missing root is not an error here — a machine that has never run the tool
+// has no ~/.replay, and `replay privacy` must answer it plainly rather than
+// fail. That distinction is #155's: any other read failure now reaches the
+// caller, because a store the walk could not enter must not render as a clean
+// disk.
 func TestST5_AnUnreadableRootResolvesToNothing(t *testing.T) {
-	if got := resolveStores(filepath.Join(t.TempDir(), "absent")); len(got) != 0 {
-		t.Errorf("resolveStores over a missing root returned %d store(s), want none", len(got))
+	got, err := resolveStoresErr(filepath.Join(t.TempDir(), "absent"))
+	if len(got) != 0 {
+		t.Errorf("resolveStoresErr over a missing root returned %d store(s), want none", len(got))
+	}
+	// The error is returned, and it is the not-exist one specifically. The
+	// caller decides what that means — safeState treats a missing root as an
+	// empty machine and anything else as a disclosure it must not render as a
+	// clean disk. Asserted with errors.Is rather than on the message, because
+	// the wording of a missing path is the operating system's and differs.
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("a root that is simply absent gave %v, not a not-exist error; the caller "+
+			"distinguishes those and would report an empty machine as a read failure", err)
 	}
 }
 

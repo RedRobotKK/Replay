@@ -188,27 +188,122 @@ func TestPG6_AnUnparseableWindowIsRefused(t *testing.T) {
 	}
 }
 
-// ledgerSessions writes one ledger file per name, each holding the given
-// session ids one record per line, plus a blank line and an unparseable one.
+// PG22: an erasure names what it could not read.
 //
-// Both of those are deliberate. A blank line and a line that is not JSON are
-// what a real ledger accumulates, and each is a branch in the erasure walk that
-// nothing observed.
-func ledgerSessions(t *testing.T, files map[string][]string) string {
-	t.Helper()
-	dir := t.TempDir()
-	for name, ids := range files {
-		var b strings.Builder
-		b.WriteString("\n")                        // blank line
-		b.WriteString("this is not json at all\n") // unparseable, must be kept
-		for _, id := range ids {
-			b.WriteString(`{"session_id":"` + id + `","bytes":1}` + "\n")
-		}
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(b.String()), 0o600); err != nil {
-			t.Fatal(err)
-		}
+// The walk skipped an unreadable ledger file and said nothing, then printed
+// "removed N record(s)" or "Nothing to remove". A subject asking for erasure was
+// told it completed over a corpus the command had not fully examined. Absence,
+// zero and unknown are three values, and silence collapsed the third into the
+// first.
+func TestPG22_AnErasureNamesWhatItCouldNotRead(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no Unix mode bits on this platform; a file cannot be made unreadable here")
 	}
-	return dir
+	if os.Geteuid() == 0 {
+		t.Skip("running as root, which can read anything")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.jsonl"),
+		[]byte(`{"session_id":"wanted"}`+"\n"+`{"session_id":"other"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	locked := filepath.Join(dir, "locked.jsonl")
+	if err := os.WriteFile(locked, []byte(`{"session_id":"wanted"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0o000); err != nil {
+		t.Skipf("cannot remove file permissions: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o600) })
+
+	var out, errb bytes.Buffer
+	if err := runPurge([]string{dir, "--session", "wanted", "--yes"}, &out, &errb); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "could not be read") {
+		t.Errorf("the erasure did not say a file was skipped, so its report reads as a "+
+			"statement about the whole directory:\n%s", s)
+	}
+	if !strings.Contains(s, "not a statement about those") {
+		t.Errorf("the report must bound its own claim:\n%s", s)
+	}
+}
+
+// PG23: an erasure names a directory it could not walk, not just a file it
+// could not read.
+//
+// The two failures reach purgeSession by different routes. A file that cannot
+// be opened fails at os.ReadFile; a directory that cannot be listed never
+// produces a file at all, and arrives as the walk's own error. Counting only
+// the first would let a whole unreadable subtree pass unmentioned under
+// "removed N record(s)", which is the larger of the two silences.
+func TestPG23_AnErasureNamesADirectoryItCouldNotWalk(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no Unix mode bits on this platform; a directory cannot be made unreadable here")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("running as root, which can read anything")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.jsonl"),
+		[]byte(`{"session_id":"wanted"}`+"\n"+`{"session_id":"other"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	locked := filepath.Join(dir, "locked")
+	if err := os.MkdirAll(locked, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(locked, "b.jsonl"),
+		[]byte(`{"session_id":"wanted"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0o000); err != nil {
+		t.Skipf("cannot remove directory permissions: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+
+	var out, errb bytes.Buffer
+	if err := runPurge([]string{dir, "--session", "wanted", "--yes"}, &out, &errb); err != nil {
+		t.Fatalf("purge failed: %v", err)
+	}
+	if !strings.Contains(out.String(), "could not be read") {
+		t.Errorf("a subtree the walk could not enter was not mentioned, so the report "+
+			"claims an erasure over records it never saw:\n%s", out.String())
+	}
+}
+
+// PG24: a sweep that read everything claims nothing about what it could not.
+//
+// The other half of PG23. warnUnreadable returns on zero rather than printing
+// "0 file(s) could not be read"; a caveat on every clean run is a caveat the
+// reader stops reading, and then the one that matters goes past unread. Both
+// endings are checked, because the caveat is appended separately to each.
+func TestPG24_ACleanSweepClaimsNothingAboutUnreadableFiles(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.jsonl"),
+		[]byte(`{"session_id":"wanted"}`+"\n"+`{"session_id":"other"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var removed, errb bytes.Buffer
+	if err := runPurge([]string{dir, "--session", "wanted", "--yes"}, &removed, &errb); err != nil {
+		t.Fatalf("purge failed: %v", err)
+	}
+	if strings.Contains(removed.String(), "could not be read") {
+		t.Errorf("a sweep that read every file hedged anyway:\n%s", removed.String())
+	}
+
+	var nothing bytes.Buffer
+	if err := runPurge([]string{dir, "--session", "never-recorded"}, &nothing, &errb); err != nil {
+		t.Fatalf("purge failed: %v", err)
+	}
+	if !strings.Contains(nothing.String(), "Nothing to remove") {
+		t.Fatalf("expected the no-match ending, got:\n%s", nothing.String())
+	}
+	if strings.Contains(nothing.String(), "could not be read") {
+		t.Errorf("a no-match sweep over readable files hedged anyway:\n%s", nothing.String())
+	}
 }
 
 // PG10: the erasure path had no tests at all, and every guard in it was
@@ -550,7 +645,7 @@ func TestPG20_ErasingEveryRecordLeavesTheFileEmpty(t *testing.T) {
 	}
 }
 
-// PG19/PG20: a failed rewrite names the file and the operation.
+// PG22/PG23: a failed rewrite names the file and the operation.
 //
 // Both branches were reported UNREACHED the moment the AST neutraliser made
 // them checkable. They are the two steps of the write-and-rename that exists
@@ -562,7 +657,7 @@ func TestPG20_ErasingEveryRecordLeavesTheFileEmpty(t *testing.T) {
 // The distinction matters: "rewriting" and "replacing" are different failures
 // with different recoveries, and a reader who is told the wrong one looks at
 // the wrong file.
-func TestPG19_AFailedWriteIsReportedAsARewrite(t *testing.T) {
+func TestPG22_AFailedWriteIsReportedAsARewrite(t *testing.T) {
 	dir := ledgerSessions(t, map[string][]string{"a.jsonl": {"wanted", "kept"}})
 
 	orig := purgeWriteFile
@@ -582,7 +677,7 @@ func TestPG19_AFailedWriteIsReportedAsARewrite(t *testing.T) {
 	}
 }
 
-func TestPG20_AFailedRenameIsReportedAsAReplacement(t *testing.T) {
+func TestPG23_AFailedRenameIsReportedAsAReplacement(t *testing.T) {
 	dir := ledgerSessions(t, map[string][]string{"a.jsonl": {"wanted", "kept"}})
 
 	orig := purgeRename
@@ -602,4 +697,27 @@ func TestPG20_AFailedRenameIsReportedAsAReplacement(t *testing.T) {
 	if strings.Contains(err.Error(), "rewriting") {
 		t.Errorf("a failed rename was reported as a failed write: %v", err)
 	}
+}
+
+// ledgerSessions writes one ledger file per name, each holding the given
+// session ids one record per line, plus a blank line and an unparseable one.
+//
+// Both of those are deliberate. A blank line and a line that is not JSON are
+// what a real ledger accumulates, and each is a branch in the erasure walk that
+// nothing observed.
+func ledgerSessions(t *testing.T, files map[string][]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for name, ids := range files {
+		var b strings.Builder
+		b.WriteString("\n")                        // blank line
+		b.WriteString("this is not json at all\n") // unparseable, must be kept
+		for _, id := range ids {
+			b.WriteString(`{"session_id":"` + id + `","bytes":1}` + "\n")
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(b.String()), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
 }

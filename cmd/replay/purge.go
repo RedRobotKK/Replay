@@ -116,6 +116,7 @@ func runPurge(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("reading the ledger directory: %w", err)
 	}
 
+	skipped := 0
 	cutoff := time.Now().Add(-window)
 	type doomed struct {
 		path string
@@ -132,6 +133,11 @@ func runPurge(args []string, stdout, stderr io.Writer) error {
 		}
 		info, err := e.Info()
 		if err != nil {
+			// Counted, not silently skipped. A file whose stat fails is not a
+			// file known to be inside the retention window; reporting "removed
+			// N ... older than W" without saying so describes a sweep that did
+			// not cover everything it walked.
+			skipped++
 			continue
 		}
 		if info.ModTime().After(cutoff) {
@@ -148,6 +154,7 @@ func runPurge(args []string, stdout, stderr io.Writer) error {
 	if len(found) == 0 {
 		_, _ = fmt.Fprintf(stdout, "Nothing to remove: no ledger record in %s is older than %s.\n",
 			dir, *olderThan)
+		warnUnreadable(stdout, skipped)
 		return nil
 	}
 
@@ -174,6 +181,7 @@ func runPurge(args []string, stdout, stderr io.Writer) error {
 	if !*yes {
 		_, _ = fmt.Fprintf(stdout, "Nothing was changed. Add --yes to remove them.\n")
 	}
+	warnUnreadable(stdout, skipped)
 	return nil
 }
 
@@ -218,7 +226,7 @@ func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("--session needs an id: %w", errUsage)
 	}
-	var matched, scanned int
+	var matched, scanned, unreadable int
 	var removedFrom []string
 	var exported [][]byte
 	// Rewrites the walk found and did not perform. Held until the export is
@@ -231,10 +239,22 @@ func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".jsonl") {
+			// A walk error is counted for the same reason a read error is: a
+			// path that could not be inspected is not a path known to be
+			// clean. Directories and non-ledger files are neither, and are
+			// skipped without counting.
+			if err != nil {
+				unreadable++
+			}
 			return nil
 		}
 		body, rerr := os.ReadFile(path)
 		if rerr != nil {
+			// Counted, not silently skipped. A ledger file this command cannot
+			// read may hold records for the session being erased, and reporting
+			// "removed N" or "Nothing to remove" without saying so tells a
+			// subject their erasure completed when it may not have.
+			unreadable++
 			return nil
 		}
 		lines := strings.Split(string(body), "\n")
@@ -284,6 +304,7 @@ func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 	if matched == 0 {
 		_, _ = fmt.Fprintf(stdout, "Nothing to remove: no record in %s carries session %q "+
 			"(%d record(s) read).\n", dir, id, scanned)
+		warnUnreadable(stdout, unreadable)
 		return nil
 	}
 
@@ -326,5 +347,20 @@ func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 	if !yes {
 		_, _ = fmt.Fprintf(stdout, "Nothing was changed. Add --yes to remove them.\n")
 	}
+	warnUnreadable(stdout, unreadable)
 	return nil
+}
+
+// warnUnreadable says what the erasure could not look inside.
+//
+// An erasure request is answered with a claim, and the claim has to be bounded
+// by what was actually examined. Silence here let "removed N record(s)" and
+// "Nothing to remove" both stand for a run that skipped files it could not
+// read.
+func warnUnreadable(stdout io.Writer, n int) {
+	if n == 0 {
+		return
+	}
+	_, _ = fmt.Fprintf(stdout, "\n%d file(s) could not be read and were not examined. "+
+		"This report covers the rest; it is not a statement about those.\n", n)
 }
