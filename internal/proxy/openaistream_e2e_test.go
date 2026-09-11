@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"net/http"
@@ -144,5 +146,68 @@ func TestOAE2_TheParserIsChosenByTheRouteNotTheContentType(t *testing.T) {
 	if recs[0].Response.Usage.CacheRead != 900 {
 		t.Errorf("cached tokens = %d, want 900; the OpenAI stream parser did not run "+
 			"on an OpenAI route", recs[0].Response.Usage.CacheRead)
+	}
+}
+
+func gzipBytes(t *testing.T, p []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	if _, err := zw.Write(p); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// WriteHeader skips both stream parsers when Content-Encoding is gzip and
+// buffers the compressed body. result() then gunzips and always constructs
+// an Anthropic StreamParser, even on an OpenAI route. The usage frame is
+// not recognised: the turn records no tokens and prices as free. Ordinary
+// Go clients send Accept-Encoding: gzip; a Cursor/DeepSeek stream hits this.
+func TestOAE3_AGzipOpenAIStreamIsNotParsedAsAnthropic(t *testing.T) {
+	const (
+		wantPrompt     = 4242
+		wantCached     = 4000
+		wantCompletion = 77
+	)
+	up := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		payload := gzipBytes(t, []byte(openaiSSE(wantPrompt, wantCached, wantCompletion)))
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Content-Encoding", "gzip")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(payload); err != nil {
+			t.Error(err)
+		}
+	})
+	base, dir, _ := startProxy(t, up, "")
+
+	body := `{"model":"gpt-4o","stream":true,` +
+		`"stream_options":{"include_usage":true},` +
+		`"messages":[{"role":"user","content":"hi"}]}`
+	resp, err := http.Post(base+chatCompletionsPath, "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // test read
+	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+		t.Fatal(err)
+	}
+
+	recs := waitLedger(t, dir, 1)
+	if len(recs) == 0 {
+		t.Fatal("the proxy forwarded a gzip OpenAI stream and wrote no ledger record")
+	}
+	got := recs[0].Response.Usage
+	if got == nil || (got.PromptTotal() == 0 && got.Output == 0) {
+		t.Fatal("gzip OpenAI SSE was parsed as Anthropic: no usage, so the turn prices as free")
+	}
+	if got.Output != wantCompletion {
+		t.Errorf("completion tokens = %d, want %d", got.Output, wantCompletion)
+	}
+	if got.CacheRead != wantCached {
+		t.Errorf("cached tokens = %d, want %d", got.CacheRead, wantCached)
 	}
 }
