@@ -113,10 +113,26 @@ was not true**, and a document whose purpose is completeness has to say so.
 **A correction to an earlier version of this page**, found by re-checking rather than by reading it
 back: the claim "exactly one host" was wrong. `replay doctor` issues a `GET` to
 `$ANTHROPIC_BASE_URL/replay/healthz` to find out whether a Replay proxy is already running
-(`cmd/replay/doctor.go:114`). That is normally loopback, and it sends no credential, reads at most
-64 bytes and times out. **But the host comes from an environment variable**, so if you have pointed
-`ANTHROPIC_BASE_URL` at a remote gateway, `doctor` will probe that remote host. Small, and it was
-not on the map.
+(`probeProxy` in `cmd/replay/doctor.go`). It sends no credential, reads at most 64 bytes and times
+out after two seconds.
+
+**A correction to that correction, 2026-09-11.** The paragraph above used to end by saying that
+because the host comes from an environment variable, pointing `ANTHROPIC_BASE_URL` at a remote
+gateway would make `doctor` probe that remote host. It will not. `probeProxy` refuses any address
+that is not loopback before it builds the request, and returns `not probed: only a loopback address
+is contacted, and this is not one`. `localhost` and the whole of `127/8` and `::1` pass; a corporate
+name, a private range and the cloud metadata address do not.
+
+That correction ran in the rarer direction for this page — it described the tool as leakier than it
+is, which costs a reader's trust rather than their security. It is recorded here rather than quietly
+edited because a document that only ever corrects itself in the flattering direction is not
+evidence of anything.
+
+The guard now has tests. `TestDP1` asserts five non-loopback hosts are refused and that a live test
+server is never contacted while they are; `TestDP2` asserts a real loopback proxy is still found, so
+the guard cannot be "fixed" by refusing everything; `TestDP3` covers what counts as loopback,
+including the address that merely starts with `127.0.0.1`. Before this change nothing tested it: the
+property was written in a comment, described on this page, and never checked.
 
 | Direction | Endpoint | When | Status |
 |---|---|---|---|

@@ -126,7 +126,7 @@ would still work and it would stop being believable, and believability is the en
 |---|---|
 | Every command over your own transcripts: `cost`, `diff`, `blame`, `context`, `advise`, `route`, `learn`, `doctor` | These are the claim. Gating one makes the whole tier system a marketing device |
 | `replay serve`, byte-for-byte passthrough, the ledger, secret masking | The proxy sits in a credential path. A payment check in a request path is a new failure mode in the worst possible place |
-| The compiled rules table and the free feed at a stable URL | Promised complete in [FUNDING.md](../FUNDING.md) and enforced by `npm run check:rules`, which fails the build if the published file and `replay rules --export` ever differ |
+| The compiled rules table and the free feed at a stable URL | Promised complete in [FUNDING.md](../FUNDING.md) and enforced by the site repository's `npm run check:rules`, which fails its build if the published file and `replay rules --export` ever differ |
 | Every tier label, error bar, refusal and retraction | A refusal is the product. `replay route --to` declining to price an unmeasured pair is the behaviour that earns trust |
 | Local operation with no account and no network call | [README.md](../README.md) states this as a footprint guarantee. Entitlement must not touch it, which is what section 4 is about |
 
