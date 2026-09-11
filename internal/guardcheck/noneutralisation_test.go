@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/RedRobotKK/Replay/internal/guardcheck"
 )
 
 // TestGC6_NoNeutralisedConditionalIsCommitted refuses the reviewer's own
@@ -36,6 +38,15 @@ import (
 // document the very form this looks for. So this walks the AST and looks for
 // the expression, which a comment cannot produce.
 func TestGC6_NoNeutralisedConditionalIsCommitted(t *testing.T) {
+	// The reviewer neutralises a guard and then runs this suite. Failing
+	// here on its own scratch work would fail every one of its runs, so
+	// every mutant would look caught and its verdict would mean nothing.
+	// It says so by setting this; nothing else does, and the baseline run
+	// does not, so the tree the reviewer starts from is still guarded.
+	if os.Getenv(guardcheck.NeutralisingEnv) != "" {
+		t.Skip("guard-reachability is neutralising a conditional right now; " +
+			"it restores the file when it is done")
+	}
 	root := repoRoot(t)
 	fset := token.NewFileSet()
 
@@ -64,13 +75,11 @@ func TestGC6_NoNeutralisedConditionalIsCommitted(t *testing.T) {
 		walked++
 		rel, _ := filepath.Rel(root, path)
 		ast.Inspect(f, func(n ast.Node) bool {
-			cond := conditionOf(n)
-			if cond == nil {
-				return true
-			}
-			if lit, side := constantShortCircuit(cond); lit != "" {
-				found = append(found, rel+":"+
-					ffline(fset, cond.Pos())+": "+side+" is always "+lit)
+			for _, cond := range conditionsOf(n) {
+				if lit, side := constantShortCircuit(cond); lit != "" {
+					found = append(found, rel+":"+
+						ffline(fset, cond.Pos())+": "+side+" is always "+lit)
+				}
 			}
 			return true
 		})
@@ -94,15 +103,25 @@ func TestGC6_NoNeutralisedConditionalIsCommitted(t *testing.T) {
 	t.Logf("%d Go files, no neutralised conditional", walked)
 }
 
-// conditionOf returns the condition of any node that has one.
-func conditionOf(n ast.Node) ast.Expr {
+// conditionsOf returns every expression a node decides a branch on.
+//
+// The case clauses matter as much as the if statements, and missing them is
+// not hypothetical: a `case false && (...)` in a tagless switch is exactly
+// the form the reviewer writes for a switch arm, and the first version of
+// this test walked only if/for/switch conditions. A fourth leftover went
+// through it unnoticed, in the same file as the other three.
+func conditionsOf(n ast.Node) []ast.Expr {
 	switch s := n.(type) {
 	case *ast.IfStmt:
-		return s.Cond
+		return []ast.Expr{s.Cond}
 	case *ast.ForStmt:
-		return s.Cond
+		return []ast.Expr{s.Cond}
 	case *ast.SwitchStmt:
-		return s.Tag
+		return []ast.Expr{s.Tag}
+	case *ast.CaseClause:
+		// A tagless switch decides on each case expression, and that is
+		// where a neutralised switch arm lands.
+		return s.List
 	}
 	return nil
 }

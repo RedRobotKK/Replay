@@ -349,7 +349,15 @@ func changedGoFiles(base string) (map[string]map[int]bool, error) {
 // that added it.
 func runTests(pkgs []string, limit time.Duration) (string, bool) {
 	args := append([]string{"test", "-count=1", "-timeout", limit.String()}, pkgs...)
-	out, err := exec.Command("go", args...).CombinedOutput()
+	cmd := exec.Command("go", args...)
+	// Declare the neutralisation to the suite being run. A tree with a
+	// `false &&` in it is exactly what guardcheck.GC6 refuses, and without
+	// this the reviewer fails that test on every guard — which makes every
+	// mutant look caught and the whole verdict worthless. The marker is set
+	// only while a guard is neutralised; the baseline runs without it, so
+	// GC6 still guards the tree the reviewer started from.
+	cmd.Env = append(os.Environ(), guardcheck.NeutralisingEnv+"=1")
+	out, err := cmd.CombinedOutput()
 	return string(out), err == nil
 }
 

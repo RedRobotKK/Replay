@@ -279,10 +279,9 @@ const (
 func measureContent(b []byte) (int, bool) {
 	n, i := 0, 0
 	for {
-		i = skipJSONSpace(b, i)
-		if i >= len(b) {
-			return n, true
-		}
+		// No end-of-input check here. measureJSONValue makes the same one
+		// and reports scanTruncated, which the switch below already turns
+		// into the same answer, so a check here can never change a result.
 		m, next, how := measureJSONValue(b, i)
 		n += m
 		switch how {
@@ -514,9 +513,6 @@ func measureJSONString(b []byte, i int) (n, end int, ok bool) {
 			// A raw control character in a string literal is a syntax
 			// error to the scanner this replaced, not a character.
 			return 0, 0, false
-		case c < utf8.RuneSelf:
-			n++
-			i++
 		default:
 			r, size := utf8.DecodeRune(b[i:])
 			if r == utf8.RuneError && size == 1 {

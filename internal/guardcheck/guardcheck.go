@@ -264,6 +264,11 @@ func Neutralise(g Guard) (func(), error) {
 	return func() { _ = os.WriteFile(g.File, orig, 0o644) }, nil
 }
 
+// NeutralisingEnv is set by the reviewer while a guard is neutralised, so a
+// test that refuses a neutralised tree can tell the reviewer's own scratch
+// work from someone's forgotten scratch work. Nothing else may set it.
+const NeutralisingEnv = "GUARD_REACHABILITY_NEUTRALISING"
+
 // NeutralisedTimeout bounds how long one neutralised guard may take.
 //
 // The baseline run has to finish; a neutralised one does not. Disabling a

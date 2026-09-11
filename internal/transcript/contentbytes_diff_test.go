@@ -110,7 +110,37 @@ func diffCorpus() []string {
 		`{"a":1}x`, "1x", `"a"x`, "[] [",
 		// Escapes.
 		`"a\nb"`, `"\/"`, `"\\"`, `"\""`, `"\b\f\n\r\t"`, `"\q"`, `"\"`,
+		// Keywords that are almost keywords. `nul` was here and `tru` and
+		// `fals` were not, so the arms that reject a truncated true and a
+		// truncated false were never entered.
+		"tru", "truX", "fals", "falsX", "nulX", "trueX", "[tru]", "[fals]",
+		// A closer that does not match what is open. Both arms of that check
+		// were unentered: the corpus had unbalanced input but never
+		// MISmatched input.
+		"[}", "{]", `{"a":1]`, "[1}", `[{"a":1]`, `{"a":[1}`,
 		// Unicode escapes, including the surrogate rules.
+		// A VALID pair, which nothing here had: every surrogate case was a
+		// broken one, so the arm that joins two halves into one rune had
+		// never run. "\ud83d\ude00" is U+1F600, four bytes once decoded.
+		`"\ud83d\ude00"`, `"\ud83d\ude00x"`, `"a\ud83d\ude00b"`,
+		`"\udbff\udfff"`, // the last pair, U+10FFFF
+		// Uppercase hex, which nothing here had either: every escape was
+		// written in lowercase, so half the hex-digit arm was unreachable.
+		`"\u00E9"`, `"\uD83D\uDE00"`, `"\uABCD"`, `"\uFFFD"`, `"\uD800"`,
+		// An escape that runs off the end of the buffer, with no closing
+		// quote after it. `"\u00"` does not exercise the length check in
+		// readHex4 — the closing quote is simply not a hex digit, so the
+		// digit loop rejects it first. Only an input that ENDS mid-escape
+		// reaches the bounds check, and without it the loop reads past the
+		// slice.
+		`"\u00`, `"\u0`, `"\u`, `"\u000`,
+		`["\u00`, `{"k":"\u0`,
+		// A high surrogate at the very end, which is what readHex4Escape's
+		// bounds check is for: there is no room left for the low half.
+		`"\ud800`, `"\ud800\`, `"\ud800\u`, `"\ud83d\ude0`,
+		`["\ud800`, `{"k":"\ud83d\u`,
+		// A string that ends on its own backslash.
+		`"a\`, `"\`, `{"k":"v\`,
 		`"A"`, `"é"`, `"€"`, `"😀"`, `"\ud800"`,
 		`"\ud800x"`, `"\ud800\ud800"`, `"\udc00"`, `"\ud800A"`,
 		`"\uZZZZ"`, `"\u00"`, `"\u"`,
@@ -120,6 +150,21 @@ func diffCorpus() []string {
 		"\"a\x00b\"", "\"\x1f\"", "\"\x7f\"",
 		// Keys carrying the same tricks as values.
 		`{"a\nb":1}`, "{\"\xff\":1}", `{"\ud800":1}`,
+		// Every malformed input above, again inside a container.
+		//
+		// At the top level a malformed value measures len(raw), and so does
+		// almost every way of breaking the scanner: `1.5e10` measures 6 and
+		// len("1.5e10") is 6, so disabling the exponent arm reports 6 by a
+		// different route and no test can see it. Wrapping the same input in
+		// brackets separates the two, because len grows and the measurement
+		// does not. Eleven branches were inert for exactly this reason —
+		// the same shape as a bare `0` being unable to catch the
+		// leading-zero arm.
+		"[1.]", "[.1]", "[1e]", "[1e+]", "[-]", "[+1]", "[NaN]", "[Infinity]",
+		"[00]", "[-.5]", "[1..2]", "[1.5e10]", "[1.5E-7]", "[1e5]", "[0e0]",
+		`["\uZZZZ"]`, `["\u00"]`, `["\u"]`, `["\q"]`, `["a\"]`,
+		`{"k":1.}`, `{"k":1e}`, `{"k":01}`, `{"k":"\uZZZZ"}`, `{"k":"\u0"}`,
+		`[{"k":[1e]}]`, `[[1.]]`,
 		// Shapes from real transcripts.
 		`{"file_path":"/tmp/x.go","content":"package x\n"}`,
 		`[{"type":"text","text":"hello"}]`,
