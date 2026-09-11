@@ -235,8 +235,8 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 
 	p.Printf("\n## Per model\n\n")
 	p.Printf("Calibration by the model of each session's first request, with the newest %d sessions judged on their own so a provider rule change shows as a drop (ST-1). The minimum cacheable prefix is bounded from usage: the largest uncached prompt lies below it, the smallest cached prefix at or above it.\n\n", analysis.StalenessRecentSessions)
-	p.Printf("| Model | Sessions | Exact rate | Match rate | Recent sessions | Recent exact rate | Recent match rate | Verdict |\n")
-	p.Printf("|---|---:|---:|---:|---:|---:|---:|---|\n")
+	p.Printf("| Model | Sessions | Exact rate | Match rate | Recent sessions | Recent turns | Recent exact rate | Recent match rate | Verdict |\n")
+	p.Printf("|---|---:|---:|---:|---:|---:|---:|---:|---|\n")
 	for _, m := range models {
 		// A model with nothing compared is not a model that scored badly, and
 		// printing a percentage for it says it was measured. `<synthetic>` is
@@ -255,9 +255,20 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 		case m.MatchRate() < analysis.CalibrationThreshold:
 			verdict = "below threshold"
 		}
-		p.Printf("| %s | %d | %s | %s | %d | %s | %s | %s |\n", m.Model, m.Sessions,
+		// The recent window's denominator is printed, not just its rates.
+		//
+		// Without it the table reports 87.5% for a lane of EIGHT turns beside
+		// 93.3% for a lane of 539, and marks both calibrated. Seven of eight is
+		// exactly 87.5%, and a reader cannot tell that from the rate alone.
+		//
+		// This does not fix the gate, and is not meant to. CalibrationThreshold
+		// has no minimum sample size, so a lane clears 95% on eight turns as
+		// easily as on eight hundred — splitting exact from match leaves that
+		// untouched. Showing n is the part that can be done without changing
+		// which lanes pass, which is a decision for whoever owns the threshold.
+		p.Printf("| %s | %d | %s | %s | %d | %d | %s | %s | %s |\n", m.Model, m.Sessions,
 			matchRateCell(m.Exact, m.Compared), matchRateCell(m.Matched, m.Compared),
-			m.RecentSessions,
+			m.RecentSessions, m.RecentCompared,
 			matchRateCell(m.RecentExact, m.RecentCompared), matchRateCell(m.RecentMatched, m.RecentCompared),
 			verdict)
 	}
