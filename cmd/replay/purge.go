@@ -208,6 +208,20 @@ func formatBytes(n int64) string {
 // Records are matched on the session id the ledger already stores. Lines that
 // do not parse are kept rather than dropped — an unreadable line is not
 // evidence about anyone, and a purge is not the place to tidy a corpus.
+// purgeWriteFile and purgeRename are indirected once so the two failure branches below
+// can be entered from a test.
+//
+// Neither is reachable otherwise. Making the parent unwritable stops the write
+// and so hides the rename; making the temp path a directory stops the write on
+// every platform and hides the rename again. The seam is the only way to reach
+// the second, and a branch no test can enter is one this repository does not
+// keep — guard-reachability reported both as UNREACHED the moment the AST
+// neutraliser made them checkable at all.
+var (
+	purgeWriteFile = os.WriteFile
+	purgeRename    = os.Rename
+)
+
 func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("--session needs an id: %w", errUsage)
@@ -215,6 +229,13 @@ func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 	var matched, scanned, unreadable int
 	var removedFrom []string
 	var exported [][]byte
+	// Rewrites the walk found and did not perform. Held until the export is
+	// safely on disk, so a failure there costs nothing.
+	type rewrite struct {
+		path string
+		kept []string
+	}
+	var pending []rewrite
 
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".jsonl") {
@@ -264,17 +285,17 @@ func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 		if !yes {
 			return nil
 		}
-		out := strings.Join(kept, "\n")
-		if out != "" {
-			out += "\n"
-		}
-		// Through a sibling and renamed: a half-written ledger read on the next
-		// keystroke would lose every session in the file, not just this one.
-		tmp := path + ".tmp"
-		if werr := os.WriteFile(tmp, []byte(out), 0o600); werr != nil {
-			return werr
-		}
-		return os.Rename(tmp, path)
+		// The rewrite is DEFERRED, not done here, because the export has to be
+		// on disk before a single record is removed.
+		//
+		// It used to happen inline and the export was written after the walk.
+		// With --export pointing somewhere unwritable that erased every matched
+		// record and then failed, leaving no copy — the exact outcome --export
+		// exists to prevent. Reproduced 2026-09-10: a two-record ledger came
+		// back holding one, the export never existed, and the command exited 1
+		// having already destroyed what it promised to save first.
+		pending = append(pending, rewrite{path: path, kept: kept})
+		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("walking the ledger: %w", err)
@@ -297,6 +318,23 @@ func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 			return fmt.Errorf("writing the export: %w", werr)
 		}
 		_, _ = fmt.Fprintf(stdout, "Wrote %d record(s) to %s before removing them.\n", matched, export)
+	}
+
+	// Only now, with the export written or not requested, is anything removed.
+	for _, r := range pending {
+		out := strings.Join(r.kept, "\n")
+		if out != "" {
+			out += "\n"
+		}
+		// Through a sibling and renamed: a half-written ledger read on the next
+		// keystroke would lose every session in the file, not just this one.
+		tmp := r.path + ".tmp"
+		if werr := purgeWriteFile(tmp, []byte(out), 0o600); werr != nil {
+			return fmt.Errorf("rewriting %s: %w", r.path, werr)
+		}
+		if rerr := purgeRename(tmp, r.path); rerr != nil {
+			return fmt.Errorf("replacing %s: %w", r.path, rerr)
+		}
 	}
 
 	verb := "would remove"

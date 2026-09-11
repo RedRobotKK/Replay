@@ -412,3 +412,122 @@ func TestPV9_TheSnapshotSeesASizeChange(t *testing.T) {
 		})
 	}
 }
+
+// PV5: every line of the disclosure is a branch, and none of them were
+// observed.
+//
+// `replay privacy` is the answer to "what do you have on me". Eight of its
+// conditionals could be removed without a test noticing, including the mark
+// that flags the one store holding secrets and the sentence saying a store
+// survives a retention window. A disclosure whose distinguishing marks are
+// untested discloses whatever the last edit left behind.
+func TestPV5_TheDisclosureMarksAreEachObserved(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	root := filepath.Join(home, ".replay")
+	if err := os.MkdirAll(filepath.Join(root, "vault"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// A directory store with more than one file, so the file count prints.
+	led := filepath.Join(root, "ledger")
+	if err := os.MkdirAll(led, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"a.jsonl", "b.jsonl"} {
+		if err := os.WriteFile(filepath.Join(led, n), []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "vault", "vault.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errb bytes.Buffer
+	if err := runPrivacy(nil, &out, &errb); err != nil {
+		t.Fatalf("privacy failed: %v", err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "! vault") {
+		t.Errorf("the sensitive store is not marked; the mark is how a reader finds the one\n"+
+			"store holding secrets rather than counts about them:\n%s", s)
+	}
+	if !strings.Contains(s, "2 files") {
+		t.Errorf("a store of several files did not report how many:\n%s", s)
+	}
+	if !strings.Contains(s, "Not removed by a retention window") {
+		t.Errorf("a store that a window does not cover must say so, or a reader believes\n"+
+			"purge --older-than reaches everything:\n%s", s)
+	}
+}
+
+// PV6: nothing on disk is said plainly, not rendered as an empty table.
+func TestPV6_AnEmptyMachineIsSaidPlainly(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	var out, errb bytes.Buffer
+	if err := runPrivacy(nil, &out, &errb); err != nil {
+		t.Fatalf("privacy failed: %v", err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "has written nothing to this machine") {
+		t.Errorf("an empty machine must be stated, not shown as a heading over nothing:\n%s", s)
+	}
+	if strings.Contains(s, "Everything Replay holds") {
+		t.Errorf("a heading was printed over an empty disclosure:\n%s", s)
+	}
+}
+
+// PV7: with no home directory there is nothing to disclose and the command
+// says why rather than reporting an empty machine.
+//
+// Absence, zero and unknown are three values. "I could not find your home" and
+// "you have nothing" are different answers to "what do you have on me".
+func TestPV7_NoHomeIsAnErrorNotAnEmptyReport(t *testing.T) {
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+	var out, errb bytes.Buffer
+	err := runPrivacy(nil, &out, &errb)
+	if err == nil {
+		// Not a skip. `os.UserHomeDir` returns an error when HOME is empty on
+		// unix, so a nil error here means the guard was removed, not that the
+		// platform differs — and a skip would swallow exactly that regression.
+		t.Fatal("privacy resolved a home directory with HOME unset, so the error " +
+			"branch is gone: an unlocatable home would be reported as an empty machine")
+	}
+	if !strings.Contains(err.Error(), "home directory") {
+		t.Errorf("refused for the wrong reason: %v", err)
+	}
+	if strings.Contains(out.String(), "written nothing") {
+		t.Errorf("an unlocatable home was reported as an empty machine:\n%s", out.String())
+	}
+}
+
+// PV8: a store measured as a single file reports one file, and a store that
+// cannot be measured reports nothing rather than guessing.
+func TestPV8_MeasureStoreCountsFilesAndAbsence(t *testing.T) {
+	dir := t.TempDir()
+	single := filepath.Join(dir, "one.json")
+	if err := os.WriteFile(single, []byte("12345"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if b, n, _ := measureStore(single); b != 5 || n != 1 {
+		t.Errorf("measureStore(single file) = (%d, %d), want (5, 1)", b, n)
+	}
+	if b, n, _ := measureStore(filepath.Join(dir, "absent")); b != 0 || n != 0 {
+		t.Errorf("measureStore(absent) = (%d, %d), want (0, 0)", b, n)
+	}
+	sub := filepath.Join(dir, "many")
+	if err := os.MkdirAll(filepath.Join(sub, "nested"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"a", "nested/b"} {
+		if err := os.WriteFile(filepath.Join(sub, p), []byte("xy"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Directories are counted as containers, never as files.
+	if b, n, _ := measureStore(sub); b != 4 || n != 2 {
+		t.Errorf("measureStore(directory) = (%d, %d), want (4, 2): a directory is not a file", b, n)
+	}
+}
