@@ -117,7 +117,7 @@ func TestOAE1_AStreamedChatCompletionIsRecordedThroughTheProxy(t *testing.T) {
 // forced either way: forced true, the Anthropic path breaks; forced false,
 // this test does.
 func TestOAE2_TheParserIsChosenByTheRouteNotTheContentType(t *testing.T) {
-	up := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	up := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(openaiSSE(1000, 900, 5)))
