@@ -506,6 +506,16 @@ func (s *stats) breakCause(ln *laneState, rec *ledger.Record, prefixChanged bool
 		// hand. Reporting "system prompt or tool definitions changed" while
 		// holding it is the silence this codebase keeps finding.
 		d := diffPrefix(ln.tools, rec.Prompt.Tools, ln.systemBytes, rec.Prompt.SystemBytes)
+		if !d.toolsChanged() && !d.systemChanged() {
+			// Hash moved; sizes did not. The ledger does not keep the
+			// system prompt text, so this is as far as the proxy can go.
+			// A same-length rewrite — including Claude Code's billing
+			// header swapping cc_version hashes — is consistent with this
+			// and cannot be named more specifically without storing
+			// content we have chosen not to store.
+			return cachemodel.CausePrefixChange,
+				"prefix hash changed at equal system and tool sizes; the differing bytes are not in the ledger"
+		}
 		return d.cause(), d.detail()
 	}
 	cause, ok := cachemodel.ClassifyBreak(ln.last, *rec.Response.Usage, ln.model, rec.Model, rec.Timestamp.Sub(ln.lastSeen))

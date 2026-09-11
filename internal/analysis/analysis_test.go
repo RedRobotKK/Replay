@@ -223,6 +223,9 @@ func TestReportCarriesMandatoryLines(t *testing.T) {
 	if !strings.Contains(buf.String(), string(cachemodel.CauseRerendered)) {
 		t.Errorf("diff report does not name the break cause")
 	}
+	if !strings.Contains(buf.String(), "Each line is a cause, not a location in the prompt") {
+		t.Errorf("diff report does not say a cause is not a location")
+	}
 }
 
 func TestReportSurfacesWriteErrors(t *testing.T) {

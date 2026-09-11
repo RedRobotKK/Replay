@@ -312,6 +312,7 @@ func (r *LaneReport) breaks(p *Printer) {
 		}
 		p.Printf("    evidence: %s\n", b.Detail)
 	}
+	p.Printf("  Each line is a cause, not a location in the prompt.\n")
 }
 
 func (r *LaneReport) errors(p *Printer) {
