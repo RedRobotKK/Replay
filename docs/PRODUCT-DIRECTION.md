@@ -16,7 +16,7 @@ Replay already computes the answer and calls it cache diagnostics.
 | `error_share` | The share of a session's spend that went to failed tools, failed edits and repeated identical calls. **Money that bought nothing** |
 | `re_reads` | File reads that repeated a path already in context. **The agent forgot something you had already paid to tell it** |
 | `cache_breaks`, `prefix_changes` | Re-billing caused by a layout that shifted. **Mechanical waste** |
-| `unused-tools` | Tool definitions carried on every single request and never once called. **Rent on capability you did not use** |
+| `unused-tools` | Tool definitions carried on every single request and never once called. **Rent on capability you did not use.** Requires a ledger written by `replay serve` against an Anthropic-family surface — a transcript records what was *called*, never what was *offered*, so this one cannot fire on Claude Code JSONL, Codex or Ollama files |
 | `hot-file` | The same file read over and over |
 | `first-turn-content` | Content loaded at turn one and never referenced |
 | `large-results` | Tool results that dwarf what was done with them |
