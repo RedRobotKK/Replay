@@ -187,8 +187,30 @@ func runPrefix(args []string, stdout, stderr io.Writer) error {
 	// working, on what, and when they next send. Multiplying the per-session
 	// figure by a guessed headcount would manufacture exactly the defect this
 	// repository keeps finding — a number standing in for one nobody measured.
+	// Why a citation sits in a command's output at all.
+	//
+	// The claim above is this repository's own: the 30-lane trial of
+	// 2026-09-06 in internal/proxy/causedetail.go, where system_bytes never
+	// moved once and every real prefix change was the tool SET changing. From
+	// the reader's side that is indistinguishable from their own setup
+	// misbehaving, and the difference decides what they do about it — a quirk
+	// gets worked around, a general mechanism gets designed for.
+	//
+	// So the line names a source they can check, and keeps it in its place.
+	// The paper corroborates from the serving side; the evidence is the
+	// trial. CacheRouter (arXiv:2608.22708) §1.1: "in multi-turn agents, the
+	// system prompt, history, and tool definitions all sit inside the cached
+	// prefix, so changing the tool definitions between adjacent requests
+	// forfeits that discount even for nearly identical tasks."
+	//
+	// The number is pinned by PX7 because a search summary first attributed
+	// that sentence to two other papers, and only fetching all three settled
+	// which one carries it.
 	_, _ = fmt.Fprintf(stdout,
-		"  Every session holding a warm prefix re-bills it in full on its next request.\n"+
+		"  Measured here, and a known mechanism elsewhere: tool definitions sit inside\n"+
+			"  the cached prefix, so changing the set between adjacent requests forfeits\n"+
+			"  the discount for work that is otherwise identical (arXiv:2608.22708).\n\n"+
+			"  Every session holding a warm prefix re-bills it in full on its next request.\n"+
 			"  How many sessions that is: NOT MEASURED. It cannot be read from a diff, and a\n"+
 			"  headcount multiplied by a per-session figure would be a guess wearing a total.\n\n"+
 			"  For the size of one such break on your own history:  replay diff <transcript>\n")
