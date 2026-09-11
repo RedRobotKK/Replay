@@ -174,8 +174,8 @@ All notable changes to this project are documented here. The format follows [Kee
   change still invalidates under the default `cache_control` contract. Some
   models may keep the prefix when that beta is on. The command reports the set
   change; it does not claim the next request will miss.
-- **`replay diff` says what Console names.** Anthropic Console cache diagnostics
-  name a byte offset; this names a cause. One line, no second product.
+- **`replay diff` says each line is a cause, not a location in the prompt.**
+  It does not describe another product's diagnostics.
 - **A prefix hash change at equal system and tool sizes is no longer silent.**
   The proxy already knew the hash moved. The detail now says the sizes did not,
   and that the differing bytes are not in the ledger. A same-length system
