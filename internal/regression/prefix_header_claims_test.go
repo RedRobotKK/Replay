@@ -1,6 +1,8 @@
 package regression
 
 import (
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -48,14 +50,26 @@ import (
 // ordinals were removed from prefix.go by hand, for the reason its comment
 // gives, and nothing here stops them coming back.
 //
-// PASS: no comment in prefix.go carries a comma-grouped count.
+// PASS: no comment in prefix.go carries a comma-grouped count — every comment,
+// line-leading or trailing or block, because the file is parsed rather than
+// scanned.
 // FAIL: a measurement came back into the prose, where nothing can check it.
 func TestFCPX_ThePrefixHeaderCarriesNoCorpusCounts(t *testing.T) {
 	root := repoRootFor(t)
 	path := filepath.Join(root, "cmd", "replay", "prefix.go")
-	body, err := os.ReadFile(path)
+
+	// Parsed, not scanned line by line. The first version of this test matched
+	// lines BEGINNING with "//", while its own header promised that no COMMENT
+	// carried a count — a stated claim wider than the behaviour, which is the
+	// defect this test exists to catch, committed inside the test. Review found
+	// both holes by mutation: a trailing `// measured: 1,807,000` on a func
+	// declaration, and a `/* ... */` block. Walking ast.File.Comments closes
+	// them and makes the promise true. internal/guardcheck already parses for
+	// the same reason.
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 	if err != nil {
-		t.Fatalf("cannot read %s: %v", path, err)
+		t.Fatalf("cannot parse %s: %v", path, err)
 	}
 
 	// A comma-grouped number is the signature of a measurement: 1,807,000 and
@@ -63,33 +77,34 @@ func TestFCPX_ThePrefixHeaderCarriesNoCorpusCounts(t *testing.T) {
 	grouped := regexp.MustCompile(`\b\d{1,3}(,\d{3})+\b`)
 
 	var found []string
-	for i, line := range strings.Split(string(body), "\n") {
-		trimmed := strings.TrimSpace(line)
-		if !strings.HasPrefix(trimmed, "//") {
-			continue
-		}
-		if m := grouped.FindString(trimmed); m != "" {
-			found = append(found, formatLine(i+1, m, trimmed))
+	groups := 0
+	for _, cg := range f.Comments {
+		for _, c := range cg.List {
+			groups++
+			if m := grouped.FindString(c.Text); m != "" {
+				found = append(found, formatLine(fset.Position(c.Pos()).Line, m, c.Text))
+			}
 		}
 	}
 
-	// A scan that matched nothing because it read nothing would pass while
+	// A walk that matched nothing because it read nothing would pass while
 	// checking no comment at all.
-	if !strings.Contains(string(body), "//") {
-		t.Fatal("prefix.go has no comments at all, so this test is not looking at anything")
+	if groups == 0 {
+		t.Fatal("prefix.go parsed with no comments at all, so this test is not looking at anything")
 	}
 
 	if len(found) > 0 {
 		t.Errorf("a corpus count is back in prefix.go's prose:\n  %s\n\n"+
 			"These figures aged twice in five days and nothing in the build noticed, "+
 			"because no test compares a comment against a corpus. State the shape and "+
-			"name the command that recomputes it — `replay diff` prints the cause "+
-			"table — rather than quoting a number that will be wrong by the time "+
+			"name the command that recomputes it — `replay diff` prints each break and "+
+			"its cause — rather than quoting a number that will be wrong by the time "+
 			"somebody reads it.", strings.Join(found, "\n  "))
 	}
 }
 
 func formatLine(n int, match, line string) string {
+	line = strings.ReplaceAll(line, "\n", " ")
 	if len(line) > 90 {
 		line = line[:87] + "..."
 	}
