@@ -45,7 +45,12 @@ import (
 // constant the analysis uses rather than a second number that could drift:
 // a pre-flight figure that disagreed with the ledger's own figure for the same
 // request would be worse than no figure at all.
-const tokensPerByte = 0.25
+//
+// It says that since 2026-09-05 and it was not true until 2026-09-11: the
+// analysis constant was unexported and this line retyped the digits, so the two
+// could drift in exactly the way the sentence promised they could not. Now it
+// is the same constant, and drift is a compile error rather than a hope.
+const tokensPerByte = analysis.DefaultTokensPerByte
 
 // preFlight refuses a request whose changed prefix would re-lay more tokens
 // than the operator agreed to spend, and warns when it would not refuse.

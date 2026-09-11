@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/version"
 )
@@ -352,19 +353,28 @@ func mcpOverheadText(model string, bytes, requests float64) (string, error) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s bytes of tool definitions on %s, carried across %s requests\n",
 		commaFloat(bytes), model, commaFloat(requests))
-	fmt.Fprintf(&b, "  about %s tokens, ESTIMATED from bytes at %.2f tokens per byte, not counted by a tokenizer\n",
+	fmt.Fprintf(&b, "  at least %s tokens, ESTIMATED from bytes at %.2f tokens per byte, not counted by a tokenizer\n",
 		commaFloat(tokens), defaultTokensPerByteMCP)
-	fmt.Fprintf(&b, "  cold  $%.4f per request, $%.2f across %.0f\n", cold, cold*requests, requests)
-	fmt.Fprintf(&b, "  cached $%.4f per request, $%.2f across %.0f\n", cached, cached*requests, requests)
+	// The direction, because it is known and the magnitude is not. The ratio is
+	// an asserted English-prose average (analysis.DefaultTokensPerByte) and
+	// every ratio this project has actually fitted is higher, so a figure for
+	// JSON schemas built on it understates by an unmeasured amount. "At least"
+	// is the whole claim: a tool set not worth its cost at the floor is not
+	// worth its cost, and one that looks affordable here has not been cleared.
+	fmt.Fprintf(&b, "  The ratio is an English-prose average and these are JSON schemas, which are denser,\n")
+	fmt.Fprintf(&b, "  so it understates them. How much by is not measured: no tokenizer ran over these bytes.\n")
+	fmt.Fprintf(&b, "  cold  $%.4f per request, $%.2f across %.0f, at least\n", cold, cold*requests, requests)
+	fmt.Fprintf(&b, "  cached $%.4f per request, $%.2f across %.0f, at least\n", cached, cached*requests, requests)
 	b.WriteString("  Definitions sit in the prompt on every request whether the agent calls the tool or not,\n")
 	b.WriteString("  so this cost is recurring. A tool never called is the whole figure wasted.\n")
 	return b.String(), nil
 }
 
-// defaultTokensPerByteMCP is the same coarse prose ratio analysis.Fit falls
-// back to, and carries the same warning: it is an English-prose average and
-// tool schemas are not English prose.
-const defaultTokensPerByteMCP = 0.25
+// defaultTokensPerByteMCP is the same ratio analysis.Fit falls back to — the
+// constant itself since 2026-09-11, not a third copy of the digits — and it
+// carries the same warning: it is an asserted English-prose average and tool
+// schemas are not English prose.
+const defaultTokensPerByteMCP = analysis.DefaultTokensPerByte
 
 func commaFloat(f float64) string {
 	s := fmt.Sprintf("%.0f", f)

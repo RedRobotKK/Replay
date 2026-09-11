@@ -283,11 +283,11 @@ func TestReconcile_ThePrefixTurnIsNotFitted(t *testing.T) {
 		t.Errorf("%d turn(s) were fitted, but every comparable turn here re-lays the shared "+
 			"prefix. Fitting one prices prose off tool-definition JSON: the ratio came out "+
 			"%.3f tokens/byte against a prose default of %.3f.",
-			fit.Turns, fit.TokensPerByte, defaultTokensPerByte)
+			fit.Turns, fit.TokensPerByte, DefaultTokensPerByte)
 	}
-	if fit.TokensPerByte != defaultTokensPerByte {
+	if fit.TokensPerByte != DefaultTokensPerByte {
 		t.Errorf("tokens/byte = %.4f, want the stated default %.4f: with nothing fitted the fit "+
 			"must say so rather than report a number it did not measure",
-			fit.TokensPerByte, defaultTokensPerByte)
+			fit.TokensPerByte, DefaultTokensPerByte)
 	}
 }

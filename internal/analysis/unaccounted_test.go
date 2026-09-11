@@ -57,7 +57,7 @@ func TestUA1_AWriteTheVisibleBytesCannotExplainIsNotChargedToThem(t *testing.T) 
 		}
 		return acc[l]
 	}
-	fit := TokenFit{TokensPerByte: defaultTokensPerByte, RelativeError: 1, Turns: 0}
+	fit := TokenFit{TokensPerByte: DefaultTokensPerByte, RelativeError: 1, Turns: 0}
 	blocks := []transcript.Block{{Label: "tool result: Bash echo one", Bytes: 30}}
 
 	shareWithinTheFit(blocks, 21_000, 1, fit, get)
