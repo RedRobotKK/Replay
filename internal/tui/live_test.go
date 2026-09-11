@@ -38,13 +38,21 @@ func TestLive2(t *testing.T) {
 		t.Errorf("must state how long it has been up, got:\n%s", got)
 	}
 	// The HEADLINE must carry it. Prose two paragraphs down is not the same
-	// thing: a reader glancing at the first line has to see the problem.
-	head := got
-	if i := strings.Index(got, "\n"); i > 0 {
-		head = got[:i]
+	// thing: a reader glancing at the top of the screen has to see the problem.
+	//
+	// The screen opens with two rows it did not have before — the question it
+	// answers, and the blank under it — so the headline is the third row rather
+	// than the first. It is pinned by index here rather than searched for, which is
+	// stricter than what it replaced: the old check read everything before the
+	// first newline and would have gone on passing if the headline slid a row
+	// further down behind more chrome. This fails the moment it moves.
+	rows := strings.Split(got, "\n")
+	if len(rows) < 3 {
+		t.Fatalf("the live screen has no body under its title:\n%s", got)
 	}
+	head := rows[2]
 	if !strings.Contains(head, "recorded nothing") {
-		t.Errorf("the first line must say it has recorded nothing, got %q", head)
+		t.Errorf("the headline must say it has recorded nothing, got %q", head)
 	}
 	if !strings.Contains(strings.ToLower(got), "anthropic_base_url") {
 		t.Errorf("must name the fix, since the cause is always the same:\n%s", got)
