@@ -836,7 +836,14 @@ func TestUO27_TheCauseBlockAppearsOnlyWhenThereIsSomethingToExplain(t *testing.T
 	}
 
 	// Three records: the third reads nothing, which usage settles on its own.
-	decidable := append(clean, fixtureRecord{2, 10000, 1000, 0, 9000, 100, usageFixtureModel, "s1"})
+	//
+	// Copied rather than appended in place. `clean` is read again below, and
+	// appending to it while assigning elsewhere writes through its backing
+	// array whenever it has spare capacity — the two fixtures would then be
+	// the same fixture, and the second assertion would be checking the first.
+	decidable := make([]fixtureRecord, len(clean), len(clean)+1)
+	copy(decidable, clean)
+	decidable = append(decidable, fixtureRecord{2, 10000, 1000, 0, 9000, 100, usageFixtureModel, "s1"})
 	e2, err := usage.ParseExport([]byte(exportDoc(true, true, decidable)))
 	if err != nil {
 		t.Fatal(err)

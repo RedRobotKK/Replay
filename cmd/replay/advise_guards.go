@@ -29,16 +29,30 @@ func guardAdviceLines(sessionUSD, sessionTokens []float64) []string {
 	out := []string{"caps from your own spread, Tukey's upper fence (Q3 + 1.5*IQR):"}
 	if okUSD {
 		out = append(out,
-			fmt.Sprintf("  --spend-session-usd %.2f", usd.Upper),
+			fmt.Sprintf("  --max-session-usd %.2f", usd.Upper),
 			fmt.Sprintf("    Q1 $%.2f, median $%.2f, Q3 $%.2f, IQR $%.2f, over %d sessions", usd.Q1, usd.Median, usd.Q3, usd.IQR, usd.N))
 	}
 	if okTok {
 		out = append(out,
-			fmt.Sprintf("  --spend-session-tokens %.0f", tok.Upper),
+			fmt.Sprintf("  --max-session-tokens %.0f", tok.Upper),
 			fmt.Sprintf("    Q1 %.0f, median %.0f, Q3 %.0f, IQR %.0f, over %d sessions", tok.Q1, tok.Median, tok.Q3, tok.IQR, tok.N))
+	}
+	// Assemble the command, rather than leaving the reader to work out which
+	// one takes these. The flags used to be printed under the names
+	// --spend-session-usd and --spend-session-tokens, which serve has never
+	// defined: a reader who copied the recommendation got an error from the
+	// tool that made it. Printing the whole invocation means the name and the
+	// command that accepts it are written down together, once.
+	cmd := "  replay serve"
+	if okUSD {
+		cmd += fmt.Sprintf(" --max-session-usd %.2f", usd.Upper)
+	}
+	if okTok {
+		cmd += fmt.Sprintf(" --max-session-tokens %.0f", tok.Upper)
 	}
 	out = append(out,
 		"Above the fence is an outlier against your own history, not a rule.",
-		"Nothing is written: pass these yourself if you want them.")
+		"Nothing is written: pass these yourself if you want them.",
+		cmd)
 	return out
 }

@@ -1,5 +1,13 @@
 # Four parser fixes moved no cost figure, 2026-09-10
 
+> **Correction, 2026-09-10 (later the same day).** Every dollar figure below was
+> produced while `replay cost` priced one lane per transcript. That dropped
+> 21,854 of 60,401 requests on this corpus — 36.2% — concentrated in the 8
+> multi-lane files out of 1,812, which are the fan-out sessions. The corrected
+> total is **$10,503**, not $3,411/$3,721. The figures here are NOT withdrawn:
+> both arms of this comparison used the same pricing, so the comparison stands.
+> What does not survive is any absolute total quoted from it.
+
 **What this measures:** whether merging #133, #136, #137 and #138 changed any
 number `replay cost` prints, measured by running the pre-merge and post-merge
 binaries over the same corpus at the same moment.

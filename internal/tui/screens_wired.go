@@ -42,11 +42,10 @@ type ModelRow struct {
 
 // unavailable builds the no-corpus frame every wired screen shares.
 func unavailable(cmd, why, next string) Screen {
-	return Screen{Key: 0, Title: cmd, From: Unavailable, Lines: []string{
-		header(cmd), "",
+	lines := append(screenHead(cmd),
 		paint(Warn, Banner(Unavailable, why)), "",
-		"  " + fitTo(next, Cols()-2), "",
-	}}
+		"  "+fitTo(next, Cols()-2), "")
+	return Screen{Key: 0, Title: cmd, From: Unavailable, Lines: lines}
 }
 
 // ContextScreen ranks what entered the context, by tool.
@@ -56,7 +55,7 @@ func ContextScreen(rows []ContextRow, sessions int) Screen {
 			"Run an agent, then come back. "+paint(Accent, "replay doctor")+" says what is visible.")
 	}
 	sc := Screen{Key: 'x', Title: "context", From: Measured}
-	lines := []string{header("context"), ""}
+	lines := screenHead("context")
 	if len(rows) == 0 {
 		lines = append(lines,
 			paint(Good, fmt.Sprintf("  Nothing attributable across %d session(s).", sessions)), "",
@@ -78,61 +77,6 @@ func ContextScreen(rows []ContextRow, sessions int) Screen {
 	return sc
 }
 
-// GuardsScreen shows spend caps drawn from this machine's own spread.
-//
-// The lines arrive already rendered, because the fence arithmetic and the
-// wording that explains it live together on the command side and splitting them
-// would let the two drift.
-func GuardsScreen(advice []string, sessions int) Screen {
-	if sessions == 0 {
-		return unavailable("guards", "no sessions were read, so no spread to draw a cap from",
-			"A cap from one session is a cap from an accident. "+paint(Accent, "replay cost")+" shows what is there.")
-	}
-	sc := Screen{Key: 'g', Title: "guards", From: Measured}
-	lines := []string{header("guards"), ""}
-	if len(advice) == 0 {
-		lines = append(lines,
-			paint(Good, fmt.Sprintf("  No cap suggested from %d session(s).", sessions)), "",
-			paint(Faint, "  Too few sessions, or a spread too flat to fence."), "")
-		sc.Lines = lines
-		return sc
-	}
-	lines = append(lines, fmt.Sprintf("  Caps drawn from %d session(s) on this machine", sessions), "")
-	for _, l := range advice {
-		lines = append(lines, fitTo(l, Cols()))
-	}
-	lines = append(lines, "", paint(Faint, "  Printed only. Nothing here is written to your configuration."))
-	sc.Lines = lines
-	return sc
-}
-
-// SafeScreen shows what a byte cap on tool output would have removed.
-func SafeScreen(t TrimSummary, sessions int) Screen {
-	if sessions == 0 {
-		return unavailable("safe", "no sessions were read, so no cap could be scored",
-			"Run an agent, then come back. "+paint(Accent, "replay trim --cap 2000")+" scores a cap.")
-	}
-	sc := Screen{Key: 's', Title: "safe", From: Measured}
-	lines := []string{header("safe"), ""}
-	lines = append(lines, fmt.Sprintf("  A %s-byte cap on tool results, over %d session(s)",
-		commas(t.CapBytes), sessions), "")
-	if t.Blocks == 0 {
-		lines = append(lines,
-			paint(Good, "  Nothing was over the cap."), "",
-			paint(Faint, "  No tool result exceeded it, so this cap would remove nothing."), "")
-		sc.Lines = lines
-		return sc
-	}
-	lines = append(lines,
-		"  "+paint(Faint, cell("over the cap", 18))+paint(Strong, commas(t.Blocks)+" block(s)"),
-		"  "+paint(Faint, cell("removable", 18))+commas(t.RemovedBytes)+" bytes",
-		"  "+paint(Faint, cell("prompt tokens", 18))+paint(Good, commas(t.RemovedPromptTokens)+" once resending is counted"),
-		"",
-		paint(Faint, fitTo("  Removing a result the agent later needs costs a re-read, and that is counted.", Cols())))
-	sc.Lines = lines
-	return sc
-}
-
 // ModelScreen reports what the corpus ran on, and what a switch would compare against.
 //
 // Without a target the screen is Unavailable rather than Example: naming a model
@@ -144,7 +88,7 @@ func ModelScreen(target string, rows []ModelRow, sessions int) Screen {
 			"Run an agent, then come back. "+paint(Accent, "replay route --to <model>")+" compares one.")
 	}
 	sc := Screen{Key: 'm', Title: "model", From: Measured}
-	lines := []string{header("model"), ""}
+	lines := screenHead("model")
 	if len(rows) == 0 {
 		lines = append(lines,
 			paint(Good, fmt.Sprintf("  No model named in %d session(s).", sessions)), "",

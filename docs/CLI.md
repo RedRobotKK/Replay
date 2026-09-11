@@ -168,7 +168,7 @@ The same answers as screens you can move between.
 |---|---|---|
 | `-color` | string | when to colour: auto (a terminal only), always, never. NO_COLOR always wins (default "auto") |
 | `-once` | bool | render one frame and exit, for a pipe or a screenshot |
-| `-screen` | string | which question to open on: cost, why, context, advise, guards, model, safe, doctor, share (default "cost") |
+| `-screen` | string | which question to open on: cost, why, context, advise, guards, model, safe, doctor, live, share (default "cost") |
 
 ### context
 
@@ -239,7 +239,9 @@ A boot block naming where this project keeps its records.
 
 Answer an agent's questions mid-session, JSON-RPC on stdio.
 
-Takes no flags.
+| Flag | Type | What it does |
+|---|---|---|
+| `-install` | bool | print the MCP client configuration for this binary and exit, instead of serving |
 
 ### corpus
 

@@ -38,7 +38,13 @@ type Live struct {
 
 // LiveScreen draws what is flowing through the proxy right now.
 func LiveScreen(l Live, now time.Time) Screen {
-	s := Screen{Key: 'l', Title: "live", From: Measured}
+	// The only screen that never said what it was.
+	//
+	// Nine screens opened with a banner; this one opened straight into "no
+	// proxy answered at 127.0.0.1:4000", which is an answer with the question
+	// missing. A reader who opened it without meaning to had nothing on screen
+	// telling them what they were looking at or how to leave.
+	s := Screen{Key: 'l', Title: "live", From: Measured, Lines: screenHead("live")}
 	add := func(f string, a ...any) { s.Lines = append(s.Lines, fmt.Sprintf(f, a...)) }
 
 	if !l.Reachable {

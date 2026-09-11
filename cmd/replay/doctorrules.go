@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/RedRobotKK/Replay/internal/tui"
 )
 
 // rulesStaleAfter is when a table stops being worth trusting silently.
@@ -49,13 +51,8 @@ func rulesNotice(version, fetchedAt string, now time.Time) string {
 		return b.String()
 	}
 
-	at, err := time.Parse(time.RFC3339, fetchedAt)
-	if err != nil {
-		if d, e := time.Parse("2006-01-02", fetchedAt); e == nil {
-			at, err = d, nil
-		}
-	}
-	if err != nil {
+	at, ok := parseFetchedAt(fetchedAt)
+	if !ok {
 		// Absence, zero and unknown are three values (ADR-0018). A date this
 		// build cannot read must not pass as current, because the reading that
 		// suppresses the warning is the one that hides the problem.
@@ -78,4 +75,52 @@ func rulesNotice(version, fetchedAt string, now time.Time) string {
 	fmt.Fprintf(&b, "              a cache — which is advice this tool would be giving on its own behalf\n")
 	fmt.Fprintf(&b, "              next: replay rules --check-prices\n")
 	return b.String()
+}
+
+// parseFetchedAt reads a rules document's fetch date, in the two shapes one is
+// written in: RFC3339 as the fetcher stamps it, and a bare date as a human
+// editing the file by hand writes it.
+//
+// It exists so the two surfaces that report this cannot disagree. `replay
+// doctor` and the TUI doctor screen answer the same question, and a date one
+// of them can read and the other cannot would tell one operator their table is
+// current and the other that it is undated — from the same file, on the same
+// machine, in the same minute.
+//
+// A blank date has no early return of its own. It does not need one: neither
+// layout parses the empty string, so it leaves by the same door as "nope",
+// which is the answer it should get. An `if s == ""` above the parse attempts
+// returns the identical pair and is therefore unobservable — no test can tell
+// the two versions apart, and a test written to cover it would only freeze the
+// dead line in place. What must stay true is the contract, not the branch: a
+// document carrying no fetch date must come back not-ok, never ok at the zero
+// instant, which would render an unreadable document as one dated to the year
+// one and aged by two millennia. TestParseFetchedAtRefusesAnEmptyDate holds
+// that, and holds it against this function however it is spelled.
+func parseFetchedAt(s string) (time.Time, bool) {
+	s = strings.TrimSpace(s)
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, true
+	}
+	if t, err := time.Parse("2006-01-02", s); err == nil {
+		return t, true
+	}
+	return time.Time{}, false
+}
+
+// rulesAge classifies the rules document for the TUI, which renders rather than
+// prints and so needs the three states as values instead of as sentences.
+//
+// The classification is the same one rulesNotice makes; only the output shape
+// differs. Both go through parseFetchedAt, so the line between "dated" and
+// "undated" is drawn once.
+func rulesAge(fetchedAt string, now time.Time) (tui.RulesAge, int) {
+	if strings.TrimSpace(fetchedAt) == "" {
+		return tui.RulesBuiltIn, 0
+	}
+	at, ok := parseFetchedAt(fetchedAt)
+	if !ok {
+		return tui.RulesUndated, 0
+	}
+	return tui.RulesFetched, int(now.Sub(at).Hours() / 24)
 }
