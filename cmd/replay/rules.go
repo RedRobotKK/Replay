@@ -363,7 +363,7 @@ func measureRules(dir string, stdout io.Writer) error {
 		if e.IsDir() || !ledger.IsLedgerFile(path) {
 			continue
 		}
-		records, dropped, rerr := ledger.ReadRecords(path)
+		records, dropped, _, rerr := ledger.ReadRecords(path)
 		if rerr != nil {
 			// One unreadable file must not lose the rest of the evidence.
 			skipped++

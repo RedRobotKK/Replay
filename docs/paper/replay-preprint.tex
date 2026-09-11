@@ -1,0 +1,373 @@
+% Replay: prompt-cache invalidation in agentic coding workloads.
+%
+% Every figure in this document is traceable to a dated file under
+% docs/evidence/. Where a figure comes from a different corpus than the one
+% before it, the corpus is named in the sentence that carries it. That is not
+% padding: an earlier draft of this paper merged four corpora into one and
+% reported a 98.8% -> 4.2% "correction" between two quantities that do not
+% share a denominator. See Section 6.
+%
+% Compile: pdflatex replay-preprint.tex  (twice, for the table references)
+
+\documentclass[11pt,twocolumn,letterpaper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\geometry{top=1in,bottom=1in,left=0.75in,right=0.75in}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{microtype}
+\usepackage{abstract}
+
+\title{\textbf{Prompt Cache Invalidation in Agentic Coding Workloads:\\
+An Attribution Study on Unsolicited Transcripts}}
+
+\author{
+  Daniel Saito \\
+  RedRobot KK, Tokyo \\
+  \texttt{https://github.com/RedRobotKK/Replay}
+}
+\date{\small{11 September 2026}}
+
+\begin{document}
+
+\twocolumn[
+  \begin{abstract}
+  Prompt caching is the dominant cost lever in long-running agentic coding
+  sessions, and its failures are silent: when a cached prefix is invalidated the
+  provider re-bills the historical window at write prices, returns a normal
+  response, and raises nothing. We report an attribution study over local agent
+  transcripts that were not written for measurement. On a corpus of 1{,}506
+  transcripts we isolate 735 cache breaks accounting for 31.26M re-billed
+  tokens, and attribute each to one of five causes. On a separate corpus of 60
+  main-lane transcripts comprising 26{,}675 consecutive assistant-turn pairs, we
+  test the keepalive hypothesis --- that periodic pings preserve cache warmth ---
+  and find it addresses the wrong failure: 87\% of cache-creation tokens are
+  emitted after gaps shorter than five minutes, during which no published
+  time-to-live had elapsed. We further report a measurement artifact in which
+  session-wide prefix comparison misattributed cause in fan-out workloads, and
+  document the correction. We argue that turn-level differential attribution,
+  with explicit provenance tiers, is a prerequisite for cost claims about
+  agentic systems, and that aggregate consumption tracking cannot substitute
+  for it.
+  \vspace{0.5cm}
+  \end{abstract}
+]
+
+\section{Introduction}
+
+Stateful language-model pricing discounts the re-reading of a cached context
+prefix, typically by an order of magnitude relative to writing it. In
+autonomous coding agents the context history grows with every turn, so the
+retention of that prefix, rather than the length of any single prompt,
+determines the economics of a session.
+
+Cache invalidation in these systems is opaque by construction. A provider that
+cannot serve a cached prefix does not fail; it re-computes the prefix, bills it
+at write rates, and returns a well-formed response. The event is observable
+only in the usage counters attached to that response, and only by a reader who
+is comparing them against the preceding request. In practice the first signal an
+engineer receives is an invoice.
+
+This paper describes an attribution method implemented in an open-source
+diagnostic engine, \texttt{Replay}, and reports what it finds on transcripts
+produced by ordinary work. We distinguish throughout between aggregate
+consumption --- how many tokens a session billed --- and differential
+attribution --- which turn re-billed, and against which predecessor.
+
+\subsection{Contributions}
+
+\begin{enumerate}
+  \item A five-way cause taxonomy for cache invalidation, with a measured
+    distribution over 735 breaks (Section 3).
+  \item A falsification of the keepalive mitigation for this workload class,
+    with the counterfactual saving priced (Section 4).
+  \item A documented measurement artifact in fan-out attribution, and the
+    isolation requirement it implies (Section 5).
+  \item A provenance discipline that makes the preceding three auditable, and
+    a report of what it cost us to violate it (Section 6).
+\end{enumerate}
+
+\section{Method}
+
+\subsection{Corpora}
+
+Four corpora appear in this paper. They are distinct, and we name the relevant
+one at each figure rather than reporting a single aggregate, because the
+quantities they support are not interchangeable.
+
+\begin{table}[h]
+\centering
+\caption{Corpora. One transcript is one agent lane; a session that spawns
+sub-agents contributes several.}
+\label{tab:corpora}
+\vskip 0.1in
+\small
+\begin{tabular}{llr}
+\toprule
+\textbf{Label} & \textbf{Extent} & \textbf{Date} \\
+\midrule
+$C_{\text{cause}}$ & 1{,}506 transcripts & 2026-09-06 \\
+$C_{\text{fid}}$   & 1{,}751 transcripts, 116 sessions & 2026-09-10 \\
+$C_{\text{gap}}$   & 60 transcripts, 26{,}675 pairs & 2026-09-10 \\
+$C_{\text{lane}}$  & 60 requests, 5 sessions, 16 lanes & 2026-09-06 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+None of these transcripts was generated for this study. They are the residue of
+unrelated engineering work on a single machine, which bounds external validity
+(Section 7) and removes one familiar bias: no workload was shaped to the
+hypothesis, because the hypothesis postdates the workload.
+
+\subsection{Attribution}
+
+For each consecutive pair of requests within one lane, the engine compares the
+serialised prefix, the declared tool set, the system block, the model
+identifier, and the inter-request interval. A break is recorded when the
+response reports cache-creation tokens that a cache hit would have made
+unnecessary. Cause is assigned by the first discriminating comparison, and a
+pair for which no comparison discriminates is recorded as \emph{unknown} rather
+than assigned to a default.
+
+\subsection{Provenance tiers}
+
+Every figure the engine emits is labelled with one of three tiers, and the
+labels are enforced in the reporting path rather than applied editorially:
+
+\begin{itemize}
+  \item \textbf{Measured.} Usage counters returned by the provider for a
+    specific request.
+  \item \textbf{Estimated.} Derived from a byte-to-token fit, reported with the
+    fit's error bounds.
+  \item \textbf{Structural.} A property of request geometry, independent of any
+    provider response.
+\end{itemize}
+
+The distinction is load-bearing for the results below: Section 3 is measured,
+Section 4 is estimated, and a reader who conflates them will over-read
+Section 4.
+
+\section{A Taxonomy of Cache Failures}
+
+Over $C_{\text{cause}}$ the engine isolates 735 breaks accounting for
+31{,}264{,}349 re-billed tokens. Table~\ref{tab:breakdown} gives the
+distribution. Figures in this section are \emph{measured}.
+
+\begin{table}[h]
+\centering
+\caption{Re-billed tokens by cause, $C_{\text{cause}}$ (735 breaks,
+31.26M tokens).}
+\label{tab:breakdown}
+\vskip 0.1in
+\small
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Cause} & \textbf{Breaks} & \textbf{Share} & \textbf{Mean} \\
+\midrule
+Client re-render   & 583 & 50.8\% & 27{,}232 \\
+TTL expiry         & 39  & 33.9\% & 271{,}436 \\
+Prefix divergence  & 102 & 7.0\%  & 21{,}503 \\
+Definition change  & 5   & 5.8\%  & 361{,}400 \\
+Model switch       & 6   & 2.6\%  & 133{,}667 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The distribution's shape matters more than its ranking. Client re-renders are
+frequent and individually small; TTL expiries are rare and individually
+enormous, at roughly ten times the mean size. One developer leaving for lunch
+costs more than a hundred re-renders. Grouped by the intervention that could
+plausibly address them, prefix layout and ordering account for 63.6\% of
+re-billed tokens and timing for 33.9\%.
+
+\subsection{A sampling failure worth reporting}
+
+This measurement was first run over the 40 largest sessions in the same corpus
+and produced approximately the opposite result: TTL expiry at 75.2\% against
+33.9\%, and client re-render at 2.5\% against 50.8\%. The conclusion drawn from
+the sample --- that three quarters of the recoverable spend is idleness, and
+that prefix layout is not worth building --- reverses on the full corpus.
+
+The bias is mechanical. The largest sessions are the longest-running; the
+longest-running contain the longest gaps; and a long gap is what TTL expiry
+\emph{is}. Sorting by size selected for the cause. We report this because the
+sampled figure was defensible on its face, and nothing internal to it would
+have exposed the error.
+
+\section{Falsifying Keepalive for This Workload}
+
+A common mitigation is to issue periodic requests that hold the cache open.
+Prior work derives a break-even horizon for the practice,
+$I_{\max} \approx \tau(w/r - 1)$, with $\tau$ the ping interval, $w$ the
+re-prefill multiple and $r$ the cached-read multiple, and reports a paying band
+of roughly 46 minutes at $r=0.10$.
+
+Two observations follow, both on $C_{\text{gap}}$. Figures in this section are
+\emph{estimated}.
+
+\subsection{The band has moved}
+
+The published band assumes $r = 0.10$. Current top-tier models in our compiled
+price table carry $r = 0.025$, which widens $I_{\max}$ to approximately 196
+minutes at the same $\tau$. Nothing in the derivation is wrong; a constant moved
+underneath it. This is the ordinary failure mode of a published constant, and
+it argues for tools that read a live table rather than embed one.
+
+\subsection{The band is nearly empty}
+
+Bucketing all 26{,}675 consecutive assistant-turn pairs by the gap preceding
+them, and pricing the counterfactual saving as
+$\text{creation} \times \text{input} \times (w - r)$:
+
+\begin{table}[h]
+\centering
+\caption{Cache-creation spend by preceding gap, $C_{\text{gap}}$.}
+\label{tab:gaps}
+\vskip 0.1in
+\small
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Gap band} & \textbf{$n$} & \textbf{Creation} & \textbf{Recoverable} \\
+\midrule
+$<$ 5 min            & 26{,}022 & 98.5M & none \\
+5--46 min            & 598 & 2.1M & \$11.65 \\
+46--196 min          & 40 & 11.4M & \$65.59 \\
+$>$ 196 min          & 15 & 8.7M & none \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Recoverable by keepalive: \$77.24. Not recoverable: \$508.83.
+
+87\% of cache-creation spend on this corpus occurs after gaps shorter than five
+minutes, during which no published TTL had elapsed. The cache was alive and was
+invalidated anyway --- something rewrote the prefix while it was still warm. No
+ping interval reaches that spend, because there is no idle period to bridge.
+Keepalive is a real mechanism answering a question this workload does not ask,
+and it is the wrong lever here by roughly $7\times$.
+
+We state the scope plainly: this is one workload class on one machine, at the
+estimated tier. It falsifies the keepalive hypothesis \emph{for this corpus}. It
+does not establish that keepalive fails for workloads with genuine idle
+structure, and the cited derivation remains correct on its own terms.
+
+\section{Fan-Out and the Isolation Requirement}
+
+Agentic systems fan out. Sub-agents issue requests concurrently against a shared
+session identifier, and their prefixes diverge from one another by design.
+
+An early build of the engine compared each request's prefix hash against a
+single session-wide field. Under fan-out this compares a request against
+whichever sibling wrote last, so every lane appears to have had its prefix
+rewritten by every other lane. The instrument reported that 98.8\% of re-billed
+tokens in a 30-lane trial were attributable to changed system or tool
+definitions. The figure reached a commit message and a source comment as
+established fact before it was identified as an artifact of the comparison
+rather than a property of the workload.
+
+The correction is per-lane isolation: a prefix may only be compared against its
+own lane's predecessor. On a corrected six-minute run over $C_{\text{lane}}$,
+336{,}060 of 7{,}996{,}448 billed prompt tokens --- 4.2\% --- were re-billed by
+cache break.
+
+\textbf{These two percentages do not share a denominator and must not be read
+as a before-and-after of one quantity.} The 98.8\% figure is a share of the
+uncorrected run's own deficit total, itself a product of the faulty comparison.
+The 4.2\% figure is re-billed tokens against every prompt token billed. The
+first number is not a worse estimate of the second; it is a different quantity,
+and reporting the pair as a correction would misstate both. We note this
+explicitly because a draft of this paper did exactly that.
+
+\section{Provenance as an Engineering Constraint}
+
+The preceding sections each depend on a discipline that is easier to state than
+to hold.
+
+\subsection{Three values, not two}
+
+Absence, zero, and unknown are distinct. A request for which reuse was not
+observed is not a request that reused nothing, and collapsing the two produces a
+figure that looks measured and is not. We encountered this concretely in a
+local-inference surface whose logs record a reuse counter only on requests whose
+prompt was already fully resident. A hit rate computed over those requests
+measures a population selected for having been cached, and is bounded near
+$(n-1)/n$ by the server's own re-evaluation rule. The engine therefore reports
+two counts and no ratio for that surface.
+
+\subsection{A check that cannot fail is not evidence}
+
+We verify assertions by mutation: a guard is disabled, and a test suite that
+stays green has not been testing it. The discipline has a failure mode we
+record here because it is easy to miss. A mutant the compiler rejects --- for
+instance, one that leaves a variable unused --- produces a build failure, not a
+test failure. An automated harness that greps for test-failure output counts
+that build failure as a pass and reports the mutant as caught. We have
+mis-scored our own guards this way. A compiler-rejected mutant is not evidence
+about a test; it is evidence that the mutation was ill-formed.
+
+\section{Threats to Validity}
+
+\textbf{Single operator, single machine.} All four corpora derive from one
+engineer's work. The cause distribution in Section 3 is a property of this
+workload and this client, not of agentic coding generally. A client that
+re-renders history differently would move the largest row in
+Table~\ref{tab:breakdown}.
+
+\textbf{Tier mixing.} Section 3 is measured; Section 4 is estimated from a
+byte-to-token fit. The 87\% figure inherits that fit's error, and we do not
+claim measured precision for it.
+
+\textbf{Unsolicited transcripts.} The corpora were not designed. This removes
+workload-shaping bias and introduces coverage gaps: causes absent from this
+work are absent from the taxonomy, which is why \emph{unknown} is a reported
+category rather than a residual folded into the nearest named cause.
+
+\textbf{Seat freshness of the price table.} Section 4's conclusion depends on
+$r$, which providers change. The 196-minute band is correct for the table
+compiled at the date given and for no other.
+
+\section{Conclusion}
+
+Cost claims about agentic systems require turn-level differential attribution.
+Aggregate consumption tracking cannot distinguish a session that is large from
+a session that is re-billing, and the two call for opposite interventions.
+
+On the workload measured here, the recoverable spend is structural rather than
+temporal: prefix layout accounts for 63.6\% of re-billed tokens, and 87\% of
+cache-creation spend occurs inside windows where no cache had expired. The
+engineering implication is that context layout, not cache timeout tuning, is
+where the money is.
+
+We report two of our own measurement failures alongside the results --- a
+sampling bias that inverted a conclusion, and an instrument artifact that
+produced a confident and meaningless 98.8\% --- because both were internally
+consistent and neither would have been caught by a reader who trusted the
+output. The tooling around a measurement is part of the measurement.
+
+\section*{Availability}
+
+Source, dated evidence files for every figure above, and the architectural
+decision records referenced in Section 6 are published at
+\url{https://github.com/RedRobotKK/Replay} under the Business Source License
+1.1, converting to Apache 2.0 on 2029-09-06. The engine runs locally, requires
+no account, and issues no network request that the operator did not invoke.
+
+\small
+\begin{thebibliography}{9}
+\bibitem{keepalive} \emph{Keeping the Cache Warm Pays: Keepalive Economics for
+  Agentic Workloads.} arXiv:2607.19214. Derives the break-even horizon
+  $I_{\max} \approx \tau(w/r - 1)$ evaluated in Section 4.
+\bibitem{dontbreak} \emph{Don't Break the Cache: An Evaluation of Prompt
+  Caching for Long-Horizon Agentic Tasks.} arXiv:2601.06007v2. Reports cost
+  savings from excluding dynamic tool results from the cached prefix.
+\bibitem{tracelab} arXiv:2606.30560. Approximately 4{,}300 real Claude Code and
+  Codex sessions, approximately 350k steps, publicly released; reports high but
+  imperfect prefix cache hit rates.
+\bibitem{tracecopilot} arXiv:2608.00101. Production traces across 3.2M users:
+  cache hit rate 90\% within a turn and 55\% across turn boundaries, reported as
+  drastically invalidated by model switches and compaction.
+\end{thebibliography}
+
+\end{document}

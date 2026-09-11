@@ -181,3 +181,28 @@ func calibrationLineOf(s string) string {
 	}
 	return s
 }
+
+// ExactRate returns zero without evidence, for the reason MatchRate does.
+//
+// guard-reachability reported the HasEvidence branch unreached: every test
+// called ExactRate on a lane that had compared something. So nothing
+// established that a lane with NO compared turns reports 0 rather than the
+// 0/0 the division would produce, or worse, a 1 that reads as perfect.
+//
+// MatchRate returned 1 for an empty lane until 2026-09-06, and 18 of 1,450
+// lanes were admitted to alternative scoring for having tested nothing. This
+// is the same trap one function over, and it was added without a test.
+func TestER1_ExactRateIsZeroWithoutEvidence(t *testing.T) {
+	var empty Calibration
+	if empty.HasEvidence() {
+		t.Fatal("the fixture compared something; this test asserts nothing")
+	}
+	if got := empty.ExactRate(); got != 0 {
+		t.Errorf("ExactRate = %v on a lane that compared nothing, want 0. An absent "+
+			"measurement must not read as a good one", got)
+	}
+	// And it must not pass a threshold by accident.
+	if empty.Passes() {
+		t.Error("a lane with no evidence passes the calibration gate")
+	}
+}

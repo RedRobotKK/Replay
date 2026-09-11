@@ -15,39 +15,63 @@ import (
 // prefix, is refit from the sessions. The lookback window cannot be
 // inferred from usage and stays in the rules file (ST-2).
 const (
-	// StalenessRecentSessions is how many of a model's newest sessions
-	// form the recent window.
-	StalenessRecentSessions = 5
-	// StalenessMinSessions and StalenessMinTurns are the evidence a window
+	// StalenessRecentLanes is how many of a model's newest LANES form the
+	// recent window.
+	//
+	// Lanes, not sessions, and the name says so since 2026-09-11. Making the
+	// window session-based is the right end state and is not what this is;
+	// TestRecentWindowIsStillLaneBased records what it would cost and what has
+	// to be derived first.
+	StalenessRecentLanes = 5
+	// StalenessMinLanes and StalenessMinTurns are the evidence a window
 	// needs before its match rate means anything.
-	StalenessMinSessions = 3
-	StalenessMinTurns    = 20
+	StalenessMinLanes = 3
+	StalenessMinTurns = 20
 )
 
-// ModelCalibration is one model's calibration across sessions.
+// ModelCalibration is one model's calibration.
+//
+// Two denominations live here and they are not interchangeable. Sessions is the
+// independent count — one person, one machine, one account, one set of habits
+// per session — and it is what a sample size means. Lanes is the number of
+// transcripts those sessions wrote, which a fan-out session inflates by its
+// subagent count. Every field below says which one it is in its name. Naming
+// them all "sessions" cost this project a retracted figure, and then — with
+// half of them corrected and half not — a published count of -3.
 type ModelCalibration struct {
 	Model    string
 	Sessions int
+	// Lanes is how many transcripts those sessions wrote.
+	Lanes    int
 	Compared int
 	Matched  int
-	// Exact counts only the turns whose read was reproduced exactly. Matched
-	// above also counts turns the provider served MORE prefix for than the
-	// model predicted, which is a prediction that was wrong; carrying both
-	// lets a reader of the per-model table and of a pooled contribution see
-	// how much of a match rate is exact. See Calibration.ExactRate.
+	// Exact counts only the turns whose read was reproduced exactly.
+	//
+	// Matched above also counts ReadExceeded — turns where a sibling request
+	// had extended the shared prefix, so the provider served MORE than this
+	// lane's predecessor wrote. That is fan-out working as designed in a
+	// multi-lane session, not an error, and an earlier version of this comment
+	// called it "a prediction that was wrong", which overstated it. What is
+	// true is narrower: the read was not REPRODUCED, and a calibration gate
+	// deciding whether a lane may be scored for counterfactual advice should
+	// care about reproduction rather than about sibling traffic.
+	//
+	// Carrying both lets a reader of the per-model table and of a pooled
+	// contribution see how much of a match rate is exact. See
+	// Calibration.ExactRate.
 	Exact int
-	// The recent window: the newest sessions judged on their own.
-	RecentSessions int
+	// The recent window: the newest LANES judged on their own.
+	RecentLanes    int
 	RecentCompared int
 	RecentMatched  int
 	RecentExact    int
-	// RecentFailing counts recent sessions that individually fall below
+	// RecentFailing counts recent lanes that individually fall below
 	// the calibration threshold.
 	RecentFailing int
-	// Stale is set when earlier sessions calibrated and enough recent
-	// sessions each do not; Reason says so in words. One bad session is
-	// not a rule change, and a model whose sessions never calibrated is
-	// not stale: the per-session gate already refuses it.
+	// Stale is set when earlier lanes calibrated and enough recent
+	// lanes each do not; Reason says so in words. One bad lane is
+	// not a rule change, and a model whose lanes never calibrated is
+	// not stale: the per-lane gate already refuses it.
 	Stale  bool
 	Reason string
 	// MinPrefix is the refit of the minimum cacheable prefix.
@@ -192,11 +216,15 @@ func modelCalibration(model string, reps []*LaneReport) ModelCalibration {
 	sort.SliceStable(reps, func(i, j int) bool {
 		return reps[i].Lane.Requests[0].Timestamp.Before(reps[j].Lane.Requests[0].Timestamp)
 	})
-	m := ModelCalibration{Model: model, Sessions: distinctSessions(reps), MinPrefix: MinPrefixFit{Rule: cachemodel.MinCacheablePrefix(model)}}
-	// The window below still slices LANES, and RecentSessions still counts
-	// them. Only the published Sessions count is corrected here; see
-	// TestRecentWindowIsStillLaneBased for why the rest is deliberate.
-	recentFrom := len(reps) - StalenessRecentSessions
+	m := ModelCalibration{
+		Model:     model,
+		Sessions:  distinctSessions(reps),
+		Lanes:     len(reps),
+		MinPrefix: MinPrefixFit{Rule: cachemodel.MinCacheablePrefix(model)},
+	}
+	// The window slices LANES and is named for lanes. Making it session-based
+	// is deliberately out of scope; see TestRecentWindowIsStillLaneBased.
+	recentFrom := len(reps) - StalenessRecentLanes
 	if recentFrom < 0 {
 		recentFrom = 0
 	}
@@ -207,7 +235,7 @@ func modelCalibration(model string, reps []*LaneReport) ModelCalibration {
 		m.Matched += matched
 		m.Exact += cal.Reproduced
 		if i >= recentFrom {
-			m.RecentSessions++
+			m.RecentLanes++
 			m.RecentCompared += cal.Compared()
 			m.RecentMatched += matched
 			m.RecentExact += cal.Reproduced
@@ -229,11 +257,15 @@ func modelCalibration(model string, reps []*LaneReport) ModelCalibration {
 	}
 	earlierCompared := m.Compared - m.RecentCompared
 	earlierMatched := m.Matched - m.RecentMatched
-	recentEvidence := m.RecentFailing >= StalenessMinSessions && m.RecentCompared >= StalenessMinTurns
+	recentEvidence := m.RecentFailing >= StalenessMinLanes && m.RecentCompared >= StalenessMinTurns
 	earlierEvidence := earlierCompared >= StalenessMinTurns && rate(earlierMatched, earlierCompared) >= CalibrationThreshold
 	if recentEvidence && earlierEvidence {
 		m.Stale = true
-		m.Reason = fmt.Sprintf("provider behavior changed: %d of the newest %d sessions fall below the calibration threshold (%.0f%% together) after %.0f%% on the %d before them; alternatives are not scored for this model", m.RecentFailing, m.RecentSessions, m.RecentMatchRate()*100, rate(earlierMatched, earlierCompared)*100, m.Sessions-m.RecentSessions)
+		// Every count in this sentence is lanes, including the one it
+		// subtracts from. It read "sessions" and took m.Sessions-m.RecentLanes
+		// until 2026-09-11, which is a session count minus a lane count: on a
+		// fan-out corpus it published "after 100% on the -3 before them".
+		m.Reason = fmt.Sprintf("provider behavior changed: %d of the newest %d lanes fall below the calibration threshold (%.0f%% together) after %.0f%% on the %d lanes before them; alternatives are not scored for this model", m.RecentFailing, m.RecentLanes, m.RecentMatchRate()*100, rate(earlierMatched, earlierCompared)*100, m.Lanes-m.RecentLanes)
 	}
 	return m
 }

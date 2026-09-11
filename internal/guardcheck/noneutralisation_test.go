@@ -57,8 +57,7 @@ func TestGC6_NoNeutralisedConditionalIsCommitted(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "node_modules", "testdata", "dist":
+			if skipTree(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -188,4 +187,50 @@ func repoRoot(t *testing.T) string {
 	}
 	t.Fatal("no go.mod above the test directory")
 	return ""
+}
+
+// skipTree names directories this check must not walk into.
+//
+// ".claude" is the one that is not obvious. Claude Code puts agent worktrees
+// under .claude/worktrees/, and each is a complete second copy of this
+// repository. Two things follow. The check walked every copy, so a repository
+// with four agents running was parsed five times. Worse, a worktree running
+// guard-reachability legitimately holds a neutralised conditional for the
+// seconds between writing the mutant and restoring it, and this check would
+// report that transient state as a neutralisation left in the tree — failing
+// on a file the developer does not own, in a directory they did not edit.
+//
+// That happened: a run failed on
+// .claude/worktrees/agent-<id>/internal/proxy/lifecycle.go while the agent
+// that owned it was mid-check. The finding was real about the bytes on disk
+// and meaningless about this working tree.
+//
+// CI never saw it, because CI has no worktrees. A check that only misfires on
+// the developer's machine is the kind that gets ignored, and a check that gets
+// ignored is not a check.
+func skipTree(name string) bool {
+	switch name {
+	case ".git", ".claude", "node_modules", "testdata", "dist":
+		return true
+	}
+	return false
+}
+
+// TestGC7_AgentWorktreesAreNotThisTreesBusiness pins the skip list.
+//
+// Written after a run failed on another agent's worktree. The assertion that
+// matters is .claude: the rest of the list is long-standing, and including
+// them here is what stops a future edit narrowing the switch to one case.
+func TestGC7_AgentWorktreesAreNotThisTreesBusiness(t *testing.T) {
+	for _, name := range []string{".git", ".claude", "node_modules", "testdata", "dist"} {
+		if !skipTree(name) {
+			t.Errorf("skipTree(%q) = false; this check walks into it", name)
+		}
+	}
+	// And it must still walk the tree it exists for.
+	for _, name := range []string{"internal", "cmd", "proxy", "ledger", "claude"} {
+		if skipTree(name) {
+			t.Errorf("skipTree(%q) = true; the check skips real source", name)
+		}
+	}
 }

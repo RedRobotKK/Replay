@@ -12,7 +12,7 @@ import (
 // Fit sets RelativeError = 1 on two paths that are not measurements:
 //
 //	fit.go:197-199  sumBytes == 0      no fittable turn at all, so TokensPerByte
-//	                                   is defaultTokensPerByte, an English prose
+//	                                   is DefaultTokensPerByte, an English prose
 //	                                   average borrowed from nowhere in particular
 //	weightedSpread  len(samples) < 2   one fitted turn, so there is no spread to
 //	                                   take; the 1 is a stand-in
@@ -39,7 +39,7 @@ import (
 
 // FE1: a fit with no fittable turns reports its error as unmeasured.
 func TestFE1_NoFittedTurnsIsNotAMeasuredError(t *testing.T) {
-	f := TokenFit{TokensPerByte: defaultTokensPerByte, RelativeError: 1, Turns: 0}
+	f := TokenFit{TokensPerByte: DefaultTokensPerByte, RelativeError: 1, Turns: 0}
 	if f.ErrorMeasured() {
 		t.Error("a fit with zero fitted turns claims a measured error bar; its " +
 			"RelativeError is the placeholder Fit assigns when sumBytes == 0")
@@ -80,7 +80,7 @@ func TestFE3_ARealSpreadIsMeasuredEvenAtOne(t *testing.T) {
 // Putting it on Figure means a caller cannot print the bar without having been
 // handed the fact that it is a placeholder.
 func TestFE4_FigureCarriesWhetherTheErrorWasMeasured(t *testing.T) {
-	unfitted := TokenFit{TokensPerByte: defaultTokensPerByte, RelativeError: 1, Turns: 0}
+	unfitted := TokenFit{TokensPerByte: DefaultTokensPerByte, RelativeError: 1, Turns: 0}
 	if got := unfitted.Figure(Estimated(1_500_000)); got.ErrorMeasured {
 		t.Errorf("a figure from an unfitted session says its error was measured: %+v", got)
 	}
@@ -95,7 +95,7 @@ func TestFE4_FigureCarriesWhetherTheErrorWasMeasured(t *testing.T) {
 // Where the provider reported the tokens, there is no estimate and no error
 // bar, so the question does not arise and must not produce a spurious caveat.
 func TestFE5_AMeasuredFigureIsNotQualified(t *testing.T) {
-	unfitted := TokenFit{TokensPerByte: defaultTokensPerByte, RelativeError: 1, Turns: 0}
+	unfitted := TokenFit{TokensPerByte: DefaultTokensPerByte, RelativeError: 1, Turns: 0}
 	got := unfitted.Figure(Tokens{Measured: 4000})
 	if got.Error != 0 {
 		t.Errorf("a wholly measured figure carries an error bar of %d", got.Error)
@@ -117,7 +117,7 @@ func TestFE5_AMeasuredFigureIsNotQualified(t *testing.T) {
 // at that line has no way to know the bar is a placeholder, and the fix is only
 // real when that line changes.
 func TestFE6_TheReportQualifiesAnUnmeasuredBar(t *testing.T) {
-	unfitted := TokenFit{TokensPerByte: defaultTokensPerByte, RelativeError: 1, Turns: 0}
+	unfitted := TokenFit{TokensPerByte: DefaultTokensPerByte, RelativeError: 1, Turns: 0}
 	got := errorBar(unfitted.Figure(Estimated(1_500_000)))
 	if got == "1.50M" || got == "1500000" {
 		t.Fatalf("an unmeasured error bar renders as the bare figure %q, which is what "+
@@ -139,7 +139,7 @@ func TestFE6_TheReportQualifiesAnUnmeasuredBar(t *testing.T) {
 //
 // A postcondition nothing stated, and a refusal in cmd/replay depends on it.
 // budget.go declines when fit.TokensPerByte <= 0, and that branch is
-// unreachable: Fit assigns defaultTokensPerByte when sumBytes is zero, and
+// unreachable: Fit assigns DefaultTokensPerByte when sumBytes is zero, and
 // otherwise divides sumTokens by sumBytes where both are positive by
 // construction — a sample is only recorded when newTokens > 0 and userBytes
 // clears minFitBytes.
@@ -151,9 +151,9 @@ func TestFE6_TheReportQualifiesAnUnmeasuredBar(t *testing.T) {
 // that honest. If Fit's contract ever changes, the refusal becomes live code
 // and somebody finds out here rather than in a budget priced from a zero ratio.
 func TestFE7_FitAlwaysReturnsAPositiveRatio(t *testing.T) {
-	if defaultTokensPerByte <= 0 {
+	if DefaultTokensPerByte <= 0 {
 		t.Fatalf("the default ratio is %v; the empty-corpus branch cannot be positive",
-			defaultTokensPerByte)
+			DefaultTokensPerByte)
 	}
 	// The empty case, which is the branch a session with no fittable turn takes.
 	empty := Fit(&Calibration{Lane: &transcript.Lane{}}, false)

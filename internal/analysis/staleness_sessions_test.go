@@ -95,11 +95,11 @@ func TestRecentWindowIsStillLaneBased(t *testing.T) {
 
 	cals := ModelCalibrations(reports)
 	perLane := cals[0].Compared / 11
-	if got, want := cals[0].RecentCompared, StalenessRecentSessions*perLane; got != want {
+	if got, want := cals[0].RecentCompared, StalenessRecentLanes*perLane; got != want {
 		t.Errorf("RecentCompared = %d, want %d: the window slices the newest %d LANES. "+
 			"If this now fails because the window counts sessions, that is the intended "+
 			"end state — delete this test and derive the per-session evidence bar",
-			got, want, StalenessRecentSessions)
+			got, want, StalenessRecentLanes)
 	}
 	if got := cals[0].Sessions; got != 7 {
 		t.Errorf("Sessions = %d, want 7: the count is corrected even though the window is not", got)

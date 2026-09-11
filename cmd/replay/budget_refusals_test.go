@@ -40,7 +40,7 @@ import (
 //
 // R3 is a different finding and is NOT closed by a test here: it is
 // UNREACHABLE. analysis.Fit cannot return a non-positive TokensPerByte — it
-// assigns defaultTokensPerByte when sumBytes is zero, and otherwise divides two
+// assigns DefaultTokensPerByte when sumBytes is zero, and otherwise divides two
 // quantities that are both positive by construction, since a sample is only
 // recorded when newTokens > 0. budget.go reaches R3 only when sawLedger, and
 // fit then came from Fit. See TestFitAlwaysReturnsAPositiveRatio in

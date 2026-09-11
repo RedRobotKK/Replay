@@ -116,8 +116,10 @@ current; the free feed is the same table as it stands today.
 
 **The free tier is permanently complete, and you can check that.** It is not a
 sample or a trial. `replay rules --export` generates it from the binary, the
-published file is that output, and `npm run check:rules` fails the build if the
-two ever differ. Diff the two URLs and see exactly what the money buys.
+published file is that output, and the site repository's `npm run check:rules`
+fails its build if the two ever differ. This repository's `scripts/preflight.sh`
+runs the same comparison locally. Diff the two URLs and see exactly what the
+money buys.
 
 **Replay cannot pay, by design.** It holds no key and contains no code that can
 sign a transaction. `cmd/replay/x402_test.go` fails the build if any appears.

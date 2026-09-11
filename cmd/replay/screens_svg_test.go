@@ -124,6 +124,7 @@ func TestScreenSVGs(t *testing.T) {
 	// platform nobody here develops on.
 	t.Setenv("USERPROFILE", home)
 
+	colourEnv(t)
 	for _, name := range tuiScreens {
 		if unpinnable[name] {
 			continue

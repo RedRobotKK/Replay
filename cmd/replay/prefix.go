@@ -14,11 +14,26 @@ import (
 
 // What a commit can do to a cached prefix, before it is merged.
 //
-// A prefix change is the rarest break cause in the corpus and the most
-// expensive per event: 5 breaks, 1,807,000 tokens, a mean of 361,400 — higher
-// than a TTL expiry. Rare and enormous is the shape a gate is for. Nobody
-// catches this by watching, because it happens five times and each time it
-// happens to everyone at once.
+// Rare and enormous is the shape a gate is for. A prefix change happens seldom
+// and bills hugely when it does, because one change voids every warm prefix at
+// once: nobody catches that by watching, since there is nothing to watch until
+// the bill arrives for everyone together.
+//
+// No measurements here on purpose, and that includes the rankings. This comment
+// carried counts — a break count, a token total, a mean — and all three had
+// aged within five days, one into a plain falsehood: "the rarest break cause"
+// stopped being true when a wider corpus showed model changes rarer still.
+//
+// Stripping the numbers and keeping "the rarest" or "the highest mean" would
+// have kept the same claim in words a check cannot read. An ordinal IS a
+// measurement; it just hides the arithmetic. The sentence above argues from the
+// mechanism instead, which is structural and cannot rot: one prefix, every
+// warm session, at the same moment.
+//
+// For figures, run the command that produces them. `replay diff` prints each
+// break and its cause, one line per event rather than a rollup — a reader
+// wanting totals counts them, and gets a number dated by the run that made it.
+// internal/regression FC-PX fails if a count comes back here.
 //
 // It watches the tool set, not the system prompt, and that is a measured choice
 // rather than an obvious one. internal/proxy/causedetail.go records that across

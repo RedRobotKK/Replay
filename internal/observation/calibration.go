@@ -73,8 +73,11 @@ type ModelCalibrationRow struct {
 	// Exact is the subset of Matched whose read was reproduced EXACTLY.
 	//
 	// Matched also counts turns where the provider served more cached prefix
-	// than the model predicted, which is a prediction that was wrong in the
-	// other direction. Without this field a pooled reading would rebuild the
+	// than the model predicted — a sibling request in the same session had
+	// extended the shared prefix. That is fan-out behaving normally, not a
+	// prediction error, and an earlier version of this comment called it one.
+	// What is true is that the read was not REPRODUCED. Without this field a
+	// pooled reading would rebuild the
 	// same conflated headline across every contributor and no reader of the
 	// pool could decompose it either. Added 2026-09-11; see
 	// analysis.Calibration.ExactRate.

@@ -29,7 +29,7 @@ func TestCN1_ThePerModelTableShowsItsDenominator(t *testing.T) {
 		Compared:       900,
 		Matched:        891,
 		Exact:          867,
-		RecentSessions: 5,
+		RecentLanes:    5,
 		RecentCompared: 8,
 		RecentMatched:  8,
 		RecentExact:    7,

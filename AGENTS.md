@@ -4,7 +4,11 @@ Conventions for agents (and humans) working in this repository. Read fully befor
 
 ## Project
 
-Project Replay is a local, byte-transparent proxy between coding agents and model providers that adds cost visibility, prompt-cache diagnostics, secret masking, and spend circuit breakers. Status: pre-MVP. Roadmap in `docs/ROADMAP.md`. Decisions in `docs/adr/`.
+Project Replay is a local, byte-transparent proxy between coding agents and model providers that adds cost visibility, prompt-cache diagnostics, secret masking, and spend circuit breakers.
+
+**The proxy is the product and it ships.** `replay serve` is released and verified against the real provider; v0.1 through v0.5 are shipped, tagged, and described in `docs/ROADMAP.md` with their gates and their unmet caveats. This file said "pre-MVP" until 2026-09-11, seven tagged releases after it stopped being true — which mattered because an agent reading it treats the proxy as a thing to be built rather than an instrument in use, and edits it accordingly.
+
+Roadmap and per-release status in `docs/ROADMAP.md`. Decisions in `docs/adr/`. What each surface can and cannot be asked is in `docs/SURFACES.md`, and it is the file to believe over this one about capability.
 
 ## Commands
 
@@ -38,11 +42,16 @@ make docs-lint   # markdownlint over all Markdown
 ## Layout
 
 ```text
-cmd/replay/          command entry point
-internal/           private packages (version, later: proxy, masking, spend, dashboard)
+cmd/replay/         command entry point
+internal/           private packages: proxy, masking, analysis, cachemodel, ledger,
+                    transcript, advisor, quota, money, tui, and the rest — all built,
+                    none deferred
 docs/adr/           architecture decision records
 docs/architecture/  system design
-docs/internal/prd/           product requirement documents (history)
-docs/evidence/       design reviews
+docs/design/        design studies and surface taxonomies
+docs/evidence/      dated measurements; a figure quoted elsewhere cites a file here
+scripts/            check scripts the gates run
 .github/            CI, templates, labels, housekeeping automation
 ```
+
+This block listed `proxy` and `masking` as "later" and pointed at `docs/internal/prd/`, which does not exist, until 2026-09-11.

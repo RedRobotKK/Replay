@@ -157,6 +157,11 @@ var modelTable = []modelRow{
 	// A prefix under the floor does not cache, silently, so a wrong floor here
 	// recommends caching something that cannot be cached.
 	{"3-5-haiku", minPrefixOpus47, Price{0.80, 4, ReadMultiplier}, true},
+	// Opus 4.1 has its own row because it is its own model. It had none until
+	// 2026-09-11 and was priced through `opus-4` containing it, which is the
+	// same accident that priced the unreleased `opus-4-9` at $15/$75. The two
+	// prices agree today; nothing says the next pair will.
+	{"opus-4-1", minPrefixStandard, Price{15, 75, ReadMultiplier}, true},
 	{"opus-4", minPrefixStandard, Price{15, 75, ReadMultiplier}, true},
 	{"haiku", minPrefixStandard, Price{}, false},
 }
@@ -205,7 +210,7 @@ var anthropicFamilies = []string{"claude", "opus", "sonnet", "haiku", "fable", "
 // model whose cache arithmetic this table can do; a model nothing matches
 // still gets its input alone, which is short rather than wrong.
 func unpriceable(model string) bool {
-	if _, ok := activeRow(model); ok {
+	if _, _, ok := activeRow(model); ok {
 		return false
 	}
 	return foreignModel(model)
@@ -226,7 +231,7 @@ func foreignModel(model string) bool {
 func lookup(model string) modelRow {
 	m := strings.ToLower(model)
 	for _, row := range modelTable {
-		if strings.Contains(m, row.match) {
+		if matchesModel(m, row.match) {
 			if row.price.ReadMult == 0 {
 				row.price.ReadMult = ReadMultiplier
 			}
@@ -238,7 +243,7 @@ func lookup(model string) modelRow {
 
 // MinCacheablePrefix returns the minimum cacheable prefix for a model id.
 func MinCacheablePrefix(model string) int {
-	if row, ok := activeRow(model); ok {
+	if row, _, ok := activeRow(model); ok {
 		return row.MinPrefix
 	}
 	return lookup(model).minPrefix
@@ -247,8 +252,20 @@ func MinCacheablePrefix(model string) int {
 // PriceFor returns the list price for a model id, and false when the model
 // is not in the table. Callers print no dollar figure in that case.
 func PriceFor(model string) (Price, bool) {
-	if r, ok := activeRow(model); ok {
-		return Price{InputPerMTok: r.InputPerMTok, OutputPerMTok: r.OutputPerMTok, ReadMult: r.ReadMult}, r.Priced
+	if m, doc, ok := activeRow(model); ok {
+		// The discount is applied HERE, not only in PriceAt.
+		//
+		// It used to be applied only there, and PriceAt has no production
+		// callers — so an operator who stated a negotiated rate in their rules
+		// document was charged list in every figure the tool printed, silently.
+		// AccountDiscount was a documented, configurable field that could not
+		// reach a single number a user sees.
+		//
+		// applyDiscount deliberately leaves ReadMult alone: it is a ratio
+		// against the input price, which has already been discounted, so
+		// discounting it too would apply the negotiated rate twice to cached
+		// reads.
+		return doc.applyDiscount(priceOf(m)), m.Priced
 	}
 	row := lookup(model)
 	return row.price, row.priced
@@ -257,7 +274,7 @@ func PriceFor(model string) (Price, bool) {
 // ReadMultiplierFor returns the cache-read multiple for a model, falling
 // back to the standard multiple for unknown models.
 func ReadMultiplierFor(model string) float64 {
-	if r, ok := activeRow(model); ok && r.ReadMult > 0 {
+	if r, _, ok := activeRow(model); ok && r.ReadMult > 0 {
 		return r.ReadMult
 	}
 	return lookup(model).price.ReadMult

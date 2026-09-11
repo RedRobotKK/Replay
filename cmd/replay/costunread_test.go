@@ -59,7 +59,12 @@ func TestCU1_NothingPricedDoesNotCallUnreadableFilesRead(t *testing.T) {
 // sentence covering both would say something untrue about one of them.
 func TestCU2_UnpricedAndUnreadableAreDifferentSentences(t *testing.T) {
 	got := renderCost(summarise(nil), 5, 3, io.Discard, "")
-	if !strings.Contains(got, "5 were read but their model is not in the price table") {
+	// "their modelS". This assertion used to pin the singular, which is the
+	// grammar defect it was holding in place: "5 were read but their model"
+	// reads as five transcripts sharing one model. The sentence is built by
+	// unpricedClause now, and CW1 covers every count including the one this
+	// test cannot reach.
+	if !strings.Contains(got, "5 were read but their models are not in the price table") {
 		t.Errorf("the unpriced count lost its own sentence:\n%s", got)
 	}
 	if !strings.Contains(got, "3 transcript(s) could not be read") {

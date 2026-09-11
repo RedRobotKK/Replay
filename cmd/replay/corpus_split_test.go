@@ -152,8 +152,14 @@ func TestCS4_ThePerModelTableCarriesTheExactRate(t *testing.T) {
 			t.Errorf("the per-model table has no %q column:\n%s", col, modelHeader)
 		}
 	}
-	if !strings.Contains(got, "| claude-opus-5 | 1 | 50.0% | 100.0% |") {
-		t.Errorf("the model row does not print the exact rate before the match rate:\n%s", got)
+	// Sessions, Lanes, then exact before match. The Lanes column arrived on
+	// main while this branch was open — two denominations of the same corpus,
+	// and this assertion pins their order so a future edit cannot quietly
+	// reintroduce the conflation by printing one of them under the other's
+	// heading.
+	if !strings.Contains(got, "| claude-opus-5 | 1 | 1 | 50.0% | 100.0% |") {
+		t.Errorf("the model row does not print sessions, lanes, then the exact rate "+
+			"before the match rate:\n%s", got)
 	}
 }
 
@@ -213,7 +219,7 @@ func TestCS6_AWellFormedContributionStillPools(t *testing.T) {
 func TestCS7_ContributionCarriesTheMeasuredExactCount(t *testing.T) {
 	cals := []analysis.ModelCalibration{{
 		Model: "claude-opus-5", Sessions: 1, Compared: 10, Matched: 9, Exact: 8,
-		RecentSessions: 1, RecentCompared: 10, RecentMatched: 9, RecentExact: 8,
+		RecentLanes: 1, RecentCompared: 10, RecentMatched: 9, RecentExact: 8,
 	}}
 	rows := []corpusRow{{id: "abc", client: "2.1.0", requests: 11, compared: 10, matched: 9, exact: 8}}
 	home := t.TempDir()
@@ -264,4 +270,57 @@ func dataRowOf(s string) string {
 		}
 	}
 	return s
+}
+
+// CS8: the note explaining exceeded reads appears only when there are any.
+//
+// The paragraph tells a reader what a read larger than predicted means. On a
+// corpus with none, printing it explains a number that is not on the page —
+// and the number it explains is zero, so a reader who stops on it learns that
+// something they do not have is behaving normally.
+//
+// guard-reachability reported the branch INERT: the note was printed on every
+// fixture that had exceeded turns and nothing checked the empty case, so the
+// condition could be deleted with the suite green.
+func TestCS8_TheExceededNoteIsAbsentWhenNothingExceeded(t *testing.T) {
+	const phrase = "larger than predicted"
+
+	withExceeded := []corpusRow{{
+		id: "s1", compared: 4, matched: 4, exact: 3, exceeded: 1,
+	}}
+	var sb strings.Builder
+	if err := writeCorpus(&sb, withExceeded, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sb.String(), phrase) {
+		t.Errorf("a corpus WITH exceeded reads does not explain them:\n%s", sb.String())
+	}
+
+	none := []corpusRow{{
+		id: "s1", compared: 4, matched: 4, exact: 4, exceeded: 0,
+	}}
+	sb.Reset()
+	if err := writeCorpus(&sb, none, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(sb.String(), phrase) {
+		t.Errorf("a corpus with NO exceeded reads still explains them, so the report "+
+			"describes a condition the reader does not have:\n%s", sb.String())
+	}
+}
+
+// CS9: a row that compared nothing has an exact rate of zero, not 0/0.
+//
+// Unreached: every fixture compared something. A lane with no compared turns
+// is the one MatchRate returned 1 for until 2026-09-06, admitting 18 of 1,450
+// lanes to alternative scoring for having tested nothing. exactRate is the
+// same shape, added later, and nothing had asked it the question.
+func TestCS9_ARowThatComparedNothingRatesZero(t *testing.T) {
+	r := corpusRow{id: "s1", compared: 0, matched: 0, exact: 0}
+	if got := r.exactRate(); got != 0 {
+		t.Errorf("exactRate = %v on a row that compared nothing, want 0", got)
+	}
+	if got := r.matchRate(); got != 0 {
+		t.Errorf("matchRate = %v on a row that compared nothing, want 0", got)
+	}
 }

@@ -220,9 +220,22 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 	// never said how much of it was exact.
 	p.Printf("  Of those matched, reproduced exactly: %d; read more than predicted: %d\n", totalExact, totalExceeded)
 	if totalExceeded > 0 {
+		// "not reproduced", not "predicted wrong".
+		//
+		// This line said "it is still a prediction that was wrong". A sibling
+		// lane extending a shared prefix is fan-out working as designed, and
+		// calling it a wrong prediction turns a normal multi-lane condition
+		// into an error the reader will go looking for. Corrected in math
+		// review after the same phrasing reached a pull request body.
+		//
+		// What is true is narrower and is what the exact rate measures: the
+		// read was not REPRODUCED. The count is an upper bound on anything
+		// anomalous rather than a count of errors — nothing in the record
+		// separates fan-out from a genuine accounting mismatch.
 		p.Printf("  A read larger than predicted usually means a concurrent sibling lane extended the\n" +
-			"  prefix. It is counted as a match because the provider served at least what was\n" +
-			"  predicted, and it is still a prediction that was wrong, so it is NOT counted as exact.\n")
+			"  prefix, which is fan-out behaving normally. It is counted as a match because the\n" +
+			"  provider served at least what was predicted, and NOT as exact because the read was\n" +
+			"  not reproduced. Treat it as an upper bound on anything anomalous, not an error count.\n")
 	}
 	p.Printf("- Overall match rate: %.2f%% (exact reproduction rate: %.2f%%)", overall*100, exactOverall*100)
 	if totalTurns == 0 {
@@ -234,9 +247,22 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 	}
 
 	p.Printf("\n## Per model\n\n")
-	p.Printf("Calibration by the model of each session's first request, with the newest %d sessions judged on their own so a provider rule change shows as a drop (ST-1). The minimum cacheable prefix is bounded from usage: the largest uncached prompt lies below it, the smallest cached prefix at or above it.\n\n", analysis.StalenessRecentSessions)
-	p.Printf("| Model | Sessions | Exact rate | Match rate | Recent sessions | Recent turns | Recent exact rate | Recent match rate | Verdict |\n")
-	p.Printf("|---|---:|---:|---:|---:|---:|---:|---:|---|\n")
+	// Two denominations, two column headings. `Sessions` is the independent
+	// count and `Lanes` is how many transcripts those sessions wrote; the
+	// recent window slices lanes, so its column says lanes. The column headed
+	// `Sessions` held lane counts until 2026-09-10 and this one held them
+	// under a heading that said sessions until 2026-09-11 — the same
+	// conflation, one column to the right, which is where a reviewer found it.
+	//
+	// `Recent turns` is the recent window's DENOMINATOR, printed because the
+	// rates beside it are unweighable without it: haiku read 87.5% recent
+	// exact on EIGHT turns next to opus-5's 93.3% on 539, and both were marked
+	// calibrated. Seven of eight is exactly 87.5%, which is how a reviewer
+	// spotted it — from the number alone, because the table invited the guess
+	// instead of answering it.
+	p.Printf("Calibration by the model of each session's first request, with the newest %d LANES judged on their own so a provider rule change shows as a drop (ST-1). A session writes one lane per subagent, so the two counts differ on a fan-out corpus and the window is the lane one. The minimum cacheable prefix is bounded from usage: the largest uncached prompt lies below it, the smallest cached prefix at or above it.\n\n", analysis.StalenessRecentLanes)
+	p.Printf("| Model | Sessions | Lanes | Exact rate | Match rate | Recent lanes | Recent turns | Recent exact rate | Recent match rate | Verdict |\n")
+	p.Printf("|---|---:|---:|---:|---:|---:|---:|---:|---:|---|\n")
 	for _, m := range models {
 		// A model with nothing compared is not a model that scored badly, and
 		// printing a percentage for it says it was measured. `<synthetic>` is
@@ -255,20 +281,23 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 		case m.MatchRate() < analysis.CalibrationThreshold:
 			verdict = "below threshold"
 		}
-		// The recent window's denominator is printed, not just its rates.
+		// Ten columns, and every one of them is a different question.
 		//
-		// Without it the table reports 87.5% for a lane of EIGHT turns beside
-		// 93.3% for a lane of 539, and marks both calibrated. Seven of eight is
-		// exactly 87.5%, and a reader cannot tell that from the rate alone.
+		// Sessions and Lanes are two denominations of the same corpus; Exact
+		// and Match are two readings of the same turns; Recent lanes and
+		// Recent turns are the window's two sizes. This table stopped being
+		// readable at a glance some commits ago, and each pair is here because
+		// printing only one of them published a number that read as the other.
 		//
-		// This does not fix the gate, and is not meant to. CalibrationThreshold
-		// has no minimum sample size, so a lane clears 95% on eight turns as
-		// easily as on eight hundred — splitting exact from match leaves that
-		// untouched. Showing n is the part that can be done without changing
-		// which lanes pass, which is a decision for whoever owns the threshold.
-		p.Printf("| %s | %d | %s | %s | %d | %d | %s | %s | %s |\n", m.Model, m.Sessions,
+		// Showing n does not fix the gate and is not meant to.
+		// CalibrationThreshold has no minimum sample size, so a lane clears
+		// 95% on eight turns as easily as on eight hundred. This is the part
+		// that can be done without changing which lanes pass — a decision for
+		// whoever owns the threshold.
+		p.Printf("| %s | %d | %d | %s | %s | %d | %d | %s | %s | %s |\n",
+			m.Model, m.Sessions, m.Lanes,
 			matchRateCell(m.Exact, m.Compared), matchRateCell(m.Matched, m.Compared),
-			m.RecentSessions, m.RecentCompared,
+			m.RecentLanes, m.RecentCompared,
 			matchRateCell(m.RecentExact, m.RecentCompared), matchRateCell(m.RecentMatched, m.RecentCompared),
 			verdict)
 	}

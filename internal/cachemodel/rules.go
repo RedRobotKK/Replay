@@ -185,7 +185,7 @@ func (r *Rules) PriceAt(model string, t time.Time) (Price, bool) {
 	var fallback *ModelRule
 	for i := range r.Models {
 		m := r.Models[i]
-		if !strings.Contains(lower, strings.ToLower(m.Match)) {
+		if !matchesModel(lower, strings.ToLower(m.Match)) {
 			continue
 		}
 		if !m.windowContains(t) {
@@ -428,11 +428,19 @@ func FetchedAtInEffect() string {
 
 // activeRow finds a loaded rule for a model id, matched the same way the
 // compiled table is: by substring, most specific first, in file order.
-func activeRow(model string) (ModelRule, bool) {
+// activeRow returns the installed document's row for a model, and the document
+// it came from.
+//
+// The document is returned because the row alone is not a price. AccountDiscount
+// lives on the Rules, and a caller holding only the row cannot apply it — which
+// is exactly how PriceFor came to ignore a negotiated rate the operator had
+// stated: it took the row, built a Price from three fields, and never saw the
+// document those fields belonged to.
+func activeRow(model string) (ModelRule, *Rules, bool) {
 	overrideMu.RLock()
 	defer overrideMu.RUnlock()
 	if override == nil {
-		return ModelRule{}, false
+		return ModelRule{}, nil, false
 	}
 	// lookup() lowercases before matching the compiled table; this did not,
 	// so an installed feed correcting a price was silently ignored for
@@ -441,11 +449,11 @@ func activeRow(model string) (ModelRule, bool) {
 	// spellings of a model id and not others is worse than none.
 	lower := strings.ToLower(model)
 	for _, m := range override.Models {
-		if strings.Contains(lower, strings.ToLower(m.Match)) {
-			return m, true
+		if matchesModel(lower, strings.ToLower(m.Match)) {
+			return m, override, true
 		}
 	}
-	return ModelRule{}, false
+	return ModelRule{}, nil, false
 }
 
 // windowsOverlap reports whether two half-open-ended windows share an instant.
