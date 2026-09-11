@@ -35,6 +35,7 @@ All notable changes to this project are documented here. The format follows [Kee
   `replay cost` goes from 116 sessions and $3766.87 to 118 sessions and
   $3771.32, and from disclosing 6 transcripts read but not priced to disclosing
   13 that could not be read at all.
+
 ### Added
 
 - **`replay doctor` now says how old this binary is.** `selfupdate.StaleNotice` has
