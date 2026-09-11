@@ -28,7 +28,7 @@ func TestON1_TheOutlierIsNamedWithItsBasis(t *testing.T) {
 	if note == "" {
 		t.Fatal("a 4x session against a 5-session median produced no note")
 	}
-	for _, want := range []string{"53%", "6.45", "5 sessions"} {
+	for _, want := range []string{"52%", "6.45", "5 sessions"} {
 		if !strings.Contains(note, want) {
 			t.Errorf("the note does not carry %q so the reader cannot check it:\n%s", want, note)
 		}
@@ -49,7 +49,7 @@ func TestON2_AnUnremarkableCorpusIsSilent(t *testing.T) {
 
 // ON3: too few sessions, or a zero median, says nothing.
 //
-// The refusals live in analysis.CompareToMedian; this is the check that the
+// The refusals live in analysis.CompareToTotal; this is the check that the
 // caller honours them rather than rendering an infinity or a ratio of one.
 func TestON3_RefusalsAreHonoured(t *testing.T) {
 	if note := outlierNote(units(1.0, 5.0), costSummary{TotalUSD: 6.0, Tasks: 2}); note != "" {
@@ -72,5 +72,190 @@ func TestON4_TheSessionIsIdentified(t *testing.T) {
 	note := outlierNote(u, costSummary{TotalUSD: 5.65, Tasks: len(u)})
 	if !strings.Contains(note, "d0000000") && !strings.Contains(note, "d000000") {
 		t.Errorf("the note does not name the session it is about:\n%s", note)
+	}
+}
+
+// ON6: the instruction names the transcript, and it is the peak's transcript.
+//
+// The note used to end `replay why <id>`. `why` was never a command — it is a
+// TUI screen label that reached CLI output — so the one line written for a
+// first-time reader to act on told them to run something that does not exist,
+// at the moment they were most likely to try. The tests at the time asserted
+// only on the finding line, so the instruction was never checked at all and the
+// defect shipped under a green suite.
+func TestON6_TheInstructionNamesThePeaksTranscript(t *testing.T) {
+	u := units(0.50, 0.80, 0.85, 0.90, 3.40)
+	for i := range u {
+		u[i].path = "/corpus/" + u[i].ID + ".jsonl"
+	}
+	note := outlierNote(u, costSummary{TotalUSD: 6.45, Tasks: len(u)})
+	if !strings.Contains(note, "replay blame /corpus/e0000000.jsonl") {
+		t.Errorf("the note does not tell the reader how to open the session it just "+
+			"named:\n%s", note)
+	}
+	if strings.Contains(note, "replay why") {
+		t.Errorf("the note prints `replay why`, which is not a command:\n%s", note)
+	}
+	for _, other := range []string{"a0000000.jsonl", "d0000000.jsonl"} {
+		if strings.Contains(note, "blame /corpus/"+other) {
+			t.Errorf("the instruction opens %s, which is not the session the finding "+
+				"is about:\n%s", other, note)
+		}
+	}
+}
+
+// ON7: with no transcript to name, the finding stands and the instruction goes.
+//
+// Absence, zero and unknown are three values (ADR-0018). A row priced from a
+// source this build cannot point at still supports the finding; it does not
+// support an instruction, and inventing a plausible-looking path would be the
+// same defect as `replay why` in a different costume.
+func TestON7_NoPathMeansNoInstruction(t *testing.T) {
+	u := units(0.50, 0.80, 0.85, 0.90, 3.40) // no paths set
+	note := outlierNote(u, costSummary{TotalUSD: 6.45, Tasks: len(u)})
+	if note == "" {
+		t.Fatal("the finding was dropped along with the instruction")
+	}
+	if !strings.Contains(note, "52%") {
+		t.Errorf("the finding is gone:\n%s", note)
+	}
+	if strings.Contains(note, "replay blame") {
+		t.Errorf("an instruction was printed with no transcript behind it:\n%s", note)
+	}
+}
+
+// ON8: a session folded from several lanes is opened at its own transcript,
+// not at whichever sub-agent lane the walk happened to reach first.
+//
+// blame reads either file, so the wrong choice fails silently: it answers a
+// narrower question than the row the reader clicked, and looks like an answer.
+func TestON8_TheFoldKeepsTheSessionsOwnTranscript(t *testing.T) {
+	id := "facfd32e"
+	lanes := []costUnit{
+		{ID: id, CostUSD: 3.0, path: "/corpus/agent-9c11beef.jsonl"},
+		{ID: id, CostUSD: 1.0, path: "/corpus/" + id + ".jsonl"},
+		{ID: id, CostUSD: 0.5, path: "/corpus/agent-77aa0011.jsonl"},
+	}
+	got := foldSessions(lanes)
+	if len(got) != 1 {
+		t.Fatalf("three lanes of one session folded to %d rows", len(got))
+	}
+	if got[0].path != "/corpus/"+id+".jsonl" {
+		t.Errorf("the folded session points at %q, not its own transcript", got[0].path)
+	}
+}
+
+// ON9: the instruction does not promise more than the command delivers.
+//
+// `replay blame` reports one lane and says so. On a fanned-out session that
+// lane can be a minority of the cost the finding above it just quoted — measured
+// here, $286.59 of a $1,056.14 session, the remaining $769.55 sitting in 1,013
+// sub-agent transcripts. "ranks what filled it" over that is an instruction the
+// reader takes at face value for an answer to a narrower question.
+func TestON9_TheInstructionDoesNotOverclaimItsScope(t *testing.T) {
+	u := units(0.50, 0.80, 0.85, 0.90, 3.40)
+	for i := range u {
+		u[i].path = "/corpus/" + u[i].ID + ".jsonl"
+	}
+	note := outlierNote(u, costSummary{TotalUSD: 6.45, Tasks: len(u)})
+	if !strings.Contains(note, "main lane") {
+		t.Errorf("the instruction does not say blame is scoped to one lane:\n%s", note)
+	}
+	if strings.Contains(note, "ranks what filled it.") {
+		t.Errorf("the instruction still claims blame ranks the whole session:\n%s", note)
+	}
+}
+
+// ON10: a share is floored, never rounded up.
+//
+// %.0f turns 99.5% into "100%", and "100% of everything replay priced" asserts
+// that every other row cost nothing. The dollar figures beside it are printed
+// to the cent, so a near-total prints "$199.00 of $199.00" and the arithmetic
+// appears to confirm the false claim. Flooring can understate by less than a
+// point; it cannot state something untrue.
+func TestON10_ASharesRoundingCannotMakeItFalse(t *testing.T) {
+	note := outlierNote(
+		[]costUnit{
+			{ID: "a0000000", CostUSD: 1.0, path: "/c/a.jsonl"},
+			{ID: "b0000000", CostUSD: 199.0, path: "/c/b.jsonl"},
+			{ID: "c0000000", CostUSD: 0.5, path: "/c/c.jsonl"},
+		},
+		costSummary{TotalUSD: 199.6, Tasks: 3},
+	)
+	if strings.Contains(note, "100%") {
+		t.Errorf("a session that is not all of the spend is reported as all of it:\n%s", note)
+	}
+	if !strings.Contains(note, "99%") {
+		t.Errorf("the share is not reported at all:\n%s", note)
+	}
+}
+
+// ON11: the noun follows the report's unit.
+//
+// Under --per-lane a row is an agent lane. cost.go already switches "task" to
+// "lane" for the median and p90 five lines above this note, with a comment
+// warning that calling a lane a task under a header that said lanes "is how one
+// word came to mean two things here in the first place". The note then did
+// exactly that, twice, on the same stdout.
+func TestON11_TheNounFollowsTheReportsUnit(t *testing.T) {
+	u := []costUnit{
+		{ID: "a0000000", CostUSD: 1.0, path: "/c/a.jsonl"},
+		{ID: "b0000000", CostUSD: 9.0, path: "/c/b.jsonl"},
+		{ID: "c0000000", CostUSD: 1.0, path: "/c/c.jsonl"},
+	}
+	lanes := outlierNote(u, costSummary{TotalUSD: 11.0, Tasks: 3, Unit: unitLane})
+	if !strings.Contains(lanes, "largest lane") || strings.Contains(lanes, "largest session") {
+		t.Errorf("a --per-lane report calls its rows sessions:\n%s", lanes)
+	}
+	if !strings.Contains(lanes, "3 lanes") {
+		t.Errorf("the denominator is not in the report's unit:\n%s", lanes)
+	}
+	sessions := outlierNote(u, costSummary{TotalUSD: 11.0, Tasks: 3, Unit: unitSession})
+	if !strings.Contains(sessions, "largest session") {
+		t.Errorf("a session report calls its rows something else:\n%s", sessions)
+	}
+}
+
+// ON12: the denominator is named for what it is.
+//
+// The total excludes sessions whose model is not in the price table, covers
+// only the directories this walk was given, and is the estimated tier rather
+// than an invoice. "everything you spent" is false in all three directions at
+// once, and it is the only clause in the line a reader could act on wrongly.
+func TestON12_TheDenominatorIsNotCalledEverythingYouSpent(t *testing.T) {
+	note := outlierNote(
+		[]costUnit{{ID: "a0000000", CostUSD: 1.0, path: "/c/a.jsonl"},
+			{ID: "b0000000", CostUSD: 9.0, path: "/c/b.jsonl"},
+			{ID: "c0000000", CostUSD: 1.0, path: "/c/c.jsonl"}},
+		costSummary{TotalUSD: 11.0, Tasks: 3},
+	)
+	if strings.Contains(note, "everything you spent") {
+		t.Errorf("the note claims a total it does not have:\n%s", note)
+	}
+	if !strings.Contains(note, "everything replay priced") {
+		t.Errorf("the note does not name its denominator:\n%s", note)
+	}
+}
+
+// ON13: an unnamed transcript or an unnamed session is not the main transcript.
+//
+// Reported by guard-reachability as INERT: the branch ran and nothing depended
+// on it. It is load-bearing in the fold — the zero value has to LOSE to any
+// real candidate, or a session with one lane missing a path would keep the
+// empty string and the outlier note would print no instruction at all.
+func TestON13_TheZeroValueIsNeverTheMainTranscript(t *testing.T) {
+	for _, c := range []struct {
+		path, id string
+		want     bool
+	}{
+		{"/corpus/facfd32e.jsonl", "facfd32e", true},
+		{"/corpus/agent-9c11.jsonl", "facfd32e", false},
+		{"", "facfd32e", false},
+		{"/corpus/facfd32e.jsonl", "", false},
+		{"", "", false},
+	} {
+		if got := mainTranscript(c.path, c.id); got != c.want {
+			t.Errorf("mainTranscript(%q, %q) = %v, want %v", c.path, c.id, got, c.want)
+		}
 	}
 }
