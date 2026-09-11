@@ -16,7 +16,7 @@ of the document.
 | `$CLAUDE_CONFIG_DIR/projects/*/*.jsonl`, else `~/.claude/projects/…` | read | Agent transcripts. Never modified | **Verified** |
 | `~/.replay/ledger/<session>.jsonl` | write | **Message text is genuinely never written** and that was verified against a request stuffed with secrets. But "block kinds, sizes, timings, usage" understated it: records also carry the request `path`, `session_id` and `agent_id` from client headers, the provider's `request_id`, `model`, `effort`, **and tool names verbatim** — `SanitizeLabel` runs on read, not on write. `0600` **at creation only** | **Verified**, and the description corrected |
 | `~/.replay/ledger/.label-key` | write | HMAC key for path labels | Read |
-| `~/.replay/vault/`, `.vault-key` | write | Only with `--mask`. AES-256-GCM, key file alongside | **Verified**: a reviewer decrypted it in five lines of Python. The key file is the whole boundary |
+| `~/.replay/vault/`, `.vault-key` | write | Only with `--mask`. AES-256-GCM, key file alongside. **Entries expire after 24h since 2026-09-10** (`serve --mask-ttl`, `0` to disable); the directory and both files are verified owner-only on every open | **Verified**: a reviewer decrypted it in five lines of Python. The key file is still the whole boundary — expiry bounds the window, it does not close it |
 | `~/.replay/.pins`, `.revert` | write | Per-session policy decisions, persisted so a restart cannot change a session's mind | Read |
 | `~/.replay/policy.json` | **read and write** | `learn` writes it; **the proxy reads it at each new session's first request** (`server.go:763`), so anything that can write this file changes the parameters sent to the provider. Listed as write-only in the first version | Read |
 | `$CLAUDE_CONFIG_DIR/settings.json`, else `~/.claude/settings.json` | **read, and write with `advise --apply --yes`** | The one configuration file Replay touches, and only when you pass the flag. It reads the current `promptCacheTtl`, and `--yes` writes that single key back after copying the file to a timestamped `.bak-…` sibling; a file that is not valid JSON is refused untouched (`cmd/replay/apply.go`). **Missing from the first version of this table**, which is why [`WHAT-YOU-GET.md`](WHAT-YOU-GET.md) claimed a boundary wider than the code holds | Read |
@@ -126,18 +126,25 @@ not on the map.
 | in | `127.0.0.1:4000` `/` | the proxy itself. Loopback enforced at construction | **Verified**: a non-loopback `-listen` refuses to start |
 | in | `/replay/status` | JSON per-session totals, plus per-lane breakdowns under `context_by_lane`, `re_reads_by_lane` and `what_if_by_lane`. `Origin` and `Sec-Fetch-Mode` refused | **Verified** |
 | in | `/replay/metrics` | Prometheus text, aggregate only | Read |
-| in | `/replay/healthz` | **no origin check, no token check** | **Verified as a gap** |
+| in | `/replay/healthz` | **Origin and `Host` checked, 2026-09-10; still no token check, deliberately.** A browser-originated request is refused, so a page can no longer fingerprint that Replay is running. The token is not required because `doctor` probes this endpoint with none, and it cannot learn a token it did not set | **Closed as a gap**, security review finding 6 |
 | out | `$ANTHROPIC_BASE_URL/replay/healthz` | `doctor` only, probing for a running proxy. No credential, 64-byte read, timeout | **Verified**, and missing from the first version of this page |
 | out | the configured provider, `/v1/messages` and `/v1/messages/count_tokens` | **`probe --execute` only.** The one command that ORIGINATES traffic rather than forwarding it: synthetic, cache-defeating, billable, on your own key. It refuses to run without `--execute`, prints the plan first, and asks for confirmation unless `--yes`. `count_tokens` is unbilled; `/v1/messages` is not | **Verified**, and missing until 2026-09-06 — see the note below |
 | out | **any host you name** | `rules --update <https url>` (`cmd/replay/rules.go:216`). The destination is an argument, so this page cannot enumerate it. `https` is enforced (`:212`) and a redirect to `http` is refused (`:232`); a 402 payment-terms response is parsed. **Missing from every earlier version of this page** | **Added 2026-09-10** |
+| out (unwired) | the rules feed base URL passed to `feed.Fetch` | **Capability, not a call anybody can make today.** `internal/feed` fetches a signed bundle and its detached `.sig` (`feed.go:172`) with a 10-second timeout, verifies an ed25519 signature and never signs. No non-test caller reaches it, so no command types this — the row exists because this page inventories what the binary CAN reach, and "unwired" is a fact about today's call graph. **Missing from every earlier version of this page, and from the test that is supposed to keep it complete:** `feed` sends with `c.Get(u)` on an `*http.Client` parameter, a shape `outbound_drift_test.go`'s call matcher could not see. That test now also checks imports, which is the capability rather than the spelling | **Added 2026-09-10** |
 | out | `raw.githubusercontent.com` | `rules --check-prices` only. A plain GET compared against the compiled table; nothing is installed from it | **Verified** |
 | out (loopback) | `127.0.0.1:11434/api/version` | **Not typed.** `replay burn` probes for a local Ollama on every run (`cmd/replay/ollamaversion.go:26`, called from `burn.go:111`), 2s timeout. It never leaves the machine, which is why it is easy to omit — and why it was omitted | **Added 2026-09-10** |
 
-**Known gaps here, all recorded in the security review:** `/replay/status` and `/replay/metrics` are
+**Known gaps here, updated 2026-09-10.** `/replay/status` and `/replay/metrics` remain
 **unauthenticated unless `--token` is set**, so any local process can read model names, token counts
-and per-session list-price dollars. There is **no `Host` header validation**; the anti-rebinding
-defence rests on `Origin` being present. And `/replay/healthz` answers cross-origin, so a web page
-can fingerprint that Replay is running.
+and per-session list-price dollars. That one stands.
+
+The other two are closed. **`Host` header validation now exists** on every TCP-served route,
+including the passthrough: a page at a name that resolves to `127.0.0.1` is refused on the Host
+header alone, which is the defence that does not depend on `Origin` being sent — a plain `<form>`
+post sends none. And **`/replay/healthz` no longer answers cross-origin**. The Host check is
+deliberately not applied to a Unix socket, which has no DNS to rebind and whose clients address it
+through a placeholder authority. See `internal/proxy/hostguard.go` and, for what each guard is
+worth, the tests beside it: each was neutralised and watched to fail before it was believed.
 
 ### Provider surface, and what this build does not read
 
@@ -260,10 +267,16 @@ error as the Grok cell above, found twice in one day.
   on `/replay/metrics`, which is unauthenticated unless `--token` is set. **Same tool-name disclosure
   class as the redacted-fixture problem**, on an endpoint any local process can read. Unbounded
   cardinality too.
-- **No `O_EXCL` anywhere, and no write re-checks permissions.** Every key and state file is written
-  through a pre-existing symlink if one is there, and an existing file keeps its existing mode.
-- **`loadOrCreateKey` silently overwrites on any read failure.** A permission-denied read rotates the
-  label key, or replaces the vault key and orphans the vault.
+- **No `O_EXCL` anywhere.** Every key and state file is written through a pre-existing symlink if one
+  is there. **Half fixed 2026-09-10:** the mode half is closed — the ledger and vault directories and
+  their key files are stat'd on every open, tightened when group or other bits are set, and refused
+  when they cannot be (`internal/ownerdir`). The symlink half stands.
+- **`loadOrCreateKey` overwrites on a read failure.** Narrowed 2026-09-10 rather than closed: an
+  unreadable key file is now refused by `ownerdir.EnsureFile` before `loadOrCreateKey` sees it, so
+  the case a reviewer reached — a symlink loop, an unstat-able path — errors instead of silently
+  producing a new key and orphaning the store. A file that stats cleanly and then fails to read is
+  still handled by `loadOrCreateKey`, which will try to write a replacement and report the write
+  error.
 - **No file locking at all.** Two `replay serve` instances on one ledger directory rely entirely on
   `O_APPEND` atomicity; the mutex in `store.go` is per-process.
 - **`isLoopback` accepts the literal string `localhost` without resolving it**, so that one input

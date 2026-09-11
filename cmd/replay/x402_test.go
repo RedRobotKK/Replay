@@ -277,6 +277,17 @@ var execExempt = map[string]bool{
 	// check below still applies: if it stops importing os/exec the entry has
 	// to come out.
 	"scripts/guard-reachability/main.go": true,
+	// scripts/refusal-reachability is the same kind of tool under the same
+	// //go:build ignore, and earns its exemption on the same terms: it is
+	// excluded from every build of this module, it runs only `go test` on
+	// packages of this repository, and the exec is the job — it neutralises the
+	// guard in front of each refusal and reports the refusals no test can tell
+	// from any other outcome.
+	//
+	// It runs no `git` and takes no path from a user: the packages it tests come
+	// from walking cmd/ and internal/ for .go files. Adding it here is a second
+	// entry a reviewer reads, which is the intended cost.
+	"scripts/refusal-reachability/main.go": true,
 }
 
 var allowedImports = map[string]bool{

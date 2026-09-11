@@ -41,8 +41,8 @@ const (
 type Verdict string
 
 const (
-	// Unmeasured means this machine did not compute the figure. Absence, zero
-	// and unknown are three values (ADR-0018), and this is the first.
+	// Unmeasured means this machine did not compute the figure. Absence, zero and
+	// unknown are three values (ADR-0018), and this is the first.
 	Unmeasured Verdict = "unmeasured"
 	// NoReference means nothing published covers this metric.
 	NoReference Verdict = "no-reference"
@@ -50,9 +50,9 @@ const (
 	Within Verdict = "within"
 	// Outside means it falls outside a published spread.
 	Outside Verdict = "outside"
-	// Differs means no spread was published, so only direction and magnitude
-	// can be stated. This is the common case, because most papers report a
-	// median and not a distribution.
+	// Differs means no spread was published, so only direction and magnitude can be
+	// stated. This is the common case, because most papers report a median and
+	// not a distribution.
 	Differs Verdict = "differs"
 )
 
@@ -154,6 +154,20 @@ func (c Comparison) Line() string {
 	}
 	return fmt.Sprintf("%s here, %s across %s (%s)",
 		format(c.Local, r.Unit), format(r.Value, r.Unit), r.Population, r.Citation)
+}
+
+// Against is the published half alone, for a caller that has already rendered
+// the local figure in its own words.
+//
+// It exists because rendering the local figure twice is the defect this package
+// is meant to help find. `replay burn` prints "99% of the prompt served from
+// cache" with its own precision; a comparison line that restated the same
+// measurement as "98.6% here" put two renderings of one number on consecutive
+// rows, which is precisely the two-surfaces-disagree failure the reference is
+// supposed to make visible.
+func (c Comparison) Against() string {
+	r := c.Reference
+	return fmt.Sprintf("%s across %s (%s)", format(r.Value, r.Unit), r.Population, r.Citation)
 }
 
 func format(v float64, u Unit) string {
