@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -36,6 +37,16 @@ import (
 // The repair was not fresher numbers. Fresher numbers age too, and these had
 // already been replaced once. The header states the shape and names the
 // command that recomputes it, so a reader who wants a figure runs for one.
+//
+// SCOPE, stated because the next reader will otherwise overestimate this.
+// The signature is a comma-grouped number. It would NOT have caught the
+// original header's "5 breaks" or "it happens five times" — only 1,807,000 and
+// 361,400. Ungrouped counts and ordinals ("the rarest", "the highest mean")
+// are out of scope and no check reads them. That is a deliberate trade:
+// matching every digit false-positives on version numbers and on this comment,
+// and matching wordings freezes the wording rather than the defect. The
+// ordinals were removed from prefix.go by hand, for the reason its comment
+// gives, and nothing here stops them coming back.
 //
 // PASS: no comment in prefix.go carries a comma-grouped count.
 // FAIL: a measurement came back into the prose, where nothing can check it.
@@ -82,21 +93,7 @@ func formatLine(n int, match, line string) string {
 	if len(line) > 90 {
 		line = line[:87] + "..."
 	}
-	return "prefix.go:" + itoaFC(n) + ": " + match + "   in: " + line
-}
-
-func itoaFC(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b [20]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(b[i:])
+	return "prefix.go:" + strconv.Itoa(n) + ": " + match + "   in: " + line
 }
 
 // repoRootFor walks up to the module root.
