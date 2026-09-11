@@ -32,6 +32,22 @@ type Screen struct {
 	// Rows is how many selectable lines the screen has, so the loop knows
 	// whether the movement keys apply here.
 	Rows int
+	// BodyRows is how many lines the screen built BEFORE the pad helper
+	// fitted it to the frame, and it exists because nothing could see that.
+	//
+	// pad(), padCost(), padWhy() and padShare() each fill a short body and
+	// trim a long one, so Lines is bodyRows-3 whatever went in. A screen
+	// that overflowed and lost its last row is the same length as one that
+	// fitted with space to spare, and the row-budget test asserted on that
+	// length — an assertion whose value is constant regardless of the
+	// defect, which is the shape ADR-0014 is about.
+	//
+	// It cost a red main. #157 and #160 each added one doctor row, each
+	// respected the budget alone, and together needed 21 rows against 20.
+	// The screen compiled, the tests passed, and a row went out of frame.
+	//
+	// Compare it against bodyRows-3: greater means content was dropped.
+	BodyRows int
 }
 
 // answerBlock renders the headline: a figure and the sentence that reads it.
