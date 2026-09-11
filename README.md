@@ -1,7 +1,35 @@
 # Replay
 
+[![CI](https://github.com/RedRobotKK/Replay/actions/workflows/ci.yml/badge.svg)](https://github.com/RedRobotKK/Replay/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/RedRobotKK/Replay?sort=semver)](https://github.com/RedRobotKK/Replay/releases)
+[![Go](https://img.shields.io/badge/go-1.24-00ADD8?logo=go&logoColor=white)](go.mod)
+[![Dependencies](https://img.shields.io/badge/dependencies-0-success)](cmd/replay/x402_test.go)
+[![Coverage](https://img.shields.io/badge/coverage-%E2%89%A585%25-success)](scripts/coverage-gate.sh)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)](#platform-support-macos-and-linux-only)
+[![License](https://img.shields.io/badge/license-BSL%201.1-blue)](LICENSE)
+
 **Your prompt cache expired while you were at lunch.** Replay finds the turn it happened on, and
 what that one turn cost.
+
+> **The refusals are the feature.** Anything this tool cannot measure, it declines to print — and
+> says why, in the place the number would have gone. `replay route` will not quote you dollars for a
+> model pair it has never seen on the wire. `replay context` tells you when its own answer is
+> incomplete because the session was compacted. Every figure carries the population it was measured
+> on and the date it was read. When a number here turns out to be wrong, the correction ships as a
+> new dated file and the old reading stays visible — including
+> [the time this README overstated its own sample size twentyfold](#how-far-to-trust-it).
+
+## Start with the question you actually have
+
+| You want to know | Type this |
+|---|---|
+| What did all this cost me? | `replay` |
+| Which turn got billed twice, and why? | `replay diff <transcript\|dir>` |
+| What should I change? | `replay advise <dir>` |
+| What is filling my context? | `replay context <transcript\|dir>` |
+| Would another model be cheaper? | `replay route <dir> --to <model>` |
+| Is anything on this machine broken? | `replay doctor` |
+| All of it, as screens | `replay tui` |
 
 If you already run ccusage, this is the next question rather than a replacement for it. ccusage
 tells you what you spent, and it is better at that than anything here. Replay answers something
