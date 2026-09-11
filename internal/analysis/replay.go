@@ -35,12 +35,24 @@ type Tally struct {
 	// CostUSD is the list-price cost when the model is in the price table,
 	// and zero otherwise. Priced reports say which.
 	CostUSD float64
+	// Four billed legs. They sum to CostUSD. Printed by `replay cost` so a
+	// token cut that only shrinks cache reads is not mistaken for an input cut.
+	UncachedUSD float64
+	WriteUSD    float64
+	ReadUSD     float64
+	OutputUSD   float64
 	// Misses counts requests that read nothing from cache after the first.
 	Misses int
 }
 
-// Add records one request's usage.
+// Add records one request's usage at an unknown time (compiled / undated rate).
 func (t *Tally) Add(u transcript.Usage, model string) {
+	t.AddAt(u, model, time.Time{})
+}
+
+// AddAt records one request's usage at the time it ran, so a dated rules
+// window and an account discount reach the number a user sees.
+func (t *Tally) AddAt(u transcript.Usage, model string, at time.Time) {
 	if t.Requests > 0 && u.CacheRead == 0 {
 		t.Misses++
 	}
@@ -50,8 +62,13 @@ func (t *Tally) Add(u transcript.Usage, model string) {
 	t.Writes += u.CacheCreation
 	t.Output += u.Output
 	t.EffectiveTokens += cachemodel.EffectiveTokens(u, model)
-	if p, ok := cachemodel.PriceFor(model); ok {
-		t.CostUSD += cachemodel.CostUSD(u, p)
+	if p, ok := cachemodel.PriceForAt(model, at); ok {
+		legs := cachemodel.CostLegsUSD(u, p)
+		t.CostUSD += legs.Total()
+		t.UncachedUSD += legs.Uncached
+		t.WriteUSD += legs.Write
+		t.ReadUSD += legs.Read
+		t.OutputUSD += legs.Output
 	}
 }
 
@@ -67,7 +84,7 @@ const AssumptionNote = "replayed savings assume the agent would have behaved ide
 func AsRun(lane *transcript.Lane) PolicyResult {
 	r := PolicyResult{Name: "as-run", ReachableLive: "n/a"}
 	for _, req := range lane.Requests {
-		r.Add(req.Usage, req.Model)
+		r.AddAt(req.Usage, req.Model, req.Timestamp)
 	}
 	return r
 }

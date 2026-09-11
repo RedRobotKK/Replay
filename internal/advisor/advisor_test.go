@@ -33,8 +33,14 @@ func TestFixtureProducesTheExpectedSuggestions(t *testing.T) {
 		t.Fatal("fixture must calibrate")
 	}
 	got := Suggest([]Observation{ob}, nil)
-	if len(got) == 0 || got[0].Kind != KindToolInputs || got[0].Target != "Bash" {
-		t.Fatalf("largest suggestion must be the Bash inputs: %+v", got)
+	if len(got) == 0 {
+		t.Fatal("no suggestions")
+	}
+	// Cache-breaks re-bill at input price; Bash inputs sit in the prefix and
+	// bill at the read multiple. Token ranking put Bash first; dollar ranking
+	// puts the re-bills first. That is the change.
+	if got[0].Kind != KindCacheBreaks {
+		t.Fatalf("largest by cache-traffic dollars must be cache-breaks, got %s: %+v", got[0].Kind, got)
 	}
 	by := kinds(got)
 	for _, k := range []Kind{KindToolInputs, KindFirstTurn, KindCacheBreaks} {
@@ -47,12 +53,43 @@ func TestFixtureProducesTheExpectedSuggestions(t *testing.T) {
 			t.Errorf("fixture has no evidence for %s", k)
 		}
 	}
-	first := got[0]
-	if first.Sessions != 1 || first.Share < MinShare || first.PredictedTokens != first.PromptTokens/2 || first.Status != Pending || !strings.Contains(first.Action, "heredoc") {
-		t.Fatalf("Bash suggestion wrong: %+v", first)
+	bash := by[KindToolInputs]
+	if bash.Sessions != 1 || bash.Share < MinShare || bash.PredictedTokens != bash.PromptTokens/2 || bash.Status != Pending || !strings.Contains(bash.Action, "heredoc") {
+		t.Fatalf("Bash suggestion wrong: %+v", bash)
 	}
 	if b := by[KindCacheBreaks]; b.Status != AdviceOnly || b.PromptTokens <= 0 || b.PredictedTokens != b.PromptTokens {
 		t.Fatalf("cache breaks are advice only: %+v", by[KindCacheBreaks])
+	}
+}
+
+func TestSuggest_RanksByWriteReadDollarsNotTokenShare(t *testing.T) {
+	now := time.Now()
+	// More tokens of Bash results than of cache-breaks, but the breaks
+	// are priced as re-bills (input) and the results as cache reads.
+	obs := []Observation{
+		{
+			at: now, prompt: 2_000_000,
+			targets: map[string]evidence{
+				key(KindLargeResults, "Bash"): {at: now, share: 0.5, tokens: 1_000_000, usd: 1.00},
+			},
+		},
+		{
+			at: now.Add(time.Second), prompt: 200_000,
+			targets: map[string]evidence{
+				key(KindCacheBreaks, "cache breaks"): {at: now, share: 0.4, tokens: 80_000, usd: 10.00},
+			},
+		},
+	}
+	got := Suggest(obs, nil)
+	if len(got) < 2 {
+		t.Fatalf("want two suggestions, got %d", len(got))
+	}
+	if got[0].Kind != KindCacheBreaks {
+		t.Fatalf("dollar ranking put %s first (tokens %d $%.2f); cache-breaks should lead",
+			got[0].Kind, got[0].PredictedTokens, got[0].PredictedUSD)
+	}
+	if got[1].Kind != KindLargeResults {
+		t.Fatalf("second = %s, want Bash results", got[1].Kind)
 	}
 }
 

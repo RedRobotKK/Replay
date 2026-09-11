@@ -431,9 +431,7 @@ func EffectiveTokens(u transcript.Usage, model string) float64 {
 // CostUSD prices one request's usage at first-party list rates: prompt
 // tokens as EffectiveTokens at the input price, output at the output price.
 func CostUSD(u transcript.Usage, p Price) float64 {
-	input := (float64(u.Input) + writeEquivalent(u) + float64(u.CacheRead)*p.ReadMult) * p.InputPerMTok
-	output := float64(u.Output) * p.OutputPerMTok
-	return (input + output) / tokensPerMillion
+	return CostLegsUSD(u, p).Total()
 }
 
 // SimulatedUsage builds the usage a simulated request would report, so

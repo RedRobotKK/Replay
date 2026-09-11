@@ -114,7 +114,7 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 		prose = stderr
 	}
 	p := analysis.NewPrinter(prose)
-	p.Printf("Sessions: %d found, %d calibrated. Predictions assume the target is halved; shares are of prompt tokens, the scale-free metric.\n\n", len(files), len(obs))
+	p.Printf("Sessions: %d found, %d calibrated. Ranked by cache-write and cache-read dollars, not token share. Predictions assume the target is halved.\n\n", len(files), len(obs))
 	if len(suggestions) == 0 {
 		p.Printf("No token source above %.0f%% of prompt tokens in any session.\n", advisor.MinShare*100)
 	}
@@ -125,7 +125,7 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 		}
 		p.Printf("%d. [%s] %s\n", i+1, s.Status, s.Title)
 		p.Printf("   %s\n", s.Action)
-		p.Printf("   evidence: %d session(s), %s tokens in prompts%s; predicted saving %.0f%% of prompt tokens per session (%s tokens across the corpus)", s.Sessions, formatCount(s.PromptTokens), tier, s.PredictedShare*100, formatCount(s.PredictedTokens))
+		p.Printf("   evidence: %d session(s), %s tokens in prompts%s ($%.2f cache traffic); predicted $%.2f (%.0f%% of that target, %s tokens)", s.Sessions, formatCount(s.PromptTokens), tier, s.WriteReadUSD, s.PredictedUSD, s.PredictedShare*100, formatCount(s.PredictedTokens))
 		if s.Status == advisor.Verified || s.Status == advisor.NotVerified {
 			p.Printf("; realized %.0f%%", s.RealizedShare*100)
 		}
