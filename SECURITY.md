@@ -29,10 +29,21 @@ file contents. Paths in derived findings are HMAC'd.
 
 **One store is different.** The masking vault (`~/.replay/vault`) holds the real values behind
 placeholders sent to a provider. It is the only store here that keeps your secrets rather than
-counts about them, it is never removed by a retention window, and `replay privacy` marks it.
+counts about them, and `replay privacy` marks it.
 
-**Retention: 90 days is the recommended default, and nothing is deleted unless you ask.** Replay
-sets no automatic expiry, because silently deleting a reader's own measurements is not a decision a
+**It is the one store with an automatic expiry, and the reason is the sentence below it.** Entries
+are evicted 24 hours after they are vaulted (`serve --mask-ttl`; `0` restores the old behaviour of
+keeping them indefinitely). This file used to say the vault "is never removed by a retention
+window". That was true and it was the wrong default: masking turns a transient credential into one
+at rest, and the vault key file sits next to the ciphertext it decrypts, so an unbounded vault meant
+a host compromised on day 200 gave up 200 days of credentials. Expiry costs almost nothing — the
+placeholder is derived from the secret, so re-sending a secret whose entry lapsed restores it
+unchanged — and what it does not do is make the vault safe: within the window, anyone who can read
+that directory can read the secrets. Treat masking as a control on what leaves the machine, not as
+storage.
+
+**Retention: 90 days is the recommended default, and nothing is deleted unless you ask — with the
+one exception above, the masking vault.** For everything else Replay sets no automatic expiry, because silently deleting a reader's own measurements is not a decision a
 tool should make for them. What it gives you instead is the means to enforce whatever period you
 choose:
 

@@ -417,16 +417,23 @@ func (s *Server) Addr() string {
 	return s.addr
 }
 
-func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
+// health answers "ok". It carries the browser and Host guards — a page that
+// could reach it learns Replay is running here, which is a fingerprint — but
+// deliberately NOT the token: `replay doctor` probes this endpoint to explain
+// a broken agent setup and has no way to learn a token it did not set.
+func (s *Server) health(w http.ResponseWriter, r *http.Request) {
+	if s.notLocal(w, r) {
+		return
+	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = io.WriteString(w, "ok\n") // best-effort health response
 }
 
-// localOnly guards the read endpoints the same way requests are guarded:
-// no browser origins, and the token when one is configured.
+// localOnly guards the read endpoints and the passthrough: no browser
+// origins, a Host header that names this machine, and the token when one is
+// configured.
 func (s *Server) localOnly(w http.ResponseWriter, r *http.Request) bool {
-	if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Mode") != "" {
-		http.Error(w, "replay: browser-originated requests are not accepted", http.StatusForbidden)
+	if s.notLocal(w, r) {
 		return false
 	}
 	if s.cfg.Token != "" && r.Header.Get(HeaderToken) != s.cfg.Token {

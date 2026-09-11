@@ -64,6 +64,43 @@ func (l *Labeler) keyCalls(blocks []Block) []Block {
 	return blocks
 }
 
+// KeyResponseCalls returns a copy of a response's blocks with each tool
+// call's identity re-keyed under the ledger secret, closing finding 4 of the
+// 2026-09-04 security review: the response half was written as an unkeyed
+// SHA-256 of the tool input, so a ledger holder could confirm a guessed tool
+// call — a shell command, a path, a search string — offline and without
+// interaction, while the request half was already HMAC'd.
+//
+// Keyed over the digest rather than over the input, because the input is
+// gone by the time a record exists: ParseResponse strips block text, and the
+// streaming parser never accumulates input_json_delta at all. That is enough
+// for what the finding names. An offline guesser can still compute the
+// digest of a guess and still cannot compute this HMAC of it, which is the
+// property the request half has.
+//
+// It copies rather than rewriting in place. The proxy still reads the record
+// it handed over — spend attribution and the guard counters — so mutating
+// the caller's slice would change values behind a running guard.
+func (l *Labeler) KeyResponseCalls(blocks []Block) []Block {
+	// No early return for the empty case. It was here, it protected nothing —
+	// Response.Blocks is `omitempty`, so a nil and an empty slice serialise
+	// identically — and guard-reachability reported that no test could tell
+	// whether it existed. A branch nothing can observe is a branch that reads
+	// as a decision and is not one.
+	out := make([]Block, len(blocks))
+	copy(out, blocks)
+	for i := range out {
+		if out[i].Kind != transcript.KindToolUse || out[i].CallKey == "" {
+			continue
+		}
+		mac := hmac.New(sha256.New, l.key)
+		mac.Write([]byte("response-call\x00"))
+		mac.Write([]byte(out[i].CallKey))
+		out[i].CallKey = hex.EncodeToString(mac.Sum(nil))[:hashLabelBytes]
+	}
+	return out
+}
+
 // SummarizeRequest reduces a Messages API request body to its structure
 // and attributes. Labels come from the labeler and carry no content; block
 // text is dropped before the summary leaves this function.
