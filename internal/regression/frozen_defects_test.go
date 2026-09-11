@@ -288,6 +288,36 @@ var defects = []Defect{
 		Evidence: "cmd/replay/otherSurfaces_test.go OS1-OS7; end-to-end run on a " +
 			"Codex-only HOME",
 	},
+	{
+		ID:    "FD-12",
+		Title: "A retracted trial's figures survived in the file that produced them",
+		Looked: "Current. internal/analysis/predictor.go's header asserted that 3,778,706 " +
+			"re-billed tokens moved the 5h utilization figure from 0.10 to 0.15, five steps " +
+			"at the header's 0.01 resolution. Both halves are void. The 30-lane trial was " +
+			"re-read lane by lane and 31 of its 34 events never happened, so the token " +
+			"figure is a product of the broken session-wide classifier — preflight.go says " +
+			"of the same trial, 'That was the instrument, not the world'. The utilization " +
+			"movement was never recorded: one 2026-09-06 record survives carrying " +
+			"anthropic-ratelimit-unified-5h-utilization 0.13, so the capture path works " +
+			"and has run, but one reading is not a movement and that ledger has rotated. " +
+			"The correction reached preflight.go and README.md on 2026-09-06 and did not " +
+			"reach predictor.go until 2026-09-10. In between, quota-estimator-red.md named " +
+			"predictor.go as the one place it had not landed, and qm-budget-2026-09-08.md " +
+			"went on citing predictor.go as authority for a claim the repository had " +
+			"withdrawn.",
+		Symptom: "A Go source comment states the trial's token figure or its utilization " +
+			"movement as measurement, without withdrawing it in the same paragraph. A " +
+			"retracted figure in a comment is still shipped: it is what the next reader, " +
+			"human or agent, repeats.",
+		Status: StatusGuarded,
+		Guards: []string{"TestFrozenFD12_TheRetractedTrialFiguresAreNotAssertedAgain"},
+		Fix: "this branch: predictor.go's header keeps what it used to say, marks it void, " +
+			"and rests the surviving conclusion on the null result that was actually " +
+			"measured — the utilisation counter moved zero steps across 3.09M tokens",
+		Evidence: "README.md:244-254 for the null result; internal/proxy/preflight.go:23-35 " +
+			"for the lane-by-lane re-read; docs/design/quota-estimator-red.md:100-108 naming " +
+			"predictor.go as the file the correction missed",
+	},
 }
 
 // testFuncs indexes every test function declared in the repository.
