@@ -39,7 +39,12 @@ func NewLineScanner(r io.Reader) *bufio.Scanner {
 // RawMessage is a message as it appears on the provider wire and in
 // transcripts: a role and content that is either a string or a block list.
 type RawMessage struct {
-	Role    string          `json:"role"`
+	Role string `json:"role"`
+	// ID is the provider's identifier for the response this line belongs to.
+	// It is the only per-request identifier a transcript from a non-`cli`
+	// entrypoint carries, and it groups the lines of one response exactly as
+	// the top-level requestId does.
+	ID      string          `json:"id"`
 	Model   string          `json:"model"`
 	Content json.RawMessage `json:"content"`
 	Usage   *WireUsage      `json:"usage"`

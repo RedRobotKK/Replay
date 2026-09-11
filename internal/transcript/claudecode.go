@@ -21,16 +21,20 @@ const (
 // Unknown fields are ignored on purpose so a client update does not break
 // parsing; unknown line types are counted in Session.Skipped.
 type rawLine struct {
-	Type          string `json:"type"`
-	UUID          string `json:"uuid"`
-	ParentUUID    string `json:"parentUuid"`
-	SessionID     string `json:"sessionId"`
-	Version       string `json:"version"`
-	Timestamp     string `json:"timestamp"`
-	RequestID     string `json:"requestId"`
-	APIBlockIndex int    `json:"apiBlockIndex"`
-	IsSidechain   bool   `json:"isSidechain"`
-	Effort        string `json:"effort"`
+	Type       string `json:"type"`
+	UUID       string `json:"uuid"`
+	ParentUUID string `json:"parentUuid"`
+	SessionID  string `json:"sessionId"`
+	Version    string `json:"version"`
+	Timestamp  string `json:"timestamp"`
+	RequestID  string `json:"requestId"`
+	// IsAPIErrorMessage marks a line the CLIENT wrote to record a failed
+	// call, not a response the provider sent. It carries a message.model of
+	// the literal string "<synthetic>" and a usage object of all zeros.
+	IsAPIErrorMessage bool   `json:"isApiErrorMessage"`
+	APIBlockIndex     int    `json:"apiBlockIndex"`
+	IsSidechain       bool   `json:"isSidechain"`
+	Effort            string `json:"effort"`
 	// IsCompactSummary marks the record that replaced the history.
 	IsCompactSummary bool `json:"isCompactSummary"`
 	// CompactMetadata carries the sizes the client dropped. Its absence on a
@@ -39,6 +43,33 @@ type rawLine struct {
 	CompactMetadata *rawCompaction `json:"compactMetadata"`
 	// Message is decoded once, at read time, for the lines that carry one.
 	Message *RawMessage `json:"message"`
+}
+
+// requestKey identifies the provider request an assistant line belongs to.
+//
+// Claude Code writes the top-level `requestId` only from the `cli`
+// entrypoint. `sdk-cli`, `sdk-ts` and `claude-desktop` write the same
+// `message.usage` and the same `message.id` and no `requestId` at all, so a
+// parser keyed on `requestId` alone grouped nothing, `Lanes` came back empty
+// and the whole file was discarded as unreadable.
+//
+// The message id is the provider's identifier for one response, so it groups
+// the lines of one response exactly as the request id does. Measured over the
+// 1821 transcripts on the machine this was found on: 28,665 request ids across
+// 55,415 assistant lines, every one of them carrying exactly one message id,
+// and every message id appearing under exactly one request id.
+//
+// The two are not interchangeable and this does not treat them as such. The
+// request id wins wherever it exists, and a request that fell back says so in
+// Request.IDFromMessage.
+func (l *rawLine) requestKey() string {
+	if l.RequestID != "" {
+		return l.RequestID
+	}
+	if l.Message != nil {
+		return l.Message.ID
+	}
+	return ""
 }
 
 type rawCompaction struct {
@@ -125,13 +156,26 @@ func ParseClaudeCode(r io.Reader) (*Session, error) {
 	var order []string
 	groups := make(map[string][]*rawLine)
 	for _, l := range lines {
-		if l.Type != lineTypeAssistant || l.RequestID == "" {
+		key := l.requestKey()
+		// A client-written API error is not a provider request. Forty of them
+		// sit in the 1821 transcripts this was measured on, twenty-four
+		// carrying a requestId and counted as requests long before the
+		// message-id fallback existed. Their model is the literal string
+		// "<synthetic>" and their usage is all zeros, and cmd/replay/cost.go
+		// names a lane's model from its FIRST request: one placeholder at the
+		// head of a lane took that lane from claude-opus-5 to "<synthetic>",
+		// which is not in any price table, and its avoidable figure from
+		// 1,586,545 tokens to zero with the cost unchanged.
+		//
+		// They stay in the parent chain, because the next turn genuinely saw
+		// the error text. They are only refused the status of a request.
+		if l.Type != lineTypeAssistant || key == "" || l.IsAPIErrorMessage {
 			continue
 		}
-		if _, seen := groups[l.RequestID]; !seen {
-			order = append(order, l.RequestID)
+		if _, seen := groups[key]; !seen {
+			order = append(order, key)
 		}
-		groups[l.RequestID] = append(groups[l.RequestID], l)
+		groups[key] = append(groups[key], l)
 	}
 
 	dec := &decoder{toolNames: collectToolNames(lines), byUUID: byUUID, messages: make(map[string]*Message)}
@@ -227,16 +271,18 @@ func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
 		return nil, "", err
 	}
 	req := &Request{
-		ID: first.RequestID,
-		// The provider's own id. This decoder groups assistant lines BY
-		// requestId and skips every line that carries none, so an id that
-		// reaches here came off the wire and was never synthesised.
-		IDMeasured: true,
-		Model:      first.Message.Model,
-		Effort:     first.Effort,
-		Timestamp:  ts,
-		Usage:      first.Message.Usage.Usage(),
-		Output:     out,
+		ID: first.requestKey(),
+		// Both halves of this id came off the wire: requestKey returns the
+		// provider's requestId, or the provider's message id where the
+		// entrypoint wrote none. Neither is synthesised here, so the id is
+		// measured either way, and IDFromMessage says which one it is.
+		IDMeasured:    true,
+		IDFromMessage: first.RequestID == "",
+		Model:         first.Message.Model,
+		Effort:        first.Effort,
+		Timestamp:     ts,
+		Usage:         first.Message.Usage.Usage(),
+		Output:        out,
 	}
 
 	// Context: walk the parent chain from the first output line back to the
@@ -267,9 +313,14 @@ func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
 			}
 			req.Context = append(req.Context, msg)
 		case lineTypeAssistant:
-			// Merge the run of lines that belong to the same request.
+			// Merge the run of lines that belong to the same request. Keyed
+			// on requestKey rather than the raw requestId: where no line in
+			// the file carries one, comparing the absent field to itself is
+			// "" == "", which merges every consecutive assistant line in the
+			// chain into a single message regardless of which response wrote
+			// it.
 			runEnd := i
-			for runEnd+1 < len(chain) && chain[runEnd+1].Type == lineTypeAssistant && chain[runEnd+1].RequestID == l.RequestID {
+			for runEnd+1 < len(chain) && chain[runEnd+1].Type == lineTypeAssistant && chain[runEnd+1].requestKey() == l.requestKey() {
 				runEnd++
 			}
 			msg, err := d.assistantMessage(chain[i : runEnd+1])

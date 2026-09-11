@@ -150,13 +150,26 @@ const (
 // the usage the provider reported for it.
 type Request struct {
 	ID string
-	// IDMeasured reports whether ID is the provider's own request id. False
-	// means it was synthesised locally, from the record's position in its
-	// file, and identifies the request only within that file: two files both
-	// have a first record, so an unmeasured id is not a join key. The field
-	// exists because "ledger-0" and "req_011CenqQTy2oUZRGuFhUzqTw" are the
-	// same type and the same shape and mean entirely different things.
+	// IDMeasured reports whether ID came off the provider's wire at all.
+	// False means it was synthesised locally, from the record's position in
+	// its file, and identifies the request only within that file: two files
+	// both have a first record, so an unmeasured id is not a join key. The
+	// field exists because "ledger-0" and "req_011CenqQTy2oUZRGuFhUzqTw" are
+	// the same type and the same shape and mean entirely different things.
+	//
+	// It is a coarser question than IDFromMessage below, and the two are
+	// independent: a message id is the provider's and joins across files, so
+	// it is measured; only a locally invented id is not.
 	IDMeasured bool
+	// IDFromMessage records that ID is the provider's message id rather than
+	// its request id. Transcripts written by the `cli` entrypoint carry a
+	// top-level `requestId`; `sdk-cli`, `sdk-ts` and `claude-desktop` do not,
+	// and the message id groups the same lines. Provenance is a field, not a
+	// comment (ADR-0018): a consumer that needs the request id specifically -
+	// a correlation against a provider's own logs, say - can tell that it does
+	// not have one, and a consumer that only needs a stable per-request key
+	// does not have to care.
+	IDFromMessage bool
 	// Correlation is how firmly this request can be joined to its
 	// predecessor in the lane: one of the three constants above.
 	Correlation string

@@ -6,6 +6,35 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **`replay cost` read seven transcripts it had been discarding whole.** The
+  Claude Code parser grouped assistant lines into requests by the top-level
+  `requestId` and skipped any line without one. Only the `cli` entrypoint writes
+  that field: `sdk-cli`, `sdk-ts` and `claude-desktop` write the same
+  `message.usage` and the same `message.id` and no `requestId` at all, so those
+  files produced no lanes and were reported as unreadable. The message id groups
+  the same lines - measured over 1821 transcripts, 28,665 request ids each
+  carrying exactly one message id and no message id under two request ids - and
+  is now used where the request id is absent, with `Request.IDFromMessage`
+  recording which one a request holds.
+- **A client's record of a failed call is no longer counted as a request.**
+  Claude Code writes an API error as an assistant line with
+  `isApiErrorMessage`, a model of the literal string `<synthetic>` and a usage
+  object of all zeros. One landing at the head of a lane renamed that lane's
+  model to `<synthetic>`, which no price table knows, and took its avoidable
+  figure from 1,586,545 tokens to zero with the cost unchanged.
+- **A transcript that could not be read is no longer reported as read.** `cost`
+  counted transcripts that parsed and priced to nothing, and counted nothing at
+  all for transcripts that did not parse, so over a single unreadable file it
+  printed "0 were read" about a file with 183 assistant turns in it. The two
+  are now separate counts with separate sentences, in the report, in the
+  `--max-avoidable-usd` gate and in `--json` as `unreadable`.
+- Redaction keeps `message.id`, which it had been dropping. Every fixture here
+  is a redacted transcript, so a bug report about an SDK transcript arrived with
+  the only identifier the file carried removed.
+- **This moves a published figure.** On the corpus this was measured on,
+  `replay cost` goes from 116 sessions and $3766.87 to 118 sessions and
+  $3771.32, and from disclosing 6 transcripts read but not priced to disclosing
+  13 that could not be read at all.
 - **Per-event cause attribution no longer reports a race as a finding.** A cache
   break's cause is a claim about a PAIR — this request and the one whose entry it
   read — and the predecessor was taken as whichever response of the lane finished

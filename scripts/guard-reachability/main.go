@@ -34,30 +34,76 @@
 // conditionals added or changed in non-test Go files, and for each one runs the
 // packages that could observe it with the condition forced false.
 //
-// A conditional whose neutralisation leaves every test passing is reported. It
-// is either unreachable or untested, and ADR-0014 is explicit that both matter.
+// A conditional whose neutralisation leaves every test passing is reported,
+// and the report says which of two things it is, because they have different
+// fixes:
+//
+//   - UNREACHED: no test ever makes the condition true. The branch is not
+//     exercised at all, and the fix is a test.
+//   - INERT: the branch runs, and no test depends on whether it did. Either
+//     the statement is redundant with the code below it — delete it — or it
+//     changes something real that nothing asserts on. Both happened on the
+//     first run of this verdict against its own package: two error returns
+//     stated an outcome the fall-through already produced, and one guard
+//     changed which line a scan stopped at, with no test watching. So the
+//     verdict names the situation and leaves the choice to a reader, rather
+//     than asking for a test that would freeze dead code in place.
+//
+// Coverage separates them: `go test -covermode=count` at the baseline says
+// whether any test entered the body. Where coverage has no block for a guard,
+// the verdict stays UNOBSERVED and says so — absence, zero and unknown are
+// three values (ADR-0018).
+//
+// A mutant the compiler rejects was never put to the suite, so it is counted
+// and reported as UNCHECKED rather than passed over. An unchecked guard is the
+// false green this tool exists to prevent, in the tool itself.
+//
+// # What a verdict here does not mean
+//
+// Every verdict is scoped to the host that produced it. Coverage is measured
+// by running this machine's tests on this machine's OS, so a branch that only
+// fires elsewhere is UNREACHED here and load-bearing there.
+//
+// This is not hypothetical. On the run that introduced these verdicts, the
+// tool reported a name comparison in its own coverage matcher as never true,
+// the comparison was deleted as dead, and Windows CI went red: the deleted
+// line was the one normalising a backslash path, and it could not be true on
+// a host whose separator is already a slash. The verdict was accurate and the
+// conclusion drawn from it was wrong.
+//
+// So UNREACHED means "no test on THIS host makes this true". Before deleting
+// a branch on its authority, ask whether the condition is one another
+// platform, another build tag, or another configuration could satisfy. The
+// tool cannot ask that question; it only runs here.
+
+// The same caution applies across packages, for a different reason.
+//
+// Each mutant is put only to its own package's tests, because that is what
+// makes the run cost seconds rather than the whole suite per guard. A test
+// that would have caught the mutant from a neighbouring package is therefore
+// never run against it, and the guard comes back SURVIVED with that test
+// passing all along.
+//
+// Found by use, on the pull request after this tool shipped: a test written in
+// cmd/replay for a guard in internal/usage reported SURVIVED while the test
+// itself was green. It is the mirror of the defect ADR-0018 names — there the
+// test sat too close to the thing it checked, here too far from it.
+//
+// So a survivor is a claim about the guard's own package. Before writing a
+// test to satisfy one, check whether a test somewhere else already covers it;
+// if it does, the honest fix is usually to move the test next to the guard,
+// not to add a second.
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"go/ast"
-	"go/build/constraint"
-	"go/parser"
-	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
-)
 
-type guard struct {
-	file string
-	line int
-	src  string
-	pkg  string
-}
+	"github.com/RedRobotKK/Replay/internal/guardcheck"
+)
 
 func main() {
 	base := "origin/main"
@@ -74,7 +120,7 @@ func main() {
 		return
 	}
 
-	var guards []guard
+	var guards []guardcheck.Guard
 	for file, lines := range changed {
 		// A file excluded from every build has no guard that can affect
 		// anyone, and its package cannot be tested at all.
@@ -85,11 +131,11 @@ func main() {
 		// //go:build ignore, so the toolchain reports "build constraints
 		// exclude all Go files" and the baseline is red. The refusal worked;
 		// the analysis should never have got that far.
-		if excluded, why := excludedFromBuild(file); excluded {
+		if excluded, why := guardcheck.ExcludedFromBuild(file); excluded {
 			fmt.Printf("guard-reachability: skipping %s (%s)\n", file, why)
 			continue
 		}
-		gs, err := conditionalsIn(file, lines)
+		gs, err := guardcheck.Conditionals(file, lines)
 		if err != nil {
 			fail("parsing %s: %v", file, err)
 		}
@@ -102,56 +148,140 @@ func main() {
 
 	// A red baseline makes every guard look caught, which is the failure this
 	// tool exists to prevent in others. ADR-0014 refuses to run against one.
+	//
+	// The baseline is also where coverage is measured, on unmutated code: it
+	// is the record of which branches the suite enters when nothing has been
+	// tampered with.
 	fmt.Printf("guard-reachability: baseline over %d guard(s) in %d file(s)\n", len(guards), len(changed))
-	if out, ok := runTests(pkgsOf(guards)); !ok {
+	profile := filepath.Join(os.TempDir(), fmt.Sprintf("guard-cover-%d.out", os.Getpid()))
+	defer func() { _ = os.Remove(profile) }()
+	out, ok := runTestsWithCoverage(pkgsOf(guards), profile)
+	if !ok {
 		fail("the baseline is red, so every mutant would look caught:\n%s", out)
 	}
+	cov, err := guardcheck.ParseCoverage(profile)
+	if err != nil {
+		// Coverage is an enrichment, not the verdict. Without it every
+		// survivor is reported as before, which is less useful and still true.
+		fmt.Printf("guard-reachability: no coverage detail (%v); survivors will not be classified\n", err)
+		cov = nil
+	}
+	if cov != nil && cov.Unparsed > 0 {
+		// The profile format is an assumption. When it stops holding, every
+		// block stops matching and every survivor degrades to UNOBSERVED —
+		// which reads as a suite problem rather than an instrument one.
+		fmt.Printf("guard-reachability: %d line(s) of the coverage profile did not parse; "+
+			"survivor classification may be degraded\n", cov.Unparsed)
+	}
 
-	var survivors []guard
+	var unreached, inert, unobserved, unchecked []guardcheck.Guard
 	for i, g := range guards {
-		fmt.Printf("  [%d/%d] %s:%d  %s\n", i+1, len(guards), g.file, g.line, short(g.src))
-		restore, err := neutralise(g)
+		fmt.Printf("  [%d/%d] %s:%d  %s\n", i+1, len(guards), g.File, g.Line, short(g.Src))
+		restore, err := guardcheck.Neutralise(g)
 		if err != nil {
 			fmt.Printf("        skipped: %v\n", err)
 			continue
 		}
-		out, green := runTests([]string{g.pkg})
+		out, green := runTests([]string{g.Pkg})
 		restore()
 		switch {
 		case strings.Contains(out, "build failed") || strings.Contains(out, "cannot use"):
 			// A mutant the compiler rejected was never put to the suite.
 			// Counting it as caught is how a score is inflated.
-			fmt.Printf("        stillborn: the neutralised form does not compile\n")
+			fmt.Printf("        UNCHECKED: the neutralised form does not compile\n")
+			unchecked = append(unchecked, g)
 		case green:
-			fmt.Printf("        SURVIVED: nothing observed this guard\n")
-			survivors = append(survivors, g)
+			taken, known := cov.BranchTaken(g)
+			switch {
+			case known && !taken:
+				fmt.Printf("        UNREACHED: no test makes this condition true\n")
+				unreached = append(unreached, g)
+			case known:
+				fmt.Printf("        INERT: the branch runs and nothing depends on it\n")
+				inert = append(inert, g)
+			default:
+				fmt.Printf("        UNOBSERVED: nothing observed this guard, and coverage has no block for it\n")
+				unobserved = append(unobserved, g)
+			}
 		default:
 			fmt.Printf("        caught\n")
 		}
 	}
 
-	fmt.Printf("\nguard-reachability: %d guard(s), %d survived\n", len(guards), len(survivors))
-	if len(survivors) == 0 {
+	total := len(unreached) + len(inert) + len(unobserved)
+	fmt.Printf("\nguard-reachability: %d guard(s), %d survived, %d unchecked\n",
+		len(guards), total, len(unchecked))
+	if total == 0 && len(unchecked) == 0 {
 		return
 	}
-	fmt.Println("\nEach of these can be removed without any test noticing. It is either")
-	fmt.Println("unreachable or untested, and both matter:")
-	for _, g := range survivors {
-		fmt.Printf("  %s:%d  %s\n", g.file, g.line, short(g.src))
-	}
+
+	report("These branches are never entered by any test. The fix is a test that\n"+
+		"makes the condition true:", unreached)
+	report("These branches run, and no test depends on whether they did. Either the\n"+
+		"statement is redundant with the code below it — delete it — or it changes\n"+
+		"something real that nothing asserts on. Read it before choosing: a test\n"+
+		"written to satisfy this verdict can freeze dead code in place:", inert)
+	report("These survived and coverage carried no block for them, so which of the\n"+
+		"two above they are is NOT MEASURED:", unobserved)
+	report("These were never put to the suite at all: the compiler rejected the\n"+
+		"neutralised form, so nothing about them was measured. An unchecked guard\n"+
+		"is the false green this tool exists to prevent:", unchecked)
 	os.Exit(1)
 }
 
-// changedGoFiles maps a changed non-test .go file to the lines the diff touched.
+// report prints one verdict's guards under its heading, or nothing.
+func report(heading string, gs []guardcheck.Guard) {
+	if len(gs) == 0 {
+		return
+	}
+	fmt.Println("\n" + heading)
+	for _, g := range gs {
+		fmt.Printf("  %s:%d  %s\n", g.File, g.Line, short(g.Src))
+	}
+}
+
+// pkgsOf lists the distinct packages the guards live in.
+func pkgsOf(gs []guardcheck.Guard) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, g := range gs {
+		if !seen[g.Pkg] {
+			seen[g.Pkg] = true
+			out = append(out, g.Pkg)
+		}
+	}
+	return out
+}
+
+// short trims a source line to something a terminal can hold.
+func short(s string) string {
+	const max = 90
+	if len(s) <= max {
+		return s
+	}
+	return s[:max-1] + "\u2026"
+}
+
+func fail(format string, a ...any) {
+	fmt.Fprintf(os.Stderr, "guard-reachability: "+format+"\n", a...)
+	os.Exit(1)
+}
+
+// changedGoFiles asks git what moved and hands the text to the parser.
+//
+// The git invocation lives here rather than in internal/guardcheck because
+// os/exec is confined to the mutation build tag, and this file is the one
+// place exempted from that confinement. Keeping the analysis package free of
+// process invocation is the point of the split; it also leaves every branch of
+// the diff parser reachable from a test with a string.
+//
+// Committed work first, then the working tree, and the union of both. The
+// first version fell back only when the three-dot diff ERRORED. On a branch
+// with no commits yet that diff succeeds and is empty, so uncommitted changes
+// were invisible and the tool reported "no non-test Go files changed" over a
+// file it had just been pointed at. Found by planting a guard and watching it
+// say nothing.
 func changedGoFiles(base string) (map[string]map[int]bool, error) {
-	// Committed work first, then the working tree, and the union of both.
-	//
-	// The first version fell back only when the three-dot diff ERRORED. On a
-	// branch with no commits yet that diff succeeds and is empty, so
-	// uncommitted changes were invisible and the tool reported "no non-test Go
-	// files changed" over a file it had just been pointed at. Found by planting
-	// a guard and watching it say nothing.
-	files := map[string]map[int]bool{}
 	var out []byte
 	for _, args := range [][]string{
 		{"diff", "-U0", base + "...HEAD"},
@@ -163,189 +293,23 @@ func changedGoFiles(base string) (map[string]map[int]bool, error) {
 		}
 		out = append(out, b...)
 	}
-	if len(out) == 0 {
-		return files, nil
-	}
-	var cur string
-	sc := bufio.NewScanner(strings.NewReader(string(out)))
-	sc.Buffer(make([]byte, 1<<20), 1<<20)
-	for sc.Scan() {
-		line := sc.Text()
-		if strings.HasPrefix(line, "+++ b/") {
-			cur = strings.TrimPrefix(line, "+++ b/")
-			if filepath.Ext(cur) != ".go" || strings.HasSuffix(cur, "_test.go") {
-				cur = ""
-			}
-			continue
-		}
-		if cur == "" || !strings.HasPrefix(line, "@@") {
-			continue
-		}
-		// @@ -old,+new @@
-		parts := strings.Fields(line)
-		if len(parts) < 3 {
-			continue
-		}
-		spec := strings.TrimPrefix(parts[2], "+")
-		start, count := spec, "1"
-		if i := strings.IndexByte(spec, ','); i >= 0 {
-			start, count = spec[:i], spec[i+1:]
-		}
-		s, err1 := strconv.Atoi(start)
-		n, err2 := strconv.Atoi(count)
-		if err1 != nil || err2 != nil {
-			continue
-		}
-		if files[cur] == nil {
-			files[cur] = map[int]bool{}
-		}
-		for l := s; l < s+max(n, 1); l++ {
-			files[cur][l] = true
-		}
-	}
-	return files, sc.Err()
+	return guardcheck.ParseDiff(string(out)), nil
 }
 
-// excludedFromBuild reports whether a file's //go:build line keeps it out of
-// an ordinary build.
-//
-// Evaluated with no tags set, which is what `go test ./pkg` does. A file
-// guarded by `ignore` — the conventional tag for a standalone tool — is
-// excluded, and so is anything behind a tag this run does not set. Both are
-// correct to skip: the conditionals inside them are not in the binary and no
-// ordinary test run can observe them.
-func excludedFromBuild(file string) (bool, string) {
-	f, err := os.Open(file)
-	if err != nil {
-		return false, ""
-	}
-	defer func() { _ = f.Close() }()
-
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		// Constraints sit above the package clause; stop once it is reached.
-		if strings.HasPrefix(line, "package ") {
-			return false, ""
-		}
-		if !constraint.IsGoBuild(line) {
-			continue
-		}
-		expr, err := constraint.Parse(line)
-		if err != nil {
-			return false, ""
-		}
-		if !expr.Eval(func(string) bool { return false }) {
-			return true, "build constraints exclude it: " + line
-		}
-	}
-	return false, ""
-}
-
-// conditionalsIn finds if-statements whose condition sits on a changed line.
-func conditionalsIn(file string, lines map[int]bool) ([]guard, error) {
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, file, nil, 0)
-	if err != nil {
-		return nil, err
-	}
-	src, err := os.ReadFile(file)
-	if err != nil {
-		return nil, err
-	}
-	byLine := strings.Split(string(src), "\n")
-
-	var out []guard
-	ast.Inspect(f, func(n ast.Node) bool {
-		is, ok := n.(*ast.IfStmt)
-		if !ok || is.Cond == nil {
-			return true
-		}
-		pos := fset.Position(is.Pos())
-		if !lines[pos.Line] || pos.Line > len(byLine) {
-			return true
-		}
-		out = append(out, guard{
-			file: file,
-			line: pos.Line,
-			src:  strings.TrimSpace(byLine[pos.Line-1]),
-			pkg:  "./" + filepath.Dir(file),
-		})
-		return true
-	})
-	return out, nil
-}
-
-// neutralise forces one conditional false and returns a restore func.
-//
-// `if false && <cond>` keeps the condition compiled, so a variable it uses does
-// not become unused and turn the mutant stillborn for the wrong reason.
-func neutralise(g guard) (func(), error) {
-	orig, err := os.ReadFile(g.file)
-	if err != nil {
-		return nil, err
-	}
-	lines := strings.Split(string(orig), "\n")
-	if g.line > len(lines) {
-		return nil, fmt.Errorf("line %d past end of file", g.line)
-	}
-	line := lines[g.line-1]
-	idx := strings.Index(line, "if ")
-	if idx < 0 {
-		return nil, fmt.Errorf("no `if` on the line")
-	}
-	if strings.Contains(line, "if false &&") {
-		return nil, fmt.Errorf("already neutralised")
-	}
-	// The condition is parenthesised, and the reason is a defect this tool
-	// reported for months.
-	//
-	// `if false && A || B` is not a neutralised guard. Go binds && tighter than
-	// ||, so it parses as `(false && A) || B` and only the FIRST clause is
-	// disabled: every other clause still fires, the suite stays green, and this
-	// tool reports SURVIVED for a guard that was never actually neutralised.
-	// Measured on internal/transcript/codex.go:175 — three tests catch the
-	// parenthesised form and none catch the unparenthesised one.
-	//
-	// Every multi-clause `||` guard this tool has ever passed judgement on was
-	// judged on its first clause alone.
-	cond := strings.TrimSpace(line[idx+3:])
-	brace := ""
-	if strings.HasSuffix(cond, "{") {
-		cond, brace = strings.TrimSpace(strings.TrimSuffix(cond, "{")), " {"
-	}
-	lines[g.line-1] = line[:idx] + "if false && (" + cond + ")" + brace
-	if err := os.WriteFile(g.file, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
-		return nil, err
-	}
-	return func() { _ = os.WriteFile(g.file, orig, 0o644) }, nil
-}
-
+// runTests runs the packages and reports whether they passed.
 func runTests(pkgs []string) (string, bool) {
 	args := append([]string{"test", "-count=1"}, pkgs...)
 	out, err := exec.Command("go", args...).CombinedOutput()
 	return string(out), err == nil
 }
 
-func pkgsOf(gs []guard) []string {
-	seen, out := map[string]bool{}, []string{}
-	for _, g := range gs {
-		if !seen[g.pkg] {
-			seen[g.pkg] = true
-			out = append(out, g.pkg)
-		}
-	}
-	return out
-}
-
-func short(s string) string {
-	if len(s) > 72 {
-		return s[:69] + "..."
-	}
-	return s
-}
-
-func fail(format string, a ...any) {
-	fmt.Fprintf(os.Stderr, "guard-reachability: "+format+"\n", a...)
-	os.Exit(2)
+// runTestsWithCoverage runs the packages and writes a count-mode profile.
+//
+// Count mode, not set mode: the reviewer only asks whether a block ran at
+// least once, and count mode answers that as well while leaving the door open
+// to asking how often.
+func runTestsWithCoverage(pkgs []string, profile string) (string, bool) {
+	args := append([]string{"test", "-count=1", "-covermode=count", "-coverprofile=" + profile}, pkgs...)
+	out, err := exec.Command("go", args...).CombinedOutput()
+	return string(out), err == nil
 }

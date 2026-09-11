@@ -187,7 +187,32 @@ var unknownModel = modelRow{minPrefix: minPrefixStandard, price: Price{ReadMult:
 // another's record counts the cached share twice and labels it measured.
 var anthropicFamilies = []string{"claude", "opus", "sonnet", "haiku", "fable", "mythos"}
 
-// foreignModel reports that this id belongs to no family this table prices.
+// unpriceable reports that nothing in force describes this model's caching.
+//
+// The guard used to be foreignModel alone: any id without an Anthropic family
+// name in it lost its cache arithmetic, because the compiled table could not
+// know which counting convention applied to another provider's record.
+//
+// It is known now, and at a different layer. transcript.Usage is defined as
+// exclusive — PromptTotal is Input + CacheCreation + CacheRead — and every
+// reader normalises into it before pricing sees anything:
+// internal/transcript/codex.go:186 subtracts the cached share and the cache
+// write from Input, and openai.go:63 subtracts the cached share. So a Codex
+// record reaching here is disjoint in exactly the way the Anthropic wire is.
+//
+// What remains unknown for a foreign model is its read multiple, and that is
+// what a rules row supplies. A model a loaded document prices is therefore a
+// model whose cache arithmetic this table can do; a model nothing matches
+// still gets its input alone, which is short rather than wrong.
+func unpriceable(model string) bool {
+	if _, ok := activeRow(model); ok {
+		return false
+	}
+	return foreignModel(model)
+}
+
+// foreignModel reports that this id belongs to no family the COMPILED table
+// prices. It is the fallback for a machine with no rules document installed.
 func foreignModel(model string) bool {
 	m := strings.ToLower(model)
 	for _, f := range anthropicFamilies {
@@ -377,10 +402,10 @@ func writeEquivalent(u transcript.Usage) float64 {
 // model's read multiplier. It is a relative measure for comparing layouts,
 // not a bill.
 func EffectiveTokens(u transcript.Usage, model string) float64 {
-	if foreignModel(model) {
-		// No cache arithmetic, because this table does not know which one
-		// applies. Returning the input alone is short rather than wrong, and
-		// the caller can tell it is unpriced from the same lookup.
+	if unpriceable(model) {
+		// No cache arithmetic, because nothing in force supplies this model's
+		// read multiple. Returning the input alone is short rather than wrong,
+		// and the caller can tell it is unpriced from the same lookup.
 		return float64(u.Input)
 	}
 	return float64(u.Input) + writeEquivalent(u) + float64(u.CacheRead)*ReadMultiplierFor(model)

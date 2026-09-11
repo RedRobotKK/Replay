@@ -1,0 +1,17 @@
+package tiny
+
+// Taken's guard fires in the test below.
+func Taken(n int) int {
+	if n < 0 {
+		return 0
+	}
+	return n
+}
+
+// Untaken's guard never fires: no test passes it a negative.
+func Untaken(n int) int {
+	if n < 0 {
+		return 0
+	}
+	return n
+}
