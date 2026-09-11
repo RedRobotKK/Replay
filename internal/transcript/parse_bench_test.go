@@ -22,6 +22,7 @@ import (
 //	after  decode-once   1008.4 ms   283.7 MB   657,522 allocs
 //	after  chain reuse    1013.7 ms   214.1 MB   615,003 allocs
 //	after  label truncate   989.0 ms   201.9 MB   611,786 allocs
+//	after  label once       918.0 ms   193.5 MB   587,147 allocs
 //
 // Read no timing signal out of this benchmark at this scale. Twelve runs of
 // one unchanged binary spanned 955 to 1193 ms on this machine, a band of 12%
