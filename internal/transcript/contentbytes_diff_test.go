@@ -18,12 +18,26 @@ import (
 //
 //   - Decoder.Token does not stop at the end of the first value. Two values
 //     side by side are both measured and summed: `1 2` is 2, `"a" "b"` is 2.
+//
 //   - An escape is measured decoded: "a\nb" is 3, not 4.
+//
 //   - A lone surrogate, and any byte sequence that is not valid UTF-8,
 //     measures as U+FFFD, which is three bytes.
+//
 //   - Object keys are measured, and duplicate keys are measured twice.
-//   - There is no nesting limit on this path. Twenty thousand open brackets
-//     are measured, not refused.
+//
+//   - There IS a nesting limit on this path, and where it sits depends on the
+//     toolchain. This said there was none, which was true of every Go the
+//     corpus had been run on: go1.26.0 measures twenty thousand open brackets
+//     without complaint. go1.27.1 caps Decoder.Token at ten thousand and
+//     returns "exceeded max depth", at which point the fallback above turns a
+//     refusal into len(raw) — forty thousand bytes reported for one byte of
+//     content.
+//
+//     That is a property of this implementation rather than of JSON, and it
+//     is one of the things the scanner was written to stop doing. TestCB5
+//     compares against the oracle below the limit and asserts the scanner's
+//     own answer above it.
 func contentBytesReference(raw json.RawMessage) int {
 	if len(raw) == 0 {
 		return 0
@@ -152,14 +166,40 @@ func TestCB5ScannerAgreesWithTheDecoderItReplaced(t *testing.T) {
 			t.Errorf("ContentBytes(%q) = %d, decoder said %d", s, got, want)
 		}
 	}
-	// Deep nesting, which the decoder path does not refuse and neither may
-	// the scanner. Kept out of the corpus above so the failure message
-	// stays readable.
-	for _, depth := range []int{32, 33, 1000, 20000} {
+	// Deep nesting. Kept out of the corpus above so the failure message stays
+	// readable, and split at ten thousand because that is where the oracle
+	// stops being a fixed point.
+	//
+	// encoding/json gained a nesting limit of 10000 on the Decoder.Token path
+	// in Go 1.27. Measured on both toolchains, same input:
+	//
+	//	depth   go1.26.0   go1.27.0
+	//	 10000         1          1
+	//	 10001         1      20005   (= len(raw), the refusal)
+	//	 20000         1      40003
+	//
+	// So below the limit the two agree and equality is the right assertion.
+	// Above it, asserting equality would freeze Replay's answer to whichever
+	// Go the tests happened to run on, and the figure a user reads would
+	// change when their toolchain did.
+	for _, depth := range []int{32, 33, 1000, 9999, 10000} {
 		s := strings.Repeat("[", depth) + `"x"` + strings.Repeat("]", depth)
 		raw := json.RawMessage(s)
 		if got, want := ContentBytes(raw), contentBytesReference(raw); got != want {
 			t.Errorf("ContentBytes(depth %d) = %d, decoder said %d", depth, got, want)
+		}
+	}
+	// Past the limit, the scanner keeps measuring. That is now a decision
+	// this package owns rather than one inherited from encoding/json: the
+	// walk is iterative, holds one byte per level, and refusing a value it
+	// can measure would report len(raw) — a different measure — for content
+	// it read perfectly well. A transcript nested ten thousand deep does not
+	// exist; what matters is that the answer does not depend on the compiler.
+	for _, depth := range []int{10001, 20000} {
+		s := strings.Repeat("[", depth) + `"x"` + strings.Repeat("]", depth)
+		if got := ContentBytes(json.RawMessage(s)); got != 1 {
+			t.Errorf("ContentBytes(depth %d) = %d, want 1: the scanner measures deep "+
+				"nesting rather than refusing it, on every toolchain", depth, got)
 		}
 	}
 
