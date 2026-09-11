@@ -50,6 +50,8 @@ is the only place that says what will actually ship.
 | [The money path](MONEY-PATH.md) | What a subscription could honestly charge for, what stays free forever, and why the unit is a repository rather than a developer |
 | [Open design questions](design/README.md) | Questions written up before a decision, not after. Currently: where live context cost should surface and who consumes it |
 | [Gap analysis, 2026-09-07](GAP-ANALYSIS-2026-09-07.md) | Everything a day of measuring the product and the site turned up, fixed and open, with the pattern six of the defects shared |
+| [Research index](RESEARCH-INDEX.md) | External findings indexed by what they let this project do — locus of control, action class, billing basis, detectability, evidence grade — with citation provenance in three tiers |
+| [The idea gateway](IDEA-GATEWAY.md) | The screen an idea passes before anyone calls it a moat, and why the answer is usually publish rather than file |
 
 ## If you are curious how it got here
 

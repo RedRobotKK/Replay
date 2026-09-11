@@ -31,6 +31,8 @@ package mutation
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -170,6 +172,69 @@ func (o outcome) String() string {
 	}
 }
 
+// stillbirth is one mutant the compiler refused, kept with the refusal.
+//
+// The output is carried rather than discarded because "M70 did not compile" is
+// not something a reader can act on. The kill matrix used to report exactly
+// that, having thrown the compiler's message away, and then reported the same
+// mutant a second time as "detected by no test in the catalogue" — a confident
+// diagnosis of a hole in the suite, for a mutant the suite was never shown.
+type stillbirth struct {
+	id, name, out string
+}
+
+// verdict is the score of one pass over the catalogue.
+//
+// The three counts are kept together, and the interesting one is the third. A
+// score quoted as "75 mutants, 75 killed" is evidence only if the denominator
+// is the number of mutants the compiler accepted. A stillborn mutant was never
+// put to the suite: counting it as killed inflates the score, and quietly
+// dropping it from the denominator inflates it further while leaving nothing
+// for a reader to notice.
+type verdict struct {
+	killed    int
+	survived  int
+	stillborn []stillbirth
+}
+
+// total is every catalogue entry the run touched, stillborn ones included.
+func (v verdict) total() int { return v.killed + v.survived + len(v.stillborn) }
+
+func (v verdict) String() string {
+	return fmt.Sprintf("%d mutants: %d killed, %d survived, %d stillborn",
+		v.total(), v.killed, v.survived, len(v.stillborn))
+}
+
+// evidence reports why this run is not evidence, or nil when it is.
+//
+// A stillborn mutant is a defect in the catalogue, not in the suite, and it is
+// the harness's job to say so in one place with a number attached. Before this
+// the number existed only inside a t.Logf that prints under -v, and the run
+// went red solely because each stillborn mutant failed its own subtest —
+// so softening one of those, the obvious edit when a mutant is temporarily
+// awkward, would have left a non-zero tally printing under a green run.
+func (v verdict) evidence() error {
+	if len(v.stillborn) == 0 {
+		return nil
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "%d of %d mutants were stillborn: the compiler refused them, so no test "+
+		"was ever asked about them and the remaining %d killed are a score over %d mutants, "+
+		"not %d. Rewrite each so it builds, or delete it and record why:",
+		len(v.stillborn), v.total(), v.killed, v.total()-len(v.stillborn), v.total())
+	for _, s := range v.stillborn {
+		fmt.Fprintf(&b, "\n\n  %s (%s)\n%s", s.id, s.name, indent(tail(s.out)))
+	}
+	return errors.New(b.String())
+}
+
+func indent(s string) string {
+	if s == "" {
+		return "    (no compiler output was kept)"
+	}
+	return "    " + strings.ReplaceAll(s, "\n", "\n    ")
+}
+
 // buildFailed distinguishes a compiler refusal from a test failure.
 func buildFailed(out string) bool {
 	return strings.Contains(out, "[build failed]") ||
@@ -271,7 +336,7 @@ func TestFrozenMutantsStillDie(t *testing.T) {
 			"A mutant caught by an already-failing suite has been caught by nothing.\n%s", o, tail(out))
 	}
 
-	var nKilled, nSurvived, nStillborn int
+	var v verdict
 	for _, m := range c.Mutants {
 		t.Run(m.ID+"_"+m.Name, func(t *testing.T) {
 			if c.Classes[m.Class] == "" {
@@ -290,17 +355,17 @@ func TestFrozenMutantsStillDie(t *testing.T) {
 			o, failed, out := runNamed(t, dir, m.KilledBy)
 			switch o {
 			case stillborn:
-				nStillborn++
+				v.stillborn = append(v.stillborn, stillbirth{id: m.ID, name: m.Name, out: out})
 				t.Fatalf("%s (%s) did not compile, so no test was ever asked about it. "+
 					"A mutant the compiler refuses is not evidence about the suite; "+
 					"rewrite it so it builds.\n%s", m.ID, m.Name, tail(out))
 			case survived:
-				nSurvived++
+				v.survived++
 				t.Errorf("%s (%s) SURVIVED %s.\n\n%s\n\nEither the defect this represents can "+
 					"ship again, or the mutant is equivalent and changes nothing observable — "+
 					"say which, in the catalogue.", m.ID, m.Name, strings.Join(m.KilledBy, ", "), m.Note)
 			default:
-				nKilled++
+				v.killed++
 				for _, name := range m.KilledBy {
 					if !failed[name] {
 						t.Errorf("%s names %s as a killer, but %s passed with the mutant applied. "+
@@ -311,7 +376,19 @@ func TestFrozenMutantsStillDie(t *testing.T) {
 			}
 		})
 	}
-	t.Logf("%d mutants: %d killed, %d survived, %d stillborn", len(c.Mutants), nKilled, nSurvived, nStillborn)
+	// The score, and then the one number that decides whether it is a score at
+	// all. t.Logf prints only under -v, so on its own it is a claim nobody
+	// reads on a green run; evidence() is what makes a non-zero stillborn
+	// count fail here, rather than only inside whichever subtest hit it.
+	//
+	// Both the catalogue size and the verdict's own total, because they can
+	// differ: a mutant rejected above for naming no killer or no class never
+	// reaches an outcome, and a denominator that quietly shrinks to the
+	// mutants which ran is the same inflation one step removed.
+	t.Logf("%d catalogued — %s", len(c.Mutants), v)
+	if err := v.evidence(); err != nil {
+		t.Error(err)
+	}
 }
 
 // TestKillMatrix is the permutation analysis: every mutant against every
@@ -339,14 +416,26 @@ func TestKillMatrix(t *testing.T) {
 		t.Fatalf("baseline is %s; the matrix would attribute that failure to every mutant.\n%s", o, tail(out))
 	}
 
+	var v verdict
 	kills := map[string]map[string]bool{} // mutant id -> tests that killed it
 	for _, m := range c.Mutants {
 		dir := thaw(t, root)
 		apply(t, dir, m)
-		o, failed, _ := runNamed(t, dir, all)
-		if o == stillborn {
-			t.Errorf("%s did not compile; excluded from the matrix", m.ID)
+		o, failed, out := runNamed(t, dir, all)
+		switch o {
+		case stillborn:
+			// Kept with its compiler output, and kept OUT of the matrix rows
+			// below. Reporting it there as well produced "M70 is detected by
+			// no test in the catalogue", which is a confident diagnosis of a
+			// hole in the suite for a mutant the suite was never shown — and
+			// the reader who acts on it goes looking for a missing test
+			// instead of a mutant that does not build.
+			v.stillborn = append(v.stillborn, stillbirth{id: m.ID, name: m.Name, out: out})
 			continue
+		case survived:
+			v.survived++
+		default:
+			v.killed++
 		}
 		kills[m.ID] = failed
 	}
@@ -354,7 +443,10 @@ func TestKillMatrix(t *testing.T) {
 	t.Log("kill matrix — mutant: tests that detect it")
 	var singly []string
 	for _, m := range c.Mutants {
-		f := kills[m.ID]
+		f, measured := kills[m.ID]
+		if !measured {
+			continue // stillborn; reported once, below, with the compiler's reason
+		}
 		names := make([]string, 0, len(f))
 		for n := range f {
 			names = append(names, n)
@@ -389,6 +481,14 @@ func TestKillMatrix(t *testing.T) {
 		if unique == 0 {
 			t.Logf("note: %s is the sole detector of nothing; every mutant it catches is caught elsewhere too", name)
 		}
+	}
+
+	// The matrix is a claim about coverage, and its denominator is the mutants
+	// that actually reached the suite. Saying so with a number is what stops a
+	// run reporting a complete-looking matrix over two thirds of the catalogue.
+	t.Logf("%d catalogued — %s", len(c.Mutants), v)
+	if err := v.evidence(); err != nil {
+		t.Error(err)
 	}
 }
 

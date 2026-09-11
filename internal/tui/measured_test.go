@@ -7,7 +7,7 @@ import (
 
 func aMachine() Machine {
 	return Machine{
-		Transcripts: 1599, Lanes: 214, Projects: 12,
+		Sessions: 1385, Transcripts: 1599, Lanes: 214, Projects: 12,
 		ProjectsDir: "~/.claude/projects",
 		LedgerDir:   "~/.replay/ledger", LedgerWritable: true,
 		PriceTableDate: "2026-06-24", PriceAgeDays: 75,

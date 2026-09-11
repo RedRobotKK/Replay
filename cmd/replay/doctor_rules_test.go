@@ -93,3 +93,37 @@ func TestFetchedAtInEffectSeparatesLoadedFromCompiled(t *testing.T) {
 		t.Errorf("with a document loaded, FetchedAtInEffect() = %q, want its fetchedAt", got)
 	}
 }
+
+// An empty fetch date is not a date, and must not parse as the zero instant.
+//
+// A rules document may carry no fetch date at all — a hand-edited file with
+// the field blank, or a fetcher that wrote the key and not the value. The
+// value time.Parse hands back alongside its error is time.Time{}, so a caller
+// that read the time before checking the bool would be told the table was
+// fetched at the zero instant: an unreadable document rendered as a dated one,
+// aged by two thousand years, and reported with a confidence nothing earned.
+// The pair must be (zero, false), and false is the half that carries it.
+//
+// Nothing observed this before because both callers trim and test for "" on
+// their own account before they ever reach here, so no test on either surface
+// arrived with an empty string in hand. The condition is only reachable by
+// calling parseFetchedAt directly, which is what this does.
+//
+// Note what is deliberately not asserted: that an early `if s == ""` performs
+// the rejection. It did, and it was removed, because neither layout parses ""
+// and the branch returned exactly what the code beneath it already returns —
+// unobservable by construction, and guard-reachability reported it INERT. The
+// contract below survives that edit and any other spelling of the function.
+func TestParseFetchedAtRefusesAnEmptyDate(t *testing.T) {
+	for _, s := range []string{"", "   ", "\t\n "} {
+		at, ok := parseFetchedAt(s)
+		if ok {
+			t.Errorf("parseFetchedAt(%q) = %v, true: a blank fetch date is the absence\n"+
+				"of a date, not a date this build can read", s, at)
+		}
+		if !at.IsZero() {
+			t.Errorf("parseFetchedAt(%q) returned %v with ok=false; the time a rejected\n"+
+				"parse hands back must be the zero value, not a partial one", s, at)
+		}
+	}
+}

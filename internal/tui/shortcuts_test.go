@@ -5,38 +5,6 @@ import (
 	"testing"
 )
 
-// The key strip has to fit the smallest terminal this is designed for.
-//
-// It is the one line present on every screen, so if it wraps, every screen
-// wraps. It went two columns over on the first attempt, which is not something
-// reading catches.
-func TestHintsFitTheBudget(t *testing.T) {
-	for _, s := range Shortcuts() {
-		h := Hints(s.Key)
-		if len(h) > Cols() {
-			t.Errorf("the key strip is %d columns with %q selected, budget is %d:\n%s",
-				len(h), s.Label, Cols(), h)
-		}
-		if strings.ContainsRune(h, '\n') {
-			t.Errorf("the key strip wrapped: %q", h)
-		}
-	}
-}
-
-// The strip must name what each key does.
-//
-// A row of bare letters is readable only by somebody who already knows the
-// tool, which is precisely the audience this surface is not for: the premise
-// is that most people will never type a flag and the screen has to carry them.
-func TestHintsNameWhatTheKeysDo(t *testing.T) {
-	h := Hints('c')
-	for _, s := range Shortcuts() {
-		if !strings.Contains(h, s.Label) {
-			t.Errorf("key %q does not say what it does on the strip: %q", s.Key, h)
-		}
-	}
-}
-
 // Every question is reachable from every screen.
 func TestEveryQuestionIsOneKeystrokeAway(t *testing.T) {
 	seen := map[rune]string{}
@@ -52,25 +20,15 @@ func TestEveryQuestionIsOneKeystrokeAway(t *testing.T) {
 			t.Errorf("%q is not phrased as the question a user would ask: %q", s.Key, s.Question)
 		}
 	}
-	// The cap used to be a hardcoded nine, on the stated grounds that more
-	// would not fit one strip inside Cols(). Ten fit, once Hints stopped
-	// spending its last seven columns on a " q quit" that Footer already
-	// prints on the line below.
+	// There is no cap on how many questions this surface may have, and there
+	// is no longer a layout pretending to impose one.
 	//
-	// So the number was never the property. It was a count derived from a
-	// layout that happened to contain a duplication, and it would have refused
-	// a tenth question that fits. What matters is what the comment said next:
-	// one strip, and a second row of hints is a menu.
-	//
-	// Width is measured by TestHintsFitTheBudget, which reads the rendered
-	// strip rather than counting entries. This asserts the other half, that it
-	// stays one line, which nothing else covers.
-	for k := range seen {
-		if strings.Contains(Hints(k), "\n") {
-			t.Errorf("the key strip wrapped with %q selected. A second row of hints is a menu, "+
-				"and this surface is not one", string(k))
-		}
-	}
+	// It used to be a hardcoded nine, then a one-line key strip measured
+	// against eighty columns. That strip had no callers in its whole life, so
+	// the ceiling was being enforced for a line no reader had seen. It is gone;
+	// the index is Help(), which TestHelpCarriesEveryQuestion measures against
+	// the same twenty-four rows and which a reader reaches with the keystroke
+	// the footer advertises.
 }
 
 // The provenance line must show the real command, never a paraphrase.

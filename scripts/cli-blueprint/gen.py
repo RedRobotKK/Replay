@@ -144,7 +144,29 @@ def md_cell(text):
     here rather than by hand-editing a generated file that CI then rejects.
     """
     text = text.replace("|", "\\|")
-    return re.sub(r'(?<![`(])(https?://[^\s,)"\'`]+)', r"`\1`", text)
+    text = re.sub(r'(?<![`(])(https?://[^\s,)"\'`]+)', r"`\1`", text)
+    return undate(text)
+
+
+# Any flag whose default is a date is a default that changes at midnight.
+DATED_DEFAULT = re.compile(r'\(default "(\d{4}-\d{2}-\d{2})"\)')
+
+
+def undate(text):
+    """Replace a date-valued default with a placeholder.
+
+    A generated artifact that embeds today fails every morning, and a check
+    that fails daily gets switched off. The CI job that compares this file to
+    the binary says exactly that, and then `replay pool` grew a --pooled-at
+    whose default is time.Now(), so from the next midnight UTC the reference
+    said one date and the binary printed another. Every open pull request
+    failed the blueprint check, none of them for a reason of its own.
+
+    Normalised here rather than in the flag, because the binary telling a
+    reader that --pooled-at defaults to today is correct and useful. It is only
+    writing it into a file under version control that is wrong.
+    """
+    return DATED_DEFAULT.sub('(default "<today, in UTC>")', text)
 
 
 def main():
