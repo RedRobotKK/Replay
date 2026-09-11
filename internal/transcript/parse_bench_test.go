@@ -20,6 +20,15 @@ import (
 //
 //	before decode-once   1010.0 ms   292.8 MB   744,534 allocs
 //	after  decode-once   1008.4 ms   283.7 MB   657,522 allocs
+//	after  chain reuse    1013.7 ms   214.1 MB   615,003 allocs
+//	after  label truncate   989.0 ms   201.9 MB   611,786 allocs
+//	after  label once       918.0 ms   193.5 MB   587,147 allocs
+//
+// Read no timing signal out of this benchmark at this scale. Twelve runs of
+// one unchanged binary spanned 955 to 1193 ms on this machine, a band of 12%
+// either side of the middle, which is wider than any of the three changes
+// above moved the median. The bytes and the allocation counts are stable to
+// four figures run to run and are the only numbers here worth comparing.
 //
 // The time difference there is noise — the individual runs straddle the
 // baseline — and saying so is the point of writing both down.

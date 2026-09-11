@@ -9,7 +9,6 @@ import (
 	"io"
 	"path"
 	"strings"
-	"unicode/utf8"
 )
 
 // Scanner sizing for line-oriented files (transcripts, ledgers). Tool
@@ -136,12 +135,34 @@ func DecodeBlock(rb RawBlock, role string, toolNames map[string]string, label La
 		// thinking text may be empty. Its tokens come from usage, not bytes.
 		return Block{Kind: KindThinking, Label: LabelAssistantThinking, Bytes: len(rb.Thinking), Text: rb.Thinking}
 	case KindToolUse:
-		name := rb.Name
-		if label != nil {
-			name = label(rb.Name, rb.Input)
-		}
+		// The name computed here goes into toolNames and nowhere else: the
+		// block below labels itself from rb.Name. So there is nothing to
+		// compute when there is nowhere to put it, and nothing to recompute
+		// when the id is already there.
+		//
+		// That second case is the common one. collectToolNames walks every
+		// assistant tool_use block and labels it before the decoder builds a
+		// single message, and then DecodeBlock walks the same blocks again —
+		// twice more, once through the memoised context and once through the
+		// directly decoded output — with the same map and the same label
+		// function. The label is a pure function of its two arguments, so
+		// each of those recomputed a value that was already in the map, and
+		// labelling reads the whole tool input to do it.
+		//
+		// An entry already in the map is therefore trusted, which makes
+		// toolNames an input as well as an output: the map and the label
+		// function have to come from the same caller. Every caller today
+		// either passes a map it filled itself with this label function
+		// (claudecode) or a fresh empty one (the ledger, whose labels are
+		// keyed and must never be replaced by plain ones).
 		if toolNames != nil && rb.ID != "" {
-			toolNames[rb.ID] = name
+			if _, named := toolNames[rb.ID]; !named {
+				name := rb.Name
+				if label != nil {
+					name = label(rb.Name, rb.Input)
+				}
+				toolNames[rb.ID] = name
+			}
 		}
 		return Block{Kind: KindToolUse, Label: LabelToolCallPrefix + rb.Name, Bytes: len(rb.Name) + ContentBytes(rb.Input), Text: string(rb.Input), ToolUseID: rb.ID, ToolName: rb.Name, CallKey: CallKey(rb.Name, rb.Input)}
 	case KindToolResult:
@@ -351,10 +372,27 @@ func SanitizeLabel(s string) string {
 
 // TruncateLabel shortens a label to at most n runes, ending in an ellipsis
 // when it was cut. It never splits a multi-byte character.
+//
+// It walks byte offsets rather than building a []rune. The labels reaching it
+// are tool-call parameter values, which run to whole file contents, and
+// converting one of those to runes to keep sixty of them allocated four bytes
+// for every byte of the part being discarded: 43 MB of the 78 MB transcript
+// benchmark. The walk stops at the first rune past the limit, so the cost is
+// the width, not the label.
 func TruncateLabel(s string, n int) string {
-	if n <= 0 || utf8.RuneCountInString(s) <= n {
+	if n <= 0 {
 		return s
 	}
-	runes := []rune(s)
-	return string(runes[:n-1]) + "…"
+	count, cut := 0, 0
+	for i := range s {
+		if count == n-1 {
+			cut = i
+		}
+		count++
+		if count > n {
+			return s[:cut] + "…"
+		}
+	}
+	// Fewer runes than the limit, or exactly the limit: nothing to cut.
+	return s
 }
