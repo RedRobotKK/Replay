@@ -14,11 +14,22 @@ import (
 
 // What a commit can do to a cached prefix, before it is merged.
 //
-// A prefix change is the rarest break cause in the corpus and the most
-// expensive per event: 5 breaks, 1,807,000 tokens, a mean of 361,400 — higher
-// than a TTL expiry. Rare and enormous is the shape a gate is for. Nobody
-// catches this by watching, because it happens five times and each time it
-// happens to everyone at once.
+// A prefix change is among the rarest break causes and the most expensive per
+// event — the highest mean tokens of any named cause, above a TTL expiry. Rare
+// and enormous is the shape a gate is for. Nobody catches it by watching,
+// because it happens a handful of times and each time it happens to everyone
+// at once.
+//
+// No counts here on purpose. This comment carried them — a break count, a
+// token total, a mean — and all three had aged within five days, one of them
+// into a plain falsehood: "the rarest break cause" stopped being true when a
+// wider corpus showed model changes rarer still. Nothing in the build compares
+// a comment against a corpus, so the figures stayed quotable long after they
+// stopped being true.
+//
+// For the figures, run the command that produces them: `replay diff` prints
+// the cause table for a corpus, and a number read there is dated by the run
+// that made it. internal/regression FC-PX fails if a count comes back here.
 //
 // It watches the tool set, not the system prompt, and that is a measured choice
 // rather than an obvious one. internal/proxy/causedetail.go records that across
