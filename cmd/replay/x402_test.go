@@ -321,6 +321,15 @@ var allowedImports = map[string]bool{
 	"slices": true, "sort": true, "strconv": true, "strings": true,
 	"sync": true, "sync/atomic": true, "syscall": true, "testing": true,
 	"time": true, "unicode": true, "unicode/utf8": true,
+	// unicode/utf16, for one thing: pairing surrogate halves when measuring
+	// a JSON string escape. internal/transcript/wire.go calls IsSurrogate and
+	// DecodeRune, both pure functions over runes. ContentBytes has to agree
+	// with encoding/json byte for byte on what "\ud83d\ude00" weighs, and
+	// encoding/json pairs surrogates through this same package.
+	//
+	// It opens nothing, runs nothing and signs nothing, which is what this
+	// test is about.
+	"unicode/utf16": true,
 
 	// unsafe, for exactly one thing: handing a termios struct to
 	// syscall.Syscall so `replay tui` can read one keypress at a time.
