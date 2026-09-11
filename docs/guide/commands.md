@@ -1,11 +1,14 @@
 # Commands
 
-Twenty-nine commands, listed on thirty-seven headings because eight of them have a form worth
+Every command, listed on more headings than there are commands because several have a form worth
 showing separately. Most people use three of them.
 
-The count is checked against the binary rather than kept by hand: `docs/CLI.md` is generated from
-`replay --help` and states its own totals at the foot. This page said **twenty** until 2026-09-10,
-by which point `purge`, `privacy` and `upgrade` had all shipped.
+No total is written here, and that is a repair rather than an omission. This page said **twenty**
+until 2026-09-10, by which point `purge`, `privacy` and `upgrade` had shipped; it then said
+**twenty-nine** while [`docs/CLI.md`](../CLI.md) — the file this page cited as its own proof — said
+thirty. A page that claims to be checked against a source it contradicts is worse than one that
+claims nothing. `docs/CLI.md` is generated from the binary and the build fails when it drifts, so it
+is the one place a total can be read.
 
 `replay --help` prints them in four groups — **start here**, **look closer**, **corpus and
 calibration**, **setup and maintenance** — ordered by what they are worth rather than alphabetically.

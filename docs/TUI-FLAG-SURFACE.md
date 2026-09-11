@@ -8,10 +8,13 @@ serve`, and the archetype renderings that do appear, the four-state threshold
 meter on the guards screen and the posture block on the safe screen, are drawn
 from example data and say so.
 
-Replay has **81 flags across 14 commands**. `serve` carries 29 of them, `probe`
-16. That count is the finding rather than the input: a surface that renders 78
-flags as 80 widgets is a worse tool than the command line it replaces, because
-it asks the reader to hold the same complexity with less to hold onto.
+Replay's flags outnumber its commands several times over, and `serve` alone
+carries more than any other. The current totals are in [`CLI.md`](CLI.md),
+generated from the binary — this page carried its own and they were wrong.
+
+The ratio is the finding rather than the input: a surface that renders every
+flag as its own widget is a worse tool than the command line it replaces,
+because it asks the reader to hold the same complexity with less to hold onto.
 
 So the question is not "where does each flag go". It is what kind of thing each
 flag is, because **twenty of them are the same kind of thing and collapse into

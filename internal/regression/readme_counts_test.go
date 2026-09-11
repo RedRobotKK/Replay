@@ -136,4 +136,42 @@ func TestReadmeDoesNotOverclaimTheScreenImages(t *testing.T) {
 		t.Errorf("docs/screens holds %d images for %d screens. If doctor became "+
 			"pinnable, RC3 is now the stale claim", n, len(tui.Shortcuts()))
 	}
+
+	// And the README must name every screen it is missing.
+	//
+	// It said "Nine of the ten are in docs/screens; the doctor screen is not"
+	// while docs/screens held eight and the code excluded TWO. The count was
+	// wrong and the reason was half-told: safe is excluded for its own reason,
+	// and a reader who wants to know why an image is missing was sent looking
+	// for one omission when there were two.
+	//
+	// Naming them rather than counting them is deliberate. A count needs an
+	// owner; a list of names fails the moment the set changes, which is when
+	// the sentence became wrong last time.
+	// Scoped to the paragraph that talks about docs/screens. Searching the
+	// whole README passes on any word that happens to appear elsewhere: the
+	// first version of this check looked for "safe" anywhere, and the README
+	// says "a card that is safe to post" a few lines up, so it went green
+	// against a sentence that had stopped naming the safe screen at all.
+	para := ""
+	for _, block := range strings.Split(text, "\n\n") {
+		if strings.Contains(block, "docs/screens") && strings.Contains(block, "absent") {
+			para = strings.ToLower(block)
+			break
+		}
+	}
+	if para == "" {
+		t.Fatal("no paragraph in the README explains which screens are absent from " +
+			"docs/screens, so this check has nothing to read")
+	}
+	for _, s := range tui.Shortcuts() {
+		if _, err := os.Stat(filepath.Join(root, "docs", "screens", s.Label+".svg")); err == nil {
+			continue
+		}
+		if !strings.Contains(para, strings.ToLower(s.Label)) {
+			t.Errorf("the %q screen has no image in docs/screens and the paragraph "+
+				"explaining the absences does not name it. A reader looking for the "+
+				"missing screen is not told which one is missing, or why.", s.Label)
+		}
+	}
 }

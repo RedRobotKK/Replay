@@ -21,9 +21,12 @@ curl -fsSL https://redrobot.jp/replay.sh | sh
 
 `replay tui` puts the same answers on ten screens, one keystroke apart. The images in this README
 are generated from those screens and checked against them by a test, so a screenshot here cannot
-drift from what the tool prints. Nine of the ten are in [docs/screens](docs/screens); the doctor
-screen is not, because it renders your machine and a committed picture of somebody else's corpus
-would be an illustration pretending to be a reading.
+drift from what the tool prints. The doctor and safe screens are deliberately absent from
+[docs/screens](docs/screens). Doctor renders your machine, and one of its rows counts days from the
+compiled price table to today, so an image of it is correct for one day and wrong after. Safe lists
+what Replay has written to your disk, and a picture of somebody else's byte counts is not an answer
+to "what does this thing know about me". Both would be illustrations pretending to be readings;
+`cmd/replay/screens_svg_test.go` holds the list and the reasons.
 
 If you are pointing an agent through the proxy, `l` answers the question the transcripts cannot:
 
@@ -225,8 +228,11 @@ argument still wins when you give it. This is not a convenience — a first comm
 the reader does not know yet is a command they do not run.
 
 `replay --help` lists all thirty, grouped and ordered by what they are worth rather than
-alphabetically, because the list is what a person reads before they know which of them matters. Full
-reference: [`docs/guide/commands.md`](docs/guide/commands.md).
+alphabetically, because the list is what a person reads before they know which of them matters. That
+number is compared against the binary's dispatch switch by `internal/regression` RC1, which is why it
+is allowed to be here and why the same figure is not written into the other documents. Full
+reference: [`docs/guide/commands.md`](docs/guide/commands.md), and
+[`docs/CLI.md`](docs/CLI.md) generated from the binary.
 
 `replay context` now says when its own answer is incomplete. Claude Code records a compaction with the
 prompt size before and after it, and nothing here was reading that field, so a session that compacted
