@@ -76,9 +76,33 @@ func Bindings() []Binding {
 		b = append(b, Binding{string(s.Key), s.Question, L2})
 	}
 	return append(b,
-		Binding{"--json", "the same answer for a machine, no screen at all", L3},
+		Binding{"--json", jsonLine(), L3},
 		Binding{"replay <cmd>", "the command each screen prints, run directly", L3},
 	)
+}
+
+// jsonLine writes the --json entry from the screen table rather than by hand.
+//
+// The line used to read "the same answer for a machine, no screen at all",
+// unqualified, on all ten screens. Four of the commands behind them have no
+// such flag, so a user who copied it off the help screen got a usage dump.
+//
+// Writing "four of the ten" here would fix today and rot tomorrow — an
+// ordinal is a measurement with the arithmetic hidden, and the audit that
+// caught this said two when it is four. So the exceptions are derived from
+// Shortcut.JSON, and cmd/replay TestJC1 pins that field to what the binary
+// actually accepts. Nothing here is maintained by hand.
+func jsonLine() string {
+	var missing []string
+	for _, s := range Shortcuts() {
+		if !s.JSON {
+			missing = append(missing, string(s.Key))
+		}
+	}
+	if len(missing) == 0 {
+		return "the same answer for a machine, no screen at all"
+	}
+	return "machine-readable, except on " + strings.Join(missing, " ")
 }
 
 // footerKeys is the floor: what a first-time user sees without asking.

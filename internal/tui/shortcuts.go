@@ -71,6 +71,11 @@ type Shortcut struct {
 	// only somebody who already knows the tool can read, which is the audience
 	// this design is explicitly not for.
 	Label string
+	// JSON records whether Command accepts --json, because the help overlay
+	// offers that flag and four of these screens cannot honour it. It is a
+	// fact about another package's flag set, so it is declared here and
+	// checked against the binary by cmd/replay TestJC1 rather than trusted.
+	JSON bool
 }
 
 // shareKey opens the share screen.
@@ -92,25 +97,25 @@ const shareKey = 'p'
 func Shortcuts() []Shortcut {
 	return []Shortcut{
 		{'c', "What did this cost me?", "cost", []string{"--per-task"},
-			"Cost per task, newest first, at list prices.", "cost"},
+			"Cost per task, newest first, at list prices.", "cost", true},
 		{'w', "Why was it expensive?", "blame", nil,
-			"Where the prompt cache broke, and what each break re-billed.", "why"},
+			"Where the prompt cache broke, and what each break re-billed.", "why", false},
 		{'x', "What is filling my context?", "context", []string{"--top", "12"},
-			"What entered this context, largest first.", "context"},
+			"What entered this context, largest first.", "context", true},
 		{'a', "What should I change?", "advise", []string{"--guards"},
-			"Changes worth making, with the evidence behind each.", "advise"},
+			"Changes worth making, with the evidence behind each.", "advise", true},
 		{'g', "Am I about to blow a budget?", "serve", []string{"--max-day-usd"},
-			"Every guard, whether it is armed, and whether it can fire.", "guards"},
+			"Every guard, whether it is armed, and whether it can fire.", "guards", false},
 		{'m', "Which model should I use?", "route", []string{"--to"},
-			"What the same work would cost on another model, with error bars.", "model"},
+			"What the same work would cost on another model, with error bars.", "model", true},
 		{'s', "Is my setup safe?", "privacy", nil,
-			"Everything Replay has written here, and what a purge will not reach.", "safe"},
+			"Everything Replay has written here, and what a purge will not reach.", "safe", true},
 		{'d', "Is anything broken?", "doctor", nil,
-			"What Replay can see on this machine, and what it cannot.", "doctor"},
+			"What Replay can see on this machine, and what it cannot.", "doctor", false},
 		{'l', "What is flowing right now?", "serve", nil,
-			"What the proxy is seeing as it happens, or why it is seeing nothing.", "live"},
+			"What the proxy is seeing as it happens, or why it is seeing nothing.", "live", false},
 		{shareKey, "Is any of this worth posting?", "cost", []string{"--share", "--png"},
-			"What a card of these figures would say, and what it would not carry.", "share"},
+			"What a card of these figures would say, and what it would not carry.", "share", true},
 	}
 }
 
