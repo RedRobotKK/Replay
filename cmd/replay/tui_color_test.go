@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -36,6 +37,40 @@ var sgr = regexp.MustCompile("\x1b\\[[0-9;]*m")
 // that gets piped into a README.
 var anyEscape = regexp.MustCompile("\x1b\\[[0-9;?]*[a-zA-Z]")
 
+// colourEnv clears the two variables that switch colour off, for the whole test.
+//
+// internal/tui.NewPainter answers NO_COLOR-set or TERM=dumb with NoPaint
+// BEFORE it looks at the mode, so `-color always` renders colourless under
+// either. Two consequences here, and the second is the nastier one:
+//
+//   - TestScreenSVGs renders with `-color always` and compares against
+//     committed images that DO carry colour. Under a container's ordinary
+//     NO_COLOR=1 TERM=dumb it fails, on a product behaving as designed.
+//   - TestCL1 compares `-color never` against `-color always` and requires
+//     them to differ in no cell. Under the same environment BOTH are
+//     colourless, the comparison is between two identical strings, and the
+//     test passes having checked nothing. That is the worse failure: it is
+//     silent.
+//
+// Verified: with NO_COLOR=1 and TERM=dumb, internal/tui and cmd/replay both go
+// red on a tree that is green on a developer's terminal.
+//
+// Whether `-color always` SHOULD beat TERM=dumb in the shipped binary is a
+// separate question about explicit flags versus environment heuristics. It
+// changes behaviour a user can see and is not a test helper's to decide.
+func colourEnv(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{"NO_COLOR", "TERM"} {
+		// Setenv first so the testing package restores the original at
+		// cleanup; Unsetenv is what actually clears it, because NewPainter
+		// asks whether the variable EXISTS, not what it holds.
+		t.Setenv(k, "x")
+		if err := os.Unsetenv(k); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func render(t *testing.T, args ...string) string {
 	t.Helper()
 	var out, errb bytes.Buffer
@@ -66,6 +101,7 @@ func TestCL1_ColourChangesNoCell(t *testing.T) {
 	// measuring the clock, and it fails for the people most likely to be
 	// running it.
 	corpus(t)
+	colourEnv(t)
 	for _, s := range tuiScreens {
 		plain := render(t, "tui", "-once", "-screen", s, "-color", "never")
 		painted := render(t, "tui", "-once", "-screen", s, "-color", "always")
@@ -145,6 +181,10 @@ func TestCL4_NoColorBeatsTheFlag(t *testing.T) {
 // does nothing, which is the shape of check this project has now found seven
 // times: every assertion passes and nothing is being tested.
 func TestCL5_ColourIsActuallyEmitted(t *testing.T) {
+	// The test written to catch vacuous colour assertions was itself reading
+	// the ambient environment, which is how it stayed green on a terminal and
+	// went red in a container.
+	colourEnv(t)
 	for _, s := range tuiScreens {
 		painted := render(t, "tui", "-once", "-screen", s, "-color", "always")
 		if !sgr.MatchString(painted) {

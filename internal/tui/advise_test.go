@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 )
@@ -138,18 +137,13 @@ func TestAD6_ALongActionIsTruncatedNotWrapped(t *testing.T) {
 // Having a corpus on the development machine made every other test kinder than
 // the machine this has to run on.
 func TestAD7_EveryBranchPaints(t *testing.T) {
-	// Unset, not set-to-empty. NewPainter uses os.LookupEnv, which asks whether
-	// the variable EXISTS, so t.Setenv("NO_COLOR", "") switches colour off
-	// rather than on — which is how the first version of this test failed
-	// against correct code. t.Setenv is called first purely so the testing
-	// package restores whatever was there afterwards.
-	t.Setenv("NO_COLOR", "x")
-	if err := os.Unsetenv("NO_COLOR"); err != nil {
-		t.Fatal(err)
-	}
-	old := active
-	active = NewPainter("always", true)
-	defer func() { active = old }()
+	// paintOn, not a second copy of it.
+	//
+	// This block used to be inlined here, and it cleared NO_COLOR but not TERM
+	// — so it went red under TERM=dumb for the same reason WS3 did, in a file
+	// that had already learned the lesson about NO_COLOR. Two copies of a
+	// helper meant the fix had to be found twice; the second copy is gone.
+	paintOn(t)
 
 	for _, c := range []struct {
 		name     string

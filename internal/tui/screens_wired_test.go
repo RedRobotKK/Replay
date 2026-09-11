@@ -31,11 +31,36 @@ import (
 // NewPainter asks os.LookupEnv("NO_COLOR"), which tests whether the variable
 // EXISTS. Setting it to "" switches colour off. t.Setenv runs first only so the
 // testing package restores the caller's environment afterwards.
+// paintOn forces colour on for a test, whatever the ambient environment is.
+//
+// It clears TERM as well as NO_COLOR, and that second line is the whole point.
+// NewPainter answers TERM=dumb with NoPaint BEFORE it looks at mode, so
+// NewPainter("always", true) returns a painter that emits nothing when the
+// suite runs under a dumb terminal — and the assertion "every branch paints"
+// then fails on a product that is behaving exactly as designed.
+//
+// It bit in a container: NO_COLOR=1 and TERM=dumb are ordinary CI and
+// container defaults, and internal/tui went red there while passing on a
+// developer's terminal. WS3 exists because a screen "failed CI on all four
+// platforms while passing here" — it had the same disease it was written to
+// cure, one environment variable over.
+//
+// The t.Setenv call is what registers the restore: t.Setenv records the old
+// value and reinstates it at cleanup, and Unsetenv immediately afterwards is
+// how a variable gets cleared FOR the test without leaking the clear into the
+// rest of the package.
+//
+// This does not decide whether `--color=always` ought to beat TERM=dumb in the
+// product. That is a precedence question about explicit flags versus
+// environment heuristics, it changes shipped behaviour, and it is not a test
+// helper's to answer.
 func paintOn(t *testing.T) {
 	t.Helper()
-	t.Setenv("NO_COLOR", "x")
-	if err := os.Unsetenv("NO_COLOR"); err != nil {
-		t.Fatal(err)
+	for _, k := range []string{"NO_COLOR", "TERM"} {
+		t.Setenv(k, "x")
+		if err := os.Unsetenv(k); err != nil {
+			t.Fatal(err)
+		}
 	}
 	old := active
 	active = NewPainter("always", true)
