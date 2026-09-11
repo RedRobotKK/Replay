@@ -1234,7 +1234,15 @@ func (t *responseTap) result() ledger.Response {
 		body = decoded
 	}
 	if ledger.IsEventStream(t.Header().Get("Content-Type")) {
-		// A gzip-compressed event stream: parse the decoded body whole.
+		// Gzip skipped the incremental parsers in WriteHeader. The route
+		// still knows which family this is; guessing from the body would
+		// put an OpenAI usage frame through the Anthropic parser and
+		// record the turn as free.
+		if t.openai {
+			sp := &ledger.OpenAIStreamParser{}
+			_, _ = sp.Write(body)
+			return sp.Result()
+		}
 		sp := &ledger.StreamParser{}
 		_, _ = sp.Write(body) // StreamParser.Write never fails
 		return sp.Result()
