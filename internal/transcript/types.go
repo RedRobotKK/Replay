@@ -241,6 +241,19 @@ type Session struct {
 	// Skipped counts lines the parser could not interpret. Non-zero is not an
 	// error, but it is reported so a format change does not pass silently.
 	Skipped int
+	// Refusals counts records the proxy wrote because it answered a request
+	// locally — a spend cap, a guard — rather than forwarding it.
+	//
+	// Separate from Skipped because they are opposite facts. A refusal record
+	// carries no provider usage and no prompt, which is the same SHAPE as a
+	// record the reader could not use, and it was counted as one: a session
+	// that hit its spend cap three times reported three skipped records. That
+	// told a reader their protection working was their ledger breaking.
+	//
+	// The difference is that a refusal names the guard that produced it, in
+	// Record.Refusal. Absence, zero and unknown are three values (ADR-0018),
+	// and so are read, refused and unreadable.
+	Refusals int
 	// Policy names the request-parameter policy the proxy applied to this
 	// session's requests, and Trial the arm of the live trial it was in:
 	// "treated", "control", or empty. Only the ledger knows either.

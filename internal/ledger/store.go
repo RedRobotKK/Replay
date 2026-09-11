@@ -156,14 +156,40 @@ func IsLedgerFile(path string) bool {
 
 // ReadRecords reads every record in a ledger file and counts lines it could
 // not decode.
-func ReadRecords(path string) (records []Record, skipped int, err error) {
+// ReadRecords reads a ledger file.
+//
+// Three return values because there are three different facts, and they used
+// to be two. `skipped` counts complete lines that are not records of the
+// current schema — data loss, or an upgrade. `incomplete` says the file does
+// not end in a newline, which means the last record had not finished being
+// written when it was read.
+//
+// Collapsing the second into the first told a reader of a LIVE ledger that
+// records had been skipped. Store.Append writes one record per os.File.Write,
+// and Go loops on a short write, so any reader polling a ledger that
+// `replay serve` is still writing can land inside that loop. Nothing is lost
+// there; the record arrives a moment later. Reporting it as skipped is the
+// difference between "your data is fine" and "your data is gone".
+func ReadRecords(path string) (records []Record, skipped int, incomplete bool, err error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, 0, fmt.Errorf("open ledger: %w", err)
+		return nil, 0, false, fmt.Errorf("open ledger: %w", err)
 	}
 	defer f.Close() //nolint:errcheck // read-only file; a close error carries no information we can act on
+	// Whether the file ends on a newline is what separates a torn write from a
+	// corrupt record, and the scanner cannot answer it: it strips the
+	// terminator, so the last line looks identical either way. Asked of the
+	// file directly, before reading.
+	// The shape of the file, asked before its content is read.
+	//
+	// tailKnown is carried rather than folded away. A file whose shape could
+	// not be established is not a file with a torn tail, and reporting one as
+	// the other is the same collapse this change exists to undo one level up.
+	endsClean, tailKnown := endsWithNewline(f)
 	scanner := transcript.NewLineScanner(f)
+	var lastWasSkip bool
 	for scanner.Scan() {
+		lastWasSkip = false
 		line := bytes.TrimSpace(scanner.Bytes())
 		if len(line) == 0 {
 			// A file exists before its first record is flushed.
@@ -175,19 +201,44 @@ func ReadRecords(path string) (records []Record, skipped int, err error) {
 			// current one would produce figures that look measured and
 			// are not.
 			skipped++
+			lastWasSkip = true
 			continue
 		}
 		records = append(records, rec)
 	}
-	if err := scanner.Err(); err != nil {
-		return nil, skipped, fmt.Errorf("read ledger: %w", err)
+	// A line the parser rejected, sitting last in a file with no terminating
+	// newline, is a record still being written rather than a broken one.
+	// Unknown shape means no claim: incomplete stays false, and whatever the
+	// scanner found is reported on its own terms.
+	//
+	// tailKnown is defence in depth and no current input reaches it. Every way
+	// the shape goes unknown — a directory, a handle closed underneath us — is
+	// also a way the scan fails, so control never arrives here with tailKnown
+	// false. A hand-written mutant of the form `(tailKnown || true)` therefore
+	// survives the suite, and is recorded here rather than left for the next
+	// reader to rediscover: guard-reachability does not catch it because it
+	// neutralises the whole condition, which TL1 does catch.
+	//
+	// It stays because the term is what the sentence means. Dropping it would
+	// make the line read "an unknown tail is a torn tail", which is the
+	// collapse this change exists to undo, and it would be correct only for as
+	// long as the two failure sets keep coinciding.
+	if lastWasSkip && tailKnown && !endsClean {
+		skipped--
+		incomplete = true
 	}
-	return records, skipped, nil
+	if err := scanner.Err(); err != nil {
+		return nil, skipped, incomplete, fmt.Errorf("read ledger: %w", err)
+	}
+	return records, skipped, incomplete, nil
 }
 
 // ReadFile turns one ledger file into a Session at the measured tier.
 func ReadFile(path string) (*transcript.Session, error) {
-	records, skipped, err := ReadRecords(path)
+	// The incomplete flag is deliberately not folded into Session.Skipped.
+	// A record still in flight is not a record the reader lost, and the count
+	// they see must mean only the second thing.
+	records, skipped, _, err := ReadRecords(path)
 	if err != nil {
 		return nil, err
 	}
@@ -232,6 +283,16 @@ func NewSessionBuilder(id, path string) *SessionBuilder {
 func (b *SessionBuilder) Add(rec Record) {
 	b.added++
 	if rec.Response.Usage == nil || len(rec.Prompt.Messages) == 0 {
+		// A refusal explains itself; an empty record does not.
+		//
+		// recordRefusal writes exactly this shape on purpose: the proxy
+		// answered locally, so there is no provider usage and no prompt to
+		// carry. Counting it as skipped reported a working spend cap as a
+		// ledger the reader could not read.
+		if rec.Refusal != "" {
+			b.session.Refusals++
+			return
+		}
 		b.session.Skipped++
 		return
 	}
@@ -481,4 +542,41 @@ func loadPins(path string) (map[string]Pin, error) {
 		return nil, fmt.Errorf("read pins file: %w", err)
 	}
 	return pins, nil
+}
+
+// endsWithNewline reports whether the file's final byte is a newline, and
+// whether that could be established at all.
+//
+// Two returns rather than one error, because there are three outcomes and an
+// error return collapsed them. The file ends clean; it does not; or the
+// question could not be asked — a directory opens and stats successfully and
+// then refuses ReadAt, and a handle closed underneath us fails at Stat. The
+// third is not a kind of "torn", and defaulting it to false said it was.
+//
+// An empty file ends clean and KNOWN: it has no unterminated last line because
+// it has no last line. Without that case the last byte is read at offset -1,
+// which fails, and every ledger would be unknown for the window between
+// creation and its first record.
+//
+// The caller does not need an error from here. Every input that makes this
+// unknown also fails the scan that follows, so the failure reaches the caller
+// as a scanner error with the content-level reason attached, which is the more
+// useful of the two.
+func endsWithNewline(f *os.File) (clean, known bool) {
+	info, err := f.Stat()
+	if err != nil {
+		return false, false
+	}
+	if info.Size() == 0 {
+		return true, true
+	}
+	// ReadAt, so the scanner that follows still starts at zero. A Seek back to
+	// the start stood here to restore the offset; ReadAt reads at an absolute
+	// offset and does not move the file position, so it restored something
+	// nothing had moved, and its error branch was one no input could reach.
+	var last [1]byte
+	if _, err := f.ReadAt(last[:], info.Size()-1); err != nil {
+		return false, false
+	}
+	return last[0] == '\n', true
 }

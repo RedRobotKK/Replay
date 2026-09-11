@@ -231,7 +231,17 @@ func readLedger(t *testing.T, dir string) []ledger.Record {
 	}
 	var out []ledger.Record
 	for _, m := range matches {
-		recs, skipped, err := ledger.ReadRecords(m)
+		// incomplete is ignored on purpose; skipped is not.
+		//
+		// These tests poll the ledger every 10ms while the proxy is writing to
+		// it, so a read can land inside Store.Append's write and see a last
+		// line with no newline. That is a record still arriving, and failing on
+		// it put main in the red three merges running while the same test
+		// passed 30/30 locally — the runner was slower, not the code wronger.
+		//
+		// A COMPLETE line that is not a record still fails here. That one is
+		// data loss and no amount of polling explains it.
+		recs, skipped, _, err := ledger.ReadRecords(m)
 		if err != nil {
 			t.Fatal(err)
 		}
