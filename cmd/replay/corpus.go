@@ -26,6 +26,13 @@ type corpusRow struct {
 	requests int
 	compared int
 	matched  int
+	// exact is the subset of matched whose read was reproduced EXACTLY, and
+	// exceeded is the rest of it: turns where the provider served MORE cached
+	// prefix than the model predicted. Both are carried because matched alone
+	// cannot be decomposed by a reader, and the published evidence document
+	// never broke it out. See analysis.Calibration.ExactRate.
+	exact    int
+	exceeded int
 	breaks   int
 	fit      analysis.TokenFit
 	source   transcript.Source
@@ -42,6 +49,16 @@ func (r corpusRow) matchRate() float64 {
 		return 0
 	}
 	return float64(r.matched) / float64(r.compared)
+}
+
+// exactRate is the share reproduced EXACTLY, with exceeded reads excluded.
+//
+// Zero when nothing was compared, for the same reason matchRate gives.
+func (r corpusRow) exactRate() float64 {
+	if r.compared == 0 {
+		return 0
+	}
+	return float64(r.exact) / float64(r.compared)
 }
 
 // distinctSessions counts session ids, not transcripts.
@@ -119,6 +136,8 @@ func runCorpus(args []string, stdout, stderr io.Writer) error {
 			requests: len(rep.Lane.Requests),
 			compared: rep.Calibration.Compared(),
 			matched:  rep.Calibration.Reproduced + rep.Calibration.Exceeded,
+			exact:    rep.Calibration.Reproduced,
+			exceeded: rep.Calibration.Exceeded,
 			breaks:   rep.Calibration.Broken,
 			fit:      rep.Fit,
 			source:   session.Source,
@@ -154,9 +173,16 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 		"several rows that share its id and its conditions. Rows carry a session id prefix, never a "+
 		"path, project name, or content.\n\n",
 		len(rows), distinctSessions(rows), time.Now().UTC().Format("2006-01-02"))
-	p.Printf("| Session | Client | Tier | Requests | Compared | Matched | Breaks | Match rate | Fit tokens/byte | Fit ±%% |\n")
-	p.Printf("|---|---|---|---:|---:|---:|---:|---:|---:|---:|\n")
-	totalTurns, totalMatched, totalBreaks, below := 0, 0, 0, 0
+	// Matched is split into Exact and Exceeded in the table itself, not only
+	// in the totals. An exceeded turn is one the provider served MORE cached
+	// prefix for than the model predicted; it is counted as a match because
+	// the predicted prefix was served, and it is still a prediction that was
+	// wrong. Every row of the published evidence document reported the folded
+	// figure alone, so a reader could not tell an exactly reproduced lane from
+	// one carried by its siblings.
+	p.Printf("| Session | Client | Tier | Requests | Compared | Exact | Exceeded | Matched | Breaks | Exact rate | Match rate | Fit tokens/byte | Fit ±%% |\n")
+	p.Printf("|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
+	totalTurns, totalMatched, totalExact, totalExceeded, totalBreaks, below := 0, 0, 0, 0, 0, 0
 	causes := map[cachemodel.BreakCause]int{}
 	for _, r := range rows {
 		rate := r.matchRate()
@@ -165,15 +191,18 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 		}
 		totalTurns += r.compared
 		totalMatched += r.matched
+		totalExact += r.exact
+		totalExceeded += r.exceeded
 		totalBreaks += r.breaks
 		for _, c := range r.causes {
 			causes[c]++
 		}
-		p.Printf("| %s | %s | %s | %d | %d | %d | %d | %.1f%% | %.3f | %.0f |\n", r.id, r.client, tierName(r.source), r.requests, r.compared, r.matched, r.breaks, rate*100, r.fit.TokensPerByte, r.fit.RelativeError*100)
+		p.Printf("| %s | %s | %s | %d | %d | %d | %d | %d | %d | %.1f%% | %.1f%% | %.3f | %.0f |\n", r.id, r.client, tierName(r.source), r.requests, r.compared, r.exact, r.exceeded, r.matched, r.breaks, r.exactRate()*100, rate*100, r.fit.TokensPerByte, r.fit.RelativeError*100)
 	}
-	overall := 0.0
+	overall, exactOverall := 0.0, 0.0
 	if totalTurns > 0 {
 		overall = float64(totalMatched) / float64(totalTurns)
+		exactOverall = float64(totalExact) / float64(totalTurns)
 	}
 	sessions := distinctSessions(rows)
 	p.Printf("\n## Totals\n\n")
@@ -185,7 +214,30 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 			"  an account, a machine and one person's habits, and are not independent draws.\n")
 	}
 	p.Printf("- Compared turns: %d, matched: %d, breaks: %d\n", totalTurns, totalMatched, totalBreaks)
-	p.Printf("- Overall match rate: %.2f%%", overall*100)
+	// The decomposition, stated rather than left for the reader to subtract.
+	// Until 2026-09-11 this report printed only the line above, and the
+	// published evidence document inherited that: it gave a matched total and
+	// never said how much of it was exact.
+	p.Printf("  Of those matched, reproduced exactly: %d; read more than predicted: %d\n", totalExact, totalExceeded)
+	if totalExceeded > 0 {
+		// "not reproduced", not "predicted wrong".
+		//
+		// This line said "it is still a prediction that was wrong". A sibling
+		// lane extending a shared prefix is fan-out working as designed, and
+		// calling it a wrong prediction turns a normal multi-lane condition
+		// into an error the reader will go looking for. Corrected in math
+		// review after the same phrasing reached a pull request body.
+		//
+		// What is true is narrower and is what the exact rate measures: the
+		// read was not REPRODUCED. The count is an upper bound on anything
+		// anomalous rather than a count of errors — nothing in the record
+		// separates fan-out from a genuine accounting mismatch.
+		p.Printf("  A read larger than predicted usually means a concurrent sibling lane extended the\n" +
+			"  prefix, which is fan-out behaving normally. It is counted as a match because the\n" +
+			"  provider served at least what was predicted, and NOT as exact because the read was\n" +
+			"  not reproduced. Treat it as an upper bound on anything anomalous, not an error count.\n")
+	}
+	p.Printf("- Overall match rate: %.2f%% (exact reproduction rate: %.2f%%)", overall*100, exactOverall*100)
 	if totalTurns == 0 {
 		p.Printf(" (nothing was compared, so this is an absence rather than a result)")
 	}
@@ -201,9 +253,16 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 	// `Sessions` held lane counts until 2026-09-10 and this one held them
 	// under a heading that said sessions until 2026-09-11 — the same
 	// conflation, one column to the right, which is where a reviewer found it.
+	//
+	// `Recent turns` is the recent window's DENOMINATOR, printed because the
+	// rates beside it are unweighable without it: haiku read 87.5% recent
+	// exact on EIGHT turns next to opus-5's 93.3% on 539, and both were marked
+	// calibrated. Seven of eight is exactly 87.5%, which is how a reviewer
+	// spotted it — from the number alone, because the table invited the guess
+	// instead of answering it.
 	p.Printf("Calibration by the model of each session's first request, with the newest %d LANES judged on their own so a provider rule change shows as a drop (ST-1). A session writes one lane per subagent, so the two counts differ on a fan-out corpus and the window is the lane one. The minimum cacheable prefix is bounded from usage: the largest uncached prompt lies below it, the smallest cached prefix at or above it.\n\n", analysis.StalenessRecentLanes)
-	p.Printf("| Model | Sessions | Lanes | Match rate | Recent lanes | Recent match rate | Verdict |\n")
-	p.Printf("|---|---:|---:|---:|---:|---:|---|\n")
+	p.Printf("| Model | Sessions | Lanes | Exact rate | Match rate | Recent lanes | Recent turns | Recent exact rate | Recent match rate | Verdict |\n")
+	p.Printf("|---|---:|---:|---:|---:|---:|---:|---:|---:|---|\n")
 	for _, m := range models {
 		// A model with nothing compared is not a model that scored badly, and
 		// printing a percentage for it says it was measured. `<synthetic>` is
@@ -222,7 +281,25 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 		case m.MatchRate() < analysis.CalibrationThreshold:
 			verdict = "below threshold"
 		}
-		p.Printf("| %s | %d | %d | %s | %d | %s | %s |\n", m.Model, m.Sessions, m.Lanes, matchRateCell(m.Matched, m.Compared), m.RecentLanes, matchRateCell(m.RecentMatched, m.RecentCompared), verdict)
+		// Ten columns, and every one of them is a different question.
+		//
+		// Sessions and Lanes are two denominations of the same corpus; Exact
+		// and Match are two readings of the same turns; Recent lanes and
+		// Recent turns are the window's two sizes. This table stopped being
+		// readable at a glance some commits ago, and each pair is here because
+		// printing only one of them published a number that read as the other.
+		//
+		// Showing n does not fix the gate and is not meant to.
+		// CalibrationThreshold has no minimum sample size, so a lane clears
+		// 95% on eight turns as easily as on eight hundred. This is the part
+		// that can be done without changing which lanes pass — a decision for
+		// whoever owns the threshold.
+		p.Printf("| %s | %d | %d | %s | %s | %d | %d | %s | %s | %s |\n",
+			m.Model, m.Sessions, m.Lanes,
+			matchRateCell(m.Exact, m.Compared), matchRateCell(m.Matched, m.Compared),
+			m.RecentLanes, m.RecentCompared,
+			matchRateCell(m.RecentExact, m.RecentCompared), matchRateCell(m.RecentMatched, m.RecentCompared),
+			verdict)
 	}
 	for _, m := range models {
 		p.Printf("\n- %s: %s", m.Model, m.MinPrefix)

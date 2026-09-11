@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **The match rate never said how much of it was exact.** `MatchRate` counts a
+  turn as matched when the provider's cache read was reproduced exactly OR
+  exceeded — more prefix served than the model predicted, usually because a
+  concurrent sibling lane extended it. The second kind is a prediction that was
+  wrong in the generous direction, and no report broke the two apart, so the
+  published `97.79%` could not be decomposed by a reader. `Calibration.ExactRate`
+  and `ModelCalibration.Exact` are new and are printed beside the match rate
+  everywhere it appears: the `replay corpus` totals, its per-transcript and
+  per-model tables, the lane header `replay replay` and `replay diff` print, and
+  the poolable calibration record, which refuses a row claiming more exact turns
+  than matched ones. `MatchRate` keeps its published meaning; redefining a
+  quoted statistic underneath its readers would be a second defect on the first.
+  Measured on the corpus root on 2026-09-11 — 1816 transcripts, 118 sessions,
+  38111 compared turns — the 97.89% match rate is **94.10% reproduced exactly,
+  3.78% read more than predicted, 2.12% broken**, and **258 transcripts clear
+  the 95% calibration gate only because an exceeded read counts as a match**.
+  The 2026-09-10 evidence file carries the split as a dated addendum rather than
+  a rewrite.
+
 - **`replay route` printed a result and never said who maintains it.** Every
   other command in `valueCommands()` appends the funding ask after its
   human-readable report — five in their own files, `blame` and `diff` through
@@ -194,6 +213,29 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- **`replay prefix` names the mid-conversation-tool-changes beta.** A tool-set
+  change still invalidates under the default `cache_control` contract. Some
+  models may keep the prefix when that beta is on. The command reports the set
+  change; it does not claim the next request will miss.
+- **`replay diff` says each line is a cause, not a location in the prompt.**
+  It does not describe another product's diagnostics.
+- **A prefix hash change at equal system and tool sizes is no longer silent.**
+  The proxy already knew the hash moved. The detail now says the sizes did not,
+  and that the differing bytes are not in the ledger. A same-length system
+  rewrite (Claude Code's billing header swapping `cc_version` hashes is the
+  published case) is consistent with that and is not named as a size move or a
+  history re-render.
+- **A nested 1h cache write is priced at 2×, not the 5m rate.** The wire
+  object `ephemeral_1h_input_tokens` already reached `writeEquivalent` when
+  present; a test now pins that path through `CostUSD`. **What it does not
+  fix:** a write with no TTL split is still priced at 1.25×. Codex records
+  take that branch. That is ccusage #899 on a different surface.
+- **Sequential turns are no longer marked overlapping.** The lane was held
+  in-flight until after the ledger write. A client that posted the next turn
+  as soon as the body closed (and `waitLedger` in tests) unblocked on that
+  write, so the next enter saw the previous still open and named the cause
+  NOT MEASURED. The flag is still read for the current turn; the lane is
+  released before Append.
 - **`replay mcp`'s tool-definition cost is stated as a floor.** The 0.25
   tokens-per-byte fallback is asserted, not measured — it is the English-prose
   four-bytes-per-token rule of thumb — and every ratio this project has fitted is
