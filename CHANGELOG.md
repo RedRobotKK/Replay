@@ -6,6 +6,30 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **`replay route` printed a result and never said who maintains it.** Every
+  other command in `valueCommands()` appends the funding ask after its
+  human-readable report — five in their own files, `blame` and `diff` through
+  the shared runner in `main.go`. `route` carried neither `shareCoffee` nor
+  `supportLine`, so a reader who ran `replay route <dir> --to <model>` got the
+  whole topology, the inversion boundary and the sigma verdict, and was never
+  told the tool is free and maintained by one person. The ask is now written on the same terms as the
+  rest: after the report, gated on the report having reached the reader, and
+  never on `--json`, where a funding line is corruption rather than persuasion.
+- **The test that covered this skipped on every run since the day it was
+  written.** `TestS1_EveryResultCarriesTheAsk` iterates `valueCommands()` and
+  invoked each one as `run([]string{cmd, dir})`. `runRoute` refuses without
+  `--to <model>`, so the `route` subtest took a usage error, hit `t.Skipf`, and
+  never reached its assertion — and Go reports a parent whose children skipped
+  as PASS, so the suite asserted the ask was on every value command for exactly
+  as long as it was missing from one. The subtest now supplies the flag, and the
+  skip is gone rather than narrowed: a command in `valueCommands()` that cannot
+  be exercised fails the test and names `requiredArgs` as the fix, because a
+  subtest that can quietly skip forever is the defect and not the symptom.
+  **What it does not fix:** `TestS2_MachineReadableOutputIsNotPolluted` still
+  skips its `advise` subtest, because `replay advise --json` exits zero with an
+  empty stdout on the committed corpus. That is a second vacuous subtest with a
+  different cause, and it is left standing here rather than fixed in a change
+  about `route`.
 - **A model the price table has never heard of was priced as the version before
   it.** Rows are matched by substring, so `claude-opus-4-9` contains `opus-4`
   and took the Opus 4 row: $15/$75 per Mtok, `priced` true, printed next to the
