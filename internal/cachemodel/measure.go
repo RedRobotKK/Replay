@@ -127,7 +127,7 @@ func Incoherent(o Observation) bool {
 // must not print it as a number; Claim.Status treats a zero documented figure
 // as nothing to agree or disagree with.
 func DocumentedMinPrefix(model string) int {
-	if r, ok := activeRow(model); ok {
+	if r, _, ok := activeRow(model); ok {
 		return r.MinPrefix
 	}
 	for _, row := range modelTable {
