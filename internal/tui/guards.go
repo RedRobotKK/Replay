@@ -93,7 +93,7 @@ func GuardsScreen(g GuardState, advice []string, sessions int) Screen {
 				paint(Accent, "replay cost")+".")
 	}
 	sc := Screen{Key: 'g', Title: "guards", From: Measured}
-	lines := []string{header("guards"), ""}
+	lines := screenHead("guards")
 	lines = append(lines,
 		"  What the proxy is enforcing right now", "",
 		Row(armedCols, "check", "result"),

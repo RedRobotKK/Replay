@@ -69,8 +69,28 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 		// "3 sessions" is a distinction where there is none, which misleads the
 		// same way as hiding one that exists.
 		if c.lanes > 0 {
-			p.Printf("              %d transcript files in all: a session writes one per agent lane, so\n", c.sessions+c.lanes)
-			p.Printf("              replay cost over this directory reports on every one of them\n")
+			// Say what the extra files ARE, and stop where the evidence does.
+			//
+			// This used to end "replay cost over this directory reports on
+			// every one of them". It does not: nine files on the corpus this
+			// was found on fail to parse and six carry a model nothing prices,
+			// and cost priced 1,797 of the 1,812 counted here. TC-3 asserted
+			// doctor's total against len(transcriptFiles(root)) — what the
+			// walker HANDS to cost — so the test guarded the walk while the
+			// sentence promised the read.
+			//
+			// "sub-agent lanes" rather than "agent lanes" is deliberate. `replay
+			// cost` prints "N sessions (M agent lanes)" where M counts every
+			// priced transcript including the session's own; the figure here
+			// excludes it, because countNestedTranscripts skips the project's
+			// own children. Same two words, two denominators. Naming this one
+			// for what it holds is the cheaper half of the fix; the other half
+			// belongs on the cost header.
+			p.Printf("              %d transcript files in all: %d session transcript(s) and %d\n",
+				c.sessions+c.lanes, c.sessions, c.lanes)
+			p.Printf("              sub-agent lane file(s), one per agent lane\n")
+			p.Printf("              replay cost counts a session's own transcript as a lane too, so\n")
+			p.Printf("              its lane figure is higher than the one here\n")
 		}
 		p.Printf("              next: replay replay %s\n", filepath.Join(projects, "<project>"))
 	}
