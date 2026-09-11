@@ -60,7 +60,7 @@ const previewWidth = 72
 
 // ShareScreen renders the preview, or says why there is nothing to preview.
 func ShareScreen(s ShareState) Screen {
-	head := []string{header("share"), ""}
+	head := screenHead("share")
 	lines := make([]string, 0, BudgetRows)
 	lines = append(lines, head...)
 

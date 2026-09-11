@@ -166,7 +166,7 @@ type Task struct {
 // Never Example: this screen has no illustrative version, because a made-up
 // answer to "what can you see on my machine" is worse than no answer.
 func DoctorScreen(m Machine) Screen {
-	head := []string{header("doctor"), ""}
+	head := screenHead("doctor")
 
 	if !m.Found {
 		lines := make([]string, 0, BudgetRows)
@@ -378,7 +378,7 @@ func commas(n int) string {
 // the difference between "nothing" and "not yet", and it is the reason the
 // liveness cue exists at all.
 func CostScreen(m Machine, tick int, sel Selection) Screen {
-	head := []string{header("cost"), ""}
+	head := screenHead("cost")
 
 	if !m.Found {
 		lines := make([]string, 0, BudgetRows)
@@ -433,10 +433,25 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 	// it under a ja_JP locale, which is the locale nobody here develops in.
 	// Putting a second currency in the table's cost column has the same
 	// problem with less to gain, and the column header already says dollars.
+	//
+	// The shape leads, and the total follows it.
+	//
+	// It was the other way round, and the total was the only figure raised:
+	// "$3739.80 across 116 tasks" on the first line, "Median $0.77, p90 $3.41"
+	// dropped into a subtitle underneath. On this corpus the mean is $32 and
+	// the median is $0.77, so the figure the eye was sent to describes no task
+	// anybody ran. A reader taking one number off this screen took the one that
+	// answers "what did I spend in total", which is a different question from
+	// the one the screen is titled by.
+	//
+	// The total stays. It is a real answer to a question about a bill and
+	// deleting it would trade one half-truth for another; what changes is that
+	// it no longer has the emphasis to itself.
 	lines = append(lines,
-		"  "+paint(Strong, money(m.TotalUSD))+alsoIn(m.FX, m.TotalUSD)+" across "+commas(m.Tasks)+" tasks",
-		"  Median "+money(m.MedianUSD)+", p90 "+money(m.P90USD)+", "+
-			paint(Alarm, money(m.AvoidableUSD))+" avoidable. List price, not your bill.",
+		"  Median "+paint(Strong, money(m.MedianUSD))+", p90 "+paint(Strong, money(m.P90USD))+
+			" per task. List price, not your bill.",
+		"  "+paint(Strong, money(m.TotalUSD))+alsoIn(m.FX, m.TotalUSD)+" across "+commas(m.Tasks)+
+			" tasks, "+paint(Alarm, money(m.AvoidableUSD))+" avoidable.",
 		"")
 
 	rows := TaskLines(m.TaskRows)
@@ -556,7 +571,7 @@ func padCost(lines []string) []string {
 // run is injected so this package still does no I/O and the screen stays
 // testable without a corpus.
 func WhyScreen(t *Task, run func(path string) (string, error)) Screen {
-	head := []string{header("why"), ""}
+	head := screenHead("why")
 	lines := make([]string, 0, BudgetRows)
 	lines = append(lines, head...)
 

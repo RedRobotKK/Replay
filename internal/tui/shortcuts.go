@@ -141,30 +141,23 @@ func Ran(s Shortcut) []string {
 // render back byte for byte. Pass text that is already padded to its column.
 func Dim(s string) string { return paint(Faint, s) }
 
-// Hints renders the one-line key strip. Every question is reachable from every
-// screen, because a surface where the answer you want is three screens away is
-// a surface people stop using.
-func Hints(cur rune) string {
-	var b strings.Builder
-	for _, s := range Shortcuts() {
-		if s.Key == cur {
-			b.WriteString("[" + string(s.Key) + "]" + s.Label)
-			continue
-		}
-		b.WriteString(" " + string(s.Key) + " " + s.Label)
-	}
-	// The quit hint is not on this strip, and its absence is deliberate.
-	//
-	// It used to be, and at nine questions the strip was exactly eighty
-	// columns. The tenth took it to eighty-seven and TestHintsFitTheBudget
-	// caught it. Dropping " q quit" recovers exactly the seven columns needed,
-	// and it was duplicated anyway: Footer already ends every screen with
-	// "esc back  q quit", so the strip was spending its last seven columns
-	// repeating the line directly beneath it.
-	//
-	// That puts the strip at exactly eighty again, which means an eleventh
-	// question does not fit either. The answer then is a different layout, not
-	// another entry: two rows, or labels that are not also the -screen names.
-	// The test is what will say so.
-	return b.String()
-}
+// The key strip is gone, and its absence is the design rather than an omission.
+//
+// Hints() rendered one line naming all ten screens. It had no callers, ever:
+// the loop appends Footer(key) and nothing else, so no reader has seen it. That
+// alone would make it dead code. What made it worth removing rather than
+// wiring is what it was costing while dead.
+//
+// The strip came to exactly eighty columns at ten questions, and
+// TestHintsFitTheBudget held that as a hard budget. So a line nobody rendered
+// was refusing an eleventh screen on behalf of a reader who could not see the
+// tenth. A ceiling on the whole surface, enforced for a layout that does not
+// exist.
+//
+// It was also superseded and not deleted. outcomes.go records that progressive
+// disclosure "moved [the eight-key strip] behind ?", which is where the index
+// now lives: Help() names every question, fits the same twenty-four rows, and
+// is one keystroke the footer advertises on every screen. TestHelpCarriesEveryQuestion
+// holds that every question stays reachable there, and TestFooterNamesTheCurrentScreen
+// holds that each screen says which one it is. Both properties the strip
+// claimed are held by surfaces a reader actually sees.
