@@ -16,8 +16,14 @@ const SourceCodex Source = "codex-rollout"
 // It is the only live quota signal found in any client this project has
 // examined. The Anthropic surface reports a rising utilization fraction only
 // on the wire; the Grok CLI advertises x-ratelimit headers that never moved
-// across 8 calls and 940KB of responses. This one moves: measured across 6,871
-// events in a local corpus, used_percent ranged 0 to 52 over two windows.
+// across 8 calls and 940KB of responses. This one moves, and the two windows
+// move independently: the long window has been observed reaching far higher
+// than the short one, so a reader who takes the short window's maximum for the
+// record's maximum understates it badly. Until 2026-09-11 this comment said
+// used_percent "ranged 0 to 52 over two windows", which was the short window's
+// range quoted as though it bounded both; the census that re-read the same
+// corpus put the long window at 89. Per-window ranges, dated by the run that
+// produced them, are in docs/design/quota-data-census.md.
 //
 // It needs no proxy, because Codex writes it to disk itself.
 type CodexQuota struct {

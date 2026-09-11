@@ -8,10 +8,17 @@ phrase rather than a test.
 
 **v0.5.0 is a working tool with a documented threat model. It is not a v1.0.**
 
-The distinction is not code quality. The test posture is strong: 816 test
-functions across 152 files against 127 source files, `go vet` plus
-`go test -race -count=1` on every push, and every fix in this release was
-reproduced red before it was fixed and then mutation tested. What is missing is
+The distinction is not code quality. The test posture is strong: every package
+carries tests, `go vet` plus `go test -race -count=1` runs on every push, and
+every fix in this release was reproduced red before it was fixed and then
+mutation tested. The counts that stood in this paragraph until 2026-09-11 —
+"816 test functions across 152 files against 127 source files" — are deleted
+rather than refreshed. They were written when this file was, on 2026-09-06, and
+nothing recomputed them; counted again on 2026-09-11 the tree held 1811 test
+functions across 358 test files against 202 source files, so two of the three
+were wrong by more than double. Fresher counts would rot the same way.
+`go test ./... -count=1` runs what exists, and
+`find . -name '*_test.go' | wc -l` counts the files. What is missing is
 that one security finding is open in part by choice, and one provider path has
 never touched a live provider.
 

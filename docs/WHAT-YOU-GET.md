@@ -37,7 +37,7 @@ snapshot. The transcript counts differ between them for that reason and no other
 
 | | | Source |
 |---|---:|---|
-| Sessions | **78** — a session writes one transcript per lane, so subagents multiply the file count without adding an independent draw | [correction, 2026-09-06](evidence/calibration-corpus-2026-09-06.md) |
+| Sessions | Not quoted here. This is the row that gets lifted out of the table and repeated elsewhere as a standing fact, and it has been withdrawn twice. A session writes one transcript per lane, so subagents multiply the file count without adding an independent draw; whatever the count reaches, the sample is one machine, one account and one operator | [dated readings](evidence/README.md); the [2026-09-06 correction](evidence/calibration-corpus-2026-09-06.md) explains the file-for-session conflation |
 | Turns reproduced against real bills | 28,135 of 28,868 (97.46%), over 1,450 transcripts | [same](evidence/calibration-corpus-2026-09-06.md) |
 | Spend at list rates | $3,018.99 over 1,505 transcripts | `replay cost`, 2026-09-06 |
 | Median task | $0.65 | same run |
@@ -170,7 +170,8 @@ the cause.
 Items 1 to 4 exist. The named-server attribution in the box above **does not** — it is a presentation
 change over data already in the ledger, and it is the single highest-leverage thing left to build.
 
-**And all of it rests on 78 sessions from one machine.** The mechanism is sound; the thresholds
+**And all of it rests on one machine, one account and one operator.** That is the constraint that
+matters and no session count relaxes it. The mechanism is sound; the thresholds
 that would turn "9 tools never called" into "you should disable this" are not calibrated, which is
 why the output above states a fact and leaves the decision alone.
 
