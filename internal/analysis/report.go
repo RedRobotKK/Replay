@@ -312,6 +312,7 @@ func (r *LaneReport) breaks(p *Printer) {
 		}
 		p.Printf("    evidence: %s\n", b.Detail)
 	}
+	p.Printf("  Anthropic Console cache diagnostics name a byte offset; this names a cause.\n")
 }
 
 func (r *LaneReport) errors(p *Printer) {

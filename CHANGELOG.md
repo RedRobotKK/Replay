@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+
+- **`replay prefix` names the mid-conversation-tool-changes beta.** A tool-set
+  change still invalidates under the default `cache_control` contract. Some
+  models may keep the prefix when that beta is on. The command reports the set
+  change; it does not claim the next request will miss.
+- **`replay diff` says what Console names.** Anthropic Console cache diagnostics
+  name a byte offset; this names a cause. One line, no second product.
+- **A prefix hash change at equal system and tool sizes is no longer silent.**
+  The proxy already knew the hash moved. The detail now says the sizes did not,
+  and that the differing bytes are not in the ledger. A same-length system
+  rewrite (Claude Code's billing header swapping `cc_version` hashes is the
+  published case) is consistent with that and is not named as a size move or a
+  history re-render.
+
 ### Fixed
 
 - **A model the price table has never heard of was priced as the version before

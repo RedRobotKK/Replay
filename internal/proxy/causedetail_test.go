@@ -103,6 +103,35 @@ func TestBreakCause_NamesWhatChanged(t *testing.T) {
 	}
 }
 
+// The ledger hashes the system prompt and tools as sent, and stores only
+// sizes. A same-length rewrite — Claude Code's billing header swapping
+// cc_version hashes is the published case — changes the hash and not the
+// byte count. Naming that "system prompt changed" would claim a size move
+// that did not happen; naming it "re-rendered history" would claim a
+// message-history fact the proxy does not have. The honest remainder is
+// the hash moved at equal sizes.
+func TestBreakCause_SameLengthPrefixRewriteIsNotASizeMove(t *testing.T) {
+	tools := []transcript.ToolDef{{Name: "Read", Bytes: 500}}
+	s := newStats()
+	first := prefixRecord("lane-a", 0, 29199, tools, 0)
+	s.observe(first)
+	second := prefixRecord("lane-a", 1, 29199, tools, 0)
+	second.PrefixHash = first.PrefixHash + "-rewritten"
+	out := s.observe(second)
+	if out == nil || out.Outcome != "broken" {
+		t.Fatalf("a changed prefix hash must break; got %+v", out)
+	}
+	if out.Cause != cachemodel.CausePrefixChange {
+		t.Errorf("cause = %q, want the combined prefix cause, not a size-move or a re-render", out.Cause)
+	}
+	if strings.Contains(out.CauseDetail, "system prompt") && strings.Contains(out.CauseDetail, " to ") {
+		t.Errorf("detail claims a system size move: %q", out.CauseDetail)
+	}
+	if !strings.Contains(out.CauseDetail, "equal system and tool sizes") {
+		t.Errorf("detail does not say the sizes were equal: %q", out.CauseDetail)
+	}
+}
+
 // The cause vocabulary must stay bounded, because it is a metrics label.
 //
 // state.go emits replay_cache_break_total{cause=%q}. Putting tool names in the

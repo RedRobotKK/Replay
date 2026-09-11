@@ -63,3 +63,26 @@ func TestPX7_TheInvalidationNamesItsCorroboration(t *testing.T) {
 			"that reads as the source demotes it:\n%s", out)
 	}
 }
+
+// The forfeiture is the default cache_control contract, not a universal one.
+// mid-conversation-tool-changes-2026-07-01 lets some models keep the prefix
+// across a tool-set change. A command that says the next request will miss
+// is dated; one that reports the set change and names the beta is not.
+func TestPX8_TheInvalidationDoesNotClaimEveryModelWillMiss(t *testing.T) {
+	const beta = "mid-conversation-tool-changes-2026-07-01"
+	dir := t.TempDir()
+	before := writeFile(t, dir, "before.json", mcpTwo)
+	after := writeFile(t, dir, "after.json", mcpThree)
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"prefix", "--before", before, "--after", after}, &stdout, &stderr); err == nil {
+		t.Fatal("the fixture no longer invalidates the prefix, so this asserts nothing")
+	}
+	out := stdout.String() + stderr.String()
+	if !strings.Contains(out, beta) {
+		t.Errorf("the invalidation does not name %s, so a reader on a model that accepts\n"+
+			"it is told the prefix will miss when the command cannot know that:\n%s", beta, out)
+	}
+	if strings.Contains(out, "always forfeits") {
+		t.Errorf("the invalidation claims a miss on every model:\n%s", out)
+	}
+}

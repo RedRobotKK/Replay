@@ -1,6 +1,7 @@
 package cachemodel
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -46,6 +47,31 @@ func TestClassifyBreak(t *testing.T) {
 	}
 	if _, ok := ClassifyBreak(prev, transcript.Usage{CacheRead: 500}, "m", "m", time.Minute); ok {
 		t.Fatal("a mid-history divergence needs the history and must not be decided here")
+	}
+}
+
+func TestCostUSD_Nested1hWriteIsNotPricedAtTheShortRate(t *testing.T) {
+	// Claude Code on this machine always sends cache_creation as a nested
+	// object with ephemeral_1h_input_tokens. ccusage #899 priced every write
+	// at the 5m rate (1.25x) because it never read that object. A million
+	// 1h-write tokens on opus-5 is $10 at 2x and $6.25 at 1.25x.
+	raw := []byte(`{"input_tokens":0,"cache_creation_input_tokens":1000000,"cache_creation":{"ephemeral_1h_input_tokens":1000000},"cache_read_input_tokens":0,"output_tokens":0}`)
+	var w transcript.WireUsage
+	if err := json.Unmarshal(raw, &w); err != nil {
+		t.Fatal(err)
+	}
+	u := w.Usage()
+	if u.Create1h != 1_000_000 || u.Create5m != 0 {
+		t.Fatalf("wire split not parsed: %+v", u)
+	}
+	p, ok := PriceFor("claude-opus-5")
+	if !ok {
+		t.Fatal("opus-5 must be priced")
+	}
+	got := CostUSD(u, p)
+	const want1h, want5m = 10.0, 6.25
+	if got != want1h {
+		t.Fatalf("CostUSD = %v, want %v (1h at 2x). %v is the 5m rate: the nested split was ignored", got, want1h, want5m)
 	}
 }
 

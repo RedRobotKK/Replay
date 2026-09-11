@@ -225,9 +225,15 @@ func runPrefix(args []string, stdout, stderr io.Writer) error {
 		"  Measured here, and a known mechanism elsewhere: tool definitions sit inside\n"+
 			"  the cached prefix, so changing the set between adjacent requests forfeits\n"+
 			"  the discount for work that is otherwise identical (arXiv:2608.22708).\n\n"+
-			"  Every session holding a warm prefix re-bills it in full on its next request.\n"+
-			"  How many sessions that is: NOT MEASURED. It cannot be read from a diff, and a\n"+
-			"  headcount multiplied by a per-session figure would be a guess wearing a total.\n\n"+
+			"  That forfeiture is the default cache_control contract. Models that accept\n"+
+			"  the mid-conversation-tool-changes-2026-07-01 beta may keep the prefix across\n"+
+			"  a tool-set change. This command still reports the set change; it does not\n"+
+			"  know whether that beta is on, and it does not claim the next request will\n"+
+			"  miss.\n\n"+
+			"  Every session holding a warm prefix re-bills it in full on its next request\n"+
+			"  unless that beta (or an equivalent) is in force. How many sessions that is:\n"+
+			"  NOT MEASURED. It cannot be read from a diff, and a headcount multiplied by a\n"+
+			"  per-session figure would be a guess wearing a total.\n\n"+
 			"  For the size of one such break on your own history:  replay diff <transcript>\n")
 	return errPrefixInvalidated
 }
