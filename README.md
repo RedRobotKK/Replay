@@ -107,8 +107,9 @@ That is a statement about mechanism, and mechanism does not rot. The shares did.
 a five-row table of percentages measured on 2026-09-06. By 2026-09-11 the two leading causes had
 converged to within half a point of each other, and a second reading taken hours later the same day
 put them in the **opposite order** — the corpus is this machine's own transcripts, so it grows while
-you work. The classifier also changed between readings, and no re-run can separate those two
-effects.
+you work. That first move was the corpus alone: re-running the *same* classifier over the larger set
+reproduces it. Later readings also crossed a change in the classifier, and those two effects cannot
+be separated after the fact.
 
 So the sentence this section used to end on — that the shapes matter more than the ranking — was
 right in a way that flattered it. The shapes held across every reading. The ranking it waved away is
