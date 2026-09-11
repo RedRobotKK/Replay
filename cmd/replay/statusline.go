@@ -190,9 +190,13 @@ func runStatusline(args []string, stdout, stderr io.Writer) error {
     }
   }
 
-It reads the JSON Claude Code sends on stdin and opens no files, so it costs
-nothing to run on every render. It shows spend, cache health, and what the
-cache misses cost you, while the session is still running.
+It reads the JSON Claude Code sends on stdin. It also opens your installed
+rules document, if you have one, because every figure this tool prints is
+built on those rules and a statusline that quoted compiled defaults after
+you installed a price list would be the one surface lying to you. That is
+one file open per render, since a statusline is a fresh process each time.
+It shows spend, cache health, and what the cache misses cost you, while the
+session is still running.
 `, statusSettingsHint())
 		return err
 	}
