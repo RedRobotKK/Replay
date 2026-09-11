@@ -283,6 +283,16 @@ func NewSessionBuilder(id, path string) *SessionBuilder {
 func (b *SessionBuilder) Add(rec Record) {
 	b.added++
 	if rec.Response.Usage == nil || len(rec.Prompt.Messages) == 0 {
+		// A refusal explains itself; an empty record does not.
+		//
+		// recordRefusal writes exactly this shape on purpose: the proxy
+		// answered locally, so there is no provider usage and no prompt to
+		// carry. Counting it as skipped reported a working spend cap as a
+		// ledger the reader could not read.
+		if rec.Refusal != "" {
+			b.session.Refusals++
+			return
+		}
 		b.session.Skipped++
 		return
 	}
