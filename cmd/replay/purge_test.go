@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -546,5 +547,59 @@ func TestPG20_ErasingEveryRecordLeavesTheFileEmpty(t *testing.T) {
 	}
 	if len(body) != 0 {
 		t.Errorf("a file whose every record was erased holds %q, want nothing", body)
+	}
+}
+
+// PG19/PG20: a failed rewrite names the file and the operation.
+//
+// Both branches were reported UNREACHED the moment the AST neutraliser made
+// them checkable. They are the two steps of the write-and-rename that exists
+// so a half-written ledger is never read: if either fails silently, purge
+// reports success over a file it did not replace, which is the worst outcome
+// this command has — the records the reader asked to erase are still there
+// and they have been told they are gone.
+//
+// The distinction matters: "rewriting" and "replacing" are different failures
+// with different recoveries, and a reader who is told the wrong one looks at
+// the wrong file.
+func TestPG19_AFailedWriteIsReportedAsARewrite(t *testing.T) {
+	dir := ledgerSessions(t, map[string][]string{"a.jsonl": {"wanted", "kept"}})
+
+	orig := purgeWriteFile
+	purgeWriteFile = func(string, []byte, os.FileMode) error { return errors.New("disk full") }
+	t.Cleanup(func() { purgeWriteFile = orig })
+
+	var out, errb bytes.Buffer
+	err := runPurge([]string{dir, "--session", "wanted", "--yes"}, &out, &errb)
+	if err == nil {
+		t.Fatal("a write that failed was reported as a successful erasure")
+	}
+	if !strings.Contains(err.Error(), "rewriting") {
+		t.Errorf("the failure does not say the rewrite is what failed: %v", err)
+	}
+	if !strings.Contains(err.Error(), "disk full") {
+		t.Errorf("the underlying cause was swallowed: %v", err)
+	}
+}
+
+func TestPG20_AFailedRenameIsReportedAsAReplacement(t *testing.T) {
+	dir := ledgerSessions(t, map[string][]string{"a.jsonl": {"wanted", "kept"}})
+
+	orig := purgeRename
+	purgeRename = func(string, string) error { return errors.New("cross-device link") }
+	t.Cleanup(func() { purgeRename = orig })
+
+	var out, errb bytes.Buffer
+	err := runPurge([]string{dir, "--session", "wanted", "--yes"}, &out, &errb)
+	if err == nil {
+		t.Fatal("a rename that failed was reported as a successful erasure")
+	}
+	// Not "rewriting": the write succeeded and the file that was not replaced
+	// is the one the reader needs to look at.
+	if !strings.Contains(err.Error(), "replacing") {
+		t.Errorf("the failure does not say the replacement is what failed: %v", err)
+	}
+	if strings.Contains(err.Error(), "rewriting") {
+		t.Errorf("a failed rename was reported as a failed write: %v", err)
 	}
 }

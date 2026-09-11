@@ -200,6 +200,20 @@ func formatBytes(n int64) string {
 // Records are matched on the session id the ledger already stores. Lines that
 // do not parse are kept rather than dropped — an unreadable line is not
 // evidence about anyone, and a purge is not the place to tidy a corpus.
+// purgeWriteFile and purgeRename are indirected once so the two failure branches below
+// can be entered from a test.
+//
+// Neither is reachable otherwise. Making the parent unwritable stops the write
+// and so hides the rename; making the temp path a directory stops the write on
+// every platform and hides the rename again. The seam is the only way to reach
+// the second, and a branch no test can enter is one this repository does not
+// keep — guard-reachability reported both as UNREACHED the moment the AST
+// neutraliser made them checkable at all.
+var (
+	purgeWriteFile = os.WriteFile
+	purgeRename    = os.Rename
+)
+
 func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("--session needs an id: %w", errUsage)
@@ -294,10 +308,10 @@ func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 		// Through a sibling and renamed: a half-written ledger read on the next
 		// keystroke would lose every session in the file, not just this one.
 		tmp := r.path + ".tmp"
-		if werr := os.WriteFile(tmp, []byte(out), 0o600); werr != nil {
+		if werr := purgeWriteFile(tmp, []byte(out), 0o600); werr != nil {
 			return fmt.Errorf("rewriting %s: %w", r.path, werr)
 		}
-		if rerr := os.Rename(tmp, r.path); rerr != nil {
+		if rerr := purgeRename(tmp, r.path); rerr != nil {
 			return fmt.Errorf("replacing %s: %w", r.path, rerr)
 		}
 	}
