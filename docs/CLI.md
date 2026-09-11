@@ -424,4 +424,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-30 commands, 107 flags, read from the binary.
+30 commands, 108 flags, read from the binary.
