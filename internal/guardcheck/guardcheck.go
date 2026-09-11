@@ -154,7 +154,45 @@ func Conditionals(file string, lines map[int]bool) ([]Guard, error) {
 	byLine := strings.Split(string(src), "\n")
 
 	var out []Guard
+	// A conditional is an `if`, and it is also a tagless switch's case.
+	//
+	// This matched *ast.IfStmt and nothing else. The tree holds 91 tagless
+	// `switch {` statements across 66 files, and every `case cond:` inside one
+	// was a guard that reached neither survived nor unchecked — not seen, with
+	// a clean line printed over it. Four of this repository's own refusals are
+	// written that way, which is why the refusal reviewer had to grow a second
+	// AST neutraliser rather than reuse this one.
+	//
+	// A case is neutralised exactly as an `if` is, because it is the same
+	// thing: `case false && (n < 0):` keeps the expression compiled so a
+	// variable only it uses does not go unused and turn the mutant stillborn
+	// for the wrong reason.
+	collect := func(cond ast.Expr, at token.Pos, lbrace, rbrace token.Pos) {
+		pos := fset.Position(at)
+		if !lines[pos.Line] || pos.Line > len(byLine) {
+			return
+		}
+		out = append(out, Guard{
+			File:      file,
+			Line:      pos.Line,
+			Src:       strings.TrimSpace(byLine[pos.Line-1]),
+			Pkg:       "./" + filepath.Dir(file),
+			CondStart: fset.Position(cond.Pos()).Offset,
+			CondEnd:   fset.Position(cond.End()).Offset,
+			BodyStart: fset.Position(lbrace),
+			BodyEnd:   fset.Position(rbrace),
+		})
+	}
+
 	ast.Inspect(f, func(n ast.Node) bool {
+		if sw, ok := n.(*ast.SwitchStmt); ok {
+			for _, cc := range taglessCases(sw) {
+				for _, cond := range cc.List {
+					collect(cond, cc.Pos(), cc.Colon, cc.End())
+				}
+			}
+			return true
+		}
 		is, ok := n.(*ast.IfStmt)
 		if !ok || is.Cond == nil {
 			return true
@@ -230,7 +268,7 @@ func Neutralise(g Guard) (func(), error) {
 //
 // The baseline run has to finish; a neutralised one does not. Disabling a
 // guard can turn a bounded walk into a loop that never ends — it has happened
-// twice in this repo, both times in the same scanner — and a suite that hangs
+// three times in this repo, every time in the same scanner — and a suite that hangs
 // is a mutant that was caught, not one that needs waiting on. Without a bound
 // each such guard costs `go test`'s ten-minute default, and a change touching
 // forty conditionals exhausts a CI runner before it reaches the twentieth.
@@ -252,4 +290,33 @@ func NeutralisedTimeout(baseline time.Duration) time.Duration {
 		d = ceiling
 	}
 	return d
+}
+
+// taglessCases returns the case clauses of a tagless switch that carry a
+// condition.
+//
+// Split out of the walk so its two refusals can be entered from a test. Inside
+// the walk they could not be: go/parser only ever produces *ast.CaseClause in
+// a switch body, so the type assertion was structurally unreachable through
+// the public API, and the reviewer reported it as a branch nothing enters. The
+// same assertion sits in scripts/refusal-reachability and was never flagged
+// only because that file carries //go:build ignore and is skipped.
+//
+// Tagless only. `switch x { case 1: }` compares values, and `case false && (1)`
+// is not a comparison — it does not compile, so collecting it would make this
+// tool the author of a stillborn mutant.
+func taglessCases(sw *ast.SwitchStmt) []*ast.CaseClause {
+	if sw.Tag != nil || sw.Body == nil {
+		return nil
+	}
+	var out []*ast.CaseClause
+	for _, stmt := range sw.Body.List {
+		// Defensive against an AST built by hand rather than parsed. A
+		// `default:` needs no check: its List is empty, so a caller ranging
+		// it does nothing.
+		if cc, ok := stmt.(*ast.CaseClause); ok {
+			out = append(out, cc)
+		}
+	}
+	return out
 }

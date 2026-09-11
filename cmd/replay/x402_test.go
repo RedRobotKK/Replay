@@ -409,6 +409,19 @@ var allowedImports = map[string]bool{
 	// go/ast: internal/observation's own import allowlist walks its syntax
 	// tree. Reading code, not emitting it.
 	"go/ast": true,
+	// go/build, for internal/guardcheck's BuildableHere. It answers one
+	// question — does this host compile this file — by reading the file's
+	// //go:build line and its name, which is the same question `go build`
+	// asks and which Go decides two ways. Reading only the first is blind to
+	// the second, so the standard library does it rather than a rule written
+	// here.
+	//
+	// It opens files read-only, runs nothing, and signs nothing. It is in the
+	// same family as go/parser and go/ast above, and like them it lives in a
+	// package that is deliberately absent from the binary: internal/guardcheck
+	// exists to disable the binary's conditionals, and shipping that inside
+	// the binary would be the defect (see the unwired registry).
+	"go/build": true,
 
 	// os/exec: internal/mutation invokes `go build` and `go test` to apply a
 	// mutant and ask whether a test notices. It cannot be avoided — the
