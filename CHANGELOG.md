@@ -6,6 +6,34 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **A model the price table has never heard of was priced as the version before
+  it.** Rows are matched by substring, so `claude-opus-4-9` contains `opus-4`
+  and took the Opus 4 row: $15/$75 per Mtok, `priced` true, printed next to the
+  table's date as a documented list price. Every member of that family since 4.5
+  is $5/$25, so the next release of a family already in the table would have been
+  billed at three times its rate — and `claude-fable-5-2` would have fallen back
+  to `fable-5`'s 0.10 cache-read multiple where the 5.1 tier reads at 0.025,
+  overstating every cached token fourfold. A match is now rejected when what
+  follows it is a further version component — a digit continuing the number, or a
+  hyphen and a short run of digits — while a build date (`-20250514`, eight
+  digits) still matches, so every id the table is written for keeps its price. The
+  same rule applies to a loaded rules document, which is the path a bad figure
+  would otherwise spread over. **What it does not fix:** `opus-5-preview` still
+  prices as Opus 5, and another provider's id carrying an Anthropic family name
+  still matches. Those are substring matching's other failure modes.
+- **Opus 4.1 has its own row.** It had none and reached $15/$75 by `opus-4`
+  containing it — the accidental half of the same mechanism. The two prices agree
+  today; nothing says the next pair will.
+- **The corpus per-model table stopped calling lanes sessions.** `Sessions`
+  became a distinct-session count on 2026-09-10, and the correction left the
+  column beside it holding lane counts under the heading `Recent sessions` — the
+  same conflation, one column over. The staleness reason then subtracted the lane
+  window from the session count and published sentences like "after 100% on the
+  **-3** before them". The recent window still slices lanes on purpose; it is now
+  named for them (`RecentLanes`), the table gained a `Lanes` column, and the
+  reason's counts are all lanes. `docs/evidence/calibration-corpus-2026-09-10.md`
+  is annotated rather than regenerated: a dated reading is not corrected by
+  re-running it over a different corpus on a different day.
 - **`replay cost` read seven transcripts it had been discarding whole.** The
   Claude Code parser grouped assistant lines into requests by the top-level
   `requestId` and skipped any line without one. Only the `cli` entrypoint writes
@@ -142,6 +170,30 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- **`replay mcp`'s tool-definition cost is stated as a floor.** The 0.25
+  tokens-per-byte fallback is asserted, not measured — it is the English-prose
+  four-bytes-per-token rule of thumb — and every ratio this project has fitted is
+  higher (0.445 to 0.795 in ADR-0007; 0.439 to 1.261 in the 2026-09-10 corpus).
+  Two places in the tree already said a prose ratio understates JSON schemas, and
+  `replay mcp` applies it to nothing else. Its figures now read "at least" and say
+  why. The magnitude of the gap is still unmeasured; no tokenizer ran over those
+  bytes.
+- **One declaration of the fallback ratio.** `internal/proxy/preflight.go` said
+  its copy "is deliberately the same constant the analysis uses rather than a
+  second number that could drift". It was not: the analysis constant was
+  unexported and two other files retyped the digits. It is now
+  `analysis.DefaultTokensPerByte`, and drift is a compile error.
+- **`Turn.Gap` says which clock it came from.** It was documented as "the time
+  since the previous request started", which is true of the ledger and false of a
+  Claude Code transcript, where the timestamp approximates response completion
+  (risk R6, `docs/design-review-2026-09-02.md`) and the parser gives a request
+  and its output the same line's instant — so no duration is recoverable and the
+  gap carries the difference of two response durations. The arithmetic is
+  unchanged and deliberately so: the provider refreshes a cache entry when it
+  reads the prefix, which is a request start, and re-anchoring on the previous
+  response would move every published break-cause figure toward a worse
+  instrument. Three tests now pin the two clocks so the difference cannot be
+  erased by accident.
 - **The installer prints the ending it actually performs.** Two "Next:" commands
   were printed unconditionally, and then, on a terminal, the script `exec`d
   `replay tui` over the top of them: the reader was told to run one thing and

@@ -27,7 +27,33 @@ type Turn struct {
 	Outcome  cachemodel.ReadOutcome
 	Expected int
 	Actual   int
-	// Gap is the time since the previous request started.
+	// Gap is the difference between this request's timestamp and the previous
+	// one's. What that measures depends on which reader supplied them, and
+	// the two do not agree.
+	//
+	// From the ledger it is start to start: the proxy stamps a record when the
+	// request arrives (proxy/server.go:490) and carries the latency separately,
+	// so this is the interval between two request starts.
+	//
+	// From a Claude Code transcript it is completion to completion. The
+	// timestamp is the assistant line's, which approximates when the response
+	// finished — docs/design-review-2026-09-02.md:33 records that as risk R6
+	// and accepts it — and the parser gives the request and its output THE
+	// SAME line's instant, so no duration is recoverable to correct with. The
+	// gap therefore carries the difference of the two responses' durations:
+	// a long generation after a short one inflates it, and the reverse deflates
+	// it. TestTranscriptRequestsCarryNoDuration pins that.
+	//
+	// This matters because cachemodel.ClassifyBreak calls a gap longer than the
+	// TTL a certain cause. Near the threshold that verdict inherits the error
+	// above, in whichever direction the two durations happen to fall.
+	//
+	// It is NOT corrected here, and re-anchoring it on the previous response
+	// would be the wrong correction anyway: the provider refreshes a cache
+	// entry when it READS the prefix, which is at the start of a request, not
+	// at the end of the one before. The ledger already measures that interval.
+	// A transcript cannot, and no arithmetic on one clock recovers what the
+	// other clock never wrote down.
 	Gap time.Duration
 	// Correlation is how firmly Previous can be called this request's
 	// predecessor. Calibrate pairs request i with request i-1 in the lane
@@ -101,9 +127,21 @@ func (c *Calibration) Passes() bool {
 // it is the only thing that sees both requests open at once — and puts it on
 // the record. A transcript carries no such field and never will, so the
 // fallback is the one thing a transcript does say: a request that began before
-// its supposed predecessor had answered was in flight beside it. That is a
-// weaker instrument than the proxy's counter and it is not nothing, and where
-// it says neither, the answer is that nobody looked.
+// its supposed predecessor had answered was in flight beside it. Where neither
+// says anything, the answer is that nobody looked.
+//
+// On the Claude Code reader that fallback is weaker than it reads. The parser
+// gives a request and its output the same assistant line's timestamp
+// (claudecode.go:228, :317, :452), so prev.Output.Timestamp IS prev.Timestamp
+// and the test below reduces to asking whether the lane's timestamps run
+// backwards. That is a test for a file written out of order, not for two
+// requests open at once. It stays because it is correct on any source that does
+// record a response instant — the ledger does — and because removing it would
+// leave the ledger's own transcript-shaped path with nothing.
+//
+// TestTranscriptRequestsCarryNoDuration pins the equality it turns on, so
+// whoever makes a transcript carry a response instant will be told that this
+// fallback becomes real at the same moment.
 func correlationOf(prev, cur *transcript.Request) string {
 	if cur.Correlation != transcript.CorrelationUnmeasured {
 		return cur.Correlation

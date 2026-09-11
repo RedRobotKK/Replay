@@ -185,7 +185,7 @@ func (r *Rules) PriceAt(model string, t time.Time) (Price, bool) {
 	var fallback *ModelRule
 	for i := range r.Models {
 		m := r.Models[i]
-		if !strings.Contains(lower, strings.ToLower(m.Match)) {
+		if !matchesModel(lower, strings.ToLower(m.Match)) {
 			continue
 		}
 		if !m.windowContains(t) {
@@ -441,7 +441,7 @@ func activeRow(model string) (ModelRule, bool) {
 	// spellings of a model id and not others is worse than none.
 	lower := strings.ToLower(model)
 	for _, m := range override.Models {
-		if strings.Contains(lower, strings.ToLower(m.Match)) {
+		if matchesModel(lower, strings.ToLower(m.Match)) {
 			return m, true
 		}
 	}

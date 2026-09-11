@@ -12,7 +12,7 @@ import (
 // session fits a Japanese ratio and is right about it. Telling that user the
 // number came from an English constant would be false.
 //
-// A session with no fittable turn fell back to defaultTokensPerByte, which is
+// A session with no fittable turn fell back to DefaultTokensPerByte, which is
 // an English prose average. That user is owed the provenance, because the
 // constant does not describe their script.
 //
@@ -30,10 +30,10 @@ func TestFitNote_SeparatesAFittedRatioFromTheFallbackConstant(t *testing.T) {
 		t.Errorf("the fitted note must still explain what the mark means:\n%s", note)
 	}
 
-	fallback := TokenFit{TokensPerByte: defaultTokensPerByte, Turns: 0}
+	fallback := TokenFit{TokensPerByte: DefaultTokensPerByte, Turns: 0}
 	note = FitNote(fallback)
 	if !strings.Contains(note, "English") {
-		t.Errorf("with no fittable turn the ratio is defaultTokensPerByte, an English "+
+		t.Errorf("with no fittable turn the ratio is DefaultTokensPerByte, an English "+
 			"prose average. The footnote must say so, or a CJK session reads a "+
 			"borrowed constant as a measurement:\n%s", note)
 	}

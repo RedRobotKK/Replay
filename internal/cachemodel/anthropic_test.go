@@ -103,10 +103,16 @@ func TestModelTable(t *testing.T) {
 	// until 2026-09-07, when the provider's page was read and it gained one;
 	// the invariant still needs an example, so it uses a row that genuinely
 	// has no price rather than one that used to.
-	if _, ok := PriceFor("claude-haiku-9-9"); ok {
+	//
+	// The example was `claude-haiku-9-9` until 2026-09-11. That is not a model
+	// id anyone has shipped, and it only reached the bare `haiku` row because
+	// matching ignored the version it invented; under matchesModel an invented
+	// version is an unrecognised model, which is the point of that change. A
+	// real id exercises the same row and cannot be wrong about the table.
+	if _, ok := PriceFor("claude-3-haiku-20240307"); ok {
 		t.Fatal("a model with a caching floor but no list price must not be priced")
 	}
-	if ReadMultiplierFor("claude-haiku-9-9") != ReadMultiplier || ReadMultiplierFor("claude-fable-5-1") != readMultiplierNewest {
+	if ReadMultiplierFor("claude-3-haiku-20240307") != ReadMultiplier || ReadMultiplierFor("claude-fable-5-1") != readMultiplierNewest {
 		t.Fatal("read multiples wrong")
 	}
 }

@@ -73,9 +73,37 @@ type TokenFit struct {
 	Injected Tokens
 }
 
-// defaultTokensPerByte is used only when a session offers no turn to fit
-// on. It is a coarse prose average and is reported as such.
-const defaultTokensPerByte = 0.25
+// DefaultTokensPerByte is used only when a session offers no turn to fit on.
+//
+// It is ASSERTED, not derived. Nobody measured it here: it is the English-prose
+// rule of thumb of roughly four bytes to the token, turned upside down, and no
+// document in this tree records a tokenizer run behind it. That is the honest
+// provenance and the comment said only "a coarse prose average", which reads
+// like a summary of data that does not exist.
+//
+// It is also known to sit below everything this project HAS measured, and the
+// measurements are its own:
+//
+//   - ADR-0007 records fitted ratios from 0.445 to 0.795 across eleven sessions.
+//   - docs/evidence/calibration-corpus-2026-09-10.md ranges 0.439 to 1.261,
+//     excluding the rows that print 0.250 — which are this constant, showing
+//     up as itself wherever a transcript offered no turn to fit on.
+//
+// So the direction is known and the size is not: a figure built on this
+// understates, by an unmeasured amount. ADR-0017 and
+// docs/design/surface-taxonomy-4-rewriting.md both say "known biased low" about
+// the same number; until now the declaration did not.
+//
+// It is the ONE declaration. internal/proxy/preflight.go said of its own copy
+// that it "is deliberately the same constant the analysis uses rather than a
+// second number that could drift", which was not true while this one was
+// unexported and two other files retyped the digits.
+//
+// Replacing it needs a measurement, not a better guess. Raising it to the
+// middle of the fitted range would make every unfittable session report a
+// number derived from sessions that are not it, and the whole reason this
+// constant is reached is that there was nothing to fit on.
+const DefaultTokensPerByte = 0.25
 
 // minFitBytes excludes turns whose new user content is so small that the
 // client's fixed per-message overhead, not the content, decides the ratio.
@@ -203,7 +231,7 @@ func Fit(cal *Calibration, prefixVisible bool) TokenFit {
 	}
 	fit := TokenFit{Turns: len(samples)}
 	if sumBytes == 0 {
-		fit.TokensPerByte = defaultTokensPerByte
+		fit.TokensPerByte = DefaultTokensPerByte
 		fit.RelativeError = 1
 	} else {
 		fit.TokensPerByte = sumTokens / sumBytes
@@ -306,7 +334,7 @@ const (
 // The distinction it draws is the whole point. A session with fittable turns
 // measured its own tokens-per-byte ratio, so a Japanese session carries a
 // Japanese ratio and the estimate is grounded in that session's own script. A
-// session with no fittable turn borrowed defaultTokensPerByte, which is an
+// session with no fittable turn borrowed DefaultTokensPerByte, which is an
 // English prose average, and the user is owed that provenance: at 2.29 bytes
 // per character for Japanese against roughly 1.0 for ASCII prose, a constant
 // derived from one does not describe the other.
