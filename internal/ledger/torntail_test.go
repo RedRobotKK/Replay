@@ -157,6 +157,21 @@ func TestTL4_AValidLastRecordWithoutItsNewlineIsComplete(t *testing.T) {
 // equivalent, and this test is aimed at the error instead.
 func TestTL5_AnEmptyLedgerFileIsNotTorn(t *testing.T) {
 	p := writeLines(t)
+	f, oerr := os.Open(p)
+	if oerr != nil {
+		t.Fatal(oerr)
+	}
+	clean, known := endsWithNewline(f)
+	_ = f.Close()
+	if !known {
+		t.Error("an empty ledger file reads as unknown; without the size case the last " +
+			"byte is read at offset -1 and every new ledger is unreadable until its " +
+			"first record lands")
+	}
+	if !clean {
+		t.Error("an empty ledger file reads as torn; it has no last line to tear")
+	}
+
 	recs, skipped, incomplete, err := ReadRecords(p)
 	if err != nil {
 		t.Fatal(err)
@@ -167,5 +182,174 @@ func TestTL5_AnEmptyLedgerFileIsNotTorn(t *testing.T) {
 	if incomplete {
 		t.Error("an empty ledger file is reported as a torn write; every ledger would " +
 			"be torn between creation and its first record")
+	}
+}
+
+// TL6: the error paths in endsWithNewline are reachable, and reported.
+//
+// All three were UNREACHED — no test made them true — and an error branch
+// nothing enters is a branch nobody has checked returns the right thing. Two
+// inputs reach them: a file handle that is already closed fails at Stat, and a
+// directory opens cleanly, stats cleanly, and fails at ReadAt with EISDIR.
+//
+// What matters is not that they error but that the error is RETURNED. A
+// ledger that cannot be read must not come back as a ledger that is empty:
+// that is absence reported as zero, and the whole point of the incomplete flag
+// is to stop this file doing that.
+func TestTL6_AnUnreadableLedgerErrorsRatherThanReadingEmpty(t *testing.T) {
+	t.Run("closed handle fails at stat", func(t *testing.T) {
+		p := writeLines(t, goodLine(t, "a"))
+		f, err := os.Open(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if _, known := endsWithNewline(f); known {
+			t.Error("a closed handle reported its last byte as known")
+		}
+	})
+
+	t.Run("directory fails at readat", func(t *testing.T) {
+		d, err := os.Open(t.TempDir())
+		if err != nil {
+			t.Skipf("cannot open a directory on this platform: %v", err)
+		}
+		defer d.Close() //nolint:errcheck // read-only probe
+		if _, known := endsWithNewline(d); known {
+			t.Error("a directory reported its last byte as known")
+		}
+	})
+
+	t.Run("ReadRecords surfaces it instead of returning no records", func(t *testing.T) {
+		recs, skipped, incomplete, err := ReadRecords(t.TempDir())
+		if err == nil {
+			t.Fatalf("reading a directory as a ledger succeeded: %d records, skipped=%d, "+
+				"incomplete=%v. An unreadable ledger must not read as an empty one",
+				len(recs), skipped, incomplete)
+		}
+		if len(recs) != 0 {
+			t.Errorf("records returned alongside the error: %d", len(recs))
+		}
+	})
+}
+
+// TL7: a line too long to scan is an error, not an empty ledger.
+//
+// The scanner is capped at 64MiB per line. Past that it stops and reports
+// bufio.ErrTooLong, and `scanner.Err()` was UNREACHED: no test made it true,
+// so nothing checked that the cap surfaces as an error rather than as a short
+// read. A ledger truncated to "the records before the huge line" would be the
+// same defect this file exists to prevent, arriving through the scanner
+// instead of through the tail.
+//
+// The fixture is sparse: Truncate gives 65MiB of zero bytes, which contain no
+// newline and cost no disk.
+func TestTL7_ALineTooLongToScanIsReported(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "huge.jsonl")
+	f, err := os.Create(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const past64MiB = 65 << 20
+	if err := f.Truncate(past64MiB); err != nil {
+		_ = f.Close()
+		t.Skipf("cannot make a sparse file here: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	recs, _, _, err := ReadRecords(p)
+	if err == nil {
+		t.Fatalf("a %d-byte line with no newline read cleanly and returned %d records; "+
+			"the scanner's cap is being reported as the end of the data", past64MiB, len(recs))
+	}
+	if len(recs) != 0 {
+		t.Errorf("records returned alongside the error: %d", len(recs))
+	}
+}
+
+// TL8: ReadFile surfaces a read failure instead of "no records".
+//
+// ReadFile returns `no records in <file>` when the slice is empty, and that
+// message is indistinguishable from a ledger that is genuinely empty. The
+// error branch above it was UNREACHED, so nothing established that an
+// unreadable path takes the first exit rather than falling through to the
+// second and telling the reader their ledger has nothing in it.
+func TestTL8_ReadFileOnAnUnreadablePathSaysSoNotEmpty(t *testing.T) {
+	_, err := ReadFile(t.TempDir())
+	if err == nil {
+		t.Fatal("reading a directory as a ledger file succeeded")
+	}
+	if strings.Contains(err.Error(), "no records in") {
+		t.Errorf("an unreadable ledger is reported as an empty one: %v.\n"+
+			"      Absence and unknown are different values, and the reader acts on "+
+			"them differently", err)
+	}
+}
+
+// TL9: an unreadable pin line is skipped, and the rest of the file still loads.
+//
+// loadPins says a pin it cannot read "is a decision it must make again rather
+// than a reason to refuse to start". Nothing tested it. Both halves of the
+// skip were unexercised: a line that is not JSON, and a line that parses but
+// carries no session id — the second is the one a hand-edited or
+// half-written pins file actually produces, and without the check it would
+// install a pin under the empty key that every session with no id then shares.
+func TestTL9_AnUnreadablePinIsSkippedNotFatal(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "pins.jsonl")
+	body := "" +
+		"{\"session_id\":\"keep-me\"}\n" +
+		"not json at all\n" +
+		"{\"session_id\":\"\"}\n" + // parses, names no session
+		"{\"session_id\":\"keep-me-too\"}\n"
+	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	pins, err := loadPins(p)
+	if err != nil {
+		t.Fatalf("two bad lines made the whole pins file fatal: %v", err)
+	}
+	if len(pins) != 2 {
+		t.Errorf("pins = %d, want 2; got %v", len(pins), pins)
+	}
+	if _, ok := pins[""]; ok {
+		t.Error("a pin was installed under the empty session id. Every session that " +
+			"cannot name itself would then share one pin")
+	}
+	for _, want := range []string{"keep-me", "keep-me-too"} {
+		if _, ok := pins[want]; !ok {
+			t.Errorf("pin %q was lost to a bad line elsewhere in the file", want)
+		}
+	}
+}
+
+// TL10: a pins file too long to scan is an error, not a silently empty map.
+//
+// The distinction loadPins draws is between a line it cannot read and a FILE
+// it cannot read. The first is skipped; the second must not come back as "no
+// pins", because no pins means every session re-decides, and a proxy that
+// re-decides silently has lost state it was told to keep.
+func TestTL10_AnUnscannablePinsFileIsAnError(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "pins.jsonl")
+	f, err := os.Create(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(65 << 20); err != nil {
+		_ = f.Close()
+		t.Skipf("cannot make a sparse file here: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	pins, err := loadPins(p)
+	if err == nil {
+		t.Fatalf("an unscannable pins file returned %d pins and no error; the proxy "+
+			"would treat lost state as absent state", len(pins))
 	}
 }

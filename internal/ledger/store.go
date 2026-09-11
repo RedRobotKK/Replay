@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -181,10 +180,12 @@ func ReadRecords(path string) (records []Record, skipped int, incomplete bool, e
 	// corrupt record, and the scanner cannot answer it: it strips the
 	// terminator, so the last line looks identical either way. Asked of the
 	// file directly, before reading.
-	endsClean, err := endsWithNewline(f)
-	if err != nil {
-		return nil, 0, false, fmt.Errorf("read ledger: %w", err)
-	}
+	// The shape of the file, asked before its content is read.
+	//
+	// tailKnown is carried rather than folded away. A file whose shape could
+	// not be established is not a file with a torn tail, and reporting one as
+	// the other is the same collapse this change exists to undo one level up.
+	endsClean, tailKnown := endsWithNewline(f)
 	scanner := transcript.NewLineScanner(f)
 	var lastWasSkip bool
 	for scanner.Scan() {
@@ -207,7 +208,22 @@ func ReadRecords(path string) (records []Record, skipped int, incomplete bool, e
 	}
 	// A line the parser rejected, sitting last in a file with no terminating
 	// newline, is a record still being written rather than a broken one.
-	if lastWasSkip && !endsClean {
+	// Unknown shape means no claim: incomplete stays false, and whatever the
+	// scanner found is reported on its own terms.
+	//
+	// tailKnown is defence in depth and no current input reaches it. Every way
+	// the shape goes unknown — a directory, a handle closed underneath us — is
+	// also a way the scan fails, so control never arrives here with tailKnown
+	// false. A hand-written mutant of the form `(tailKnown || true)` therefore
+	// survives the suite, and is recorded here rather than left for the next
+	// reader to rediscover: guard-reachability does not catch it because it
+	// neutralises the whole condition, which TL1 does catch.
+	//
+	// It stays because the term is what the sentence means. Dropping it would
+	// make the line read "an unknown tail is a torn tail", which is the
+	// collapse this change exists to undo, and it would be correct only for as
+	// long as the two failure sets keep coinciding.
+	if lastWasSkip && tailKnown && !endsClean {
 		skipped--
 		incomplete = true
 	}
@@ -519,25 +535,38 @@ func loadPins(path string) (map[string]Pin, error) {
 }
 
 // endsWithNewline reports whether the file's final byte is a newline, and
-// leaves the offset where it found it.
+// whether that could be established at all.
 //
-// An empty file counts as clean: it has no unterminated last line, because it
-// has no last line. Treating it as torn would make every ledger incomplete
-// for the moment between creation and its first record.
-func endsWithNewline(f *os.File) (bool, error) {
+// Two returns rather than one error, because there are three outcomes and an
+// error return collapsed them. The file ends clean; it does not; or the
+// question could not be asked — a directory opens and stats successfully and
+// then refuses ReadAt, and a handle closed underneath us fails at Stat. The
+// third is not a kind of "torn", and defaulting it to false said it was.
+//
+// An empty file ends clean and KNOWN: it has no unterminated last line because
+// it has no last line. Without that case the last byte is read at offset -1,
+// which fails, and every ledger would be unknown for the window between
+// creation and its first record.
+//
+// The caller does not need an error from here. Every input that makes this
+// unknown also fails the scan that follows, so the failure reaches the caller
+// as a scanner error with the content-level reason attached, which is the more
+// useful of the two.
+func endsWithNewline(f *os.File) (clean, known bool) {
 	info, err := f.Stat()
 	if err != nil {
-		return false, err
+		return false, false
 	}
 	if info.Size() == 0 {
-		return true, nil
+		return true, true
 	}
+	// ReadAt, so the scanner that follows still starts at zero. A Seek back to
+	// the start stood here to restore the offset; ReadAt reads at an absolute
+	// offset and does not move the file position, so it restored something
+	// nothing had moved, and its error branch was one no input could reach.
 	var last [1]byte
 	if _, err := f.ReadAt(last[:], info.Size()-1); err != nil {
-		return false, err
+		return false, false
 	}
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return false, err
-	}
-	return last[0] == '\n', nil
+	return last[0] == '\n', true
 }
