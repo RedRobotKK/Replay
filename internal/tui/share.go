@@ -60,7 +60,7 @@ const previewWidth = 72
 
 // ShareScreen renders the preview, or says why there is nothing to preview.
 func ShareScreen(s ShareState) Screen {
-	head := []string{header("share"), ""}
+	head := screenHead("share")
 	lines := make([]string, 0, BudgetRows)
 	lines = append(lines, head...)
 
@@ -130,11 +130,11 @@ func padShare(lines []string, s ShareState) []string {
 	case s.Wrote != "":
 		lines = append(lines, "  wrote "+tailOf(shortPath(s.Wrote), Cols()-8))
 	}
-	for len(lines) < BudgetRows-3 {
+	for len(lines) < bodyRows-3 {
 		lines = append(lines, "")
 	}
-	if len(lines) > BudgetRows-3 {
-		lines = lines[:BudgetRows-3]
+	if len(lines) > bodyRows-3 {
+		lines = lines[:bodyRows-3]
 	}
 	ran := "  ran   replay cost --share --png <path>"
 	if s.Ready {

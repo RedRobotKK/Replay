@@ -1,5 +1,13 @@
 # Avoidable spend is a fan-out phenomenon, 2026-09-10
 
+> **Correction, 2026-09-10 (later the same day).** Produced while `replay cost`
+> priced one lane per transcript, dropping 36.2% of requests corpus-wide and
+> concentrated in exactly the fan-out sessions this file is about. The direction
+> of the finding is reinforced rather than withdrawn — the sessions holding the
+> avoidable spend are the ones whose cost was most understated — but every
+> absolute figure below is a floor, not a total. Corrected corpus total:
+> **$10,503**; corrected avoidable: **$297.25** over 61.5M tokens.
+
 **What this measures:** where the corpus-wide avoidable figure actually sits.
 The headline is a single percentage over 116 sessions; this asks how it is
 distributed, because a rate that is uniform and a rate that is four sessions

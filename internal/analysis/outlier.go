@@ -1,7 +1,7 @@
 package analysis
 
 // Self-referential comparison: how a session sits against the reader's own
-// median, and nothing else.
+// total, and nothing else.
 //
 // A bare figure is not actionable. "This session cost $3.40" leaves the reader
 // asking whether that is high, and neither they nor this tool can answer from a
@@ -10,7 +10,7 @@ package analysis
 // already retracted twice.
 //
 // The comparison that IS available at first run is the reader against
-// themselves. Their own median needs no population, no key, no network, and no
+// themselves. Their own total needs no population, no key, no network, and no
 // second surface; it works identically on a metered API account, a subscription
 // seat and a local model where there is no money at all. It is the only
 // interpretable number this tool can honestly put in front of somebody who has
@@ -59,18 +59,25 @@ func CompareToTotal(cost, total float64, n int) (Outlier, bool) {
 }
 
 // Notable reports whether this session is concentrated enough to be worth
-// showing unprompted, and the test scales with the corpus rather than being a
-// flat percentage.
+// showing unprompted.
 //
 // Two conditions, both required. The session must hold at least
-// concentrationMultiple times its even share (1/n), which is what makes this a
-// statement about the distribution — with three sessions an even share is 33%,
-// so nothing fires spuriously on a tiny corpus. And it must clear an absolute
-// floor, because on a large corpus 3x an even share can still be a rounding
-// error nobody should be interrupted for.
+// concentrationMultiple times its even share (1/n), which keeps a tiny corpus
+// from firing spuriously — with three sessions an even share is already 33%.
+// And it must clear an absolute floor, because on a large corpus twice an even
+// share can be a rounding error nobody should be interrupted for.
 //
-// Both numbers are judgements, named here rather than buried at a call site so
-// they can be argued with.
+// Which of the two binds depends on n, and it is worth being exact because the
+// comment here used to claim the test "scales with the corpus rather than being
+// a flat percentage" — which is true only below n = 21. The multiple binds
+// while 2/n > minShareFloor, i.e. for n <= 20. At n >= 21 the floor is always
+// the larger of the two and Notable is exactly Share >= minShareFloor: a flat
+// percentage, on every corpus this tool has been run against.
+//
+// Both numbers are judgements rather than measurements, and ADR-0009 says that
+// of every threshold in this tool. They are named here rather than buried at a
+// call site so they can be argued with, and pinned by tests that go red when
+// either moves, so they cannot be changed without somebody deciding to.
 func (o Outlier) Notable() bool {
 	if o.N < minSessions {
 		return false

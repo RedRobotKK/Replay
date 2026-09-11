@@ -36,8 +36,9 @@ import (
 )
 
 const (
-	// DirPerm and FilePerm are owner-only.
-	DirPerm  os.FileMode = 0o700
+	// DirPerm is the mode for a directory this package creates: owner-only.
+	DirPerm os.FileMode = 0o700
+	// FilePerm is the mode for a file inside one: owner-only.
 	FilePerm os.FileMode = 0o600
 	// looseBits are the group and other bits. Any of them set on a directory
 	// holding keys or derived transcript data is the finding.

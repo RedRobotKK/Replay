@@ -61,8 +61,13 @@ type Loop struct {
 	// pipe. The reader got the text wrapped in control codes.
 	Addressable bool
 
-	mu      sync.Mutex
-	cur     rune
+	mu  sync.Mutex
+	cur rune
+	// prev is the screen the reader came from, and is what "esc back" goes
+	// back to. One rune rather than a stack: back-one-step is what the footer
+	// promises, and a history would make the second press land somewhere the
+	// reader cannot predict from what is on screen.
+	prev    rune
 	tick    int
 	painted []string
 	help    bool
@@ -100,6 +105,36 @@ func (l *Loop) SetLocal(f func(rune) bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.local = f
+}
+
+// Current is the screen on show. Exported so a test can assert where a key
+// left the reader, which is the only thing "esc back" is a claim about.
+func (l *Loop) Current() rune {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.cur
+}
+
+// Goto moves to a screen as if the reader had pressed its key, recording where
+// they came from so escape brings them back.
+//
+// For the one case the loop cannot decide for itself: enter on a row means
+// "open this", and only the source knows which screen opening it lands on.
+func (l *Loop) Goto(k rune) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if k == l.cur {
+		return
+	}
+	l.prev, l.cur = l.cur, k
+	l.help = false
+}
+
+// Helping reports whether the help overlay is up.
+func (l *Loop) Helping() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.help
 }
 
 // TakeOpened reports whether enter was pressed since the last call, and clears
@@ -216,7 +251,24 @@ func (l *Loop) press(k rune) {
 	case '?':
 		l.help = !l.help
 	case 27: // escape
-		l.help = false
+		// Help first, and only help. Two effects from one keystroke is how a
+		// reader loses their place: they press escape to dismiss the overlay
+		// and find themselves on a different screen.
+		if l.help {
+			l.help = false
+			return
+		}
+		// Then back, one step. The footer has said "esc back" on all ten
+		// screens since the footer existed, and the advice detail says "esc
+		// back to the list" in its own body, while escape did nothing at all —
+		// which is indistinguishable from a terminal that dropped the key.
+		//
+		// One step, not a history: back from the screen you came from is what
+		// the word promises, and a stack would make the second press land
+		// somewhere the reader cannot predict.
+		if l.prev != 0 && l.prev != l.cur {
+			l.cur, l.prev = l.prev, l.cur
+		}
 	case '\r', '\n':
 		// Enter opens the selected row. The source reads Cursor() and decides
 		// what opening means; the loop does not know what a row stands for.
@@ -224,6 +276,9 @@ func (l *Loop) press(k rune) {
 	default:
 		for _, s := range Shortcuts() {
 			if s.Key == k {
+				if k != l.cur {
+					l.prev = l.cur
+				}
 				l.cur = k
 				l.help = false
 			}
@@ -248,11 +303,11 @@ func (l *Loop) paint() {
 	} else if l.Source != nil {
 		lines = l.Source(key, tick).Lines
 	}
-	for len(lines) < BudgetRows-1 {
+	for len(lines) < bodyRows {
 		lines = append(lines, "")
 	}
-	if len(lines) > BudgetRows-1 {
-		lines = lines[:BudgetRows-1]
+	if len(lines) > bodyRows {
+		lines = lines[:bodyRows]
 	}
 	lines = append(lines, Footer(key))
 

@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="704" height="213" viewBox="0 0 704 213" role="img" aria-label="replay model">
 <rect width="704" height="213" rx="8" fill="#14161a"/>
 <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="14">
-<text x="16.0" y="26.0" xml:space="preserve" fill="#d9dce1">  replay model                                                               dev</text>
+<text x="16.0" y="26.0" xml:space="preserve" fill="#d9dce1">  Which model should I use?                                    replay route  dev</text>
 <text x="16.0" y="45.0" xml:space="preserve" fill="#d9dce1"></text>
 <text x="16.0" y="64.0" xml:space="preserve" fill="#d9dce1">  What 1 session(s) actually ran on</text>
 <text x="16.0" y="83.0" xml:space="preserve" fill="#d9dce1"></text>

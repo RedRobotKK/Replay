@@ -75,6 +75,24 @@
 // a branch on its authority, ask whether the condition is one another
 // platform, another build tag, or another configuration could satisfy. The
 // tool cannot ask that question; it only runs here.
+
+// The same caution applies across packages, for a different reason.
+//
+// Each mutant is put only to its own package's tests, because that is what
+// makes the run cost seconds rather than the whole suite per guard. A test
+// that would have caught the mutant from a neighbouring package is therefore
+// never run against it, and the guard comes back SURVIVED with that test
+// passing all along.
+//
+// Found by use, on the pull request after this tool shipped: a test written in
+// cmd/replay for a guard in internal/usage reported SURVIVED while the test
+// itself was green. It is the mirror of the defect ADR-0018 names — there the
+// test sat too close to the thing it checked, here too far from it.
+//
+// So a survivor is a claim about the guard's own package. Before writing a
+// test to satisfy one, check whether a test somewhere else already covers it;
+// if it does, the honest fix is usually to move the test next to the guard,
+// not to add a second.
 package main
 
 import (
