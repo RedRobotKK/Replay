@@ -90,3 +90,19 @@ rather than an architecture.
 It does not license any claim that a particular layout recovers any of it. That
 requires a live trial with a control arm, which is what `--trial-share` and the
 graduation rules in `replay learn` exist for.
+
+## Appended 2026-09-11: the 50.8% does not reproduce
+
+Re-run on the corpus as it stands today — 1,816 transcripts, 118 sessions, 806
+breaks, 40,087,042 re-billed tokens — the same classifier reads **42.4%** for
+client re-render and **42.6%** for TTL expiry. The corpus grew by 310
+transcripts and the engine took 234 commits between the two readings, and the
+re-run cannot separate those. The table above is its reading on its date.
+
+One thing the re-run does settle. An external reviewer put it that the
+classification rests on a ±10% band around a coarse byte-to-token estimate, so
+the headline is a story about a tolerance constant. Swept from 0% to infinity,
+the re-render share moves 8.1 points in total and the shipped 10% sits 1.5
+points into that range; 589 of 597 classifications land on exact integer
+equality between two provider-reported numbers. **The tolerance is not why the
+number moved.** [Full sweep](rerender-band-sensitivity-2026-09-11.md).

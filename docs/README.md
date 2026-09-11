@@ -22,6 +22,7 @@ back to this index.
 | [Decisions](adr/README.md) | Why the design is the way it is. One record per decision, never edited after acceptance |
 | [Surfaces](SURFACES.md) | Every file, socket and process Replay touches, each row marked verified, read, or unknown |
 | [CLI reference](CLI.md) | Every command and every flag, generated from the binary and checked in CI, with what each one reaches and what it writes |
+| [Preprint and launch drafts](paper/README.md) | Outward-facing writing about the measurements, with every figure traced to its corpus and its tier — and the struck numbers recorded beside the corrected ones |
 
 ## If you are contributing
 
