@@ -157,6 +157,11 @@ var modelTable = []modelRow{
 	// A prefix under the floor does not cache, silently, so a wrong floor here
 	// recommends caching something that cannot be cached.
 	{"3-5-haiku", minPrefixOpus47, Price{0.80, 4, ReadMultiplier}, true},
+	// Opus 4.1 has its own row because it is its own model. It had none until
+	// 2026-09-11 and was priced through `opus-4` containing it, which is the
+	// same accident that priced the unreleased `opus-4-9` at $15/$75. The two
+	// prices agree today; nothing says the next pair will.
+	{"opus-4-1", minPrefixStandard, Price{15, 75, ReadMultiplier}, true},
 	{"opus-4", minPrefixStandard, Price{15, 75, ReadMultiplier}, true},
 	{"haiku", minPrefixStandard, Price{}, false},
 }
@@ -226,7 +231,7 @@ func foreignModel(model string) bool {
 func lookup(model string) modelRow {
 	m := strings.ToLower(model)
 	for _, row := range modelTable {
-		if strings.Contains(m, row.match) {
+		if matchesModel(m, row.match) {
 			if row.price.ReadMult == 0 {
 				row.price.ReadMult = ReadMultiplier
 			}
