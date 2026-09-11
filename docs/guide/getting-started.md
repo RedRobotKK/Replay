@@ -18,6 +18,26 @@ job. Either way, check it landed:
 replay version
 ```
 
+### What the installer does when it finishes
+
+On a terminal, the screens open as soon as the install completes. The script `exec`s `replay tui`,
+so it owns your terminal until you press `q`, and it opens on `cost` — the same question `replay`
+answers below. The closing lines say so before it happens:
+
+```text
+Next:  replay tui      # opening now, on cost: what your agent already spent
+       replay          # after you quit: the same figures, as one report
+       replay doctor   # if that found nothing, this says why
+```
+
+Off a terminal, nothing opens and those two commands are the next step. That covers CI, a
+`Dockerfile RUN`, cron, a provisioner, and a container built without `-t`: the script probes
+`/dev/tty` rather than stdin, because under `curl ... | sh` stdin is the script and says nothing
+about whether a person is watching.
+
+`--no-tui`, or `REPLAY_NO_OPEN=1`, declines the open on a terminal too. `CI` being set declines it
+already.
+
 ## Get a number out of it
 
 ```sh
@@ -178,6 +198,9 @@ project name or a spend total.
 
 ## Where to go next
 
+- [The first run, end to end](first-run-journey.md) carries this walkthrough through to acting on a
+  finding and checking whether the change worked, with real output at every step and a plain account
+  of the three places that route stops.
 - [Commands](commands.md) covers every subcommand and the flags on `serve`.
 - [Troubleshooting](troubleshooting.md) covers what goes wrong and what it means.
 - [Architecture](../architecture/) explains how the replay engine and the proxy actually work.

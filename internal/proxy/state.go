@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
@@ -148,6 +149,14 @@ const maxSessions = 256
 // stats is the proxy's in-memory observability state. It is derived data
 // only and is lost on restart; the ledger is the durable record.
 type stats struct {
+	// analysed is the running total of lane requests AnalyzeLane has walked.
+	//
+	// Atomic and first in the struct so it is 8-byte aligned on 32-bit. It
+	// exists for one test, and it costs one add per rescore — a price worth
+	// paying to replace a wall-clock assertion that failed on a busy machine
+	// and told nobody anything about the code.
+	analysed atomic.Int64
+
 	mu            sync.Mutex
 	now           func() time.Time
 	started       time.Time
@@ -479,6 +488,15 @@ func (s *stats) rescore(rec *ledger.Record) (string, analysis.ReReads) {
 	// scoreMu, so it races with the next request's builder.Add. CI's -race
 	// caught it on ubuntu; 25 local runs with -race did not.
 	covered := len(lane.Requests)
+	// Counted because the complexity claim is about work, not wall-clock.
+	//
+	// rescore re-walks the whole lane on every request, so the total requests
+	// analysed across a session is 1+2+...+n — quadratic by design. A nested
+	// walk would make it cubic. Timing that ratio was the original test and it
+	// failed roughly one run in three on a loaded machine, blocking merges for
+	// a reason that had nothing to do with the code. This sum is the same
+	// claim, decided by arithmetic instead of by a clock.
+	s.analysed.Add(int64(covered))
 	st.scoreMu.Unlock()
 
 	asRun := policies[0]

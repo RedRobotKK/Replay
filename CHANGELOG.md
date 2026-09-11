@@ -35,6 +35,82 @@ All notable changes to this project are documented here. The format follows [Kee
   `replay cost` goes from 116 sessions and $3766.87 to 118 sessions and
   $3771.32, and from disclosing 6 transcripts read but not priced to disclosing
   13 that could not be read at all.
+- **`replay privacy` reported a `~/.replay` it could not read as one holding
+  nothing.** The store registry returned an empty list for a directory that was
+  absent and for one that existed and failed to list, and the command printed
+  "Replay has written nothing to this machine" for both - a false absence in the
+  command that answers "what do you hold about me". Only `os.IsNotExist` now
+  means nothing is there; anything else is reported. The same swallow sat under
+  the TUI's safe screen, which already had an unreadable state and no way to be
+  told it had one.
+- **A store measured over entries it could not walk no longer prints as its
+  readable part.** `privacy` and the safe screen both totalled what the walk
+  could read, so a store containing an unreadable directory printed smaller than
+  it is, or as `0 B` - indistinguishable from a store known to be empty. Both
+  now say how many entries went unmeasured.
+- **`replay purge` reported an erasure over files it had not examined.** Ledger
+  files the walk could not enter and files it could not read were skipped in
+  silence, and the run still printed "removed N record(s)" or "Nothing to
+  remove". Both are counted, and a sweep that skipped anything says so and says
+  that the report does not cover it.
+
+### Added
+
+- **`replay cost --usage <file>` prices a usage export: token counts per
+  request, no conversation content anywhere in the file.** Three readers cannot
+  use the transcript path — an operator whose security review will not approve a
+  tool that reads prompt content, a finance owner who wants a reconciliation
+  figure and not a conversation, and anyone whose transcripts were rotated away
+  before the question was asked.
+- **The cost is Measured and the cause is not, in the same row.** Cache
+  arithmetic never needed the content: the expected read is the previous
+  request's prompt minus its uncached tail, both provider-reported, so the break
+  deficit is a measurement. Why the prefix stopped matching is not — usage and
+  timing settle only three causes (expired, model changed, nothing read) and
+  every other break is counted with its deficit and its cause marked
+  `NOT MEASURED`. The transcript path's fourth answer is located by the
+  byte-to-token fit and is not borrowed here, because there are no bytes.
+- **The export declares two things it cannot prove and is refused without
+  them.** A record missing from the export is indistinguishable from a cache
+  break, so the exporter asserts `complete`; undated records cannot be put in
+  the order a break is defined against. Without either, the cost still prints
+  and the break figures say `NOT MEASURED` with the reason. `fresh + cached_read
+  - cached_write` must equal `prompt`, which refuses an export copied from a
+  provider that counts inclusively — the error is largest on exactly the
+  sessions that cache best.
+- `--max-avoidable-usd` refuses to pass when the avoidable figure was not
+  measured. `--share`, `--png`, `--compare`, `--contribute` and `--per-lane` are
+  refused on this path rather than served with a blank.
+- A file that is not readable JSON is refused for that reason, in its own
+  words: not JSON at all, a foreign schema, and counts that disagree are three
+  different mistakes and a reader sent to check the wrong one is worse off than
+  one told nothing. A failed write of either report form is returned and says a
+  write is what failed — a truncated JSON document a pipeline parses, or a
+  printed report that stops before the NOT MEASURED block, must not exit 0.
+- `internal/usage` is wired into the binary for the first time
+  (UNWIRED-LOG #8): the export decodes into `usage.Entry` and `Validate` runs on
+  every record at the door.
+
+### Changed
+
+- **The installer prints the ending it actually performs.** Two "Next:" commands
+  were printed unconditionally, and then, on a terminal, the script `exec`d
+  `replay tui` over the top of them: the reader was told to run one thing and
+  handed another, and the surface that took the terminal was named nowhere in the
+  output. The exec was kept and the printed line moved. On a terminal the block
+  now names `replay tui`, says it opens on `cost`, and offers the two commands as
+  what to type after quitting; off a terminal — CI, a `Dockerfile RUN`, cron, a
+  container built without `-t` — nothing opens and the two commands are the next
+  step exactly as before. `--no-tui` and `REPLAY_NO_OPEN=1` are unchanged.
+
+### Added
+
+- [The first run, end to end](docs/guide/first-run-journey.md): install to first
+  finding to acting on it to verifying the change, as one document, with every
+  block pasted from a run against the redacted session this repository ships so a
+  reader can reproduce it. It names the three places the route does not complete
+  on a new machine, including that the verification step in step 7 has not been
+  observed to fire on any corpus this project holds.
 
 ### Added
 
