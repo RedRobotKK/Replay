@@ -35,6 +35,24 @@ All notable changes to this project are documented here. The format follows [Kee
   `replay cost` goes from 116 sessions and $3766.87 to 118 sessions and
   $3771.32, and from disclosing 6 transcripts read but not priced to disclosing
   13 that could not be read at all.
+- **`replay privacy` reported a `~/.replay` it could not read as one holding
+  nothing.** The store registry returned an empty list for a directory that was
+  absent and for one that existed and failed to list, and the command printed
+  "Replay has written nothing to this machine" for both - a false absence in the
+  command that answers "what do you hold about me". Only `os.IsNotExist` now
+  means nothing is there; anything else is reported. The same swallow sat under
+  the TUI's safe screen, which already had an unreadable state and no way to be
+  told it had one.
+- **A store measured over entries it could not walk no longer prints as its
+  readable part.** `privacy` and the safe screen both totalled what the walk
+  could read, so a store containing an unreadable directory printed smaller than
+  it is, or as `0 B` - indistinguishable from a store known to be empty. Both
+  now say how many entries went unmeasured.
+- **`replay purge` reported an erasure over files it had not examined.** Ledger
+  files the walk could not enter and files it could not read were skipped in
+  silence, and the run still printed "removed N record(s)" or "Nothing to
+  remove". Both are counted, and a sweep that skipped anything says so and says
+  that the report does not cover it.
 
 ## [0.5.4] - 2026-09-09
 
