@@ -33,10 +33,10 @@ func TestTL1MatchesTheReferenceOnEveryInput(t *testing.T) {
 		"short",
 		strings.Repeat("プ", 10), // 3-byte runes
 		"héllo wörld",
-		"áé",                           // combining marks: runes, not graphemes
-		"\U0001f469‍\U0001f4bb together", // ZWJ sequence, 4-byte runes
-		"…",                              // the ellipsis itself
-		strings.Repeat("…", 5),           // a label that already ends in one
+		"áé",                                // combining marks: runes, not graphemes
+		"\U0001f469\u200d\U0001f4bb together", // ZWJ sequence: 4-byte runes joined
+		"…",                                   // the ellipsis itself
+		strings.Repeat("…", 5),                // a label that already ends in one
 		strings.Repeat("x", 300),
 		strings.Repeat("プx", 150),
 		"\x00\x01mixedcontrol",
