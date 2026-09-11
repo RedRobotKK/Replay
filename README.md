@@ -91,26 +91,38 @@ of 30,977 requests, 1.4%, on the run above.
 
 ## What actually broke the cache
 
-`replay diff` classifies every break, so the money has a cause attached rather than a total. Across
-1,506 transcripts on the same machine, 735 breaks and 31.26M re-billed tokens
-([method and limits](docs/evidence/break-causes-2026-09-06.md)):
+`replay diff` classifies every break, so the money has a cause attached rather than a total. It
+prints one line per event with its cause, on your transcripts, dated by the run that produced it.
+Run it. There is no table of shares here on purpose, and the reason is worth more than the table
+was.
 
-| cause | share of re-billed tokens | shape |
-|---|---:|---|
-| client re-rendered history after the system prefix | 50.8% | 583 breaks, ~27k tokens each |
-| cache expired (gap longer than the TTL) | 33.9% | 39 breaks, ~271k tokens each |
-| prefix diverged inside the message history | 7.0% | 102 breaks, ~22k tokens each |
-| system prompt or tool definitions changed | 5.8% | 5 breaks, ~361k tokens each |
-| model changed between requests | 2.6% | 6 breaks, ~134k tokens each |
+Two causes dominate, and they have opposite shapes:
 
-The two large causes have opposite shapes, and that matters more than the ranking: a re-render is
-frequent and small, a TTL expiry is rare and enormous. One developer going to lunch costs more than a
-hundred re-renders.
+- **A client re-render** — the history is rebuilt after the system prefix — is **frequent and
+  small**. It happens constantly and re-bills a little each time.
+- **A TTL expiry** — the gap between two requests outlives the cache — is **rare and enormous**.
+  One developer going to lunch costs more than a great many re-renders.
 
-Read the sampling note in that file before quoting the number. The same measurement over the 40
-largest sessions said TTL expiry was 75.2% and re-rendering 2.5% — almost the reverse — because the
-largest sessions are the long-running ones, long-running sessions contain long gaps, and long gaps
-are what TTL expiry means. Sorting by size selected for the cause.
+That is a statement about mechanism, and mechanism does not rot. The shares did. This README carried
+a five-row table of percentages measured on 2026-09-06. By 2026-09-11 the two leading causes had
+converged to within half a point of each other, and a second reading taken hours later the same day
+put them in the **opposite order** — the corpus is this machine's own transcripts, so it grows while
+you work. The classifier also changed between readings, and no re-run can separate those two
+effects.
+
+So the sentence this section used to end on — that the shapes matter more than the ranking — was
+right in a way that flattered it. The shapes held across every reading. The ranking it waved away is
+precisely the part that flipped.
+
+Two further reasons not to quote a share, both of which survived the re-runs:
+
+- **Sorting by size selects for the cause.** The same measurement over the largest sessions alone
+  nearly reverses the order, because the largest sessions are the long-running ones, long-running
+  sessions contain long gaps, and long gaps are what a TTL expiry is.
+- **The per-event token counts are rounded to thousands before they are summed**, so a total built
+  from them carries far fewer significant figures than its digits suggest.
+
+[Method, limits, and every reading with its date](docs/evidence/break-causes-2026-09-06.md).
 
 ---
 
