@@ -145,7 +145,7 @@ elsewhere in this file. -->
 | `--token` | `serve` | string |
 | `--upstream` | `serve` | string |
 
-### Threshold that can fire (20)
+### Threshold that can fire (21)
 
 | Flag | Command | Type |
 |---|---|---|
@@ -160,6 +160,7 @@ elsewhere in this file. -->
 | `--loop-warn` | `serve` | int |
 | `--max-age` | `probe` | duration |
 | `--max-day-tokens` | `serve` | int |
+| `--mask-ttl` | `serve` | duration |
 | `--max-day-usd` | `serve` | float64 |
 | `--max-probes` | `probe` | int |
 | `--max-session-tokens` | `serve` | int |
