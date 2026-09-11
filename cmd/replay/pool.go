@@ -25,15 +25,35 @@ import (
 // Pooling happens where the submissions were collected — a pull request, a
 // directory of checked-in files — never over a wire. This command reads local
 // paths and nothing else, which is why it needs no allowlist of its own.
+// pooledAtOr resolves the pool date: the caller's, or today in UTC.
+//
+// Split out so the resolution can be tested against the clock seam, and so the
+// flag's printed default stays a constant. An explicit value is passed through
+// untouched, because somebody regenerating a published document supplies the
+// date it was published on.
+func pooledAtOr(flagValue string) string {
+	if flagValue != "" {
+		return flagValue
+	}
+	return timeNow().UTC().Format("2006-01-02")
+}
+
 func runPool(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("pool", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	asJSON := fs.Bool("json", false, "emit the pooled document rather than the table")
-	// pooledAt is a flag with a dated default rather than a clock read, for the
-	// reason NewPool states: a document reporting a different timestamp on every
-	// regeneration cannot be diffed against the one that was published.
-	pooledAt := fs.String("pooled-at", timeNow().UTC().Format("2006-01-02"),
-		"the date this pool was assembled, recorded in the document")
+	// pooledAt records a date rather than a clock read, for the reason NewPool
+	// states: a document reporting a different timestamp on every regeneration
+	// cannot be diffed against the one that was published.
+	//
+	// The default is EMPTY and resolved at use, not rendered into the flag.
+	// flag.PrintDefaults writes the default into --help, docs/CLI.md is
+	// generated from that help and committed, and cli-blueprint regenerates and
+	// diffs — so a default carrying today's date made a published surface go
+	// stale at every UTC midnight. It failed on a tree nobody had touched, 83
+	// seconds after the rollover.
+	pooledAt := fs.String("pooled-at", "",
+		"the date this pool was assembled, recorded in the document (default: today, UTC)")
 	fs.Usage = func() {
 		_, _ = fmt.Fprint(stderr, "Usage: replay pool <submission.json...> [--json] [--pooled-at <date>]\n\n"+
 			"Aggregate corpus submissions written by `replay cost --contribute`.\n"+
@@ -45,7 +65,7 @@ func runPool(args []string, stdout, stderr io.Writer) error {
 	}
 	files := fs.Args()
 
-	p := observation.NewPool(*pooledAt)
+	p := observation.NewPool(pooledAtOr(*pooledAt))
 	admitted := 0
 	for _, f := range files {
 		body, err := os.ReadFile(f)
