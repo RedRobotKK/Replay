@@ -157,3 +157,39 @@ func TestME3_PricingDoesNotDependOnRowOrder(t *testing.T) {
 		})
 	}
 }
+
+// TestME4 records the gap versionDigits leaves, as a passing test.
+//
+// continuesWithVersion treats up to three digits after a hyphen as a version
+// and anything longer as a build date, because `opus-4-20250514` is Opus 4 and
+// must keep pricing as Opus 4. The cost is at the boundary: a FOUR-digit
+// version component reads as a date and keeps the parent row.
+//
+// Nobody ships `claude-opus-4-1000`, which is why this is a documented limit
+// rather than a defect. It is pinned as a passing test anyway, for two
+// reasons. Raised twice in review is twice more than a comment survives. And
+// if a provider ever does emit a four-digit component, this test is where the
+// behaviour is written down — it will need changing, deliberately, rather than
+// being discovered as a wrong invoice.
+//
+// The end state is ids matched whole, which is a rules-document format change.
+// Until then the rule is: short digit runs are versions, long ones are dates,
+// and the boundary is three.
+func TestME4_AFourDigitComponentReadsAsADateNotAVersion(t *testing.T) {
+	const match = "claude-opus-4"
+	for _, tc := range []struct {
+		id   string
+		want bool
+		note string
+	}{
+		{"claude-opus-4-9", false, "one digit: a version, refused"},
+		{"claude-opus-4-123", false, "three digits: still a version, refused"},
+		{"claude-opus-4-1000", true, "FOUR digits: read as a date, keeps the parent row"},
+		{"claude-opus-4-20250514", true, "eight digits: a build date, keeps the row"},
+	} {
+		if got := matchesModel(tc.id, match); got != tc.want {
+			t.Errorf("matchesModel(%q, %q) = %v, want %v — %s",
+				tc.id, match, got, tc.want, tc.note)
+		}
+	}
+}
