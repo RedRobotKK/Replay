@@ -166,7 +166,7 @@ func Conditionals(file string, lines map[int]bool) ([]Guard, error) {
 	// thing: `case false && (n < 0):` keeps the expression compiled so a
 	// variable only it uses does not go unused and turn the mutant stillborn
 	// for the wrong reason.
-	collect := func(cond ast.Expr, body *ast.BlockStmt, at token.Pos, lbrace, rbrace token.Pos) {
+	collect := func(cond ast.Expr, at token.Pos, lbrace, rbrace token.Pos) {
 		pos := fset.Position(at)
 		if !lines[pos.Line] || pos.Line > len(byLine) {
 			return
@@ -187,7 +187,7 @@ func Conditionals(file string, lines map[int]bool) ([]Guard, error) {
 		if sw, ok := n.(*ast.SwitchStmt); ok {
 			for _, cc := range taglessCases(sw) {
 				for _, cond := range cc.List {
-					collect(cond, nil, cc.Pos(), cc.Colon, cc.End())
+					collect(cond, cc.Pos(), cc.Colon, cc.End())
 				}
 			}
 			return true
