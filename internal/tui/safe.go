@@ -58,7 +58,7 @@ func SafeScreen(p Privacy) Screen {
 				"tell you the disk is clean.")
 	}
 	sc := Screen{Key: 's', Title: "safe", From: Measured}
-	lines := []string{header("safe"), ""}
+	lines := screenHead("safe")
 
 	if len(p.Stores) == 0 {
 		lines = append(lines,

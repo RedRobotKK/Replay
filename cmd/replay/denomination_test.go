@@ -39,7 +39,7 @@ func TestDN1_AvoidableIsAlsoInTokens(t *testing.T) {
 		Tasks: 1477, TotalUSD: 3000.56, MedianUSD: 0.65, P90USD: 2.21,
 		AvoidableUSD: 149.44, AvoidableShare: 0.0498, AvoidableTokens: 31_264_349,
 	}
-	out := renderCost(s, 0, io.Discard, "")
+	out := renderCost(s, 0, 0, io.Discard, "")
 	if !strings.Contains(out, "31.3M") {
 		t.Errorf("the avoidable figure is not stated in tokens:\n%s", out)
 	}
@@ -57,7 +57,7 @@ func TestDN2_TheReportNamesWhoPaysDollars(t *testing.T) {
 		Tasks: 1477, TotalUSD: 3000.56, MedianUSD: 0.65, P90USD: 2.21,
 		AvoidableUSD: 149.44, AvoidableShare: 0.0498, AvoidableTokens: 31_264_349,
 	}
-	out := strings.ToLower(renderCost(s, 0, io.Discard, ""))
+	out := strings.ToLower(renderCost(s, 0, 0, io.Discard, ""))
 	if !strings.Contains(out, "subscription") && !strings.Contains(out, "flat seat") {
 		t.Errorf("nothing tells a subscriber the dollars are not theirs:\n%s", out)
 	}
@@ -70,7 +70,7 @@ func TestDN2_TheReportNamesWhoPaysDollars(t *testing.T) {
 // rather than one that was not taken.
 func TestDN3_NoTokensNoClaim(t *testing.T) {
 	s := costSummary{Tasks: 3, TotalUSD: 10, MedianUSD: 1, AvoidableUSD: 0.5, AvoidableShare: 0.05}
-	out := renderCost(s, 0, io.Discard, "")
+	out := renderCost(s, 0, 0, io.Discard, "")
 	if strings.Contains(out, "0 tokens re-billed") || strings.Contains(out, "0.0M") {
 		t.Errorf("printed a token figure it did not measure:\n%s", out)
 	}
