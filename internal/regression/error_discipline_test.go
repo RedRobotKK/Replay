@@ -137,11 +137,11 @@ func TestED1_ADiscardedErrorSaysWhy(t *testing.T) {
 	// and believed. The ceiling is what stops them being forgotten — it may
 	// fall and must never rise, so a new swallow cannot hide among them.
 	//
-	// 29 -> 26 on merging this branch with main: the parser and TUI work landing
-	// alongside it documented three of the remaining discards. Lowered here
-	// rather than left, because a ceiling above the count is slack a new swallow
-	// fits inside.
-	const ceiling = 26
+	// 29 -> 26 -> 25 across the two merges with main this branch took: the
+	// parser and TUI work documented three of the remaining discards and the
+	// security work documented a fourth. Lowered each time rather than left,
+	// because a ceiling above the count is slack a new swallow fits inside.
+	const ceiling = 25
 
 	outside := 0
 	for _, f := range undocumented {

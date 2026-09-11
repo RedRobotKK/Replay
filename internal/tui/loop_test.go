@@ -93,9 +93,45 @@ func TestEveryWrittenRowIsClearedFirst(t *testing.T) {
 	}
 }
 
-// The loop stops when the user asks.
+// The loop stops when the user asks, and stops reading when it does.
+//
+// This test was vacuous and the repository already knew half of why. It read
+// `_, _ = drive(t, plain, 'q')`, and drive closes the key channel after sending
+// — Run returns on `!ok || k == 'q'`, so it ended whether or not 'q' meant
+// anything. Measured: with `k == 'q'` deleted from loop.go, the old body
+// PASSED. It was asserting drive's teardown, not the key it is named after.
+//
+// TestQEndsTheLoopWithoutClosingTheChannel in artifact_test.go was written to
+// close exactly that gap and does catch the mutant, so the GUARD was covered.
+// What was not covered is this test's own name: a reader auditing the suite
+// found two tests for 'q' and one of them was scenery. That is its own defect —
+// the next person to touch the quit path reads this one, believes it, and the
+// evidence they are relying on is somewhere else entirely.
+//
+// So it keeps the name and earns it, with the claim the sibling does not make.
+// The sibling sends one key and asserts the loop returned. This one queues a
+// second key behind the 'q' on a channel that is never closed: nothing but the
+// 'q' branch can end the run, and if the loop reads past the 'q' the second key
+// paints a screen that says so.
 func TestQEndsTheLoop(t *testing.T) {
-	_, _ = drive(t, plain, 'q')
+	var out bytes.Buffer
+	keys := make(chan rune, 2)
+	keys <- 'q'
+	keys <- 'g'
+	l := &Loop{Out: &out, Source: plain, Keys: keys, Addressable: true}
+
+	done := make(chan struct{})
+	go func() { l.Run(nil); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("q did not end the loop; with the channel still open nothing else can " +
+			"stop it, so the key people press to quit does not quit")
+	}
+	if strings.Contains(out.String(), "screen g") {
+		t.Errorf("the loop read the key after 'q' and painted it, so it did not stop "+
+			"when it was asked:\n%s", out.String())
+	}
 }
 
 // A screen key switches screens; help toggles over them.

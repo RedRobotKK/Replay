@@ -13,6 +13,7 @@ import (
 	"github.com/RedRobotKK/Replay/internal/facts"
 
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/reference"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -156,6 +157,43 @@ func costCell(s surfaceBurn) string {
 	}
 }
 
+// cachedShareLine is the published cache hit rate, for the line under this
+// surface's own. It returns "" when there is no local reading to place.
+//
+// The published half only: the caller has already printed the local share in
+// its own precision, and restating it here put "99%" and "98.6% here" on
+// consecutive rows — two renderings of one measurement, which is the failure
+// this whole comparison exists to help a reader notice.
+//
+// A hit rate means little alone: 99% reads as excellent to anybody who has not
+// seen another machine's and as unremarkable to anybody who has. TraceLab
+// measured 4,265 sessions across Claude Code and Codex at 95.7%, which is the
+// first thing that makes 99% mean anything.
+//
+// Zero is treated as no reading rather than as a measured zero, matching the
+// caller: burn clears hasCached on Ollama deliberately, because every observed
+// request there is a back-off case and averaging the unlabelled ones would look
+// like a measurement of the cache instead of a measurement of the logging.
+func cachedShareLine(share float64) string {
+	if share <= 0 {
+		return ""
+	}
+	return publishedShare("cachedShare", share)
+}
+
+// publishedShare is the published half of a comparison for one metric.
+//
+// The metric is a parameter so the not-found branch can be entered from a
+// test. It is unreachable while Compiled() carries cachedShare, and a branch no
+// test can enter is one this repository does not keep.
+func publishedShare(metric string, share float64) string {
+	ref, ok := reference.For(metric)
+	if !ok {
+		return ""
+	}
+	return ref.Compare(share).Against()
+}
+
 // perHour is the burn rate over the window actually observed, which is the
 // only rate the data supports. A corpus spanning an afternoon says nothing
 // about a month.
@@ -226,6 +264,9 @@ func runBurn(args []string, stdout, stderr io.Writer) error {
 		}
 		if s.hasCached {
 			_, _ = fmt.Fprintf(stdout, "    %s of the prompt served from cache\n", sharePct(s.cached))
+			if line := cachedShareLine(s.cached); line != "" {
+				_, _ = fmt.Fprintf(stdout, "    %s\n", line)
+			}
 		}
 		for _, p := range s.problems {
 			_, _ = fmt.Fprintf(stdout, "    [NOTE] %s\n", p)
