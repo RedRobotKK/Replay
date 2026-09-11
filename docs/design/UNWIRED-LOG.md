@@ -30,7 +30,7 @@ Found incidentally over 2026-09-08/09 while doing other work. Every one cited.
 | 5 | `internal/quota` (whole package) | `go list -deps ./cmd/replay` → absent | Zero importers. The only consumer of `Record.Quota` | OPEN |
 | 6 | `saveQuota` | Blue-team review | No production caller; the quota line always answers "no reading stored" | OPEN |
 | 7 | `internal/proxy/preflight.go` | `Config.PreFlight` never assigned; `serve.go:136` omits it | **120 lines, a refusal kind and a counter that can never fire. Eight tests, all calling `s.preFlight` directly** | OPEN |
-| 8 | `internal/usage` (`FromInclusive`, `Validate`) | Zero importers | Still zero importers. The double-count it was written for is **fixed at source**: `codexUsage.usage()` now subtracts, `internal/usage/codex_normalises_test.go` asserts it across the package boundary. See the correction below | OPEN |
+| 8 | `internal/usage` (`FromInclusive`, `Validate`) | Zero importers | **WIRED 2026-09-10.** `cmd/replay/costusage.go` imports it: `replay cost --usage` reads a usage export into `usage.Entry`, and `Validate` runs on every record at the door. It is a real guard there and was not one in the Codex reader — the export's `prompt` is written by whoever produced the file, not derived from the parts, so the two sides move independently and an inclusive-counted export is refused. The correction below still stands for why wiring alone would not have closed it in the reader | WIRED |
 | 9 | `internal/otlp`, `internal/feed` | `go list -deps` → absent | Not determined; may be by design | OPEN |
 
 ## Adjacent defects found the same way

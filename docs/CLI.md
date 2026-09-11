@@ -89,6 +89,7 @@ Cost per task from transcripts already on disk.
 | `-predicted` | float | with --compare, the fractional change you predicted (e.g. -0.2 for a 20% saving) |
 | `-share` | bool | print a paste-ready summary: the avoidable rate and the task spread, with no spend total, no paths and no project names |
 | `-tone` | string | the register the card is written in: measured (what was found, stated, the default) or rekt (the same figures, exact and deadpan) |
+| `-usage` | string | price a usage export instead of transcripts: token counts per request, no conversation content. Figures that cannot be sourced from token counts alone print NOT MEASURED rather than zero |
 
 ### ceiling
 
@@ -424,4 +425,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-30 commands, 108 flags, read from the binary.
+30 commands, 109 flags, read from the binary.
