@@ -91,6 +91,13 @@ All notable changes to this project are documented here. The format follows [Kee
   (UNWIRED-LOG #8): the export decodes into `usage.Entry` and `Validate` runs on
   every record at the door.
 
+- [The first run, end to end](docs/guide/first-run-journey.md): install to first
+  finding to acting on it to verifying the change, as one document, with every
+  block pasted from a run against the redacted session this repository ships so a
+  reader can reproduce it. It names the three places the route does not complete
+  on a new machine, including that the verification step in step 7 has not been
+  observed to fire on any corpus this project holds.
+
 ### Changed
 
 - **The installer prints the ending it actually performs.** Two "Next:" commands
@@ -102,16 +109,6 @@ All notable changes to this project are documented here. The format follows [Kee
   what to type after quitting; off a terminal — CI, a `Dockerfile RUN`, cron, a
   container built without `-t` — nothing opens and the two commands are the next
   step exactly as before. `--no-tui` and `REPLAY_NO_OPEN=1` are unchanged.
-
-### Added
-
-- [The first run, end to end](docs/guide/first-run-journey.md): install to first
-  finding to acting on it to verifying the change, as one document, with every
-  block pasted from a run against the redacted session this repository ships so a
-  reader can reproduce it. It names the three places the route does not complete
-  on a new machine, including that the verification step in step 7 has not been
-  observed to fire on any corpus this project holds.
-
 ## [0.5.4] - 2026-09-09
 
 ### Changed
@@ -135,7 +132,6 @@ All notable changes to this project are documented here. The format follows [Kee
   replaced the illustrations and the `advise` saving row began dropping its
   status column when the terminal cannot hold it — `storyboard.go` scene 25,
   implemented.
-
 ## [0.5.3] - 2026-09-08
 
 ### Added
@@ -149,7 +145,6 @@ All notable changes to this project are documented here. The format follows [Kee
   transcripts, so without this the gate would go green having measured nothing.
 - Excluded unpriced transcripts are counted in the failure, because the total the
   ceiling was compared against has holes and the real figure is higher.
-
 ## [0.5.2] - 2026-09-08
 
 ### Added
@@ -195,7 +190,6 @@ All notable changes to this project are documented here. The format follows [Kee
   usage, so the conclusion held and both stated reasons were wrong.
 - A `$406.07` figure, reported as the only measured dollar figure on the
   machine, is withdrawn. The fields it was derived from do not exist.
-
 ## [0.5.1] - 2026-09-08
 
 Recorded after the fact: this release was tagged without a changelog entry, and
@@ -213,7 +207,6 @@ a release nobody wrote down is one nobody can audit.
 - The MCP snippet was not valid JSON on Windows: a path like `C:\Users` made
   `\U` an invalid escape. Paths are marshalled rather than interpolated.
 - Figures that were never measured stopped being reported as passing results.
-
 ## [0.5.0] - 2026-09-07
 
 The first release with an interactive surface, the first carrying a fix somebody
@@ -379,7 +372,6 @@ outside the project reported, and the first under a new licence.
   semantics skip with the reason stated. Skipping honestly is not passing.
 - Five of the eight TUI screens carry example data and say so. `guards`, `model`
   and `safe` need a running proxy or are limited by the estimator floor above.
-
 ## [0.4.0] - 2026-09-06
 
 A minor release. The theme is that the proxy's own instruments were wrong about
@@ -515,7 +507,6 @@ change: it has never been tested there. See the README.
   contributed a fabricated hit and inflated the cached share on
   `/replay/status`. It produced no error and no anomaly, only a better-looking
   success metric.
-
 ## [0.3.0] - 2026-09-05
 
 A minor release rather than a patch: it adds a second provider path.
