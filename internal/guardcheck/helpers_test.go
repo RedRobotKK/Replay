@@ -3,6 +3,7 @@ package guardcheck
 import (
 	"go/parser"
 	"go/token"
+	"os"
 )
 
 // pos builds a token.Position for a line and column, for tests that describe a
@@ -18,4 +19,13 @@ func pos(line, col int) token.Position {
 func goParses(path string) bool {
 	_, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
 	return err == nil
+}
+
+// readFile is a test helper that reads a file or fails the test.
+func readFile(t interface{ Fatal(...any) }, path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }
