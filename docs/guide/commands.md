@@ -47,6 +47,20 @@ Tells you what Replay can see on this machine: transcript directories, whether a
 set, whether a proxy is running, whether a ledger exists. It ends by naming the next command worth
 running. Start here when something is not behaving.
 
+**It opens by naming the build that is answering.** `build  v0.5.4 (e93a0ba), built 2026-09-08`, and
+under it one line when that build is more than thirty days old: `This build is 96 days old. replay
+upgrade checks for a newer release.` The age is arithmetic on the timestamp linked into the binary,
+so it reaches nothing and needs no account — this command is not asking github what the newest
+release is, it is telling you how old yours is, which are different claims and only one of them can
+be made offline. Before this, the only way to learn a newer release had shipped was to type `replay
+upgrade --check`, which is a command you run when you already suspect the answer.
+
+Three states, never two. A source build says `from source` and is never called stale, because
+`replay upgrade` refuses to overwrite one and advice the binary declines to take is not advice. A
+timestamp this build cannot read says `build date unreadable`, and one dated after the machine's
+clock says `ahead of this clock` — neither passes as current, because the silent reading is the one
+that hides the problem.
+
 It reports two transcript figures, because there are two: the number of **sessions**, and the number
 of **transcript files** every other command will read. A session writes one transcript per agent
 lane, so a session that spawned sub-agents contributes several — on the machine this was found on,

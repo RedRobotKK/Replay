@@ -128,13 +128,19 @@ func runUpgrade(args []string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-// The staleness hint that used to sit here has been removed rather than
-// carried forward. It wrapped selfupdate.StaleNotice in three lines and no
-// caller ever invoked it — not on this branch and not on the one this code was
-// rescued from. Landing it would have added a fourteenth entry to the
-// built-but-unwired register in the same week that register was being cleared.
+// The staleness hint that used to sit here was removed rather than carried
+// forward, and the note left in its place said the decision about where it
+// belonged should be made deliberately rather than inherited from a commit that
+// arrived by accident. That decision has now been made: cmd/replay/doctorbuild.go.
 //
-// Nothing is lost: selfupdate.StaleNotice is exported and tested. Printing a
-// staleness line under every report is a product decision about what the tool
-// says unprompted, and it should be made deliberately rather than inherited
-// from a commit that arrived here by accident.
+// It is not under every report. Printing a staleness line unprompted is what
+// the note was refusing, and the refusal still stands: README's Footprint
+// section promises one ask at most once every thirty days, and a line a reader
+// meets on every run is one they learn to skip. `replay doctor` is a command an
+// operator types to ask what is wrong here, so the notice is answering rather
+// than volunteering.
+//
+// What that does not fix: an operator who never runs `doctor` still learns
+// nothing, and nothing here reaches the network, so a build inside the window
+// is reported as current whether or not a newer release exists. This says how
+// old your binary is, not what the newest one is.
