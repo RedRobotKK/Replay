@@ -238,12 +238,19 @@ func buildRoute(from, to string, c modelCorpus) routeReport {
 			observed := cachemodel.CostUSD(u, pFrom)
 			// Every token count is scaled by the measured sigma: the same
 			// work, counted by the destination's tokenizer.
-			scaled := transcript.Usage{
-				Input:         scaleTokens(u.Input, r.Dilation.Sigma),
-				CacheCreation: scaleTokens(u.CacheCreation, r.Dilation.Sigma),
-				CacheRead:     scaleTokens(u.CacheRead, r.Dilation.Sigma),
-				Output:        scaleTokens(u.Output, r.Dilation.Sigma),
-			}
+			//
+			// The TTL split is carried, not dropped. Without it CostUSD
+			// cannot tell a one-hour write from a five-minute one and falls
+			// back to the short multiplier, so this side of the comparison
+			// priced writes at 1.25x while `observed` above priced the same
+			// writes at 2x. Two multipliers, one comparison, and the error
+			// ran in the direction that flatters the destination.
+			//
+			// The total is recomputed from the parts rather than scaled
+			// separately, because the wire holds total == 5m + 1h on every
+			// creation-bearing record and rounding each independently would
+			// break that.
+			scaled := scaleUsage(u, r.Dilation.Sigma)
 			projected := cachemodel.CostUSD(scaled, pTo)
 			r.Observed, r.Dollars = &observed, &projected
 
@@ -252,7 +259,19 @@ func buildRoute(from, to string, c modelCorpus) routeReport {
 			// counted by the destination's tokenizer.
 			if c.total > 0 {
 				prefix := scaleTokens(u.CacheRead/c.total, r.Dilation.Sigma)
-				cost := cachemodel.CostUSD(transcript.Usage{CacheCreation: prefix}, pTo)
+				// At the TTL this session actually wrote. A bare
+				// CacheCreation carries no TTL, so it was priced at the
+				// short multiplier regardless of what the source was doing
+				// — which made the payback read faster than it is on any
+				// session writing one-hour entries. The observed proportion
+				// is kept rather than a dominant bucket chosen, so a mixed
+				// session is not rounded to whichever tier happens to lead.
+				write := transcript.Usage{CacheCreation: prefix}
+				if tot := u.Create5m + u.Create1h; tot > 0 {
+					write.Create1h = prefix * u.Create1h / tot
+					write.Create5m = prefix - write.Create1h
+				}
+				cost := cachemodel.CostUSD(write, pTo)
 				sw := analysis.Payback(cost, observed, projected, c.total)
 				r.Switch = &sw
 			}
@@ -343,6 +362,36 @@ func (p *printer) printf(format string, args ...any) {
 // projection does not drift systematically low across four fields.
 func scaleTokens(n int, sigma float64) int {
 	return int(math.Round(float64(n) * sigma))
+}
+
+// scaleUsage counts the same work with the destination's tokenizer.
+//
+// The TTL split is carried rather than dropped. Without it CostUSD cannot
+// tell a one-hour write from a five-minute one and falls back to the short
+// multiplier, so the projected side of a route comparison priced writes at
+// 1.25x while the observed side priced the same writes at 2x. Two
+// multipliers, one comparison, and the error ran in the direction that
+// flatters the destination model.
+//
+// CacheCreation is recomputed from the parts when a split exists, because
+// the wire holds total == 5m + 1h on every creation-bearing record — all
+// 59,348 of them on the machine this was measured on — and scaling three
+// numbers independently breaks that at any sigma that is not a whole
+// number.
+func scaleUsage(u transcript.Usage, sigma float64) transcript.Usage {
+	out := transcript.Usage{
+		Input:          scaleTokens(u.Input, sigma),
+		CacheCreation:  scaleTokens(u.CacheCreation, sigma),
+		CacheRead:      scaleTokens(u.CacheRead, sigma),
+		Output:         scaleTokens(u.Output, sigma),
+		Create5m:       scaleTokens(u.Create5m, sigma),
+		Create1h:       scaleTokens(u.Create1h, sigma),
+		ThinkingTokens: scaleTokens(u.ThinkingTokens, sigma),
+	}
+	if out.Create5m+out.Create1h > 0 {
+		out.CacheCreation = out.Create5m + out.Create1h
+	}
+	return out
 }
 
 func short12(s string) string {
