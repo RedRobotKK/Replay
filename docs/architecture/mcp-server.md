@@ -2,9 +2,28 @@
 
 A second front door onto the same engine, for agents rather than people.
 
-**Nothing here is built.** There is no `replay mcp` command. This records the
-design and, more usefully, the measurements that killed the first version of
-it — because the first version was wrong in ways that looked right.
+**Corrected 2026-09-11.** This document opened with *"Nothing here is built.
+There is no `replay mcp` command"* for long enough that `cmd/replay/mcp.go`
+reached 406 lines underneath it. `replay mcp` ships, serves seven tools over
+stdio, and `replay mcp --install` prints a client configuration. The sentence
+was true when it was written and nobody came back to it — which is the drift
+this repository writes tests to catch everywhere except in its own prose.
+
+**What is built.** A local stdio MCP server, protocol `2025-06-18`, hand-rolled
+over the standard library. Seven tools, frozen by name and order in
+`cmd/replay/mcpfreeze_test.go`. Every one answers from this machine's disk or
+from the compiled price table; two of them answer by declining and naming a URL,
+because Replay never pays and never fetches on a caller's behalf.
+
+**What is not built, and is not planned.** A hosted server holding user data. A
+session diff exposed as a tool — a finding returned over MCP becomes the next
+model turn's input, so the instrument would be writing into the workload it
+measures. Anything that rewrites `tools/list`: that is a compression proxy, a
+different product, and one this project has declined to clone.
+
+The rest of this document records the design and, more usefully, the
+measurements that killed the first version of it — because the first version
+was wrong in ways that looked right.
 
 ## What the measurements changed
 
