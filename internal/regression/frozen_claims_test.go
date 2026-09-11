@@ -565,3 +565,54 @@ func uniqueStrings(in []string) []string {
 	}
 	return out
 }
+
+// FD-12, frozen. The 30-lane trial's figures were retracted everywhere except
+// the one file that produced them.
+//
+// internal/analysis/predictor.go's header asserted that 3,778,706 re-billed
+// tokens moved the 5h utilization figure from 0.10 to 0.15. Both halves are
+// void. The trial was re-read lane by lane and 31 of its 34 events never
+// happened, so the token figure is a product of the broken session-wide
+// classifier; internal/proxy/preflight.go says of it, "That was the instrument,
+// not the world". The utilization movement was never recorded anywhere at all —
+// it existed only as that sentence.
+//
+// The correction reached preflight.go and README.md on 2026-09-06 and did not
+// reach predictor.go until 2026-09-10. In between,
+// docs/design/quota-estimator-red.md named predictor.go as the one place it had
+// not landed, and docs/evidence/qm-budget-2026-09-08.md went on citing
+// predictor.go as authority for a claim the rest of the repository had
+// withdrawn. A retracted figure living in a source comment is still shipped: it
+// is what the next reader, human or agent, repeats.
+//
+// PASS: no paragraph states those figures except one that also withdraws them.
+// FAIL: the numbers are asserted again as measurement.
+func TestFrozenFD12_TheRetractedTrialFiguresAreNotAssertedAgain(t *testing.T) {
+	figures := []string{"3,778,706", "3778706", "0.10 to 0.15"}
+	// A paragraph carrying any of these is withdrawing the claim, not making
+	// it. The corrected comment quotes the old wording on purpose, because a
+	// document that quietly loses its own wrong claim cannot be audited
+	// against it.
+	withdrawn := []string{
+		"used to read", "retracted", "void", "corrected", "was wrong",
+		"never happened", "not the world", "null result", "withdraw",
+	}
+	for path, body := range textFiles(t, ".go") {
+		for _, p := range paragraphs(body) {
+			marker, ok := containsAny(p, figures...)
+			if !ok {
+				continue
+			}
+			if _, ok := containsAny(p, withdrawn...); ok {
+				continue
+			}
+			t.Errorf("%s states %q as measurement:\n\n%s\n\n"+
+				"The 30-lane trial's figures are retracted: 31 of its 34 events never "+
+				"happened, and the utilization movement was never recorded. What was "+
+				"measured is a null result over 3.09M tokens. If this paragraph is "+
+				"reporting the retraction, say so in it; if it is asserting the figure, "+
+				"it is repeating a claim this repository withdrew.",
+				path, marker, p)
+		}
+	}
+}
