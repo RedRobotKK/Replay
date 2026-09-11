@@ -329,3 +329,26 @@ func TestMeasureStoreCountsFilesAndNotTheDirectoriesHoldingThem(t *testing.T) {
 			"throughout", unmeasured)
 	}
 }
+
+// PV13: a machine Replay has never written to is answered, not refused.
+//
+// The other side of PV10, and the one the first-run reader meets. `~/.replay`
+// absent is the one read error that does mean "nothing here", so it produces
+// the empty answer rather than a failure — and separating the two is the whole
+// point of PV10. Without this, tightening the check to reject every read error
+// turns the first thing a new reader can safely run into an error, and the
+// suite stays green.
+func TestPV13_AMachineWithNothingWrittenIsAnswered(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	var out, errb bytes.Buffer
+	if err := runPrivacy(nil, &out, &errb); err != nil {
+		t.Fatalf("a machine Replay has never written to was refused an answer: %v", err)
+	}
+	if !strings.Contains(out.String(), "written nothing to this machine") {
+		t.Errorf("an untouched machine was not told plainly that nothing is held:\n%s",
+			out.String())
+	}
+}
