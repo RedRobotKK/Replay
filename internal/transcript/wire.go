@@ -9,7 +9,6 @@ import (
 	"io"
 	"path"
 	"strings"
-	"unicode/utf8"
 )
 
 // Scanner sizing for line-oriented files (transcripts, ledgers). Tool
@@ -351,10 +350,27 @@ func SanitizeLabel(s string) string {
 
 // TruncateLabel shortens a label to at most n runes, ending in an ellipsis
 // when it was cut. It never splits a multi-byte character.
+//
+// It walks byte offsets rather than building a []rune. The labels reaching it
+// are tool-call parameter values, which run to whole file contents, and
+// converting one of those to runes to keep sixty of them allocated four bytes
+// for every byte of the part being discarded: 43 MB of the 78 MB transcript
+// benchmark. The walk stops at the first rune past the limit, so the cost is
+// the width, not the label.
 func TruncateLabel(s string, n int) string {
-	if n <= 0 || utf8.RuneCountInString(s) <= n {
+	if n <= 0 {
 		return s
 	}
-	runes := []rune(s)
-	return string(runes[:n-1]) + "…"
+	count, cut := 0, 0
+	for i := range s {
+		if count == n-1 {
+			cut = i
+		}
+		count++
+		if count > n {
+			return s[:cut] + "…"
+		}
+	}
+	// Fewer runes than the limit, or exactly the limit: nothing to cut.
+	return s
 }
