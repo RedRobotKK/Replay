@@ -140,7 +140,19 @@ func TestBG7_TheWalkRefusalIsReachedAndDistinguishable(t *testing.T) {
 		// The distinction that earns this guard its parenthetical: a reader
 		// who typo'd a path is told the path is wrong, not that their corpus
 		// is empty. Without the guard R1 answers and says the latter.
-		if !strings.Contains(err.Error(), "no such file or directory") {
+		//
+		// Asserted on the tool's own words, not the operating system's. This
+		// first read `no such file or directory`, which is what Unix says and
+		// Windows does not — there it is "The system cannot find the file
+		// specified", and the test failed on a refusal that had worked
+		// perfectly. A test whose subject is "the path was not there" must
+		// assert on the sentence this program wrote, or it is testing libc.
+		// Both budget refusals open with "no ledger found under", so that
+		// phrase alone would pass whichever one answered — the vacuous shape
+		// this branch exists to remove. Only the walk refusal parenthesises
+		// the underlying cause after the path, so that is what distinguishes
+		// it, and it distinguishes without quoting any operating system.
+		if !strings.Contains(err.Error(), missing+" (") {
 			t.Errorf("a missing path was not reported as missing, so the reader is sent to "+
 				"look at their corpus instead of their argument: %v", err)
 		}
