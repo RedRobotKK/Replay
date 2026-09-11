@@ -905,8 +905,8 @@
       "class": "attribution-misplacement",
       "discovered": "2026-09-06",
       "file": "internal/proxy/state.go",
-      "anchor": "\tln, ok := st.lanes[agentID]\n\tif !ok {\n\t\tln = &laneState{}\n\t\tst.lanes[agentID] = ln\n\t}",
-      "replacement": "\tln, ok := st.lanes[\"\"]\n\tif !ok {\n\t\tln = &laneState{}\n\t\tst.lanes[\"\"] = ln\n\t}",
+      "anchor": "\tln, ok := st.lanes[agentID]\n\tif !ok {\n\t\tln = &laneState{open: map[*bool]struct{}{}}\n\t\tst.lanes[agentID] = ln\n\t}",
+      "replacement": "\tln, ok := st.lanes[\"\"]\n\tif !ok {\n\t\tln = &laneState{open: map[*bool]struct{}{}}\n\t\tst.lanes[\"\"] = ln\n\t}",
       "killedBy": [
         "TestObserve_ConcurrentLanesDoNotForgeCacheBreaks",
         "TestObserve_AnOpeningRequestInAnyLaneIsNotAReproduction",

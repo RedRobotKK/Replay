@@ -271,7 +271,12 @@ func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
 		return nil, "", err
 	}
 	req := &Request{
-		ID:            first.requestKey(),
+		ID: first.requestKey(),
+		// Both halves of this id came off the wire: requestKey returns the
+		// provider's requestId, or the provider's message id where the
+		// entrypoint wrote none. Neither is synthesised here, so the id is
+		// measured either way, and IDFromMessage says which one it is.
+		IDMeasured:    true,
 		IDFromMessage: first.RequestID == "",
 		Model:         first.Message.Model,
 		Effort:        first.Effort,

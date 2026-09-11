@@ -113,6 +113,58 @@ func TestRecoveredRequestSaysWhereItsIDCameFrom(t *testing.T) {
 	}
 }
 
+// Both of the ids this parser can hand back are the provider's own, so both
+// are measured.
+//
+// IDMeasured answers a coarser question than IDFromMessage: not which of the
+// provider's two identifiers this is, but whether it came off the wire at all.
+// The alternative it exists to exclude is the `ledger-<n>` the ledger reader
+// synthesises from a record's position in its file, which names a position and
+// not a request - every ledger file has a `ledger-0`. `replay cost` joins
+// across files on measured ids only, so a parser that marked its requests
+// unmeasured would quietly withdraw every transcript from the overlap figure
+// and report them all as unjoinable instead: a corpus-wide number moving with
+// nothing failing.
+//
+// The message-id case is the one worth pinning. It is the newer path and the
+// easy mistake is to read "recovered from the message id" as "not really the
+// provider's", which it is not - Claude Code writes message.id from the
+// provider's response either way.
+func TestBothRecoveredAndDirectIDsAreMeasured(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		file        string
+		wantFromMsg bool
+	}{
+		{"message id, no top-level requestId", sdkFixture, true},
+		{"top-level requestId", "testdata/session-redacted.jsonl", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, err := ParseClaudeCodeFile(tc.file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			n := 0
+			for _, lane := range s.Lanes {
+				for i, r := range lane.Requests {
+					n++
+					if !r.IDMeasured {
+						t.Fatalf("request %d carries the provider id %q and is marked "+
+							"unmeasured, so `replay cost` will not join it across files", i, r.ID)
+					}
+					if r.IDFromMessage != tc.wantFromMsg {
+						t.Fatalf("request %d: IDFromMessage = %v, want %v",
+							i, r.IDFromMessage, tc.wantFromMsg)
+					}
+				}
+			}
+			if n == 0 {
+				t.Fatal("the fixture produced no requests, so this asserts nothing")
+			}
+		})
+	}
+}
+
 // Every fixture in this repository is a redacted transcript, and a user
 // attaching one to a bug report about SDK transcripts would have been
 // attaching the evidence with the identifier removed. Redaction keeps the

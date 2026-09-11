@@ -48,6 +48,22 @@ func classify(t Turn, fit TokenFit) Break {
 	b := Break{Turn: t, Deficit: t.Expected - t.Actual, MessageIndex: -1}
 	prev, cur := t.Previous, t.Request
 
+	if t.Correlation == transcript.CorrelationLaneOverlap {
+		// Everything below compares this request against `prev`, and `prev`
+		// is only the request that happened to finish first. Two requests of
+		// this lane were open together, so the entry this one read may have
+		// been written by either, and naming a cause here would be reporting
+		// the race rather than the session.
+		//
+		// Expected and Deficit are left as computed and rest on the same
+		// pairing. This does not make them right; it declines to build a
+		// further claim on top of them (ADR-0018: the limit is part of the
+		// deliverable).
+		b.Cause = cachemodel.CauseNotMeasured
+		b.Detail = "another request of this lane was in flight at the same time; which request's cache entry this one read is not observable"
+		return b
+	}
+
 	if cause, ok := cachemodel.ClassifyBreak(prev.Usage, cur.Usage, prev.Model, cur.Model, t.Gap); ok {
 		b.Cause = cause
 		switch cause {
