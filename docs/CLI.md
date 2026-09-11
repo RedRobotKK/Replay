@@ -142,6 +142,7 @@ Local proxy: byte-for-byte passthrough, records a ledger.
 | `-mask` | bool | EXPERIMENTAL: replace secrets matching the named pattern set with vault placeholders before requests leave the machine, and restore them in responses within -rehydrate-scope (see README) |
 | `-mask-entropy` | bool | with -mask, also mask runs that look like credentials by shape and entropy. Needs mixed case and digits over 32 characters, so bare hex and lowercase secrets are NOT caught by shape; those are caught only when a name like TOKEN= or api_key: sits beside them. Reported as pattern entropy |
 | `-mask-patterns` | string | file of user-defined patterns for -mask, one per line as name<TAB>regexp |
+| `-mask-ttl` | duration | with -mask, how long a masked secret stays in the vault before it is evicted. Masking turns a transient secret into one at rest and the vault key sits beside the ciphertext, so this is the window a compromised host hands over. 0 keeps entries forever, which was the behaviour before v0.6 and is the wrong default. Re-sending a secret restores its entry, and the placeholder is unchanged (default 24h0m0s) |
 | `-max-day-tokens` | int | refuse requests once this many tokens were consumed today, UTC (0 = off) |
 | `-max-day-usd` | float | refuse requests once today's list-price cost reaches this many dollars, UTC (0 = off) |
 | `-max-session-tokens` | int | refuse a session's next request once it has consumed this many tokens (0 = off) |
@@ -423,4 +424,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-30 commands, 107 flags, read from the binary.
+30 commands, 108 flags, read from the binary.
