@@ -45,10 +45,26 @@ type ModelCalibration struct {
 	Lanes    int
 	Compared int
 	Matched  int
+	// Exact counts only the turns whose read was reproduced exactly.
+	//
+	// Matched above also counts ReadExceeded — turns where a sibling request
+	// had extended the shared prefix, so the provider served MORE than this
+	// lane's predecessor wrote. That is fan-out working as designed in a
+	// multi-lane session, not an error, and an earlier version of this comment
+	// called it "a prediction that was wrong", which overstated it. What is
+	// true is narrower: the read was not REPRODUCED, and a calibration gate
+	// deciding whether a lane may be scored for counterfactual advice should
+	// care about reproduction rather than about sibling traffic.
+	//
+	// Carrying both lets a reader of the per-model table and of a pooled
+	// contribution see how much of a match rate is exact. See
+	// Calibration.ExactRate.
+	Exact int
 	// The recent window: the newest LANES judged on their own.
 	RecentLanes    int
 	RecentCompared int
 	RecentMatched  int
+	RecentExact    int
 	// RecentFailing counts recent lanes that individually fall below
 	// the calibration threshold.
 	RecentFailing int
@@ -67,6 +83,12 @@ func (m ModelCalibration) MatchRate() float64 { return rate(m.Matched, m.Compare
 
 // RecentMatchRate is the same over the recent window.
 func (m ModelCalibration) RecentMatchRate() float64 { return rate(m.RecentMatched, m.RecentCompared) }
+
+// ExactRate is the share reproduced exactly, with exceeded reads excluded.
+func (m ModelCalibration) ExactRate() float64 { return rate(m.Exact, m.Compared) }
+
+// RecentExactRate is the same over the recent window.
+func (m ModelCalibration) RecentExactRate() float64 { return rate(m.RecentExact, m.RecentCompared) }
 
 // rate is the share of compared turns that matched, and it reports 0 when
 // nothing was compared.
@@ -211,10 +233,12 @@ func modelCalibration(model string, reps []*LaneReport) ModelCalibration {
 		matched := cal.Reproduced + cal.Exceeded
 		m.Compared += cal.Compared()
 		m.Matched += matched
+		m.Exact += cal.Reproduced
 		if i >= recentFrom {
 			m.RecentLanes++
 			m.RecentCompared += cal.Compared()
 			m.RecentMatched += matched
+			m.RecentExact += cal.Reproduced
 			if !cal.Passes() {
 				m.RecentFailing++
 			}

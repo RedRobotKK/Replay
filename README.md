@@ -302,6 +302,15 @@ and one operator**. A session writes one transcript per lane, so subagents multi
 without adding an independent draw. Read the sample as 116, not 1751. Figures as of **2026-09-10**:
 [`docs/evidence/calibration-corpus-2026-09-10.md`](docs/evidence/calibration-corpus-2026-09-10.md).
 
+That 97.79% counts two things: turns the engine reproduced **exactly**, and turns where the
+provider served **more** cached prefix than the engine predicted — usually because a concurrent
+sibling lane extended it. The second kind is a prediction that was wrong in the generous
+direction, and until 2026-09-11 no report broke the two apart. On a re-reading of the same corpus
+root on **2026-09-11** (1816 transcripts, 118 sessions, 38111 compared turns) the split is
+**94.10% reproduced exactly, 3.78% read more than predicted, 2.12% broken** — a 97.89% match rate
+of which 3.86% is a read the engine did not predict. Both rates are now printed side by side
+wherever a match rate appears. The addendum in the evidence file above has the working.
+
 Earlier versions of this document said "1363 sessions" while counting files, overstating the
 independent sample roughly twentyfold. The correction, with the reasoning, is in
 [`docs/evidence/calibration-corpus-2026-09-06.md`](docs/evidence/calibration-corpus-2026-09-06.md).

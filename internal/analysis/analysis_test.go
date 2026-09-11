@@ -211,7 +211,11 @@ func TestReportCarriesMandatoryLines(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	for _, want := range []string{"Tier: estimated", "Calibration: reproduced provider cache reads on", "Assumption: " + AssumptionNote, "Rules: " + cachemodel.RulesVersion, "as-run", "provider retries: not visible"} {
+	// The calibration line gained the word "exactly" and both rates on
+	// 2026-09-11. It reported Reproduced+Exceeded under the word "reproduced",
+	// which counted turns the provider served MORE prefix for than predicted
+	// as reproductions; see Calibration.ExactRate and TestMR4.
+	for _, want := range []string{"Tier: estimated", "Calibration: reproduced provider cache reads exactly on", "% exact, ", "% match)", "Assumption: " + AssumptionNote, "Rules: " + cachemodel.RulesVersion, "as-run", "provider retries: not visible"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("report missing %q", want)
 		}

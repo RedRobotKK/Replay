@@ -359,7 +359,7 @@ func contributeCalibration(campaign, dir string, rows []corpusRow, cals []analys
 	}
 	for _, m := range cals {
 		c.Models = append(c.Models, observation.ModelCalibrationRow{
-			Model: m.Model, Sessions: m.Sessions, Compared: m.Compared, Matched: m.Matched,
+			Model: m.Model, Sessions: m.Sessions, Compared: m.Compared, Matched: m.Matched, Exact: m.Exact,
 			RuleMinPrefix:   m.MinPrefix.Rule,
 			LargestUncached: m.MinPrefix.LargestUncached,
 			SmallestCached:  m.MinPrefix.SmallestCached,

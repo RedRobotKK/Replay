@@ -70,6 +70,18 @@ type ModelCalibrationRow struct {
 	Sessions int    `json:"sessions"`
 	Compared int    `json:"compared"`
 	Matched  int    `json:"matched"`
+	// Exact is the subset of Matched whose read was reproduced EXACTLY.
+	//
+	// Matched also counts turns where the provider served more cached prefix
+	// than the model predicted — a sibling request in the same session had
+	// extended the shared prefix. That is fan-out behaving normally, not a
+	// prediction error, and an earlier version of this comment called it one.
+	// What is true is that the read was not REPRODUCED. Without this field a
+	// pooled reading would rebuild the
+	// same conflated headline across every contributor and no reader of the
+	// pool could decompose it either. Added 2026-09-11; see
+	// analysis.Calibration.ExactRate.
+	Exact int `json:"exact"`
 
 	// RuleMinPrefix is what the table claims, carried beside what was observed
 	// so a pooled reading can say the two disagree without re-deriving either.
@@ -124,12 +136,17 @@ func (c Calibration) Validate() error {
 		if m.Model == "" {
 			return fmt.Errorf("a row with no model id cannot be pooled with anything")
 		}
-		if m.Compared < 0 || m.Matched < 0 || m.Sessions < 0 {
+		if m.Compared < 0 || m.Matched < 0 || m.Sessions < 0 || m.Exact < 0 {
 			return fmt.Errorf("%s: negative counters", m.Model)
 		}
 		if m.Matched > m.Compared {
 			return fmt.Errorf("%s: matched %d of %d compared, which describes a state that "+
 				"cannot occur", m.Model, m.Matched, m.Compared)
+		}
+		if m.Exact > m.Matched {
+			return fmt.Errorf("%s: exact %d of %d matched, which describes a state that "+
+				"cannot occur: an exactly reproduced turn is a matched turn by construction",
+				m.Model, m.Exact, m.Matched)
 		}
 		compared += m.Compared
 	}

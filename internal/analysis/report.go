@@ -149,9 +149,18 @@ func (r *LaneReport) header(p *Printer) {
 	cal := r.Calibration
 	p.Printf("Session %s  client %s  model %s  requests %d\n", shortID(r.Session.ID), r.Session.ClientVersion, r.Lane.Requests[0].Model, len(r.Lane.Requests))
 	p.Printf("Tier: %s\n", r.Session.Source.Tier())
-	p.Printf("Calibration: reproduced provider cache reads on %d/%d turns", cal.Reproduced+cal.Exceeded, cal.Compared())
+	// Both rates, always, and the counts they are computed from.
+	//
+	// This line used to print one number — Reproduced+Exceeded over Compared —
+	// and name the exceeded count only in a parenthetical with no rate beside
+	// it. An exceeded read is one the provider served MORE prefix for than the
+	// model predicted, which is a prediction that was wrong; a reader could not
+	// tell how much of the headline was exact without arithmetic this line did
+	// not give them the inputs for. See Calibration.ExactRate.
+	p.Printf("Calibration: reproduced provider cache reads exactly on %d of %d turns (%.1f%% exact, %.1f%% match)",
+		cal.Reproduced, cal.Compared(), cal.ExactRate()*100, cal.MatchRate()*100)
 	if cal.Exceeded > 0 {
-		p.Printf(" (%d read more than predicted: a sibling request extended the prefix)", cal.Exceeded)
+		p.Printf("; %d read MORE than predicted (a sibling request extended the prefix), counted as a match but not as exact", cal.Exceeded)
 	}
 	if cal.Broken > 0 {
 		p.Printf("; %d cache breaks", cal.Broken)
