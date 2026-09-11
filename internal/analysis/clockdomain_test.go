@@ -78,7 +78,7 @@ func TestTranscriptRequestsCarryNoDuration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open the recorded session: %v", err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // read-only fixture
 	sess, err := transcript.ParseClaudeCode(f)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
