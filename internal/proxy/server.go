@@ -622,11 +622,13 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			s.noteRehydration(&rec, tap.rehydrate)
 		}
 		rec.Cache = s.stats.observe(&rec)
-		// Release the lane before the ledger write. waitLedger in tests (and
-		// a client that posts the next turn as soon as the body is closed)
-		// unblocks on Append; if we are still in-flight then, sequential
-		// turns are marked overlapping and the cause is NOT MEASURED.
-		// correlation() has already read the flag.
+		// Lane overlap means overlap at the provider, not during local
+		// bookkeeping. correlation() has already read this request's flag.
+		// Release before Append: the ledger write is local, and a client
+		// that posts the next turn when the body closes (waitLedger in
+		// tests) unblocks on that write. Holding the lane open through it
+		// marked sequential turns as overlapping and named the cause
+		// NOT MEASURED — two turns that never raced at the provider.
 		leaveLane()
 		if readable && rec.SessionID != "" {
 			if err := s.cfg.Store.Append(rec); err != nil {
