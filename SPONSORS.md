@@ -21,8 +21,11 @@ Sponsorship pays for the parts that are not fun:
 - Keeping the provider caching rules current. They are published numbers that
   change faster than release cycles do, and every one of them is a claim this
   tool is meant to check rather than repeat.
-- Widening the calibration corpus past one machine. It is 78 sessions from
-  one laptop today, and every report says so.
+- Widening the calibration corpus past one machine. It is one laptop, one
+  account and one operator today, whatever the session count has reached, and
+  every report says so. The count is a dated reading rather than a standing
+  fact, and it has been restated twice; the readings are in
+  [`docs/evidence/`](docs/evidence/README.md).
 - Adding a second provider properly, instead of pretending one caching model
   fits three different mechanisms.
 

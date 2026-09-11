@@ -130,13 +130,16 @@ breakdown is the useful part.
 
 ## The honest constraint
 
-All five waste categories are computed from **78 sessions on one machine, one account and one
-operator** — the figure this document originally gave as eleven, and later as 1363, which was a count
-of transcript *files* rather than of independent draws
-([correction](evidence/calibration-corpus-2026-09-06.md)). More files did not make it a wider sample.
-The taxonomy is sound; the thresholds that turn a measurement into advice are not calibrated. **Ship
-the breakdown before the advice.** Showing someone where their money went is defensible on 78
-sessions from one operator. Telling them what to change is not.
+All five waste categories are computed from **one machine, one account and one operator**. That is
+the constraint, and it is the one this paragraph kept losing by reaching for a session count instead:
+the sample has been published here as eleven sessions, then as a count of transcript *files*, then as
+a corrected session count that went stale where it stood. Not one of those numbers widened the
+sample, and the next one will not either. The [2026-09-06
+correction](evidence/calibration-corpus-2026-09-06.md) explains the file-for-session conflation, and
+[`evidence/`](evidence/README.md) carries the readings with the dates they were taken on. The
+taxonomy is sound; the thresholds that turn a measurement into advice are not calibrated. **Ship the
+breakdown before the advice.** Showing someone where their money went is defensible on one operator's
+own history. Telling them what to change is not.
 
 The break-cause study on 2026-09-06 is the sharpest available demonstration of why. Run over the 40
 largest sessions it said TTL expiry was 75.2% of re-billed tokens and prefix layout was not worth

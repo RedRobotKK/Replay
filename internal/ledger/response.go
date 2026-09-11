@@ -29,7 +29,7 @@ func ParseResponse(body []byte) Response {
 		// path never did, so a field this build does not declare was dropped
 		// silently — the exact defect fixed for the other provider on
 		// 2026-09-05 and left standing here, on the primary path, where the
-		// 1363-session corpus comes from. Anthropic has already added fields
+		// calibration corpus comes from. Anthropic has already added fields
 		// once (the ephemeral 5m/1h split) and will again.
 		resp.RawUsage = rawUsageBytes(body)
 	}

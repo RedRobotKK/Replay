@@ -338,6 +338,15 @@ that "measured across 6,871 events in a local corpus, `used_percent` ranged 0 to
 not: `0 to 52` is the *primary* window only. The secondary window reaches
 **89.0**. The docstring understates the observed maximum by 37 points.
 
+**Corrected in the source on 2026-09-11.** The docstring no longer quotes a
+range. It states that the two windows move independently and that the short
+one does not bound the long one, and names this file for the per-window
+figures. The line numbers above are the ones the claim stood on when this
+census was run; the comment is longer now and starts at `codex.go:16`. This
+paragraph is left as written because a dated record is a reading taken on its
+date, and because the gap between a correction being *published* and the
+claim being *fixed* is worth being able to see.
+
 **Does it move within a session?** Yes.
 
 ```text
