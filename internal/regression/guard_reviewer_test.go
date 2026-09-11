@@ -75,9 +75,34 @@ func TestGR2_TheReviewerFailsOnASurvivor(t *testing.T) {
 		t.Error("the reviewer does not refuse a red baseline; against one, every mutant " +
 			"appears caught and the run asserts nothing (ADR-0014)")
 	}
-	// A stillborn mutant is not a caught mutant.
-	if !strings.Contains(s, "stillborn") {
-		t.Error("the reviewer does not distinguish a mutant the compiler rejected from one " +
-			"the tests killed, which is how a score is inflated")
+	// A mutant the compiler rejected is not a caught mutant. It was called
+	// "stillborn" when this claim was first frozen and is called UNCHECKED
+	// now; what has to hold is that the reviewer names the case, counts it,
+	// and does not let it pass as a kill.
+	for _, want := range []string{"UNCHECKED", "does not compile", "unchecked"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("the reviewer does not distinguish a mutant the compiler rejected "+
+				"from one the tests killed (%q absent), which is how a score is inflated", want)
+		}
+	}
+
+	// A survivor is two different findings with two different fixes, and
+	// saying only "survived" sends readers to the wrong one. A branch no test
+	// enters needs a test; a branch that runs and changes nothing observable
+	// may need deleting, and a test written to satisfy the verdict would
+	// freeze dead code in place.
+	for _, want := range []string{"UNREACHED", "INERT"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("the reviewer does not separate %s from the other kind of survivor, "+
+				"so its advice is right for one of them and wrong for the other", want)
+		}
+	}
+
+	// The classification comes from coverage measured on unmutated code. If
+	// coverage is unavailable the verdict must say so rather than defaulting
+	// to one of the two: absence, zero and unknown are three values.
+	if !strings.Contains(s, "NOT MEASURED") {
+		t.Error("the reviewer has no unknown case, so a guard coverage carried no block " +
+			"for would be reported as one of the two verdicts on no evidence")
 	}
 }

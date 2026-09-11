@@ -34,10 +34,19 @@ import (
 // collapses the third into the first, and the comment is what proves somebody
 // decided which one they meant.
 //
-// PASS: every `if err != nil { return nil }` and `{ continue }` in a walk, and
-// every `_ = <call>`, has a comment within three lines above it.
+// PASS: every single-statement `if err != nil { return nil }` and
+// `if err != nil { continue }` carries a comment within three lines above it.
 // FAIL: one does not, and nothing in the tree says which of the three values
 // the caller intended.
+//
+// What this does NOT cover, named rather than left to be discovered: a bare
+// `_ = <call>`, and a swallow whose body does more than return or continue.
+// `{ unmeasured++; return nil }` is two statements and the walk below steps
+// past it. Both are real shapes of the same defect. Widening the pattern is a
+// separate change, because it lands a batch of findings that each need the
+// judgement the ceiling exists to force — and a guard whose comment claims more
+// than it checks is worse than one that says where it stops, since the first is
+// read as coverage.
 func TestED1_ADiscardedErrorSaysWhy(t *testing.T) {
 	root := repoRoot(t)
 	fset := token.NewFileSet()
@@ -127,7 +136,12 @@ func TestED1_ADiscardedErrorSaysWhy(t *testing.T) {
 	// making thirty of those at speed is how a wrong reason gets written down
 	// and believed. The ceiling is what stops them being forgotten — it may
 	// fall and must never rise, so a new swallow cannot hide among them.
-	const ceiling = 29
+	//
+	// 29 -> 26 on merging this branch with main: the parser and TUI work landing
+	// alongside it documented three of the remaining discards. Lowered here
+	// rather than left, because a ceiling above the count is slack a new swallow
+	// fits inside.
+	const ceiling = 26
 
 	outside := 0
 	for _, f := range undocumented {

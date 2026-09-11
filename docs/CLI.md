@@ -167,7 +167,7 @@ The same answers as screens you can move between.
 |---|---|---|
 | `-color` | string | when to colour: auto (a terminal only), always, never. NO_COLOR always wins (default "auto") |
 | `-once` | bool | render one frame and exit, for a pipe or a screenshot |
-| `-screen` | string | which question to open on: cost, why, context, advise, guards, model, safe, doctor, share (default "cost") |
+| `-screen` | string | which question to open on: cost, why, context, advise, guards, model, safe, doctor, live, share (default "cost") |
 
 ### context
 
@@ -238,7 +238,9 @@ A boot block naming where this project keeps its records.
 
 Answer an agent's questions mid-session, JSON-RPC on stdio.
 
-Takes no flags.
+| Flag | Type | What it does |
+|---|---|---|
+| `-install` | bool | print the MCP client configuration for this binary and exit, instead of serving |
 
 ### corpus
 
@@ -379,7 +381,7 @@ Aggregate corpus submissions into one figure, with its roster.
 | Flag | Type | What it does |
 |---|---|---|
 | `-json` | bool | emit the pooled document rather than the table |
-| `-pooled-at` | string | the date this pool was assembled, recorded in the document (default "2026-09-10") |
+| `-pooled-at` | string | the date this pool was assembled, recorded in the document (default "<today, in UTC>") |
 
 ## The TUI covers the same ground
 
@@ -421,4 +423,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-30 commands, 106 flags, read from the binary.
+30 commands, 107 flags, read from the binary.

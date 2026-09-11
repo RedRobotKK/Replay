@@ -243,3 +243,89 @@ func TestPV10_AnUnreadableStoreIsNotReportedAsEmpty(t *testing.T) {
 		t.Errorf("an unreadable store was reported as an empty machine:\n%s", out.String())
 	}
 }
+
+// PV11: a store with an entry nobody could walk is not reported at its readable size.
+//
+// measureStore totals what the walk could read. A directory inside a store that
+// cannot be listed contributes nothing, so the store prints smaller than it is —
+// and an entire store that cannot be opened prints as "0 B", which reads as a
+// store known to be empty. The disclosure has to bound its own claim.
+func TestPV11_AStoreWithAnEntryItCouldNotWalkSaysSo(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no Unix mode bits on this platform; a directory cannot be made unreadable here")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("running as root, which can read anything")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	locked := filepath.Join(home, ".replay", "ledger", "locked")
+	if err := os.MkdirAll(locked, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(locked, "s1.jsonl"), []byte(`{"schema":1}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0o000); err != nil {
+		t.Skipf("cannot remove directory permissions: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+
+	var out, errb bytes.Buffer
+	if err := runPrivacy(nil, &out, &errb); err != nil {
+		t.Fatalf("privacy failed on a readable ~/.replay holding one unreadable entry: %v", err)
+	}
+	if !strings.Contains(out.String(), "could not be measured") {
+		t.Errorf("a store holding an entry nobody could walk was printed as a plain "+
+			"size, so the reader cannot tell it from one measured whole:\n%s", out.String())
+	}
+}
+
+// PV12: and a store measured whole claims nothing was missed.
+//
+// The other half of PV11. A disclosure that always hedges is a disclosure the
+// reader learns to ignore, which costs exactly as much as never hedging.
+func TestPV12_AStoreMeasuredWholeSaysNothingWasMissed(t *testing.T) {
+	homeWithStores(t)
+	var out, errb bytes.Buffer
+	if err := runPrivacy(nil, &out, &errb); err != nil {
+		t.Fatalf("privacy failed: %v", err)
+	}
+	if strings.Contains(out.String(), "could not be measured") {
+		t.Errorf("a fully readable ~/.replay reported entries it could not measure:\n%s",
+			out.String())
+	}
+}
+
+// measureStore counts files, and the directories holding them are not files.
+//
+// Walk visits the store root and every subdirectory under it. Counting those as
+// entries would inflate the file count `replay privacy` prints and add the
+// directories' own sizes to a total the reader reads as bytes of their data.
+func TestMeasureStoreCountsFilesAndNotTheDirectoriesHoldingThem(t *testing.T) {
+	store := filepath.Join(t.TempDir(), "ledger")
+	if err := os.MkdirAll(filepath.Join(store, "nested"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(store, "a.jsonl"), []byte("0123456789"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(store, "nested", "b.jsonl"), []byte("01234567890123456789"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	total, files, unmeasured := measureStore(store)
+	if files != 2 {
+		t.Errorf("measureStore counted %d files under a store holding two, plus two "+
+			"directories; a directory is not a record", files)
+	}
+	if total != 30 {
+		t.Errorf("measureStore totalled %d bytes, want 30: the reader reads this as "+
+			"bytes of their data, not as bytes of directory entries", total)
+	}
+	if unmeasured != 0 {
+		t.Errorf("%d entr(ies) reported unmeasurable in a store that was readable "+
+			"throughout", unmeasured)
+	}
+}

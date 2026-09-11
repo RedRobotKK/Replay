@@ -100,3 +100,80 @@ func TestOutlierNotableHonoursTheMinimumWhenBuiltDirectly(t *testing.T) {
 			o.N, minSessions)
 	}
 }
+
+// The two cut points are judgements. These pin them, so moving either is a
+// decision somebody makes rather than a value that drifts.
+//
+// A mutation sweep found both unpinned across wide bands: minShareFloor
+// survived 0.05 through 0.30 and concentrationMultiple survived roughly 1.13
+// through 2.0 with the suite green. Per ADR-0014, a threshold no test can
+// distinguish is not a threshold — it is a constant with a comment.
+
+// OL6: above n = 20 the floor governs, and it governs at 0.10.
+//
+// n = 1000 puts an even share at 0.1%, so the multiple is satisfied by anything
+// above 0.2% and only the floor can decide. 9.9% must be silent and 10.1% must
+// not: that pair fails if the floor moves in either direction.
+func TestOL6_TheFloorGovernsOnALargeCorpus(t *testing.T) {
+	for _, c := range []struct {
+		share float64
+		want  bool
+	}{{0.099, false}, {0.101, true}} {
+		o, ok := CompareToTotal(c.share*1000, 1000, 1000)
+		if !ok {
+			t.Fatalf("share %.3f over n=1000 produced no comparison", c.share)
+		}
+		if got := o.Notable(); got != c.want {
+			t.Errorf("at n=1000 a %.1f%% share is Notable()=%v, want %v. The absolute "+
+				"floor moved; it decides every corpus above 20 rows",
+				c.share*100, got, c.want)
+		}
+	}
+}
+
+// OL7: below n = 21 the multiple governs, and it governs at 2x.
+//
+// n = 10 puts an even share at 10%, so the floor is satisfied by anything above
+// it and only the multiple can decide. 19% must be silent and 21% must not.
+func TestOL7_TheMultipleGovernsOnASmallCorpus(t *testing.T) {
+	for _, c := range []struct {
+		share float64
+		want  bool
+	}{{0.19, false}, {0.21, true}} {
+		o, ok := CompareToTotal(c.share*100, 100, 10)
+		if !ok {
+			t.Fatalf("share %.2f over n=10 produced no comparison", c.share)
+		}
+		if got := o.Notable(); got != c.want {
+			t.Errorf("at n=10 a %.0f%% share is Notable()=%v, want %v. The concentration "+
+				"multiple moved; it decides every corpus of 20 rows or fewer",
+				c.share*100, got, c.want)
+		}
+	}
+}
+
+// OL8: and the changeover is where the arithmetic says it is.
+//
+// At n = 20 an even share is 5% and twice that is exactly the floor, so the two
+// conditions coincide. At n = 21 twice an even share is 9.52%, below the floor,
+// and the floor takes over for good. This is the boundary the old docstring's
+// "scales with the corpus" claim was false on the far side of.
+func TestOL8_TheMultipleStopsBindingAtTwentyOne(t *testing.T) {
+	// 9.6% clears twice an even share at n=21 (9.52%) but not the 10% floor.
+	o, ok := CompareToTotal(9.6, 100, 21)
+	if !ok {
+		t.Fatal("no comparison at n=21")
+	}
+	if o.Notable() {
+		t.Error("at n=21 a 9.6% share fired, so the floor is not governing above 20")
+	}
+	// The same share at n=20 also fails, because there twice an even share IS
+	// the floor. One row fewer and the two conditions are the same condition.
+	o20, ok := CompareToTotal(9.6, 100, 20)
+	if !ok {
+		t.Fatal("no comparison at n=20")
+	}
+	if o20.Notable() {
+		t.Error("at n=20 a 9.6% share fired; twice an even share is 10% there")
+	}
+}

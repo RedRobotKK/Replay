@@ -135,14 +135,14 @@ func homeStores() []store {
 	}
 }
 
-// resolveStores expands the registry against a real directory, so a prefixed
-// entry like ledger also covers ledger-grok.
-// resolveStoresErr is resolveStores with the reason it found nothing.
+// resolveStoresErr expands the registry against a real directory, so a prefixed
+// entry like ledger also covers ledger-grok — and says why it found nothing.
 //
 // A nil slice means one of two things and they are not the same: the directory
-// is not there, or it is there and could not be read. `replay privacy` answers
-// "what do you hold about me", and reporting the second as the first is a false
-// absence in the one command where that matters most.
+// is not there, or it is there and could not be read. Both callers answer a
+// question about the reader — `replay privacy` answers "what do you hold about
+// me", the TUI's safe screen answers "is my setup safe" — and reporting the
+// second as the first is a false absence in the two places it costs most.
 func resolveStoresErr(root string) ([]resolved, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
