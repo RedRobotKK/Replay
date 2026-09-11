@@ -168,8 +168,9 @@ this project exists to refuse.
 
 ### D. Settings and configuration
 
-The gap in the storyboard. There are 26 flags, three consent decisions and a
-masking configuration, and a person cannot currently see any of them at once.
+The gap in the storyboard. `serve` carries a large flag set — see
+[`CLI.md`](CLI.md) for the current one — along with three consent decisions and
+a masking configuration, and a person cannot currently see any of them at once.
 
 | # | State | What it must show |
 |---|---|---|

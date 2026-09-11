@@ -82,8 +82,10 @@ what to do instead.
 ### 4. One command over many, rather than many flags
 
 `posthog-cli api` is a single shell-friendly front over their whole tool
-catalog. Replay has 75 flags across 13 commands and, until the shortcut layer,
-no single entry point.
+catalog. Replay spreads a comparable surface across many commands and, until the
+shortcut layer, had no single entry point. The totals live in
+[`CLI.md`](CLI.md), which is generated from the binary; a count written here
+was wrong within days of being written.
 
 The nine questions are Replay's version of this and they are not finished.
 `replay tui` runs them as of 0.5.0, and four of the nine read this machine:

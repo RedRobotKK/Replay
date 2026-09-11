@@ -1,7 +1,35 @@
 # Replay
 
+[![CI](https://github.com/RedRobotKK/Replay/actions/workflows/ci.yml/badge.svg)](https://github.com/RedRobotKK/Replay/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/RedRobotKK/Replay?sort=semver)](https://github.com/RedRobotKK/Replay/releases)
+[![Go](https://img.shields.io/badge/go-1.24-00ADD8?logo=go&logoColor=white)](go.mod)
+[![Dependencies](https://img.shields.io/badge/dependencies-0-success)](cmd/replay/x402_test.go)
+[![Coverage](https://img.shields.io/badge/coverage-%E2%89%A585%25-success)](scripts/coverage-gate.sh)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)](#platform-support-macos-and-linux-only)
+[![License](https://img.shields.io/badge/license-BSL%201.1-blue)](LICENSE)
+
 **Your prompt cache expired while you were at lunch.** Replay finds the turn it happened on, and
 what that one turn cost.
+
+> **The refusals are the feature.** Anything this tool cannot measure, it declines to print — and
+> says why, in the place the number would have gone. `replay route` will not quote you dollars for a
+> model pair it has never seen on the wire. `replay context` tells you when its own answer is
+> incomplete because the session was compacted. Every figure carries the population it was measured
+> on and the date it was read. When a number here turns out to be wrong, the correction ships as a
+> new dated file and the old reading stays visible — including
+> [the time this README overstated its own sample size twentyfold](#how-far-to-trust-it).
+
+## Start with the question you actually have
+
+| You want to know | Type this |
+|---|---|
+| What did all this cost me? | `replay` |
+| Which turn got billed twice, and why? | `replay diff <transcript\|dir>` |
+| What should I change? | `replay advise <dir>` |
+| What is filling my context? | `replay context <transcript\|dir>` |
+| Would another model be cheaper? | `replay route <dir> --to <model>` |
+| Is anything on this machine broken? | `replay doctor` |
+| All of it, as screens | `replay tui` |
 
 If you already run ccusage, this is the next question rather than a replacement for it. ccusage
 tells you what you spent, and it is better at that than anything here. Replay answers something
@@ -21,9 +49,12 @@ curl -fsSL https://redrobot.jp/replay.sh | sh
 
 `replay tui` puts the same answers on ten screens, one keystroke apart. The images in this README
 are generated from those screens and checked against them by a test, so a screenshot here cannot
-drift from what the tool prints. Nine of the ten are in [docs/screens](docs/screens); the doctor
-screen is not, because it renders your machine and a committed picture of somebody else's corpus
-would be an illustration pretending to be a reading.
+drift from what the tool prints. The doctor and safe screens are deliberately absent from
+[docs/screens](docs/screens). Doctor renders your machine, and one of its rows counts days from the
+compiled price table to today, so an image of it is correct for one day and wrong after. Safe lists
+what Replay has written to your disk, and a picture of somebody else's byte counts is not an answer
+to "what does this thing know about me". Both would be illustrations pretending to be readings;
+`cmd/replay/screens_svg_test.go` holds the list and the reasons.
 
 If you are pointing an agent through the proxy, `l` answers the question the transcripts cannot:
 
@@ -225,8 +256,11 @@ argument still wins when you give it. This is not a convenience — a first comm
 the reader does not know yet is a command they do not run.
 
 `replay --help` lists all thirty, grouped and ordered by what they are worth rather than
-alphabetically, because the list is what a person reads before they know which of them matters. Full
-reference: [`docs/guide/commands.md`](docs/guide/commands.md).
+alphabetically, because the list is what a person reads before they know which of them matters. That
+number is compared against the binary's dispatch switch by `internal/regression` RC1, which is why it
+is allowed to be here and why the same figure is not written into the other documents. Full
+reference: [`docs/guide/commands.md`](docs/guide/commands.md), and
+[`docs/CLI.md`](docs/CLI.md) generated from the binary.
 
 `replay context` now says when its own answer is incomplete. Claude Code records a compaction with the
 prompt size before and after it, and nothing here was reading that field, so a session that compacted

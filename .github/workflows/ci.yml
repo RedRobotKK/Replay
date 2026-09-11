@@ -61,7 +61,21 @@ jobs:
         run: go vet ./...
       - name: Test
         run: go test -race -count=1 -coverprofile=coverage.out ./...
+      # Enforced on one runner, printed on the rest.
+      #
+      # Coverage is not comparable across the matrix: files tagged
+      # //go:build unix are compiled out on Windows, so the same tree reports
+      # a different total there. One floor applied to three runners would be
+      # too low to mean anything on Linux or wrong on Windows.
+      #
+      # Before this, the step printed the total and nothing read it. A number
+      # printed into a log that no step consumes is the same shape as a test
+      # that cannot fail: it looks like a check and nothing depends on it.
+      - name: Coverage gate
+        if: matrix.os == 'ubuntu-latest'
+        run: ./scripts/coverage-gate.sh coverage.out
       - name: Coverage
+        if: matrix.os != 'ubuntu-latest'
         run: go tool cover -func=coverage.out | tail -1
       - name: Build
         run: go build -trimpath ./...
