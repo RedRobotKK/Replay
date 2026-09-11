@@ -43,6 +43,50 @@ type rawLine struct {
 	CompactMetadata *rawCompaction `json:"compactMetadata"`
 	// Message is decoded once, at read time, for the lines that carry one.
 	Message *RawMessage `json:"message"`
+
+	// The decoded content, kept so it is decoded once rather than once per
+	// reader. Three passes over a transcript call DecodeContent on the same
+	// Message.Content — collectToolNames, the request builder, and the
+	// compaction scan — and each one unmarshals it into a fresh []RawBlock.
+	// Every RawBlock carries four more json.RawMessage fields, each of which
+	// copies its bytes, so one assistant line of twenty blocks produced
+	// roughly 240 nested copies three times over, of content that cannot
+	// change between the calls.
+	//
+	// Measured before this existed: 292 MB allocated and 745,015 allocations
+	// to parse a 78 MB transcript, with json.RawMessage.UnmarshalJSON the
+	// largest single item at 94 MB, and the allocator returning pages to the
+	// OS accounting for nearly half the CPU.
+	//
+	// Not exported and not concurrent: forEachSession parallelises across
+	// files, never within one, so a line's blocks are decoded and read on one
+	// goroutine.
+	decoded   bool
+	decText   string
+	decBlocks []RawBlock
+	decIsText bool
+	decErr    error
+}
+
+// content decodes this line's message content, once.
+//
+// The error is memoised with the result. A line whose content will not decode
+// fails the same way for every reader, and re-attempting it per call site was
+// three failures where the transcript has one defect.
+//
+// The returned slice is shared between callers, which is safe only because no
+// caller writes to it. That is a property of the three call sites today rather
+// than a guarantee of the type, and it is why this is unexported.
+func (l *rawLine) content() (text string, blocks []RawBlock, isText bool, err error) {
+	if l.decoded {
+		return l.decText, l.decBlocks, l.decIsText, l.decErr
+	}
+	l.decoded = true
+	if l.Message == nil {
+		return "", nil, false, nil
+	}
+	l.decText, l.decBlocks, l.decIsText, l.decErr = DecodeContent(l.Message.Content)
+	return l.decText, l.decBlocks, l.decIsText, l.decErr
 }
 
 // requestKey identifies the provider request an assistant line belongs to.
@@ -231,7 +275,7 @@ func collectToolNames(lines []*rawLine) map[string]string {
 		if l.Type != lineTypeAssistant || l.Message == nil {
 			continue
 		}
-		_, blocks, _, err := DecodeContent(l.Message.Content)
+		_, blocks, _, err := l.content()
 		if err != nil {
 			continue
 		}
@@ -251,6 +295,18 @@ type decoder struct {
 	toolNames map[string]string
 	byUUID    map[string]*rawLine
 	messages  map[string]*Message
+
+	// chain is scratch for the parent walk in buildRequest, reused across
+	// requests. Every request walks its whole ancestry from scratch, so a
+	// fresh slice per request grew by doubling once per request and the
+	// total was quadratic in the depth of the chain: 225 MB for a chain of
+	// 2000 turns, most of it slice headers thrown away immediately.
+	//
+	// Nothing may retain it. buildRequest hands sub-slices of it to
+	// assistantMessage, which reads them and returns a Message built from
+	// its own storage; decodeAssistantRun reorders the sub-slice in place
+	// but keeps no reference to it.
+	chain []*rawLine
 }
 
 func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
@@ -271,7 +327,12 @@ func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
 		return nil, "", err
 	}
 	req := &Request{
-		ID:            first.requestKey(),
+		ID: first.requestKey(),
+		// Both halves of this id came off the wire: requestKey returns the
+		// provider's requestId, or the provider's message id where the
+		// entrypoint wrote none. Neither is synthesised here, so the id is
+		// measured either way, and IDFromMessage says which one it is.
+		IDMeasured:    true,
 		IDFromMessage: first.RequestID == "",
 		Model:         first.Message.Model,
 		Effort:        first.Effort,
@@ -283,7 +344,7 @@ func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
 	// Context: walk the parent chain from the first output line back to the
 	// root, collecting conversation messages. Consecutive assistant lines
 	// with one request id collapse into one message.
-	var chain []*rawLine
+	chain := d.chain[:0]
 	for cur := d.byUUID[first.ParentUUID]; cur != nil; cur = d.byUUID[cur.ParentUUID] {
 		chain = append(chain, cur)
 		if len(chain) > len(d.byUUID) {
@@ -293,6 +354,13 @@ func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
 	for i, j := 0, len(chain)-1; i < j; i, j = i+1, j-1 {
 		chain[i], chain[j] = chain[j], chain[i]
 	}
+	d.chain = chain
+
+	// One context message per chain line at most: user lines contribute
+	// one, a run of assistant lines contributes one between them, and hook
+	// summaries contribute none. Sizing it here replaces the doubling
+	// growth of a slice that is appended to once per ancestor.
+	req.Context = make([]*Message, 0, len(chain))
 
 	laneID := ""
 	for i := 0; i < len(chain); i++ {
@@ -358,7 +426,7 @@ func (d *decoder) userMessage(l *rawLine) (*Message, error) {
 			return nil, err
 		}
 		msg := &Message{UUID: l.UUID, Role: RoleUser, Timestamp: ts}
-		text, blocks, isText, err := DecodeContent(l.Message.Content)
+		text, blocks, isText, err := l.content()
 		if err != nil {
 			return nil, fmt.Errorf("decode user content: %w", err)
 		}
@@ -390,7 +458,7 @@ func decodeAssistantRun(run []*rawLine, toolNames map[string]string) (*Message, 
 		if l.Message == nil {
 			return nil, fmt.Errorf("assistant line %s has no message", l.UUID)
 		}
-		_, blocks, _, err := DecodeContent(l.Message.Content)
+		_, blocks, _, err := l.content()
 		if err != nil {
 			return nil, fmt.Errorf("decode assistant content: %w", err)
 		}

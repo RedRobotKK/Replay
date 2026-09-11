@@ -98,6 +98,33 @@ All notable changes to this project are documented here. The format follows [Kee
   on a new machine, including that the verification step in step 7 has not been
   observed to fire on any corpus this project holds.
 
+- **`replay doctor` now says how old this binary is.** `selfupdate.StaleNotice` has
+  been exported and tested since the package landed and nothing called it, so the
+  only way to learn a newer release existed was to type `replay upgrade --check` —
+  a command you run when you already suspect the answer, and the operator the
+  package was written for is the one who did not. This project ran 0.4.0 for three
+  days while 0.5.4 was published.
+- It reaches nothing. The age is arithmetic on the RFC 3339 stamp linked in at
+  release time, so the promise that replay originates no request you did not type
+  is unchanged; the report says how old your build is, not what the newest one is.
+- Three states rather than two: a build inside the window is named and dated with
+  no warning; one past thirty days carries `selfupdate`'s own sentence and the
+  command that checks; a source build, an unreadable stamp, and a stamp dated
+  ahead of the clock each say which of those they are and are never aged. A dev
+  build is not stale — `replay upgrade` refuses to overwrite one.
+- On `doctor` and nowhere else. A staleness line under every report is one a
+  reader learns to skip, which is what the Footprint section's "one ask at most
+  once every thirty days" is protecting.
+- `x-request-id` is captured alongside `request-id`, so a session on the
+  OpenAI-compatible family (OpenAI, Cursor, DeepSeek) carries the provider's own
+  id at last. Every record on that family previously carried none.
+- `transcript.Request.IDMeasured` separates a provider id from the `ledger-<n>`
+  this reader synthesises from a record's position in its file. `replay cost`
+  matches only on the former — every ledger file has a `ledger-0`, and joining on
+  it reported unrelated sessions' first requests as one request seen twice — and
+  discloses how many requests it could not consider, in the printed note and as
+  `unjoinableRequests` in the JSON.
+
 ### Changed
 
 - **The installer prints the ending it actually performs.** Two "Next:" commands
@@ -109,6 +136,23 @@ All notable changes to this project are documented here. The format follows [Kee
   what to type after quitting; off a terminal — CI, a `Dockerfile RUN`, cron, a
   container built without `-t` — nothing opens and the two commands are the next
   step exactly as before. `--no-tui` and `REPLAY_NO_OPEN=1` are unchanged.
+- **Per-event cause attribution no longer reports a race as a finding.** A cache
+  break's cause is a claim about a PAIR — this request and the one whose entry it
+  read — and the predecessor was taken as whichever response of the lane finished
+  most recently. Nothing on the wire says that is the same request. Coding agents
+  fan out by construction, so two requests of a lane in flight together is the
+  normal case, not a corner, and their usage records could be transposed with the
+  cause following the transposition.
+- The proxy now counts what is open in each lane while it is open, and writes
+  `correlation: lane-serial` or `lane-overlap` on the record. Where it overlapped,
+  the cause degrades to `NOT MEASURED (requests overlapped in this lane; the
+  predecessor is not determined)` rather than naming one — live, offline, in the
+  ledger and on the break line, which now states how the pair was correlated.
+  Where a transcript has no such field, a request that began before its supposed
+  predecessor answered is read the same way.
+- **This does not make any break figure more accurate.** `Expected` and `Deficit`
+  rest on the same pairing and are unchanged; what stops is building a further
+  claim on top of them. Naming that gap is the change working, not a hole in it.
 
 ## [0.5.4] - 2026-09-09
 

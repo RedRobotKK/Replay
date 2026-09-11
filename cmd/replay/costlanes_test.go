@@ -237,7 +237,11 @@ func TestAnonymousRequestsDoNotBecomeDuplicatesOfEachOther(t *testing.T) {
 	lane := func(ids ...string) *transcript.Lane {
 		l := &transcript.Lane{}
 		for _, id := range ids {
-			l.Requests = append(l.Requests, &transcript.Request{ID: id, Model: "claude-opus-5"})
+			// A present id here stands for one the provider sent; an absent
+			// one is the case under test. IDMeasured tracks that, so the
+			// fixture cannot accidentally assert the unjoinable path.
+			l.Requests = append(l.Requests, &transcript.Request{
+				ID: id, IDMeasured: id != "", Model: "claude-opus-5"})
 		}
 		return l
 	}
@@ -245,19 +249,23 @@ func TestAnonymousRequestsDoNotBecomeDuplicatesOfEachOther(t *testing.T) {
 		lane("a", "", "b", "", ""),
 	}}
 
-	seen := map[string]bool{}
-	ids, total, dup := requestIDs(s, seen)
-	if total != 2 {
-		t.Errorf("two identified requests among five counted as %d", total)
+	join := newRequestJoin()
+	ids, unjoinable := requestIDs(s, join)
+	if join.total != 2 {
+		t.Errorf("two identified requests among five counted as %d", join.total)
 	}
-	if dup != 0 {
+	if join.duplicated != 0 {
 		t.Errorf("three anonymous requests produced %d duplicate(s); they were keyed "+
-			"on the empty string and became duplicates of each other", dup)
+			"on the empty string and became duplicates of each other", join.duplicated)
 	}
 	if len(ids) != 2 {
 		t.Errorf("collected %d ids, want 2", len(ids))
 	}
-	if seen[""] {
+	if unjoinable != 0 {
+		t.Errorf("an absent id was reported as %d unjoinable request(s); absent is "+
+			"skipped before the join, not offered to it as a synthesised id", unjoinable)
+	}
+	if join.seen[""] {
 		t.Error(`the empty string was recorded as a seen request id, so the next ` +
 			`anonymous request in any file counts as a re-render of this one`)
 	}
@@ -267,18 +275,19 @@ func TestAnonymousRequestsDoNotBecomeDuplicatesOfEachOther(t *testing.T) {
 // hiding the thing the counter exists for.
 func TestARepeatedIDIsCountedAsADuplicate(t *testing.T) {
 	lane := &transcript.Lane{Requests: []*transcript.Request{
-		{ID: "a", Model: "claude-opus-5"},
-		{ID: "b", Model: "claude-opus-5"},
+		{ID: "a", IDMeasured: true, Model: "claude-opus-5"},
+		{ID: "b", IDMeasured: true, Model: "claude-opus-5"},
 	}}
 	s := &transcript.Session{ID: "sess", Lanes: []*transcript.Lane{lane}}
 
-	seen := map[string]bool{"a": true} // "a" already arrived in an earlier file
-	_, total, dup := requestIDs(s, seen)
-	if total != 2 {
-		t.Errorf("counted %d requests, want 2", total)
+	join := newRequestJoin()
+	join.seen["a"] = true // "a" already arrived in an earlier file
+	_, _ = requestIDs(s, join)
+	if join.total != 2 {
+		t.Errorf("counted %d requests, want 2", join.total)
 	}
-	if dup != 1 {
-		t.Errorf("one request already seen in another file counted as %d duplicate(s)", dup)
+	if join.duplicated != 1 {
+		t.Errorf("one request already seen in another file counted as %d duplicate(s)", join.duplicated)
 	}
 }
 

@@ -496,6 +496,23 @@ func transcriptFiles(paths []string) ([]string, error) {
 		}
 	}
 	if len(entries) == 0 {
+		// Before saying there is nothing here, look for the thing that is.
+		//
+		// Seven commands share this refusal and none of them read an Ollama
+		// server log, so all five told a reader holding one that they had no
+		// data at all. The parser has been in the tree since it was written and
+		// `replay burn` uses it; only this path did not look. It is FD-11 one
+		// command over.
+		//
+		// The n_past caveat is worded as a fact about the LOG rather than about
+		// the command, because all seven arrive here and only some of them were
+		// asked for a cache figure. A reader who typed `replay trim` still needs
+		// to know the number is not in the file before they go looking for a
+		// command that reports it.
+		if n := ollamaLogsUnder(paths); n > 0 {
+			return nil, fmt.Errorf("no .jsonl transcripts found, but %d Ollama server log(s) are here. `replay burn` reads them. No command will report a cache hit rate from them: n_past, the only place an Ollama log records prefix reuse, appears ONLY on requests whose prompt was already resident "+
+				"— llama.cpp finds every token cached and re-evaluates one because it must evaluate at least one per slot. A hit rate computed over those requests measures a population selected for having been cached, not the cache. See docs/evidence/ollama-cache-ceiling-2026-09-08.md", n)
+		}
 		return nil, fmt.Errorf("no .jsonl transcripts found")
 	}
 	sort.Slice(entries, func(i, j int) bool {
@@ -604,4 +621,48 @@ Transcripts: Claude Code writes them under ~/.claude/projects/<project>/*.jsonl
 Ledger:      replay serve writes ~/.replay/ledger/<session>.jsonl (measured tier)
 `)
 	return err
+}
+
+// ollamaLogsUnder counts Ollama server logs among the paths searched.
+//
+// Counted by parsing rather than by name: a file called server.log that is not
+// an Ollama log would otherwise send a reader to `replay burn` to be told a
+// second time that there is nothing here.
+func ollamaLogsUnder(paths []string) int {
+	n := 0
+	for _, root := range paths {
+		// The walk error is discarded because it cannot change the answer.
+		//
+		// This count decides whether to make a REFERRAL — go run `replay burn`.
+		// An unreadable root means no log was confirmed here, and an unconfirmed
+		// referral is worse than none: it sends the reader to a second command to
+		// be told the same nothing. So unknown collapses to "do not refer", which
+		// is the conservative side of ADR-0018's three values rather than a claim
+		// that the directory is empty. The caller still prints the plain refusal,
+		// and transcriptFiles has already returned the real error for a root that
+		// could not be read at all.
+		_ = filepath.WalkDir(root, func(path string, _ fs.DirEntry, _ error) error {
+			// Every entry is offered to the parser, and the parser decides.
+			//
+			// Two filters stood here and guard-reachability called both INERT,
+			// correctly: a d.IsDir() check, and a .log suffix check. Neutralise
+			// either and nothing changes, because ParseOllamaLogFile already
+			// returns no requests for a directory, a README or a JPEG. They
+			// were also the wrong shape for this function — it exists to count
+			// by parsing rather than by name, which is what AO4 pins down, and
+			// a name filter in front of it is that same heuristic wearing a
+			// different hat.
+			//
+			// The walk error went the same way, for the same reason. An entry
+			// that could not be reached cannot be opened either, so the parser
+			// returns an error for it and it is not counted — which is the
+			// treatment the error branch was there to give it. Checking first
+			// only moved the decision somewhere less authoritative.
+			if rs, perr := transcript.ParseOllamaLogFile(path); perr == nil && len(rs) > 0 {
+				n++
+			}
+			return nil
+		})
+	}
+	return n
 }

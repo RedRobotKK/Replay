@@ -37,6 +37,18 @@ type laneState struct {
 	// seen is false until the lane's first request, so an opening request is
 	// classified as ReadFirst rather than measured against nothing.
 	seen bool
+	// open holds one entry per request of this lane currently in flight, each
+	// pointing at that request's own overlap flag.
+	//
+	// Overlap is a property of a PAIR, not of whichever request happened to
+	// be sent second, so entering the lane marks every request already open
+	// as well as the newcomer. A counter could not do that: the request that
+	// was already open is precisely the one whose predecessor has just become
+	// ambiguous, and it has not been classified yet.
+	//
+	// Keyed by pointer, so a request that outlives an eviction of its session
+	// clears its own entry rather than a stranger's.
+	open map[*bool]struct{}
 }
 
 type sessionState struct {
@@ -363,10 +375,47 @@ func (st *sessionState) lane(agentID string) *laneState {
 	}
 	ln, ok := st.lanes[agentID]
 	if !ok {
-		ln = &laneState{}
+		ln = &laneState{open: map[*bool]struct{}{}}
 		st.lanes[agentID] = ln
 	}
 	return ln
+}
+
+// enterLane registers a request as in flight in its lane and returns the flag
+// that will say whether it shared the lane with another, plus the function
+// that ends its flight.
+//
+// This is the measurement the whole correlation field rests on. It is taken
+// here, live, because it cannot be taken anywhere else: two requests that
+// overlapped leave a ledger that looks exactly like two that did not, and
+// their client-side timestamps were taken at the other end of the wire.
+func (s *stats) enterLane(sessionID, agentID string) (*bool, func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ln := s.session(sessionID).lane(agentID)
+	mine := new(bool)
+	for other := range ln.open {
+		// Both sides of the pair, for the reason on laneState.open.
+		*other, *mine = true, true
+	}
+	ln.open[mine] = struct{}{}
+	return mine, func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		delete(ln.open, mine)
+	}
+}
+
+// correlation reads an in-flight flag under the lock and names it. The read
+// is here rather than at the call site because the flag is written by other
+// requests' handlers.
+func (s *stats) correlation(overlapped *bool) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if *overlapped {
+		return ledger.CorrelationLaneOverlap
+	}
+	return ledger.CorrelationLaneSerial
 }
 
 // contextFor returns one lane's context breakdown, "" being the main loop.
@@ -443,6 +492,15 @@ func (s *stats) trialSession(sessionID string) (*policy.ContextEdit, time.Time, 
 // is certain, since the proxy hashed both requests; the usage-and-timing
 // causes come next; the rest is left to the offline diff.
 func (s *stats) breakCause(ln *laneState, rec *ledger.Record, prefixChanged bool) (cachemodel.BreakCause, string) {
+	if rec.Correlation == ledger.CorrelationLaneOverlap {
+		// Every cause below is a statement about this request and the one
+		// before it. Another request of this lane was open at the same time,
+		// so "the one before it" is whichever response finished first, and a
+		// cause named against it would be a reading of that race. The break
+		// itself is still reported — it happened, and the tokens were still
+		// re-billed — but where it came from was not measured.
+		return cachemodel.CauseNotMeasured, "two or more requests of this lane were in flight together; which one wrote the entry this request read is not observable"
+	}
 	if prefixChanged {
 		// The request carries the tool list, so the specific answer is in
 		// hand. Reporting "system prompt or tool definitions changed" while

@@ -343,6 +343,17 @@ const (
 	CauseHistoryEdit   BreakCause = "an earlier message was edited or removed"
 	CauseRerendered    BreakCause = "client re-rendered history after the system prefix (no edit visible in transcript)"
 	CauseUnknown       BreakCause = "prefix diverged inside the message history at an unknown block"
+	// CauseNotMeasured is the absence, and it is not one of the causes above
+	// with a wider error bar: it says the question was never answerable from
+	// what was observed.
+	//
+	// Every other cause here is a statement about this request and THE ONE
+	// BEFORE IT. Where two requests of a lane were in flight together,
+	// "the one before it" is whichever response happened to finish first, and
+	// naming a cause against it is reporting the race rather than the session.
+	// CauseUnknown is the wrong word for that: it says the divergence is
+	// somewhere in the history, which is already an answer.
+	CauseNotMeasured BreakCause = "NOT MEASURED (requests overlapped in this lane; the predecessor is not determined)"
 )
 
 // ClassifyBreak decides the causes that usage and timing alone can settle.

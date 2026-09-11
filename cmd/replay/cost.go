@@ -298,23 +298,28 @@ type costSummary struct {
 // key. Such a request is still priced: AsRunSession counts it, because absence
 // is not the same as already-seen.
 //
+// An id the provider never sent is offered to the join and excluded from the
+// returned ids. The join counts it as unjoinable rather than as seen, because
+// a synthesised `ledger-0` names a position in a file and not a request: two
+// files both have a first record. The count comes back so the caller can cache
+// it, since a warm file contributes no requests to walk.
+//
 // Split out of the walk so that branch can be reached from a test at all.
-func requestIDs(session *transcript.Session, seen map[string]bool) (ids []string, total, duplicated int) {
+func requestIDs(session *transcript.Session, join *requestJoin) (ids []string, unjoinable int) {
 	for _, lane := range session.Lanes {
 		for _, r := range lane.Requests {
 			if r.ID == "" {
 				continue
 			}
-			ids = append(ids, r.ID)
-			total++
-			if seen[r.ID] {
-				duplicated++
+			join.add(r.ID, r.IDMeasured)
+			if !r.IDMeasured {
+				unjoinable++
 				continue
 			}
-			seen[r.ID] = true
+			ids = append(ids, r.ID)
 		}
 	}
-	return ids, total, duplicated
+	return ids, unjoinable
 }
 
 func summarise(units []costUnit) costSummary {
@@ -572,8 +577,12 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	// parent's requests, so the same requestId can appear in several files;
 	// MainLane skips sidechains and absorbs most of that, and the residue is
 	// disclosed rather than silently carried.
-	seenReq := map[string]bool{}
-	duplicated, totalReq := 0, 0
+	//
+	// Only a PROVIDER id is matched on. A ledger record whose provider sent
+	// none is named for its position in its file, so every ledger file has a
+	// `ledger-0` and matching on it would report unrelated sessions' first
+	// requests as one request seen twice.
+	join := newRequestJoin()
 
 	// An index over transcripts already understood. Transcripts are
 	// append-only and most never change again, so re-deriving all of them to
@@ -586,19 +595,12 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	var cold []string
 	var units []costUnit
 	for _, f := range files {
-		if u, ids, ok := cache.get(f); ok {
+		if u, ids, unjoinable, ok := cache.get(f); ok {
 			// The cache stores what was priced, not where it was read from,
 			// so the path is reattached here rather than trusted from disk.
 			u.path = f
 			units = append(units, u)
-			for _, id := range ids {
-				totalReq++
-				if seenReq[id] {
-					duplicated++
-					continue
-				}
-				seenReq[id] = true
-			}
+			join.addCached(ids, unjoinable)
 			continue
 		}
 		cold = append(cold, f)
@@ -624,9 +626,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		if rep.Lane != nil && len(rep.Lane.Requests) > 0 {
 			model = rep.Lane.Requests[0].Model
 		}
-		reqIDs, counted, dup := requestIDs(session, seenReq)
-		totalReq += counted
-		duplicated += dup
+		reqIDs, unjoinable := requestIDs(session, join)
 		asRun := analysis.AsRunSession(session)
 		if asRun.CostUSD <= 0 {
 			unpriced++
@@ -669,7 +669,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		}
 		u.path = path
 		units = append(units, u)
-		cache.put(path, u, reqIDs)
+		cache.put(path, u, reqIDs, unjoinable)
 		return nil
 	})
 
@@ -812,8 +812,13 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		// handed one row per agent lane under that key; handing them session
 		// rows under the same version string would be the silent kind of
 		// break, where nothing errors and every figure moves.
+		// unjoinableRequests alongside the other two: a consumer computing an
+		// overlap RATE has to know the numerator could never have included
+		// these, because nothing observable says whether they appear in
+		// another file.
 		out := map[string]any{"schema": "replay.cost.v2", "summary": s, "unpriced": unpriced, "unreadable": unreadable,
-			"duplicatedRequests": duplicated, "totalRequests": totalReq}
+			"duplicatedRequests": join.duplicated, "totalRequests": join.total,
+			"unjoinableRequests": join.unjoinable}
 		// A key rather than a printed line, because stdout on this branch is a
 		// document a machine parses. The statement the human needs still has to
 		// reach a human, so it goes to stderr alongside it.
@@ -845,7 +850,14 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	if _, err := io.WriteString(stdout, renderCost(s, unpriced, unreadable, stdout, tipStateDir())); err != nil {
 		return err
 	}
-	if note := overlapNote(duplicated, totalReq); note != "" {
+	// Two disclosures about the same join, printed together: a reader handed a
+	// match rate needs the count the denominator could not consider. Each
+	// helper returns empty when it has nothing to say and writing empty writes
+	// nothing, so there is no emptiness test here to get wrong.
+	for _, note := range []string{
+		overlapNote(join.duplicated, join.total),
+		unjoinableNote(join.unjoinable, join.total),
+	} {
 		if _, err := io.WriteString(stdout, note); err != nil {
 			return err
 		}

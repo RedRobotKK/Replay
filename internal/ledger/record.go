@@ -27,6 +27,15 @@ type Block = transcript.Block
 // Usage is the transcript usage type, serialized with the provider's names.
 type Usage = transcript.Usage
 
+// The Correlation vocabulary, defined once in transcript and re-exported
+// here so a ledger writer and a ledger reader cannot drift apart on the
+// spelling of a value that is persisted to disk.
+const (
+	CorrelationUnmeasured  = transcript.CorrelationUnmeasured
+	CorrelationLaneSerial  = transcript.CorrelationLaneSerial
+	CorrelationLaneOverlap = transcript.CorrelationLaneOverlap
+)
+
 // Record is one proxied request and its response.
 type Record struct {
 	Schema    int       `json:"schema"`
@@ -37,8 +46,22 @@ type Record struct {
 	// AgentID is the client-supplied sub-agent header, empty for the main loop.
 	AgentID string `json:"agent_id,omitempty"`
 	// RequestID is the provider's request id from the response headers.
+	// Absent when the provider sent none, and never synthesised here, so a
+	// reader can tell a provider id from a locally invented one.
 	RequestID string `json:"request_id,omitempty"`
-	Path      string `json:"path"`
+	// Correlation says whether this request had its lane to itself while it
+	// was open. That is what decides whether the record before it in the file
+	// is its predecessor or merely the one that finished first, and every
+	// per-event cause downstream is only as good as that pairing.
+	//
+	// Omitted rather than written false when unknown: a record from a build
+	// that never took this reading must not read as one that measured no
+	// overlap. Absence, zero and unknown are three values (ADR-0018).
+	//
+	// Only the proxy can take it. The offline reader cannot recover it from
+	// timings taken at the other end of the wire.
+	Correlation string `json:"correlation,omitempty"`
+	Path        string `json:"path"`
 	RequestSummary
 	// Policy names the request-parameter policy the proxy applied to this
 	// request, empty when the bytes went through unchanged.

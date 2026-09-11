@@ -18,6 +18,28 @@ var quotaPrefixes = []string{
 	"x-ratelimit-",
 }
 
+// providerRequestID is the provider's own id for this response, or empty when
+// it sent none.
+//
+// Two spellings, because the two wire families disagree and the record needs
+// the same field either way. Anthropic sends `request-id`; the
+// OpenAI-compatible family — OpenAI, Cursor, DeepSeek — sends `x-request-id`,
+// and this build read only the first. Every record written for a session on
+// that family therefore carried no provider id at all and fell back to a name
+// synthesised from the record's position in its file, which is arrival order
+// wearing an id's clothes.
+//
+// Read here rather than through quotaFrom's allowlist on purpose: this is one
+// named header, not a family, and the allowlist exists to keep whole
+// provider-controlled header blocks out of an append-only file.
+func providerRequestID(h http.Header) string {
+	id := h.Get("request-id")
+	if id != "" {
+		return id
+	}
+	return h.Get("x-request-id")
+}
+
 // quotaExact are single headers outside those families that belong with them.
 var quotaExact = []string{
 	// Not a budget but the lockout itself: the provider saying the budget is
