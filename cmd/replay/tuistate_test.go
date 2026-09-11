@@ -2,6 +2,9 @@ package main
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -120,6 +123,70 @@ func TestSafeStateReportsAHomeItCouldNotResolve(t *testing.T) {
 	}
 	if strings.Contains(sc.String(), "written nothing") {
 		t.Errorf("could not look was rendered as nothing held:\n%s", sc.String())
+	}
+}
+
+// A ~/.replay that cannot be READ is not a machine holding nothing.
+//
+// The home resolves, the directory is there, and os.ReadDir fails on it. That
+// error was discarded one layer down and the screen was handed an empty store
+// list, which renders as "Replay has written nothing to this machine". SF5
+// already refuses to render an error that way; nothing could produce one, so
+// the state was unreachable from the only caller that fills the screen.
+func TestSafeStateReportsAStoreDirectoryItCouldNotRead(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no Unix mode bits on this platform; a directory cannot be made unreadable here")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("running as root, which can read anything")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	root := filepath.Join(home, ".replay")
+	if err := os.MkdirAll(filepath.Join(root, "ledger"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(root, 0o000); err != nil {
+		t.Skipf("cannot remove directory permissions: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(root, 0o700) })
+
+	p := safeState()
+	if p.Err == "" {
+		t.Fatalf("an unreadable store directory resolved to a readable machine: %+v", p)
+	}
+	if len(p.Stores) != 0 {
+		t.Errorf("%d store(s) were measured under a directory nobody could list", len(p.Stores))
+	}
+	sc := tui.SafeScreen(p)
+	if sc.From != tui.Unavailable {
+		t.Errorf("the screen declares itself %v on a directory it could not read", sc.From)
+	}
+	if strings.Contains(sc.String(), "written nothing") {
+		t.Errorf("could not look was rendered as nothing held:\n%s", sc.String())
+	}
+}
+
+// And a ~/.replay that was never written is still the clean machine it is.
+//
+// The other half of the same decision: os.IsNotExist is the one error that does
+// mean "nothing here", and turning it into an Unavailable screen would refuse
+// to answer the easiest true answer this screen has.
+func TestSafeStateReadsAnAbsentStoreDirectoryAsEmpty(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	p := safeState()
+	if p.Err != "" {
+		t.Fatalf("a machine Replay has never written to reported an error: %q", p.Err)
+	}
+	if len(p.Stores) != 0 {
+		t.Errorf("%d store(s) measured under a directory that does not exist", len(p.Stores))
+	}
+	if sc := tui.SafeScreen(p); !strings.Contains(sc.String(), "nothing") {
+		t.Errorf("an untouched machine is not told it is clean:\n%s", sc.String())
 	}
 }
 

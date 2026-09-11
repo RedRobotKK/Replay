@@ -89,6 +89,7 @@ Cost per task from transcripts already on disk.
 | `-predicted` | float | with --compare, the fractional change you predicted (e.g. -0.2 for a 20% saving) |
 | `-share` | bool | print a paste-ready summary: the avoidable rate and the task spread, with no spend total, no paths and no project names |
 | `-tone` | string | the register the card is written in: measured (what was found, stated, the default) or rekt (the same figures, exact and deadpan) |
+| `-usage` | string | price a usage export instead of transcripts: token counts per request, no conversation content. Figures that cannot be sourced from token counts alone print NOT MEASURED rather than zero |
 
 ### ceiling
 
@@ -142,6 +143,7 @@ Local proxy: byte-for-byte passthrough, records a ledger.
 | `-mask` | bool | EXPERIMENTAL: replace secrets matching the named pattern set with vault placeholders before requests leave the machine, and restore them in responses within -rehydrate-scope (see README) |
 | `-mask-entropy` | bool | with -mask, also mask runs that look like credentials by shape and entropy. Needs mixed case and digits over 32 characters, so bare hex and lowercase secrets are NOT caught by shape; those are caught only when a name like TOKEN= or api_key: sits beside them. Reported as pattern entropy |
 | `-mask-patterns` | string | file of user-defined patterns for -mask, one per line as name<TAB>regexp |
+| `-mask-ttl` | duration | with -mask, how long a masked secret stays in the vault before it is evicted. Masking turns a transient secret into one at rest and the vault key sits beside the ciphertext, so this is the window a compromised host hands over. 0 keeps entries forever, which was the behaviour before v0.6 and is the wrong default. Re-sending a secret restores its entry, and the placeholder is unchanged (default 24h0m0s) |
 | `-max-day-tokens` | int | refuse requests once this many tokens were consumed today, UTC (0 = off) |
 | `-max-day-usd` | float | refuse requests once today's list-price cost reaches this many dollars, UTC (0 = off) |
 | `-max-session-tokens` | int | refuse a session's next request once it has consumed this many tokens (0 = off) |
@@ -381,7 +383,7 @@ Aggregate corpus submissions into one figure, with its roster.
 | Flag | Type | What it does |
 |---|---|---|
 | `-json` | bool | emit the pooled document rather than the table |
-| `-pooled-at` | string | the date this pool was assembled, recorded in the document (default "<today, in UTC>") |
+| `-pooled-at` | string | the date this pool was assembled, recorded in the document (default: today, UTC) |
 
 ## The TUI covers the same ground
 
@@ -423,4 +425,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-30 commands, 107 flags, read from the binary.
+30 commands, 109 flags, read from the binary.

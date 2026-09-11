@@ -74,6 +74,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	mask := fs.Bool("mask", false, "EXPERIMENTAL: replace secrets matching the named pattern set with vault placeholders before requests leave the machine, and restore them in responses within -rehydrate-scope (see README)")
 	maskPatterns := fs.String("mask-patterns", "", "file of user-defined patterns for -mask, one per line as name<TAB>regexp")
 	maskEntropy := fs.Bool("mask-entropy", false, "with -mask, also mask runs that look like credentials by shape and entropy. Needs mixed case and digits over "+strconv.Itoa(masking.EntropyMinLength)+" characters, so bare hex and lowercase secrets are NOT caught by shape; those are caught only when a name like TOKEN= or api_key: sits beside them. Reported as pattern "+masking.EntropyPattern)
+	maskTTL := fs.Duration("mask-ttl", masking.DefaultVaultTTL, "with -mask, how long a masked secret stays in the vault before it is evicted. Masking turns a transient secret into one at rest and the vault key sits beside the ciphertext, so this is the window a compromised host hands over. 0 keeps entries forever, which was the behaviour before v0.6 and is the wrong default. Re-sending a secret restores its entry, and the placeholder is unchanged")
 	rehydrate := fs.Bool("rehydrate", true, "with -mask, restore placeholders in responses; false leaves them in place to evaluate coverage")
 	project := fs.String("project", "", "with -mask, the directory under which file-edit tool inputs may receive secrets (default: the current directory)")
 	var scopeSpecs []string
@@ -100,7 +101,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	if os.Getenv(envDisabled) != "" {
 		return errDisabled
 	}
-	masker, rehydrator, err := maskingFromFlags(*mask, *maskPatterns, *rehydrate, *project, scopeSpecs)
+	masker, rehydrator, err := maskingFromFlags(*mask, *maskPatterns, *rehydrate, *project, scopeSpecs, *maskTTL)
 	if err != nil {
 		return err
 	}
@@ -201,7 +202,7 @@ const vaultDirName = "vault"
 
 // maskingFromFlags opens the vault and builds the masker and, unless
 // rehydration is off, the rehydrator; both nil when masking is off.
-func maskingFromFlags(on bool, patternsFile string, rehydrate bool, project string, scopeSpecs []string) (*masking.Masker, *masking.Rehydrator, error) {
+func maskingFromFlags(on bool, patternsFile string, rehydrate bool, project string, scopeSpecs []string, ttl time.Duration) (*masking.Masker, *masking.Rehydrator, error) {
 	if !on {
 		return nil, nil, nil
 	}
@@ -209,7 +210,7 @@ func maskingFromFlags(on bool, patternsFile string, rehydrate bool, project stri
 	if err != nil {
 		return nil, nil, fmt.Errorf("find home directory for the vault: %w", err)
 	}
-	vault, err := masking.OpenVault(filepath.Join(home, ".replay", vaultDirName))
+	vault, err := masking.OpenVaultWithTTL(filepath.Join(home, ".replay", vaultDirName), ttl)
 	if err != nil {
 		return nil, nil, err
 	}

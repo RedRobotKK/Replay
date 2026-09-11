@@ -54,11 +54,14 @@ the test stay green.
   message bodies the parser retains. A usage-only path measured 2.4x. (#9)
 - **`TestKillMatrix` reports a stillborn baseline** that cannot be reproduced by
   hand. Until explained, the kill matrix cannot be trusted. (#8)
-- **Five security findings** stand: install.sh skips cosign silently when absent,
-  `HashedPathLabel` keeps the file extension in clear so `.env` reads are
-  visible, `call_key` is unkeyed SHA-256 over an enumerable space, two key files
-  lack the `Lstat` guard four other writers have, and `serve` accepts any
-  upstream URL without the warning `doctor` gives. (#14)
+- **Three security findings** stand: install.sh skips cosign silently when
+  absent, `HashedPathLabel` keeps the file extension in clear so `.env` reads
+  are visible, and `serve` accepts any upstream URL without the warning
+  `doctor` gives. (#14) **Two closed 2026-09-10:** `call_key` is now HMAC'd on
+  the response half as well as the request half (`ledger/store.go`), and the
+  two key files are checked on every open by `internal/ownerdir` — mode
+  verified and tightened, and an unreadable key refused before
+  `loadOrCreateKey` can decide to generate a replacement.
 - **Four of eight TUI screens still carry example data.** Honest on screen,
   but it bounds what can be shown.
 - **The proxy publishes no per-lane cost**, and the lane path has never run with

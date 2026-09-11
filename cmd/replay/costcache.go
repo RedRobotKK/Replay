@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/version"
 )
 
 // An index over transcripts already understood.
@@ -168,8 +169,28 @@ func (c *costCache) save() error {
 // costUnit gained a field, the key did not change, and the same binary on the
 // same machine reported 763k tokens warm against 31.4M cold.
 func costIndexKey() string {
-	return "replay.cost.v2/" + cachemodel.PriceTableVersion + "/" +
-		cachemodel.RulesVersion + "/" + unitSchema()
+	// The build identity, because the schema catches a change to the SHAPE of a
+	// cached unit and nothing catches a change to what one MEANS.
+	//
+	// #168 changed cost from pricing one lane per transcript to pricing every
+	// lane. The corpus total moved from $3,787 to $10,667 and not one field
+	// changed name, so this key did not move and every machine with a warm
+	// index kept reporting the old figure. The correction was invisible to
+	// exactly the people who already had the tool.
+	//
+	// v2 rather than v1 because this branch also changed the SHAPE: a cached
+	// unit now carries whether its request id was measured, and an index
+	// written before that cannot answer the join. The schema bump and the
+	// build identity answer different questions and both belong.
+	//
+	// No key can detect a semantic change in general. What it can detect is
+	// that the binary is not the one that wrote the index, which covers every
+	// released upgrade — the case that matters, because a developer with a dev
+	// build can delete the file and a user who upgraded cannot know they need
+	// to. The cost is one cold walk after an upgrade, against an index that
+	// took this command from 6.474s to 0.046s.
+	return "replay.cost.v2/" + version.Version + "/" + version.Commit + "/" +
+		cachemodel.PriceTableVersion + "/" + cachemodel.RulesVersion + "/" + unitSchema()
 }
 
 func unitSchema() string {

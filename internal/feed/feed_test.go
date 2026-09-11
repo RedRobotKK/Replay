@@ -3,6 +3,8 @@ package feed
 import (
 	"crypto/ed25519"
 	"encoding/json"
+	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -196,4 +198,178 @@ func TestFD8_ThisBuildHasNoVendorKey(t *testing.T) {
 	if _, err := VerifyFromVendor(raw, ed25519.Sign(priv, raw)); err == nil {
 		t.Fatal("VerifyFromVendor accepted a bundle with no vendor key configured")
 	}
+}
+
+// The six guards below were found by mutation, not by reading, and each was
+// removable with this package's suite still green.
+//
+// They were missed by scripts/refusal-reachability because that tool selects on
+// the vocabulary this project uses when it declines to answer — "NOT MEASURED",
+// "refusing to" — and these say "could not reach", "was not read" and "not a
+// URL". The vocabulary list IS the tool's blind spot, which is why a general
+// per-file sweep of every conditional was run alongside it. internal/feed had
+// the worst score in the tree: 7 of 16 conditionals survived.
+//
+// They are worth closing rather than noting because of what they guard. This is
+// the package that reads a supply-chain input: it takes bytes from a vendor
+// host and turns them into the price table a reader is invoiced against.
+
+// FD-9: a wrong-length signature is refused by the length check, by name.
+//
+// ed25519.Verify also rejects a short signature, so it shadows this guard
+// completely: remove the length check and Verify refuses anyway, with a
+// different sentence, and any test asserting only "an error came back" stays
+// green. The length check earns its place by saying which of the two things is
+// wrong — a truncated download and a forged signature need different actions —
+// so the assertion is on the sentence only it produces.
+func TestFD9_AWrongLengthSignatureIsNamedAsSuch(t *testing.T) {
+	pub, priv := testKey(t)
+	raw := bundleBytes(t, 3)
+	short := ed25519.Sign(priv, raw)[:ed25519.SignatureSize-1]
+
+	_, err := Verify(raw, short, pub)
+	if err == nil {
+		t.Fatal("a signature one byte short verified")
+	}
+	if !strings.Contains(err.Error(), "signature is 63 bytes, want 64") {
+		t.Errorf("refused, but not by the length check, so a truncated download reads as "+
+			"a forgery: %v", err)
+	}
+}
+
+// FD-10: a bundle with no version is refused even though it verifies.
+//
+// Version 0 is what an unversioned or zero-valued bundle deserialises to, and
+// NewerThan compares versions to detect a rollback. A bundle at version 0
+// signed by the real key would pass verification and then defeat the rollback
+// check for every bundle after it, since nothing is <= 0 except 0 itself.
+func TestFD10_AVersionlessBundleIsRefusedAfterVerifying(t *testing.T) {
+	pub, priv := testKey(t)
+	raw := bundleBytes(t, 0)
+
+	_, err := Verify(raw, ed25519.Sign(priv, raw), pub)
+	if err == nil {
+		t.Fatal("a bundle with no version was accepted from a valid signature")
+	}
+	if !strings.Contains(err.Error(), "carries no version") {
+		t.Errorf("refused, but not by the version guard: %v", err)
+	}
+	// The signature itself was fine. If this stops holding, the test above is
+	// passing for the wrong reason and proves nothing about the version.
+	if strings.Contains(err.Error(), "signature") {
+		t.Fatalf("the signature was rejected, so this fixture never reaches the "+
+			"version guard: %v", err)
+	}
+}
+
+// FD-11: a string that is not a URL is refused before any scheme check.
+//
+// CheckSource's later guards read u.Scheme and u.Hostname() off the parse
+// result. Remove this one and a malformed source is judged on the zero value
+// of a failed parse, which has an empty scheme and an empty hostname — so it
+// is refused, but for a reason that has nothing to do with what is wrong, and
+// the person holding a typo'd URL is told https is required.
+func TestFD11_AMalformedSourceIsRefusedAsMalformed(t *testing.T) {
+	err := CheckSource("https://[::1")
+	if err == nil {
+		t.Fatal("a string that does not parse as a URL was accepted as a feed source")
+	}
+	if !strings.Contains(err.Error(), "not a URL") {
+		t.Errorf("refused, but not as a parse failure, so a typo'd address is reported "+
+			"as the wrong protocol: %v", err)
+	}
+}
+
+// FD-12: the three guards inside get(), which nothing reached.
+//
+// FD-6 covers the connection failing. These are the three ways a host that
+// ANSWERS can still not have given us a feed, and each is a way an attacker or
+// a broken CDN gets bytes in front of the verifier.
+func TestFD12_AHostThatAnswersCanStillFail(t *testing.T) {
+	t.Run("a non-200 response is not a feed", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "nope", http.StatusNotFound)
+		}))
+		defer srv.Close()
+		_, _, err := Fetch(srv.Client(), srv.URL)
+		if err == nil {
+			t.Fatal("a 404 body was returned as a feed")
+		}
+		// Without the status check the 404 body is read and handed to the
+		// verifier as content, which then reports a signature failure — a
+		// misconfigured CDN would look like an attack.
+		if !strings.Contains(err.Error(), "HTTP 404") {
+			t.Errorf("the status was not reported, so an error page reaches the "+
+				"verifier as content: %v", err)
+		}
+	})
+
+	t.Run("a body over the cap is not read", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write(make([]byte, MaxBundle+1))
+		}))
+		defer srv.Close()
+		_, _, err := Fetch(srv.Client(), srv.URL)
+		if err == nil {
+			t.Fatalf("a body of %d bytes was accepted against a cap of %d", MaxBundle+1, MaxBundle)
+		}
+		if !strings.Contains(err.Error(), "larger than") {
+			t.Errorf("the cap did not refuse it, so the only limit left is the reader's "+
+				"memory: %v", err)
+		}
+	})
+
+	t.Run("a body that stops mid-stream is an error, not a short feed", func(t *testing.T) {
+		// Content-Length promises more than the handler delivers, and aborting
+		// closes the connection without the rest. io.ReadAll returns what it
+		// got plus an error, and without the check that error is dropped and a
+		// TRUNCATED body goes to the verifier. That is the worst of the three:
+		// a signature check over a prefix of the bundle.
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Length", "4096")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(make([]byte, 16))
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+			panic(http.ErrAbortHandler)
+		}))
+		srv.Config.ErrorLog = log.New(io.Discard, "", 0) // the abort is the point, not a fault
+		defer srv.Close()
+		// A path, and the reason is that the first version of this subtest was
+		// itself vacuous. It fetched srv.URL bare, so Fetch's second call went
+		// to "http://127.0.0.1:PORT.sig" — not a URL — and errored in the
+		// TRANSPORT check above. With the read check neutralised the subtest
+		// still went green, off a refusal from a different guard entirely.
+		// Reported by the per-file mutation sweep, on the test written to close
+		// that sweep's last survivor.
+		_, _, err := Fetch(srv.Client(), srv.URL+"/feed.json")
+		if err == nil {
+			t.Fatal("a body that stopped early was returned as a complete feed, so the " +
+				"signature would be checked over a prefix of the bundle")
+		}
+		if !strings.Contains(err.Error(), "could not reach") {
+			t.Errorf("the read failure was not reported as a fetch failure: %v", err)
+		}
+	})
+
+	t.Run("a nil client is given one rather than dereferenced", func(t *testing.T) {
+		pub, priv := testKey(t)
+		raw := bundleBytes(t, 4)
+		srv := serve(t, raw, ed25519.Sign(priv, raw))
+		defer srv.Close()
+		// A caller with no client of its own is the ordinary case, and every
+		// call in this package passes the client straight to c.Get. Remove the
+		// nil default and this is a nil-pointer panic in a fetch path, not an
+		// error somebody can report.
+		// A path, not a bare host: Fetch appends ".sig" to the base, and
+		// "http://127.0.0.1:60072" + ".sig" is not a URL.
+		got, sig, err := Fetch(nil, srv.URL+"/feed.json")
+		if err != nil {
+			t.Fatalf("a nil client did not get a default: %v", err)
+		}
+		if _, err := Verify(got, sig, pub); err != nil {
+			t.Errorf("the bytes a defaulted client fetched do not verify: %v", err)
+		}
+	})
 }

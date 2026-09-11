@@ -12,8 +12,14 @@ The distinction is not code quality. The test posture is strong: 816 test
 functions across 152 files against 127 source files, `go vet` plus
 `go test -race -count=1` on every push, and every fix in this release was
 reproduced red before it was fixed and then mutation tested. What is missing is
-that four security findings are open by choice, and one provider path has never
-touched a live provider.
+that one security finding is open in part by choice, and one provider path has
+never touched a live provider.
+
+**Updated 2026-09-10.** Findings 4, 6 and 7 are closed and finding 3 is closed
+on eviction. Each closure is a test that fails when the guard is removed; the
+guards were neutralised in the source and watched to go red rather than
+declared. What is left of finding 3 — the vault key file sitting beside the
+ciphertext — is unchanged and still gates 1.0.
 
 ## The v1.0 bar
 
@@ -22,18 +28,31 @@ Each line is a gate. A release cannot claim 1.0 with any of them unmet, and
 
 ### Security
 
-- [ ] **Finding 3, the vault key boundary.** The key file sits beside the
-      ciphertext, so masking converts transient secrets into secrets at rest
-      with no eviction. Either the key moves to the OS keychain, or vault
-      entries expire, or the README stops implying masking is durable
-      protection. One of the three, chosen deliberately.
-- [ ] **Finding 4, response-side `call_key`.** Currently unkeyed SHA-256
-      (`transcript/wire.go:181`), so a ledger holder can confirm guessed tool
-      calls offline. The request side is already HMAC'd. The two halves of one
-      ledger must not have different properties.
-- [ ] **Findings 6 and 7** either fixed or restated in the README as the
-      supported operating model, in the README itself and not only in the
-      security review. An operator who never opens `docs/` should still know.
+- [ ] **Finding 3, the vault key boundary.** Half done, 2026-09-10, and the
+      remaining half is the one this line is about. Vault entries now expire
+      — 24 hours by default, `--mask-ttl` to change it, `0` for the old
+      unbounded behaviour — which is the second of the three options below,
+      taken deliberately because the first is not reachable: the OS keychain
+      needs `os/exec`, and `TestX402_ExecIsConfinedToTheMutationHarness` keeps
+      `os/exec` out of every ordinary build on the grounds that it can call
+      anything. **Still open: the key file sits beside the ciphertext**, so
+      within the TTL the vault is plaintext-equivalent to anyone who can read
+      the directory. A 1.0 needs the key somewhere else, or a README that says
+      plainly that masking is a transit control and not storage.
+- [x] **Finding 4, response-side `call_key`.** Closed 2026-09-10.
+      `Store.Append` re-keys the response half under the ledger secret, so both
+      halves of one ledger have one property. Guarded by
+      `internal/ledger/responsecallkey_test.go`, which asserts on the bytes on
+      disk and covers the streaming parser separately.
+- [x] **Findings 6 and 7** closed 2026-09-10, and restated in the README's
+      Footprint section rather than only here — an operator who never opens
+      `docs/` should still know. Finding 6: `Host` validation on every
+      TCP-served route and the browser guard on `/replay/healthz`
+      (`internal/proxy/hostguard.go`); the token stays optional on the read
+      endpoints and absent from healthz, which is a decision the README now
+      states. Finding 7: `internal/ownerdir` verifies and tightens the ledger
+      and vault directories and their key files on open, and refuses when it
+      cannot.
 
 ### Provider coverage
 

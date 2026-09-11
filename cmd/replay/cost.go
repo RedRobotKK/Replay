@@ -502,8 +502,24 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	tone := fs.String("tone", "", "the register the card is written in: measured (what was found, stated, the default) or rekt (the same figures, exact and deadpan)")
 	contributeTo := fs.String("contribute", "", "build a corpus submission for this campaign from the figures below; writes a file, sends nothing. Unlike the probe submission, this one CARRIES SPEND")
 	contributeDir := fs.String("contribute-dir", ".", "where --contribute writes its file")
+	usageOnly := fs.String("usage", "", "price a usage export instead of transcripts: token counts per request, no conversation content. "+
+		"Figures that cannot be sourced from token counts alone print NOT MEASURED rather than zero")
 	if err := parseArgs(fs, args, stdout); err != nil {
 		return err
+	}
+	// The usage-only path, decided before anything goes looking for a
+	// transcript.
+	//
+	// It short-circuits rather than joining the transcript pipeline further
+	// down, because the two run on different evidence and every figure below
+	// this point assumes the transcript kind. A merged branch would have to
+	// answer on every line which of the two it was holding, and costSummary's
+	// float64s have no way to say "not measured" if it got that wrong.
+	if *usageOnly != "" {
+		if err := usageOnlyRefusals(*share, *png, *since, *contributeTo, *perLane, fs.Args()); err != nil {
+			return err
+		}
+		return runCostUsage(*usageOnly, *asJSON, *perTask, *maxAvoidable, stdout)
 	}
 	// Resolved before any transcript is read, so a typo in --card costs
 	// nothing and is reported as what it is rather than after a full scan.

@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/RedRobotKK/Replay/internal/ownerdir"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -49,10 +50,21 @@ type Store struct {
 
 // Open creates the ledger directory and its label key if needed.
 func Open(dir string) (*Store, error) {
-	if err := os.MkdirAll(dir, dirPerm); err != nil {
-		return nil, fmt.Errorf("create ledger directory: %w", err)
+	// Create it if it is missing and VERIFY it if it is not: os.MkdirAll
+	// applies its mode only when it creates, so a pre-existing world-writable
+	// ~/.replay/ledger used to be accepted in silence. Finding 7.
+	if err := ownerdir.EnsureDir(dir); err != nil {
+		return nil, fmt.Errorf("ledger directory: %w", err)
 	}
-	key, err := loadOrCreateKey(filepath.Join(dir, labelKeyFile))
+	keyPath := filepath.Join(dir, labelKeyFile)
+	// The label key is what makes the hashed path labels and the tool call
+	// keys anonymous, so it is checked by name rather than left to the
+	// directory: os.WriteFile does not change the mode of a file that is
+	// already there.
+	if err := ownerdir.EnsureFile(keyPath); err != nil {
+		return nil, fmt.Errorf("ledger label key: %w", err)
+	}
+	key, err := loadOrCreateKey(keyPath)
 	if err != nil {
 		return nil, err
 	}
@@ -85,6 +97,11 @@ func (s *Store) Labeler() *Labeler { return s.labeler }
 // Append writes one record to its session file.
 func (s *Store) Append(rec Record) error {
 	rec.Schema = SchemaVersion
+	// The response half of the record arrives with unkeyed call identities,
+	// because nothing downstream of the wire has the ledger secret. Key them
+	// here, at the one place a record becomes a file, so both halves of what
+	// a ledger holder can read have the same property. Finding 4.
+	rec.Response.Blocks = s.labeler.KeyResponseCalls(rec.Response.Blocks)
 	line, err := json.Marshal(rec)
 	if err != nil {
 		return fmt.Errorf("encode ledger record: %w", err)

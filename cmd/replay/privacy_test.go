@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -200,9 +202,332 @@ func treeSnapshot(t *testing.T, root string) string {
 		if err != nil || info.IsDir() {
 			return nil
 		}
+		// The size is formatted, not converted. string(rune(size)) reads the
+		// byte count as a Unicode code point: every size in the surrogate
+		// range and every size above 0x10FFFF encodes to U+FFFD, so a file
+		// growing from 2MB to 3MB left this snapshot unchanged and PV3 could
+		// not see the change it exists to watch for.
 		b.WriteString(p + ":" + info.ModTime().Format(time.RFC3339Nano) + ":" +
-			string(rune(info.Size())) + "\n")
+			strconv.FormatInt(info.Size(), 10) + "\n")
 		return nil
 	})
 	return b.String()
+}
+
+// PV10: an unreadable ~/.replay is not reported as an empty one.
+//
+// resolveStores returned nil for both, and privacy printed "Replay has written
+// nothing to this machine" — a false absence claim in the command that answers
+// "what do you hold about me". A subject access request answered with silence
+// about a directory nobody could read is worse than an error.
+func TestPV10_AnUnreadableStoreIsNotReportedAsEmpty(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no Unix mode bits on this platform; a directory cannot be made unreadable here")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("running as root, which can read anything")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	root := filepath.Join(home, ".replay")
+	if err := os.MkdirAll(filepath.Join(root, "ledger"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(root, 0o000); err != nil {
+		t.Skipf("cannot remove directory permissions: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(root, 0o700) })
+
+	var out, errb bytes.Buffer
+	err := runPrivacy(nil, &out, &errb)
+	if err == nil {
+		t.Fatal("an unreadable ~/.replay was accepted; it must not be answered at all " +
+			"rather than answered wrongly")
+	}
+	if strings.Contains(out.String(), "written nothing to this machine") {
+		t.Errorf("an unreadable store was reported as an empty machine:\n%s", out.String())
+	}
+}
+
+// PV11: a store with an entry nobody could walk is not reported at its readable size.
+//
+// measureStore totals what the walk could read. A directory inside a store that
+// cannot be listed contributes nothing, so the store prints smaller than it is —
+// and an entire store that cannot be opened prints as "0 B", which reads as a
+// store known to be empty. The disclosure has to bound its own claim.
+func TestPV11_AStoreWithAnEntryItCouldNotWalkSaysSo(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no Unix mode bits on this platform; a directory cannot be made unreadable here")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("running as root, which can read anything")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	locked := filepath.Join(home, ".replay", "ledger", "locked")
+	if err := os.MkdirAll(locked, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(locked, "s1.jsonl"), []byte(`{"schema":1}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0o000); err != nil {
+		t.Skipf("cannot remove directory permissions: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+
+	var out, errb bytes.Buffer
+	if err := runPrivacy(nil, &out, &errb); err != nil {
+		t.Fatalf("privacy failed on a readable ~/.replay holding one unreadable entry: %v", err)
+	}
+	if !strings.Contains(out.String(), "could not be measured") {
+		t.Errorf("a store holding an entry nobody could walk was printed as a plain "+
+			"size, so the reader cannot tell it from one measured whole:\n%s", out.String())
+	}
+}
+
+// PV12: and a store measured whole claims nothing was missed.
+//
+// The other half of PV11. A disclosure that always hedges is a disclosure the
+// reader learns to ignore, which costs exactly as much as never hedging.
+func TestPV12_AStoreMeasuredWholeSaysNothingWasMissed(t *testing.T) {
+	homeWithStores(t)
+	var out, errb bytes.Buffer
+	if err := runPrivacy(nil, &out, &errb); err != nil {
+		t.Fatalf("privacy failed: %v", err)
+	}
+	if strings.Contains(out.String(), "could not be measured") {
+		t.Errorf("a fully readable ~/.replay reported entries it could not measure:\n%s",
+			out.String())
+	}
+}
+
+// measureStore counts files, and the directories holding them are not files.
+//
+// Walk visits the store root and every subdirectory under it. Counting those as
+// entries would inflate the file count `replay privacy` prints and add the
+// directories' own sizes to a total the reader reads as bytes of their data.
+func TestMeasureStoreCountsFilesAndNotTheDirectoriesHoldingThem(t *testing.T) {
+	store := filepath.Join(t.TempDir(), "ledger")
+	if err := os.MkdirAll(filepath.Join(store, "nested"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(store, "a.jsonl"), []byte("0123456789"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(store, "nested", "b.jsonl"), []byte("01234567890123456789"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	total, files, unmeasured := measureStore(store)
+	if files != 2 {
+		t.Errorf("measureStore counted %d files under a store holding two, plus two "+
+			"directories; a directory is not a record", files)
+	}
+	if total != 30 {
+		t.Errorf("measureStore totalled %d bytes, want 30: the reader reads this as "+
+			"bytes of their data, not as bytes of directory entries", total)
+	}
+	if unmeasured != 0 {
+		t.Errorf("%d entr(ies) reported unmeasurable in a store that was readable "+
+			"throughout", unmeasured)
+	}
+}
+
+// PV13: a machine Replay has never written to is answered, not refused.
+//
+// The other side of PV10, and the one the first-run reader meets. `~/.replay`
+// absent is the one read error that does mean "nothing here", so it produces
+// the empty answer rather than a failure — and separating the two is the whole
+// point of PV10. Without this, tightening the check to reject every read error
+// turns the first thing a new reader can safely run into an error, and the
+// suite stays green.
+func TestPV13_AMachineWithNothingWrittenIsAnswered(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	var out, errb bytes.Buffer
+	if err := runPrivacy(nil, &out, &errb); err != nil {
+		t.Fatalf("a machine Replay has never written to was refused an answer: %v", err)
+	}
+	if !strings.Contains(out.String(), "written nothing to this machine") {
+		t.Errorf("an untouched machine was not told plainly that nothing is held:\n%s",
+			out.String())
+	}
+}
+
+// PV9: the snapshot must notice a size change.
+//
+// treeSnapshot recorded a file's size as string(rune(size)) — the byte count
+// reinterpreted as a Unicode code point. Every size in the surrogate range
+// (0xD800-0xDFFF) and every size above 0x10FFFF encodes to the same U+FFFD, so
+// two files differing by any amount in those ranges produced an identical
+// snapshot.
+//
+// PV3 itself was NOT blind, and an earlier draft of this said it was. Measured
+// A/B with the same injected leak: with the old encoding and the new one PV3
+// fails either way, because any write also moves the mtime and the snapshot
+// records that at nanosecond resolution.
+//
+// What was broken is the size FIELD, and the gap it leaves is narrower and
+// still real: a change that alters a file's length without moving its mtime —
+// a restore, a preserved-timestamp copy, a deliberate touch. A field that
+// collapses distinct values is wrong whether or not a sibling field happens to
+// cover for it, and the next assertion written against it would inherit the
+// blindness with no mtime to save it.
+//
+// 55296 and 55297 bytes are the cheap demonstration: both are surrogates, and
+// both collapsed. A file growing from 2MB to 3MB collapsed too. The claim here
+// is only about the field, because that is all the A/B supports.
+func TestPV9_TheSnapshotSeesASizeChange(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		a, b int
+	}{
+		{"surrogate range", 0xD800, 0xD801},
+		{"above the last code point", 0x110000, 0x110001},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dirA, dirB := t.TempDir(), t.TempDir()
+			if err := os.WriteFile(filepath.Join(dirA, "f"), make([]byte, tc.a), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dirB, "f"), make([]byte, tc.b), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			// Compare only the size field, so the differing paths and mtimes
+			// cannot mask the defect being tested.
+			sizeOf := func(dir string) string {
+				snap := treeSnapshot(t, dir)
+				parts := strings.Split(strings.TrimSpace(snap), ":")
+				return parts[len(parts)-1]
+			}
+			if sizeOf(dirA) == sizeOf(dirB) {
+				t.Errorf("%d and %d bytes produce the same snapshot field, so PV3 cannot "+
+					"see a file change size by %d bytes", tc.a, tc.b, tc.b-tc.a)
+			}
+		})
+	}
+}
+
+// PV5: every line of the disclosure is a branch, and none of them were
+// observed.
+//
+// `replay privacy` is the answer to "what do you have on me". Eight of its
+// conditionals could be removed without a test noticing, including the mark
+// that flags the one store holding secrets and the sentence saying a store
+// survives a retention window. A disclosure whose distinguishing marks are
+// untested discloses whatever the last edit left behind.
+func TestPV5_TheDisclosureMarksAreEachObserved(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	root := filepath.Join(home, ".replay")
+	if err := os.MkdirAll(filepath.Join(root, "vault"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// A directory store with more than one file, so the file count prints.
+	led := filepath.Join(root, "ledger")
+	if err := os.MkdirAll(led, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"a.jsonl", "b.jsonl"} {
+		if err := os.WriteFile(filepath.Join(led, n), []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "vault", "vault.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errb bytes.Buffer
+	if err := runPrivacy(nil, &out, &errb); err != nil {
+		t.Fatalf("privacy failed: %v", err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "! vault") {
+		t.Errorf("the sensitive store is not marked; the mark is how a reader finds the one\n"+
+			"store holding secrets rather than counts about them:\n%s", s)
+	}
+	if !strings.Contains(s, "2 files") {
+		t.Errorf("a store of several files did not report how many:\n%s", s)
+	}
+	if !strings.Contains(s, "Not removed by a retention window") {
+		t.Errorf("a store that a window does not cover must say so, or a reader believes\n"+
+			"purge --older-than reaches everything:\n%s", s)
+	}
+}
+
+// PV6: nothing on disk is said plainly, not rendered as an empty table.
+func TestPV6_AnEmptyMachineIsSaidPlainly(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	var out, errb bytes.Buffer
+	if err := runPrivacy(nil, &out, &errb); err != nil {
+		t.Fatalf("privacy failed: %v", err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "has written nothing to this machine") {
+		t.Errorf("an empty machine must be stated, not shown as a heading over nothing:\n%s", s)
+	}
+	if strings.Contains(s, "Everything Replay holds") {
+		t.Errorf("a heading was printed over an empty disclosure:\n%s", s)
+	}
+}
+
+// PV7: with no home directory there is nothing to disclose and the command
+// says why rather than reporting an empty machine.
+//
+// Absence, zero and unknown are three values. "I could not find your home" and
+// "you have nothing" are different answers to "what do you have on me".
+func TestPV7_NoHomeIsAnErrorNotAnEmptyReport(t *testing.T) {
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+	var out, errb bytes.Buffer
+	err := runPrivacy(nil, &out, &errb)
+	if err == nil {
+		// Not a skip. `os.UserHomeDir` returns an error when HOME is empty on
+		// unix, so a nil error here means the guard was removed, not that the
+		// platform differs — and a skip would swallow exactly that regression.
+		t.Fatal("privacy resolved a home directory with HOME unset, so the error " +
+			"branch is gone: an unlocatable home would be reported as an empty machine")
+	}
+	if !strings.Contains(err.Error(), "home directory") {
+		t.Errorf("refused for the wrong reason: %v", err)
+	}
+	if strings.Contains(out.String(), "written nothing") {
+		t.Errorf("an unlocatable home was reported as an empty machine:\n%s", out.String())
+	}
+}
+
+// PV8: a store measured as a single file reports one file, and a store that
+// cannot be measured reports nothing rather than guessing.
+func TestPV8_MeasureStoreCountsFilesAndAbsence(t *testing.T) {
+	dir := t.TempDir()
+	single := filepath.Join(dir, "one.json")
+	if err := os.WriteFile(single, []byte("12345"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if b, n, _ := measureStore(single); b != 5 || n != 1 {
+		t.Errorf("measureStore(single file) = (%d, %d), want (5, 1)", b, n)
+	}
+	if b, n, _ := measureStore(filepath.Join(dir, "absent")); b != 0 || n != 0 {
+		t.Errorf("measureStore(absent) = (%d, %d), want (0, 0)", b, n)
+	}
+	sub := filepath.Join(dir, "many")
+	if err := os.MkdirAll(filepath.Join(sub, "nested"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"a", "nested/b"} {
+		if err := os.WriteFile(filepath.Join(sub, p), []byte("xy"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Directories are counted as containers, never as files.
+	if b, n, _ := measureStore(sub); b != 4 || n != 2 {
+		t.Errorf("measureStore(directory) = (%d, %d), want (4, 2): a directory is not a file", b, n)
+	}
 }

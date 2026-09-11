@@ -2,13 +2,44 @@ package analysis
 
 // Pre-flight deficit policy.
 //
-// The provider's rate-limit headers cannot drive this. Measured 2026-09-06
-// across a 30-lane randomized trial: 142 responses carried
-// anthropic-ratelimit-unified-*, and 3,778,706 re-billed tokens moved the 5h
-// utilization figure from 0.10 to 0.15. That is five steps at the header's
-// published 0.01 resolution, each step spanning ~28 requests across both arms.
-// A 140,000-token full-prefix re-lay does not move the counter by one tick, so
-// the header can be a denominator and never a trigger.
+// The provider's rate-limit headers cannot drive this, and the reason is
+// stronger than the one this comment used to give.
+//
+// **Corrected 2026-09-10.** This comment used to read, and every figure in it
+// is void: "Measured 2026-09-06 across a 30-lane randomized trial: 142
+// responses carried anthropic-ratelimit-unified-*, and 3,778,706 re-billed
+// tokens moved the 5h utilization figure from 0.10 to 0.15. That is five steps
+// at the header's published 0.01 resolution, each step spanning ~28 requests
+// across both arms." The 30-lane trial was re-read lane by
+// lane and 31 of its 34 events never happened — internal/proxy/preflight.go
+// says of the same trial, "That was the instrument, not the world" — so
+// 3,778,706 is a product of the broken session-wide classifier rather than a
+// measurement. The utilization MOVEMENT was never recorded: a before and an
+// after that differ exists nowhere. The headers themselves were captured — one
+// 2026-09-06 ledger record survives, quoted inside a transcript, carrying
+// anthropic-ratelimit-unified-5h-utilization "0.13" beside its reset and status
+// — so internal/proxy/quota.go works and has run. One reading of 0.13 is not
+// five steps from 0.10 to 0.15, and the ledger those records lived in has since
+// rotated, so the claim can no longer be checked against the data that was
+// supposed to support it.
+//
+// docs/evidence/subscription-allowance-2026-09-09.md retracts the headline in
+// full and docs/design/quota-estimator-red.md names this file as the one place
+// the correction never landed. It did not land here for four days. Note that
+// the retraction overstates its own census — it says zero anthropic-ratelimit-*
+// records were ever found, and the record above falsifies that; it measured a
+// ledger already rotated and read the truncation as history. The half that
+// holds is retry-after, never observed in any record or transcript.
+//
+// **What was actually measured**, with matched cold-write and warm-read arms
+// over 3.09M tokens (README.md:244-254): the utilisation counter moved **zero**
+// steps. A null result, published as one.
+//
+// That is why the conclusion survives its evidence. A counter that did not move
+// across 3.09M re-billed tokens cannot be a trigger for anything, and a
+// 140,000-token full-prefix re-lay is far below what was already shown not to
+// move it. The header can be a denominator and never a trigger — established
+// now by a null result rather than by a step count that was never observed.
 //
 // What is available before the wire is the prefix comparison the calibrator
 // already does: whether this request re-lays content an earlier request in the

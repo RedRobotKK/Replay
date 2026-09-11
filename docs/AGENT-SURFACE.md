@@ -39,6 +39,22 @@ mention it. A skill nothing points at is a skill nobody loads.
 it. Nothing about it should be automatic: this project's whole position is that
 you can see what it did.
 
+**The cheapest-looking version of it does not work, and that was checked rather
+than assumed.** Having `install.sh` simply print the hosted skill URL fails
+`scripts/installer-telemetry/check.sh`, which allows exactly one `redrobot.jp`
+URL in that file — `https://redrobot.jp/Replay/install.sh` — and reports any
+other as an undocumented endpoint. The narrowing is deliberate: a host-level
+allowlist would have waved through the install beacon reverted on 2026-09-09.
+So naming the skill from the installer is a change to the guard's allowlist
+first and a change to the installer second, and that argument has to be made in
+the open.
+
+What does not need the guard touched, and is written today, is
+[the boot block a reader can paste by hand](guide/first-run-journey.md), with a
+statement of what `replay agents` does and does not write. That command's block
+names where **this project** keeps its records; it does not say what Replay is
+or when to reach for it, and no surface in the tool writes a block that does.
+
 ### 2. There is no "when to use which"
 
 PostHog documents **When to use the CLI** against **When to use the MCP**, so an

@@ -8,7 +8,7 @@ serve`, and the archetype renderings that do appear, the four-state threshold
 meter on the guards screen and the posture block on the safe screen, are drawn
 from example data and say so.
 
-Replay has **80 flags across 14 commands**. `serve` carries 29 of them, `probe`
+Replay has **81 flags across 14 commands**. `serve` carries 29 of them, `probe`
 16. That count is the finding rather than the input: a surface that renders 78
 flags as 80 widgets is a worse tool than the command line it replaces, because
 it asks the reader to hold the same complexity with less to hold onto.
@@ -18,7 +18,7 @@ flag is, because **twenty of them are the same kind of thing and collapse into
 one component with four states**.
 
 Every flag below was extracted from `cmd/replay/*.go`, not from documentation.
-All 80 are classified; none are left over.
+All 81 are classified; none are left over.
 
 ## The six archetypes
 
@@ -91,7 +91,7 @@ asking you to trust a summary of the thing rather than the thing.
 
 ## The full mapping
 
-### Replaces the surface (12)
+### Replaces the surface (13)
 
 | Flag | Command | Type |
 |---|---|---|
@@ -99,6 +99,7 @@ asking you to trust a summary of the thing rather than the thing.
 | `--once` | `tui` | bool |
 | `--json` | `context` | bool |
 | `--json` | `cost` | bool |
+| `--usage` | `cost` | string |
 | `--json` | `route` | bool |
 | `--json` | `trim` | bool |
 | `--no-color` | `statusline` | bool |
@@ -107,6 +108,15 @@ asking you to trust a summary of the thing rather than the thing.
 | `--version` | `upgrade` | string |
 | `--older-than` | `purge` | string |
 | `--session` | `purge` | string |
+
+<!-- `--usage` replaces the surface because it replaces the EVIDENCE. It prices a
+usage export — token counts per request, no conversation content anywhere in the
+file — and half the figures `cost` normally prints are then structurally absent:
+no repeated tool results, no tool errors, no per-block blame, no alternative
+layouts, and no cause for any break that usage and timing cannot settle on their
+own. Those print NOT MEASURED, never zero. A screen that tuned the transcript
+report with a toggle would have to render an absence as a widget state; a
+different report is the honest rendering. -->
 
 <!-- Both belong here for the same reason `--check` does: each replaces what the
 command produces rather than tuning how it behaves. `--older-than` makes purge a
@@ -145,7 +155,7 @@ elsewhere in this file. -->
 | `--token` | `serve` | string |
 | `--upstream` | `serve` | string |
 
-### Threshold that can fire (20)
+### Threshold that can fire (21)
 
 | Flag | Command | Type |
 |---|---|---|
@@ -160,6 +170,7 @@ elsewhere in this file. -->
 | `--loop-warn` | `serve` | int |
 | `--max-age` | `probe` | duration |
 | `--max-day-tokens` | `serve` | int |
+| `--mask-ttl` | `serve` | duration |
 | `--max-day-usd` | `serve` | float64 |
 | `--max-probes` | `probe` | int |
 | `--max-session-tokens` | `serve` | int |

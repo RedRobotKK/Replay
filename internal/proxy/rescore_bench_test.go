@@ -151,83 +151,53 @@ func syntheticSession(sessionID string, n int) []ledger.Record {
 
 // The cost of a session must not grow worse than quadratically.
 //
-// A benchmark nobody runs is not a guard. BenchmarkAddedLatency deliberately
-// asserts nothing, which is right for an absolute latency figure on noisy CI,
-// but it leaves this path with no automated floor at all. So this is a test,
-// and it asserts a RATIO rather than a duration: how much more it costs to
-// serve twice as many requests. A ratio survives a slow or busy machine in a
-// way "must finish in N ms" does not.
+// rescore re-walks the whole lane on every request, so the requests analysed
+// across a session of n is 1+2+...+n — quadratic by design, and known. What
+// this guards is a nested walk being added on top, which would make it cubic
+// and which nothing else catches: the client never waits for rescore, so
+// BenchmarkAddedLatency is structurally blind to this code.
 //
-// The first version compared 100 against 200 with a 6x bound, reasoning that
-// quadratic is 4x per doubling and cubic is 8x, so 6x sat between them. It
-// measured 3.51x locally and 6.55x on CI, and went red on correct code within
-// the hour. One doubling does not separate the two hypotheses by enough to
-// survive a contended runner, where the larger workload suffers more than the
-// smaller one for reasons that have nothing to do with the algorithm.
+// Counted, not timed. The first version measured wall-clock and asserted a
+// ratio under 32x. It failed roughly one run in three on a loaded machine —
+// four separate agents hit it in one day, and it blocked merges each time for
+// a reason that had nothing to do with the code under test. A gate that fails
+// on the weather is one people learn to re-run rather than read.
 //
-// So it compares 100 against 400 instead. Over a 4x growth in length quadratic
-// predicts 16x and cubic predicts 64x, which is two doublings of headroom
-// rather than one. The bound is 32x, the geometric midpoint, and CI noise at
-// the level that produced 6.55x against an expected 4x lands nowhere near it.
-//
-// The lesson is the repository's own, from the comment on BenchmarkAddedLatency:
-// a check that cries wolf gets muted, and a muted check is not a check.
-//
-// If this fails, the likely cause is that rescore started doing more per
-// request than walk the lane once, or that AnalyzeLane grew a nested walk.
-//
-// PASS: doubling the session costs less than 6x.
-// FAIL: something made a long session disproportionately expensive, which is
-// invisible to every other test here because the client never waits for it.
+// The counter is the same claim decided by arithmetic: quadrupling the session
+// should quadruple squared, about 16x. Anything past 32x is a second walk.
 func TestRescore_SessionCostDoesNotGrowWorseThanQuadratic(t *testing.T) {
-	if testing.Short() {
-		t.Skip("timing test")
-	}
-
-	cost := func(n int) time.Duration {
-		// Best of three: the minimum is the run least disturbed by the
-		// scheduler, which is what makes a timing assertion survivable on CI.
-		best := time.Duration(1<<62 - 1)
-		for try := 0; try < 3; try++ {
-			s := newStats()
-			recs := syntheticSession("guard", n)
-			for i := range recs {
-				s.observe(&recs[i])
-			}
-			start := time.Now()
-			for i := range recs {
-				s.rescore(&recs[i])
-			}
-			if d := time.Since(start); d < best {
-				best = d
-			}
+	analysed := func(n int) int64 {
+		s := newStats()
+		recs := syntheticSession("quadratic", n)
+		for i := range recs {
+			s.observe(&recs[i])
 		}
-		return best
+		s.analysed.Store(0)
+		for i := range recs {
+			s.rescore(&recs[i])
+		}
+		return s.analysed.Load()
 	}
 
-	small, large := cost(100), cost(400)
-	if small <= 0 {
-		t.Fatal("the 100-request session was not measurable, so this test cannot fail")
-	}
+	small, large := analysed(100), analysed(400)
 
-	// The work must actually be happening, or the ratio is measuring nothing.
-	// The first version of this file's benchmark called rescore without
-	// observe, so every call returned at a map miss and reported a flat 250ns
-	// with zero allocations. That looked like proof the walk was cheap.
-	if small < 100*time.Microsecond {
-		t.Fatalf("a 100-request session rescored in %v, which is too fast to be walking the "+
-			"lane. rescore returns immediately for a session that does not exist; check "+
-			"that observe ran first, or this test is measuring a map miss", small)
+	// The work must actually be happening, or the ratio measures nothing. An
+	// earlier benchmark called rescore without observe, so every call returned
+	// at a map miss and reported a flat 250ns with zero allocations — which
+	// looked like proof the walk was cheap.
+	if small < 100 {
+		t.Fatalf("a 100-request session analysed %d lane requests, which is too few to be "+
+			"walking the lane. rescore returns immediately for a session that does not "+
+			"exist; check that observe ran first, or this test is measuring a map miss", small)
 	}
 
 	ratio := float64(large) / float64(small)
-	t.Logf("100 requests: %v, 400 requests: %v, ratio %.2fx (quadratic predicts 16x, cubic 64x)",
-		small, large, ratio)
+	t.Logf("100 requests analysed %d, 400 analysed %d, ratio %.2fx "+
+		"(quadratic predicts 16x, cubic 64x)", small, large, ratio)
 	if ratio > 32 {
-		t.Errorf("quadrupling the session length cost %.2fx (%v -> %v), over the 32x bound. "+
-			"rescore re-walks the whole lane on every request, so this path is already "+
-			"quadratic across a session; worse than that means a nested walk was added. "+
-			"Nothing else catches it: the client never waits for rescore, so "+
-			"BenchmarkAddedLatency is structurally blind to this code.", ratio, small, large)
+		t.Errorf("quadrupling the session length analysed %.2fx as many lane requests "+
+			"(%d -> %d), over the 32x bound. rescore re-walking the lane once per request "+
+			"is already quadratic; worse than that means a nested walk was added.",
+			ratio, small, large)
 	}
 }

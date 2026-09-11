@@ -75,12 +75,15 @@ func textFiles(t *testing.T, exts ...string) map[string]string {
 		if err != nil {
 			return err
 		}
-		// Keys are forward-slash on every host. Callers compare them against
-		// literals like "cmd/replay/othersurfaces.go", and a backslash key
-		// makes that lookup miss on Windows — silently, since a missing key
-		// reads as a missing file. FD-11 shipped with exactly that bug and
-		// reported the file it was looking for as deleted, which is a
-		// confident answer to a question nobody asked.
+		// Keyed with forward slashes on every platform.
+		//
+		// filepath.Rel returns the OS separator, so on Windows this map was keyed
+		// `cmd\replay\x.go` while every guard that looks a file up writes the
+		// literal `cmd/replay/x.go`. The lookup missed, and FD-11 reported the
+		// detector it could not find as DELETED — a frozen guard failing on a
+		// defect nobody had reintroduced, on the one platform nobody reads the
+		// logs for. Every consumer of this map compares against forward slashes,
+		// including the paths printed in their failure messages.
 		out[filepath.ToSlash(rel)] = string(body)
 		return nil
 	})
@@ -133,46 +136,47 @@ func containsAny(s string, needles ...string) (string, bool) {
 	return "", false
 }
 
-// textFiles keys are forward-slash on every host.
+// textFiles keys with forward slashes, and every guard looks up that way.
 //
-// Callers compare those keys against literals like
-// "cmd/replay/othersurfaces.go". On Windows the walk produced backslash keys,
-// so the lookup missed and FD-11 reported the file it was looking for as
-// deleted — a confident diagnosis of something that had not happened, which is
-// worse than a plain failure because it sends the reader after the wrong
-// defect. It passed on macOS and Linux and failed only on the host nobody
-// runs locally.
+// This is the contract FD-11 broke on. filepath.Rel returns the OS separator,
+// so on Windows the map was keyed `cmd\replay\othersurfaces.go` while the guard
+// looked up the literal `cmd/replay/othersurfaces.go`. The lookup missed and the
+// guard reported the file as DELETED — a frozen defect failing on a defect
+// nobody had reintroduced. It failed on main for at least two days before
+// anybody read a windows-latest log.
 //
-// The fix belongs in textFiles rather than at each call site, and this is what
-// makes that true for the next caller as well as the current ones.
-//
-// PASS: no key carries a host separator.
-// FAIL: one does, and every literal path comparison in this package is a
-// coin flip decided by which machine ran it.
-func TestTextFilesKeysAreSlashSeparated(t *testing.T) {
+// **Half of this test cannot fail on Unix and that is stated rather than
+// hidden.** filepath.ToSlash is the identity function where the separator is
+// already '/', so the no-backslash assertion below is vacuous on macOS and
+// Linux and is real only on the windows-latest runner. The other half — that
+// the paths guards actually look up resolve — fails anywhere, and is what
+// catches a rename.
+func TestKeysAreSlashSeparatedAndResolve(t *testing.T) {
 	files := textFiles(t, ".go")
-	// A walk that found nothing would pass this by measuring nothing.
-	if len(files) < 10 {
-		t.Fatalf("textFiles returned %d files; the walk is broken and this test "+
-			"proves nothing", len(files))
+	if len(files) < 50 {
+		t.Fatalf("textFiles returned %d files; it is not reading the tree and every "+
+			"assertion below is vacuous", len(files))
 	}
 
-	var nested int
+	// Vacuous on Unix, load-bearing on Windows.
 	for path := range files {
 		if strings.ContainsRune(path, '\\') {
-			t.Errorf("%q carries a backslash, so a literal path lookup misses on this "+
-				"host and reads as a missing file", path)
-		}
-		if strings.Contains(path, "/") {
-			nested++
+			t.Errorf("%q is keyed with a backslash; every guard in this package looks up "+
+				"a forward-slash literal and will miss it", path)
 		}
 	}
-	// Keys must be relative paths into subdirectories, not bare file names:
-	// if the walk returned only base names, the check above would pass while
-	// every path comparison in this package still failed.
-	if nested == 0 {
-		t.Error("no key names a subdirectory, so these are not repository-relative " +
-			"paths and the separator check above asserts nothing")
+
+	// Falsifiable everywhere: the lookups guards actually perform.
+	for _, want := range []string{
+		"cmd/replay/othersurfaces.go",
+		"internal/analysis/predictor.go",
+		"internal/proxy/preflight.go",
+	} {
+		if _, ok := files[want]; !ok {
+			t.Errorf("%s does not resolve in the file map. Either it was renamed and a "+
+				"guard that looks it up now fails for the wrong reason, or the keying "+
+				"changed and every path lookup in this package is broken", want)
+		}
 	}
 }
 
