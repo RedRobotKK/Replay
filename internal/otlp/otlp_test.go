@@ -2,6 +2,8 @@ package otlp
 
 import (
 	"encoding/json"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -219,17 +221,55 @@ func sample() Turn {
 // internal/observation uses, and the reason it uses it: the promise is
 // structural or it is decorative.
 //
-// PASS: no network package is reachable from here.
-// FAIL: net/http appears, which is the first line of the version this debate
-// rejected.
+// This test used to grep otlp.go for four literals - "net/http", "net",
+// "net/url" and net.Dial - which is a denylist wearing an allowlist's comment,
+// and it passed over an os/exec subprocess that shipped the written file to an
+// external courier. Every outbound transport that is not one of four strings
+// was admitted, and a denylist cannot enumerate them. So this walks the
+// imports of every non-test file in the package and refuses anything not named
+// in advance. The list is short on purpose: lengthening it should require an
+// argument.
+//
+// PASS: every import is on the allowlist.
+// FAIL: net, net/http, os/exec, or anything else that could reach outward.
 func TestOT6_ThisPackageCannotSend(t *testing.T) {
-	src, err := os.ReadFile("otlp.go")
+	allowed := map[string]bool{
+		"crypto/hmac": true, "crypto/sha256": true, "encoding/hex": true,
+		"encoding/json": true, "errors": true, "fmt": true, "os": true,
+		"path/filepath": true, "time": true,
+	}
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, ".", nil, parser.ImportsOnly)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, banned := range []string{`"net/http"`, `"net"`, `"net/url"`, `net.Dial`} {
-		if strings.Contains(string(src), banned) {
-			t.Errorf("the exporter imports %s; it writes a file and must not be able to send", banned)
+	// A directory that parsed to nothing would report every import on the
+	// allowlist by finding no imports at all, which is the shape of false green
+	// this file exists to refuse.
+	seen := 0
+	for _, pkg := range pkgs {
+		for name, file := range pkg.Files {
+			if strings.HasSuffix(name, "_test.go") {
+				continue
+			}
+			seen++
+			for _, imp := range file.Imports {
+				path := strings.Trim(imp.Path.Value, `"`)
+				if !allowed[path] {
+					t.Errorf("%s imports %q, which is not on the allowlist. This package writes a "+
+						"file and returns its path; it must not be able to send one.", name, path)
+				}
+			}
+		}
+	}
+	if seen == 0 {
+		t.Error("no non-test file in this package was parsed; the allowlist checked nothing")
+	}
+	// The allowlist must be able to fail: if it admitted a transport, it would
+	// be decoration.
+	for _, banned := range []string{"net", "net/http", "net/url", "os/exec"} {
+		if allowed[banned] {
+			t.Errorf("%q is on the allowlist; the allowlist is not a guarantee", banned)
 		}
 	}
 }
