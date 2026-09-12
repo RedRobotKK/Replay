@@ -38,6 +38,8 @@ Structure, fixed:
 **What this measures:** one paragraph, in the customer's terms.
 **Corpus:** N sessions / M transcript files / D days, read on <date>,
             at list prices dated <date> (caching rules <ruleset>).
+**Tier:**   estimated (transcripts only) | measured (proxy-recorded),
+            per ADR-0002, with the fit's uncertainty range where estimated.
 **Billing basis:** metered | flat-seat | mixed, and what that means for
                    every dollar figure below.
 
@@ -53,6 +55,16 @@ The section order is deliberate. **What is not measured** comes before the
 recommendations, not in an appendix, because the limits decide how much weight
 the recommendations carry.
 
+**The tier line is not optional and the week as drafted fails it.** Every command
+in the day table below runs on a static redacted corpus, so every figure is
+estimated-tier — and on large lanes this repository's own fit error runs from
+±29% to ±170%
+([band sensitivity](../evidence/rerender-band-sensitivity-2026-09-11.md)). A
+finding that states dollars without that range is stating a precision it does not
+have. If the customer will run `replay serve` for part of the week, the tier
+changes and the deliverable is worth more; that is a question to settle before
+Day 0, not after.
+
 ### 2. The raw material
 
 Their own outputs, so nothing in the finding is taken on trust:
@@ -65,10 +77,26 @@ Their own outputs, so nothing in the finding is taken on trust:
 ### 3. The check-it-yourself script
 
 A short shell script that regenerates every number in the finding from their
-corpus. If it does not reproduce, the finding is wrong and we say so.
+corpus.
 
-This is the part that makes the week different from consulting. The deliverable
-is not our authority, it is their measurement, which we took first.
+**It proves determinism, not correctness, and the document must not blur those.**
+Same binary, same corpus, same pinned rules document will reproduce a wrong
+figure exactly as faithfully as a right one — this repository has published the
+counterexample twice. [Lane isolation](../evidence/lane-isolation-2026-09-06.md)
+retracted a 98.8% headline that a re-run would have reproduced every time,
+because the fault was in the instrument, not the run. And
+[break causes](../evidence/break-causes-2026-09-06.md) carries an appended note
+that its 50.8% does not reproduce after 234 commits and 310 more transcripts.
+
+So: if it does not reproduce, one of the two runs is broken. If it does, the
+finding is *stable*, which is a weaker and more useful claim than *true*. The
+correctness claim is a different artefact and it exists —
+[seeded blame](../evidence/seeded-blame-2026-09-11.md), ten events with the cause
+written down in advance, 10 of 10 — and the finding should cite it rather than
+let the script imply it.
+
+This is still the part that makes the week different from consulting. The
+deliverable is not our authority, it is their measurement, which we took first.
 
 ### 4. One readout, recorded
 
@@ -82,7 +110,7 @@ apart on screen:
 
 | Verdict | Means | Example |
 |---|---|---|
-| **Avoidable** | Re-billed for a cause that had no benefit | A tool block arriving mid-session, breaking a warm prefix |
+| **Avoidable** | Spend a different mechanical choice would have avoided, with the work held constant ([WASTE-DEFINITION.md](../WASTE-DEFINITION.md)) | A tool block arriving mid-session, breaking a warm prefix |
 | **Trade** | Real spend bought something real | Priced fan-out: the parallelism was the point |
 | **Not measured** | The instrument cannot tell | A session with no correlation data; a model with no published price |
 
@@ -128,11 +156,36 @@ the remaining days are not billed. **UNDECIDED:** the refund mechanics.
 
 The finding must end by saying what recurs and what does not.
 
-`MONEY-PATH.md` already measured this: the cleanest result in the corpus traced
-every break to an MCP connector's tool block arriving mid-session, and the fix is
-client-side sequencing — **a free configuration change that takes one afternoon
-and does not come back.** A week that finds that and then pitches a monthly
-subscription is selling something the customer should cancel in month two.
+The draft of this section asserted past its evidence, which is the one thing a
+document about honest findings may not do. What it said, and why each part was
+wrong, is worth keeping:
+
+> the cleanest result in the corpus traced every break to an MCP connector's
+> tool block arriving mid-session, and the fix is client-side sequencing — a
+> free configuration change that takes one afternoon and does not come back.
+
+- **"does not come back" is unmeasured, and MONEY-PATH says so in terms.**
+  [`MONEY-PATH.md`](../MONEY-PATH.md): *"If client-side sequencing does fix it,
+  the fix must be re-applied by every project that adds a connector; if it does
+  not, the exposure continues. **Which of those is true is a proxy measurement
+  nobody has taken**."* Nobody has applied the fix and re-measured, anywhere.
+- **"one afternoon" has no source at all.**
+- **"the cleanest result in the corpus" was true of the instrument and used in
+  the population sense.** [Lane isolation](../evidence/lane-isolation-2026-09-06.md)
+  is 60 requests, one operator, one machine, one synthetic fan-out prompt on
+  haiku, and says of itself that it *"does **not** establish a production
+  distribution"*. On real traffic,
+  [break causes](../evidence/break-causes-2026-09-06.md) puts that cause at
+  **5 breaks and 5.8% of re-billed tokens** — the least common measured cause,
+  not the dominant one. TTL expiry and in-history divergence are far larger.
+
+So the honest version of the same argument, which is weaker and still sufficient:
+**whether the recurring exposure is real is not known, and the finding must say
+which it is for that customer rather than assume.** A week that finds a one-time
+fix and then pitches a subscription is selling something the customer should
+cancel in month two. A week that finds recurring drift has a second week. Which
+one happened is a fact about their corpus, and the finding reports it rather than
+deciding it in advance — in either direction.
 
 So the finding names, explicitly:
 
