@@ -372,9 +372,17 @@ func (r *Runner) sizedFiller(model string, target int) (string, int, error) {
 		// it is not an error: `best` already holds the closest size achieved,
 		// and the caller's job is to notice that it is under the floor, which
 		// is exactly what it does.
-		if ceiling := target * tokensPerProbeChar * 64; chars > ceiling {
-			chars = ceiling
-		}
+		//
+		// Written as arithmetic rather than as `if chars > ceiling`, and the
+		// reason is not style. guard-reachability neutralises a conditional by
+		// forcing it false, and forcing this one false restores the unbounded
+		// allocation — so the reviewer's own run exhausted the machine and CI
+		// killed the job with SIGTERM at this guard, scoring nothing and
+		// failing the build. A bound whose absence hangs the suite cannot be
+		// expressed as a branch in a tree that neutralises branches. As a clamp
+		// it is what it always was: the size is the smaller of what the search
+		// asked for and what any real tokenizer could need.
+		chars = min(chars, target*tokensPerProbeChar*64)
 	}
 	// Not every token count is reachable: tokens span several characters, so a
 	// tokenizer may step 512 to 515 with nothing in between. Rather than fail,
