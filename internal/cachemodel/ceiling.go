@@ -208,7 +208,7 @@ func (e CeilingEffect) AllowanceNote() string {
 	if t.Total() == 0 {
 		return "NOT MEASURED: no tokens were read, so there is nothing to say about allowance."
 	}
-	return sprintf("On a subscription seat none of the dollar figures are money — they are list "+
+	return sprintf("On a subscription seat none of the dollar figures are money. They are list "+
 		"price for somebody who is billed per token. What is yours is the tokens: %d written to "+
 		"cache and %d read back, out of %d prompt tokens. A cache write that could have been a "+
 		"read spends allowance twice. How much: NOT MEASURED. Whether reads weigh against the "+

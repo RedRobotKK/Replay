@@ -72,7 +72,7 @@ func rulesNotice(version, fetchedAt string, now time.Time) string {
 	fmt.Fprintf(&b, "              the one that changes what replay recommends rather than only what it\n")
 	fmt.Fprintf(&b, "              reports. Reading at 0.10 when a model now reads at 0.025 overstates\n")
 	fmt.Fprintf(&b, "              every cached token fourfold, and biases the comparison toward keeping\n")
-	fmt.Fprintf(&b, "              a cache — which is advice this tool would be giving on its own behalf\n")
+	fmt.Fprintf(&b, "              a cache, which is advice this tool would be giving on its own behalf\n")
 	fmt.Fprintf(&b, "              next: replay rules --check-prices\n")
 	return b.String()
 }

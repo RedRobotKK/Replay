@@ -511,7 +511,7 @@ func transcriptFiles(paths []string) ([]string, error) {
 		// command that reports it.
 		if n := ollamaLogsUnder(paths); n > 0 {
 			return nil, fmt.Errorf("no .jsonl transcripts found, but %d Ollama server log(s) are here. `replay burn` reads them. No command will report a cache hit rate from them: n_past, the only place an Ollama log records prefix reuse, appears ONLY on requests whose prompt was already resident "+
-				"— llama.cpp finds every token cached and re-evaluates one because it must evaluate at least one per slot. A hit rate computed over those requests measures a population selected for having been cached, not the cache. See docs/evidence/ollama-cache-ceiling-2026-09-08.md", n)
+				"llama.cpp finds every token cached and re-evaluates one because it must evaluate at least one per slot. A hit rate computed over those requests measures a population selected for having been cached, not the cache. See docs/evidence/ollama-cache-ceiling-2026-09-08.md", n)
 		}
 		return nil, fmt.Errorf("no .jsonl transcripts found")
 	}

@@ -97,7 +97,7 @@ func contribute(campaign, dir, model, seriesPath string, stdout io.Writer) error
 	_, _ = fmt.Fprintf(stdout, "\nwrote %s\n", path)
 	_, _ = fmt.Fprintf(stdout, "Nothing was sent. Read it, and if you are happy with it, attach it to a\n"+
 		"pull request against the campaign's observations file. It carries the bracket,\n"+
-		"the method, the provenance and a per-campaign tag — no prompts, no paths, no\n"+
+		"the method, the provenance and a per-campaign tag. No prompts, no paths, no\n"+
 		"spend, and nothing that links this submission to another campaign's.\n")
 	return nil
 }
@@ -283,7 +283,7 @@ func corpusContributionNote(path string, supersedes []string) string {
 	fmt.Fprintf(&b, "\nwrote %s\n", path)
 	b.WriteString("This one carries SPEND: the total, the avoidable total and share, the median\n" +
 		"task, the task count, and which price table produced them. No prompts, no\n" +
-		"paths, no project or session names, and no per-task rows — the five figures\n" +
+		"paths, no project or session names, and no per-task rows: the five figures\n" +
 		"and their basis, nothing else.\n" +
 		"Nothing was sent. Read it, and if you are happy with it, attach it to a pull\n" +
 		"request against the campaign's corpus file. Its digest is in the filename, so\n" +
@@ -299,7 +299,7 @@ func corpusContributionNote(path string, supersedes []string) string {
 			fmt.Fprintf(&b, "  %s\n", name)
 		}
 		b.WriteString("Send only the newest. Each run reads your whole transcript root, so this\n" +
-			"file already contains everything the earlier ones did — sending both would\n" +
+			"file already contains everything the earlier ones did, so sending both would\n" +
 			"have your spend counted twice in the pooled total. They have been left on\n" +
 			"disk; nothing here deletes your files.\n")
 	}

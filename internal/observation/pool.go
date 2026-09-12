@@ -396,8 +396,8 @@ func SupersededNote(t PoolTotals) string {
 		return ""
 	}
 	return fmt.Sprintf("%d further submission(s) are named below and NOT counted. Each was "+
-		"replaced by a later corpus from the same machine. A corpus is cumulative — the tool "+
-		"reads the whole transcript root on every run — so a machine's later submission "+
+		"replaced by a later corpus from the same machine. A corpus is cumulative, because the "+
+		"tool reads the whole transcript root on every run, so a machine's later submission "+
 		"contains the tasks in its earlier one. Adding both would count that spend twice "+
 		"while raising the task count with it, which leaves the avoidable share looking "+
 		"untouched", t.SupersededSubmissions)

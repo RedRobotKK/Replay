@@ -71,12 +71,12 @@ func knownSurfaces(home string) []otherSurface {
 		{
 			name: "Grok",
 			dir:  firstWithEntries(filepath.Join(home, ".grok")),
-			why:  "Replay cannot read Grok's wire yet — it posts to /responses, which this build does not parse",
+			why:  "Replay cannot read Grok's wire yet: it posts to /responses, which this build does not parse",
 		},
 		{
 			name: "Cursor",
 			dir:  firstWithEntries(filepath.Join(home, ".cursor")),
-			why:  "Replay cannot read Cursor yet — its local history carries structure but no token usage",
+			why:  "Replay cannot read Cursor yet: its local history carries structure but no token usage",
 		},
 	}
 }

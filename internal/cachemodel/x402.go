@@ -106,7 +106,7 @@ func (p PaymentRequired) Explain(resource string) string {
 	}
 	fmt.Fprintf(&b, `
 Replay will not pay this. It holds no wallet and no key, and has no code that
-can move money — see docs/adr/0013-x402-rules-feed.md for why that is deliberate
+can move money. See docs/adr/0013-x402-rules-feed.md for why that is deliberate
 rather than missing.
 
 Nothing is blocked by this. The compiled rules are complete and every command
