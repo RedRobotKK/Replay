@@ -190,7 +190,7 @@ func TestSS7_ASessionWithNoLanesIsZero(t *testing.T) {
 // one request carried no tools, which would put a "not one as-run" warning on
 // the most ordinary session there is.
 func TestAsRunSession_AnUnlabelledRequestIsNotASecondEpoch(t *testing.T) {
-	s := &transcript.Session{Lanes: []*transcript.Lane{{ID: "main", Requests: []*transcript.Request{
+	s := &transcript.Session{Source: transcript.SourceLedger, Lanes: []*transcript.Lane{{ID: "main", Requests: []*transcript.Request{
 		{ID: "a", Epoch: "", Usage: transcript.Usage{Input: 10}},
 		{ID: "b", Epoch: "abc123", Usage: transcript.Usage{Input: 10}},
 	}}}}
@@ -206,7 +206,7 @@ func TestAsRunSession_AnUnlabelledRequestIsNotASecondEpoch(t *testing.T) {
 // be widened until nothing is ever mixed and the field silently stops meaning
 // anything.
 func TestAsRunSession_TwoLabelsAreMixedEpochs(t *testing.T) {
-	s := &transcript.Session{Lanes: []*transcript.Lane{{ID: "main", Requests: []*transcript.Request{
+	s := &transcript.Session{Source: transcript.SourceLedger, Lanes: []*transcript.Lane{{ID: "main", Requests: []*transcript.Request{
 		{ID: "a", Epoch: "abc123", Usage: transcript.Usage{Input: 10}},
 		{ID: "b", Epoch: "def456", Usage: transcript.Usage{Input: 10}},
 	}}}}
@@ -218,7 +218,7 @@ func TestAsRunSession_TwoLabelsAreMixedEpochs(t *testing.T) {
 
 // The same label on every request is one epoch, however many requests carry it.
 func TestAsRunSession_OneLabelRepeatedIsOneEpoch(t *testing.T) {
-	s := &transcript.Session{Lanes: []*transcript.Lane{{ID: "main", Requests: []*transcript.Request{
+	s := &transcript.Session{Source: transcript.SourceLedger, Lanes: []*transcript.Lane{{ID: "main", Requests: []*transcript.Request{
 		{ID: "a", Epoch: "abc123", Usage: transcript.Usage{Input: 10}},
 		{ID: "b", Epoch: "abc123", Usage: transcript.Usage{Input: 10}},
 		{ID: "c", Epoch: "abc123", Usage: transcript.Usage{Input: 10}},
@@ -234,7 +234,7 @@ func TestAsRunSession_OneLabelRepeatedIsOneEpoch(t *testing.T) {
 // epoch anywhere. If absence counted, every existing ledger would read as
 // mixed the moment one request differed from another in having no tools.
 func TestAsRunSession_NoLabelsAnywhereIsNotMixed(t *testing.T) {
-	s := &transcript.Session{Lanes: []*transcript.Lane{{ID: "main", Requests: []*transcript.Request{
+	s := &transcript.Session{Source: transcript.SourceLedger, Lanes: []*transcript.Lane{{ID: "main", Requests: []*transcript.Request{
 		{ID: "a", Usage: transcript.Usage{Input: 10}},
 		{ID: "b", Usage: transcript.Usage{Input: 10}},
 	}}}}
@@ -252,4 +252,57 @@ func TestAsRunSession_NoLabelsAnywhereIsNotMixed(t *testing.T) {
 	// labelled request with an unlabelled one; this one covers the all-absent
 	// case, which is every ledger written before the flag existed, and that is
 	// worth holding for its own sake rather than for a mutation it misses.
+}
+
+// A transcript cannot report mixed epochs, because nothing on a transcript
+// could ever label one.
+//
+// `replay cost` prices transcripts and ledgers through the same function, and
+// only the ledger reader carries an epoch across into a Request. Without
+// EpochsMeasured every transcript session answers "not mixed" to a question
+// nothing asked, and a reader cannot tell that from a real single-epoch
+// finding. Absence, zero and unknown are three values (ADR-0018).
+//
+// The epochs below are impossible on a transcript — which is the point. Even
+// handed data it could not have produced, the answer must be "nothing
+// measured this", not "no".
+func TestAsRunSession_ATranscriptCannotReportMixedEpochs(t *testing.T) {
+	s := &transcript.Session{
+		Source: transcript.SourceTranscript,
+		Lanes: []*transcript.Lane{{ID: "main", Requests: []*transcript.Request{
+			{ID: "a", Epoch: "abc123", Usage: transcript.Usage{Input: 10}},
+			{ID: "b", Epoch: "def456", Usage: transcript.Usage{Input: 10}},
+		}}},
+	}
+	got := AsRunSession(s)
+	if got.EpochsMeasured {
+		t.Fatal("a transcript source reported that epochs were measured; nothing on a " +
+			"transcript labels one")
+	}
+	if got.MixedEpochs() {
+		t.Fatal("a transcript reported a mixed-epoch finding. Nothing could have labelled " +
+			"those epochs, so the honest answer is that nobody looked, and a caveat printed " +
+			"from it would be a claim about data that does not exist")
+	}
+}
+
+// A ledger says so, which is what makes the transcript case readable as
+// absence rather than as a negative finding.
+func TestAsRunSession_ALedgerReportsThatEpochsWereMeasured(t *testing.T) {
+	s := &transcript.Session{
+		Source: transcript.SourceLedger,
+		Lanes: []*transcript.Lane{{ID: "main", Requests: []*transcript.Request{
+			{ID: "a", Usage: transcript.Usage{Input: 10}},
+		}}},
+	}
+	got := AsRunSession(s)
+	if !got.EpochsMeasured {
+		t.Fatal("a ledger source reported that epochs were not measured; the proxy is the " +
+			"thing that labels them and the ledger is where they land")
+	}
+	// Measured and none found is a real finding, and different from the case
+	// above: this session ran without --freeze-prefix and something looked.
+	if got.MixedEpochs() {
+		t.Fatal("no labels and a mixed finding")
+	}
 }

@@ -226,6 +226,23 @@ func (s Source) PrefixVisible() bool {
 	return s == SourceLedger
 }
 
+// EpochsObservable reports whether a session from this source could carry a
+// tool-set epoch at all.
+//
+// Only the proxy labels one, and only the ledger reader carries it across into
+// a Request — so on a transcript, Epoch is empty on every request whatever the
+// tool set did. A consumer asking "did this session span two tool sets" gets
+// false from a transcript, and false there means NOT MEASURED, not no.
+//
+// Separate from PrefixVisible even though both are true only for the ledger.
+// They answer different questions — whether the cacheable prefix was seen, and
+// whether anything labelled it — and a future source could answer one without
+// the other. Collapsing them because they agree today is how a distinction
+// gets lost.
+func (s Source) EpochsObservable() bool {
+	return s == SourceLedger
+}
+
 // Tier is the provenance label every report carries.
 func (s Source) Tier() string {
 	if s == SourceLedger {

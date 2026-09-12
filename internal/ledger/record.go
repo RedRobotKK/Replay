@@ -93,6 +93,20 @@ type Record struct {
 	// Epoch is the tool-set epoch this request ran under, empty when none was
 	// labelled — which is every request unless --freeze-prefix is on.
 	//
+	// COMPARABLE WITHIN A SESSION, NOT ACROSS TIME. It is sha256 of the tools
+	// bytes exactly as forwarded, which is the right reading for the question
+	// it answers — did the tools change between request N and N+1 — and the
+	// wrong one for any other. A vendor rewording one tool description, a
+	// client reordering keys, or a whitespace change yields a different epoch
+	// for an identical tool set, so two sessions a week apart cannot be
+	// grouped by it. Recorded here because a persisted key whose comparability
+	// scope is undocumented will be compared outside it.
+	//
+	// PrefixHash on this same record is derived from a PARSE (summarize.go),
+	// over an overlapping subject, with different stability. Two hashes, two
+	// readings, one line of JSON — so a consumer choosing between them needs
+	// to know which question each answers, and now can.
+	//
 	// It is OUR id for a tool set, not the provider's cache key. The kernel
 	// debate wanted H(policy, epoch, tools, model, effort) to BE the provider's
 	// key; it cannot be, because that key is not published and every term in it
