@@ -11,11 +11,11 @@ import (
 // Everything this tool writes to the reader's machine, in one list.
 //
 // The purge command was built against ~/.replay/ledger because that is where
-// the retention gap was found. Looking properly, the tool writes eleven things:
+// the retention gap was found. Looking properly, the tool writes twelve things:
 //
 //	ledger/            per-request records, counts and timings, no content
-//	ledger-<name>/     the same, per named upstream
-//	vault/             masking vault — the ONLY store that holds secrets
+//	                   — and ledger-<name>/, one directory per named upstream
+//	vault/             masking vault — holds the reader's actual secrets
 //	archive/           rotated ledger records
 //	advice.json        findings, and which the reader marked applied
 //	policy.json        learned request policy
@@ -23,16 +23,22 @@ import (
 //	measurements.jsonl probe readings
 //	seen.json          the `since` marker, one timestamp
 //	tip.json           when the funding ask was last shown
-//	serve*.log         proxy logs
+//	serve.log          proxy logs — and serve-<name>.log per named upstream
+//	contributor-secret the machine-local secret the contributor tag derives from
+//	rules.json         the price-rules cache `replay rules --update` writes
 //
-// A retention command covering one of eleven is worse than none, because it
-// answers "yes, we can delete that" while ten stores keep it. That is the
+// This list said eleven for a day, because the last two were registered on
+// 2026-09-10 after SC1 found them by reading the source and nobody came back
+// here. A retention command covering one of twelve is worse than none: it
+// answers "yes, we can delete that" while eleven stores keep it. That is the
 // defect class this repository keeps finding — a guarantee narrower than it
 // appears — applied to the reader's own files.
 //
 // So the list is data, and every consumer walks it: purge removes from it,
 // `replay privacy` reports it, and ST1 fails when the tool learns to write
-// somewhere the list does not name.
+// somewhere the list does not name. The prose above is no longer trusted to
+// keep itself current either — SD1 and SD2 in storecount_test.go read this
+// comment and docs/guide/commands.md and compare both to homeStores().
 
 // ST1: every store the code writes is registered.
 //
@@ -40,21 +46,37 @@ import (
 // the registry.
 // FAIL: the tool writes somewhere no retention or disclosure command knows
 // about, which is exactly how ten of eleven got missed the first time.
+//
+// The length assertion below is a FLOOR, not the count, and that is on purpose
+// after review. A floor cannot notice the registry growing — which is how two
+// stores were added on 2026-09-10 with nothing going red — but the answer to
+// that is not a second hard-coded number here. A literal count in this test
+// would have no external referent: updating the registry and updating the
+// number is one edit by one person, so the pair agrees by construction and
+// proves nothing. The exact count is owned by SD1/SD2 in storecount_test.go,
+// which compare len(homeStores()) against the two places a READER is told the
+// number. What is left for the floor is the case those cannot catch — the
+// registry being emptied or gutted, which would make every disclosure check
+// vacuously true — so it is derived from the name list below rather than being
+// a magic 8 that matched nothing in particular.
 func TestST1_EveryStoreTheToolWritesIsRegistered(t *testing.T) {
 	known := map[string]bool{}
 	for _, s := range homeStores() {
 		known[s.Name] = true
 	}
-	if len(known) < 8 {
-		t.Fatalf("the registry names %d stores; the tool was writing eleven when this was "+
-			"written, so a registry this short is not describing the tool", len(known))
-	}
 
 	// Names the source itself uses for things under the home directory.
-	for _, want := range []string{
+	mustBeRegistered := []string{
 		"ledger", "vault", "archive", "advice.json", "policy.json",
 		"cost-index.json", "measurements.jsonl", "seen.json", "tip.json",
-	} {
+	}
+	if len(known) < len(mustBeRegistered) {
+		t.Fatalf("the registry names %d stores and this test alone requires %d of them by "+
+			"name; a registry that short is not describing the tool", len(known),
+			len(mustBeRegistered))
+	}
+
+	for _, want := range mustBeRegistered {
 		if !known[want] {
 			t.Errorf("%s is written under ~/.replay and is not in the store registry, so no "+
 				"retention or disclosure command covers it", want)
