@@ -130,11 +130,11 @@ func padShare(lines []string, s ShareState) []string {
 	case s.Wrote != "":
 		lines = append(lines, "  wrote "+tailOf(shortPath(s.Wrote), Cols()-8))
 	}
-	for len(lines) < bodyRows-3 {
+	for len(lines) < bodyRows()-3 {
 		lines = append(lines, "")
 	}
-	if len(lines) > bodyRows-3 {
-		lines = lines[:bodyRows-3]
+	if len(lines) > bodyRows()-3 {
+		lines = lines[:bodyRows()-3]
 	}
 	ran := "  ran   replay cost --share --png <path>"
 	if s.Ready {

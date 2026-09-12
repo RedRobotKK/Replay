@@ -108,8 +108,8 @@ func TestSafeCapsALongInventoryAndSaysSo(t *testing.T) {
 		many = append(many, Store{Name: "store-" + string(rune('a'+i)), Bytes: int64(1000 - i), Files: 1, Purgeable: true})
 	}
 	sc := SafeScreen(Privacy{Root: "~/.replay", Stores: many})
-	if len(sc.Lines) > bodyRows {
-		t.Errorf("%d rows, body budget %d", len(sc.Lines), bodyRows)
+	if len(sc.Lines) > bodyRows() {
+		t.Errorf("%d rows, body budget %d", len(sc.Lines), bodyRows())
 	}
 	if !strings.Contains(sc.String(), "more") {
 		t.Errorf("rows were dropped without saying so:\n%s", sc.String())

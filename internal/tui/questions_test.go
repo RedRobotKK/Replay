@@ -191,9 +191,9 @@ func TestQT5_TheCostScreenLeadsWithTheDistribution(t *testing.T) {
 // saying so, which is how main went red in #169.
 func TestQT6_NoScreenGrewPastItsBudget(t *testing.T) {
 	for name, sc := range tenScreens(t) {
-		if len(sc.Lines) > bodyRows {
+		if len(sc.Lines) > bodyRows() {
 			t.Errorf("the %s screen is %d rows against a body budget of %d; the loop "+
-				"trims from the bottom and the reader is not told", name, len(sc.Lines), bodyRows)
+				"trims from the bottom and the reader is not told", name, len(sc.Lines), bodyRows())
 		}
 	}
 }

@@ -219,11 +219,11 @@ func spentRow(g GuardState) string {
 // padGuards trims to the body budget from the bottom, because the top half is
 // the half that answers the key's question.
 func padGuards(lines []string) []string {
-	for len(lines) < bodyRows {
+	for len(lines) < bodyRows() {
 		lines = append(lines, "")
 	}
-	if len(lines) > bodyRows {
-		lines = lines[:bodyRows]
+	if len(lines) > bodyRows() {
+		lines = lines[:bodyRows()]
 	}
 	return lines
 }

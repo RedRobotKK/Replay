@@ -113,15 +113,15 @@ func TestNoSensitiveNoteWhenNothingIsSensitive(t *testing.T) {
 
 // padSafe trims an over-long body rather than letting the frame grow.
 func TestPadSafeTrimsAndFills(t *testing.T) {
-	long := make([]string, bodyRows*2)
+	long := make([]string, bodyRows()*2)
 	for i := range long {
 		long[i] = "  row"
 	}
-	if got := len(padSafe(long)); got != bodyRows {
-		t.Errorf("an over-long safe body is %d rows, budget %d", got, bodyRows)
+	if got := len(padSafe(long)); got != bodyRows() {
+		t.Errorf("an over-long safe body is %d rows, budget %d", got, bodyRows())
 	}
-	if got := len(padSafe([]string{"  one"})); got != bodyRows {
-		t.Errorf("a short safe body is %d rows, budget %d", got, bodyRows)
+	if got := len(padSafe([]string{"  one"})); got != bodyRows() {
+		t.Errorf("a short safe body is %d rows, budget %d", got, bodyRows())
 	}
 }
 

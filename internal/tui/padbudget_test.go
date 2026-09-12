@@ -11,7 +11,7 @@ import (
 // The guard-reachability check neutralises every conditional a change touches
 // and reports the ones no test enters. It named the truncation branch in all
 // four pad helpers: screens are built well inside the budget, so the `if
-// len(lines) > bodyRows-3` arm never ran under test, and a screen that
+// len(lines) > bodyRows()-3` arm never ran under test, and a screen that
 // overflowed would have been trimmed by code nobody had ever seen work.
 //
 // That branch is the one that decides WHICH line disappears when a screen grows
@@ -19,7 +19,7 @@ import (
 // somebody is about to lose a row without being told. It is worth a test.
 
 func overlong() []string {
-	lines := make([]string, bodyRows*2)
+	lines := make([]string, bodyRows()*2)
 	for i := range lines {
 		lines[i] = "  row"
 	}
@@ -33,9 +33,9 @@ func TestEveryPadTrimsAnOverlongBody(t *testing.T) {
 		"padWhy":   padWhy(overlong()),
 		"padShare": padShare(overlong(), ShareState{}),
 	} {
-		if len(got) != bodyRows {
+		if len(got) != bodyRows() {
 			t.Errorf("%s returned %d rows for a %d-row body; the body budget is %d",
-				name, len(got), bodyRows*2, bodyRows)
+				name, len(got), bodyRows()*2, bodyRows())
 		}
 	}
 }
@@ -57,13 +57,13 @@ func TestTrimmingKeepsTheProvenanceLine(t *testing.T) {
 // A body already at the budget is returned unchanged, so the trim cannot be a
 // branch that fires on every screen and quietly removes a row from all of them.
 func TestAnExactlyFittingBodyIsNotTrimmed(t *testing.T) {
-	exact := make([]string, bodyRows-3)
+	exact := make([]string, bodyRows()-3)
 	for i := range exact {
 		exact[i] = "  row"
 	}
 	got := pad(exact)
-	if len(got) != bodyRows {
-		t.Fatalf("an exactly fitting body produced %d rows, want %d", len(got), bodyRows)
+	if len(got) != bodyRows() {
+		t.Fatalf("an exactly fitting body produced %d rows, want %d", len(got), bodyRows())
 	}
 	for i := range exact {
 		if got[i] != exact[i] {

@@ -57,7 +57,6 @@ const (
 	// <cmd>`. Down a pipe, --once does not trim, so the same screen came out
 	// one row taller with the line intact. The committed screen images are
 	// made through the pipe, so they showed a line no live reader ever saw.
-	bodyRows = BudgetRows - 1
 )
 
 // Shortcut is one question, the key that asks it, and the command that answers.
@@ -188,3 +187,23 @@ func Dim(s string) string { return paint(Faint, s) }
 // holds that every question stays reachable there, and TestFooterNamesTheCurrentScreen
 // holds that each screen says which one it is. Both properties the strip
 // claimed are held by surfaces a reader actually sees.
+
+// bodyRows is how many rows a screen's body may use, on the terminal actually
+// in front of the reader.
+//
+// It was BudgetRows-1, a constant, so every screen laid out for 24 rows
+// whatever the window was. Measured before the change: LINES=50 rendered 24
+// rows, so on a fifty-row terminal twenty-six rows were dead, and inside the
+// twenty-four that did render, seven more were blanks emitted by the pad
+// helpers. The taller the window, the more nothing it showed.
+//
+// Lines() falls back to defaultLines, which is 24, whenever there is no
+// terminal to ask -- down a pipe, and in the harness that makes the committed
+// screen captures. So piped output is byte-for-byte what it was, the images do
+// not move, and only a real terminal gains rows.
+func bodyRows() int {
+	if n := Lines() - 1; n > 0 {
+		return n
+	}
+	return 1
+}
