@@ -65,9 +65,12 @@
 // them. It revealed them.
 //
 // So a survivor on a move means "this branch is untested", never "this change
-// broke something". Both are worth knowing and they are not the same verdict,
-// and this tool cannot tell them apart, because telling them apart needs a
-// rename-aware diff it deliberately does not do.
+// broke something". Both are worth knowing and they are not the same verdict.
+// This paragraph used to end by saying the tool could not tell them apart short
+// of a rename-aware diff it deliberately does not do. It now can, by another
+// route: it re-measures the survivor in the base tree. What that buys, and the
+// four things it still cannot see, are below under "Telling a move from an
+// edit".
 //
 // The failure runs in the safe direction — noisy rather than silent — and the
 // cost of the alternative is what is being bought: a diff-scoped check is
@@ -136,6 +139,66 @@
 // test to satisfy one, check whether a test somewhere else already covers it;
 // if it does, the honest fix is usually to move the test next to the guard,
 // not to add a second.
+//
+// # Telling a move from an edit, by asking the base tree
+//
+// The section above names the defect and stops there, because when it was
+// written nothing here could do better. The repair is not a rename-aware diff,
+// which would still be guessing from text alone: when a conditional survives
+// neutralisation, the reviewer asks the BASE TREE whether it survived there
+// too, and measures the answer the same way it measured this one.
+//
+// It checks the base out into a temporary detached worktree, finds the same
+// condition there by package, enclosing function and condition text — not by
+// file and line, which a move changes — neutralises it THERE and runs that
+// package's tests THERE. A survivor that also survived in the base is reported
+// PRE-EXISTING and does not fail the build. It is still printed, with its
+// UNREACHED or INERT verdict intact, because it is still a hole; it is just not
+// this change's hole.
+//
+// On the split above, re-run against origin/main on 2026-09-11: 136 guards, 42
+// survived, 35 of them found in the base tree and surviving there too, 7 left
+// to fail. Every per-guard verdict was byte-identical to the run before this
+// change — 94 caught, 26 UNREACHED, 16 INERT — so what moved is which
+// survivors fail the build, not what any of them was judged to be.
+//
+// The seven are worth reading, because they are what this deliberately does not
+// absorb. All seven come from the branch sitting twenty-five commits behind
+// main rather than from the split: four tap conditions that main's
+// openaistream_e2e_test.go catches and the branch has no copy of, and three in
+// internal/cachemodel that main rewrote. Confirmed by hand — dropping that one
+// test file into the branch and neutralising `case t.ostream != nil` turns it
+// red. Comparing a working tree against the base's HEAD is not the same as
+// comparing it against the merge, and this still does the former; ADR-0020
+// names that family of defect for the compile case.
+//
+// The count differs from the 125 and 39 recorded above because main moved in
+// between, and because the union diff this tool takes picks that drift up as
+// well. The 94.5% and the 27-against-27 are that earlier diagnosis's
+// measurement, not this one's.
+//
+// What this does NOT do, and every one of these is a way to be wrong:
+//
+//   - It does not pair identical conditions by name. Where one function holds
+//     several `if err != nil`, nothing can say which is which, so the counts
+//     are compared and the excess fails. "Pre-existing" there means one of them
+//     was already unobserved, not that this one was.
+//   - It does not read meaning. A condition whose text is unchanged but which
+//     now reads a different value — `if ok {` after the call above it was
+//     swapped — is a new guard wearing an old face, and this calls it
+//     pre-existing.
+//   - It does not follow a guard across packages or through a renamed
+//     function. Both read as introduced, which is the loud direction.
+//   - It does not certify anything when the base tree's own suite is red, when
+//     the base cannot be checked out, or when the neutralised form does not
+//     compile there. Each of those reports the survivor as introduced and
+//     fails. The reviewer's value is that it fails noisily rather than
+//     silently, and an exemption is earned per guard or not at all.
+//
+// It is not free. A run with survivors pays for one detached worktree and one
+// package test run per surviving identity, bounded by how many survivors the
+// change has for that identity — so a change with no survivors costs exactly
+// what it did before, and the bill is proportional to the noise it saves.
 package main
 
 import (
@@ -254,7 +317,9 @@ func main() {
 			"survivor classification may be degraded\n", cov.Unparsed)
 	}
 
-	var unreached, inert, unobserved, unchecked []guardcheck.Guard
+	limit := guardcheck.NeutralisedTimeout(baseline)
+	verdicts := map[guardcheck.Guard]string{}
+	var survivors, unchecked []guardcheck.Guard
 	for i, g := range guards {
 		fmt.Printf("  [%d/%d] %s:%d  %s\n", i+1, len(guards), g.File, g.Line, short(g.Src))
 		restore, err := guardcheck.Neutralise(g)
@@ -262,7 +327,7 @@ func main() {
 			fmt.Printf("        skipped: %v\n", err)
 			continue
 		}
-		out, green := runTests([]string{g.Pkg}, guardcheck.NeutralisedTimeout(baseline))
+		out, green := runTests("", []string{g.Pkg}, limit, true)
 		restore()
 		switch {
 		case strings.Contains(out, "build failed") || strings.Contains(out, "cannot use"):
@@ -275,23 +340,46 @@ func main() {
 			switch {
 			case known && !taken:
 				fmt.Printf("        UNREACHED: no test makes this condition true\n")
-				unreached = append(unreached, g)
+				verdicts[g] = unreachedVerdict
 			case known:
 				fmt.Printf("        INERT: the branch runs and nothing depends on it\n")
-				inert = append(inert, g)
+				verdicts[g] = inertVerdict
 			default:
 				fmt.Printf("        UNOBSERVED: nothing observed this guard, and coverage has no block for it\n")
-				unobserved = append(unobserved, g)
+				verdicts[g] = unobservedVerdict
 			}
+			survivors = append(survivors, g)
 		default:
 			fmt.Printf("        caught\n")
 		}
 	}
 
-	total := len(unreached) + len(inert) + len(unobserved)
-	fmt.Printf("\nguard-reachability: %d guard(s), %d survived, %d unchecked, %d not built here\n",
-		len(guards), total, len(unchecked), len(unbuilt))
-	if total == 0 && len(unchecked) == 0 && len(unbuilt) == 0 {
+	// A survivor is only this change's business if the base tree did not
+	// already have it. Asking costs a checkout and a run per survivor, so it is
+	// asked once, after the loop, and only when there is something to ask about.
+	var preExisting []guardcheck.Guard
+	introduced := survivors
+	if len(survivors) > 0 {
+		pre, intro, err := splitSurvivors(base, survivors, limit)
+		if err != nil {
+			// Nothing certified is nothing exempted. The run fails on every
+			// survivor, which is where it started before any of this existed.
+			fmt.Printf("\nguard-reachability: the base tree could not answer (%v),\n"+
+				"so no survivor can be shown to pre-date this change and every one is "+
+				"reported as introduced\n", err)
+		} else {
+			preExisting, introduced = pre, intro
+		}
+	}
+	unreached := withVerdict(introduced, verdicts, unreachedVerdict)
+	inert := withVerdict(introduced, verdicts, inertVerdict)
+	unobserved := withVerdict(introduced, verdicts, unobservedVerdict)
+
+	fmt.Printf("\nguard-reachability: %d guard(s), %d survived (%d pre-existing, %d introduced), "+
+		"%d unchecked, %d not built here\n",
+		len(guards), len(survivors), len(preExisting), len(introduced), len(unchecked), len(unbuilt))
+	reportPreExisting(preExisting, verdicts, base)
+	if len(introduced) == 0 && len(unchecked) == 0 && len(unbuilt) == 0 {
 		return
 	}
 
@@ -312,6 +400,230 @@ func main() {
 		"neutralised form, so nothing about them was measured. An unchecked guard\n"+
 		"is the false green this tool exists to prevent:", unchecked)
 	os.Exit(1)
+}
+
+// The three survivor verdicts, kept as names so the grouping below and the
+// printing above cannot drift apart.
+const (
+	unreachedVerdict  = "UNREACHED"
+	inertVerdict      = "INERT"
+	unobservedVerdict = "UNOBSERVED"
+)
+
+// withVerdict selects the guards carrying one verdict, in the order they were
+// judged.
+func withVerdict(gs []guardcheck.Guard, verdicts map[guardcheck.Guard]string, want string) []guardcheck.Guard {
+	var out []guardcheck.Guard
+	for _, g := range gs {
+		if verdicts[g] == want {
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
+// splitSurvivors asks the base tree which of these survivors it already had.
+//
+// The base is checked out into a temporary worktree and the SAME condition —
+// same package, same enclosing function, same text — is neutralised there and
+// put to that tree's own tests. Nothing is inferred from the text matching: a
+// survivor is exempted only when its counterpart demonstrably survived in the
+// base too, measured the same way.
+//
+// Three things make this fail closed rather than open, and all three are the
+// point:
+//
+//   - a base tree that cannot be checked out, or whose own suite is red,
+//     certifies nothing and returns an error, on which the caller reports every
+//     survivor as introduced
+//   - a base counterpart whose neutralised form does not compile there is not a
+//     survivor there, so it certifies nothing
+//   - the search is bounded by how many survivors the change has for an
+//     identity, so a function whose three identical guards were two survivors
+//     before and three now still reports one introduced
+func splitSurvivors(base string, survivors []guardcheck.Guard, limit time.Duration) (pre, introduced []guardcheck.Guard, err error) {
+	root, cleanup, err := baseWorktree(base)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer cleanup()
+
+	pkgs := pkgsOf(survivors)
+	fmt.Printf("\nguard-reachability: %d survived; asking %s whether it had them too\n",
+		len(survivors), base)
+	if out, ok := runTests(root, pkgs, limit, false); !ok {
+		return nil, nil, fmt.Errorf("the base tree's own suite is red, so nothing there "+
+			"can certify anything:\n%s", lastLines(out, 15))
+	}
+	index, err := baseConditionals(root, pkgs)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Iterated over the survivors rather than over the identity map, so the
+	// order of the run — and of its output — does not depend on map iteration.
+	wanted := guardcheck.CountByIdentity(survivors)
+	baseSurvivors := map[guardcheck.Identity]int{}
+	done := map[guardcheck.Identity]bool{}
+	for _, g := range survivors {
+		id := g.Identity()
+		if done[id] {
+			continue
+		}
+		done[id] = true
+		if len(index[id]) == 0 {
+			fmt.Printf("  %s has no `%s` in %s: introduced\n", base, short(g.Cond), idFunc(id))
+			continue
+		}
+		for _, cand := range index[id] {
+			if baseSurvivors[id] >= wanted[id] {
+				break
+			}
+			rel := strings.TrimPrefix(strings.TrimPrefix(cand.File, root), string(os.PathSeparator))
+			survived, why := survivesIn(root, cand, limit)
+			if survived {
+				baseSurvivors[id]++
+				fmt.Printf("  %s:%d  %s  survives in %s too\n", rel, cand.Line, short(cand.Src), base)
+				continue
+			}
+			fmt.Printf("  %s:%d  %s  does not certify it: %s\n", rel, cand.Line, short(cand.Src), why)
+		}
+	}
+	pre, introduced = guardcheck.PairSurvivors(survivors, baseSurvivors)
+	return pre, introduced, nil
+}
+
+// idFunc names an identity's function for a message, or says it has none.
+func idFunc(id guardcheck.Identity) string {
+	if id.Func == "" {
+		return id.Pkg + " outside any function"
+	}
+	return id.Pkg + " " + id.Func
+}
+
+// survivesIn neutralises a guard in another tree and reports whether that
+// tree's tests stayed green.
+func survivesIn(root string, g guardcheck.Guard, limit time.Duration) (bool, string) {
+	restore, err := guardcheck.Neutralise(g)
+	if err != nil {
+		return false, fmt.Sprintf("it could not be neutralised there (%v)", err)
+	}
+	out, green := runTests(root, []string{g.Pkg}, limit, true)
+	restore()
+	switch {
+	case strings.Contains(out, "build failed") || strings.Contains(out, "cannot use"):
+		// Unchecked there is not survived there. Treating it as survived would
+		// exempt a guard on the strength of a mutant nobody ran.
+		return false, "the neutralised form does not compile there"
+	case green:
+		return true, ""
+	}
+	return false, "a test there catches it"
+}
+
+// baseConditionals indexes every conditional in the base copies of the packages
+// the survivors live in.
+//
+// Whole files, not a diff: the base has no diff to scope by, and the question
+// is precisely where a moved guard used to live.
+func baseConditionals(root string, pkgs []string) (map[guardcheck.Identity][]guardcheck.Guard, error) {
+	out := map[guardcheck.Identity][]guardcheck.Guard{}
+	for _, pkg := range pkgs {
+		dir := filepath.Join(root, filepath.FromSlash(strings.TrimPrefix(pkg, "./")))
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			// A package the base tree does not have is not an error. Every
+			// survivor in it is new, which is what an empty index already says.
+			continue
+		}
+		for _, e := range entries {
+			name := e.Name()
+			if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+				continue
+			}
+			path := filepath.Join(dir, name)
+			// The same two questions the working tree is put to, for the same
+			// two reasons: a file built nowhere holds no guard that reaches
+			// anyone, and a file this host does not compile cannot be
+			// neutralised against a build that does not exist.
+			if excluded, _ := guardcheck.ExcludedFromBuild(path); excluded &&
+				!guardcheck.BuiltOnSomePlatform(path) {
+				continue
+			}
+			if buildable, _ := guardcheck.BuildableHere(path); !buildable {
+				continue
+			}
+			gs, err := guardcheck.Conditionals(path, nil)
+			if err != nil {
+				return nil, fmt.Errorf("parsing the base copy of %s: %w", name, err)
+			}
+			for _, g := range gs {
+				// The package as the working tree names it, so an identity
+				// built here compares equal to one built there. Set before
+				// the identity is taken, which reads it.
+				g.Pkg = pkg
+				out[g.Identity()] = append(out[g.Identity()], g)
+			}
+		}
+	}
+	return out, nil
+}
+
+// baseWorktree checks the base ref out into a temporary directory.
+//
+// A worktree rather than `git show` per file, because the counterpart has to be
+// TESTED, not just read: it needs its package, its tests and its go.mod around
+// it. It is detached, so it does not collide with the same branch checked out
+// elsewhere.
+//
+// The cleanup runs on the way out of splitSurvivors. A killed process leaves
+// the registration behind; `git worktree prune` clears it, and the directory is
+// under the system temp dir, where it is nobody's working copy.
+func baseWorktree(base string) (string, func(), error) {
+	parent, err := os.MkdirTemp("", "guard-base-")
+	if err != nil {
+		return "", nil, err
+	}
+	root := filepath.Join(parent, "tree")
+	if out, err := exec.Command("git", "worktree", "add", "--detach", root, base).CombinedOutput(); err != nil {
+		_ = os.RemoveAll(parent)
+		return "", nil, fmt.Errorf("checking %s out into a worktree: %v: %s",
+			base, err, strings.TrimSpace(string(out)))
+	}
+	return root, func() {
+		_ = exec.Command("git", "worktree", "remove", "--force", root).Run()
+		_ = os.RemoveAll(parent)
+	}, nil
+}
+
+// lastLines trims output to its tail, which is where a Go test failure says
+// what went wrong.
+func lastLines(s string, n int) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if len(lines) <= n {
+		return s
+	}
+	return "  …\n" + strings.Join(lines[len(lines)-n:], "\n")
+}
+
+// reportPreExisting prints the survivors the base tree already had.
+//
+// They are printed rather than dropped. They are still holes, and the verdict
+// each one earned is still the thing that says what would fix it; what changed
+// is only whose hole it is.
+func reportPreExisting(gs []guardcheck.Guard, verdicts map[guardcheck.Guard]string, base string) {
+	if len(gs) == 0 {
+		return
+	}
+	fmt.Printf("\nThese survived here AND in %s, where the same condition — same package,\n"+
+		"same function, same text — was neutralised and survived too. They are not this\n"+
+		"change's doing and do not fail it. Read them anyway: where one function holds\n"+
+		"several identical conditions the pairing is by count, so this says one of them\n"+
+		"was already unobserved, not that this one was; and a condition whose text is\n"+
+		"unchanged but whose meaning is not reads as pre-existing here:\n", base)
+	for _, g := range gs {
+		fmt.Printf("  %-10s %s:%d  %s\n", verdicts[g], g.File, g.Line, short(g.Src))
+	}
 }
 
 // report prints one verdict's guards under its heading, or nothing.
@@ -390,16 +702,28 @@ func changedGoFiles(base string) (map[string]map[int]bool, error) {
 // exhausts a CI runner before it reaches the twentieth. That is not a
 // hypothetical — it is why this reviewer was killed at exit 143 on the change
 // that added it.
-func runTests(pkgs []string, limit time.Duration) (string, bool) {
+//
+// dir is the tree to run in, empty for this one. It is not empty when the
+// reviewer is asking the base tree whether it had a survivor already: the same
+// neutralisation, the same bound, run against the checkout the change started
+// from.
+func runTests(dir string, pkgs []string, limit time.Duration, neutralising bool) (string, bool) {
 	args := append([]string{"test", "-count=1", "-timeout", limit.String()}, pkgs...)
 	cmd := exec.Command("go", args...)
+	cmd.Dir = dir
+	cmd.Env = os.Environ()
 	// Declare the neutralisation to the suite being run. A tree with a
 	// `false &&` in it is exactly what guardcheck.GC6 refuses, and without
 	// this the reviewer fails that test on every guard — which makes every
-	// mutant look caught and the whole verdict worthless. The marker is set
-	// only while a guard is neutralised; the baseline runs without it, so
-	// GC6 still guards the tree the reviewer started from.
-	cmd.Env = append(os.Environ(), guardcheck.NeutralisingEnv+"=1")
+	// mutant look caught and the whole verdict worthless.
+	//
+	// It is set only while a guard is neutralised. Neither baseline sets it —
+	// not this tree's and not the base tree's — so GC6 still guards both trees
+	// the reviewer reasons from, and a `false &&` someone left in the base is a
+	// red base baseline rather than a silent certification.
+	if neutralising {
+		cmd.Env = append(cmd.Env, guardcheck.NeutralisingEnv+"=1")
+	}
 	out, err := cmd.CombinedOutput()
 	return string(out), err == nil
 }
