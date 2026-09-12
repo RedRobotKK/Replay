@@ -30,10 +30,13 @@ func toolsWireHash(body []byte) string {
 	if json.Unmarshal(body, &obj) != nil {
 		return ""
 	}
-	raw, ok := obj["tools"]
-	if !ok {
-		return ""
-	}
+	// No !ok check on the lookup. A missing key yields a nil RawMessage, and
+	// TrimSpace(string(nil)) is "", which the absence check below already
+	// returns for — so the guard could not change an outcome and the reviewer
+	// was right to call it INERT. Absent and empty really are the same fact
+	// here, which is the one place in this file where collapsing them is
+	// correct: there is no tool set either way.
+	raw := obj["tools"]
 	// An empty or null tool set is NO tool set, not a tool set that happens to
 	// be empty.
 	//

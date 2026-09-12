@@ -143,3 +143,38 @@ func TestFreeze_OnlyTheVersionIsReplaced(t *testing.T) {
 		t.Fatalf("the pin duplicated or dropped the marker:\n%s", out)
 	}
 }
+
+// Two different versions of the same length pin to identical bytes.
+//
+// This is what "pin" means and no test asserted it. The reviewer reported the
+// padding branch INERT and it was right: delete the padding and
+// cc_version=a1b2c3d4e5f6 becomes cc_version=frozene5f6 — the remnant of the
+// old version survives past the constant. Every assertion the other tests make
+// still holds. The length is unchanged, because copy wrote fewer bytes than it
+// replaced. The old string is gone, because it was overwritten in the middle.
+// The constant is present, because it is the prefix of what was written.
+//
+// And the feature is destroyed, because two different versions now produce two
+// different frozen strings, which is precisely the fork the flag exists to
+// stop. A test can assert everything about one call and still miss that the
+// function's whole purpose is a relationship BETWEEN two calls.
+func TestFreeze_TwoVersionsOfEqualLengthPinToTheSameBytes(t *testing.T) {
+	a, aok := freezeBillingHeader([]byte(`{"s":"env cc_version=a1b2c3d4e5f6 tail"}`))
+	b, bok := freezeBillingHeader([]byte(`{"s":"env cc_version=ffffffffffff tail"}`))
+	if !aok || !bok {
+		t.Fatal("both fixtures must pin; they carry a cc_version longer than the constant")
+	}
+	if string(a) != string(b) {
+		t.Fatalf("two versions of equal length pinned to different bytes, so the prefix still "+
+			"forks and the flag does nothing it claims:\n  %s\n  %s", a, b)
+	}
+	// The premise, asserted rather than assumed: these really are the same
+	// length and really do differ. If a later edit makes them equal or
+	// unequal-length, the comparison above stops meaning what it says.
+	if len("a1b2c3d4e5f6") != len("ffffffffffff") {
+		t.Fatal("the fixtures are no longer equal length; this test cannot say what it claims")
+	}
+	if string(a) == `{"s":"env cc_version=a1b2c3d4e5f6 tail"}` {
+		t.Fatal("nothing was pinned at all")
+	}
+}
