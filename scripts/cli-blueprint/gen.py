@@ -51,7 +51,7 @@ META = {
     "ceiling":    ("What a cache-blind budget ceiling halts your agents at, in your billing basis", "none", "none"),
     "diff":       ("Locate and classify every cache break, with its cause", "none", "none"),
     "advise":     ("Rank the largest token sources, with predicted savings", "none", "with --apply --yes, a settings file; --out writes advice.json"),
-    "serve":      ("Local proxy: byte-for-byte passthrough, records a ledger", "outbound: proxies every request to the provider", "~/.replay/ledger/<session>.jsonl"),
+    "serve":      ("Local proxy: forwards to the provider, records a ledger", "outbound: proxies every request to the provider", "~/.replay/ledger/<session>.jsonl"),
     "tui":        ("The same answers as screens you can move between", "loopback: the proxy status endpoint, if one is running", "a temp file, created and removed, on the doctor screen"),
     "context":    ("What entered a session's context, by tool", "none", "none"),
     "blame":      ("Rank what is eating prompt tokens", "none", "none"),

@@ -575,7 +575,7 @@ Start here:
   replay <no args>                 what your sessions cost, from transcripts already on disk
   replay diff   <transcript|dir>   locate and classify every cache break, with its cause
   replay advise <dir...>           largest cache-traffic sources, ranked by write+read dollars
-  replay serve  [flags]            local proxy: byte-for-byte passthrough, records a ledger
+  replay serve  [flags]            local proxy: forwards to the provider, records a ledger
   replay tui                       the same answers as screens you can move between
 
 Look closer:

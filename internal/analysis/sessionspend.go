@@ -27,6 +27,17 @@ type SessionSpend struct {
 	// replacing an undercount with an overcount, which is harder to notice
 	// because the number moves the way people expect.
 	Duplicated int
+	// MixedEpochs is true when the session spans more than one LABELLED
+	// tool-set epoch. CostUSD is still the sum; it is simply not one as-run,
+	// and a reader adding two epochs together should be told so.
+	//
+	// Unlabelled requests are skipped rather than counted as an epoch of their
+	// own. toolsWireHash returns "" for any body with no tools key — a first
+	// request, a tool-free sub-agent lane — and reading that absence as a
+	// distinct epoch would report a session as mixed because one request
+	// carried no tools. Absence, zero and unknown are three values (ADR-0018),
+	// and the empty string here is absence.
+	MixedEpochs bool
 	// Unidentified counts requests carrying no id. They cannot be deduplicated
 	// and are counted anyway: absence is not a duplicate, and treating an
 	// unidentifiable request as already-seen would undercount precisely the
@@ -52,6 +63,7 @@ func AsRunSession(s *transcript.Session) SessionSpend {
 	// check for one either. guard-reachability reported both as unobserved and
 	// it was right: they were guarding against nothing.
 	seen := make(map[string]bool)
+	epochs := map[string]bool{}
 	for _, lane := range s.Lanes {
 		out.Lanes++
 		for _, req := range lane.Requests {
@@ -64,9 +76,13 @@ func AsRunSession(s *transcript.Session) SessionSpend {
 			default:
 				seen[req.ID] = true
 			}
+			if req.Epoch != "" {
+				epochs[req.Epoch] = true
+			}
 			out.AddAt(req.Usage, req.Model, req.Timestamp)
 		}
 	}
+	out.MixedEpochs = len(epochs) > 1
 	return out
 }
 

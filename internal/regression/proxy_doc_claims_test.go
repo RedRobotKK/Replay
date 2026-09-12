@@ -132,7 +132,7 @@ func TestF2_TheProxyDocDoesNotDenyWhatTheProxyDoes(t *testing.T) {
 // FAIL: a rewrite was added or removed and the enumeration was not revisited.
 func TestF2_ANewBodyRewriteForcesTheDocToBeRevisited(t *testing.T) {
 	const (
-		frozen  = 4
+		frozen  = 5
 		restore = 1
 	)
 

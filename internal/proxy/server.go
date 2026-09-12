@@ -2,7 +2,7 @@
 // taps responses for usage and structure without delaying them, and records
 // derived data in the ledger.
 //
-// IT REWRITES THE REQUEST BODY IN THREE PLACES, and this comment said it did
+// IT REWRITES THE REQUEST BODY IN FOUR PLACES, and this comment said it did
 // not. The line read "Nothing here rewrites a request body or removes a client
 // header" while the same file masked secrets, applied the context-edit policy,
 // and added include-usage — and stripped two client headers, x-replay-token
@@ -22,6 +22,8 @@
 //	masking        replaces secret byte ranges in place, fail-closed
 //	context-edit   inserts one member when a policy is pinned to the session
 //	include-usage  adds stream_options so usage is reported at all
+//	freeze-prefix  pins a cc_version hash to a same-length constant, off by
+//	               default, so the prefix key does not fork on a billing header
 //	headers        strips x-replay-token, and Accept-Encoding when it taps
 //
 // Everything else is forwarded unchanged, and the tap never rewrites a
@@ -126,6 +128,11 @@ type Config struct {
 	// uncompressed, because a compressed body cannot be rewritten as it
 	// passes. Nil is off.
 	Rehydrator *masking.Rehydrator
+	// FreezePrefix, when set, pins same-length volatile system bytes
+	// (cc_version hashes) and labels a tool-set epoch from the exact tools
+	// JSON on the wire. Off by default. PX8: a new epoch is a set change,
+	// not a claim the next request will miss.
+	FreezePrefix bool
 	// Siblings, when MaxWait is set, holds a request whose prefix is in
 	// flight and not yet cached until the first response begins (the
 	// hold-parallel-siblings policy).

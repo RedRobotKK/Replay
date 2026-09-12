@@ -181,3 +181,75 @@ func TestSS7_ASessionWithNoLanesIsZero(t *testing.T) {
 			got.CostUSD, got.Requests, got.Lanes)
 	}
 }
+
+// One labelled epoch beside an unlabelled request is one epoch.
+//
+// toolsWireHash returns "" for any body with no tool set — a first request, a
+// tool-free sub-agent lane — and the empty string is absence, not a third
+// epoch. Counting it as one reports a session as spanning two epochs because
+// one request carried no tools, which would put a "not one as-run" warning on
+// the most ordinary session there is.
+func TestAsRunSession_AnUnlabelledRequestIsNotASecondEpoch(t *testing.T) {
+	s := &transcript.Session{Lanes: []*transcript.Lane{{ID: "main", Requests: []*transcript.Request{
+		{ID: "a", Epoch: "", Usage: transcript.Usage{Input: 10}},
+		{ID: "b", Epoch: "abc123", Usage: transcript.Usage{Input: 10}},
+	}}}}
+	if AsRunSession(s).MixedEpochs {
+		t.Fatal("one labelled epoch and one unlabelled request reported as two epochs; " +
+			"absence is not a value (ADR-0018)")
+	}
+}
+
+// Two different labels really are two epochs.
+//
+// The control for the test above. Without it, skipping the empty string could
+// be widened until nothing is ever mixed and the field silently stops meaning
+// anything.
+func TestAsRunSession_TwoLabelsAreMixedEpochs(t *testing.T) {
+	s := &transcript.Session{Lanes: []*transcript.Lane{{ID: "main", Requests: []*transcript.Request{
+		{ID: "a", Epoch: "abc123", Usage: transcript.Usage{Input: 10}},
+		{ID: "b", Epoch: "def456", Usage: transcript.Usage{Input: 10}},
+	}}}}
+	if !AsRunSession(s).MixedEpochs {
+		t.Fatal("two different tool-set labels reported as one epoch; the sum is then " +
+			"presented as one as-run when it is not")
+	}
+}
+
+// The same label on every request is one epoch, however many requests carry it.
+func TestAsRunSession_OneLabelRepeatedIsOneEpoch(t *testing.T) {
+	s := &transcript.Session{Lanes: []*transcript.Lane{{ID: "main", Requests: []*transcript.Request{
+		{ID: "a", Epoch: "abc123", Usage: transcript.Usage{Input: 10}},
+		{ID: "b", Epoch: "abc123", Usage: transcript.Usage{Input: 10}},
+		{ID: "c", Epoch: "abc123", Usage: transcript.Usage{Input: 10}},
+	}}}}
+	if AsRunSession(s).MixedEpochs {
+		t.Fatal("one label on three requests reported as mixed")
+	}
+}
+
+// A session nothing labelled is not mixed, and this is the common case.
+//
+// --freeze-prefix is off by default, so every ledger written without it has no
+// epoch anywhere. If absence counted, every existing ledger would read as
+// mixed the moment one request differed from another in having no tools.
+func TestAsRunSession_NoLabelsAnywhereIsNotMixed(t *testing.T) {
+	s := &transcript.Session{Lanes: []*transcript.Lane{{ID: "main", Requests: []*transcript.Request{
+		{ID: "a", Usage: transcript.Usage{Input: 10}},
+		{ID: "b", Usage: transcript.Usage{Input: 10}},
+	}}}}
+	if AsRunSession(s).MixedEpochs {
+		t.Fatal("a session with no epoch labels at all reported as mixed; that is every " +
+			"ledger written before --freeze-prefix existed")
+	}
+	// This test cannot catch the mutation its name suggests, and saying so is
+	// cheaper than letting the next reader assume it can.
+	//
+	// Remove the `req.Epoch != ""` guard and the unguarded map becomes
+	// {"": true} — size one — so `len(epochs) > 1` is still false and this
+	// passes. A review found it by running exactly that mutation. The guard is
+	// killed by AnUnlabelledRequestIsNotASecondEpoch above, which mixes a
+	// labelled request with an unlabelled one; this one covers the all-absent
+	// case, which is every ledger written before the flag existed, and that is
+	// worth holding for its own sake rather than for a mutation it misses.
+}

@@ -417,3 +417,52 @@ func TestLedgerSchemaGateIsExactAndABumpIsDestructive(t *testing.T) {
 			"real evolution mechanism and SchemaVersion's comment should say so.", skipped)
 	}
 }
+
+// The epoch survives the round trip from record to reconstructed request.
+//
+// A review mutated `Epoch: rec.Epoch` in requestFromRecord to the empty string
+// and the whole suite stayed green, including the proxy tests that write the
+// label — because those read the RECORD, and this is the line that carries it
+// across into the transcript model every analysis command actually consumes.
+// A field written to disk and dropped on the way back out is worse than one
+// never written: the ledger says the label is there and every reader sees
+// absence.
+func TestLedgerRequestsCarryTheirEpoch(t *testing.T) {
+	dir := t.TempDir()
+	store, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum, err := SummarizeRequest([]byte(sampleRequest), store.Labeler())
+	if err != nil {
+		t.Fatal(err)
+	}
+	usage := &Usage{Input: 20, CacheCreation: 500, CacheRead: 1000, Output: 40}
+	at := time.Date(2026, 9, 12, 5, 0, 0, 0, time.UTC)
+	for _, epoch := range []string{"aaaaaaaaaaaaaaaa", ""} {
+		rec := Record{
+			Timestamp: at, SessionID: "epoch-1", Path: "/v1/messages",
+			Epoch:          epoch,
+			RequestSummary: RequestSummary{Model: "claude-opus-5", Prompt: sum.Prompt},
+			Response:       Response{Usage: usage},
+		}
+		if err := store.Append(rec); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, err := ReadFile(filepath.Join(dir, "epoch-1.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := s.RequestCount(); n != 2 {
+		t.Fatalf("read %d requests, want 2", n)
+	}
+	got := []string{s.Lanes[0].Requests[0].Epoch, s.Lanes[0].Requests[1].Epoch}
+	if got[0] != "aaaaaaaaaaaaaaaa" {
+		t.Errorf("a labelled record came back with epoch %q; the label was written to disk and "+
+			"dropped on the way out, so every reader sees absence where the ledger has a value", got[0])
+	}
+	if got[1] != "" {
+		t.Errorf("an unlabelled record came back with epoch %q, inventing a label nothing wrote", got[1])
+	}
+}

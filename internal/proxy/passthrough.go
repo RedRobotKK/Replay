@@ -93,6 +93,44 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		body = s.mask(&rec, body)
 		setBody(r, body)
 	}
+	// messages, like every other rewrite in this handler.
+	//
+	// The first version carried no family gate, and a POST to a path this
+	// build cannot read had its body rewritten anyway — thirty-four lines
+	// under the comment saying such a path is forwarded unchanged and that
+	// "everything Replay offers is inert for it". A review ran it: POST
+	// /v1/embeddings carrying cc_version= came out the other side pinned.
+	// That is the F2 defect committed one release after the gate built to
+	// stop it, in the handler whose own header says the order of operations
+	// is the invariant.
+	//
+	// The gate is also what makes the epoch honest. withUsageReporting
+	// re-encodes OpenAI bodies with json.Marshal after this point, which
+	// compacts and HTML-escapes every RawMessage it re-emits, so on that
+	// family the bytes hashed here are provably not the bytes forwarded and
+	// "the tools hash is the forwarded bytes" was false exactly where it was
+	// load-bearing. On the Messages family the context-edit policy splices
+	// bytes rather than re-encoding, so the claim holds.
+	if messages && len(body) > 0 && s.cfg.FreezePrefix && !s.cfg.NoPolicy {
+		if out, ok := freezeBillingHeader(body); ok {
+			body = out
+			setBody(r, body)
+			// Recorded on its own field, not by taking Policy.
+			//
+			// Policy is one string and applyPolicy sets it unconditionally
+			// further down, so a request that was frozen AND context-edited
+			// recorded only the second and the ledger could not say the first
+			// happened. Policy's own documentation says "empty when the bytes
+			// went through unchanged", which would then be false on a record
+			// that names a different policy. A single-valued field for a fact
+			// that now has two occupants cannot record the truth, and the
+			// ledger is the artefact a reader uses to decide what was done to
+			// their request.
+			rec.Frozen = true
+		}
+		rec.Epoch = toolsWireHash(body)
+	}
+
 	if openai && s.cfg.Masker != nil && !s.cfg.NoPolicy {
 		// The masker walks the Messages body shape. This family's body is
 		// different and it is not masked. Saying so matters more here than
