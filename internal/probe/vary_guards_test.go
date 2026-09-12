@@ -405,3 +405,24 @@ func TestVaryGuard_AnUnreadableAnswerIsNotAnEmptyUsage(t *testing.T) {
 		t.Fatal("zero input tokens says nothing about caching and must be refused")
 	}
 }
+
+// A payload that cannot be encoded stops here, loudly.
+//
+// The branch this covers is unreachable through Vary by construction — every
+// value in the payload is a string, an int or a map of them — so no test
+// driving the command can enter it. Calling the helper directly with a channel
+// can, and that is the point of the helper existing: the impossibility is
+// stated in one place and checked there.
+func TestVaryGuard_AnUnencodablePayloadStopsBeforeTheProvider(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("an unencodable payload must stop here; sending a nil body would return " +
+				"the provider's 400 for what is a defect in how the payload is built")
+		}
+		if !strings.Contains(fmt.Sprint(r), "defect in how it is built") {
+			t.Fatalf("the panic does not say whose defect it is: %v", r)
+		}
+	}()
+	_ = mustJSON(map[string]any{"unencodable": make(chan int)})
+}

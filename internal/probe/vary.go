@@ -177,10 +177,7 @@ func (r *Runner) sendVary(model, filler, term string, variant bool) (usageSplit,
 			"input_schema": map[string]any{"type": "object", "properties": map[string]any{}},
 		}}
 	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return usageSplit{}, err
-	}
+	body := mustJSON(payload)
 	req, err := http.NewRequest(http.MethodPost, strings.TrimRight(r.BaseURL, "/")+"/v1/messages", bytes.NewReader(body))
 	if err != nil {
 		return usageSplit{}, err
@@ -227,4 +224,26 @@ func parseVaryUsage(raw []byte) (usageSplit, error) {
 		return usageSplit{}, fmt.Errorf("the provider's answer carried no usage, so it says nothing about caching")
 	}
 	return usageSplit{CacheCreation: parsed.Usage.CacheCreation, CacheRead: parsed.Usage.CacheRead}, nil
+}
+
+// mustJSON encodes a payload this package built itself.
+//
+// json.Marshal can only fail on a value no map literal above can hold: a
+// channel, a func, a cycle. So `if err != nil { return err }` there is an error
+// path nothing reaching it through Vary can enter, and guard-reachability was
+// right to call it unobserved — it reported the branch as never entered by any
+// test, which is true and cannot be fixed by a test that goes through Vary.
+//
+// The two honest options are to drop the check or to say what it means. Dropped
+// (`body, _ :=`), a failure sends a nil body and the provider answers 400,
+// reporting a request problem for a programming error. This says which it is: a
+// payload that cannot be encoded is a bug in the literal above, not a condition
+// a run can hit, and it stops here rather than travelling to the provider and
+// coming back as somebody else's error message.
+func mustJSON(v any) []byte {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic("probe: the vary payload cannot be encoded, which is a defect in how it is built: " + err.Error())
+	}
+	return b
 }
