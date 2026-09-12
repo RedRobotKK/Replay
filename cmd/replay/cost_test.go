@@ -368,3 +368,30 @@ func TestCostPerLaneKeepsTheLanesAndNamesThemAsLanes(t *testing.T) {
 			"rows are", got.Summary.Tasks, lanes)
 	}
 }
+
+// A session that changed tool set mid-run says so in the report.
+//
+// This is the reader `MixedEpochs` was added for and shipped without. A review
+// panel found the field had zero production consumers: its own comment said "a
+// reader adding two epochs together should be told so", and no reader was told
+// anything. A label nobody is shown cannot be wrong, which is not the same as
+// being right.
+func TestCostReportsASessionThatChangedToolSet(t *testing.T) {
+	mixed := renderCost(summarise([]costUnit{
+		{CostUSD: 10, MixedEpochs: true},
+		{CostUSD: 5},
+	}), 0, 0, io.Discard, "")
+	if !strings.Contains(mixed, "changed tool set mid-run") {
+		t.Fatalf("a session spanning two tool sets was priced and not disclosed:\n%s", mixed)
+	}
+	if !strings.Contains(mixed, "1 session(s)") {
+		t.Fatalf("the count is wrong or missing:\n%s", mixed)
+	}
+
+	// And the ordinary case says nothing, because a caveat printed on every
+	// run is a caveat nobody reads.
+	plain := renderCost(summarise([]costUnit{{CostUSD: 10}, {CostUSD: 5}}), 0, 0, io.Discard, "")
+	if strings.Contains(plain, "changed tool set") {
+		t.Fatalf("a run with no mixed-epoch session printed the notice anyway:\n%s", plain)
+	}
+}
