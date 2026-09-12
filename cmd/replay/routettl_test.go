@@ -226,3 +226,43 @@ func TestRT5_DatedRequestIsPricedAtRequestTime(t *testing.T) {
 			*r.Observed, wantThen, wantToday)
 	}
 }
+
+// TopologyOf uses PriceFor (today), so a dest that is only priced inside a
+// window that has already closed still looks Known. PriceForAt at the
+// request time then returns !ok. Skipping those turns must not print a $0
+// dest; deleting the skip bills the source and projects $0.
+func TestRT5_UnpricedAtRequestTimeIsNotAZeroDest(t *testing.T) {
+	restore := cachemodel.Override(&cachemodel.Rules{
+		Schema:  cachemodel.RulesSchema,
+		Version: "test",
+		Models: []cachemodel.ModelRule{
+			{Match: "opus-5", MinPrefix: 512, InputPerMTok: 10, OutputPerMTok: 50, ReadMult: 0.1, Priced: true},
+			{Match: "probe-dest", MinPrefix: 512, InputPerMTok: 3, OutputPerMTok: 15, ReadMult: 0.1, Priced: true,
+				EffectiveFrom: "2026-01-01", EffectiveUntil: "2026-08-31"},
+		},
+	})
+	defer restore()
+
+	const from, to = "claude-opus-5", "claude-probe-dest"
+	u := transcript.Usage{Input: 1_000_000}
+	at := time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)
+	c := modelCorpus{
+		fits:   map[string]analysis.TokenFit{from: fitAt(0.25, 100), to: fitAt(0.25, 100)},
+		turns:  map[string]int{from: 100, to: 100},
+		usage:  map[string]transcript.Usage{from: u},
+		byTurn: map[string][]usageAt{from: {{Usage: u, At: at}}},
+		hits:   80,
+		total:  100,
+	}
+	if _, ok := cachemodel.PriceFor(to); !ok {
+		t.Fatal("PriceFor must still see the dest, or Known is false and the skip never runs")
+	}
+	if _, ok := cachemodel.PriceForAt(to, at); ok {
+		t.Fatal("PriceForAt at September must not price a window that closed in August")
+	}
+	r := buildRoute(from, to, c)
+	if r.Observed != nil || r.Dollars != nil {
+		t.Fatalf("a dest unpriced at request time must not project dollars: observed=%v projected=%v",
+			r.Observed, r.Dollars)
+	}
+}

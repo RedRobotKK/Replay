@@ -344,3 +344,42 @@ func TestScoreTrim_UsesTheRequestTimestamp(t *testing.T) {
 			plan.SavedInputUSD, wantThen, wantToday)
 	}
 }
+
+// The inner `Model != ""` is inert against a lane that already carries
+// opus-5: deleting it still prices opus-5. A sonnet lane at a dated
+// sonnet row is the thing that branch changes.
+func TestScoreTrim_UsesTheRequestModel(t *testing.T) {
+	restore := cachemodel.Override(&cachemodel.Rules{
+		Schema:  cachemodel.RulesSchema,
+		Version: "test",
+		Models: []cachemodel.ModelRule{
+			{Match: "opus-5", MinPrefix: 512, InputPerMTok: 10, OutputPerMTok: 50, ReadMult: 0.1, Priced: true},
+			{Match: "sonnet-4", MinPrefix: 512, InputPerMTok: 3, OutputPerMTok: 15, ReadMult: 0.1, Priced: true},
+		},
+	})
+	defer restore()
+
+	lane := laneOf(toolResult("Read", "a.go", body("package main", "middle", "tail")))
+	for _, r := range lane.Requests {
+		r.Model = "claude-sonnet-4-5"
+	}
+	plan := ScoreTrim(lane, TokenFit{TokensPerByte: 0.25, Turns: 9}, 1024)
+	if plan.RemovedPromptTokens <= 0 {
+		t.Fatalf("the fixture saved nothing: %+v", plan)
+	}
+	sonnet, ok := cachemodel.PriceFor("claude-sonnet-4-5")
+	if !ok {
+		t.Fatal("the override must price sonnet-4")
+	}
+	opus, ok := cachemodel.PriceFor("claude-opus-5")
+	if !ok {
+		t.Fatal("the override must price opus-5")
+	}
+	mtok := float64(plan.RemovedPromptTokens) / 1e6
+	wantSonnet := mtok * sonnet.InputPerMTok
+	wantOpus := mtok * opus.InputPerMTok
+	if math.Abs(plan.SavedInputUSD-wantSonnet) > 1e-9 {
+		t.Errorf("SavedInputUSD = $%.6f, want $%.6f at sonnet (opus-5 would be $%.6f)",
+			plan.SavedInputUSD, wantSonnet, wantOpus)
+	}
+}

@@ -67,3 +67,42 @@ func TestWithTTL_UsesTheRequestTimestamp(t *testing.T) {
 			replayed.CostUSD, asRun.CostUSD)
 	}
 }
+
+// WithContextEdit switched to AddAt with no test. Reverting that one call
+// to Add stays green against TestContextEditShrinksPromptAndInvalidates.
+// A trigger so high that nothing is cleared keeps the tokens equal to
+// as-run; the dollars must follow the request clock too.
+func TestWithContextEdit_UsesTheRequestTimestamp(t *testing.T) {
+	r := &cachemodel.Rules{
+		Schema:  cachemodel.RulesSchema,
+		Version: "test",
+		Models: []cachemodel.ModelRule{
+			{Match: "fable-5-1", MinPrefix: 512, InputPerMTok: 10, OutputPerMTok: 50, ReadMult: 0.1, Priced: true},
+			{Match: "fable-5-1", MinPrefix: 512, InputPerMTok: 5, OutputPerMTok: 25, ReadMult: 0.1, Priced: true,
+				EffectiveFrom: "2026-09-01", EffectiveUntil: "2026-09-30"},
+		},
+	}
+	defer cachemodel.Override(r)()
+
+	lane := syntheticLane(4, -1, 0, true)
+	cal := Calibrate(lane)
+	fit := Fit(cal, false)
+	asRun := AsRun(lane)
+	edited := WithContextEdit(cal, ContextEditPolicy{KeepLast: 2, TriggerTokens: 1_000_000_000}, fit)
+	if asRun.CostUSD <= 0 {
+		t.Fatal("as-run priced nothing")
+	}
+	if edited.PromptTokens != asRun.PromptTokens {
+		t.Fatalf("a trigger that never fires must leave prompt tokens alone: edited %d as-run %d",
+			edited.PromptTokens, asRun.PromptTokens)
+	}
+	today, _ := cachemodel.PriceFor(lane.Requests[0].Model)
+	then, _ := cachemodel.PriceForAt(lane.Requests[0].Model, lane.Requests[0].Timestamp)
+	if today.InputPerMTok == then.InputPerMTok {
+		t.Fatal("PriceFor and PriceForAt agree; the fixture cannot tell today from request time")
+	}
+	if edited.CostUSD != asRun.CostUSD {
+		t.Fatalf("WithContextEdit $%.6f != as-run $%.6f; same tokens must price at the request timestamp, not today",
+			edited.CostUSD, asRun.CostUSD)
+	}
+}
