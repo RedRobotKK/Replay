@@ -357,20 +357,23 @@ func main() {
 	// A survivor is only this change's business if the base tree did not
 	// already have it. Asking costs a checkout and a run per survivor, so it is
 	// asked once, after the loop, and only when there is something to ask about.
-	var preExisting []guardcheck.Guard
-	introduced := survivors
+	var baseSurvivors map[guardcheck.Identity]int
+	var baseErr error
 	if len(survivors) > 0 {
-		pre, intro, err := splitSurvivors(base, survivors, limit)
-		if err != nil {
+		baseSurvivors, baseErr = baseSurvivorCounts(base, survivors, limit)
+		if baseErr != nil {
 			// Nothing certified is nothing exempted. The run fails on every
 			// survivor, which is where it started before any of this existed.
 			fmt.Printf("\nguard-reachability: the base tree could not answer (%v),\n"+
 				"so no survivor can be shown to pre-date this change and every one is "+
-				"reported as introduced\n", err)
-		} else {
-			preExisting, introduced = pre, intro
+				"reported as introduced\n", baseErr)
 		}
 	}
+	// The split itself is guardcheck.ClassifySurvivors rather than an `if err`
+	// here, because this file carries //go:build ignore and no test can reach
+	// it. Fail-closed is the reviewer's one load-bearing property and it may
+	// not live where a suite cannot watch it — see FC1..FC5 in that package.
+	preExisting, introduced := guardcheck.ClassifySurvivors(survivors, baseSurvivors, baseErr)
 	unreached := withVerdict(introduced, verdicts, unreachedVerdict)
 	inert := withVerdict(introduced, verdicts, inertVerdict)
 	unobserved := withVerdict(introduced, verdicts, unobservedVerdict)
@@ -379,7 +382,11 @@ func main() {
 		"%d unchecked, %d not built here\n",
 		len(guards), len(survivors), len(preExisting), len(introduced), len(unchecked), len(unbuilt))
 	reportPreExisting(preExisting, verdicts, base)
-	if len(introduced) == 0 && len(unchecked) == 0 && len(unbuilt) == 0 {
+	// Likewise the exit rule: classifying every survivor as introduced and then
+	// exiting 0 would be the same silent fail-open by another route, so the
+	// rule is decided where FC2, FC4 and FC5 can watch it.
+	code := guardcheck.ExitCode(introduced, unchecked, unbuilt)
+	if code == 0 {
 		return
 	}
 
@@ -399,7 +406,7 @@ func main() {
 	report("These were never put to the suite at all: the compiler rejected the\n"+
 		"neutralised form, so nothing about them was measured. An unchecked guard\n"+
 		"is the false green this tool exists to prevent:", unchecked)
-	os.Exit(1)
+	os.Exit(code)
 }
 
 // The three survivor verdicts, kept as names so the grouping below and the
@@ -422,7 +429,8 @@ func withVerdict(gs []guardcheck.Guard, verdicts map[guardcheck.Guard]string, wa
 	return out
 }
 
-// splitSurvivors asks the base tree which of these survivors it already had.
+// baseSurvivorCounts asks the base tree how many survivors it already had per
+// identity.
 //
 // The base is checked out into a temporary worktree and the SAME condition —
 // same package, same enclosing function, same text — is neutralised there and
@@ -430,21 +438,31 @@ func withVerdict(gs []guardcheck.Guard, verdicts map[guardcheck.Guard]string, wa
 // survivor is exempted only when its counterpart demonstrably survived in the
 // base too, measured the same way.
 //
-// Three things make this fail closed rather than open, and all three are the
-// point:
+// It measures and does not judge. Turning these counts into an exemption is
+// guardcheck.ClassifySurvivors' job, and the split is not cosmetic: this
+// function starts processes and creates worktrees, so it can only be exercised
+// by running it, while the decision it feeds is pure and has FC1..FC5 on it.
+//
+// Three things make the whole fail closed rather than open, and all three are
+// the point:
 //
 //   - a base tree that cannot be checked out, or whose own suite is red,
-//     certifies nothing and returns an error, on which the caller reports every
-//     survivor as introduced
+//     certifies nothing and returns an error, on which ClassifySurvivors
+//     reports every survivor as introduced
 //   - a base counterpart whose neutralised form does not compile there is not a
 //     survivor there, so it certifies nothing
 //   - the search is bounded by how many survivors the change has for an
 //     identity, so a function whose three identical guards were two survivors
 //     before and three now still reports one introduced
-func splitSurvivors(base string, survivors []guardcheck.Guard, limit time.Duration) (pre, introduced []guardcheck.Guard, err error) {
+//
+// Every error path returns a nil map as well as the error, so a caller that
+// ignored the error would exempt nothing rather than something. That is belt
+// and braces, not the contract: the contract is that the error dominates, and
+// it is enforced in ClassifySurvivors where a test can see it.
+func baseSurvivorCounts(base string, survivors []guardcheck.Guard, limit time.Duration) (map[guardcheck.Identity]int, error) {
 	root, cleanup, err := baseWorktree(base)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer cleanup()
 
@@ -452,12 +470,12 @@ func splitSurvivors(base string, survivors []guardcheck.Guard, limit time.Durati
 	fmt.Printf("\nguard-reachability: %d survived; asking %s whether it had them too\n",
 		len(survivors), base)
 	if out, ok := runTests(root, pkgs, limit, false); !ok {
-		return nil, nil, fmt.Errorf("the base tree's own suite is red, so nothing there "+
+		return nil, fmt.Errorf("the base tree's own suite is red, so nothing there "+
 			"can certify anything:\n%s", lastLines(out, 15))
 	}
 	index, err := baseConditionals(root, pkgs)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// Iterated over the survivors rather than over the identity map, so the
@@ -489,8 +507,7 @@ func splitSurvivors(base string, survivors []guardcheck.Guard, limit time.Durati
 			fmt.Printf("  %s:%d  %s  does not certify it: %s\n", rel, cand.Line, short(cand.Src), why)
 		}
 	}
-	pre, introduced = guardcheck.PairSurvivors(survivors, baseSurvivors)
-	return pre, introduced, nil
+	return baseSurvivors, nil
 }
 
 // idFunc names an identity's function for a message, or says it has none.
