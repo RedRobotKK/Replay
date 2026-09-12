@@ -322,11 +322,11 @@ func readingsLine(m Machine) string {
 
 // pad fills a screen to the budget and gives it the footer the loop expects.
 func pad(lines []string) []string {
-	for len(lines) < bodyRows-3 {
+	for len(lines) < bodyRows()-3 {
 		lines = append(lines, "")
 	}
-	if len(lines) > bodyRows-3 {
-		lines = lines[:bodyRows-3]
+	if len(lines) > bodyRows()-3 {
+		lines = lines[:bodyRows()-3]
 	}
 	return append(lines, "", "  ran   replay doctor",
 		"  "+Dim("copy it and you never need this screen again."))
@@ -481,9 +481,39 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 	// one keystroke away and only one place the rate appears. Without this the
 	// note is appended and then padCost trims it off the bottom, which reads
 	// on screen as the feature simply not working.
-	maxRows := 8
+	// The list gets whatever the window has left after the things that must
+	// not be dropped.
+	//
+	// This was `maxRows := 8`, a constant, and the comment above explains why:
+	// padCost trims from the bottom, so a long list pushed the price date and
+	// the token figure off the screen, and rows were the cheapest thing to give
+	// up. That reasoning is still right. What was wrong was paying for it with
+	// a fixed cap, which on a fifty-row terminal showed eight tasks and thirty
+	// blank rows: the provenance was safe and the window was empty.
+	//
+	// Reserving the trailer FIRST and giving the list the remainder protects
+	// the same lines for the same reason, and stops protecting them with space
+	// nobody can see. On a 24-row terminal the arithmetic lands on 8 and the
+	// screen is what it always was.
+	const (
+		headings = 2 // the column labels and the rule under them
+		trailer  = 6 // blank, selected line, enter hint, blank, and two notes
+	)
+	reserved := headings + trailer
 	if m.FX.RateNote() != "" {
-		maxRows = 7
+		reserved++ // the rate note, which must not be what gets dropped
+	}
+	maxRows := bodyRows() - 3 - len(lines) - reserved
+	// A floor, because a non-positive window does not mean "no rows".
+	//
+	// Selection.Visible reads w <= 0 as "show all of them", so on a terminal
+	// short enough to make this arithmetic negative the screen would render the
+	// entire corpus, and padCost would trim it from the bottom: a wall of rows
+	// with the selected line, the price date and the token figure all pushed
+	// off. Worse than a short list, and it only happens on the smallest
+	// windows, which is where nobody looks.
+	if maxRows < 3 {
+		maxRows = 3
 	}
 	if sel.Window <= 0 || sel.Window > maxRows {
 		sel.Window = maxRows
@@ -557,11 +587,11 @@ func money(v float64) string { return fmt.Sprintf("$%.2f", v) }
 
 // padCost fills to the budget and names the command that produced the screen.
 func padCost(lines []string) []string {
-	for len(lines) < bodyRows-3 {
+	for len(lines) < bodyRows()-3 {
 		lines = append(lines, "")
 	}
-	if len(lines) > bodyRows-3 {
-		lines = lines[:bodyRows-3]
+	if len(lines) > bodyRows()-3 {
+		lines = lines[:bodyRows()-3]
 	}
 	return append(lines, "", "  ran   replay cost --per-task",
 		"  "+Dim("copy it and you never need this screen again."))
@@ -638,11 +668,11 @@ func truncate(s string, w int) string {
 }
 
 func padWhy(lines []string) []string {
-	for len(lines) < bodyRows-3 {
+	for len(lines) < bodyRows()-3 {
 		lines = append(lines, "")
 	}
-	if len(lines) > bodyRows-3 {
-		lines = lines[:bodyRows-3]
+	if len(lines) > bodyRows()-3 {
+		lines = lines[:bodyRows()-3]
 	}
 	return append(lines, "", "  ran   replay blame <session>",
 		"  "+Dim("copy it and you never need this screen again."))

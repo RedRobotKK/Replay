@@ -303,11 +303,11 @@ func (l *Loop) paint() {
 	} else if l.Source != nil {
 		lines = l.Source(key, tick).Lines
 	}
-	for len(lines) < bodyRows {
+	for len(lines) < bodyRows() {
 		lines = append(lines, "")
 	}
-	if len(lines) > bodyRows {
-		lines = lines[:bodyRows]
+	if len(lines) > bodyRows() {
+		lines = lines[:bodyRows()]
 	}
 	lines = append(lines, Footer(key))
 

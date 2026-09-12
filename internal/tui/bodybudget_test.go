@@ -9,7 +9,7 @@ import (
 // shipped, and the difference is the whole point of this file.
 //
 // pad(), padCost(), padWhy() and padShare() each fill a short body and trim a
-// long one, so Screen.Lines is bodyRows-3 whatever went in. RB1 in
+// long one, so Screen.Lines is bodyRows()-3 whatever went in. RB1 in
 // rowbudget_test.go asserts on exactly that length. It is a true statement
 // about a value that is constant by construction: a screen that overflowed and
 // silently lost its last row passes it identically to one that fitted with
@@ -69,7 +69,7 @@ func TestBB1_NoScreenBuildsMoreBodyThanTheFrameHolds(t *testing.T) {
 		}),
 	}
 
-	const frame = bodyRows - 3
+	frame := bodyRows() - 3
 	for name, sc := range screens {
 		if sc.BodyRows == 0 {
 			t.Errorf("%s reports no body length, so this test is not looking at it. "+
@@ -88,13 +88,13 @@ func TestBB1_NoScreenBuildsMoreBodyThanTheFrameHolds(t *testing.T) {
 
 // TestBB2_TheFrameIsStillTheFrame keeps BB1 honest.
 //
-// BB1 compares a built body against bodyRows-3. If a later change altered how
+// BB1 compares a built body against bodyRows()-3. If a later change altered how
 // much pad actually keeps, BB1 would go on comparing against a number that no
 // longer describes the frame, and would pass while rows vanished again. This
 // asserts the two agree by measuring what pad returns for a body of exactly
 // the size BB1 permits.
 func TestBB2_TheFrameIsStillTheFrame(t *testing.T) {
-	const frame = bodyRows - 3
+	frame := bodyRows() - 3
 	body := make([]string, frame)
 	for i := range body {
 		body[i] = "  row"

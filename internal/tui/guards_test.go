@@ -126,8 +126,8 @@ func TestGuardsFitsTheBudget(t *testing.T) {
 		"live": liveGuards(), "loud": loud, "unreachable": {},
 	} {
 		sc := GuardsScreen(g, someAdvice(), 20)
-		if len(sc.Lines) > bodyRows {
-			t.Errorf("%s: %d rows, body budget %d", name, len(sc.Lines), bodyRows)
+		if len(sc.Lines) > bodyRows() {
+			t.Errorf("%s: %d rows, body budget %d", name, len(sc.Lines), bodyRows())
 		}
 	}
 }

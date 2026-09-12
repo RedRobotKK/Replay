@@ -173,11 +173,11 @@ func humanBytes(n int64) string {
 }
 
 func padSafe(lines []string) []string {
-	for len(lines) < bodyRows {
+	for len(lines) < bodyRows() {
 		lines = append(lines, "")
 	}
-	if len(lines) > bodyRows {
-		lines = lines[:bodyRows]
+	if len(lines) > bodyRows() {
+		lines = lines[:bodyRows()]
 	}
 	return lines
 }

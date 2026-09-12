@@ -143,7 +143,7 @@ func TestStaleRulesWarningSurvivesTheRowBudget(t *testing.T) {
 //
 // The screen's tightest state is a stale price table, a stale rules document
 // and one probe reading per model — every note firing at once. It came to 21
-// rows against a body budget of 20 the moment bodyRows landed, and the row that
+// rows against a body budget of 20 the moment bodyRows() landed, and the row that
 // lost was the last note appended: the rules staleness warning, which is the
 // one this file exists for.
 //
@@ -161,7 +161,7 @@ func TestDoctorWorstCaseKeepsEveryNote(t *testing.T) {
 	m.Readings, m.Models = 4, 4 // the one-reading-per-model note fires
 
 	sc := DoctorScreen(m)
-	// pad() fills to bodyRows-3 and then appends three lines of its own, so the
+	// pad() fills to bodyRows()-3 and then appends three lines of its own, so the
 	// body is everything before those three. Counting back from the end of
 	// sc.Lines stops on the tagline, not on the padding.
 	body := sc.Lines[:len(sc.Lines)-3]
