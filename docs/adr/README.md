@@ -27,7 +27,7 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | [0019](0019-surfaces-declare-what-they-can-be-asked.md) | Surfaces declare what they can be asked, and the declaration is probed | Proposed |
 | [0020](0020-compile-the-merge-not-the-branch.md) | Compile the merge, not the branch: two green PRs have put main in the red twice | Accepted |
 | [0021](0021-unknown-model-cache-read-multiple.md) | Unknown-model cache-read multiple is two questions: 0.025 for the instrument, unpriced for money | Superseded by 0022 |
-| [0022](0022-unknown-model-read-multiple-the-bias-runs-the-other-way.md) | Unknown-model read multiple: the bias runs the other way | Proposed |
+| [0022](0022-unknown-model-read-multiple-the-bias-runs-the-other-way.md) | Unknown-model read multiple: the bias runs the other way | Accepted |
 
 ---
 

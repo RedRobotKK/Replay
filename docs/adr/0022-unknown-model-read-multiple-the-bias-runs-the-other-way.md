@@ -1,6 +1,6 @@
 # 22. Unknown-model read multiple: the bias runs the other way
 
-**Status:** Proposed
+**Status:** Accepted (option A, implemented in #271, merged 2026-09-12)
 **Date:** 2026-09-12
 **Supersedes:** [0021](0021-unknown-model-cache-read-multiple.md), in its reasoning. The split it
 draws is kept.
@@ -83,6 +83,23 @@ one 0021 makes, and it should be written as itself rather than as conservatism.
 
 What is not defensible is the current state: the number kept for a reason that
 the source refutes.
+
+### Settled: A
+
+The owner took **A**. `readMultiplierUnknown = ReadMultiplier` landed on `main`
+in #271 on 2026-09-12, and the symbol now names the rule rather than the
+Fable/Mythos tier, which is the `Consequences` requirement below.
+
+The A/B text above is left exactly as written. It records that the choice was
+genuinely open at the time, and that is the part a later reader needs; editing
+it to read as though A were obvious would be the same defect this ADR exists to
+correct.
+
+Option B's cost, now carried: a genuinely cheaper future tier is overstated
+until the table learns it. The guard against that is
+`TestUnknownModelReadMultipleIsTheDearestInTheTable`, which derives its answer
+from the table rather than pinning 0.10, so a new dearest tier moves it and a
+failure names the reason.
 
 ## Consequences
 
