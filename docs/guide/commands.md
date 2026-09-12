@@ -1007,6 +1007,7 @@ nothing**, and `--execute` is what makes it run:
 ```sh
 replay probe --model claude-opus-5                 # what it would do, and what it would cost
 replay probe --model claude-opus-5 --execute       # actually send them
+replay probe --model claude-opus-5 --vary tools    # two-request plan: does tools sit in the cache key?
 ```
 
 The key is read from `ANTHROPIC_API_KEY` in the environment and is never a
@@ -1039,6 +1040,7 @@ full price and learn nothing.
 | `--candidates` | Plausible floors to test before searching between them. Defaults to `512,1024,2048,4096`; empty disables it |
 | `--prior` | A documented floor to test before searching. Defaults to the compiled table's figure for the model; `-1` disables it |
 | `--execute` | Actually send them. Without it, only the plan is printed |
+| `--vary` | Three-request experiment: change one prefix term (`tools`, `system`, `effort`) and watch `cache_read`. Request 3 repeats the baseline as a control. Plans unless `--execute` |
 | `--trend` | Read the recorded series and report what has provably changed. Sends nothing |
 | `--max-age` | Skip probing when a reading for this model is younger than this, and print it instead. `--max-age 24h` makes a daily schedule idempotent |
 | `--record` | Append the reading to a measurement series. Defaults to `~/.replay/measurements.jsonl`; `-` disables it |
@@ -1381,6 +1383,7 @@ is not resent. And nothing is ever retried once a byte of the *response* has rea
 
 | Flag | What it does |
 |---|---|
+| `--freeze-prefix` | Off by default. Pin same-length `cc_version` hashes in the system prompt and label a tool-set epoch from the exact tools JSON on the wire. A new epoch is a set change, not a miss claim. `REPLAY_NO_POLICY=1` forces off |
 | `--mask`, `--mask-patterns`, `--mask-entropy` | Detect and mask secrets in traffic, using a maintained pattern set, your own patterns, and an optional entropy heuristic |
 | `--mask-ttl` | With `--mask`, how long a masked secret stays in the vault before it is evicted. Default 24h. Masking turns a transient secret into one at rest, and the vault key file sits next to the ciphertext, so this is the window a compromised host hands over. `0` keeps entries forever. Eviction is close to free: the placeholder is derived from the secret, so re-sending a secret whose entry lapsed restores it and the placeholder does not change |
 | `--rehydrate` | With `--mask`, restore placeholders in responses. On by default. Turning it **off** leaves the placeholders in place, which is how you evaluate coverage: whatever the agent then trips over was masked, and whatever still works was not |

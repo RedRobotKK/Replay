@@ -51,6 +51,7 @@ func runProbe(stdin io.Reader, args []string, stdout, stderr io.Writer) error {
 	trend := fs.Bool("trend", false, "read the recorded series and report what has changed; sends nothing")
 	maxAge := fs.Duration("max-age", 0, "skip probing when a reading for this model is younger than this, and print it instead")
 	record := fs.String("record", "", "append the reading to a measurement series (default ~/.replay/measurements.jsonl; \"-\" for none)")
+	vary := fs.String("vary", "", "vary one prefix term (tools, system, effort) across two requests and watch cache_read; plan unless --execute")
 	execute := fs.Bool("execute", false, "actually send the probes; without this, only the plan is printed")
 	yes := fs.Bool("yes", false, "with --execute, skip the confirmation. For scripts that meant it")
 	contributeTo := fs.String("contribute", "", "build a submission file for this campaign from the recorded reading; writes a file, sends nothing")
@@ -69,6 +70,44 @@ func runProbe(stdin io.Reader, args []string, stdout, stderr io.Writer) error {
 	}
 	if *model == "" {
 		return fmt.Errorf("a model is required: replay probe --model claude-opus-5: %w", errUsage)
+	}
+
+	base := os.Getenv("ANTHROPIC_BASE_URL")
+	if base == "" {
+		base = "https://api.anthropic.com"
+	}
+	r := &probe.Runner{BaseURL: base, APIKey: os.Getenv("ANTHROPIC_API_KEY"), Out: stdout}
+
+	if *vary != "" {
+		if !*execute {
+			return r.PlanVary(*model, *vary)
+		}
+		if r.APIKey == "" {
+			return fmt.Errorf("ANTHROPIC_API_KEY is not set in this shell. It is read from the environment " +
+				"and never taken as a flag, because a key on a command line is recorded in shell history " +
+				"and visible in the process table")
+		}
+		if err := r.PlanVary(*model, *vary); err != nil {
+			return err
+		}
+		if !confirmSpend(stdin, stdout, "3 billable requests to "+base, *yes) {
+			return fmt.Errorf("not confirmed; nothing was sent")
+		}
+		res, err := r.Vary(*model, *vary)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintf(stdout, "\nvary %s on %s: baseline write %d read %d; variant write %d read %d; control read %d\n",
+			res.Term, res.Model, res.BaselineWrite, res.BaselineRead, res.VariantWrite, res.VariantRead, res.ControlRead)
+		switch {
+		case res.Inconclusive:
+			_, _ = fmt.Fprintf(stdout, "inconclusive: the unchanged baseline did not read on request 3, so caching is not working in this window. Not a measurement of the term.\n")
+		case res.Moved:
+			_, _ = fmt.Fprintf(stdout, "request 2's cache_read is 0 instead of reading request 1's write; request 3 read. This term is in the provider cache key on this run.\n")
+		default:
+			_, _ = fmt.Fprintf(stdout, "request 2 still read; this term was not observed in the provider cache key on this run.\n")
+		}
+		return nil
 	}
 	// A reading already in the series answers the question a probe would, and
 	// a probe costs real money at the provider.
@@ -115,12 +154,6 @@ func runProbe(stdin io.Reader, args []string, stdout, stderr io.Writer) error {
 		MaxProbes:          *maxProbes,
 		Confirm:            *confirm,
 	}
-
-	base := os.Getenv("ANTHROPIC_BASE_URL")
-	if base == "" {
-		base = "https://api.anthropic.com"
-	}
-	r := &probe.Runner{BaseURL: base, APIKey: os.Getenv("ANTHROPIC_API_KEY"), Out: stdout}
 
 	if !*execute {
 		r.Plan(cfg, *model)
