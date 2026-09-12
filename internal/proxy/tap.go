@@ -66,6 +66,12 @@ func (t *responseTap) WriteHeader(code int) {
 	}
 	ct := t.Header().Get("Content-Type")
 	t.gz = strings.EqualFold(t.Header().Get("Content-Encoding"), "gzip")
+	// Not redundant with result()'s own event-stream branch, which reparses a
+	// buffered body to the same answer. Buffering stops at MaxResponseBytes,
+	// so without the incremental parser a stream longer than the cap is
+	// dropped and the turn is ledgered with no usage at all —
+	// TestTap_AnEventStreamPastTheBufferCapIsStillMeasured is the boundary
+	// where the two paths stop agreeing.
 	if ledger.IsEventStream(ct) && !t.gz {
 		if t.openai {
 			t.ostream = &ledger.OpenAIStreamParser{}
@@ -121,20 +127,32 @@ func (t *responseTap) result() ledger.Response {
 		}
 		decoded, err := io.ReadAll(io.LimitReader(zr, MaxResponseBytes))
 		if err != nil {
-			// Indistinguishable by outcome today, and kept anyway.
+			// A body that ended early is not one we may report a figure from.
 			//
-			// A truncated gzip stream decompresses its prefix, and that prefix
-			// always carries whatever padding followed the document, so
-			// ParseResponse below rejects it and returns the same empty
-			// Response this line does. Measured across six truncation points
-			// at two padding sizes: every one read partially, none parsed.
+			// This was documented as indistinguishable by outcome and kept on
+			// intent alone. A truncated gzip stream decompresses its prefix,
+			// and cut INSIDE a compressed block that prefix always carries
+			// whatever padding followed the document, so ParseResponse below
+			// rejects it and returns the same empty Response this line does.
+			// Measured across six truncation points at two padding sizes:
+			// every one read partially, none parsed.
 			//
-			// It is not redundant in intent. A read error means WE KNOW the
-			// body is incomplete, which the parser cannot know — it only sees
-			// bytes that do not parse. The day a parser tolerates trailing
-			// data, or a provider pads with something parseable, this is the
-			// only thing standing between a partial decode and a figure the
-			// ledger presents as measured.
+			// That measurement never tried the cut that matters, and the
+			// conclusion drawn from it was wrong. gzip.Writer.Flush ends a
+			// block: everything written before it decompresses on its own, and
+			// nothing after it reaches the prefix. A provider that flushes per
+			// chunk — which is what streaming compression does — and then
+			// loses the connection leaves a stream that opens, decompresses to
+			// a WHOLE document, and ends early. Delete this line and that
+			// document is parsed and its usage entered as measured, from a
+			// response the tap knows is incomplete: not visibly wrong, just
+			// the usage of the part that arrived.
+			// TestTap_AGzipBodyCutAtAFlushBoundaryRecordsNothing builds that
+			// stream, and fails without this line.
+			//
+			// The intent it was kept on is now also the outcome. A read error
+			// means WE KNOW the body is incomplete, which the parser cannot
+			// know — it only sees bytes that do not parse.
 			return ledger.Response{}
 		}
 		body = decoded
