@@ -1,9 +1,34 @@
-// Package proxy is the local gateway: it forwards requests to the provider
-// byte for byte, taps responses for usage and structure without delaying
-// them, and records derived data in the ledger.
+// Package proxy is the local gateway: it forwards requests to the provider,
+// taps responses for usage and structure without delaying them, and records
+// derived data in the ledger.
 //
-// Nothing here rewrites a request body or removes a client header. The
-// invariants are in the repository CLAUDE.md; the client-side facts the
+// IT REWRITES THE REQUEST BODY IN THREE PLACES, and this comment said it did
+// not. The line read "Nothing here rewrites a request body or removes a client
+// header" while the same file masked secrets, applied the context-edit policy,
+// and added include-usage — and stripped two client headers, x-replay-token
+// and Accept-Encoding. Recorded as F2 in docs/design/surface-taxonomy-1-request.md
+// on 2026-09-11 and left standing as a disagreement between code and doc; this
+// is the doc conceding.
+//
+// It mattered beyond tidiness. A reader deciding whether to put this binary on
+// their wire reads this paragraph first, and it told them the proxy is a
+// pass-through. It is not: it is a gateway that mutates on purpose, in named
+// ways, for stated reasons. Every one of those reasons is defensible and none
+// of them survives being discovered by a reader who was told they did not
+// happen.
+//
+// WHAT IT ACTUALLY DOES TO A REQUEST:
+//
+//	masking        replaces secret byte ranges in place, fail-closed
+//	context-edit   inserts one member when a policy is pinned to the session
+//	include-usage  adds stream_options so usage is reported at all
+//	headers        strips x-replay-token, and Accept-Encoding when it taps
+//
+// Everything else is forwarded unchanged, and the tap never rewrites a
+// response — the one outbound rewrite, rehydration, lives in masking.go so
+// that tap.go has no exceptions.
+//
+// The invariants are in the repository CLAUDE.md; the client-side facts the
 // proxy honors are in docs/architecture/proxy-protocol.md.
 package proxy
 
