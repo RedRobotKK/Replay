@@ -532,7 +532,7 @@
       "name": "quota-not-wired-to-the-proxy",
       "class": "evidence",
       "discovered": "2026-09-06",
-      "file": "internal/proxy/server.go",
+      "file": "internal/proxy/passthrough.go",
       "anchor": "\t\trec.Quota = quotaFrom(tap.Header())",
       "replacement": "",
       "killedBy": [
@@ -774,7 +774,7 @@
       "name": "grok-back-on-the-chat-completions-row",
       "class": "claim-outruns-evidence",
       "discovered": "2026-09-06",
-      "file": "internal/proxy/server.go",
+      "file": "internal/proxy/passthrough.go",
       "anchor": "// DeepSeek and OpenAI itself all speak.",
       "replacement": "// DeepSeek, Grok and OpenAI itself all speak.",
       "killedBy": [
