@@ -64,11 +64,45 @@ func TestOSPhrasingAssertionsAreGatedOnThePlatform(t *testing.T) {
 	assertion := regexp.MustCompile(
 		`strings\.(Contains|HasPrefix|HasSuffix|EqualFold)\([^)]*\.Error\(\)\s*,\s*"([^"]*)"`)
 
+	// The detector has to be able to see the defect it was written for, and to
+	// leave alone the assertion that is correct. Without this the regexp is one
+	// careless edit from matching nothing, and a scan that matches nothing
+	// reports no offences and passes — which is this guard certifying the very
+	// shape it exists to refuse. Borrowed from R3, which has had a mutation
+	// fixture and a clean fixture beside each other all along.
+	//
+	// positive is the defect as it was actually written: TestBG7 asserted on
+	// libc's wording and failed on Windows CI over a refusal that had worked.
+	// negative is the assertion that should have been there instead — same
+	// call shape, this program's own message — and it must NOT be flagged, or
+	// the guard is not discriminating, only failing.
+	const (
+		positive = `if !strings.Contains(err.Error(), "no such file or directory") {`
+		negative = `if !strings.Contains(err.Error(), "replay: refusing to read") {`
+	)
+	pm := assertion.FindStringSubmatch(positive)
+	if pm == nil {
+		t.Fatalf("the detector no longer matches the defect it was written for, so every\n"+
+			"      pass below is a scan that found nothing rather than a tree that is clean:\n  %s", positive)
+	}
+	if _, ok := containsAny(pm[2], osPhrases...); !ok {
+		t.Errorf("the detector matched the defect but no phrase in osPhrases did; the\n"+
+			"      phrase list no longer covers %q", pm[2])
+	}
+	if nm := assertion.FindStringSubmatch(negative); nm != nil {
+		if _, ok := containsAny(nm[2], osPhrases...); ok {
+			t.Errorf("an assertion on this program's own message was read as an operating\n"+
+				"      system's wording; the guard is not discriminating:\n  %s", negative)
+		}
+	}
+
+	scanned := 0
 	var offences []string
 	for path, body := range textFiles(t, ".go") {
 		if !strings.HasSuffix(path, "_test.go") {
 			continue
 		}
+		scanned++
 		for _, fn := range testFunctions(body) {
 			_, gated := containsAny(fn.body, gates...)
 			for i, line := range strings.Split(fn.body, "\n") {
@@ -91,6 +125,12 @@ func TestOSPhrasingAssertionsAreGatedOnThePlatform(t *testing.T) {
 		}
 	}
 	sort.Strings(offences)
+
+	// And it has to have read something. An empty tree reports no offences by
+	// the same arithmetic a clean one does.
+	if scanned == 0 {
+		t.Fatal("no _test.go file was scanned; this check is reading nothing")
+	}
 
 	if len(offences) > 0 {
 		t.Errorf("these assert on an operating system's wording without establishing which "+

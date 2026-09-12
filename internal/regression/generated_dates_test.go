@@ -36,6 +36,29 @@ func TestGeneratedReferencesCarryNoDate(t *testing.T) {
 	// one shape.
 	date := regexp.MustCompile(`\(default "(19|20)\d{2}-\d{2}-\d{2}"\)`)
 
+	// The pattern has to still match the default that broke every open branch,
+	// or this check reads the file, matches nothing, and reports a clean tree.
+	// The file-is-present guard below catches a missing file; nothing catches a
+	// detector that stopped detecting, which is the quieter of the two.
+	//
+	// positive is the shape `replay pool --pooled-at` actually generated.
+	// negative is the Anthropic beta header the first version of this check
+	// wrongly flagged — a stable literal, not a default computed from the
+	// clock — and it must stay unmatched or the check is back to failing on
+	// dates that never drift.
+	const (
+		positive = `      --pooled-at string   pool as of this date (default "2026-09-11")`
+		negative = `      --beta string        beta header (default "context-management-2025-06-27")`
+	)
+	if !date.MatchString(positive) {
+		t.Fatalf("the pattern no longer matches a date-valued default, so every pass below\n"+
+			"      is a scan that found nothing rather than a file that is clean:\n  %s", positive)
+	}
+	if date.MatchString(negative) {
+		t.Errorf("a stable dated literal was read as a date-valued default; the pattern is\n"+
+			"      back to flagging dates that do not drift:\n  %s", negative)
+	}
+
 	files := textFiles(t, ".md")
 	for _, name := range generated {
 		body, ok := files[name]
