@@ -68,7 +68,23 @@ func runRoute(args []string, stdout, stderr io.Writer) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(report)
 	}
-	return report.write(stdout)
+	if err := report.write(stdout); err != nil {
+		return err
+	}
+	// The ask, on the same terms as the five other commands that hand a reader
+	// an analysis: after the human-readable report, and never on --json, where
+	// a funding line is corruption rather than persuasion.
+	//
+	// route shipped without it. It was the one value command whose funding line
+	// no test could see, because the subtest that would have caught it called
+	// route without --to, took the usage error, and skipped.
+	//
+	// Gated on the report having been written, not merely attempted. A failed
+	// write means the reader got a truncated report or none, and asking for
+	// money on a stream that has already broken is the refusal case arriving
+	// through the io layer.
+	_, err = io.WriteString(stdout, supportLine(describeResult("route"), stdout))
+	return err
 }
 
 // modelCorpus is the per-model evidence this command is allowed to use: a

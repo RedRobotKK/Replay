@@ -1,6 +1,9 @@
 package main
 
 import (
+	"errors"
+	"io"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -70,5 +73,46 @@ func TestUnmeasuredSigmaSuppressesTheDollarFigure(t *testing.T) {
 	}
 	if strings.Contains(sb.String(), "$") {
 		t.Fatalf("the suppressed report printed a currency figure:\n%s", sb.String())
+	}
+}
+
+// errRouteWriteRefused is what the refusing writer below returns, so the test
+// can prove the writer's own error travelled rather than matching on prose.
+var errRouteWriteRefused = errors.New("the pipe closed")
+
+// countingRefusal fails every write and counts how many were attempted. The
+// count is the assertion: it is what separates "the ask was not written" from
+// "the ask was written to a stream that was going to refuse it anyway".
+type countingRefusal struct{ writes int }
+
+func (w *countingRefusal) Write([]byte) (int, error) {
+	w.writes++
+	return 0, errRouteWriteRefused
+}
+
+// A report that failed to reach the reader is not a result, so it carries no ask.
+//
+// `replay route` now appends the funding line after its human-readable report,
+// which makes the report's own write error load-bearing: the printer stops at
+// its first failure, so a broken pipe leaves the reader with a truncated report
+// or nothing at all. Appending a request for money to that is the same shape S3
+// forbids on a refusal, arriving through the io layer instead.
+//
+// PASS: the writer's error comes back and exactly one write was attempted.
+// FAIL: a second write attempt, which is the ask being sent anyway.
+// Reintroduce by deleting the error check on report.write in runRoute.
+func TestARefusedReportIsNotFollowedByTheAsk(t *testing.T) {
+	dir := filepath.Join("..", "..", "internal", "transcript", "testdata")
+	w := &countingRefusal{}
+	err := runRoute([]string{"--to", "claude-opus-5", dir}, w, io.Discard)
+	if err == nil {
+		t.Fatal("the report could not be written and route reported success")
+	}
+	if !errors.Is(err, errRouteWriteRefused) {
+		t.Errorf("the writer's own error did not survive: %v", err)
+	}
+	if w.writes != 1 {
+		t.Errorf("%d writes were attempted after the first one failed; the ask was appended to a "+
+			"stream that had already broken", w.writes)
 	}
 }

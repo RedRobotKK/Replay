@@ -37,11 +37,28 @@ func TestS1_EveryResultCarriesTheAsk(t *testing.T) {
 	for _, cmd := range valueCommands() {
 		t.Run(cmd, func(t *testing.T) {
 			var out, errb bytes.Buffer
-			if err := run([]string{cmd, dir}, &out, &errb); err != nil {
-				t.Skipf("%s did not produce a result here: %v", cmd, err)
+			args := append([]string{cmd}, requiredArgs(cmd)...)
+			args = append(args, dir)
+			// Fatal, not Skip. Nothing here is allowed to skip: every name in
+			// valueCommands() is a command this corpus can exercise, and if
+			// one of them stops being that, the fix is an entry in
+			// requiredArgs or a corpus that covers it - not a green run.
+			//
+			// The skip that used to stand here is the whole reason this test
+			// was worth nothing. `route` requires --to <model>, so
+			// run([]string{"route", dir}) returned a usage error on every run
+			// since the day route was added to the list, and the subtest
+			// skipped before reaching the assertion below. Go reports a parent
+			// whose children all skipped as PASS, so the suite said the ask
+			// was on every value command for as long as it was missing from
+			// one.
+			if err := run(args, &out, &errb); err != nil {
+				t.Fatalf("%s is listed as a command that hands the reader an analysis and it "+
+					"could not be run here: %v\nstderr: %s\nIf it needs a flag, name it in "+
+					"requiredArgs; a subtest that skips instead asserts nothing forever.", cmd, err, errb.String())
 			}
 			if out.Len() == 0 {
-				t.Skipf("%s produced no output", cmd)
+				t.Fatalf("%s exited zero and printed nothing, so there is no result to carry the ask", cmd)
 			}
 			if !strings.Contains(out.String(), fundingHandle) {
 				t.Errorf("%s produced a result and never said who maintains it or that it is "+
@@ -51,6 +68,22 @@ func TestS1_EveryResultCarriesTheAsk(t *testing.T) {
 	}
 }
 
+// requiredArgs names the flags a value command refuses to run without, so S1
+// exercises each one the way a reader would rather than watching it fail
+// argument parsing and calling that a pass.
+//
+// route is the only entry today: --to is the flag tui.Shortcuts() declares for
+// its screen, and runRoute returns errUsage without it. The model here only has
+// to be one the rules price. Whether sigma is measurable for the pair decides
+// whether dollar figures print, not whether a report was produced, and the ask
+// belongs on the report either way.
+func requiredArgs(cmd string) []string {
+	if cmd == "route" {
+		return []string{"--to", "claude-opus-5"}
+	}
+	return nil
+}
+
 // S2: machine-readable output is never touched.
 //
 // PASS: --json parses, and carries no funding string.
@@ -58,10 +91,15 @@ func TestS1_EveryResultCarriesTheAsk(t *testing.T) {
 // way to get the whole thing stripped out by users.
 func TestS2_MachineReadableOutputIsNotPolluted(t *testing.T) {
 	dir := filepath.Join("..", "..", "internal", "transcript", "testdata")
-	for _, cmd := range []string{"cost", "advise", "context"} {
+	// route is here because it is the command this list was last wrong about.
+	// The ask now prints on its human-readable path, so the gate that keeps it
+	// out of --json is load-bearing for route the same way it is for the rest.
+	for _, cmd := range []string{"cost", "advise", "context", "route"} {
 		t.Run(cmd, func(t *testing.T) {
 			var out, errb bytes.Buffer
-			if err := run([]string{cmd, dir, "--json"}, &out, &errb); err != nil {
+			args := append([]string{cmd}, requiredArgs(cmd)...)
+			args = append(args, dir, "--json")
+			if err := run(args, &out, &errb); err != nil {
 				t.Skipf("%s --json unavailable: %v", cmd, err)
 			}
 			if out.Len() == 0 {
