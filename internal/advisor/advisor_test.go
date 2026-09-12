@@ -62,6 +62,19 @@ func TestFixtureProducesTheExpectedSuggestions(t *testing.T) {
 	}
 }
 
+func TestCacheTrafficUSD_ZeroTokensAndUnknownModelAreZero(t *testing.T) {
+	now := time.Now()
+	if cacheTrafficUSD(KindLargeResults, 0, "claude-opus-5", now) != 0 {
+		t.Fatal("zero tokens must price as 0, not as a free-looking miss")
+	}
+	if cacheTrafficUSD(KindLargeResults, 1_000_000, "not-a-priced-model", now) != 0 {
+		t.Fatal("an unpriced model must price as 0, excluded not free")
+	}
+	if cacheTrafficUSD(KindLargeResults, 1_000_000, "claude-opus-5", now) <= 0 {
+		t.Fatal("opus-5 cache-read of 1M tokens must be positive")
+	}
+}
+
 func TestSuggest_RanksByWriteReadDollarsNotTokenShare(t *testing.T) {
 	now := time.Now()
 	// More tokens of Bash results than of cache-breaks, but the breaks

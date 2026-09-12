@@ -444,9 +444,7 @@ func Suggest(obs []Observation, applied map[string]bool) []Suggestion {
 			s.Share *= float64(a.reads-1) / float64(a.reads)
 			s.PredictedShare = s.Share
 			s.PredictedTokens = a.tokens * (a.reads - 1) / a.reads
-			if a.reads > 0 {
-				s.PredictedUSD = s.WriteReadUSD * float64(a.reads-1) / float64(a.reads)
-			}
+			s.PredictedUSD = s.WriteReadUSD * float64(a.reads-1) / float64(a.reads)
 		case KindCacheBreaks:
 			// A break that does not happen re-bills nothing.
 			s.PredictedShare = s.Share
