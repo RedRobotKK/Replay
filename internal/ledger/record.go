@@ -17,8 +17,26 @@ import (
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
-// SchemaVersion is written on every record so a future reader can tell
-// what it is looking at. Bump it on any incompatible change.
+// SchemaVersion is written on every record so a future reader can tell what it
+// is looking at.
+//
+// BUMPING IT DISCARDS EVERY EXISTING LEDGER. This comment used to say "bump it
+// on any incompatible change", which is what the field looks like it is for and
+// is the opposite of what the reader does: ReadRecords compares with exact
+// equality and counts a mismatch as SKIPPED, which its own doc defines as data
+// loss. So a bump to 3 does not migrate a schema-2 file, it makes every record
+// in it unreadable on a machine that already holds months of them.
+//
+// Two fields already depend on that being true. Refusal says so where it is
+// declared — "bumping it would discard every existing ledger rather than
+// extend it" — and Epoch was added the same way. Both are optional fields that
+// an old reader ignores and a new reader sees as absent, which is the only
+// evolution this gate permits.
+//
+// So the real rule is: ADD optional fields, never rename or repurpose one. If
+// a change genuinely cannot be expressed that way, changing this constant is a
+// migration with a cost, not a version bump, and it needs a reader that accepts
+// the older number.
 const SchemaVersion = 2
 
 // Block is the transcript block type; its Text is never serialized.
