@@ -3,6 +3,8 @@ package proxy
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -144,5 +146,91 @@ func TestMD3_ServeMetricsReportsADeadListener(t *testing.T) {
 	}
 	if errors.Is(err, http.ErrServerClosed) {
 		t.Fatalf("a dead listener is not an ordinary shutdown: %v", err)
+	}
+}
+
+// MD4: while its context is live, serveMetrics reports a listener failure as a
+// failure — never as a clean stop.
+//
+// This is the probe behind the note on ListenAndServe's "metrics listener
+// stopped" arm, and it does NOT satisfy that guard's UNREACHED verdict.
+// Nothing here makes `err == nil` true over there; what it does is hold the
+// premise the note reasons from, so the note is measured rather than argued.
+//
+// The note says mdone can only carry a non-nil error while the context is
+// live, because serveMetrics turns a live-context failure into an error on
+// every path. MD3 shows that for one input, a real listener that was closed.
+// This shows it for the class: whatever Accept reports, the answer is an
+// error. If that stops being true, the note is wrong and this goes red before
+// anyone reads it.
+//
+// PASS: every hostile listener yields a non-nil error.
+// FAIL: one of them comes back nil, which is the metrics listener dying and
+// ListenAndServe being told the scrape target stopped on purpose.
+
+// acceptFails is a listener whose every Accept reports the same failure.
+//
+// The errors below are chosen to be ones http.Server returns rather than
+// retries: Serve loops on an Accept error only when it satisfies net.Error
+// with Temporary() true, and none of these does — net.ErrClosed's Temporary()
+// is false by construction (internal/poll errNetClosing), and the rest are not
+// net.Errors at all. A retried error would hang this test rather than fail it,
+// so the bound below is not decoration.
+type acceptFails struct {
+	err error
+}
+
+func (l *acceptFails) Accept() (net.Conn, error) { return nil, l.err }
+func (l *acceptFails) Close() error              { return nil }
+func (l *acceptFails) Addr() net.Addr            { return &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0} }
+
+func TestMD4_ALiveMetricsFailureIsNeverACleanStop(t *testing.T) {
+	s := &Server{cfg: Config{}, stats: newStats()}
+	for _, c := range []struct {
+		name string
+		err  error
+	}{
+		{"the listener was closed underneath it", net.ErrClosed},
+		{"the same, wrapped the way the net package wraps it", fmt.Errorf("accept tcp 127.0.0.1:9: %w", net.ErrClosed)},
+		{"end of file", io.EOF},
+		{"a truncated accept", io.ErrUnexpectedEOF},
+		{"a failure with no type at all", errors.New("accept: the listener is broken")},
+		{"a cancelled accept", context.Canceled},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			got := make(chan error, 1)
+			go func() { got <- s.serveMetrics(ctx, &acceptFails{err: c.err}) }()
+			select {
+			case err := <-got:
+				if err == nil {
+					t.Fatalf("Accept reported %v and serveMetrics called it a clean stop. "+
+						"ListenAndServe reads nil on that channel as the metrics listener "+
+						"having been asked to stop, so the proxy exits 0 and the operator "+
+						"is unscraped with nothing to read", c.err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatalf("serveMetrics never returned for %v; Serve is retrying an error it "+
+					"should have reported, and the metrics listener is neither serving nor "+
+					"stopped", c.err)
+			}
+		})
+	}
+
+	// The exception, named rather than left for someone to find.
+	//
+	// http.ErrServerClosed out of Accept IS mapped to nil, and that nil is the
+	// only value that reaches the `err == nil` arm in ListenAndServe. No
+	// listener in the net package produces it — Serve itself returns it, for a
+	// server someone called Close or Shutdown on — which is why that arm sits
+	// unreached and why the note there explains itself instead of carrying a
+	// test that would have to fabricate this listener to exist.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := s.serveMetrics(ctx, &acceptFails{err: http.ErrServerClosed}); err != nil {
+		t.Fatalf("an orderly server close came back as %v. Every clean metrics shutdown "+
+			"produces ErrServerClosed, and passing it up makes the proxy exit non-zero on "+
+			"a stop that was asked for", err)
 	}
 }

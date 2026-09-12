@@ -115,6 +115,65 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		// outage. Stop the proxy too, so the failure is loud at the point it
 		// happens rather than at the next shutdown.
 		_ = s.shutdown()
+		// UNREACHED on every path the suite takes, and kept. #238 lists this
+		// among the conditionals nobody had tested; measured today it is the
+		// stronger verdict — nothing the tests do can make it true, and the
+		// one window that can is a race they cannot schedule.
+		//
+		// mdone carries exactly what serveMetrics returns, and that function
+		// has four returns:
+		//
+		//   - ln == nil returns nil, and cannot arrive here at all: mdone is
+		//     left nil for that case and a receive on a nil channel blocks
+		//     forever. That is the declaration above, and MD2 tests it.
+		//   - the ctx.Done return is srv.Close(), usually nil — but reaching
+		//     this arm with it means beating the ctx.Done arm above, and ctx's
+		//     channel is closed strictly before serveMetrics can observe it
+		//     and return, so a select already parked is committed to the ctx
+		//     arm before mdone has a value.
+		//   - Serve's ErrServerClosed maps to nil, and Serve produces
+		//     ErrServerClosed only for a server someone called Close or
+		//     Shutdown on. The only such call is serveMetrics's own ctx
+		//     branch, which returns without reading errc. No net.Listener
+		//     reports it from Accept; a closed one reports net.ErrClosed.
+		//   - everything else is the non-nil error MD1 drives.
+		//
+		// That last claim is probed rather than reasoned. MD4 in
+		// metrics_death_test.go runs serveMetrics against six hostile
+		// listeners — closed, wrapped-closed, EOF, truncated, untyped,
+		// cancelled — and requires an error from every one, and it names the
+		// ErrServerClosed exception in place. Swallow any of those inside
+		// serveMetrics and MD4 goes red, which is what keeps this note from
+		// outliving the code it describes. MD4 does not satisfy the verdict on
+		// this guard and does not claim to.
+		//
+		// The window left is a start whose context is ALREADY cancelled: the
+		// select is entered rather than parked, both arms can be ready at
+		// once, and the runtime picks between them at random. That is a real
+		// path — Ctrl-C during startup — and it is why this is documented
+		// rather than deleted. It is also why it is not tested: 100 starts
+		// against a pre-cancelled context, on the neutralised build, exited
+		// nil 100 times, because the main goroutine reaches the select while
+		// the metrics goroutine is still building its server. A test that
+		// cannot make its subject happen is not a test of it.
+		//
+		// Measured, not argued from the source alone: neutralising this to
+		// `if false` leaves ./internal/proxy green, and `go test
+		// -covermode=count` puts 0 on this body against 1 on the arm around
+		// it — the arm runs, this does not.
+		//
+		// Not deleted, because nil and non-nil are different facts here and
+		// the fall-through gets the nil one wrong. fmt.Errorf wrapping a nil
+		// %w yields "metrics listener stopped: %!w(<nil>)", which is non-nil:
+		// the CLI exits non-zero and names a cause it does not have, for a
+		// stop that was clean. That is the defect
+		// TestLifecycle_ACleanCloseIsNotAnError holds one arm over.
+		//
+		// What this does not cover: the enumeration is over serveMetrics as
+		// written. Give the metrics server a shutdown of its own — any Close
+		// or Shutdown outside that ctx branch — and nil becomes ordinary
+		// here, at which point this guard starts doing work on a path a test
+		// can reach, and should get one.
 		if err == nil {
 			return nil
 		}
