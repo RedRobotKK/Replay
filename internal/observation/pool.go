@@ -66,6 +66,14 @@ type PoolEntry struct {
 	PricedAt     string `json:"pricedAt"`
 	RulesVersion string `json:"rulesVersion"`
 	Unpriced     int    `json:"unpriced"`
+
+	// CacheBreaks and ReReads are optional in a submission, so they are
+	// pointers here for the reason ADR-0018 gives: absence, zero and unknown
+	// are three values. A submission from a build that did not report breaks
+	// is not a submission that observed none, and flattening the two would
+	// make a pool of quiet contributors look like a pool of clean ones.
+	CacheBreaks *int `json:"cacheBreaks,omitempty"`
+	ReReads     *int `json:"reReads,omitempty"`
 }
 
 // Pool is a roster of submissions and nothing else.
@@ -158,6 +166,7 @@ func (p *Pool) Add(c Corpus, file string) error {
 		AvoidableUSD: c.AvoidableUSD, AvoidableShare: c.AvoidableShare,
 		MedianTaskUSD: c.MedianTaskUSD, PricedAt: c.PricedAt,
 		RulesVersion: c.RulesVersion, Unpriced: c.Unpriced,
+		CacheBreaks: c.CacheBreaks, ReReads: c.ReReads,
 	}
 	for i, e := range p.Roster {
 		if e.SourceTag != c.SourceTag {
@@ -255,6 +264,25 @@ type PoolTotals struct {
 	// pooled figure should be able to see how far apart its members were taken.
 	//
 	// The bounds are lexicographic, which is what YYYY-MM-DD is for.
+	// CacheBreaks and ReReads are sums over the submissions that REPORTED
+	// them, which is not necessarily every submission in the pool.
+	//
+	// Both fields are optional in a submission, so their population is its own
+	// and BreaksTasks carries the denominator that goes with it. Dividing
+	// CacheBreaks by Tasks would divide a partial numerator by a whole
+	// denominator, and would understate breaks per session by exactly the
+	// share of the pool that stayed quiet. Nothing here does that division;
+	// the fields travel so a reader can do it correctly or not at all.
+	//
+	// Nil when no submission reported, rather than zero. A pool nobody
+	// reported breaks for has not observed zero breaks.
+	CacheBreaks *int `json:"cacheBreaks,omitempty"`
+	ReReads     *int `json:"reReads,omitempty"`
+	// BreaksReportedBy is how many submissions carried those counts, and
+	// BreaksTasks is how many tasks those particular submissions covered.
+	BreaksReportedBy int `json:"breaksReportedBy"`
+	BreaksTasks      int `json:"breaksTasks"`
+
 	PricedAtLow      string `json:"pricedAtLow"`
 	PricedAtHigh     string `json:"pricedAtHigh"`
 	PricedAtDistinct int    `json:"pricedAtDistinct"`
@@ -294,6 +322,29 @@ func (p Pool) Totals() (PoolTotals, error) {
 		t.TotalUSD += e.TotalUSD
 		t.AvoidableUSD += e.AvoidableUSD
 		t.Unpriced += e.Unpriced
+		// Counted only where reported, with the tasks that came with it.
+		// An entry reporting one of the pair and not the other still counts
+		// its tasks once: the denominator is the submission, not the field.
+		if e.CacheBreaks != nil || e.ReReads != nil {
+			t.BreaksReportedBy++
+			t.BreaksTasks += e.Tasks
+		}
+		if e.CacheBreaks != nil {
+			n := e.CacheBreaks
+			if t.CacheBreaks == nil {
+				zero := 0
+				t.CacheBreaks = &zero
+			}
+			*t.CacheBreaks += *n
+		}
+		if e.ReReads != nil {
+			n := e.ReReads
+			if t.ReReads == nil {
+				zero := 0
+				t.ReReads = &zero
+			}
+			*t.ReReads += *n
+		}
 		if e.MedianTaskUSD < t.MedianTaskUSDLow {
 			t.MedianTaskUSDLow = e.MedianTaskUSD
 		}
