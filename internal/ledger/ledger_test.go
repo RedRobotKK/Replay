@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -373,5 +374,46 @@ func TestLedgerSessionsCarryTheirTrialArm(t *testing.T) {
 	}
 	if arms["treated-1"] != TrialTreated || arms["control-1"] != TrialControl || arms["plain-1"] != "" {
 		t.Fatalf("arms: %v", arms)
+	}
+}
+
+// The schema gate is exact equality, and a bump is destructive.
+//
+// SchemaVersion's comment used to say "bump it on any incompatible change",
+// which is what such a field usually means and is the opposite of what this
+// reader does. A record whose schema is anything other than the current
+// constant is counted as SKIPPED — which ReadRecords' own documentation
+// defines as data loss — so raising the constant makes every ledger already on
+// a user's disk unreadable rather than migrating it.
+//
+// This pins the behaviour so the comment and the reader cannot drift apart
+// again: whoever changes one finds this test asking about the other.
+func TestLedgerSchemaGateIsExactAndABumpIsDestructive(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "schema-1.jsonl")
+
+	// One record at the current schema, one at a neighbouring one. Both are
+	// well-formed JSON; only the version differs.
+	cur := fmt.Sprintf(`{"schema":%d,"ts":"2026-09-12T00:00:00Z","session_id":"s","path":"/v1/messages","model":"claude-opus-5","stream":false,"prompt":{"system_bytes":0,"tool_bytes":0,"tool_count":0,"cache_control":0,"messages":[{"role":"user","blocks":[{"kind":"text","bytes":4}]}]},"status":200,"latency_ms":1,"response":{"usage":{"input_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":1}}}`, SchemaVersion)
+	older := strings.Replace(cur, fmt.Sprintf(`"schema":%d`, SchemaVersion), fmt.Sprintf(`"schema":%d`, SchemaVersion-1), 1)
+	newer := strings.Replace(cur, fmt.Sprintf(`"schema":%d`, SchemaVersion), fmt.Sprintf(`"schema":%d`, SchemaVersion+1), 1)
+	if older == cur || newer == cur {
+		t.Fatal("the fixtures did not actually change the schema number; this test asserts nothing")
+	}
+	if err := os.WriteFile(path, []byte(cur+"\n"+older+"\n"+newer+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	recs, skipped, _, err := ReadRecords(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recs) != 1 {
+		t.Fatalf("read %d records, want 1: only the exact current schema is accepted", len(recs))
+	}
+	if skipped != 2 {
+		t.Fatalf("skipped %d, want 2. Both neighbouring schemas must be skipped — the gate is "+
+			"equality, not a floor. If this now reads the older one, the constant has become a "+
+			"real evolution mechanism and SchemaVersion's comment should say so.", skipped)
 	}
 }
