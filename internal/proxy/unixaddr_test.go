@@ -3,6 +3,7 @@ package proxy
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -20,11 +21,18 @@ import (
 // than on a line in this file, so the property is asserted here. If listenUnix
 // ever stops absolutising, this fails and names what to put back.
 func TestUnixListenerReportsAnAbsolutePathFromARelativeAddress(t *testing.T) {
+	// listenUnix refuses Windows outright -- the transport exists for
+	// filesystem permission semantics Windows does not provide -- so there is
+	// no absolute-path behaviour to assert there.
+	if runtime.GOOS == "windows" {
+		t.Skip("unix domain sockets with filesystem permissions")
+	}
 	// A short directory: the kernel's sun_path field is 104 bytes on macOS,
-	// and the standard temp dir alone can exceed it.
+	// and the standard temp dir alone can exceed it. Skip rather than fail if
+	// the platform has no /tmp, matching uds_test.go.
 	dir, err := os.MkdirTemp("/tmp", "replay-addr")
 	if err != nil {
-		t.Fatal(err)
+		t.Skipf("cannot create a short temp directory: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 	if err := os.Chmod(dir, 0o700); err != nil {
