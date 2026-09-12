@@ -105,4 +105,16 @@ func TestGR2_TheReviewerFailsOnASurvivor(t *testing.T) {
 		t.Error("the reviewer has no unknown case, so a guard coverage carried no block " +
 			"for would be reported as one of the two verdicts on no evidence")
 	}
+
+	// A guard whose false arm does not terminate cannot be scored. Forcing
+	// the condition false is how this tool works; if that restores unbounded
+	// allocation the runner is SIGTERM/OOM-killed at that mutant and the run
+	// reports zero survivors because it never finished. The bound belongs as
+	// arithmetic, not as an exemption — exempting it would hide the class
+	// this tool exists to find.
+	for _, want := range []string{"unscoreable", "false arm"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("the reviewer does not name a guard whose false arm does not terminate (%q absent); that case hangs the scorer and reports a clean tree", want)
+		}
+	}
 }

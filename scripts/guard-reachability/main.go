@@ -104,6 +104,14 @@
 // and reported as UNCHECKED rather than passed over. An unchecked guard is the
 // false green this tool exists to prevent, in the tool itself.
 //
+// A guard whose false arm does not terminate is unscoreable, and is not
+// UNCHECKED: the mutant compiles, the suite is entered, and the runner is
+// SIGTERM/OOM-killed there, so the run reports zero survivors because it
+// never finished. Found on PR #246 — Instrument's allocation ceiling
+// `if chars > ceiling` was load-bearing in the strongest sense (deleting it
+// hangs the suite) and therefore unscoreable. Write bounds as arithmetic
+// (`chars = min(chars, cap)`). Do not exempt them.
+//
 // # What a verdict here does not mean
 //
 // Every verdict is scoped to the host that produced it. Coverage is measured
