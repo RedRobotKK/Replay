@@ -10,9 +10,9 @@ import (
 
 // Pre-flight deficit, checked before the request reaches the provider.
 //
-// The ledger already names a cache break after the fact: server.go logs "read N
-// of M expected, D tokens re-billed; likely cause: ...". That line arrives once
-// the money is spent. This is the same fact one request earlier.
+// The ledger already names a cache break after the fact: passthrough.go logs
+// "read N of M expected, D tokens re-billed; likely cause: ...". That line
+// arrives once the money is spent. This is the same fact one request earlier.
 //
 // It is narrow on purpose. The only break cause knowable before the wire is a
 // changed prefix, because the prefix hash is computed from what the client just
