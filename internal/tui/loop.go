@@ -338,7 +338,12 @@ func (l *Loop) paint() {
 		return
 	}
 	// Park the cursor where it cannot sit inside the data.
-	fmt.Fprintf(&b, "\x1b[%d;1H", BudgetRows)
+	//
+	// On the last row of the frame actually drawn, not row 24. While the frame
+	// was a constant those were the same; now that a taller terminal gets a
+	// taller frame, parking at 24 leaves the cursor blinking in the middle of
+	// the table.
+	fmt.Fprintf(&b, "\x1b[%d;1H", len(lines))
 	_, _ = io.WriteString(l.Out, b.String())
 
 	l.painted = append(l.painted[:0], lines...)
