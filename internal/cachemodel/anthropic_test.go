@@ -377,3 +377,96 @@ func TestUnknownModelReadMultipleIsTheDearestInTheTable(t *testing.T) {
 			"tell the dearest from the only", len(distinct))
 	}
 }
+
+// DearestPrice's two guards, tested where they live.
+//
+// The behaviour is covered end-to-end in internal/proxy, which is where it
+// matters — but guard-reachability is per-package, so a conditional in
+// cachemodel needs a cachemodel test. A guard exercised only from another
+// package reads as unobserved here, and the reviewer is right to say so: the
+// package that owns the code owns the claim about it.
+
+// withTable swaps the compiled table for one test and puts it back.
+func withTable(t *testing.T, rows []modelRow) {
+	t.Helper()
+	prev := modelTable
+	modelTable = rows
+	t.Cleanup(func() { modelTable = prev })
+}
+
+// A table with no priced row reports that it has none.
+//
+// This is the guard that matters. Without the !priced skip, the first row
+// taken is an unpriced one carrying a zero Price, `found` goes true, and
+// DearestPrice returns (zero, true) — so a caller bounding an unpriced model
+// computes zero and the spend cap is back to never firing, which is the defect
+// #261 exists to fix, reintroduced one layer down.
+func TestDearestPriceReportsWhenNothingIsPriced(t *testing.T) {
+	withTable(t, []modelRow{
+		{match: "a", minPrefix: 1024, price: Price{}, priced: false},
+		{match: "b", minPrefix: 1024, price: Price{}, priced: false},
+	})
+	if p, ok := DearestPrice(); ok {
+		t.Fatalf("a table with no priced row reported a bound of %+v. A zero bound is not a "+
+			"bound: the caller multiplies by it and the cap never fires", p)
+	}
+}
+
+// An unpriced row never beats a priced one, wherever it sits.
+//
+// Ordering matters and this checks both: an unpriced row FIRST would otherwise
+// seed the search with a zero price, and an unpriced row LAST must not
+// displace a real one.
+func TestDearestPriceSkipsUnpricedRowsInAnyOrder(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		rows []modelRow
+	}{
+		{"unpriced first", []modelRow{
+			{match: "free", price: Price{}, priced: false},
+			{match: "cheap", price: Price{InputPerMTok: 1, OutputPerMTok: 5, ReadMult: 0.1}, priced: true},
+			{match: "dear", price: Price{InputPerMTok: 15, OutputPerMTok: 75, ReadMult: 0.1}, priced: true},
+		}},
+		{"unpriced last", []modelRow{
+			{match: "cheap", price: Price{InputPerMTok: 1, OutputPerMTok: 5, ReadMult: 0.1}, priced: true},
+			{match: "dear", price: Price{InputPerMTok: 15, OutputPerMTok: 75, ReadMult: 0.1}, priced: true},
+			{match: "free", price: Price{}, priced: false},
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			withTable(t, c.rows)
+			got, ok := DearestPrice()
+			if !ok {
+				t.Fatal("a table with priced rows reported none")
+			}
+			if got.InputPerMTok != 15 {
+				t.Fatalf("dearest is %v per MTok, want 15. An unpriced row carries a zero "+
+					"price, and a zero that wins the comparison is the spend cap failing open",
+					got.InputPerMTok)
+			}
+		})
+	}
+}
+
+// The dearest is the dearest, not the first or the last priced row.
+func TestDearestPriceTakesTheMaximumNotAnEdge(t *testing.T) {
+	withTable(t, []modelRow{
+		{match: "a", price: Price{InputPerMTok: 3, OutputPerMTok: 15, ReadMult: 0.1}, priced: true},
+		{match: "b", price: Price{InputPerMTok: 15, OutputPerMTok: 75, ReadMult: 0.1}, priced: true},
+		{match: "c", price: Price{InputPerMTok: 5, OutputPerMTok: 25, ReadMult: 0.1}, priced: true},
+	})
+	got, ok := DearestPrice()
+	if !ok {
+		t.Fatal("no priced row found in a table of three")
+	}
+	if got.InputPerMTok != 15 {
+		t.Fatalf("dearest is %v, want 15 — the maximum sits in the middle on purpose, so "+
+			"taking the first or the last row passes for the wrong reason", got.InputPerMTok)
+	}
+	// The whole Price travels, not just the field compared on. A bound that
+	// carried one row's input rate and another's output rate would be a price
+	// no model has.
+	if got.OutputPerMTok != 75 {
+		t.Fatalf("the returned Price mixes rows: input %v with output %v", got.InputPerMTok, got.OutputPerMTok)
+	}
+}

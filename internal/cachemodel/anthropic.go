@@ -202,6 +202,38 @@ var modelTable = []modelRow{
 // claim this tool would otherwise be making on its own behalf.
 var unknownModel = modelRow{minPrefix: minPrefixStandard, price: Price{ReadMult: readMultiplierUnknown}}
 
+// DearestPrice returns the most expensive priced row this table holds, and
+// whether one exists.
+//
+// It is for a guard that must not let an unpriced model through as free.
+// TOKEN-PRICES.md names the two defensible answers — refuse the request, or
+// price at the most expensive known row and label the figure an upper bound —
+// and says the third thing, counting it as zero, is neither. A spend cap that
+// silently stops applying is the failure mode that document exists to name.
+//
+// Dearest rather than nearest, because an unknown model is usually a NEW one
+// and new models have not historically been cheaper. Erring above a real price
+// costs an operator a cap that fires early, which they can see and raise.
+// Erring below costs them the cap entirely, which they find out about from the
+// invoice.
+//
+// The caller owns the labelling. This returns a price and a bool; anything
+// printed from it has to say it is an upper bound, because the model it came
+// from is not the model being priced.
+func DearestPrice() (Price, bool) {
+	var out Price
+	found := false
+	for _, m := range modelTable {
+		if !m.priced {
+			continue
+		}
+		if !found || m.price.InputPerMTok > out.InputPerMTok {
+			out, found = m.price, true
+		}
+	}
+	return out, found
+}
+
 // anthropicFamilies are the names this table is allowed to answer for.
 //
 // lookup matches by substring and has no provider dimension, so without this

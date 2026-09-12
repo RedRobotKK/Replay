@@ -416,9 +416,33 @@ func (s *Server) noteUnparsed(path string) {
 // listCost prices one request's usage at list price, zero for a model
 // the price table does not know.
 func listCost(u ledger.Usage, model string) float64 {
-	price, ok := cachemodel.PriceFor(model)
-	if !ok {
-		return 0
+	if price, ok := cachemodel.PriceFor(model); ok {
+		return cachemodel.CostUSD(u, price)
 	}
-	return cachemodel.CostUSD(u, price)
+	// An unpriced model is priced at the dearest row this table holds, as an
+	// UPPER BOUND, rather than counted as zero.
+	//
+	// Zero was the old answer and TOKEN-PRICES.md names it as neither of the
+	// two defensible options: "refuse the request and say the model is
+	// unpriced, or price it at the most expensive known row and label the
+	// figure an upper bound. Fail conservative, and say which." Counting it as
+	// zero fails OPEN — the dollar cap never reaches its limit, so an operator
+	// who asked to stop at $20 has no cap at all on exactly the traffic most
+	// likely to be expensive, because an unknown model is usually a new one.
+	//
+	// Refusing was the other option and is not taken: this sits in the request
+	// path of a running agent, and stopping traffic because the provider
+	// shipped a model faster than the table learned it turns a pricing gap
+	// into an outage. Erring high costs an operator a cap that fires early,
+	// which they can see and raise; erring low costs them the cap.
+	//
+	// CapNotEnforced still fires and still reaches doctor and the TUI, because
+	// the figure is now an over-estimate rather than a measurement and the
+	// operator needs to know which one they are reading. ADR-0022's unknown
+	// READ MULTIPLE is the same argument one field over.
+	if dearest, ok := cachemodel.DearestPrice(); ok {
+		return cachemodel.CostUSD(u, dearest)
+	}
+	// No priced row at all. Nothing to bound with, so nothing is claimed.
+	return 0
 }
