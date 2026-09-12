@@ -104,6 +104,30 @@
 // and reported as UNCHECKED rather than passed over. An unchecked guard is the
 // false green this tool exists to prevent, in the tool itself.
 //
+// A guard whose false arm exhausts MEMORY is unscoreable, and is not the same
+// as one that merely runs long.
+//
+// The distinction is the whole finding, and the first draft of this paragraph
+// lost it. A neutralised guard that turns a bounded walk into a slow one is
+// already handled: runTests below bounds every neutralised run with
+// guardcheck.NeutralisedTimeout, and its comment records that such a suite is
+// a mutant CAUGHT rather than one worth waiting on. That bound is wall clock.
+// It cannot fire on a guard whose false arm allocates without limit, because
+// the OS kills the parent process before the child's deadline arrives — so the
+// run reports zero survivors having never finished, and the two paragraphs in
+// this file would appear to disagree about whether a hanging suite is a catch.
+// They do not: one is about time, which is bounded, and this is about memory,
+// which is not.
+//
+// Found on PR #246 — an allocation ceiling `if chars > ceiling` in sizedFiller
+// was load-bearing in the strongest sense available, since deleting it
+// exhausts the machine, and that is exactly why a tool which works by removing
+// guards could not measure it. This job carries no timeout-minutes in CI, so
+// the runner's own kill is the only bound there is.
+//
+// Write such a bound as arithmetic (`chars = min(chars, cap)`), which has no
+// branch to neutralise and changes no behaviour. Do not exempt it.
+//
 // # What a verdict here does not mean
 //
 // Every verdict is scoped to the host that produced it. Coverage is measured
