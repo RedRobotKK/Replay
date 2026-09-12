@@ -1040,7 +1040,7 @@ full price and learn nothing.
 | `--candidates` | Plausible floors to test before searching between them. Defaults to `512,1024,2048,4096`; empty disables it |
 | `--prior` | A documented floor to test before searching. Defaults to the compiled table's figure for the model; `-1` disables it |
 | `--execute` | Actually send them. Without it, only the plan is printed |
-| `--vary` | Two-request experiment: change one prefix term (`tools`, `system`, `billing-header`, `effort`) and watch `cache_read`. Plans unless `--execute` |
+| `--vary` | Three-request experiment: change one prefix term (`tools`, `system`, `billing-header`, `effort`) and watch `cache_read`. Request 3 repeats the baseline as a control. Plans unless `--execute` |
 | `--trend` | Read the recorded series and report what has provably changed. Sends nothing |
 | `--max-age` | Skip probing when a reading for this model is younger than this, and print it instead. `--max-age 24h` makes a daily schedule idempotent |
 | `--record` | Append the reading to a measurement series. Defaults to `~/.replay/measurements.jsonl`; `-` disables it |

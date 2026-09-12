@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
 )
 
 // VaryTerm is one prefix field a two-request experiment can change.
@@ -34,9 +36,11 @@ type VaryResult struct {
 	Model         string
 	BaselineRead  int
 	VariantRead   int
+	ControlRead   int
 	BaselineWrite int
 	VariantWrite  int
 	Moved         bool
+	Inconclusive  bool
 }
 
 // PlanVary prints the two-request experiment and sends nothing.
@@ -48,8 +52,9 @@ func (r *Runner) PlanVary(model, term string) error {
 	_, _ = fmt.Fprintf(r.Out, "  term         %s\n", term)
 	_, _ = fmt.Fprintf(r.Out, "  request 1    baseline prefix, cache breakpoint on the system block\n")
 	_, _ = fmt.Fprintf(r.Out, "  request 2    the same prefix except %s\n", term)
-	_, _ = fmt.Fprintf(r.Out, "  expect       if that term is in the provider cache key, cache_read drops on request 2\n")
-	_, _ = fmt.Fprintf(r.Out, "  budget       2 billable requests\n")
+	_, _ = fmt.Fprintf(r.Out, "  request 3    baseline again, unchanged (control)\n")
+	_, _ = fmt.Fprintf(r.Out, "  expect       if that term is in the provider cache key, request 2's cache_read is 0 instead of reading request 1's write; request 3 must read, or the run is inconclusive\n")
+	_, _ = fmt.Fprintf(r.Out, "  budget       3 billable requests\n")
 	_, _ = fmt.Fprintf(r.Out, "\nNothing has been sent yet. Pass --execute to send.\n")
 	return nil
 }
@@ -60,9 +65,20 @@ func (r *Runner) Vary(model, term string) (VaryResult, error) {
 	if err := knownVaryTerm(term); err != nil {
 		return VaryResult{}, err
 	}
-	filler, _, err := r.sizedFiller(model, 2048)
+	min := cachemodel.DocumentedMinPrefix(model)
+	target := 2048
+	if min > 0 {
+		target = min + min/2
+		if target < min+512 {
+			target = min + 512
+		}
+	}
+	filler, actual, err := r.sizedFiller(model, target)
 	if err != nil {
 		return VaryResult{}, err
+	}
+	if min > 0 && actual < min {
+		return VaryResult{}, fmt.Errorf("the probe prefix counted %d tokens, below this model's minimum cacheable prefix %d; the run would not be able to tell a miss from a floor", actual, min)
 	}
 	base, err := r.sendVary(model, filler, term, false)
 	if err != nil {
@@ -72,18 +88,25 @@ func (r *Runner) Vary(model, term string) (VaryResult, error) {
 	if err != nil {
 		return VaryResult{}, err
 	}
-	// A first request writes. A cache hit on the second reads that write.
-	// If the varied term is in the provider key, the second writes too and
-	// cache_read stays 0.
-	return VaryResult{
+	ctrl, err := r.sendVary(model, filler, term, false)
+	if err != nil {
+		return VaryResult{}, err
+	}
+	out := VaryResult{
 		Term:          term,
 		Model:         model,
 		BaselineRead:  base.CacheRead,
 		VariantRead:   vari.CacheRead,
+		ControlRead:   ctrl.CacheRead,
 		BaselineWrite: base.CacheCreation,
 		VariantWrite:  vari.CacheCreation,
-		Moved:         base.CacheCreation > 0 && vari.CacheRead == 0,
-	}, nil
+	}
+	if ctrl.CacheRead == 0 {
+		out.Inconclusive = true
+		return out, nil
+	}
+	out.Moved = base.CacheCreation > 0 && vari.CacheRead == 0
+	return out, nil
 }
 
 func knownVaryTerm(term string) error {

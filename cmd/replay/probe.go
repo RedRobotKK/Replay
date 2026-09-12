@@ -90,19 +90,22 @@ func runProbe(stdin io.Reader, args []string, stdout, stderr io.Writer) error {
 		if err := r.PlanVary(*model, *vary); err != nil {
 			return err
 		}
-		if !confirmSpend(stdin, stdout, "2 billable requests to "+base, *yes) {
+		if !confirmSpend(stdin, stdout, "3 billable requests to "+base, *yes) {
 			return fmt.Errorf("not confirmed; nothing was sent")
 		}
 		res, err := r.Vary(*model, *vary)
 		if err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintf(stdout, "\nvary %s on %s: baseline cache_read %d write %d; variant cache_read %d write %d\n",
-			res.Term, res.Model, res.BaselineRead, res.BaselineWrite, res.VariantRead, res.VariantWrite)
-		if res.Moved {
-			_, _ = fmt.Fprintf(stdout, "cache_read dropped on the variant: this term is in the provider cache key on this run.\n")
-		} else {
-			_, _ = fmt.Fprintf(stdout, "cache_read did not drop: this term was not observed in the provider cache key on this run.\n")
+		_, _ = fmt.Fprintf(stdout, "\nvary %s on %s: baseline write %d read %d; variant write %d read %d; control read %d\n",
+			res.Term, res.Model, res.BaselineWrite, res.BaselineRead, res.VariantWrite, res.VariantRead, res.ControlRead)
+		switch {
+		case res.Inconclusive:
+			_, _ = fmt.Fprintf(stdout, "inconclusive: the unchanged baseline did not read on request 3, so caching is not working in this window. Not a measurement of the term.\n")
+		case res.Moved:
+			_, _ = fmt.Fprintf(stdout, "request 2's cache_read is 0 instead of reading request 1's write; request 3 read. This term is in the provider cache key on this run.\n")
+		default:
+			_, _ = fmt.Fprintf(stdout, "request 2 still read; this term was not observed in the provider cache key on this run.\n")
 		}
 		return nil
 	}
