@@ -9,6 +9,7 @@ ADR and the built thing goes to the architecture.
 
 | Document | The question it opens | State |
 |---|---|---|
+| [The forensics week: what the customer actually receives](forensics-week-deliverable.md) | What a paid week hands over, and what the finding may not claim | Open. Shape proposed before the first sale; five questions a first customer settles |
 | [Live context visibility: the options](P3-VISIBILITY-OPTIONS.md) | Where live context cost should surface, and who consumes it: the `serve` dashboard, the status line, a tool the agent calls, or a published shape with no consumer | Open. Four options, no recommendation, three checkable questions that decide between them |
 | [A reference distribution](reference-distribution.md) | Whether Replay should carry published population figures the way it carries published provider figures, so one machine can be read against many while the contributed pool still has one member | Open. Two 2026 publications supply the first populations; the corpus tested here differs from them by 2x on system-prompt share and 8x on conversation history. The comparison must be derived, never declared, and every difference must carry the population's definition beside it |
 | [**Built-but-unwired: running log**](UNWIRED-LOG.md) | The live register of capabilities that exist, pass tests, and cannot be reached by a user, and what was done about each | **Nine confirmed before the audit, plus five adjacent defects.** Guarded from 2026-09-09 |
