@@ -134,6 +134,7 @@ Local proxy: byte-for-byte passthrough, records a ledger.
 | `-context-edit-keep` | int | how many recent tool results a clear keeps (default 6) |
 | `-context-edit-trigger` | int | EXPERIMENTAL: ask the provider to clear old tool results once the prompt passes this many tokens, on requests whose client enabled context-management-2025-06-27 and set no context_management of its own (0 = off; REPLAY_NO_POLICY=1 forces off) |
 | `-error-budget` | float | refuse a session's next request once this share of its prompt tokens carried error content, e.g. 0.3 (0 = off) |
+| `-freeze-prefix` | bool | EXPERIMENTAL: pin cc_version hashes in the system prompt to a same-length constant so the cached prefix does not fork on the client's billing header, and label a tool-set epoch from the tools JSON as forwarded (REPLAY_NO_POLICY=1 forces off) |
 | `-guardrail-reread` | float | revert the policy from -policy-file for new sessions once treated sessions' re-read rate after the provider's first clear reaches this share (0 = off) |
 | `-hold-siblings` | duration | hold a request whose tools and system prompt are already in flight and not yet cached until that first response begins, so parallel sub-agents read the cache instead of all writing it; the value is the longest wait (0 = off; suggested 10s) |
 | `-ledger` | string | ledger directory (default ~/.replay/ledger) |
@@ -426,4 +427,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-30 commands, 110 flags, read from the binary.
+30 commands, 111 flags, read from the binary.

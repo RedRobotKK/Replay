@@ -93,6 +93,17 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		body = s.mask(&rec, body)
 		setBody(r, body)
 	}
+	if s.cfg.FreezePrefix && len(body) > 0 && !s.cfg.NoPolicy {
+		if out, ok := freezeBillingHeader(body); ok {
+			body = out
+			setBody(r, body)
+			if rec.Policy == "" {
+				rec.Policy = "freeze-prefix"
+			}
+		}
+		rec.Epoch = toolsWireHash(body)
+	}
+
 	if openai && s.cfg.Masker != nil && !s.cfg.NoPolicy {
 		// The masker walks the Messages body shape. This family's body is
 		// different and it is not masked. Saying so matters more here than

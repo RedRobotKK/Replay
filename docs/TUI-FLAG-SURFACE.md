@@ -31,7 +31,7 @@ a flag is defined in `cmd/replay` and appears in no table here.
 | Replaces the surface | 13 | There is no TUI. `--json` means a machine is reading, and drawing a frame for it is wrong |
 | Plumbing, shown once | 20 | A header line, never interactive. Where it listens, where it writes, what it talks to |
 | Threshold that can fire | 21 | A meter with **four** states: unset, armed, approaching, fired |
-| Posture, on or not covered | 15 | A line saying what is on, and more importantly what it does **not** reach |
+| Posture, on or not covered | 16 | A line saying what is on, and more importantly what it does **not** reach |
 | Scope of the question | 12 | The query line. What this screen is about, and what it excludes |
 | Action with a consequence | 16 | A confirmation, with the consequence named before the key |
 
@@ -185,7 +185,7 @@ elsewhere in this file. -->
 | `--revert-after` | `serve` | int |
 | `--trial-share` | `serve` | float64 |
 
-### Posture, on or not covered (15)
+### Posture, on or not covered (16)
 
 | Flag | Command | Type |
 |---|---|---|
@@ -193,6 +193,7 @@ elsewhere in this file. -->
 | `--dir` | `burn` | string |
 | `--write` | `agents` | string |
 | `--dry-run` | `rules` | bool |
+| `--freeze-prefix` | `serve` | bool |
 | `--guards` | `advise` | bool |
 | `--hold-siblings` | `serve` | duration |
 | `--mask` | `serve` | bool |

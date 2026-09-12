@@ -334,6 +334,7 @@ func requestFromRecord(rec Record, index int, memo map[string]*transcript.Messag
 		Correlation:   rec.Correlation,
 		Model:         rec.Model,
 		Effort:        rec.Effort,
+		Epoch:         rec.Epoch,
 		Timestamp:     rec.Timestamp,
 		Usage:         *rec.Response.Usage,
 		AppliedEdits:  rec.Response.AppliedEdits,
