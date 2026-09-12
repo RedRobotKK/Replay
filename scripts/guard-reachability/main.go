@@ -49,6 +49,49 @@
 //     verdict names the situation and leaves the choice to a reader, rather
 //     than asking for a test that would freeze dead code in place.
 //
+// WHAT "A CHANGE TOUCHES" MEANS, AND WHAT IT DOES NOT.
+//
+// The scope is a LINE diff, not a semantic one. For an edit that is the same
+// thing; for a MOVE it is not, and the difference is large enough to read as a
+// failure when nothing has broken.
+//
+// Splitting one file into several presents every relocated line as added, so
+// this tool re-analyses essentially every conditional in the old file and
+// reports the whole pre-existing untested surface at once, under new
+// filenames. That happened on the pull request splitting internal/proxy:
+// 125 guards, 39 survived. Coverage was 94.5% on both sides and the old file
+// held exactly 27 zero-count blocks against exactly 27 across the new ones —
+// the same holes, the same count, different names. The refactor did not create
+// them. It revealed them.
+//
+// So a survivor on a move means "this branch is untested", never "this change
+// broke something". Both are worth knowing and they are not the same verdict,
+// and this tool cannot tell them apart, because telling them apart needs a
+// rename-aware diff it deliberately does not do.
+//
+// The failure runs in the safe direction — noisy rather than silent — and the
+// cost of the alternative is what is being bought: a diff-scoped check is
+// cheap enough to run on every pull request, which is the property that makes
+// it useful at all.
+//
+// This is one instance of a rule the repository keeps rediscovering, and it is
+// written here because this is the tool most likely to be believed:
+//
+//	A SOURCE SCAN MAY CLAIM ONLY WHAT IT TRAVERSES.
+//
+// Four scans were corrected in a single day for claiming more than they read.
+// internal/otlp OT6 and internal/probe R3 both proved "this package cannot
+// reach the network" and "the credential never comes from a flag" by grepping
+// for a fixed list of literals; a working capability added under any other
+// name passed both. internal/regression FC-PX described itself as checking
+// comments while scanning only line-leading ones. A fourth counted comment
+// text as code. None of them was wrong about what it found — each was wrong
+// about what its finding covered.
+//
+// The repair in every case was the same: state the traversal in the test, and
+// state what it cannot see. A scan that names its own blind spot is evidence.
+// One that does not is a claim wearing evidence's clothes.
+//
 // Coverage separates them: `go test -covermode=count` at the baseline says
 // whether any test entered the body. Where coverage has no block for a guard,
 // the verdict stays UNOBSERVED and says so — absence, zero and unknown are
