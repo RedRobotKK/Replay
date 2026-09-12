@@ -85,12 +85,13 @@ type Shortcut struct {
 // x for context and m for model — the letter is a handle, not an abbreviation.
 const shareKey = 'p'
 
-// Shortcuts is the whole surface: nine questions, nine keys.
+// Shortcuts is the whole surface: ten questions, ten keys.
 //
-// Nine is the ceiling, and it is a measured one rather than a preference. The
-// key strip is one line of eighty columns, every entry costs three columns plus
-// its label, and the nine labels come to exactly eighty with the quit hint on
-// the end. A tenth does not fit, and a second row of hints is a menu.
+// The count is the length of the literal below, not a ceiling. A previous
+// version of this comment called nine the measured limit of a one-line key
+// strip that had no callers, while the tenth entry was already in the slice.
+// The strip is gone; Help() is the index. Adding a screen is a design
+// decision, not a layout refusal.
 //
 // Every command Replay has is reachable from one of these or from the command
 // line; not every command deserves a key.
