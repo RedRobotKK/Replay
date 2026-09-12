@@ -74,6 +74,11 @@ type costUnit struct {
 	AvoidableUSD    float64 `json:"avoidableUsd"`
 	AvoidableTokens int     `json:"avoidableTokens,omitempty"`
 	Breaks          int     `json:"breaks"`
+	// MixedEpochs is set when this session's requests ran under more than one
+	// labelled tool-set epoch, so its total is a sum across tool sets rather
+	// than one as-run figure. Empty on every session recorded without
+	// --freeze-prefix, which is the default and therefore almost all of them.
+	MixedEpochs bool `json:"mixedEpochs,omitempty"`
 	// Repeated and Errored are the waste distribution ADR-0009 asks the corpus
 	// to carry: content-free counts, additive across lanes like Breaks.
 	Repeated int       `json:"repeated,omitempty"`
@@ -280,6 +285,11 @@ type costSummary struct {
 	// measurement of it came back null (README.md:228-235). The deficit was
 	// always in tokens first, and in tokens is where it can be stated.
 	AvoidableTokens int `json:"avoidableTokens,omitempty"`
+	// MixedEpochSessions counts sessions whose total spans more than one
+	// labelled tool-set epoch. Such a total is still the sum of what was
+	// spent; it is simply not one as-run, and a reader comparing it against
+	// another session's should be told before they do.
+	MixedEpochSessions int `json:"mixedEpochSessions,omitempty"`
 	// Which route the traffic took. A category, never an id — see
 	// namespace.go for why the billing mode is only claimed where the model
 	// id actually settles it.
@@ -346,6 +356,9 @@ func summarise(units []costUnit) costSummary {
 	s.Route = routeLine(models)
 	for _, u := range units {
 		s.AvoidableTokens += u.AvoidableTokens
+		if u.MixedEpochs {
+			s.MixedEpochSessions++
+		}
 	}
 	costs := make([]float64, 0, len(units))
 	for _, u := range units {
@@ -476,6 +489,17 @@ func renderCost(s costSummary, unpriced, unreadable int, out io.Writer, stateDir
 	}
 	if unreadable > 0 {
 		fmt.Fprintf(&b, "\n%d further transcript(s) could not be read: no provider request was found.\nAbsent from every figure above, not zero in it.\n", unreadable)
+	}
+	if s.MixedEpochSessions > 0 {
+		// The reader this field was added for, and did not have.
+		//
+		// A session that changed tool set mid-run is still priced in full —
+		// nothing is excluded — but its total is a sum across two prefixes
+		// rather than one as-run figure, and comparing it against a
+		// single-epoch session compares different things. Saying so is the
+		// whole point of labelling the epoch; a label nobody is shown is a
+		// label that cannot be wrong, which is not the same as being right.
+		fmt.Fprintf(&b, "\n%d session(s) changed tool set mid-run. Their totals are the sum of what was\nspent, not one as-run figure: the prefix differed across the requests inside\nthem, so comparing such a total against a single-epoch session compares two\ndifferent things.\n", s.MixedEpochSessions)
 	}
 	// tipLine names a coffee count and returns nothing below its floor, so a
 	// modest corpus produced a result and no ask at all. Below the floor the
@@ -664,6 +688,8 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			Model:    model,
 			Requests: asRun.Requests,
 			CostUSD:  asRun.CostUSD,
+
+			MixedEpochs: asRun.MixedEpochs(),
 		}
 		// Breaks, re-reads, errors and the avoidable deficit are counted over
 		// every lane too. Fixing the dollar figure and leaving these on the

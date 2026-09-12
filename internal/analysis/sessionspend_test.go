@@ -194,7 +194,7 @@ func TestAsRunSession_AnUnlabelledRequestIsNotASecondEpoch(t *testing.T) {
 		{ID: "a", Epoch: "", Usage: transcript.Usage{Input: 10}},
 		{ID: "b", Epoch: "abc123", Usage: transcript.Usage{Input: 10}},
 	}}}}
-	if AsRunSession(s).MixedEpochs {
+	if AsRunSession(s).MixedEpochs() {
 		t.Fatal("one labelled epoch and one unlabelled request reported as two epochs; " +
 			"absence is not a value (ADR-0018)")
 	}
@@ -210,7 +210,7 @@ func TestAsRunSession_TwoLabelsAreMixedEpochs(t *testing.T) {
 		{ID: "a", Epoch: "abc123", Usage: transcript.Usage{Input: 10}},
 		{ID: "b", Epoch: "def456", Usage: transcript.Usage{Input: 10}},
 	}}}}
-	if !AsRunSession(s).MixedEpochs {
+	if !AsRunSession(s).MixedEpochs() {
 		t.Fatal("two different tool-set labels reported as one epoch; the sum is then " +
 			"presented as one as-run when it is not")
 	}
@@ -223,7 +223,7 @@ func TestAsRunSession_OneLabelRepeatedIsOneEpoch(t *testing.T) {
 		{ID: "b", Epoch: "abc123", Usage: transcript.Usage{Input: 10}},
 		{ID: "c", Epoch: "abc123", Usage: transcript.Usage{Input: 10}},
 	}}}}
-	if AsRunSession(s).MixedEpochs {
+	if AsRunSession(s).MixedEpochs() {
 		t.Fatal("one label on three requests reported as mixed")
 	}
 }
@@ -238,7 +238,7 @@ func TestAsRunSession_NoLabelsAnywhereIsNotMixed(t *testing.T) {
 		{ID: "a", Usage: transcript.Usage{Input: 10}},
 		{ID: "b", Usage: transcript.Usage{Input: 10}},
 	}}}}
-	if AsRunSession(s).MixedEpochs {
+	if AsRunSession(s).MixedEpochs() {
 		t.Fatal("a session with no epoch labels at all reported as mixed; that is every " +
 			"ledger written before --freeze-prefix existed")
 	}
