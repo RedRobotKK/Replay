@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"sort"
+	"time"
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
@@ -87,6 +88,14 @@ func runRoute(args []string, stdout, stderr io.Writer) error {
 	return err
 }
 
+// usageAt is one request's provider-reported usage at the time it ran.
+// Dollar figures on this command price each turn; the summed usage map
+// remains the TTL-split and prefix arithmetic.
+type usageAt struct {
+	Usage transcript.Usage
+	At    time.Time
+}
+
 // modelCorpus is the per-model evidence this command is allowed to use: a
 // tokens-per-byte fit measured from provider-reported counts, and the cache
 // hit rate the thresholds are computed at.
@@ -97,8 +106,11 @@ type modelCorpus struct {
 	// projection is applied to, so it is measured on both counts: the tokens
 	// came off the wire and so did sigma.
 	usage map[string]transcript.Usage
-	hits  int
-	total int
+	// byTurn is each request at the time it ran. Empty in fixtures that only
+	// set usage: those price the aggregate at an unknown time (PriceFor).
+	byTurn map[string][]usageAt
+	hits   int
+	total  int
 }
 
 func (c modelCorpus) hitRate() float64 {
@@ -141,7 +153,12 @@ func (c modelCorpus) busiest() string {
 // the pooled ratio instead: how much the sessions disagree with one another,
 // over how many independent sessions there effectively are.
 func gatherByModel(files []string) (modelCorpus, error) {
-	c := modelCorpus{fits: map[string]analysis.TokenFit{}, turns: map[string]int{}, usage: map[string]transcript.Usage{}}
+	c := modelCorpus{
+		fits:   map[string]analysis.TokenFit{},
+		turns:  map[string]int{},
+		usage:  map[string]transcript.Usage{},
+		byTurn: map[string][]usageAt{},
+	}
 	samples := map[string][]analysis.FitSample{}
 
 	err := forEachSession(files, func(_ string, _ *transcript.Session, rep *analysis.LaneReport, err error) error {
@@ -169,6 +186,7 @@ func gatherByModel(files []string) (modelCorpus, error) {
 			u.CacheCreation += req.Usage.CacheCreation
 			u.CacheRead += req.Usage.CacheRead
 			u.Output += req.Usage.Output
+			c.byTurn[model] = append(c.byTurn[model], usageAt{Usage: req.Usage, At: req.Timestamp})
 		}
 		c.usage[model] = u
 		return nil
@@ -248,10 +266,21 @@ func buildRoute(from, to string, c modelCorpus) routeReport {
 	// it as a note said the same sentence twice.
 	if r.Dilation.Measured && r.From.Known && r.To.Known {
 		u := c.usage[from]
-		pFrom, okF := cachemodel.PriceFor(from)
-		pTo, okT := cachemodel.PriceFor(to)
-		if okF && okT {
-			observed := cachemodel.CostUSD(u, pFrom)
+		turns := c.byTurn[from]
+		if len(turns) == 0 {
+			// Fixtures that only set the summed usage have no per-request
+			// clock. PriceForAt at zero time is PriceFor.
+			turns = []usageAt{{Usage: u}}
+		}
+		var observed, projected float64
+		var lastTo cachemodel.Price
+		priced := false
+		for _, turn := range turns {
+			pFrom, okF := cachemodel.PriceForAt(from, turn.At)
+			pTo, okT := cachemodel.PriceForAt(to, turn.At)
+			if !okF || !okT {
+				continue
+			}
 			// Every token count is scaled by the measured sigma: the same
 			// work, counted by the destination's tokenizer.
 			//
@@ -266,8 +295,12 @@ func buildRoute(from, to string, c modelCorpus) routeReport {
 			// separately, because the wire holds total == 5m + 1h on every
 			// creation-bearing record and rounding each independently would
 			// break that.
-			scaled := scaleUsage(u, r.Dilation.Sigma)
-			projected := cachemodel.CostUSD(scaled, pTo)
+			observed += cachemodel.CostUSD(turn.Usage, pFrom)
+			projected += cachemodel.CostUSD(scaleUsage(turn.Usage, r.Dilation.Sigma), pTo)
+			lastTo = pTo
+			priced = true
+		}
+		if priced {
 			r.Observed, r.Dollars = &observed, &projected
 
 			// The prefix the destination has to write once before it reads
@@ -287,7 +320,7 @@ func buildRoute(from, to string, c modelCorpus) routeReport {
 					write.Create1h = prefix * u.Create1h / tot
 					write.Create5m = prefix - write.Create1h
 				}
-				cost := cachemodel.CostUSD(write, pTo)
+				cost := cachemodel.CostUSD(write, lastTo)
 				sw := analysis.Payback(cost, observed, projected, c.total)
 				r.Switch = &sw
 			}

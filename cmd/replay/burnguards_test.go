@@ -307,6 +307,85 @@ const (
 	unpricedModel = "gpt-5-codex"
 )
 
+// BG-6: a dated request is priced at the time it ran, not at today's row.
+//
+// PriceFor ignores dated windows. A promotion that applied in September
+// and has since ended is today's $10, and a report that uses PriceFor
+// bills the September request at $10. As-run uses the row in force at
+// the request timestamp.
+func TestBG6_DatedRequestIsPricedAtRequestTime(t *testing.T) {
+	restore := cachemodel.Override(&cachemodel.Rules{
+		Schema:  cachemodel.RulesSchema,
+		Version: "test",
+		Models: []cachemodel.ModelRule{
+			{Match: "opus-5", MinPrefix: 512, InputPerMTok: 10, OutputPerMTok: 50, ReadMult: 0.1, Priced: true},
+			{Match: "opus-5", MinPrefix: 512, InputPerMTok: 5, OutputPerMTok: 25, ReadMult: 0.1, Priced: true,
+				EffectiveFrom: "2026-09-01", EffectiveUntil: "2026-09-30"},
+		},
+	})
+	defer restore()
+
+	today, ok := cachemodel.PriceFor(pricedModel)
+	if !ok {
+		t.Fatal("the override must price opus-5")
+	}
+	at := time.Date(2026, 9, 15, 0, 36, 2, 0, time.UTC)
+	then, ok := cachemodel.PriceForAt(pricedModel, at)
+	if !ok {
+		t.Fatal("the dated window must price opus-5 in September")
+	}
+	if today.InputPerMTok == then.InputPerMTok {
+		t.Fatal("PriceFor and PriceForAt agree; the fixture cannot tell today from request time")
+	}
+
+	home := t.TempDir()
+	proj := filepath.Join(home, ".claude", "projects", "p")
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(proj, "session.jsonl")
+	if err := os.WriteFile(path, []byte(datedOpusTranscript), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(transcriptsEnv, "")
+
+	sess, err := transcript.ParseClaudeCodeFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var u transcript.Usage
+	var found int
+	for _, lane := range sess.Lanes {
+		for _, r := range lane.Requests {
+			if r.Model != pricedModel {
+				continue
+			}
+			u = r.Usage
+			found++
+		}
+	}
+	if found != 1 {
+		t.Fatalf("fixture holds %d priced request(s), want 1", found)
+	}
+	wantToday := cachemodel.CostUSD(u, today)
+	wantThen := cachemodel.CostUSD(u, then)
+	if wantToday == wantThen || wantThen <= 0 {
+		t.Fatalf("the two clocks price the same ($%.6f); the assertion below proves nothing", wantThen)
+	}
+
+	s := burnClaudeCode(home, "")
+	if math.Abs(s.costUSD-wantThen) > 1e-9 {
+		t.Errorf("costUSD = $%.6f, want $%.6f at the September row (today would be $%.6f)",
+			s.costUSD, wantThen, wantToday)
+	}
+}
+
+// datedOpusTranscript is one request on opus-5, timestamped inside the
+// September 2026 window, with 1M input tokens so the two rates differ by $5.
+const datedOpusTranscript = `{"uuid":"a1","type":"user","sessionId":"s","version":"2.0","timestamp":"2026-09-15T00:36:01Z","message":{"role":"user","content":"hi"}}
+{"uuid":"a2","parentUuid":"a1","type":"assistant","requestId":"r1","apiBlockIndex":0,"timestamp":"2026-09-15T00:36:02Z","message":{"role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"one"}],"usage":{"input_tokens":1000000,"output_tokens":0}}}
+`
+
 // twoModelTranscript is one session, one lane, two requests, on two models —
 // one the compiled table prices and one it does not.
 const twoModelTranscript = `{"uuid":"a1","type":"user","sessionId":"s","version":"2.0","timestamp":"2026-03-21T00:36:01Z","message":{"role":"user","content":"hi"}}

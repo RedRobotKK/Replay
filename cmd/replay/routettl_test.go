@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
@@ -169,5 +170,99 @@ func TestRT4_WithNoSplitTheScaledTotalSurvives(t *testing.T) {
 	if got.Create5m != 0 || got.Create1h != 0 {
 		t.Errorf("scaling invented a TTL split that was never reported: 5m %d, 1h %d. "+
 			"Absence is not zero and it is not a guess.", got.Create5m, got.Create1h)
+	}
+}
+
+// RT5: observed dollars use the row in force at the request, not today's.
+//
+// buildRoute priced the aggregate with PriceFor. A September request under a
+// September promotion is today's $10 if the lookup has no clock. As-run uses
+// the timestamp the turn actually ran at.
+func TestRT5_DatedRequestIsPricedAtRequestTime(t *testing.T) {
+	restore := cachemodel.Override(&cachemodel.Rules{
+		Schema:  cachemodel.RulesSchema,
+		Version: "test",
+		Models: []cachemodel.ModelRule{
+			{Match: "opus-5", MinPrefix: 512, InputPerMTok: 10, OutputPerMTok: 50, ReadMult: 0.1, Priced: true},
+			{Match: "opus-5", MinPrefix: 512, InputPerMTok: 5, OutputPerMTok: 25, ReadMult: 0.1, Priced: true,
+				EffectiveFrom: "2026-09-01", EffectiveUntil: "2026-09-30"},
+			{Match: "fable-5", MinPrefix: 512, InputPerMTok: 3, OutputPerMTok: 15, ReadMult: 0.1, Priced: true},
+		},
+	})
+	defer restore()
+
+	const from, to = "claude-opus-5", "claude-fable-5-1"
+	u := transcript.Usage{Input: 1_000_000}
+	at := time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)
+	c := modelCorpus{
+		fits:   map[string]analysis.TokenFit{from: fitAt(0.25, 100), to: fitAt(0.25, 100)},
+		turns:  map[string]int{from: 100, to: 100},
+		usage:  map[string]transcript.Usage{from: u},
+		byTurn: map[string][]usageAt{from: {{Usage: u, At: at}}},
+		hits:   80,
+		total:  100,
+	}
+
+	today, ok := cachemodel.PriceFor(from)
+	if !ok {
+		t.Fatal("the override must price the source")
+	}
+	then, ok := cachemodel.PriceForAt(from, at)
+	if !ok {
+		t.Fatal("the dated window must price the source in September")
+	}
+	if today.InputPerMTok == then.InputPerMTok {
+		t.Fatal("PriceFor and PriceForAt agree; the fixture cannot tell today from request time")
+	}
+	wantToday := cachemodel.CostUSD(u, today)
+	wantThen := cachemodel.CostUSD(u, then)
+
+	r := buildRoute(from, to, c)
+	if r.Observed == nil {
+		t.Fatal("the projection produced no observed figure")
+	}
+	if *r.Observed != wantThen {
+		t.Errorf("observed $%.6f, want $%.6f at the September row (today would be $%.6f)",
+			*r.Observed, wantThen, wantToday)
+	}
+}
+
+// TopologyOf uses PriceFor (today), so a dest that is only priced inside a
+// window that has already closed still looks Known. PriceForAt at the
+// request time then returns !ok. Skipping those turns must not print a $0
+// dest; deleting the skip bills the source and projects $0.
+func TestRT5_UnpricedAtRequestTimeIsNotAZeroDest(t *testing.T) {
+	restore := cachemodel.Override(&cachemodel.Rules{
+		Schema:  cachemodel.RulesSchema,
+		Version: "test",
+		Models: []cachemodel.ModelRule{
+			{Match: "opus-5", MinPrefix: 512, InputPerMTok: 10, OutputPerMTok: 50, ReadMult: 0.1, Priced: true},
+			{Match: "probe-dest", MinPrefix: 512, InputPerMTok: 3, OutputPerMTok: 15, ReadMult: 0.1, Priced: true,
+				EffectiveFrom: "2026-01-01", EffectiveUntil: "2026-08-31"},
+		},
+	})
+	defer restore()
+
+	const from, to = "claude-opus-5", "claude-probe-dest"
+	u := transcript.Usage{Input: 1_000_000}
+	at := time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)
+	c := modelCorpus{
+		fits:   map[string]analysis.TokenFit{from: fitAt(0.25, 100), to: fitAt(0.25, 100)},
+		turns:  map[string]int{from: 100, to: 100},
+		usage:  map[string]transcript.Usage{from: u},
+		byTurn: map[string][]usageAt{from: {{Usage: u, At: at}}},
+		hits:   80,
+		total:  100,
+	}
+	if _, ok := cachemodel.PriceFor(to); !ok {
+		t.Fatal("PriceFor must still see the dest, or Known is false and the skip never runs")
+	}
+	if _, ok := cachemodel.PriceForAt(to, at); ok {
+		t.Fatal("PriceForAt at September must not price a window that closed in August")
+	}
+	r := buildRoute(from, to, c)
+	if r.Observed != nil || r.Dollars != nil {
+		t.Fatalf("a dest unpriced at request time must not project dollars: observed=%v projected=%v",
+			r.Observed, r.Dollars)
 	}
 }

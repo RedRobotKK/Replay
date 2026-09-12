@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/transcript"
@@ -145,10 +146,14 @@ func ScoreTrim(lane *transcript.Lane, fit TokenFit, capBytes int) TrimPlan {
 	}
 
 	model := "claude-opus-5"
-	if len(lane.Requests) > 0 && lane.Requests[0].Model != "" {
-		model = lane.Requests[0].Model
+	var at time.Time
+	if len(lane.Requests) > 0 {
+		if lane.Requests[0].Model != "" {
+			model = lane.Requests[0].Model
+		}
+		at = lane.Requests[0].Timestamp
 	}
-	price, priced := cachemodel.PriceFor(model)
+	price, priced := cachemodel.PriceForAt(model, at)
 
 	for _, key := range order {
 		c := cuts[key]

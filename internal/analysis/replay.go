@@ -165,7 +165,7 @@ func WithTTL(cal *Calibration, ttl time.Duration) PolicyResult {
 	available := observedAvailability(cal)
 	for i, req := range lane.Requests {
 		read, write := state.serve(req.Timestamp, req.Usage.PromptTotal(), req.Usage.Input, available[i])
-		r.Add(cachemodel.SimulatedUsage(req.Usage.Input, write, read, req.Usage.Output, ttl), req.Model)
+		r.AddAt(cachemodel.SimulatedUsage(req.Usage.Input, write, read, req.Usage.Output, ttl), req.Model, req.Timestamp)
 	}
 	return r
 }
@@ -256,7 +256,7 @@ func WithContextEdit(cal *Calibration, p ContextEditPolicy, fit TokenFit) Policy
 			read = invalidateFrom
 			state.prefix = prompt - tail
 		}
-		r.Add(cachemodel.SimulatedUsage(tail, write, read, req.Usage.Output, state.ttl), req.Model)
+		r.AddAt(cachemodel.SimulatedUsage(tail, write, read, req.Usage.Output, state.ttl), req.Model, req.Timestamp)
 	}
 	return r
 }

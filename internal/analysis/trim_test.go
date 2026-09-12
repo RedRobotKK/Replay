@@ -2,10 +2,12 @@ package analysis
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -295,5 +297,89 @@ func TestProbeDoesNotCountABlockAgainstItself(t *testing.T) {
 				"The block matched its own resent copy, so this counts the transport "+
 				"rather than the agent.", h)
 		}
+	}
+}
+
+// ScoreTrim used PriceFor, which ignores dated windows. A lane whose
+// requests ran inside a promotion is today's rate if the lookup has no
+// clock, and the promotional rate if it uses the request timestamp.
+func TestScoreTrim_UsesTheRequestTimestamp(t *testing.T) {
+	restore := cachemodel.Override(&cachemodel.Rules{
+		Schema:  cachemodel.RulesSchema,
+		Version: "test",
+		Models: []cachemodel.ModelRule{
+			{Match: "opus-5", MinPrefix: 512, InputPerMTok: 10, OutputPerMTok: 50, ReadMult: 0.1, Priced: true},
+			{Match: "opus-5", MinPrefix: 512, InputPerMTok: 5, OutputPerMTok: 25, ReadMult: 0.1, Priced: true,
+				EffectiveFrom: "2026-09-01", EffectiveUntil: "2026-09-30"},
+		},
+	})
+	defer restore()
+
+	lane := laneOf(toolResult("Read", "a.go", body("package main", "middle", "tail")))
+	at := time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)
+	for _, r := range lane.Requests {
+		r.Timestamp = at
+	}
+	plan := ScoreTrim(lane, TokenFit{TokensPerByte: 0.25, Turns: 9}, 1024)
+	if plan.SavedInputUSD <= 0 || plan.RemovedPromptTokens <= 0 {
+		t.Fatalf("the fixture saved nothing: %+v", plan)
+	}
+
+	today, ok := cachemodel.PriceFor("claude-opus-5")
+	if !ok {
+		t.Fatal("the override must price opus-5")
+	}
+	then, ok := cachemodel.PriceForAt("claude-opus-5", at)
+	if !ok {
+		t.Fatal("the dated window must price opus-5 in September")
+	}
+	if today.InputPerMTok == then.InputPerMTok {
+		t.Fatal("PriceFor and PriceForAt agree; the fixture cannot tell today from request time")
+	}
+	mtok := float64(plan.RemovedPromptTokens) / 1e6
+	wantToday := mtok * today.InputPerMTok
+	wantThen := mtok * then.InputPerMTok
+	if math.Abs(plan.SavedInputUSD-wantThen) > 1e-9 {
+		t.Errorf("SavedInputUSD = $%.6f, want $%.6f at the September row (today would be $%.6f)",
+			plan.SavedInputUSD, wantThen, wantToday)
+	}
+}
+
+// The inner `Model != ""` is inert against a lane that already carries
+// opus-5: deleting it still prices opus-5. A sonnet lane at a dated
+// sonnet row is the thing that branch changes.
+func TestScoreTrim_UsesTheRequestModel(t *testing.T) {
+	restore := cachemodel.Override(&cachemodel.Rules{
+		Schema:  cachemodel.RulesSchema,
+		Version: "test",
+		Models: []cachemodel.ModelRule{
+			{Match: "opus-5", MinPrefix: 512, InputPerMTok: 10, OutputPerMTok: 50, ReadMult: 0.1, Priced: true},
+			{Match: "sonnet-4", MinPrefix: 512, InputPerMTok: 3, OutputPerMTok: 15, ReadMult: 0.1, Priced: true},
+		},
+	})
+	defer restore()
+
+	lane := laneOf(toolResult("Read", "a.go", body("package main", "middle", "tail")))
+	for _, r := range lane.Requests {
+		r.Model = "claude-sonnet-4-5"
+	}
+	plan := ScoreTrim(lane, TokenFit{TokensPerByte: 0.25, Turns: 9}, 1024)
+	if plan.RemovedPromptTokens <= 0 {
+		t.Fatalf("the fixture saved nothing: %+v", plan)
+	}
+	sonnet, ok := cachemodel.PriceFor("claude-sonnet-4-5")
+	if !ok {
+		t.Fatal("the override must price sonnet-4")
+	}
+	opus, ok := cachemodel.PriceFor("claude-opus-5")
+	if !ok {
+		t.Fatal("the override must price opus-5")
+	}
+	mtok := float64(plan.RemovedPromptTokens) / 1e6
+	wantSonnet := mtok * sonnet.InputPerMTok
+	wantOpus := mtok * opus.InputPerMTok
+	if math.Abs(plan.SavedInputUSD-wantSonnet) > 1e-9 {
+		t.Errorf("SavedInputUSD = $%.6f, want $%.6f at sonnet (opus-5 would be $%.6f)",
+			plan.SavedInputUSD, wantSonnet, wantOpus)
 	}
 }

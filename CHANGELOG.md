@@ -218,9 +218,13 @@ All notable changes to this project are documented here. The format follows [Kee
   multiple, not at input.
 - **`cost`, `costusage`, advisor and as-run replay price at the request
   timestamp.** Dated windows and an account discount reach those numbers.
-  Other paths remain undated: statusline, route, mcp, burn, trim, order,
-  idle, ceiling, and the live spend cap (`listCost`). `PriceFor` is still
-  the lookup when there is no timestamp.
+- **burn, ceiling, trim, route and TTL replay now price at request time
+  too.** They already had a timestamp and still billed today's row via
+  `PriceFor`. `PriceForAt(model, t)` honours a dated window; zero time
+  still falls back to `PriceFor`. Remaining undated paths have no request
+  clock: statusline (live), mcp (table lookup / overhead estimate), idle
+  and order (structural / live), topology (rate card), and the live spend
+  cap (`listCost`). An unpriced model is still excluded, not billed as $0.
 - **`replay advise` ranks by cache-write plus cache-read dollars, not token
   share.** Predictions still assume the target is halved.
 - **`replay prefix` names the mid-conversation-tool-changes beta.** A tool-set
