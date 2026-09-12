@@ -61,8 +61,8 @@ PostHog documents **When to use the CLI** against **When to use the MCP**, so an
 agent holding both does not have to guess.
 
 Replay has three ways in and no such page: read transcripts from disk, sit in
-front of the traffic as a proxy, or answer a question through the nine
-shortcuts. Which one is right depends on whether the surface writes transcripts,
+front of the traffic as a proxy, or answer a question through the shortcut
+surface. Which one is right depends on whether the surface writes transcripts,
 which is exactly the thing the surface registry knows and nobody else does.
 
 ### 3. The FAQ is written for the wrong reader
@@ -87,9 +87,14 @@ shortcut layer, had no single entry point. The totals live in
 [`CLI.md`](CLI.md), which is generated from the binary; a count written here
 was wrong within days of being written.
 
-The nine questions are Replay's version of this and they are not finished.
-`replay tui` runs them as of 0.5.0, and four of the nine read this machine:
-cost, why, doctor and share. The other five carry an example-data notice.
+The question surface is Replay's version of this. `replay tui` runs it as of
+0.5.0, and every screen reads this machine; none of them carries an
+example-data notice. `replay tui -h` lists the screens, which is the same list
+the binary dispatches on.
+
+The counts that stood in this paragraph — how many questions there are, how
+many of them were wired — are gone for the reason section 4 gives directly
+above: this page has no way to notice when they stop being true.
 
 ## What Replay has that this comparison does not flatter away
 

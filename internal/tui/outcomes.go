@@ -9,8 +9,8 @@ import (
 //
 // One question in, one screen out, inside eighty columns and twenty-four rows.
 // The shape is the same every time, which is the point: a user who learns to
-// read one of these can read all nine, and the thing that changes between them
-// is the answer rather than the furniture.
+// read one of these can read every one of them, and the thing that changes
+// between them is the answer rather than the furniture.
 //
 //	title        what this screen is
 //	answer       one sentence, the thing they asked for
@@ -193,6 +193,24 @@ func Outcome(key rune) Screen {
 	// Every figure on these screens was typed. Until each is wired to its
 	// source, the screen says so above the numbers rather than letting a
 	// reader take them for their own.
+	//
+	// No reader reaches this any more, and the fact is recorded rather than
+	// acted on. Checked 2026-09-11: this is the only assignment of Example in
+	// the package; Outcome() has one production call site, the fallthrough
+	// under the key switch in cmd/replay/tui.go, and that switch now has an
+	// explicit case for every key in Shortcuts(). The loop only ever sets its
+	// current key from Shortcuts(), and --screen resolves against the same
+	// list or errors, so no key reaches the fallthrough. Outcomes() has no
+	// production caller at all — docs/design/unwired-3-branches-and-docs.md
+	// recorded that before this.
+	//
+	// It is left in place because the tests that hold the provenance contract
+	// render through here: provenance_test.go asserts that an unmeasured
+	// screen carries its banner, and deleting this would delete the only
+	// screen that has one. Removing it is a change that has to answer that
+	// question, not a tidy-up to fold into a documentation fix. Nothing in
+	// the build asserts this is unreachable, so treat the paragraph above as
+	// a measurement with a date on it rather than an invariant.
 	from := Example
 	lines = WithBanner(lines, from, "")
 	for len(lines) < BudgetRows-4 {

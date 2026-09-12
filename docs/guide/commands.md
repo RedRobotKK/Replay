@@ -1192,9 +1192,9 @@ Feed the result into a rules document with `replay rules --measure`.
 
 ### `replay tui`
 
-The nine questions as screens you move between, instead of nine commands you have to know the
-names of. Every screen prints the command it ran, so the surface teaches the CLI rather than
-replacing it.
+Every question as a screen you move between, instead of a command you have to know the name of.
+The set is the `-screen` table below and nothing restates its size. Every screen prints the command
+it ran, so the surface teaches the CLI rather than replacing it.
 
 | Flag | What it does |
 |------|--------------|
@@ -1202,11 +1202,15 @@ replacing it.
 | `-once` | Render one frame and exit, for a pipe or a screenshot. |
 | `-color <when>` | `auto` (colour only when stdout is a terminal), `always`, `never`. Default `auto`. `NO_COLOR` in the environment beats all three. |
 
-**Five of the ten read this machine: `cost`, `why`, `doctor`, `share` and `live`.** The other five carry a
-notice saying they are example data and describe nobody, and they say it on screen rather than in
-a footnote. They are being wired one at a time, and each one that lands moves from example to
-measured in a change that has to name the source it now reads. A screen that quietly showed a
-plausible number instead of that notice would be worth less than no screen.
+**Every screen reads this machine, and none of them carries an example-data notice.** They were
+wired one at a time, each landing as a change that named the source it had started reading, and the
+last five landed on 2026-09-08 — [the run is
+recorded](../evidence/tui-example-screens-2026-09-08.md). The illustrative renderer they used to
+fall through to is now unreachable: every key has its own case in the dispatch.
+
+A screen with nothing to read still does not invent a figure. It says `not measured here` and names
+what it could not find — no ledger, no running proxy, no transcripts — because a screen that
+quietly showed a plausible number instead would be worth less than no screen.
 
 `share` previews the card `replay cost --share --png` would write, as text, before anything reaches
 the disk. `t` switches the register, `d` switches the design, and `w` writes the PNG and then

@@ -4,11 +4,18 @@ import "strings"
 
 // Most people will never type a flag.
 //
-// Replay has 75 of them across 13 commands, and the flag-surface design
-// classified all 75 into six kinds of screen element. That was the right map
-// of the wrong territory: it assumed the person at the keyboard is choosing.
-// They are not. A TUI, or an agent, runs the command for them and their whole
-// experience is whatever lands on screen afterwards.
+// Replay has a great many of them, across a great many commands, and the
+// flag-surface design classified every one into six kinds of screen element.
+// The totals are not written here. This sentence used to carry them — 75 flags
+// across 13 commands — and the binary has since grown well past both figures,
+// which is what a hand-copied total does. docs/CLI.md is generated from the
+// binary and CI fails when it drifts, so it is the one place a live total
+// lives; internal/regression TestFCDC_NoHandWrittenCommandOrFlagTotals holds
+// that rule for the Markdown, and this comment now keeps it too.
+//
+// That was the right map of the wrong territory: it assumed the person at the
+// keyboard is choosing. They are not. A TUI, or an agent, runs the command for
+// them and their whole experience is whatever lands on screen afterwards.
 //
 // So the unit of design is not the flag. It is the question, and every screen
 // answers exactly one:
@@ -21,6 +28,7 @@ import "strings"
 //	which model should I be using
 //	is my setup actually safe
 //	is anything broken
+//	what is flowing right now
 //	is any of this worth posting
 //
 // A flag is then an implementation detail of answering one of those, chosen by
@@ -85,12 +93,26 @@ type Shortcut struct {
 // x for context and m for model — the letter is a handle, not an abbreviation.
 const shareKey = 'p'
 
-// Shortcuts is the whole surface: nine questions, nine keys.
+// Shortcuts is the whole surface: one question per key. The list below is the
+// count, and no sentence in this package restates it.
 //
-// Nine is the ceiling, and it is a measured one rather than a preference. The
-// key strip is one line of eighty columns, every entry costs three columns plus
-// its label, and the nine labels come to exactly eighty with the quit hint on
-// the end. A tenth does not fit, and a second row of hints is a menu.
+// There is no ceiling on this list any more, and the argument that there was
+// one is worth keeping rather than deleting, because it was wrong in a way
+// that is easy to write again. It read: the key strip is one line of eighty
+// columns, every entry costs three columns plus its label, the labels come to
+// exactly eighty with the quit hint on the end, so the next screen does not
+// fit. Every step of that was true of Hints(), and Hints() had no caller in
+// its entire life — see the note under Dim. The eighty-column budget was being
+// enforced on behalf of a line no reader had ever seen, and it was still
+// sitting three lines above a literal that had already grown past it twice:
+// live, then share.
+//
+// What actually constrains the set is Help(), the index that replaced the
+// strip. It is a screen, so it has to fit BudgetRows like every other screen,
+// and TestHelpCarriesEveryQuestion measures it against those rows rather than
+// asserting a number somebody typed. A question that cannot be reached from
+// the index is the failure this guards; running out of columns on a strip
+// nothing renders is not.
 //
 // Every command Replay has is reachable from one of these or from the command
 // line; not every command deserves a key.
