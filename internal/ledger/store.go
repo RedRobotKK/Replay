@@ -339,6 +339,7 @@ func requestFromRecord(rec Record, index int, memo map[string]*transcript.Messag
 		AppliedEdits:  rec.Response.AppliedEdits,
 		ClearedTokens: rec.Response.ClearedInputTokens,
 		Tools:         rec.Prompt.Tools,
+		Epoch:         rec.Epoch,
 	}
 	if req.ID == "" {
 		// A name for this record within this file, and nothing more. It is
