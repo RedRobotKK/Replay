@@ -181,6 +181,30 @@ func TestUnknownModelDoesNotGetAFabricatedReadMultiple(t *testing.T) {
 	}
 }
 
+// ADR-0021: the read multiple and the dollar column are not the same question.
+//
+// EffectiveTokens / policy comparison uses 0.025 (the newest tier) so the
+// instrument cannot inflate cache-preserving policies. Dollars refuse: PriceFor
+// returns !ok, so a cap cannot treat an unknown model as cheap. Putting 0.10 on
+// the row, pricing it, or inventing a third multiple each collapses one of
+// those failure directions.
+func TestUnknownModelReadMultiplePinsTheSplit(t *testing.T) {
+	if unknownModel.price.ReadMult != 0.025 {
+		t.Fatalf("unknownModel.ReadMult = %g, want 0.025", unknownModel.price.ReadMult)
+	}
+	if unknownModel.price.ReadMult != readMultiplierNewest {
+		t.Fatalf("unknownModel.ReadMult = %g, want readMultiplierNewest (%g); "+
+			"do not put ReadMultiplier (%g) here and do not invent a third multiple",
+			unknownModel.price.ReadMult, readMultiplierNewest, ReadMultiplier)
+	}
+	if unknownModel.priced {
+		t.Fatal("unknownModel.priced: a dollar figure for a model nobody has a price for")
+	}
+	if _, ok := PriceFor("a-model-nobody-has-heard-of"); ok {
+		t.Fatal("PriceFor(unknown) must be !ok; dollars do not guess")
+	}
+}
+
 // The cache floor is per model family, and the fallback is not a floor.
 //
 // claude-3-5-haiku fell through to the bare "haiku" row and took the 1,024
