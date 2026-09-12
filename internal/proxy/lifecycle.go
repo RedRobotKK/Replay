@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"path/filepath"
 	"time"
 )
 
@@ -45,10 +44,13 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		}
 		// Go's UnixListener unlinks the socket on Close, so a clean shutdown
 		// leaves nothing behind for the next start to treat as stale.
-		s.addr = socketPath(s.cfg.Listen)
-		if abs, aerr := filepath.Abs(s.addr); aerr == nil {
-			s.addr = abs
-		}
+		//
+		// Addr() and nothing else, for the same reason the metrics listener
+		// below takes Addr() and nothing else: listenUnix has already resolved
+		// the path with filepath.Abs and failed if it could not, so the
+		// listener REPORTS an absolute path and recomputing one from the
+		// config is a second reading of a thing already read.
+		s.addr = ln.Addr().String()
 	} else {
 		ln, err = net.Listen("tcp", s.cfg.Listen)
 		if err != nil {
