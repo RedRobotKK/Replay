@@ -812,18 +812,21 @@ The question a subject access request asks, and one this tool could not answer u
 local-first tool is unusually well placed to: nothing has to be requested from anyone, because the
 whole answer is a directory on your own disk.
 
-Eleven stores sit under `~/.replay`, and the report says what each holds in plain terms — including
+Twelve stores sit under `~/.replay`, and the report says what each holds in plain terms — including
 what it does **not** hold. The ledger carries timings, token counts, cache outcomes, a request path
 and a session id, and never message content.
 
-One is marked with `!`: the **masking vault**, which holds the real values behind placeholders sent
-to a provider. It is the only store here that keeps your secrets rather than counts about them, and
-since 2026-09-10 it is the only one with an automatic expiry: entries are evicted after 24 hours
-(`serve --mask-ttl`, `0` to keep them). This paragraph used to say it is never removed by a
-retention window, "because deleting it breaks rehydration for every transcript that referenced it".
-That reason turned out not to hold: the placeholder is derived from the secret, so a client
-re-sending a secret whose entry lapsed gets the same placeholder and the entry comes back. What was
-being paid for was an unbounded store of credentials on disk with its key file beside it.
+Two are marked with `!`. The **masking vault** holds the real values behind placeholders sent to a
+provider, and `contributor-secret` holds the machine-local secret your contributor tag is derived
+from — anyone who can read it can compute this machine's tag for any campaign, which is the one
+thing the per-campaign tag exists to prevent. Both are owner-only and neither is removed by a
+retention window. The vault is the only store with an automatic expiry, and has been since
+2026-09-10: entries are evicted after 24 hours (`serve --mask-ttl`, `0` to keep them). This
+paragraph used to say the vault is never removed by a retention window, "because deleting it breaks
+rehydration for every transcript that referenced it". That reason turned out not to hold: the
+placeholder is derived from the secret, so a client re-sending a secret whose entry lapsed gets the
+same placeholder and the entry comes back. What was being paid for was an unbounded store of
+credentials on disk with its key file beside it.
 
 It reports and never removes. Every path it names is one `replay purge` can act on, and keeping the
 two commands apart means reading what you hold is never one keystroke from destroying it.
