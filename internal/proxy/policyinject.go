@@ -194,7 +194,19 @@ func (s *Server) policyFromFile(sessionID, sessionType string) (*policy.ContextE
 	return edit, res.Generated
 }
 
-// bodyHash is a content-free fingerprint of a request body for the log.
+// bodyHash is a content-free fingerprint of a request body.
+//
+// For the log, and now for the ledger: Record.BodyHashBefore and
+// BodyHashAfter bracket every rewrite in handle, and record.go says those two
+// fields are "what makes 'the proxy forwards bytes unchanged' checkable rather
+// than promised". Equal hashes are the proof. So this function is no longer a
+// debugging convenience, and a change to its truncation or its input changes
+// what that proof is worth.
+//
+// Truncated the way every other label here is: long enough that two different
+// bodies will not collide by accident, and not a cryptographic commitment —
+// the reader and the writer are the same machine, and the question is "did
+// these bytes change", not "can you prove they did not".
 func bodyHash(body []byte) string {
 	sum := sha256.Sum256(body)
 	return hex.EncodeToString(sum[:])[:16]
