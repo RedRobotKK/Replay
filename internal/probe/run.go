@@ -150,6 +150,24 @@ const (
 	fillerPrefixBytes = 46
 )
 
+// maxFillerChars is the widest prefix worth building for a target, and it is
+// the only thing standing between a provider whose count stops tracking the
+// body and a run that never comes back.
+//
+// The search is bounded in ITERATIONS and was not bounded in SIZE, and the two
+// are not the same bound. When the reported count does not move, the observed
+// ratio falls every round, the next step scales by its reciprocal, and the
+// prefix grows by tens of times per iteration — forty of those is an
+// allocation no machine completes. The loop looked terminating and was not.
+//
+// Eight times the byte length a CJK filler needs for the target is generous:
+// no tokenizer this probes spends less than a rune per few tokens, so a prefix
+// this far past the target is evidence the count is not tracking the body, not
+// evidence the target is nearly reached. Hitting it stops the search and keeps
+// the closest size actually measured, so the caller gets a real reading and a
+// floor check that can refuse it, rather than a hang.
+func maxFillerChars(target int) int { return target*runeBytes*8 + fillerPrefixBytes }
+
 // Plan describes what a run would do, and sends nothing.
 func (r *Runner) Plan(cfg Config, model string) {
 	s := New(cfg)
@@ -357,6 +375,9 @@ func (r *Runner) sizedFiller(model string, target int) (string, int, error) {
 		}
 		if chars < 1 {
 			chars = 1
+		}
+		if chars > maxFillerChars(target) {
+			break
 		}
 	}
 	// Not every token count is reachable: tokens span several characters, so a
