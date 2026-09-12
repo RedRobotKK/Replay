@@ -49,6 +49,15 @@ type SessionSpend struct {
 	// carried no tools. Absence, zero and unknown are three values (ADR-0018),
 	// and the empty string here is absence.
 	Epochs []string
+	// EpochsMeasured reports whether this session's source could label an
+	// epoch at all. False means MixedEpochs() is not a finding.
+	//
+	// `replay cost` prices transcripts and ledgers through this same function,
+	// and only a ledger carries epochs — so without this, every transcript
+	// session reports "not mixed" and a reader cannot tell that from "nothing
+	// looked". Absence, zero and unknown are three values (ADR-0018), and an
+	// unlabelled source is the third one.
+	EpochsMeasured bool
 	// Unidentified counts requests carrying no id. They cannot be deduplicated
 	// and are counted anyway: absence is not a duplicate, and treating an
 	// unidentifiable request as already-seen would undercount precisely the
@@ -73,6 +82,7 @@ func AsRunSession(s *transcript.Session) SessionSpend {
 	// is a state nothing produces. AsRun, which this generalises, does not
 	// check for one either. guard-reachability reported both as unobserved and
 	// it was right: they were guarding against nothing.
+	out.EpochsMeasured = s.Source.EpochsObservable()
 	seen := make(map[string]bool)
 	epochs := map[string]bool{}
 	for _, lane := range s.Lanes {
@@ -123,4 +133,4 @@ func AnalyzeEveryLane(s *transcript.Session) []*LaneReport {
 // MixedEpochs reports whether the session spans more than one labelled
 // tool-set epoch, in which case CostUSD is still the sum but is not one
 // as-run.
-func (s SessionSpend) MixedEpochs() bool { return len(s.Epochs) > 1 }
+func (s SessionSpend) MixedEpochs() bool { return s.EpochsMeasured && len(s.Epochs) > 1 }
