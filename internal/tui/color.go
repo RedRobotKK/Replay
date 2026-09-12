@@ -211,9 +211,11 @@ func StripSGR(s string) string {
 //
 // A package-level value, and worth saying why rather than leaving it to be
 // found. Painter is a value type so the decision can be constructed and tested
-// in isolation, but nine screen constructors take nine different argument
-// lists and none of them takes a painter. Threading one through all of them
-// would be a larger and riskier change than the feature it carries.
+// in isolation, but every screen constructor takes a different argument list
+// and none of them takes a painter. Threading one through all of them would be
+// a larger and riskier change than the feature it carries. The sentence used to
+// say how many constructors there are, which was one more thing to keep right
+// and was already wrong.
 //
 // The command sets this once, at startup, from flags and environment, before
 // any screen is built. Tests drive the real entry point, so they set it the

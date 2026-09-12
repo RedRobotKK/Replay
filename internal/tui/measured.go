@@ -106,8 +106,15 @@ type Machine struct {
 	//
 	// The zero value is dollars only, so a screen built without one renders
 	// exactly what it rendered before this existed. That matters more here
-	// than in the report: nine screens share this struct and most of them will
-	// never set it.
+	// than in the report, because this struct is shared rather than per-screen:
+	// DoctorScreen and CostScreen take a Machine, and cmd/replay builds the
+	// share screen's state from the same value. Only the cost screen reads
+	// this field.
+	//
+	// A count of screens stood here instead, and it was not merely one behind
+	// the surface — it named a number of screens that never shared this
+	// struct at all. The consumers are listed rather than counted so the next
+	// reader can check them.
 	FX currency.Display
 
 	// Cost is what the corpus adds up to. It arrives late: the walk takes

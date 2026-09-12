@@ -95,10 +95,11 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 	// Every screen is rendered from the same source, so the loop has no
 	// knowledge of what any question means. Swapping illustrative figures for
 	// measured ones later changes this function and nothing else.
-	// The doctor screen reads this machine; the rest are example data and say
-	// so on screen. Wiring one at a time, and each one that lands moves a
-	// screen from Example to Measured in a change that has to say which source
-	// it now reads.
+	// Every screen reads this machine. That was done one at a time, each
+	// landing as a change that named the source it had started reading, and
+	// the last of them landed on 2026-09-08 — docs/evidence/tui-example-screens-2026-09-08.md
+	// records the run. Nothing here is Example any more; a screen with no
+	// source to read is Unavailable and says what it could not find.
 	m := machineState()
 	m.FX = fx
 
@@ -276,7 +277,7 @@ func runTUI(args []string, stdout, stderr io.Writer) error {
 		lines := make([]string, 0, len(frame)+1)
 		lines = append(lines, frame...)
 		lines = append(lines, tui.Footer(key))
-		// One boundary, so prose is fitted once rather than in nine screens.
+		// One boundary, so prose is fitted once rather than in every screen.
 		//
 		// tui.Fit wraps a sentence that overruns the terminal and carries its
 		// indent onto the continuation. It leaves column layouts alone: this
