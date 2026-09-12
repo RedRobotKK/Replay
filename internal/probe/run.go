@@ -358,6 +358,23 @@ func (r *Runner) sizedFiller(model string, target int) (string, int, error) {
 		if chars < 1 {
 			chars = 1
 		}
+		// And an upper bound, which was missing while the lower one was there.
+		//
+		// chars is driven by the provider's own answer: `chars * target / got`
+		// grows without limit when `got` stops growing with the prefix. A
+		// provider that under-reports — a stuck counter, a cap, a bug — makes
+		// this allocate a string of unbounded size, forty times. The loop
+		// terminates; the memory does not. Found by writing a test for the
+		// floor refusal below and watching it hang instead of fail.
+		//
+		// The ceiling allows a tokenizer sixty-four times less efficient than
+		// the initial approximation, which is far outside any real one. Hitting
+		// it is not an error: `best` already holds the closest size achieved,
+		// and the caller's job is to notice that it is under the floor, which
+		// is exactly what it does.
+		if ceiling := target * tokensPerProbeChar * 64; chars > ceiling {
+			chars = ceiling
+		}
 	}
 	// Not every token count is reachable: tokens span several characters, so a
 	// tokenizer may step 512 to 515 with nothing in between. Rather than fail,

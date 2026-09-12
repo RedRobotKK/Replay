@@ -132,13 +132,20 @@ func TestProbeVaryCLI_EachVerdictIsPrinted(t *testing.T) {
 		want           string
 		mustNotContain string
 	}{
+		// The phrases have to DISTINGUISH, not merely appear. Both verdicts end
+		// in "in the provider cache key on this run" — one says the term IS in
+		// it, the other that it was NOT OBSERVED in it — so asserting that
+		// substring passes whichever branch ran, and deleting `case res.Moved`
+		// falls through to the default with the test still green. That is what
+		// guard-reachability called INERT, and it was right.
+		//
 		// Control read on request 3, variant did not: the term moved the key.
-		{"moved", 0, 4096, "in the provider cache key", "inconclusive"},
+		{"moved", 0, 4096, "request 2's cache_read is 0", "was not observed"},
 		// Control did NOT read: caching is not working in this window, so the
 		// run says nothing about the term either way.
-		{"inconclusive", 0, 0, "inconclusive", "in the provider cache key on this run"},
+		{"inconclusive", 0, 0, "inconclusive:", "request 2's cache_read is 0"},
 		// Variant still read: the term was not observed in the key.
-		{"held", 4096, 4096, "not observed in the provider cache key", "inconclusive"},
+		{"held", 4096, 4096, "was not observed", "request 2's cache_read is 0"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			srv, msgs := varyProvider(t, c.second, c.third)

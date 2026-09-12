@@ -140,12 +140,23 @@ func TestVaryGuard_AFloorAboveTheDefaultIsFollowedNotIgnored(t *testing.T) {
 
 // The token counter failing stops the run rather than guessing a size.
 func TestVaryGuard_ACountingFailureStopsTheRun(t *testing.T) {
-	// Only the COUNTER fails. A server that refuses everything makes the run
-	// fail whether or not this guard is there — the first message would error
-	// anyway — so the failure has to be confined to sizing, and the messages
-	// have to be ready to succeed. Then the difference between keeping and
-	// dropping the guard is the difference between refusing and running an
-	// experiment on a prefix nobody sized.
+	// Two things have to be true at once or this guard stays INERT, and both
+	// were wrong in my first version.
+	//
+	// Only the COUNTER fails: a server that refuses everything makes the run
+	// fail whether or not this check is here, because the first message errors
+	// anyway.
+	//
+	// And the model must have NO documented floor. With one, deleting this
+	// check leaves an empty filler that the `actual < floor` refusal below
+	// catches instead — a different guard covering for this one, which is what
+	// guard-reachability was reporting. With no floor, deleting it sends three
+	// billable requests carrying a prefix nobody sized, and that is the fact
+	// worth failing on.
+	if got := cachemodel.DocumentedMinPrefix(noFloorModel); got != 0 {
+		t.Fatalf("%s now has a documented floor of %d; the floor refusal would catch the "+
+			"deletion of this guard and this test could not fail", noFloorModel, got)
+	}
 	msgs := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "count_tokens") {
@@ -158,12 +169,70 @@ func TestVaryGuard_ACountingFailureStopsTheRun(t *testing.T) {
 			`{"id":"m","usage":{"input_tokens":5,"cache_creation_input_tokens":4096,"cache_read_input_tokens":0,"output_tokens":1}}`)
 	}))
 	defer srv.Close()
-	if _, err := runnerFor(srv).Vary("claude-opus-5", VaryTools); err == nil {
+	if _, err := runnerFor(srv).Vary(noFloorModel, VaryTools); err == nil {
 		t.Fatal("a failing token counter must stop the run, not size the prefix by guess")
 	}
 	if msgs != 0 {
 		t.Fatalf("the prefix could not be sized and the run still spent %d billable requests "+
 			"on an experiment whose prefix nobody measured", msgs)
+	}
+}
+
+// noFloorModel is a model id the compiled table documents no minimum for.
+const noFloorModel = "a-model-the-table-has-never-seen"
+
+// A prefix that cannot be built up to the floor refuses the experiment.
+//
+// This hung before sizedFiller grew an upper bound on `chars`. A provider whose
+// count plateaus makes the search scale its request without limit, so the test
+// exhausted memory rather than reaching this line — which is how the missing
+// ceiling was found. The bound is the fix; this is the test that needed it.
+//
+// Deleting this branch does not compile (`actual` goes unused), so the reviewer
+// can only neutralise it, and a compiler-rejected mutant is not a catch
+// (ADR-0014). Neutralising it lets a run proceed on a prefix under the
+// published minimum, where a miss cannot be told apart from a miss caused by
+// the varied term — which is the entire experiment.
+func TestVaryGuard_APrefixThatCannotReachTheFloorIsRefused(t *testing.T) {
+	restore := cachemodel.Override(&cachemodel.Rules{
+		Schema: "replay.rules/v1", Version: "test-unreachable-floor", Provider: "test",
+		Models: []cachemodel.ModelRule{{
+			Match: "stuck-counter-model", MinPrefix: 8192,
+			InputPerMTok: 1, ReadMult: 0.1, Priced: true,
+		}},
+	})
+	defer restore()
+
+	msgs := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "count_tokens") {
+			raw, _ := io.ReadAll(r.Body)
+			// Grows with the prefix, then plateaus far under the floor.
+			n := 7 + len(raw)/20
+			if n > 1000 {
+				n = 1000
+			}
+			w.Header().Set("content-type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"input_tokens":%d}`, n)
+			return
+		}
+		msgs++
+		w.Header().Set("content-type", "application/json")
+		_, _ = io.WriteString(w,
+			`{"id":"m","usage":{"input_tokens":5,"cache_creation_input_tokens":4096,"cache_read_input_tokens":0,"output_tokens":1}}`)
+	}))
+	defer srv.Close()
+
+	_, err := runnerFor(srv).Vary("stuck-counter-model", VaryTools)
+	if err == nil {
+		t.Fatal("a prefix below the published floor must refuse; a miss on an undersized " +
+			"prefix cannot be told apart from a miss caused by the varied term")
+	}
+	if !strings.Contains(err.Error(), "minimum cacheable prefix") {
+		t.Fatalf("the refusal does not name the floor it failed to reach: %v", err)
+	}
+	if msgs != 0 {
+		t.Fatalf("the prefix was under the floor and the run still spent %d billable requests", msgs)
 	}
 }
 
@@ -254,7 +323,7 @@ func TestVaryGuard_ANilClientGetsADefaultOne(t *testing.T) {
 
 // A URL the request builder cannot parse fails before any network call.
 func TestVaryGuard_AnUnparseableBaseURLFailsBeforeSending(t *testing.T) {
-	r := &Runner{BaseURL: "http://exa\x7fmple", APIKey: "k", Out: io.Discard}
+	r := &Runner{BaseURL: ":", APIKey: "k", Out: io.Discard}
 	if _, err := r.sendVary("claude-opus-5", "filler", VaryTools, false); err == nil {
 		t.Fatal("an unparseable base URL must fail rather than be sent")
 	}
