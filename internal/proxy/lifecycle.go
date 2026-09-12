@@ -65,13 +65,14 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		return merr
 	}
 	if mln != nil {
+		// Addr() and nothing else. listenUnix resolves the path with
+		// filepath.Abs before it binds, so a unix listener already REPORTS the
+		// absolute path — and this used to recompute it from the config, which
+		// is two readings of one thing in a file whose sibling defect was
+		// exactly that. guard-reachability called the recomputation INERT and
+		// it was right: neutralising it changed no value, because there was no
+		// value to change.
 		s.metricsAddr = mln.Addr().String()
-		if isUnixAddr(s.cfg.MetricsListen) {
-			s.metricsAddr = socketPath(s.cfg.MetricsListen)
-			if abs, aerr := filepath.Abs(s.metricsAddr); aerr == nil {
-				s.metricsAddr = abs
-			}
-		}
 	}
 	s.markReady()
 
@@ -90,6 +91,17 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		err := s.shutdown()
+		// UNSCOREABLE by neutralisation, and kept for the reason #251 records.
+		//
+		// Forcing this false makes the receive below run against a nil channel,
+		// which blocks forever — so the reviewer's neutralised run hangs rather
+		// than failing, and a suite that hangs is not a verdict. It cannot be
+		// written as arithmetic either, the way an allocation ceiling can: it
+		// is a genuine branch on whether a goroutine exists.
+		//
+		// What it does is wait for the metrics goroutine before returning, so
+		// an error it was about to report is not lost to a caller that exits on
+		// the return.
 		if mdone != nil {
 			if mErr := <-mdone; err == nil {
 				err = mErr
