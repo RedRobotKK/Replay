@@ -62,22 +62,51 @@ func TestTV3_TheArmIsOnTheLink(t *testing.T) {
 	}
 }
 
-// TV-4: variant B names the maintainer and what the money funds.
+// TV-4: the arms differ, and they differ on the variable they claim to.
 //
-// PASS: both present.
-// FAIL: B identical in substance to A, which makes the experiment a no-op that
-// still costs a month of asks to run.
-func TestTV4_VariantBNamesThePersonAndTheCost(t *testing.T) {
-	b := tipBody("B", 149.44, 2, "coffees", "LINK")
+// This test used to assert that B named the maintainer AND said what the money
+// pays for, with A implicitly saying neither. The countdown then put "what the
+// money pays for" into both arms, and this test stayed green - B still named
+// Daniel, B still mentioned the price table, and the two strings were still
+// unequal. Every assertion passed while the thing being asserted had stopped
+// being true, which is the failure mode this repository keeps finding in other
+// forms: a check that survives the change it exists to notice.
+//
+// So it now asserts the difference itself. The sole variable is the named
+// person: strip the name out of B and the two arms must read the same.
+//
+// PASS: B names him, A does not, and nothing else separates them.
+// FAIL: the arms stopped differing, or started differing on something the
+// experiment is not attributing.
+func TestTV4_TheArmsDifferOnlyOnTheNamedPerson(t *testing.T) {
+	const clock = "COUNTDOWN"
+	a := tipBody("A", 149.44, 2, "coffees", "LINK", clock)
+	b := tipBody("B", 149.44, 2, "coffees", "LINK", clock)
 	if !strings.Contains(b, "Daniel") {
 		t.Error("variant B must name the maintainer, not the project")
 	}
-	if !strings.Contains(strings.ToLower(b), "price table") && !strings.Contains(strings.ToLower(b), "api") {
-		t.Error("variant B must say concretely what the money pays for")
-	}
-	a := tipBody("A", 149.44, 2, "coffees", "LINK")
 	if a == b {
 		t.Error("the two arms are identical, so the experiment measures nothing")
+	}
+	// Both arms say what the money pays for. That is no longer B's variable and
+	// no longer withheld from A, because it is true in both framings.
+	for arm, body := range map[string]string{"A": a, "B": b} {
+		if !strings.Contains(body, clock) {
+			t.Errorf("arm %s dropped the countdown, so half the machines are not told\n"+
+				"what the money buys: %q", arm, body)
+		}
+	}
+	// Normalise B's two name clauses onto A's and the remainder must be
+	// identical. Anything left over is a second variable nobody is attributing.
+	//
+	// The closing sentence used to differ too - "would go a long way" against
+	// "would make a real difference" - and normalising that away here would
+	// have been a test quietly accommodating the thing it forbids. The wording
+	// was unified in tipvariant.go instead.
+	norm := strings.Replace(b, "maintains it: Daniel.", "maintains it.", 1)
+	norm = strings.Replace(norm, "instead of Daniel.", "instead of the person who wrote this.", 1)
+	if norm != a {
+		t.Errorf("the arms differ by more than the named person:\n  A: %q\n  B': %q", a, norm)
 	}
 }
 

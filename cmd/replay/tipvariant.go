@@ -54,7 +54,16 @@ func tipURL(arm string) string {
 }
 
 // tipBody renders one arm's text.
-func tipBody(arm string, avoidableUSD float64, coffees int, unit, link string) string {
+//
+// countdown is the price table's check window, rendered by tipCountdown. It
+// goes into BOTH arms, which changed what the experiment measures and is
+// recorded rather than quietly done: B used to be the only arm that said what
+// the money pays for, and the countdown says that in a stronger form. Holding
+// it back from half the machines would have been withholding a true and useful
+// sentence in order to keep a chart clean, and the chart has no readout anyway
+// (see tipURL). What is left between the arms is the named person, which is the
+// variable with the best evidence behind it.
+func tipBody(arm string, avoidableUSD float64, coffees int, unit, link, countdown string) string {
 	// Who the coffees went to instead is the arm's own variable, so the lead
 	// names Daniel in B and not in A. Naming him in a shared lead would have
 	// put the named person in both arms and left the experiment measuring
@@ -72,19 +81,26 @@ func tipBody(arm string, avoidableUSD float64, coffees int, unit, link string) s
 		lead = fmt.Sprintf("Replay just found $%.2f you had already paid for once.\n"+
 			"That is %d coffees you bought your provider instead of %s.", avoidableUSD, c, rival)
 	}
+	// The countdown is optional in the type and never in practice: it is empty
+	// only when the compiled check date cannot be parsed, and a missing clause
+	// is the right failure there. Built as a separate block so that case drops
+	// one paragraph rather than leaving a dangling sentence.
+	clock := ""
+	if countdown != "" {
+		clock = countdown + "\n"
+	}
 	if arm == "B" {
 		return fmt.Sprintf(
 			"\n%s\nDid that help?\n"+
-				"It is free and one person maintains it: Daniel. The price table behind\n"+
-				"that number is checked against live API calls that cost real money.\n"+
-				"%d %s back would go a long way: %s\n",
-			lead, coffees, unit, link)
+				"It is free and one person maintains it: Daniel.\n%s"+
+				"%d %s back would make a real difference: %s\n",
+			lead, clock, coffees, unit, link)
 	}
 	return fmt.Sprintf(
 		"\n%s\nDid that help?\n"+
-			"It is free and one person maintains it. %d %s back would make a real\n"+
-			"difference: %s\n",
-		lead, coffees, unit, link)
+			"It is free and one person maintains it.\n%s"+
+			"%d %s back would make a real difference: %s\n",
+		lead, clock, coffees, unit, link)
 }
 
 // wastedCoffees is what the re-billed amount would have bought, in the unit

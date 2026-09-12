@@ -4,6 +4,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"time"
 
 	"github.com/RedRobotKK/Replay/internal/tui"
 )
@@ -74,6 +75,13 @@ func tipLineFor(avoidableUSD float64, hyperlink bool) string {
 }
 
 func tipLineArm(arm string, avoidableUSD float64, hyperlink bool) string {
+	return tipLineAt(arm, avoidableUSD, hyperlink, time.Now())
+}
+
+// tipLineAt takes the clock as an argument because the line now carries a
+// countdown, and a countdown read off time.Now() can only be tested on the day
+// the test is written.
+func tipLineAt(arm string, avoidableUSD float64, hyperlink bool, now time.Time) string {
 	if avoidableUSD < tipFloorUSD {
 		return ""
 	}
@@ -99,7 +107,7 @@ func tipLineArm(arm string, avoidableUSD float64, hyperlink bool) string {
 	if hyperlink {
 		link = "\x1b]8;;https://" + dest + "\x1b\\" + dest + "\x1b]8;;\x1b\\"
 	}
-	return tipBody(arm, avoidableUSD, coffees, unit, link)
+	return tipBody(arm, avoidableUSD, coffees, unit, link, tipCountdown(now))
 }
 
 const shareCoffee = "buymeacoffee.com/saitodaniel"
