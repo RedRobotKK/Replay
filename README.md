@@ -484,3 +484,6 @@ measurements behind it are real API spend.
 Business Source License 1.1, converting to Apache 2.0 on 2029-09-06. Running it
 at work is free and unrestricted; reselling it as a hosted service is not. See
 [LICENSE](LICENSE), [NOTICE](NOTICE) and [ADR-0016](docs/adr/0016-business-source-license.md).
+
+[COMMERCIAL.md](COMMERCIAL.md) says what is sold, what is never sold, and why no
+invoice is ever computed from a figure this tool reports.
