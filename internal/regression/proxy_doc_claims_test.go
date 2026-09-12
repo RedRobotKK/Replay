@@ -136,24 +136,45 @@ func TestF2_ANewBodyRewriteForcesTheDocToBeRevisited(t *testing.T) {
 		restore = 1
 	)
 
-	path := filepath.Join(repoRootFor(t), "internal", "proxy", "server.go")
-	src, err := os.ReadFile(path)
+	// The PACKAGE, not one file of it.
+	//
+	// The first version read internal/proxy/server.go by name and Fatal'd if it
+	// was missing. #210 splits that file into eight and deletes it, so the gate
+	// would have hard-failed a legitimate refactor on a missing file rather
+	// than on anything about rewrites — a gate that fires on the shape of the
+	// tree instead of on its subject. The rewrites are a property of the
+	// package; where they are written down is not.
+	dir := filepath.Join(repoRootFor(t), "internal", "proxy")
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		t.Fatalf("reading server.go: %v", err)
+		t.Fatalf("reading %s: %v", dir, err)
 	}
 
 	// Call sites only. The func declaration is not one of them, and a line of
 	// prose mentioning setBody is not either.
 	call := regexp.MustCompile(`(?m)^\s*setBody\(`)
-	sites := 0
-	for _, line := range strings.Split(string(src), "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "func ") {
+	sites, files := 0, 0
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
 			continue
 		}
-		if call.MatchString(line) {
-			sites++
+		src, rerr := os.ReadFile(filepath.Join(dir, e.Name()))
+		if rerr != nil {
+			t.Fatalf("reading %s: %v", e.Name(), rerr)
 		}
+		files++
+		for _, line := range strings.Split(string(src), "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "func ") {
+				continue
+			}
+			if call.MatchString(line) {
+				sites++
+			}
+		}
+	}
+	if files == 0 {
+		t.Fatal("no non-test Go file read in internal/proxy; this test counts nothing")
 	}
 
 	// The positive: the pattern still matches a real call site. A regex edited
@@ -167,7 +188,7 @@ func TestF2_ANewBodyRewriteForcesTheDocToBeRevisited(t *testing.T) {
 	}
 
 	if sites != frozen {
-		t.Errorf("server.go replaces the request body at %d call sites, frozen at %d.\n"+
+		t.Errorf("internal/proxy replaces the request body at %d call sites, frozen at %d.\n"+
 			"      %d of those are rewrites the package comment enumerates by name; %d restores\n"+
 			"      the body the reader consumed. If you added or removed a rewrite, say so in\n"+
 			"      the comment above `package proxy` — its list and its opening count are what a\n"+
