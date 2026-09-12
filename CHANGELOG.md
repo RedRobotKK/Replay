@@ -127,6 +127,27 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- **`replay probe --vary <term>`** plans (or with `--execute` sends) three
+  requests that differ in one prefix term — `tools`, `system` or `effort` —
+  and reports whether `cache_read` dropped. Request 3 repeats the baseline as
+  a control, so a provider that never reads is reported inconclusive rather
+  than as a move. The provider's cache key is measured, not assumed: missing
+  usage is an error, not `cache_read=0`. `billing-header` is deliberately not
+  a term — pinning `cc_version` varies system text, not a header, and naming
+  it as one would have the experiment report a header result for a body
+  change.
+- **`replay serve --freeze-prefix`** (off by default) pins same-length
+  `cc_version` hashes and labels a tool-set epoch from the exact tools JSON
+  on the wire. It is the fourth request-body rewrite the proxy performs and
+  the package comment names it as one. `REPLAY_NO_POLICY=1` forces it off.
+  A new epoch is a set change, not a miss claim.
+- **Epoch conservation.** `Record.Epoch` and `Request.Epoch` carry the kernel
+  epoch a request ran under, and `AsRunSession` reports `MixedEpochs` when a
+  session spans more than one. The dollars still sum; they are not one
+  as-run. An unlabelled request is absence, not a second epoch — a body with
+  no tools key is routine, and counting it would report mixed epochs on a
+  session that ran under exactly one.
+
 - **New evidence: [does the ±10% band decide the re-render headline?](docs/evidence/rerender-band-sensitivity-2026-09-11.md).**
   An external reviewer put it that `rerenderTolerance = 0.10` in `diff.go` is
   what produces the 50.8% re-render share, because it is a band around a

@@ -119,11 +119,16 @@ func TestF2_TheProxyDocDoesNotDenyWhatTheProxyDoes(t *testing.T) {
 // wrong again, silently, by the same mechanism, one PR later.
 //
 // So freeze the number of places the request body is replaced. setBody is the
-// only way it is replaced, and there are four call sites on the branch this was
-// written against: one restores the body after the reader consumed it, and
-// three are the rewrites the doc names. Adding a fifth means the enumeration is
-// now short by one, and the person adding it is the person who knows what to
-// call it.
+// only way it is replaced: one call restores the body after the reader
+// consumed it, and the rest are the rewrites the doc names. Adding one more
+// means the enumeration is now short by one, and the person adding it is the
+// person who knows what to call it.
+//
+// The count was four when this was written and it is five now. freeze-prefix
+// arrived, the package comment gained a line naming it, and `frozen` moved in
+// the same commit — which is the loop this gate exists to force, demonstrated
+// once. Moving the number without touching the comment is the defect; moving
+// both is the intended cost of adding a rewrite.
 //
 // This is a drift alarm, not a ban. Changing the count is fine; changing it
 // without touching the doc is the defect.
@@ -132,7 +137,7 @@ func TestF2_TheProxyDocDoesNotDenyWhatTheProxyDoes(t *testing.T) {
 // FAIL: a rewrite was added or removed and the enumeration was not revisited.
 func TestF2_ANewBodyRewriteForcesTheDocToBeRevisited(t *testing.T) {
 	const (
-		frozen  = 4
+		frozen  = 5
 		restore = 1
 	)
 
@@ -184,7 +189,7 @@ func TestF2_ANewBodyRewriteForcesTheDocToBeRevisited(t *testing.T) {
 		t.Fatal("the call-site pattern no longer matches a call site; this test counts nothing")
 	}
 	if sites == 0 {
-		t.Fatal("no setBody call sites found in server.go; this test asserts nothing")
+		t.Fatal("no setBody call sites found in internal/proxy; this test asserts nothing")
 	}
 
 	if sites != frozen {

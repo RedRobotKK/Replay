@@ -71,6 +71,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	trialShare := fs.Float64("trial-share", proxy.DefaultTrialShare, "share of new sessions that get the policy from -policy-file; the rest run as controls (stable per session id)")
 	guardrail := fs.Float64("guardrail-reread", 0, "revert the policy from -policy-file for new sessions once treated sessions' re-read rate after the provider's first clear reaches this share (0 = off)")
 	revertAfter := fs.Int("revert-after", proxy.DefaultRevertAfter, "how many sessions must breach the guardrail before the policy is reverted")
+	freezePrefix := fs.Bool("freeze-prefix", false, "EXPERIMENTAL: pin same-length cc_version hashes in the system prompt and label a tool-set epoch from the exact tools JSON on the wire (off by default)")
 	mask := fs.Bool("mask", false, "EXPERIMENTAL: replace secrets matching the named pattern set with vault placeholders before requests leave the machine, and restore them in responses within -rehydrate-scope (see README)")
 	maskPatterns := fs.String("mask-patterns", "", "file of user-defined patterns for -mask, one per line as name<TAB>regexp")
 	maskEntropy := fs.Bool("mask-entropy", false, "with -mask, also mask runs that look like credentials by shape and entropy. Needs mixed case and digits over "+strconv.Itoa(masking.EntropyMinLength)+" characters, so bare hex and lowercase secrets are NOT caught by shape; those are caught only when a name like TOKEN= or api_key: sits beside them. Reported as pattern "+masking.EntropyPattern)
@@ -94,6 +95,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	if noPolicy {
 		*policyFile = ""
 		*mask = false
+		*freezePrefix = false
 	}
 	// The kill switch comes first. Building the masker creates the vault key on
 	// disk, so checking afterwards meant REPLAY_DISABLED=1 still wrote a file
@@ -147,6 +149,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		ContextEdit:   contextEdit,
 		PolicyFile:    *policyFile,
 		NoPolicy:      noPolicy,
+		FreezePrefix:  *freezePrefix,
 		Masker:        masker,
 		Rehydrator:    rehydrator,
 		Trial:         proxy.TrialSettings{Share: *trialShare, ReReadRate: *guardrail, RevertAfter: *revertAfter},

@@ -21,7 +21,7 @@ flag is, because **twenty of them are the same kind of thing and collapse into
 one component with four states**.
 
 Every flag below was extracted from `cmd/replay/*.go`, not from documentation.
-All 81 are classified; none are left over.
+All 83 are classified; none are left over.
 
 ## The six archetypes
 
@@ -31,8 +31,8 @@ All 81 are classified; none are left over.
 | Plumbing, shown once | 16 | A header line, never interactive. Where it listens, where it writes, what it talks to |
 | Threshold that can fire | 20 | A meter with **four** states: unset, armed, approaching, fired |
 | Posture, on or not covered | 14 | A line saying what is on, and more importantly what it does **not** reach |
-| Scope of the question | 12 | The query line. What this screen is about, and what it excludes |
-| Action with a consequence | 11 | A confirmation, with the consequence named before the key |
+| Scope of the question | 13 | The query line. What this screen is about, and what it excludes |
+| Action with a consequence | 12 | A confirmation, with the consequence named before the key |
 
 ## Why a threshold needs four screens, not one
 
@@ -204,7 +204,7 @@ elsewhere in this file. -->
 | `--share` | `cost` | bool |
 | `--trend` | `probe` | bool |
 
-### Scope of the question (12)
+### Scope of the question (13)
 
 | Flag | Command | Type |
 |---|---|---|
@@ -220,12 +220,14 @@ elsewhere in this file. -->
 | `--resolution` | `probe` | int |
 | `--to` | `route` | string |
 | `--top` | `context` | int |
+| `--vary` | `probe` | string |
 
-### Action with a consequence (11)
+### Action with a consequence (12)
 
 | Flag | Command | Type |
 |---|---|---|
 | `--apply` | `advise` | bool |
+| `--freeze-prefix` | `serve` | bool |
 | `--check-prices` | `rules` | bool |
 | `--confirm` | `probe` | int |
 | `--contribute` | `probe` | string |

@@ -93,6 +93,28 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		body = s.mask(&rec, body)
 		setBody(r, body)
 	}
+	// freeze-prefix, off by default. It is the fourth body rewrite, and the
+	// package comment above `package proxy` names it — the count in that
+	// paragraph and `frozen` in TestF2_ANewBodyRewriteForcesTheDocToBeRevisited
+	// both moved when this arrived.
+	//
+	// It runs after masking because masking is fail-closed and must see the
+	// body first (ADR-0004), and the pin is a same-length replacement that
+	// cannot disturb a byte range the masker already rewrote.
+	//
+	// The epoch is labelled from the body as it will be forwarded, pin
+	// included, so the label describes the bytes the provider keyed on rather
+	// than the bytes the client sent. PX8: a new epoch is a set change, not a
+	// claim the next request will miss.
+	if s.cfg.FreezePrefix && len(body) > 0 && !s.cfg.NoPolicy {
+		if out, ok := freezeBillingHeader(body); ok {
+			body = out
+			setBody(r, body)
+			rec.Policy = "freeze-prefix"
+		}
+		rec.Epoch = toolsWireHash(body)
+	}
+
 	if openai && s.cfg.Masker != nil && !s.cfg.NoPolicy {
 		// The masker walks the Messages body shape. This family's body is
 		// different and it is not masked. Saying so matters more here than

@@ -47,11 +47,18 @@ the request path: a guard that is green in CI and absent in production.
 
 **F2. The package doc contradicts the package.** `internal/proxy/server.go:5-6`
 states: *"Nothing here rewrites a request body or removes a client header."*
-The same file rewrites the request body in three places
-(`server.go:511-514` masking, `server.go:540-543` context-edit,
-`server.go:545-552` include-usage) and removes two client headers
-(`server.go:211` `x-replay-token`, `server.go:561` `Accept-Encoding`). Recorded
-as a disagreement between code and doc, not as a bug in either.
+Resolved 2026-09-12, PR #240: the package comment now lists the body rewrites
+and two header strips; `internal/regression/proxy_doc_claims_test.go` freezes
+the denial and, beside it, the number of `setBody` call sites in the package.
+This entry stays as the record of the disagreement.
+The package rewrote the request body in three places when this was filed —
+masking, context-edit and include-usage — and removed two client headers,
+`x-replay-token` and `Accept-Encoding`. It is four rewrites now: `freeze-prefix`
+was added and the comment, the frozen count and this line all moved with it,
+which is the loop the gate exists to force. Line numbers are deliberately not
+carried here any more: #210 split `server.go` and every one of the citations
+this entry used to hold pointed at the wrong file within a day. Recorded as a
+disagreement between code and doc, not as a bug in either.
 
 **F3. One default-on mutation re-serializes the whole body.** Every other
 mutation path splices: masking replaces byte ranges in place
