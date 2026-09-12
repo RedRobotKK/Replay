@@ -111,6 +111,26 @@ func (h *rehydration) modify(resp *http.Response) {
 			return
 		}
 		out, report, err := h.rh.Body(body)
+		// guard-reachability reports this UNREACHED and no test will fix it:
+		// nothing this proxy can be sent makes it true. Rehydrator.Body
+		// returns a non-nil error from exactly one place, literals(), and
+		// literals() only fails on a document json.Unmarshal has already
+		// rejected on the line above it — at which point Body has returned
+		// (body, rep, nil) and never reaches literals at all. The earlier
+		// guard dominates this one.
+		//
+		// Probed rather than assumed, against the real Rehydrator: a
+		// truncated body, 100- and 10001-deep nesting, invalid UTF-8, a lone
+		// surrogate, a surrogate pair, duplicate keys, 100k digits of number,
+		// and 1e999999. All ten returned a nil error. The 10001-deep case
+		// shows the mechanism directly — Unmarshal refuses it with "exceeded
+		// max depth", so Body returns early and literals is never called.
+		//
+		// It stays because deleting it would discard an error return, and
+		// because the dominance is a property of Body's current shape rather
+		// than a guarantee. If Body ever grows a second error path, this
+		// becomes live and the note is wrong — which is the thing to check
+		// before trusting it.
 		if err != nil {
 			h.err = err
 			out = body
