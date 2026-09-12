@@ -242,4 +242,14 @@ func TestAsRunSession_NoLabelsAnywhereIsNotMixed(t *testing.T) {
 		t.Fatal("a session with no epoch labels at all reported as mixed; that is every " +
 			"ledger written before --freeze-prefix existed")
 	}
+	// This test cannot catch the mutation its name suggests, and saying so is
+	// cheaper than letting the next reader assume it can.
+	//
+	// Remove the `req.Epoch != ""` guard and the unguarded map becomes
+	// {"": true} — size one — so `len(epochs) > 1` is still false and this
+	// passes. A review found it by running exactly that mutation. The guard is
+	// killed by AnUnlabelledRequestIsNotASecondEpoch above, which mixes a
+	// labelled request with an unlabelled one; this one covers the all-absent
+	// case, which is every ledger written before the flag existed, and that is
+	// worth holding for its own sake rather than for a mutation it misses.
 }

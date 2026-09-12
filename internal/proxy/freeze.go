@@ -52,6 +52,36 @@ func toolsWireHash(body []byte) string {
 	return hex.EncodeToString(sum[:8])
 }
 
+// freezeBillingHeader pins the FIRST cc_version in the body to a same-length
+// constant. Two limits decide how much this is worth, and neither was written
+// down until a review measured them.
+//
+// IT DOES NOT SURVIVE A VERSION STRING CHANGING LENGTH. The replacement is
+// padded to the length of what it replaced, so:
+//
+//	cc_version=1.0.99   ->  cc_version=frozen␣
+//	cc_version=1.0.100  ->  cc_version=frozen␣␣
+//
+// Different lengths pad to different bytes, so the prefix still forks across
+// exactly the client upgrade this exists to survive — it only holds while the
+// version string keeps its length. Same-length padding is not a choice: a
+// replacement that shortened the body would move every byte after it, which is
+// the one thing a prefix pin may not do. So the benefit is real and bounded,
+// and the flag's help says so rather than promising the general case.
+//
+// IT TAKES THE FIRST MATCH, over the whole body, not the system block. A body
+// where cc_version appears in user content before the system prompt gets the
+// user's copy pinned and the system one left forking — the stated purpose
+// defeated and a user's message altered. That is why the caller is gated to
+// the Messages family, where the system block is the first place this string
+// appears in a Claude Code request; it is a property of the traffic, not a
+// guarantee of this function, and a body that breaks the assumption gets a
+// pointless rewrite rather than a wrong measurement.
+//
+// A version shorter than the constant is refused outright and silently — no
+// log line, no ledger field. The operator turns the flag on and nothing
+// happens. Worth fixing; recorded here so the next reader does not have to
+// rediscover it from the padding arithmetic.
 func freezeBillingHeader(body []byte) ([]byte, bool) {
 	loc := ccVersion.FindIndex(body)
 	if loc == nil {

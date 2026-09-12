@@ -80,6 +80,16 @@ type Record struct {
 	// timings taken at the other end of the wire.
 	Correlation string `json:"correlation,omitempty"`
 	Path        string `json:"path"`
+	// Frozen records that the freeze-prefix rewrite pinned a version string
+	// in this request's body.
+	//
+	// Separate from Policy because Policy is one string and applyPolicy sets
+	// it unconditionally: a request that was frozen and then context-edited
+	// would record only the second, on a field documented as "empty when the
+	// bytes went through unchanged". Two rewrites, one slot, and the reader
+	// cannot tell. This is the smallest thing that keeps the record able to
+	// say what happened.
+	Frozen bool `json:"frozen,omitempty"`
 	// Epoch is the tool-set epoch this request ran under, empty when none was
 	// labelled — which is every request unless --freeze-prefix is on.
 	//

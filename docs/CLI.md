@@ -44,7 +44,7 @@ to test whether `~/.replay` is writable.
 | [`ceiling`](#ceiling) | What a cache-blind budget ceiling halts your agents at, in your billing basis | none | none |
 | [`diff`](#diff) | Locate and classify every cache break, with its cause | none | none |
 | [`advise`](#advise) | Rank the largest token sources, with predicted savings | none | with --apply --yes, a settings file; --out writes advice.json |
-| [`serve`](#serve) | Local proxy: byte-for-byte passthrough, records a ledger | outbound: proxies every request to the provider | ~/.replay/ledger/<session>.jsonl |
+| [`serve`](#serve) | Local proxy: forwards to the provider, records a ledger | outbound: proxies every request to the provider | ~/.replay/ledger/<session>.jsonl |
 | [`tui`](#tui) | The same answers as screens you can move between | loopback: the proxy status endpoint, if one is running | a temp file, created and removed, on the doctor screen |
 | [`context`](#context) | What entered a session's context, by tool | none | none |
 | [`blame`](#blame) | Rank what is eating prompt tokens | none | none |
@@ -125,7 +125,7 @@ Rank the largest token sources, with predicted savings.
 
 ### serve
 
-Local proxy: byte-for-byte passthrough, records a ledger.
+Local proxy: forwards to the provider, records a ledger.
 
 | Flag | Type | What it does |
 |---|---|---|
@@ -134,7 +134,7 @@ Local proxy: byte-for-byte passthrough, records a ledger.
 | `-context-edit-keep` | int | how many recent tool results a clear keeps (default 6) |
 | `-context-edit-trigger` | int | EXPERIMENTAL: ask the provider to clear old tool results once the prompt passes this many tokens, on requests whose client enabled context-management-2025-06-27 and set no context_management of its own (0 = off; REPLAY_NO_POLICY=1 forces off) |
 | `-error-budget` | float | refuse a session's next request once this share of its prompt tokens carried error content, e.g. 0.3 (0 = off) |
-| `-freeze-prefix` | bool | EXPERIMENTAL: pin cc_version hashes in the system prompt to a same-length constant so the cached prefix does not fork on the client's billing header, and label a tool-set epoch from the tools JSON as forwarded (REPLAY_NO_POLICY=1 forces off) |
+| `-freeze-prefix` | bool | EXPERIMENTAL: pin a cc_version in the request body to a same-length constant so the cached prefix does not fork when the client's billing header changes WITHOUT changing length, and label a tool-set epoch from the tools JSON as forwarded. A version string that changes length still forks the prefix (REPLAY_NO_POLICY=1 forces off) |
 | `-guardrail-reread` | float | revert the policy from -policy-file for new sessions once treated sessions' re-read rate after the provider's first clear reaches this share (0 = off) |
 | `-hold-siblings` | duration | hold a request whose tools and system prompt are already in flight and not yet cached until that first response begins, so parallel sub-agents read the cache instead of all writing it; the value is the longest wait (0 = off; suggested 10s) |
 | `-ledger` | string | ledger directory (default ~/.replay/ledger) |
