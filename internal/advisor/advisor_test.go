@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -33,8 +34,14 @@ func TestFixtureProducesTheExpectedSuggestions(t *testing.T) {
 		t.Fatal("fixture must calibrate")
 	}
 	got := Suggest([]Observation{ob}, nil)
-	if len(got) == 0 || got[0].Kind != KindToolInputs || got[0].Target != "Bash" {
-		t.Fatalf("largest suggestion must be the Bash inputs: %+v", got)
+	if len(got) == 0 {
+		t.Fatal("no suggestions")
+	}
+	// Cache-breaks re-bill at input price; Bash inputs sit in the prefix and
+	// bill at the read multiple. Token ranking put Bash first; dollar ranking
+	// puts the re-bills first. That is the change.
+	if got[0].Kind != KindCacheBreaks {
+		t.Fatalf("largest by cache-traffic dollars must be cache-breaks, got %s: %+v", got[0].Kind, got)
 	}
 	by := kinds(got)
 	for _, k := range []Kind{KindToolInputs, KindFirstTurn, KindCacheBreaks} {
@@ -47,12 +54,56 @@ func TestFixtureProducesTheExpectedSuggestions(t *testing.T) {
 			t.Errorf("fixture has no evidence for %s", k)
 		}
 	}
-	first := got[0]
-	if first.Sessions != 1 || first.Share < MinShare || first.PredictedTokens != first.PromptTokens/2 || first.Status != Pending || !strings.Contains(first.Action, "heredoc") {
-		t.Fatalf("Bash suggestion wrong: %+v", first)
+	bash := by[KindToolInputs]
+	if bash.Sessions != 1 || bash.Share < MinShare || bash.PredictedTokens != bash.PromptTokens/2 || bash.Status != Pending || !strings.Contains(bash.Action, "heredoc") {
+		t.Fatalf("Bash suggestion wrong: %+v", bash)
 	}
 	if b := by[KindCacheBreaks]; b.Status != AdviceOnly || b.PromptTokens <= 0 || b.PredictedTokens != b.PromptTokens {
 		t.Fatalf("cache breaks are advice only: %+v", by[KindCacheBreaks])
+	}
+}
+
+func TestCacheTrafficUSD_ZeroTokensAndUnknownModelAreZero(t *testing.T) {
+	now := time.Now()
+	if cacheTrafficUSD(KindLargeResults, 0, "claude-opus-5", now) != 0 {
+		t.Fatal("zero tokens must price as 0, not as a free-looking miss")
+	}
+	if cacheTrafficUSD(KindLargeResults, 1_000_000, "not-a-priced-model", now) != 0 {
+		t.Fatal("an unpriced model must price as 0, excluded not free")
+	}
+	if cacheTrafficUSD(KindLargeResults, 1_000_000, "claude-opus-5", now) <= 0 {
+		t.Fatal("opus-5 cache-read of 1M tokens must be positive")
+	}
+}
+
+func TestSuggest_RanksByWriteReadDollarsNotTokenShare(t *testing.T) {
+	now := time.Now()
+	// More tokens of Bash results than of cache-breaks, but the breaks
+	// are priced as re-bills (input) and the results as cache reads.
+	obs := []Observation{
+		{
+			at: now, prompt: 2_000_000,
+			targets: map[string]evidence{
+				key(KindLargeResults, "Bash"): {at: now, share: 0.5, tokens: 1_000_000, usd: 1.00},
+			},
+		},
+		{
+			at: now.Add(time.Second), prompt: 200_000,
+			targets: map[string]evidence{
+				key(KindCacheBreaks, "cache breaks"): {at: now, share: 0.4, tokens: 80_000, usd: 10.00},
+			},
+		},
+	}
+	got := Suggest(obs, nil)
+	if len(got) < 2 {
+		t.Fatalf("want two suggestions, got %d", len(got))
+	}
+	if got[0].Kind != KindCacheBreaks {
+		t.Fatalf("dollar ranking put %s first (tokens %d $%.2f); cache-breaks should lead",
+			got[0].Kind, got[0].PredictedTokens, got[0].PredictedUSD)
+	}
+	if got[1].Kind != KindLargeResults {
+		t.Fatalf("second = %s, want Bash results", got[1].Kind)
 	}
 }
 
@@ -309,4 +360,83 @@ func keysOf(m map[string]Suggestion) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// The two guards in cacheTrafficUSD, made load-bearing.
+//
+// guard-reachability reported both INERT: the branches run, and deleting
+// either one changed no test's result. That verdict was right, and the reason
+// is the shape of the test above this one. It asserts zero tokens price as 0
+// and an unknown model prices as 0 — both true whether or not the guard is
+// there, because `0 * rate` is already 0, and an unknown model's Price is the
+// zero value, so `mtok * 0 * 0` is 0 too. Two correct assertions that between
+// them certify nothing about the code they name.
+//
+// An INERT verdict is not a request to delete the branch. Read it first: here
+// each guard is load-bearing on an input the old tests did not reach, and the
+// fix is a test, not a deletion.
+
+// A negative token count is the input that separates the guard from the
+// arithmetic.
+//
+// Nothing in this package should produce one, which is the point: the guard is
+// there for the case nobody planned. Without it a negative count does not
+// return zero, it returns NEGATIVE DOLLARS — and this figure is summed into a
+// ranking, so one negative row does not look like an error, it looks like a
+// target worth less than nothing and sorts to the bottom where nobody reads it.
+func TestCacheTrafficUSD_ANegativeTokenCountIsZeroNotNegativeDollars(t *testing.T) {
+	got := cacheTrafficUSD(KindLargeResults, -1, "claude-opus-5", time.Time{})
+	if got != 0 {
+		t.Fatalf("a negative token count priced at %v; it must be 0, because a negative "+
+			"dollar figure summed into a ranking reads as a cheap target rather than as "+
+			"the impossible input it is", got)
+	}
+}
+
+// A row that carries numbers and is not priced.
+//
+// `PriceForAt` returns (Price, bool) and the bool is not "the Price is zero".
+// activeRow's ok means A ROW MATCHED; the row's own Priced field is what comes
+// back as the second value. So an installed rules document can return a fully
+// populated Price alongside false — real InputPerMTok, real ReadMult, and a
+// flag saying do not bill from this.
+//
+// That is the exact shape of #212, where unknown models were priced as known.
+// Here, deleting `if !ok` bills 1,000,000 tokens at 10 * 0.1 = $1.00 from a row
+// whose entire purpose is to say it is not for billing. Zero-value prices hide
+// this; a populated unpriced row is the only input that shows it.
+func TestCacheTrafficUSD_AnUnpricedRowWithRealNumbersDoesNotBill(t *testing.T) {
+	restore := cachemodel.Override(&cachemodel.Rules{
+		Schema:   "replay.rules/v1",
+		Version:  "test-unpriced-populated",
+		Provider: "test",
+		Models: []cachemodel.ModelRule{{
+			Match:        "unpriced-but-populated",
+			InputPerMTok: 10,
+			ReadMult:     0.1,
+			Priced:       false,
+		}},
+	})
+	defer restore()
+
+	// The premise, asserted rather than assumed: this really is the populated
+	// -but-false pair. If a later change makes an unpriced row return a zero
+	// Price, the test below stops being able to fail and this line says so.
+	p, ok := cachemodel.PriceForAt("unpriced-but-populated", time.Time{})
+	if ok {
+		t.Fatal("the fixture row reports priced; it cannot exercise the !ok guard")
+	}
+	if p.InputPerMTok == 0 || p.ReadMult == 0 {
+		t.Fatalf("the fixture row came back with a zero Price (%+v), so deleting the "+
+			"guard would price it at 0 anyway and this test could not fail", p)
+	}
+
+	if got := cacheTrafficUSD(KindLargeResults, 1_000_000, "unpriced-but-populated", time.Time{}); got != 0 {
+		t.Fatalf("an unpriced row billed %v for 1M tokens; a row flagged not-for-billing "+
+			"must price as excluded, not as %v of real money", got, got)
+	}
+	// The break arm prices differently and must also refuse.
+	if got := cacheTrafficUSD(KindCacheBreaks, 1_000_000, "unpriced-but-populated", time.Time{}); got != 0 {
+		t.Fatalf("an unpriced row billed %v on the cache-break arm", got)
+	}
 }

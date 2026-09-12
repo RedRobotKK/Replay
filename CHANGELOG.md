@@ -213,6 +213,16 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- **`replay cost` prints four billed legs.** Cache write, cache read, uncached
+  input, output. Token cuts that only shrink cached prefix save at the read
+  multiple, not at input.
+- **`cost`, `costusage`, advisor and as-run replay price at the request
+  timestamp.** Dated windows and an account discount reach those numbers.
+  Other paths remain undated: statusline, route, mcp, burn, trim, order,
+  idle, ceiling, and the live spend cap (`listCost`). `PriceFor` is still
+  the lookup when there is no timestamp.
+- **`replay advise` ranks by cache-write plus cache-read dollars, not token
+  share.** Predictions still assume the target is halved.
 - **`replay prefix` names the mid-conversation-tool-changes beta.** A tool-set
   change still invalidates under the default `cache_control` contract. Some
   models may keep the prefix when that beta is on. The command reports the set

@@ -151,7 +151,7 @@ func priceUsage(e *usage.Export) (usageReport, []usageRow) {
 		dominant := 0.0
 		for i, r := range g.Records {
 			u := r.ToAnthropic()
-			price, priced := cachemodel.PriceFor(r.Model)
+			price, priced := cachemodel.PriceForAt(r.Model, r.At)
 			if !priced {
 				// Excluded, not free. cost.go draws the same line one level
 				// up, over whole transcripts; here it has to be drawn per

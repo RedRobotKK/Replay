@@ -88,6 +88,18 @@ func TestCostSummaryRendersTheActionableNumber(t *testing.T) {
 	}
 }
 
+func TestCostPrintsFourBilledLegs(t *testing.T) {
+	s := summarise([]costUnit{{
+		CostUSD: 10, UncachedUSD: 1, WriteUSD: 4, ReadUSD: 3.5, OutputUSD: 1.5,
+	}})
+	out := renderCost(s, 0, 0, io.Discard, "")
+	for _, want := range []string{"cache write", "cache read", "uncached", "output"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("report is missing billed leg %q:\n%s", want, out)
+		}
+	}
+}
+
 // Sessions the engine could not reproduce must be named, not silently dropped,
 // because a cost report that quietly ignores what it could not read is exactly
 // the kind of number this tool exists to distrust.

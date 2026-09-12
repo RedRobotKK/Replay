@@ -64,7 +64,7 @@ func AsRunSession(s *transcript.Session) SessionSpend {
 			default:
 				seen[req.ID] = true
 			}
-			out.Add(req.Usage, req.Model)
+			out.AddAt(req.Usage, req.Model, req.Timestamp)
 		}
 	}
 	return out

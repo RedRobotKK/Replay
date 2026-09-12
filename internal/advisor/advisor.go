@@ -1,8 +1,9 @@
 // Package advisor turns the largest token sources across a developer's
 // sessions into concrete suggestions with a predicted saving, and tracks
 // each suggestion from pending to applied to verified against later
-// sessions (PRD AD-1 to AD-3). Every prediction is on the scale-free
-// metric first: the share of prompt tokens a target accounts for.
+// sessions (PRD AD-1 to AD-3). Ranking is by cache-write plus cache-read
+// dollars, not by token share: text already in the prefix bills at the
+// read multiple.
 package advisor
 
 import (
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -97,8 +99,14 @@ type Suggestion struct {
 	// to remove per session; PredictedTokens the same over the corpus.
 	PredictedShare  float64 `json:"predicted_share"`
 	PredictedTokens int     `json:"predicted_tokens"`
-	Estimated       bool    `json:"estimated"`
-	Status          Status  `json:"status"`
+	// WriteReadUSD is the target's cache-write plus cache-read list price
+	// across the corpus. PredictedUSD is the cut this suggestion claims, on
+	// that scale. Ranking is by PredictedUSD, not by token share: a million
+	// cached-read tokens are not a million input tokens.
+	WriteReadUSD float64 `json:"write_read_usd,omitempty"`
+	PredictedUSD float64 `json:"predicted_usd,omitempty"`
+	Estimated    bool    `json:"estimated"`
+	Status       Status  `json:"status"`
 	// RealizedShare is the drop in the target's share on the newest
 	// sessions, once the suggestion counts as applied.
 	RealizedShare float64   `json:"realized_share,omitempty"`
@@ -125,6 +133,7 @@ type evidence struct {
 	errorMeasured bool
 	// reads counts file reads for hot-file targets.
 	reads int
+	usd   float64
 }
 
 // sample is one session's reading of one target, and whether there was one.
@@ -149,6 +158,7 @@ type sample struct {
 type Observation struct {
 	at      time.Time
 	prompt  int
+	model   string
 	targets map[string]evidence // keyed by kind + target
 	titles  map[string][3]string
 }
@@ -164,7 +174,12 @@ func Observe(s *transcript.Session) (Observation, bool) {
 	if !rep.Calibration.Passes() {
 		return Observation{}, false
 	}
-	ob := Observation{at: lane.Requests[0].Timestamp, targets: map[string]evidence{}, titles: map[string][3]string{}}
+	ob := Observation{
+		at:      lane.Requests[0].Timestamp,
+		model:   lane.Requests[0].Model,
+		targets: map[string]evidence{},
+		titles:  map[string][3]string{},
+	}
 	for _, req := range lane.Requests {
 		ob.prompt += req.Usage.PromptTotal()
 	}
@@ -222,7 +237,8 @@ func (ob *Observation) note(kind Kind, target string, tokens analysis.Figure, es
 		return
 	}
 	ob.targets[key(kind, target)] = evidence{at: ob.at, share: share, tokens: tokens.Value,
-		estimated: estimated, errorMeasured: tokens.ErrorMeasured}
+		estimated: estimated, errorMeasured: tokens.ErrorMeasured,
+		usd: cacheTrafficUSD(kind, tokens.Value, ob.model, ob.at)}
 }
 
 // noteReads records a file read at any size; the corpus decides whether
@@ -234,7 +250,26 @@ func (ob *Observation) noteReads(name string, e analysis.BlameEntry) {
 	ev.tokens += e.PromptTokens.Value
 	ev.share = float64(ev.tokens) / float64(ob.prompt)
 	ev.reads += e.Occurrences
+	ev.usd = cacheTrafficUSD(KindHotFile, ev.tokens, ob.model, ob.at)
 	ob.targets[k] = ev
+}
+
+// cacheTrafficUSD prices target tokens the way they actually bill once they
+// sit in the prefix: cache reads, except cache-breaks which are re-billed
+// at the input/write rate.
+func cacheTrafficUSD(kind Kind, tokens int, model string, at time.Time) float64 {
+	if tokens <= 0 {
+		return 0
+	}
+	p, ok := cachemodel.PriceForAt(model, at)
+	if !ok {
+		return 0
+	}
+	mtok := float64(tokens) / 1e6
+	if kind == KindCacheBreaks {
+		return mtok * p.InputPerMTok
+	}
+	return mtok * p.InputPerMTok * p.ReadMult
 }
 
 // builtinTools is the bucket for definitions that name no server.
@@ -337,15 +372,16 @@ func (ob *Observation) unusedTools(lane *transcript.Lane, fit analysis.TokenFit)
 type agg struct {
 	// applied is set by the caller from the reader's own decision, never
 	// inferred from the shares below.
-	applied   bool
-	kind      Kind
-	target    string
-	evidence  []evidence
-	shares    []sample // per session in time order; seen=false where there was no reading
-	titles    [3]string
-	estimated bool
-	tokens    int
-	reads     int
+	applied      bool
+	kind         Kind
+	target       string
+	evidence     []evidence
+	shares       []sample // per session in time order; seen=false where there was no reading
+	titles       [3]string
+	estimated    bool
+	tokens       int
+	reads        int
+	writeReadUSD float64
 }
 
 // Suggest aggregates observations into suggestions, newest evidence
@@ -374,6 +410,7 @@ func Suggest(obs []Observation, applied map[string]bool) []Suggestion {
 			a.estimated = a.estimated || ev.estimated
 			a.tokens += ev.tokens
 			a.reads += ev.reads
+			a.writeReadUSD += ev.usd
 			if t, ok := ob.titles[k]; ok {
 				a.titles = t
 			}
@@ -396,7 +433,7 @@ func Suggest(obs []Observation, applied map[string]bool) []Suggestion {
 		}
 		sid := id(a.kind, a.target)
 		a.applied = applied[sid]
-		s := Suggestion{ID: sid, Kind: a.kind, Target: a.target, Sessions: len(a.evidence), PromptTokens: a.tokens, Estimated: a.estimated, FirstSeen: a.evidence[0].at, LastSeen: a.evidence[len(a.evidence)-1].at}
+		s := Suggestion{ID: sid, Kind: a.kind, Target: a.target, Sessions: len(a.evidence), PromptTokens: a.tokens, WriteReadUSD: a.writeReadUSD, Estimated: a.estimated, FirstSeen: a.evidence[0].at, LastSeen: a.evidence[len(a.evidence)-1].at}
 		for _, ev := range a.evidence {
 			s.Share += ev.share
 		}
@@ -407,13 +444,16 @@ func Suggest(obs []Observation, applied map[string]bool) []Suggestion {
 			s.Share *= float64(a.reads-1) / float64(a.reads)
 			s.PredictedShare = s.Share
 			s.PredictedTokens = a.tokens * (a.reads - 1) / a.reads
+			s.PredictedUSD = s.WriteReadUSD * float64(a.reads-1) / float64(a.reads)
 		case KindCacheBreaks:
 			// A break that does not happen re-bills nothing.
 			s.PredictedShare = s.Share
 			s.PredictedTokens = a.tokens
+			s.PredictedUSD = s.WriteReadUSD
 		default:
 			s.PredictedShare = trimShare * s.Share
 			s.PredictedTokens = int(trimShare * float64(a.tokens))
+			s.PredictedUSD = trimShare * s.WriteReadUSD
 		}
 		s.Title, s.Action = describe(a, s)
 		// applied comes from the reader, not from the data. Suggest has no
@@ -423,7 +463,12 @@ func Suggest(obs []Observation, applied map[string]bool) []Suggestion {
 		s.Status, s.RealizedShare = track(a.kind, a.shares, s.PredictedShare, a.applied)
 		out = append(out, s)
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].PredictedTokens > out[j].PredictedTokens })
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].PredictedUSD != out[j].PredictedUSD {
+			return out[i].PredictedUSD > out[j].PredictedUSD
+		}
+		return out[i].PredictedTokens > out[j].PredictedTokens
+	})
 	return out
 }
 

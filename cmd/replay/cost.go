@@ -67,6 +67,10 @@ type costUnit struct {
 	Model           string  `json:"model"`
 	Requests        int     `json:"requests"`
 	CostUSD         float64 `json:"costUsd"`
+	UncachedUSD     float64 `json:"uncachedUsd,omitempty"`
+	WriteUSD        float64 `json:"cacheWriteUsd,omitempty"`
+	ReadUSD         float64 `json:"cacheReadUsd,omitempty"`
+	OutputUSD       float64 `json:"outputUsd,omitempty"`
 	AvoidableUSD    float64 `json:"avoidableUsd"`
 	AvoidableTokens int     `json:"avoidableTokens,omitempty"`
 	Breaks          int     `json:"breaks"`
@@ -196,6 +200,10 @@ func foldSessions(units []costUnit) []costUnit {
 		s.Lanes++
 		s.Requests += u.Requests
 		s.CostUSD += u.CostUSD
+		s.UncachedUSD += u.UncachedUSD
+		s.WriteUSD += u.WriteUSD
+		s.ReadUSD += u.ReadUSD
+		s.OutputUSD += u.OutputUSD
 		s.AvoidableUSD += u.AvoidableUSD
 		s.AvoidableTokens += u.AvoidableTokens
 		s.Breaks += u.Breaks
@@ -255,6 +263,10 @@ type costSummary struct {
 	// other. On a lane-unit report it equals Tasks.
 	Lanes          int     `json:"lanes"`
 	TotalUSD       float64 `json:"totalUsd"`
+	UncachedUSD    float64 `json:"uncachedUsd,omitempty"`
+	WriteUSD       float64 `json:"cacheWriteUsd,omitempty"`
+	ReadUSD        float64 `json:"cacheReadUsd,omitempty"`
+	OutputUSD      float64 `json:"outputUsd,omitempty"`
 	MedianUSD      float64 `json:"medianUsd"`
 	P90USD         float64 `json:"p90Usd"`
 	AvoidableUSD   float64 `json:"avoidableUsd"`
@@ -338,6 +350,10 @@ func summarise(units []costUnit) costSummary {
 	costs := make([]float64, 0, len(units))
 	for _, u := range units {
 		s.TotalUSD += u.CostUSD
+		s.UncachedUSD += u.UncachedUSD
+		s.WriteUSD += u.WriteUSD
+		s.ReadUSD += u.ReadUSD
+		s.OutputUSD += u.OutputUSD
 		s.AvoidableUSD += u.AvoidableUSD
 		costs = append(costs, u.CostUSD)
 	}
@@ -405,6 +421,10 @@ func renderCost(s costSummary, unpriced, unreadable int, out io.Writer, stateDir
 	// conversion is an indication of size, and the column header, the rate,
 	// its date and the note under the block all say so.
 	fx := money.Detect(os.LookupEnv, time.Now())
+	fmt.Fprintf(&b, "  cache write    %s\n", fxCol(fx, s.WriteUSD))
+	fmt.Fprintf(&b, "  cache read     %s\n", fxCol(fx, s.ReadUSD))
+	fmt.Fprintf(&b, "  uncached       %s\n", fxCol(fx, s.UncachedUSD))
+	fmt.Fprintf(&b, "  output         %s\n", fxCol(fx, s.OutputUSD))
 	fmt.Fprintf(&b, "  total          %s\n", fxCol(fx, s.TotalUSD))
 	// "task" only where a row is a task. Under --per-lane the same two figures
 	// describe agent lanes, and calling a lane a task on the line beneath a
@@ -449,7 +469,7 @@ func renderCost(s costSummary, unpriced, unreadable int, out io.Writer, stateDir
 			"What they cost you instead is not established. Whether a re-billed token draws\n"+
 			"down a rate-limit window was measured here across 3.09M tokens and the\n"+
 			"utilisation counter did not move: a null result, not a saving. `replay advise`\n"+
-			"ranks what to cut by token count, which is the part that was measured.\n")
+			"ranks what to cut by cache-write and cache-read dollars, not by token share.\n")
 	}
 	if unpriced > 0 {
 		fmt.Fprintf(&b, "\n%d further transcripts were read but not priced, because their model is not in\nthe price table. They are excluded rather than counted as free.\n", unpriced)
@@ -668,10 +688,14 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		// Price only what was demonstrably spent twice. A cache break's deficit
 		// is tokens the provider re-billed, which is spend that already
 		// happened, not a projection of what a different layout might save.
-		if price, ok := cachemodel.PriceFor(model); ok {
+		if price, ok := cachemodel.PriceForAt(model, u.At); ok {
 			u.AvoidableUSD = float64(deficit) / 1_000_000 * price.InputPerMTok
 			u.AvoidableTokens = deficit
 		}
+		u.UncachedUSD = asRun.UncachedUSD
+		u.WriteUSD = asRun.WriteUSD
+		u.ReadUSD = asRun.ReadUSD
+		u.OutputUSD = asRun.OutputUSD
 		u.path = path
 		units = append(units, u)
 		cache.put(path, u, reqIDs, unjoinable)
