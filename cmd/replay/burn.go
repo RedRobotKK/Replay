@@ -440,11 +440,12 @@ func burnClaudeCode(home, dir string) surfaceBurn {
 			s.requests += sess.RequestCount()
 			for _, lane := range sess.Lanes {
 				for _, r := range lane.Requests {
-					// Priced per request, at the row in force for its model.
-					// A request whose model nothing prices is counted as
-					// unpriced rather than as free: excluded and disclosed is
-					// the rule this report already keeps for tokens.
-					if p, ok := cachemodel.PriceFor(r.Model); ok {
+					// Priced per request, at the row in force for its model
+					// at the time it ran. A request whose model nothing
+					// prices is counted as unpriced rather than as free:
+					// excluded and disclosed is the rule this report already
+					// keeps for tokens.
+					if p, ok := cachemodel.PriceForAt(r.Model, r.Timestamp); ok {
 						s.costUSD += cachemodel.CostUSD(r.Usage, p)
 						s.pricedReqs++
 					} else {

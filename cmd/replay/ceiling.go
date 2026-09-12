@@ -99,10 +99,10 @@ func runCeiling(args []string, stdout, stderr io.Writer) error {
 		}
 		for _, lane := range session.Lanes {
 			for _, r := range lane.Requests {
-				// Add prices both sides; AddTokens counts allowance even for
-				// unpriced models, because a model missing from the table still
-				// spent a subscriber's quota.
-				e.Add(r.Model, r.Usage, *flatRate)
+				// AddAt prices both sides at the request timestamp; AddTokens
+				// counts allowance even for unpriced models, because a model
+				// missing from the table still spent a subscriber's quota.
+				e.AddAt(r.Model, r.Usage, r.Timestamp, *flatRate)
 				e.AddTokens(r.Usage)
 			}
 		}

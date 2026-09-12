@@ -4,6 +4,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
@@ -290,5 +291,33 @@ func TestCE11_ANoteWithNoCeilingSaysWhyThereIsNoHaltPoint(t *testing.T) {
 	}
 	if strings.Contains(withCeiling, "is not computed") {
 		t.Errorf("a halt point was computed and the note still says it was not:\n%s", withCeiling)
+	}
+}
+
+// CE12: a dated request is priced at the time it ran, not at today's row.
+//
+// Add used PriceFor, which ignores dated windows. The same usage inside and
+// outside a promotional window must produce different CorrectUSD or the
+// timestamp the command already has is theatre.
+func TestCE12_AddAtUsesTheRequestTimestamp(t *testing.T) {
+	r := rules(
+		ModelRule{Match: "opus-5", MinPrefix: 512, InputPerMTok: 10, OutputPerMTok: 50, ReadMult: 0.1, Priced: true},
+		ModelRule{Match: "opus-5", MinPrefix: 512, InputPerMTok: 5, OutputPerMTok: 25, ReadMult: 0.1, Priced: true,
+			EffectiveFrom: "2026-09-01", EffectiveUntil: "2026-09-30"},
+	)
+	defer Override(r)()
+
+	u := usage(1_000_000, 0, 0, 0)
+	var inside, outside CeilingEffect
+	inside.AddAt("claude-opus-5", u, time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC), 5.0)
+	outside.AddAt("claude-opus-5", u, time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), 5.0)
+	if inside.CorrectUSD == outside.CorrectUSD {
+		t.Fatalf("same usage priced the same inside and outside a dated window: $%.4f", inside.CorrectUSD)
+	}
+	if inside.CorrectUSD <= 0 || outside.CorrectUSD <= 0 {
+		t.Fatalf("a priced model contributed nothing: inside %+v outside %+v", inside, outside)
+	}
+	if inside.Unpriced != 0 || outside.Unpriced != 0 {
+		t.Fatalf("a priced model was counted as unpriced: inside %d outside %d", inside.Unpriced, outside.Unpriced)
 	}
 }

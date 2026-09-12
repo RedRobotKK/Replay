@@ -8,7 +8,8 @@ import "time"
 // PriceFor ignores dated windows. PriceAt honours them and had no production
 // callers, so a promotion or a negotiated discount that was only wired through
 // PriceAt could not reach a number a user sees. Every priced request in cost,
-// burn, and as-run session totals goes through here.
+// burn, ceiling, trim, route, TTL replay, and as-run session totals goes
+// through here.
 //
 // A zero timestamp means "no time was recorded": fall back to PriceFor rather
 // than invent a clock.

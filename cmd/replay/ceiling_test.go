@@ -3,10 +3,15 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // `replay ceiling` makes the cache-blind arithmetic runnable.
@@ -181,5 +186,61 @@ func TestCM8_AMalformedFileIsSkipped(t *testing.T) {
 	}
 	if stdout.Len() == 0 {
 		t.Error("no report was produced alongside the skipped file")
+	}
+}
+
+// CM9: a dated request is priced at the time it ran, not at today's row.
+//
+// CeilingEffect.Add used PriceFor, which ignores dated windows. A September
+// request under a September promotion is today's $10 if the lookup has no
+// clock, and $5 if it uses the request timestamp. As-run uses the clock.
+func TestCM9_DatedRequestIsPricedAtRequestTime(t *testing.T) {
+	restore := cachemodel.Override(&cachemodel.Rules{
+		Schema:  cachemodel.RulesSchema,
+		Version: "test",
+		Models: []cachemodel.ModelRule{
+			{Match: "opus-5", MinPrefix: 512, InputPerMTok: 10, OutputPerMTok: 50, ReadMult: 0.1, Priced: true},
+			{Match: "opus-5", MinPrefix: 512, InputPerMTok: 5, OutputPerMTok: 25, ReadMult: 0.1, Priced: true,
+				EffectiveFrom: "2026-09-01", EffectiveUntil: "2026-09-30"},
+		},
+	})
+	defer restore()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "s.jsonl")
+	body := `{"uuid":"a1","type":"user","sessionId":"s","version":"2.0","timestamp":"2026-09-15T00:36:01Z","message":{"role":"user","content":"hi"}}
+{"uuid":"a2","parentUuid":"a1","type":"assistant","requestId":"r1","apiBlockIndex":0,"timestamp":"2026-09-15T00:36:02Z","message":{"role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"one"}],"usage":{"input_tokens":1000000,"output_tokens":0}}}
+`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"ceiling", "--metered", "--json", path}, &stdout, &stderr); err != nil {
+		t.Fatalf("ceiling --json: %v\n%s", err, stderr.String())
+	}
+	var doc struct {
+		CorrectUSD float64 `json:"correctUsd"`
+		Requests   int     `json:"requests"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &doc); err != nil {
+		t.Fatalf("stdout is not JSON: %v\n%s", err, stdout.String())
+	}
+	if doc.Requests != 1 {
+		t.Fatalf("requests = %d, want 1", doc.Requests)
+	}
+
+	at := time.Date(2026, 9, 15, 0, 36, 2, 0, time.UTC)
+	today, _ := cachemodel.PriceFor("claude-opus-5")
+	then, _ := cachemodel.PriceForAt("claude-opus-5", at)
+	if today.InputPerMTok == then.InputPerMTok {
+		t.Fatal("PriceFor and PriceForAt agree; the fixture cannot tell today from request time")
+	}
+	u := transcript.Usage{Input: 1_000_000}
+	wantToday := cachemodel.CostUSD(u, today)
+	wantThen := cachemodel.CostUSD(u, then)
+	if math.Abs(doc.CorrectUSD-wantThen) > 1e-9 {
+		t.Errorf("correctUsd = $%.6f, want $%.6f at the September row (today would be $%.6f)",
+			doc.CorrectUSD, wantThen, wantToday)
 	}
 }

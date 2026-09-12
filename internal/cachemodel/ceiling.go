@@ -2,6 +2,7 @@ package cachemodel
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
@@ -108,13 +109,21 @@ func (e CeilingEffect) StopsAt(ceilingUSD float64) (float64, bool) {
 	return ceilingUSD / r, true
 }
 
-// Add folds one request's usage into the effect.
+// Add folds one request's usage into the effect at an unknown time
+// (compiled / undated rate).
+func (e *CeilingEffect) Add(model string, u transcript.Usage, blindRatePerMTok float64) {
+	e.AddAt(model, u, time.Time{}, blindRatePerMTok)
+}
+
+// AddAt folds one request's usage into the effect at the time it ran, so a
+// dated rules window reaches the number a user sees. Zero time falls back
+// to PriceFor, matching Tally.AddAt.
 //
 // An unpriced model is counted and skipped on BOTH sides. Pricing it on one
 // side only would move the ratio by an amount that has nothing to do with cache
 // accounting, which is the single thing this measures.
-func (e *CeilingEffect) Add(model string, u transcript.Usage, blindRatePerMTok float64) {
-	p, ok := PriceFor(model)
+func (e *CeilingEffect) AddAt(model string, u transcript.Usage, at time.Time, blindRatePerMTok float64) {
+	p, ok := PriceForAt(model, at)
 	if !ok {
 		e.Unpriced++
 		return
