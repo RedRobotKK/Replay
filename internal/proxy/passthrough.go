@@ -89,6 +89,22 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	}
 	setBody(r, body)
 
+	// Open the bracket. record.go says these two fields are "what makes 'the
+	// proxy forwards bytes unchanged' checkable rather than promised: equal
+	// hashes are the proof" — and nothing set them, so the claim stayed a
+	// promise while the number of body rewrites grew to four. A field whose
+	// whole purpose is to make a claim checkable, left unwritten, is the same
+	// defect as the comment that denied the rewrites: the artefact a reader
+	// would check says nothing.
+	//
+	// Taken on every request whose body was read, not only on rewritten ones.
+	// Equal hashes are the interesting case — they are the proof — and writing
+	// them only when something changed would leave a reader unable to tell an
+	// untouched request from a record written before this existed.
+	if readable && len(body) > 0 {
+		rec.BodyHashBefore = bodyHash(body)
+	}
+
 	if messages && len(body) > 0 && s.cfg.Masker != nil && !s.cfg.NoPolicy {
 		body = s.mask(&rec, body)
 		setBody(r, body)
@@ -171,6 +187,15 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// Close the bracket, after every rewrite and before anything forwards.
+	//
+	// BodyHashAfter equal to BodyHashBefore is the proof that this request
+	// went out as it came in. Unequal names a request the proxy changed, and
+	// the record already says which policy did it.
+	if readable && len(body) > 0 {
+		rec.BodyHashAfter = bodyHash(body)
+	}
+
 	// This request is in flight in its lane from here until its response is
 	// finished. Everything downstream that names a cause for it is comparing
 	// it against the request before it, and only this counter can say whether
