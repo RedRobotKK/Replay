@@ -121,6 +121,20 @@ func (t *responseTap) result() ledger.Response {
 		}
 		decoded, err := io.ReadAll(io.LimitReader(zr, MaxResponseBytes))
 		if err != nil {
+			// Indistinguishable by outcome today, and kept anyway.
+			//
+			// A truncated gzip stream decompresses its prefix, and that prefix
+			// always carries whatever padding followed the document, so
+			// ParseResponse below rejects it and returns the same empty
+			// Response this line does. Measured across six truncation points
+			// at two padding sizes: every one read partially, none parsed.
+			//
+			// It is not redundant in intent. A read error means WE KNOW the
+			// body is incomplete, which the parser cannot know — it only sees
+			// bytes that do not parse. The day a parser tolerates trailing
+			// data, or a provider pads with something parseable, this is the
+			// only thing standing between a partial decode and a figure the
+			// ledger presents as measured.
 			return ledger.Response{}
 		}
 		body = decoded
