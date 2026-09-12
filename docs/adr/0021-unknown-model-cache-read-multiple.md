@@ -1,6 +1,6 @@
 # 21. Unknown-model cache-read multiple is two questions
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-0022](0022-unknown-model-read-multiple-the-bias-runs-the-other-way.md)
 **Date:** 2026-09-11
 
 ## Context
