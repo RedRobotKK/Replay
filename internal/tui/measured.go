@@ -653,7 +653,13 @@ func blameBody(out string) []string {
 			continue
 		}
 		keep = append(keep, l)
-		if len(keep) >= BudgetRows-11 {
+		// The window decides how much blame is worth reading, not a constant.
+		//
+		// This was BudgetRows-11, so the screen showed thirteen lines however
+		// tall the terminal was and padWhy filled the rest with blanks: at
+		// LINES=50 the why screen was 78% empty, the emptiest in the app, while
+		// the output it had to show was sitting truncated.
+		if len(keep) >= bodyRows()-11 {
 			break
 		}
 	}

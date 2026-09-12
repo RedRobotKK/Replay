@@ -213,7 +213,7 @@ func Outcome(key rune) Screen {
 	// a measurement with a date on it rather than an invariant.
 	from := Example
 	lines = WithBanner(lines, from, "")
-	for len(lines) < BudgetRows-4 {
+	for len(lines) < bodyRows()-4 {
 		lines = append(lines, "")
 	}
 	lines = append(lines, Ran(sc)...)
