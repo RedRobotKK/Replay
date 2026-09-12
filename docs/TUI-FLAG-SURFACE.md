@@ -32,7 +32,7 @@ All 81 are classified; none are left over.
 | Threshold that can fire | 20 | A meter with **four** states: unset, armed, approaching, fired |
 | Posture, on or not covered | 14 | A line saying what is on, and more importantly what it does **not** reach |
 | Scope of the question | 12 | The query line. What this screen is about, and what it excludes |
-| Action with a consequence | 11 | A confirmation, with the consequence named before the key |
+| Action with a consequence | 12 | A confirmation, with the consequence named before the key |
 
 ## Why a threshold needs four screens, not one
 
@@ -221,7 +221,7 @@ elsewhere in this file. -->
 | `--to` | `route` | string |
 | `--top` | `context` | int |
 
-### Action with a consequence (11)
+### Action with a consequence (12)
 
 | Flag | Command | Type |
 |---|---|---|
@@ -233,6 +233,7 @@ elsewhere in this file. -->
 | `--measure` | `rules` | string |
 | `--record` | `probe` | string |
 | `--update` | `rules` | string |
+| `--vary` | `probe` | string |
 | `--x402-json` | `rules` | bool |
 | `--yes` | `advise` | bool |
 | `--yes` | `probe` | bool |

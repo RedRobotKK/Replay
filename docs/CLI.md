@@ -283,6 +283,7 @@ Measure a model's caching floor.
 | `-relative` | float | stop within this fraction of the answer instead of a fixed token width |
 | `-resolution` | int | how narrow a bracket is narrow enough, in tokens (default 512) |
 | `-trend` | bool | read the recorded series and report what has changed; sends nothing |
+| `-vary` | string | vary one prefix term (tools, system, effort) across two requests and watch cache_read; plan unless --execute |
 | `-yes` | bool | with --execute, skip the confirmation. For scripts that meant it |
 
 ### doctor
@@ -425,4 +426,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-30 commands, 109 flags, read from the binary.
+30 commands, 110 flags, read from the binary.
