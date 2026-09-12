@@ -17,22 +17,23 @@ flag as its own widget is a worse tool than the command line it replaces,
 because it asks the reader to hold the same complexity with less to hold onto.
 
 So the question is not "where does each flag go". It is what kind of thing each
-flag is, because **twenty of them are the same kind of thing and collapse into
-one component with four states**.
+flag is, because **twenty-one of them are the same kind of thing and collapse
+into one component with four states**.
 
 Every flag below was extracted from `cmd/replay/*.go`, not from documentation.
-All 81 are classified; none are left over.
+None are left over: `TestFlagSurface_EveryFlagIsClassified` fails the build when
+a flag is defined in `cmd/replay` and appears in no table here.
 
 ## The six archetypes
 
 | Archetype | Flags | What it looks like |
 |---|---|---|
-| Replaces the surface | 7 | There is no TUI. `--json` means a machine is reading, and drawing a frame for it is wrong |
-| Plumbing, shown once | 16 | A header line, never interactive. Where it listens, where it writes, what it talks to |
-| Threshold that can fire | 20 | A meter with **four** states: unset, armed, approaching, fired |
-| Posture, on or not covered | 14 | A line saying what is on, and more importantly what it does **not** reach |
+| Replaces the surface | 13 | There is no TUI. `--json` means a machine is reading, and drawing a frame for it is wrong |
+| Plumbing, shown once | 20 | A header line, never interactive. Where it listens, where it writes, what it talks to |
+| Threshold that can fire | 21 | A meter with **four** states: unset, armed, approaching, fired |
+| Posture, on or not covered | 15 | A line saying what is on, and more importantly what it does **not** reach |
 | Scope of the question | 12 | The query line. What this screen is about, and what it excludes |
-| Action with a consequence | 12 | A confirmation, with the consequence named before the key |
+| Action with a consequence | 16 | A confirmation, with the consequence named before the key |
 
 ## Why a threshold needs four screens, not one
 
@@ -221,7 +222,7 @@ elsewhere in this file. -->
 | `--to` | `route` | string |
 | `--top` | `context` | int |
 
-### Action with a consequence (12)
+### Action with a consequence (16)
 
 | Flag | Command | Type |
 |---|---|---|
