@@ -165,19 +165,47 @@ func TestCostAndSimulatedUsage(t *testing.T) {
 	}
 }
 
-// An unknown model fell back to a read multiple of 0.10 while the current tier
-// is 0.025, a 4x overstatement that entered every effective-token figure and was
-// labelled measured rather than estimated. The bias has a direction: overstating
-// what a cache read costs systematically inflates the apparent value of
-// cache-preserving policies against cache-clearing ones, which is exactly the
-// comparison this tool exists to make.
-func TestUnknownModelDoesNotGetAFabricatedReadMultiple(t *testing.T) {
+// An unknown model's read multiple is a number this table actually holds, not
+// one invented for the occasion.
+//
+// This test used to assert the opposite of what it asserts now, and the reason
+// is worth keeping rather than quietly rewriting. It read:
+//
+//	overstating what a cache read costs systematically inflates the apparent
+//	value of cache-preserving policies against cache-clearing ones
+//
+// That is backwards, and ADR-0022 works it through. EffectiveTokens adds
+// CacheRead * ReadMult, so a cache-preserving policy — many reads, little
+// input — gets MORE expensive as the multiple rises. A high multiple makes
+// cache preservation look worse, not better. The cheap number is the one that
+// flatters this tool's own advice, by a factor of about three over ten turns.
+//
+// The test shared one inverted premise with ADR-0021, which is unsurprising:
+// they were written from the same belief, and neither could catch the other.
+//
+// What it got RIGHT, and what this keeps: the fallback must not be a number
+// somebody made up. It has to be a multiple the table actually publishes for
+// some model, so a reader can find where it came from. Which of the published
+// multiples it should be is ADR-0022's question, and
+// TestUnknownModelReadMultipleIsTheDearestInTheTable owns that answer — one
+// fact, one owner, so a future change cannot satisfy the nearer test.
+func TestUnknownModelReadMultipleIsNotInvented(t *testing.T) {
 	unknown := ReadMultiplierFor("a-model-nobody-has-heard-of")
-	newest := ReadMultiplierFor("fable-5-1")
-	if unknown > newest*2 {
-		t.Fatalf("an unknown model is charged %.4f per cached token while the current tier is %.4f; "+
-			"a fallback that overstates by %.1fx is a fabricated number, not a conservative one",
-			unknown, newest, unknown/newest)
+	published := map[float64]string{}
+	for _, m := range modelTable {
+		if m.priced {
+			published[m.price.ReadMult] = m.match
+		}
+	}
+	if len(published) == 0 {
+		t.Fatal("no priced row carries a read multiple; this test compares against nothing")
+	}
+	if from, ok := published[unknown]; !ok {
+		t.Fatalf("an unknown model reads at %.4f, which no row in this table publishes. A "+
+			"fallback nobody can trace to a real model is a number invented for the occasion, "+
+			"whatever direction it errs in", unknown)
+	} else if from == "" {
+		t.Fatal("the matched row has no name")
 	}
 }
 
@@ -189,13 +217,20 @@ func TestUnknownModelDoesNotGetAFabricatedReadMultiple(t *testing.T) {
 // the row, pricing it, or inventing a third multiple each collapses one of
 // those failure directions.
 func TestUnknownModelReadMultiplePinsTheSplit(t *testing.T) {
-	if unknownModel.price.ReadMult != 0.025 {
-		t.Fatalf("unknownModel.ReadMult = %g, want 0.025", unknownModel.price.ReadMult)
-	}
-	if unknownModel.price.ReadMult != readMultiplierNewest {
-		t.Fatalf("unknownModel.ReadMult = %g, want readMultiplierNewest (%g); "+
-			"do not put ReadMultiplier (%g) here and do not invent a third multiple",
-			unknownModel.price.ReadMult, readMultiplierNewest, ReadMultiplier)
+	// The multiple half of this pin moved to
+	// TestUnknownModelReadMultipleIsTheDearestInTheTable, and the number it
+	// used to assert is gone rather than updated.
+	//
+	// It pinned 0.025 and readMultiplierNewest, which is exactly what ADR-0021
+	// decided and ADR-0022 supersedes. Two tests asserting opposite numbers for
+	// one field is how a superseded decision comes back: whoever changes the
+	// code next satisfies the nearer test. Keeping this one pointed at the
+	// SPLIT — which is 0021's real contribution and still correct — and letting
+	// the other own the multiple leaves one owner per fact.
+	if unknownModel.price.ReadMult != readMultiplierUnknown {
+		t.Fatalf("unknownModel.ReadMult = %g, want readMultiplierUnknown (%g); the multiple is "+
+			"a rule about the table, not a constant to retype here",
+			unknownModel.price.ReadMult, readMultiplierUnknown)
 	}
 	if unknownModel.priced {
 		t.Fatal("unknownModel.priced: a dollar figure for a model nobody has a price for")
@@ -285,5 +320,60 @@ func TestPricesReadFromTheProviderPage20260907(t *testing.T) {
 		if got := ReadMultiplierFor(id); got != 0.025 {
 			t.Errorf("%s read multiple = %g, want 0.025", id, got)
 		}
+	}
+}
+
+// The unknown-model read multiple is the DEAREST the table holds, and this
+// checks the rule rather than the number.
+//
+// ADR-0021 pinned it to readMultiplierNewest, which named the Fable/Mythos
+// tier and happened to be the cheapest number in the table. Two things were
+// wrong with that and ADR-0022 records both.
+//
+// The symbol named a TIER while being used as a RULE, so the day a newer tier
+// reads dearer than 0.10 the constant would still say Newest, the record would
+// still say Accepted, and the decision would invert without anyone touching it.
+//
+// And the direction was backwards. EffectiveTokens adds CacheRead * ReadMult,
+// so a lower multiple makes a cached read cheaper, which makes the
+// cache-preserving layouts this tool recommends score better against
+// cache-clearing ones. The cheap number is the self-flattering one. An
+// instrument that must not puff itself takes the dear one.
+//
+// A test asserting `== 0.10` would pass while meaning nothing: it would pin
+// today's arithmetic and say nothing about why. This derives the answer from
+// the table, so a new tier moves it and a failure here names the reason.
+func TestUnknownModelReadMultipleIsTheDearestInTheTable(t *testing.T) {
+	dearest := 0.0
+	for _, m := range modelTable {
+		if m.priced && m.price.ReadMult > dearest {
+			dearest = m.price.ReadMult
+		}
+	}
+	if dearest == 0 {
+		t.Fatal("no priced row carries a read multiple; this test derived its answer from " +
+			"nothing and would pass on an empty table")
+	}
+	if unknownModel.price.ReadMult != dearest {
+		t.Fatalf("an unknown model reads at %v and the dearest row in the table reads at %v.\n"+
+			"      A model this table does not know is usually a NEW one, and the conservative\n"+
+			"      choice for an instrument is the multiple that makes its own advice look\n"+
+			"      WORST, not best: EffectiveTokens adds CacheRead*ReadMult, so a cheap read\n"+
+			"      inflates the apparent value of the cache-preserving layouts Replay\n"+
+			"      recommends. See ADR-0022.",
+			unknownModel.price.ReadMult, dearest)
+	}
+	// The premise, asserted rather than assumed: the table really does hold
+	// more than one multiple. If it ever holds only one, dearest is trivially
+	// that one and this test stops distinguishing anything.
+	distinct := map[float64]bool{}
+	for _, m := range modelTable {
+		if m.priced {
+			distinct[m.price.ReadMult] = true
+		}
+	}
+	if len(distinct) < 2 {
+		t.Fatalf("the table holds %d distinct read multiple(s); with one, this test cannot "+
+			"tell the dearest from the only", len(distinct))
 	}
 }

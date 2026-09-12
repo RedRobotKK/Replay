@@ -105,6 +105,27 @@ const (
 	ReadMultiplier       = 0.10
 	// readMultiplierNewest applies to the Fable and Mythos 5.1 tier.
 	readMultiplierNewest = 0.025
+	// readMultiplierUnknown is what a model this table does not know reads at.
+	//
+	// It names a RULE, not a tier, and the rule is: the most cache-hostile
+	// multiple the table holds. ADR-0021 put readMultiplierNewest here, which
+	// named the Fable/Mythos tier and happened to be the table's cheapest
+	// number — so the day a newer tier read dearer, the symbol would still say
+	// Newest, the record would still say Accepted, and the argument would
+	// invert in silence. ADR-0022 records that.
+	//
+	// Cache-hostile is the conservative direction and ADR-0021 had it
+	// backwards. EffectiveTokens adds CacheRead * ReadMult, so a LOWER
+	// multiple makes a cached read cheaper, which makes the cache-preserving
+	// layouts this tool recommends score BETTER. Over ten turns a
+	// cache-clearing candidate scores +818% worse at 0.10 and +2786% worse at
+	// 0.025: the cheap number makes our own advice look three times more
+	// valuable. An instrument that must not puff itself takes the dear one.
+	//
+	// TestUnknownModelReadMultipleIsTheDearestInTheTable holds it to the rule
+	// rather than to the number, so a table change moves it and a test failure
+	// says why.
+	readMultiplierUnknown = ReadMultiplier
 )
 
 // Minimum cacheable prefix, in tokens, by model family. A prefix shorter than
@@ -179,7 +200,7 @@ var modelTable = []modelRow{
 // The newest tier is the conservative choice here, because understating what a
 // cache read costs understates the benefit of keeping the cache, which is the
 // claim this tool would otherwise be making on its own behalf.
-var unknownModel = modelRow{minPrefix: minPrefixStandard, price: Price{ReadMult: readMultiplierNewest}}
+var unknownModel = modelRow{minPrefix: minPrefixStandard, price: Price{ReadMult: readMultiplierUnknown}}
 
 // anthropicFamilies are the names this table is allowed to answer for.
 //
