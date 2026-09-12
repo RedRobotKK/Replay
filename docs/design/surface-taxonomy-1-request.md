@@ -47,6 +47,9 @@ the request path: a guard that is green in CI and absent in production.
 
 **F2. The package doc contradicts the package.** `internal/proxy/server.go:5-6`
 states: *"Nothing here rewrites a request body or removes a client header."*
+Resolved 2026-09-12, PR #240: the package comment now lists the three body
+rewrites and two header strips; `internal/regression/proxy_doc_claims_test.go`
+freezes the denial. This entry stays as the record of the disagreement.
 The same file rewrites the request body in three places
 (`server.go:511-514` masking, `server.go:540-543` context-edit,
 `server.go:545-552` include-usage) and removes two client headers

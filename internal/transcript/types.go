@@ -176,6 +176,9 @@ type Request struct {
 	Model       string
 	Effort      string
 	Timestamp   time.Time
+	// Epoch is the session-kernel epoch this request ran under, empty when
+	// none was labelled. Two epochs in one session are not one as-run.
+	Epoch string
 	Usage       Usage
 	// Context is every message the request carried as input, oldest first.
 	Context []*Message

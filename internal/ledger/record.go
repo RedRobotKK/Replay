@@ -62,6 +62,9 @@ type Record struct {
 	// timings taken at the other end of the wire.
 	Correlation string `json:"correlation,omitempty"`
 	Path        string `json:"path"`
+	// Epoch is the kernel epoch this request ran under. Empty means none
+	// was labelled. It is our id, not the provider's cache key.
+	Epoch string `json:"epoch,omitempty"`
 	RequestSummary
 	// Policy names the request-parameter policy the proxy applied to this
 	// request, empty when the bytes went through unchanged.

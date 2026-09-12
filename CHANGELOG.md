@@ -127,6 +127,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- **`replay probe --vary <term>`** plans (or with `--execute` sends) two
+  requests that differ in one prefix term and reports whether `cache_read`
+  dropped. The provider cache key is measured, not assumed.
+- **`replay serve --freeze-prefix`** (off by default) pins same-length
+  `cc_version` hashes and labels a tool-set epoch from the exact tools JSON
+  on the wire. Mixed epochs are not one as-run. A new epoch is a set change,
+  not a miss claim.
+
 - **New evidence: [does the ±10% band decide the re-render headline?](docs/evidence/rerender-band-sensitivity-2026-09-11.md).**
   An external reviewer put it that `rerenderTolerance = 0.10` in `diff.go` is
   what produces the 50.8% re-render share, because it is a band around a

@@ -113,6 +113,11 @@ type Config struct {
 	// uncompressed, because a compressed body cannot be rewritten as it
 	// passes. Nil is off.
 	Rehydrator *masking.Rehydrator
+	// FreezePrefix, when set, pins same-length volatile system bytes
+	// (cc_version hashes) and labels a tool-set epoch from the exact
+	// tools JSON on the wire. Off by default. PX8: a new epoch is a set
+	// change, not a miss claim.
+	FreezePrefix bool
 	// Siblings, when MaxWait is set, holds a request whose prefix is in
 	// flight and not yet cached until the first response begins (the
 	// hold-parallel-siblings policy).
@@ -519,6 +524,17 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		body = s.mask(&rec, body)
 		setBody(r, body)
 	}
+	if s.cfg.FreezePrefix && len(body) > 0 && !s.cfg.NoPolicy {
+		if out, ok := freezeBillingHeader(body); ok {
+			body = out
+			setBody(r, body)
+			if rec.Policy == "" {
+				rec.Policy = "freeze-prefix"
+			}
+		}
+		rec.Epoch = toolsWireHash(body)
+	}
+
 	if openai && s.cfg.Masker != nil && !s.cfg.NoPolicy {
 		// The masker walks the Messages body shape. This family's body is
 		// different and it is not masked. Saying so matters more here than

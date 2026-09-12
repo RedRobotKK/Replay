@@ -32,6 +32,10 @@ type SessionSpend struct {
 	// unidentifiable request as already-seen would undercount precisely the
 	// traffic nobody can check.
 	Unidentified int
+	// MixedEpochs is true when the session spans more than one kernel epoch.
+	// CostUSD is still the sum; it is not one as-run. The judge of an epoch
+	// is provider usage / ExpectedRead, not the epoch label itself.
+	MixedEpochs bool
 }
 
 // AsRunSession prices every lane of a session, counting each request once.
@@ -52,6 +56,7 @@ func AsRunSession(s *transcript.Session) SessionSpend {
 	// check for one either. guard-reachability reported both as unobserved and
 	// it was right: they were guarding against nothing.
 	seen := make(map[string]bool)
+	epochs := map[string]bool{}
 	for _, lane := range s.Lanes {
 		out.Lanes++
 		for _, req := range lane.Requests {
@@ -64,9 +69,11 @@ func AsRunSession(s *transcript.Session) SessionSpend {
 			default:
 				seen[req.ID] = true
 			}
+			epochs[req.Epoch] = true
 			out.Add(req.Usage, req.Model)
 		}
 	}
+	out.MixedEpochs = len(epochs) > 1
 	return out
 }
 
