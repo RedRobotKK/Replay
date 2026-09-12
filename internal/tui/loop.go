@@ -334,6 +334,22 @@ func (l *Loop) paint() {
 		// is how a stale value survives a repaint and gets read as current.
 		fmt.Fprintf(&b, "\x1b[%d;1H\x1b[2K%s", i+1, line)
 	}
+	// Erase the rows this frame no longer covers.
+	//
+	// The loop above walks the NEW frame and never visits a row past its end,
+	// so a frame that shrank leaves the bottom of the previous one on screen,
+	// under the new one and indistinguishable from it. That is the same defect
+	// the per-line clear above prevents, one dimension up: there a longer line
+	// left a tail, here a taller frame leaves rows.
+	//
+	// It could not happen while the frame was BudgetRows tall, because every
+	// paint produced the same height. bodyRows() now reads the terminal on
+	// every paint and there is no resize handler, so shrinking the window is
+	// exactly when it happens, and a stale figure read as current is the
+	// failure this whole surface exists to avoid.
+	for i := len(lines); i < len(l.painted); i++ {
+		fmt.Fprintf(&b, "\x1b[%d;1H\x1b[2K", i+1)
+	}
 	if b.Len() == 0 {
 		return
 	}
