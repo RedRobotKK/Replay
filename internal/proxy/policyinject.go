@@ -239,6 +239,20 @@ func withUsageReporting(body []byte) ([]byte, bool) {
 	}
 	raw["stream_options"] = json.RawMessage(`{"include_usage":true}`)
 	out, err := json.Marshal(raw)
+	// guard-reachability reports this UNREACHED and no test will fix it.
+	// raw is a map[string]json.RawMessage that json.Unmarshal filled on the
+	// first line of this function, so every value in it is already valid
+	// JSON, and the one key added here is a literal. Marshalling valid
+	// RawMessages under string keys has no failure mode.
+	//
+	// Probed rather than assumed: invalid UTF-8 in a key and in a value,
+	// 500-deep nesting, 1e308, a lone surrogate escape, duplicate keys and
+	// HTML-significant characters. Every one marshalled with a nil error;
+	// invalid UTF-8 is replaced with U+FFFD rather than refused.
+	//
+	// It stays because dropping it would mean ignoring err and returning a
+	// nil out as though it were a rewritten body — the one outcome this
+	// function must never produce.
 	if err != nil {
 		return body, false
 	}
