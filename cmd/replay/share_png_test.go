@@ -233,48 +233,48 @@ func TestEachDesignCarriesItsOwnPath(t *testing.T) {
 // share.go, and the token figure on design b is where that could be undone by
 // arithmetic rather than by printing.
 //
-// The corpus sum of re-billed tokens, divided by the avoidable rate that is on
+// The corpus sum of re-billed tokens, divided by the re-billed rate that is on
 // the same card, reconstructs an order-of-magnitude spend total. The peak of a
 // single row divides into nothing, because a reader cannot know how many rows
 // produced it. So the function that computes it is exercised directly, over
 // rows whose sum and whose maximum are far apart: an earlier version of this
 // test called cardData with a literal and passed happily while
-// peakAvoidableTokens was replaced by a sum, which is a check that could not
+// peakRebilledTokens was replaced by a sum, which is a check that could not
 // fail.
 //
 // PASS: the peak row's figure, not the total.
 // FAIL: the sum, which is the leak.
 func TestSharePNGCarriesNoSpendTotal(t *testing.T) {
 	units := []costUnit{
-		{AvoidableTokens: 40_000},
-		{AvoidableTokens: 189_000},
-		{AvoidableTokens: 12_000},
-		{AvoidableTokens: 90_000},
+		{RebilledTokens: 40_000},
+		{RebilledTokens: 189_000},
+		{RebilledTokens: 12_000},
+		{RebilledTokens: 90_000},
 	}
-	got := peakAvoidableTokens(units)
+	got := peakRebilledTokens(units)
 	if got == 331_000 {
-		t.Fatalf("peakAvoidableTokens returned the corpus sum (%d). Divided by the "+
-			"avoidable rate printed beside it, that reconstructs a spend total, which "+
+		t.Fatalf("peakRebilledTokens returned the corpus sum (%d). Divided by the "+
+			"re-billed rate printed beside it, that reconstructs a spend total, which "+
 			"is the one figure the share card refuses to carry", got)
 	}
 	if got != 189_000 {
-		t.Fatalf("peakAvoidableTokens = %d, want the largest single row, 189000", got)
+		t.Fatalf("peakRebilledTokens = %d, want the largest single row, 189000", got)
 	}
-	if peakAvoidableTokens(nil) != 0 {
+	if peakRebilledTokens(nil) != 0 {
 		t.Error("no rows must mean no figure, not a figure derived from nothing")
 	}
 
 	// And the summary's own total must not survive the trip into the picture.
 	s := costSummary{
 		Tasks: 1384, Unit: unitSession, TotalUSD: 2906.39, MedianUSD: 0.77,
-		P90USD: 2.30, AvoidableUSD: 151.54, AvoidableShare: 0.052,
+		P90USD: 2.30, RebilledUSD: 151.54, RebilledShare: 0.052,
 	}
 	d := cardData(s, 67, got)
-	if d.AvoidableShare != s.AvoidableShare || d.MedianUSD != s.MedianUSD || d.P90USD != s.P90USD {
+	if d.RebilledShare != s.RebilledShare || d.MedianUSD != s.MedianUSD || d.P90USD != s.P90USD {
 		t.Errorf("the comparable figures did not survive the trip: %+v", d)
 	}
-	if d.PeakAvoidableTokens != 189_000 {
-		t.Errorf("PeakAvoidableTokens = %d, want the peak row's figure", d.PeakAvoidableTokens)
+	if d.PeakRebilledTokens != 189_000 {
+		t.Errorf("PeakRebilledTokens = %d, want the peak row's figure", d.PeakRebilledTokens)
 	}
 }
 

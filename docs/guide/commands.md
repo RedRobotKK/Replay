@@ -116,10 +116,10 @@ shown agent lanes and believed they were being shown work they did. This reposit
 retracted the same conflation once, in a published figure of "1363 sessions" that was a file count.
 
 Rows are now sessions. A session row sums its lanes, and which fields may be summed was decided one
-at a time: `requests`, `breaks`, `avoidableTokens`, `costUsd` and `avoidableUsd` are counts and
+at a time: `requests`, `breaks`, `rebilledTokens`, `costUsd` and `rebilledUsd` are counts and
 amounts within a lane, so they add; `at` is a point in time, so the session takes its *earliest*
 lane; `model` is a category, so the row names the model that ran the largest share of the money.
-Nothing that is a rate or a percentile is ever added — `avoidableShare`, the median and the p90 are
+Nothing that is a rate or a percentile is ever added — `rebilledShare`, the median and the p90 are
 derived from the finished rows. The grand total is identical either way; only the row a figure
 appears on changes.
 
@@ -146,11 +146,11 @@ than an invented default. `replay corpus` takes the same default for the same re
 
 There is deliberately no mean. One very long session drags an average somewhere no real task lives,
 so it reports the median and the p90, which is the spread you need before you can price a feature.
-The avoidable figure prices tokens the provider re-billed after a cache break: money already spent
+The re-billed figure prices tokens the provider re-billed after a cache break: money already spent
 twice, not a projection of what a different layout might save. Sessions whose model is not in the
 price table are excluded and counted, never treated as free.
 
-**Avoidable is stated in tokens as well as dollars, and the report says who the dollars are for.**
+**Re-billed is stated in tokens as well as dollars, and the report says who the dollars are for.**
 Most people running this hold a flat seat — Claude Pro or Max, Copilot, Cursor — where a broken cache
 costs no money at all, so a dollar-only finding is addressed to a minority and reads to everyone else
 as a number that does not apply. The token figure applies to all of them: a re-billed token is context
@@ -181,7 +181,7 @@ more than the work it saves.
 replay cost ~/.claude/projects/ --share
 ```
 
-It carries the avoidable rate, the median and p90 task cost, the session count and the break
+It carries the re-billed rate, the median and p90 task cost, the session count and the break
 count — and deliberately not the total. A total tells a reader your monthly burn and lets them infer team
 size; it is also the least comparable number in the set, because $3,000 means nothing without
 knowing how many engineers spent it. A rate reads the same from a solo developer and a team of
@@ -217,7 +217,7 @@ card that worked, and the next thing that happens to it is being posted.
 It carries what the text card carries — the rate, the row count and its noun, the cache breaks, the
 median and the p90 — plus one figure the text card does not: the tokens re-billed in the single
 worst session, which design b uses as its headline. That is a peak, not a corpus sum, deliberately.
-The corpus sum divided by the avoidable rate printed beside it would reconstruct an
+The corpus sum divided by the re-billed rate printed beside it would reconstruct an
 order-of-magnitude spend total, which is the one number the share card refuses to carry; a peak
 divides into nothing, because a reader cannot know how many sessions produced it.
 
@@ -249,7 +249,7 @@ shown differently, and a test renders both from one set of figures and asserts i
 
 **A card carries an absolute or the rate, never both.** That is the constraint the rekt register
 runs into, because it leads with a large exact number and the measured card leads with a
-percentage. A token total divided by the avoidable rate printed beside it reconstructs an
+percentage. A token total divided by the re-billed rate printed beside it reconstructs an
 order-of-magnitude spend total; neither half discloses it alone. So design **b** carries the peak
 session's re-billed tokens and no percentage, and design **c** carries the rate in the measured
 register and drops it entirely in the rekt one, where the absolute has moved into the headline.
@@ -272,7 +272,7 @@ phone screen. Attribution moved into the path, which needs no protecting. It is 
 cap height, which is about 11px once a 1200px card is rendered at 375px in a feed: readable without
 tapping, which the 21px it started at was not.
 
-A plain `replay cost` run also names the tip jar under the figures when the avoidable amount is over
+A plain `replay cost` run also names the tip jar under the figures when the re-billed amount is over
 $5 — at the one moment the tool has just shown you money you already spent twice. It prints a line;
 it never opens a browser.
 
@@ -319,7 +319,7 @@ The file is one JSON document:
 | `session` | yes, per record | refused, by record index. The session is the unit of the report and a record that cannot be placed cannot be counted |
 | `model` | yes, per record | refused. It is the key into the price table, and it is how a model change is told apart from a cache break |
 | `prompt`, `fresh`, `cached_read`, `cached_write` | yes | refused unless `fresh + cached_read + cached_write == prompt`. Anthropic counts exclusively and OpenAI inclusively, and an exporter that copied an inclusive total has double-counted the cache — worst on exactly the sessions that cache best |
-| `at` | for the break figures | the cost is still measured; **breaks and avoidable print NOT MEASURED**, because a break is defined against the request before it and undated records have no "before" |
+| `at` | for the break figures | the cost is still measured; **breaks and re-billed print NOT MEASURED**, because a break is defined against the request before it and undated records have no "before" |
 | `complete` | for the break figures | same. A request missing from the export is indistinguishable from a cache break, and nothing in the file settles it, so the exporter declares it |
 | `output`, `cached_write_5m`, `cached_write_1h`, `lane`, `id` | no | priced or labelled where present |
 
@@ -337,7 +337,7 @@ Five figures a transcript run prints are structurally absent, and the report nam
 than omitting them: repeated tool results, tool errors, per-block blame, alternative layouts, and
 agent-lane fan-out. In `--json` they are `null`, never `0`.
 
-`--max-avoidable-usd` still gates, and **refuses to pass when the avoidable figure was not
+`--max-rebilled-usd` still gates, and **refuses to pass when the re-billed figure was not
 measured**. An export that could not support a break figure is not an export with no waste in it,
 and a build going green there would be a clean bill of health nobody earned.
 
@@ -423,7 +423,7 @@ replay statusline --install   # prints the settings.json snippet
 ```
 
 Claude Code already reports what a session has cost. What it cannot report is how much of that was
-avoidable, because it counts cache misses in tokens and does not price them. This does, on the JSON
+re-billed, because it counts cache misses in tokens and does not price them. This does, on the JSON
 Claude Code already hands a status line, in about 6ms per render. It opens no files and makes no
 network call.
 
@@ -745,16 +745,16 @@ describing last Tuesday rather than how you work.
 `--out` names the policy file written on selection (default `~/.replay/policy.json`); `--out -`
 writes none and prints only.
 
-#### `--max-avoidable-usd <n>` — fail the build on avoidable spend
+#### `--max-rebilled-usd <n>` — fail the build on re-billed spend
 
 ```sh
-replay cost --max-avoidable-usd 5      # exit 1 when more than $5 was re-billed
+replay cost --max-rebilled-usd 5      # exit 1 when more than $5 was re-billed
 ```
 
-Compares the avoidable figure this command already measures against a ceiling you
+Compares the re-billed figure this command already measures against a ceiling you
 type, and exits non-zero when it is breached, so CI can gate on it without
-parsing prose. Avoidable is the part nobody chose: context re-billed because a
-prompt cache broke.
+parsing prose. Re-billed is the part nobody chose: context billed twice because
+a prompt cache broke.
 
 It derives nothing of its own. A governance check whose numbers come from
 anywhere but the measurement can be confidently right about a corpus nobody ran.
@@ -1228,7 +1228,7 @@ pads a row to the column width so the row underneath disappears; down a pipe tha
 invisible junk that lands in a document and in every diff of it afterwards.
 
 Colour is the semantic layer and it never carries meaning alone. The total is bold because it is the
-answer; the avoidable figure is red because it is the only number on the screen that is money
+answer; the re-billed figure is red because it is the only number on the screen that is money
 already spent twice; headings and rules are dimmed so the figures rise without anything shouting.
 Every one of those distinctions is also in the words, because roughly one man in twelve cannot
 separate red from green and because this output gets piped into files where colour does not exist.
@@ -1615,7 +1615,7 @@ bless it". Those are opposite situations and only one of them is a finding.
 In a shell:
 
 ```sh
-replay cost --max-avoidable-usd 5 ~/.claude/projects
+replay cost --max-rebilled-usd 5 ~/.claude/projects
 case $? in
   0) ;;                                  # under the ceiling
   3) echo "over the ceiling"; exit 1 ;;  # the only blocking case

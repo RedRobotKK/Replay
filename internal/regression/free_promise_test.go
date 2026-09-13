@@ -17,7 +17,7 @@ import (
 // The specific risk is not somebody deleting them in bad faith. It is that a
 // promise covering "everything free today" protects a capability nobody wrote
 // down only for as long as somebody remembers it exists. `replay cost
-// --max-avoidable-usd` fails a build on measured avoidable spend, it is free,
+// --max-rebilled-usd` fails a build on measured re-billed spend, it is free,
 // and it was named in no promise document at all while a paid `replay gate`
 // was being designed in the same repository. Those two are easy to confuse,
 // and if the paid one had shipped as a better version of the free one the
@@ -30,7 +30,7 @@ import (
 // staying free. Adding a row is a decision, and removing one is a promise
 // broken.
 var freeForever = []string{
-	"replay cost --max-avoidable-usd",
+	"replay cost --max-rebilled-usd",
 }
 
 // FC-FP1: both promise sentences are present, in the file that makes them.

@@ -23,7 +23,7 @@ ADR and the built thing goes to the architecture.
 | [Unwired 1: exported symbols](unwired-1-symbols.md) | Exported symbols nothing in production calls | **111 unwired of 798, and 82 have tests** |
 | [Unwired 2: configuration](unwired-2-config.md) | Config, flags and env vars nothing sets, and docs promising settings that do not exist | 3 DEAD, 10 PHANTOM, 4 UNDOCUMENTED |
 | [Unwired 3: branches and docs](unwired-3-branches-and-docs.md) | Unreachable branches, unproducible values, and documentation promising what the code cannot do | **49 unreachable identifiers, 41 with passing tests.** 8 overpromised claims |
-| [Quota estimator: blue](quota-estimator-blue.md) | What the captured rate-limit headers can honestly answer for a subscription seat | Forecast yes, avoidable-share refused |
+| [Quota estimator: blue](quota-estimator-blue.md) | What the captured rate-limit headers can honestly answer for a subscription seat | Forecast yes, re-billed-share refused |
 | [Quota estimator: red](quota-estimator-red.md) | A hostile review of the quota claim | Five findings rated thread-defining; its lead retracted an evidence document of this repository's own |
 | [Quota data census](quota-data-census.md) | What rate-limit data actually exists on this machine | **Zero of 17 ledger records carry any quota header** |
 | [CLI tool integration survey](cli-tool-integration-survey.md) | Which AI CLIs are actually installed on this machine, and which of four integration routes each offers | **Five installed CLIs were missing from the original list**, one "not installed" verdict was wrong, and Grok turns out to be a spend surface the census had written off |

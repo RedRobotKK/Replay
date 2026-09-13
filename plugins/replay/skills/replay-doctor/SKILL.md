@@ -26,7 +26,7 @@ Or `go install github.com/RedRobotKK/Replay/cmd/replay@latest`. macOS and Linux 
 
 | The user asks | Run | What to quote |
 |---|---|---|
-| "What did my sessions cost?" | `replay cost ~/.claude/projects/` | total, median task, p90, and the avoidable line with its date |
+| "What did my sessions cost?" | `replay cost ~/.claude/projects/` | total, median task, p90, and the re-billed line with its date |
 | "Why did it get expensive?" / "Did the cache break?" | `replay diff <session.jsonl>` | one line per break: the turn, the cause, the tokens |
 | "What is filling my context?" | `replay context <session.jsonl>` | the ranked list, and whether the session was compacted |
 | "Would a cheaper model be cheaper?" | `replay route --to <model> <session.jsonl>` | the crossover turn, or the refusal if the pair was never measured |

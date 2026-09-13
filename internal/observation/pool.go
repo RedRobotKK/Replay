@@ -57,11 +57,11 @@ type PoolEntry struct {
 	File    string `json:"file"`
 	TakenAt string `json:"takenAt"`
 
-	Tasks          int     `json:"tasks"`
-	TotalUSD       float64 `json:"totalUsd"`
-	AvoidableUSD   float64 `json:"avoidableUsd"`
-	AvoidableShare float64 `json:"avoidableShare"`
-	MedianTaskUSD  float64 `json:"medianTaskUsd"`
+	Tasks         int     `json:"tasks"`
+	TotalUSD      float64 `json:"totalUsd"`
+	RebilledUSD   float64 `json:"rebilledUsd"`
+	RebilledShare float64 `json:"rebilledShare"`
+	MedianTaskUSD float64 `json:"medianTaskUsd"`
 
 	PricedAt     string `json:"pricedAt"`
 	RulesVersion string `json:"rulesVersion"`
@@ -148,13 +148,13 @@ func (p *Pool) Add(c Corpus, file string) error {
 				"unchanged and nothing looks wrong", shortDigest(c.Digest))
 		}
 	}
-	// The caching rules decide what counts as avoidable. Two corpora scored
-	// under different rules produce avoidable totals that are not the same
+	// The caching rules decide what counts as re-billed. Two corpora scored
+	// under different rules produce re-billed totals that are not the same
 	// quantity, and adding them yields a number that is of nothing. The price
 	// table date is handled differently, and PricedAtLow says why.
 	if len(p.Roster) > 0 && p.Roster[0].RulesVersion != c.RulesVersion {
 		return fmt.Errorf("this pool is scored under %s and the submission under %s; "+
-			"avoidable spend means a different thing under each, so these totals are not "+
+			"re-billed spend means a different thing under each, so these totals are not "+
 			"addable. Rescore one corpus, or pool them separately",
 			p.Roster[0].RulesVersion, c.RulesVersion)
 	}
@@ -170,7 +170,7 @@ func (p *Pool) Add(c Corpus, file string) error {
 	// Monday's. The two are nested, not disjoint. Summing them would count
 	// almost all of that machine's money twice, and nothing about the result
 	// would look wrong: the total rises, the task count rises with it, and the
-	// avoidable share — the figure a reader actually checks — barely moves,
+	// re-billed share — the figure a reader actually checks — barely moves,
 	// because both numerator and denominator were inflated together.
 	//
 	// The duplicate-digest check above does not catch this. Two runs on
@@ -183,7 +183,7 @@ func (p *Pool) Add(c Corpus, file string) error {
 	incoming := PoolEntry{
 		SourceTag: c.SourceTag, TagBasis: c.TagBasis, Digest: c.Digest, File: file,
 		TakenAt: c.TakenAt, Tasks: c.Tasks, TotalUSD: c.TotalUSD,
-		AvoidableUSD: c.AvoidableUSD, AvoidableShare: c.AvoidableShare,
+		RebilledUSD: c.RebilledUSD, RebilledShare: c.RebilledShare,
 		MedianTaskUSD: c.MedianTaskUSD, PricedAt: c.PricedAt,
 		RulesVersion: c.RulesVersion, Unpriced: c.Unpriced,
 		CacheBreaks: c.CacheBreaks, ReReads: c.ReReads,
@@ -251,10 +251,10 @@ type PoolTotals struct {
 	// no way to tell whether they found an error or a design decision.
 	SupersededSubmissions int `json:"supersededSubmissions"`
 
-	Tasks        int     `json:"tasks"`
-	TotalUSD     float64 `json:"totalUsd"`
-	AvoidableUSD float64 `json:"avoidableUsd"`
-	// AvoidableShare is sum(avoidable) / sum(total): a share of the pooled
+	Tasks       int     `json:"tasks"`
+	TotalUSD    float64 `json:"totalUsd"`
+	RebilledUSD float64 `json:"rebilledUsd"`
+	// RebilledShare is sum(re-billed) / sum(total): a share of the pooled
 	// money.
 	//
 	// It is NOT the mean of the submissions' own shares. That would weight a
@@ -262,7 +262,7 @@ type PoolTotals struct {
 	// contributions could move a population figure further than all the real
 	// spend in the pool. The two differ whenever the corpora differ in size,
 	// which is always.
-	AvoidableShare float64 `json:"avoidableShare"`
+	RebilledShare float64 `json:"rebilledShare"`
 	// Unpriced is how many transcripts the pool's members read and left out.
 	// It is the pooled figure's own footnote: what this total does not cover.
 	Unpriced int `json:"unpriced"`
@@ -341,7 +341,7 @@ func (p Pool) Totals() (PoolTotals, error) {
 		}
 		t.Tasks += e.Tasks
 		t.TotalUSD += e.TotalUSD
-		t.AvoidableUSD += e.AvoidableUSD
+		t.RebilledUSD += e.RebilledUSD
 		t.Unpriced += e.Unpriced
 		// Counted only where reported, with the tasks that came with it.
 		// An entry reporting one of the pair and not the other still counts
@@ -382,7 +382,7 @@ func (p Pool) Totals() (PoolTotals, error) {
 	t.DistinctTags = len(tags)
 	t.PricedAtDistinct = len(dates)
 	if t.TotalUSD > 0 {
-		t.AvoidableShare = t.AvoidableUSD / t.TotalUSD
+		t.RebilledShare = t.RebilledUSD / t.TotalUSD
 	}
 	return t, nil
 }
@@ -471,7 +471,7 @@ func SupersededNote(t PoolTotals) string {
 		"replaced by a later corpus from the same machine. A corpus is cumulative, because the "+
 		"tool reads the whole transcript root on every run, so a machine's later submission "+
 		"contains the tasks in its earlier one. Adding both would count that spend twice "+
-		"while raising the task count with it, which leaves the avoidable share looking "+
+		"while raising the task count with it, which leaves the re-billed share looking "+
 		"untouched", t.SupersededSubmissions)
 }
 
@@ -487,17 +487,17 @@ func (p Pool) Render() (string, error) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Pooled corpora, scored under %s\n\n", t.RulesVersion)
 	fmt.Fprintf(&b, "  %-14s %-14s %7s %12s %12s %8s  %s\n",
-		"tag", "digest", "tasks", "total", "avoidable", "share", "file")
+		"tag", "digest", "tasks", "total", "re-billed", "share", "file")
 	for _, e := range p.Roster {
 		fmt.Fprintf(&b, "  %-14s %-14s %7d %12s %12s %7.1f%%  %s\n",
 			shortDigest(e.SourceTag), shortDigest(e.Digest), e.Tasks,
-			fmt.Sprintf("$%.2f", e.TotalUSD), fmt.Sprintf("$%.2f", e.AvoidableUSD),
-			e.AvoidableShare*100, e.File)
+			fmt.Sprintf("$%.2f", e.TotalUSD), fmt.Sprintf("$%.2f", e.RebilledUSD),
+			e.RebilledShare*100, e.File)
 	}
 	fmt.Fprintf(&b, "\n  $%.2f across %d contributed corpora, %d tasks.\n",
 		t.TotalUSD, t.Submissions, t.Tasks)
-	fmt.Fprintf(&b, "  $%.2f of it avoidable, %.1f%% of the pooled total.\n",
-		t.AvoidableUSD, t.AvoidableShare*100)
+	fmt.Fprintf(&b, "  $%.2f of it re-billed, %.1f%% of the pooled total.\n",
+		t.RebilledUSD, t.RebilledShare*100)
 	b.WriteString("  That share is the pooled money's own, not the mean of the submissions'\n" +
 		"  shares, which would weight a three-task corpus like a thousand-task one.\n")
 	fmt.Fprintf(&b, "  %s\n", MedianSpan(t))

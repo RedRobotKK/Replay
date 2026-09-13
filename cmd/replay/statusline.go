@@ -14,7 +14,7 @@ import (
 
 // The status line answers one question Claude Code cannot: not what this
 // session has cost, which it already tells you, but how much of that cost was
-// avoidable, and why.
+// re-billed, and why.
 //
 // Claude Code reports cache misses in tokens. Replay owns the price table, so
 // it reports them in money, live, while there is still a session left to change.
@@ -112,14 +112,14 @@ func statusLine(s statusInput, colour bool) string {
 		parts = append(parts, hit)
 	}
 
-	waste, priced := avoidableUSD(s)
+	waste, priced := rebilledUSD(s)
 	// Our figure is list price applied to token counts; theirs is the charge.
 	// When ours exceeds theirs the two disagree, and the one to doubt is ours.
 	// Print the cause without the number rather than a figure a reader can see
 	// is impossible.
 	credible := priced && (s.Cost.TotalUSD <= 0 || waste <= s.Cost.TotalUSD)
 	if credible {
-		parts = append(parts, paint(ansiRed, fmt.Sprintf("$%.2f avoidable", waste)))
+		parts = append(parts, paint(ansiRed, fmt.Sprintf("$%.2f re-billed", waste)))
 	}
 	if priced && pc.LastMissCause != nil && len(pc.LastMissCause.Causes) > 0 {
 		parts = append(parts, paint(ansiDim, humanCause(pc.LastMissCause.Causes[0])))
@@ -131,12 +131,12 @@ func statusLine(s statusInput, colour bool) string {
 	return strings.Join(parts, "  ")
 }
 
-// avoidableUSD prices the tokens a cache miss forced to be written again.
+// rebilledUSD prices the tokens a cache miss forced to be written again.
 //
 // Returns false when the model is not in the price table. A fabricated rate in
 // front of somebody every 300ms is worse than no figure at all, and the whole
 // argument of this tool is that its numbers can be checked.
-func avoidableUSD(s statusInput) (float64, bool) {
+func rebilledUSD(s statusInput) (float64, bool) {
 	pc := s.PromptCache
 	if pc == nil || pc.MissRecacheTokens <= 0 {
 		return 0, false

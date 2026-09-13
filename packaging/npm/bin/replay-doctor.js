@@ -7,12 +7,13 @@
  * version) and execs it. That is the whole path for a normal install: no
  * network, no postinstall, the lockfile's integrity hash covers the binary.
  *
- * Fallback, only when the platform package is absent (--no-optional, an
- * unusual installer, a mirror that dropped it): fetch the goreleaser tarball
- * for this version from the GitHub release, verify it against checksums.txt,
- * cache it, and exec that. The fallback says so on stderr, because a run that
- * quietly went to the network would be a different promise than the one on
- * the package page.
+ * When the platform package is absent (--no-optional, an unusual installer, a
+ * mirror that dropped it) the launcher stops and says so on stderr. It fetches
+ * the goreleaser tarball for this version from the GitHub release, verifies it
+ * against checksums.txt, caches it and execs that only when the environment
+ * variable REPLAY_DOCTOR_ALLOW_FETCH is exactly "1". A run that went to the
+ * network on its own would be a different promise than the one on the package
+ * page, so the network needs the user's word first (PRD E6).
  */
 import { createReadStream, existsSync, mkdirSync, renameSync, rmSync, writeFileSync, chmodSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -90,6 +91,23 @@ async function fromRelease() {
   }
 }
 
-const bin = fromPlatformPackage() || (await fromRelease());
+function refuseFetch() {
+  const t = target();
+  if (!t) {
+    console.error(`replay-doctor: ${process.platform}/${process.arch} is not supported. macOS and Linux on amd64 and arm64 are; Windows is not.`);
+    process.exit(2);
+  }
+  const name = `@replay-doctor/${process.platform}-${process.arch}`;
+  console.error(
+    `replay-doctor: the platform package ${name} is not installed, and this launcher does not go to the network on its own.\n` +
+    `  Reinstall without --no-optional so npm brings in ${name}, or take one of these:\n` +
+    `    REPLAY_DOCTOR_ALLOW_FETCH=1 npx replay-doctor ...   fetches ${archiveName(version, t)} from the v${version} GitHub release, verified against its checksums.txt\n` +
+    `    go install github.com/RedRobotKK/Replay/cmd/replay@latest\n` +
+    `  Release page: https://github.com/RedRobotKK/Replay/releases/tag/v${version}`
+  );
+  process.exit(2);
+}
+
+const bin = fromPlatformPackage() || (process.env.REPLAY_DOCTOR_ALLOW_FETCH === '1' ? await fromRelease() : refuseFetch());
 const child = spawn(bin, process.argv.slice(2), { stdio: 'inherit' });
 child.on('exit', (code, signal) => { if (signal) process.kill(process.pid, signal); else process.exit(code ?? 1); });

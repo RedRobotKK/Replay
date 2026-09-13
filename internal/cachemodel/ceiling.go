@@ -95,7 +95,7 @@ func (e CeilingEffect) Ratio() (float64, bool) {
 // execution, in real spend.
 //
 // A ceiling of zero or less is OFF, the convention `serve --max-day-usd` and
-// `cost --max-avoidable-usd` already use. Dividing zero would answer $0.00 and
+// `cost --max-rebilled-usd` already use. Dividing zero would answer $0.00 and
 // read as "your agents stop immediately", which is the opposite of what a
 // disabled ceiling means.
 func (e CeilingEffect) StopsAt(ceilingUSD float64) (float64, bool) {

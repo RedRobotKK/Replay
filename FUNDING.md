@@ -60,7 +60,7 @@ said "nothing in Replay is ever behind it" and read wider than the feed it meant
 paid**. See [SPONSORS.md](SPONSORS.md) and [the money path](docs/MONEY-PATH.md).
 
 That second promise now names the capability most likely to be caught by it.
-`replay cost --max-avoidable-usd` fails a build on measured avoidable spend, it
+`replay cost --max-rebilled-usd` fails a build on measured re-billed spend, it
 is free, and it stays free. A paid gate is designed in the money path, and it
 has to be a different thing rather than a better version of this one: the free
 gate reads transcripts you already have and refuses on waste that already

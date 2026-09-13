@@ -43,8 +43,8 @@ func watchFixture() Watch {
 		Lanes:           3,
 		Turns:           118,
 		TotalUSD:        1204.10,
-		AvoidableUSD:    96.30,
-		AvoidableTokens: 412_004,
+		RebilledUSD:     96.30,
+		RebilledTokens:  412_004,
 		BreaksByCause:   map[string]int{"toolChange": 7, "ttlExpiry": 2},
 		IdleGapsOverTTL: 6,
 		Compactions:     3,
@@ -170,9 +170,9 @@ func TestWA5_NothingMeasuredIsRefused(t *testing.T) {
 func TestWA6_TheDigestCoversTheRecord(t *testing.T) {
 	base := watchFixture().Digested()
 	moved := watchFixture()
-	moved.AvoidableUSD++
+	moved.RebilledUSD++
 	if moved.Digested().Digest == base.Digest {
-		t.Error("changing the avoidable figure did not change the digest, so a published " +
+		t.Error("changing the re-billed figure did not change the digest, so a published " +
 			"record could be restated after the fact")
 	}
 }

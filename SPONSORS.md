@@ -31,8 +31,8 @@ Sponsorship pays for the parts that are not fun:
 
 ## The free CI gate, named so it cannot be taken back
 
-**Added 2026-09-13.** `replay cost --max-avoidable-usd <ceiling>` fails a build
-when measured avoidable spend crosses a ceiling you type. It is free, it has
+**Added 2026-09-13.** `replay cost --max-rebilled-usd <ceiling>` fails a build
+when measured re-billed spend crosses a ceiling you type. It is free, it has
 been free since it shipped, and **nothing that is free today ever becomes
 paid**, so it stays free. Naming it here is the point: a promise that covers
 "everything free today" protects a capability nobody wrote down only until

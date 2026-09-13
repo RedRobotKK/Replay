@@ -41,7 +41,7 @@ import (
 //     order alone decides whether "sonnet-4-5" resolves to its own row or to
 //     the bare "sonnet" one. That reprices a corpus with no number changed.
 //   - Every row's minimum cacheable prefix. A prefix under the floor does not
-//     cache at all, silently, so the floor changes the avoidable figure.
+//     cache at all, silently, so the floor changes the re-billed figure.
 //   - Every row's input price, output price and cache-read multiple.
 //   - Whether the row is priced at all. This is the #284 case in one bit.
 //   - The unknown-model fallback, all of it. An unrecognised model is the

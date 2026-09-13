@@ -234,9 +234,9 @@ type Watch struct {
 	Lanes    int    `json:"lanes"`
 	Turns    int    `json:"turns"`
 
-	TotalUSD        float64 `json:"totalUsd"`
-	AvoidableUSD    float64 `json:"avoidableUsd"`
-	AvoidableTokens int     `json:"avoidableTokens"`
+	TotalUSD       float64 `json:"totalUsd"`
+	RebilledUSD    float64 `json:"rebilledUsd"`
+	RebilledTokens int     `json:"rebilledTokens"`
 
 	// Cause CLASSES, not causes. "toolChange" is a category this binary already
 	// assigns; the tool that changed is not in the record and cannot be

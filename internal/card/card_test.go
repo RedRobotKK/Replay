@@ -10,12 +10,12 @@ import (
 
 func sample() Data {
 	return Data{
-		AvoidableShare:      0.031,
-		Tasks:               64,
-		Breaks:              4,
-		MedianUSD:           0.20,
-		P90USD:              0.40,
-		PeakAvoidableTokens: 189_000,
+		RebilledShare:      0.031,
+		Tasks:              64,
+		Breaks:             4,
+		MedianUSD:          0.20,
+		P90USD:             0.40,
+		PeakRebilledTokens: 189_000,
 	}
 }
 
@@ -164,10 +164,10 @@ func TestRenderIsDeterministic(t *testing.T) {
 func TestTheFiguresActuallyReachThePicture(t *testing.T) {
 	base := sample()
 	moved := base
-	moved.AvoidableShare = 0.19
+	moved.RebilledShare = 0.19
 	moved.Breaks = 41
 	moved.Tasks = 900
-	moved.PeakAvoidableTokens = 12_345
+	moved.PeakRebilledTokens = 12_345
 	for _, v := range Variants() {
 		var a, b bytes.Buffer
 		if err := Encode(&a, v, ToneMeasured, base); err != nil {

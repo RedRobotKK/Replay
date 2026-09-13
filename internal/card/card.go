@@ -50,8 +50,8 @@ const (
 // and from a team of fifty, which is what makes it comparable, and comparison
 // is the only mechanism by which a number like this travels.
 type Data struct {
-	// AvoidableShare is the fraction of priced spend that was re-billed, 0..1.
-	AvoidableShare float64
+	// RebilledShare is the fraction of priced spend that was re-billed, 0..1.
+	RebilledShare float64
 	// Tasks is the row count and LaneUnit says what a row is, exactly as
 	// costSummary carries them. The two travel together because a count under
 	// the wrong noun is the defect that pair was introduced to prevent, and a
@@ -64,13 +64,13 @@ type Data struct {
 	MedianUSD float64
 	P90USD    float64
 
-	// PeakAvoidableTokens is the largest number of tokens re-billed within a
+	// PeakRebilledTokens is the largest number of tokens re-billed within a
 	// single row — one session, or one agent lane. A peak rather than the
-	// corpus sum on purpose: the corpus sum divided by the avoidable rate
+	// corpus sum on purpose: the corpus sum divided by the re-billed rate
 	// reconstructs an order-of-magnitude spend total, which is the one figure
 	// the share card refuses to carry. A peak divided by the rate reconstructs
 	// nothing, because a reader does not know how many rows there were.
-	PeakAvoidableTokens int
+	PeakRebilledTokens int
 }
 
 // The palette. Fixed, and the same values the prototype was designed against.
@@ -204,7 +204,7 @@ func (d Data) unitSingular() string {
 // The same three cases as the text card: a real fraction under one percent
 // would print as "0%", which reports a measurement as nothing.
 func (d Data) rateText() string {
-	pct := d.AvoidableShare * 100
+	pct := d.RebilledShare * 100
 	switch {
 	case pct == 0:
 		return "0%"

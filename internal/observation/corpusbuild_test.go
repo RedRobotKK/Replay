@@ -27,17 +27,17 @@ import (
 // base returns a corpus that passes Validate, so each test moves one thing.
 func base() Corpus {
 	return Corpus{
-		Schema:         CorpusSchema,
-		TakenAt:        "2026-09-12T00:00:00Z",
-		Tasks:          119,
-		TotalUSD:       4088.49,
-		AvoidableUSD:   199.77,
-		AvoidableShare: 0.0489,
-		MedianTaskUSD:  12.34,
-		PricedAt:       "2026-09-07",
-		RulesVersion:   "anthropic-2026-09-01",
-		SourceTag:      "launch-2026-09",
-		TagBasis:       "operator",
+		Schema:        CorpusSchema,
+		TakenAt:       "2026-09-12T00:00:00Z",
+		Tasks:         119,
+		TotalUSD:      4088.49,
+		RebilledUSD:   199.77,
+		RebilledShare: 0.0489,
+		MedianTaskUSD: 12.34,
+		PricedAt:      "2026-09-07",
+		RulesVersion:  "anthropic-2026-09-01",
+		SourceTag:     "launch-2026-09",
+		TagBasis:      "operator",
 	}
 }
 

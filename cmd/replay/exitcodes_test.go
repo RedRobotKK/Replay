@@ -9,7 +9,7 @@ import (
 // EC. A CI runner with no transcripts and a real breach exited the same way.
 //
 // `exitCode` mapped payment-required to 2 and everything else to 1. So
-// `replay cost --max-avoidable-usd` returned 1 both when avoidable spend was
+// `replay cost --max-rebilled-usd` returned 1 both when re-billed spend was
 // over the ceiling and when it refused because the corpus priced nothing, and
 // a shell could not tell "your agents wasted money" from "this runner has no
 // data and I declined to bless it".

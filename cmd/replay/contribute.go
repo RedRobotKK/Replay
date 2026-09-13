@@ -182,12 +182,12 @@ func contributorSecret() (string, error) {
 // not, and four consecutive float64s in a call signature is that defect waiting
 // for a refactor.
 type corpusFigures struct {
-	Tasks          int
-	Unpriced       int
-	TotalUSD       float64
-	AvoidableUSD   float64
-	AvoidableShare float64
-	MedianTaskUSD  float64
+	Tasks         int
+	Unpriced      int
+	TotalUSD      float64
+	RebilledUSD   float64
+	RebilledShare float64
+	MedianTaskUSD float64
 	// The waste distribution. Nil means this build did not measure it, which
 	// is not the same as measuring zero — see the Corpus fields.
 	CacheBreaks *int
@@ -247,13 +247,13 @@ func contributeCorpus(campaign, dir string, f corpusFigures, now time.Time) (str
 		// Truncated to the hour, as Observation's is: the hour is enough to
 		// order submissions and to say which price table was current, and a
 		// minute is closer to a keystroke timestamp than to a measurement.
-		TakenAt:        now.UTC().Truncate(time.Hour).Format(time.RFC3339),
-		Tasks:          f.Tasks,
-		TotalUSD:       f.TotalUSD,
-		AvoidableUSD:   f.AvoidableUSD,
-		AvoidableShare: f.AvoidableShare,
-		MedianTaskUSD:  f.MedianTaskUSD,
-		PricedAt:       money.RatesDate,
+		TakenAt:       now.UTC().Truncate(time.Hour).Format(time.RFC3339),
+		Tasks:         f.Tasks,
+		TotalUSD:      f.TotalUSD,
+		RebilledUSD:   f.RebilledUSD,
+		RebilledShare: f.RebilledShare,
+		MedianTaskUSD: f.MedianTaskUSD,
+		PricedAt:      money.RatesDate,
 		// In effect, not compiled. `replay rules` can load a document that
 		// Override installs for the process, and from that point every dollar
 		// figure above comes from the document rather than the table built
@@ -298,7 +298,7 @@ func contributeCorpus(campaign, dir string, f corpusFigures, now time.Time) (str
 func corpusContributionNote(path string, supersedes []string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "\nwrote %s\n", path)
-	b.WriteString("This one carries SPEND: the total, the avoidable total and share, the median\n" +
+	b.WriteString("This one carries SPEND: the total, the re-billed total and share, the median\n" +
 		"task, the task count, and which price table produced them. No prompts, no\n" +
 		"paths, no project or session names, and no per-task rows: the five figures\n" +
 		"and their basis, nothing else.\n" +
@@ -309,7 +309,7 @@ func corpusContributionNote(path string, supersedes []string) string {
 		// Said plainly, because the failure mode is a contributor helpfully
 		// attaching all of them. A corpus is cumulative, so the older files
 		// are contained in this one; a pooler that summed them would count
-		// this machine's money more than once, and the avoidable share would
+		// this machine's money more than once, and the re-billed share would
 		// barely move while it happened.
 		fmt.Fprintf(&b, "\nThis SUPERSEDES %d earlier submission(s) from this machine:\n", len(supersedes))
 		for _, name := range supersedes {

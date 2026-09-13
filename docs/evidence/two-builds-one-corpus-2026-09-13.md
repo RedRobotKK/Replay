@@ -84,6 +84,53 @@ two instruments.**
 3. `cost` and `diff` figures are never printed in the same sentence without
    naming which produced which.
 
+## Appended: the corpus is not still, and this file overstated its own precision
+
+The table above says the two builds were pointed at "the identical transcript
+root within the same minute". The root was identical. **It was not still**, and
+saying "identical corpus" without this paragraph claimed a precision the
+measurement did not have.
+
+Measured afterwards, same binary, twenty seconds apart:
+
+| | t0 | t+20s |
+|---|---:|---:|
+| lanes | 1,953 | 1,953 |
+| requests | 45,870 | 45,876 |
+| total at list | $4,245.49 | $4,245.90 |
+
+**About six requests and forty cents per twenty seconds**, because the machine
+that holds this corpus is the machine doing the measuring, and this session
+writes its own transcripts into `~/.claude/projects` while reading them.
+
+That is drift of roughly 75 requests between the two runs in the table above,
+against a measured gap of 27,067. The conclusion survives by a factor of about
+360, which is why the table stands. **The wording does not**, and this is the
+correction.
+
+It is also a standing hazard rather than a one-off: any figure this project
+publishes about its own corpus was taken while the corpus was growing, and two
+readings minutes apart will not match to the cent. Anything quoted to the cent
+from this machine should carry the time as well as the date.
+
+## Appended: where the extra lanes came from
+
+A reader of the site's 2026-09-12 reading asked why a `v0.5.4` run on that date
+reports 1,881 lanes and 43,672 requests, while the same binary on 2026-09-13
+reports 1,949 and 45,791. That is 68 more lanes and 2,119 more requests from a
+corpus that gained two sessions.
+
+**75 lane files were created under the transcript root after 2026-09-12
+00:00**, which accounts for the lane delta with room to spare. A session is not
+one file: this machine averages about sixteen lane files per session because
+sub-agent lanes each get their own, and a day of agent work creates lanes
+without creating many sessions. The request delta is those new lanes plus
+existing lanes that were appended to.
+
+So the answer is corpus growth, and it is growth in lanes rather than in
+sessions. **None of it explains the build gap in the table above**, which is
+measured on one corpus state rather than across two days.
+
 ## What this does not establish
 
 One machine, one operator. The ratios are facts about this corpus under these

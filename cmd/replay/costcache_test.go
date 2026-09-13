@@ -152,7 +152,7 @@ func TestCC6_CorruptIndexIsAMiss(t *testing.T) {
 // CC-7: the index key changes when the cached STRUCT changes.
 //
 // This is the defect the red team found, and it shipped for forty minutes.
-// AvoidableTokens was added to costUnit and the schema literal stayed
+// RebilledTokens was added to costUnit and the schema literal stayed
 // "replay.cost.v1", so every entry already on disk deserialized with the new
 // field absent. The same binary on the same machine printed 763k tokens warm
 // and 31.4M cold - and the dollar column, which was already cached, agreed in
@@ -178,7 +178,7 @@ func TestCC7_SchemaKeyTracksTheStructShape(t *testing.T) {
 	}
 	// Every field name must be represented: a key over a subset would miss
 	// exactly the field that was just added.
-	for _, f := range []string{"avoidableTokens", "costUsd", "requests", "breaks", "model"} {
+	for _, f := range []string{"rebilledTokens", "costUsd", "requests", "breaks", "model"} {
 		if !contains(got, f) {
 			t.Errorf("the schema key omits %q, so adding it would not invalidate the index: %q",
 				f, got)

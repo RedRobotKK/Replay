@@ -49,10 +49,10 @@ of that spend nobody chose. Nothing to configure and nothing to point it at. If 
 transcripts it prints the command list instead, which is the honest answer to a machine with nothing
 on it yet.
 
-The avoidable line comes in two currencies, and the second one is probably yours:
+The re-billed line comes in two currencies, and the second one is probably yours:
 
 ```text
-  avoidable      $150.27  (5% of the total)
+  re-billed      $150.27  (5% of the total)
                  31.4M tokens re-billed
 ```
 

@@ -12,7 +12,7 @@ import (
 func TestShareCardOmitsTheTotal(t *testing.T) {
 	s := costSummary{
 		Tasks: 1384, TotalUSD: 2906.39, MedianUSD: 0.65,
-		P90USD: 2.29, AvoidableUSD: 151.54, AvoidableShare: 0.052,
+		P90USD: 2.29, RebilledUSD: 151.54, RebilledShare: 0.052,
 	}
 	card := shareCard(s, 67)
 
@@ -22,7 +22,7 @@ func TestShareCardOmitsTheTotal(t *testing.T) {
 		}
 	}
 	if !strings.Contains(card, "5%") {
-		t.Errorf("the card must lead with the avoidable rate:\n%s", card)
+		t.Errorf("the card must lead with the re-billed rate:\n%s", card)
 	}
 	for _, want := range []string{"0.65", "2.29", "1384"} {
 		if !strings.Contains(card, want) {
@@ -60,7 +60,7 @@ func TestShareCardRefusesEmpty(t *testing.T) {
 
 // Nothing in the card may identify a project, a path, or a machine.
 func TestShareCardCarriesNoIdentifiers(t *testing.T) {
-	s := costSummary{Tasks: 12, MedianUSD: 1.10, P90USD: 4.00, AvoidableShare: 0.11, TotalUSD: 90}
+	s := costSummary{Tasks: 12, MedianUSD: 1.10, P90USD: 4.00, RebilledShare: 0.11, TotalUSD: 90}
 	// The route is derived from a model id, and a real Vertex id embeds the
 	// caller's GCP project and region — "projects/acme-prod/locations/..." is
 	// the ordinary shape, not a contrived one. Built from a bare literal this

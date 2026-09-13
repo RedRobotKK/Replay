@@ -44,7 +44,7 @@ Structure, fixed:
                    every dollar figure below.
 
 ## What it cost
-## What was avoidable
+## What was re-billed
 ## What was a trade
 ## What is not measured
 ## What to change, and what it does not fix
@@ -110,12 +110,12 @@ apart on screen:
 
 | Verdict | Means | Example |
 |---|---|---|
-| **Avoidable** | Spend a different mechanical choice would have avoided, with the work held constant ([WASTE-DEFINITION.md](../WASTE-DEFINITION.md)) | A tool block arriving mid-session, breaking a warm prefix |
+| **Re-billed** | Spend a different mechanical choice would have avoided, with the work held constant ([WASTE-DEFINITION.md](../WASTE-DEFINITION.md)) | A tool block arriving mid-session, breaking a warm prefix |
 | **Trade** | Real spend bought something real | Priced fan-out: the parallelism was the point |
 | **Not measured** | The instrument cannot tell | A session with no correlation data; a model with no published price |
 
 **"Waste" does not appear in the document.** Neither does any figure derived by
-multiplying avoidable tokens by a rate the customer does not pay.
+multiplying re-billed tokens by a rate the customer does not pay.
 
 Hard rules, carried over from the tool and non-negotiable in the write-up:
 
@@ -125,7 +125,7 @@ Hard rules, carried over from the tool and non-negotiable in the write-up:
   theirs; the dollars may not be.
 - **n=1 stays visible.** One session is one session. A finding from a single
   corpus says so in the sentence that states it, not in the methodology.
-- **No savings forecast.** The avoidable figure is what was *already spent
+- **No savings forecast.** The re-billed figure is what was *already spent
   twice*, never a prediction of what a change will recover. A recommendation may
   say what it removes; it may not multiply that by a month.
 - **A retraction is a delivery.** If a figure is later found wrong, the

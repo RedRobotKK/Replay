@@ -32,7 +32,7 @@ be marked up, and a defensible document can.
 It also kills one objection before it is made. "Can't we just run the tool
 ourselves?" Yes, and they should, and it is free, and it takes 16 seconds. What
 they cannot do in 16 seconds is decide which of those numbers is a trade and
-which is avoidable, and write down why in a form they can hand to finance.
+which is re-billed, and write down why in a form they can hand to finance.
 
 ## 2. The hours
 

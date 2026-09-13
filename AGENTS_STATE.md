@@ -251,7 +251,7 @@ FAIL strings, in the project's voice:
 - LiteLLM and any Anthropic-wire gateway:
   `"Replay cannot price this traffic. The upstream is HOST, not api.anthropic.com, so the wire is first-party and the bill is set by whoever runs that gateway."`
 
-Token counts, cache hit rates, break causes and avoidable TOKENS stay fully
+Token counts, cache hit rates, break causes and re-billed TOKENS stay fully
 reportable in every one of these cases. Only the dollar column is withheld.
 That is the existing `--max-session-tokens` argument from
 `docs/TOKEN-PRICES.md`, one layer up: a token figure needs no price table and
@@ -305,7 +305,7 @@ A Bedrock or Vertex user runs `replay cost`. Replay reads their Claude Code
 transcripts, matches `us.anthropic.claude-opus-5-v1:0` into the first-party
 Opus 5 row by substring, prices it at $5/$25 per million with a 0.10 cache-read
 multiple and a 1.25x cache-write multiple, prints a dollar total and an
-avoidable-spend figure, and stamps both with `PriceTableVersion 2026-09-07` and
+re-billed-spend figure, and stamps both with `PriceTableVersion 2026-09-07` and
 `RulesVersion anthropic-2026-09-01`. On the share card it prints "routed via
 Bedrock, metered" directly beside that total. Every number is stated with the
 confidence of a measurement, the provenance line names a publisher who did not

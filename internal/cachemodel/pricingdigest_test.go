@@ -165,7 +165,7 @@ func TestPD5_PricingAModelThatWasUnpricedMovesTheDigest(t *testing.T) {
 //
 // A floor decides whether a prefix caches at all. Get it wrong and the tool
 // recommends caching something that cannot be cached, which changes the
-// avoidable figure without changing any price.
+// re-billed figure without changing any price.
 func TestPD6_TheMinimumPrefixMovesTheDigest(t *testing.T) {
 	before := PricingDigest()
 

@@ -42,8 +42,8 @@ fi
 # fails, the transcript is empty, or the figures cannot be found, print nothing.
 summary=$(replay cost --json "$transcript" 2>/dev/null || true)
 if [ -n "$summary" ]; then
-  usd=$(printf '%s' "$summary" | tr -d '\n' | sed -n 's/.*"avoidableUsd"[[:space:]]*:[[:space:]]*\([0-9.]*\).*/\1/p' | head -1)
-  tok=$(printf '%s' "$summary" | tr -d '\n' | sed -n 's/.*"avoidableTokens"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' | head -1)
+  usd=$(printf '%s' "$summary" | tr -d '\n' | sed -n 's/.*"rebilledUsd"[[:space:]]*:[[:space:]]*\([0-9.]*\).*/\1/p' | head -1)
+  tok=$(printf '%s' "$summary" | tr -d '\n' | sed -n 's/.*"rebilledTokens"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' | head -1)
   if [ -n "$usd" ] && [ -n "$tok" ] && [ "$tok" != "0" ]; then
     printf 'replay: $%s at list billed twice in this session (%s tokens). Which turn: replay diff "%s"\n' "$usd" "$tok" "$transcript"
   fi

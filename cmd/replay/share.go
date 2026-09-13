@@ -44,7 +44,7 @@ func shareCard(s costSummary, breaks int) string {
 		return ""
 	}
 
-	pct := s.AvoidableShare * 100
+	pct := s.RebilledShare * 100
 	headline := fmt.Sprintf("%.0f%% of my agent spend was paid twice.", pct)
 	if pct > 0 && pct < 1 {
 		// Rounding a real number to "0%" would report a finding as nothing.

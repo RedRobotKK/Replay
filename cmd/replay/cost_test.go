@@ -41,16 +41,16 @@ func TestCostSummaryReportsMedianAndP90NotMean(t *testing.T) {
 	}
 }
 
-// The avoidable share is the point of the whole report, and it has to be a
+// The re-billed share is the point of the whole report, and it has to be a
 // share of what was actually priced, not of everything walked past.
-func TestCostSummaryAvoidableIsAShareOfWhatWasPriced(t *testing.T) {
+func TestCostSummaryRebilledIsAShareOfWhatWasPriced(t *testing.T) {
 	units := []costUnit{
-		{CostUSD: 10, AvoidableUSD: 2},
-		{CostUSD: 10, AvoidableUSD: 0},
+		{CostUSD: 10, RebilledUSD: 2},
+		{CostUSD: 10, RebilledUSD: 0},
 	}
 	s := summarise(units)
-	if math.Abs(s.AvoidableShare-0.1) > 0.0001 {
-		t.Fatalf("avoidable share: %v, want 0.1", s.AvoidableShare)
+	if math.Abs(s.RebilledShare-0.1) > 0.0001 {
+		t.Fatalf("re-billed share: %v, want 0.1", s.RebilledShare)
 	}
 }
 
@@ -58,7 +58,7 @@ func TestCostSummaryAvoidableIsAShareOfWhatWasPriced(t *testing.T) {
 // counted as a task that cost nothing: that would drag every figure down and
 // make the corpus look cheaper than it is.
 func TestCostSummaryExcludesUnpricedSessionsRatherThanCountingThemAsZero(t *testing.T) {
-	units := []costUnit{{CostUSD: 4, AvoidableUSD: 1}, {CostUSD: 6, AvoidableUSD: 1}}
+	units := []costUnit{{CostUSD: 4, RebilledUSD: 1}, {CostUSD: 6, RebilledUSD: 1}}
 	s := summarise(units)
 	if s.Tasks != 2 {
 		t.Fatalf("tasks: %d, want 2", s.Tasks)
@@ -68,17 +68,17 @@ func TestCostSummaryExcludesUnpricedSessionsRatherThanCountingThemAsZero(t *test
 	}
 	// An empty corpus is not a zero-cost corpus.
 	empty := summarise(nil)
-	if empty.Tasks != 0 || empty.MedianUSD != 0 || empty.AvoidableShare != 0 {
+	if empty.Tasks != 0 || empty.MedianUSD != 0 || empty.RebilledShare != 0 {
 		t.Fatalf("an empty corpus must summarise to nothing, got %+v", empty)
 	}
 }
 
-// The headline is the number a person can act on: what the avoidable share
+// The headline is the number a person can act on: what the re-billed share
 // would have been worth across the corpus.
 func TestCostSummaryRendersTheActionableNumber(t *testing.T) {
 	s := summarise([]costUnit{
-		{CostUSD: 100, AvoidableUSD: 12},
-		{CostUSD: 50, AvoidableUSD: 3},
+		{CostUSD: 100, RebilledUSD: 12},
+		{CostUSD: 50, RebilledUSD: 3},
 	})
 	out := renderCost(s, 0, 0, io.Discard, "")
 	for _, want := range []string{"$150.00", "10%", "$15.00"} {
@@ -214,13 +214,13 @@ func TestFoldSessionsSumsOnlyTheAdditiveFields(t *testing.T) {
 	// check that was meant to catch it.
 	got := foldSessions([]costUnit{
 		{ID: "aaaa", Lane: "main", Model: "claude-haiku", At: late,
-			Requests: 3, CostUSD: 1, AvoidableUSD: 0.25, AvoidableTokens: 10, Breaks: 1},
+			Requests: 3, CostUSD: 1, RebilledUSD: 0.25, RebilledTokens: 10, Breaks: 1},
 		{ID: "aaaa", Lane: "b0b0", Model: "claude-opus", At: early,
-			Requests: 5, CostUSD: 9, AvoidableUSD: 0.5, AvoidableTokens: 60, Breaks: 2},
+			Requests: 5, CostUSD: 9, RebilledUSD: 0.5, RebilledTokens: 60, Breaks: 2},
 		{ID: "aaaa", Lane: "c1c1", Model: "claude-haiku", At: mid,
-			Requests: 2, CostUSD: 0.5, AvoidableUSD: 0.25, AvoidableTokens: 30, Breaks: 0},
+			Requests: 2, CostUSD: 0.5, RebilledUSD: 0.25, RebilledTokens: 30, Breaks: 0},
 		{ID: "zzzz", Lane: "main", Model: "claude-opus", At: late,
-			Requests: 1, CostUSD: 4, AvoidableUSD: 0, AvoidableTokens: 0, Breaks: 0},
+			Requests: 1, CostUSD: 4, RebilledUSD: 0, RebilledTokens: 0, Breaks: 0},
 	})
 
 	if len(got) != 2 {
@@ -231,12 +231,12 @@ func TestFoldSessionsSumsOnlyTheAdditiveFields(t *testing.T) {
 		t.Fatalf("rows must keep first-seen order, got %q first", a.ID)
 	}
 	// Counts and amounts inside a lane: additive.
-	if a.Requests != 10 || a.Breaks != 3 || a.AvoidableTokens != 100 {
+	if a.Requests != 10 || a.Breaks != 3 || a.RebilledTokens != 100 {
 		t.Errorf("counts must add: requests=%d breaks=%d tokens=%d, want 10/3/100",
-			a.Requests, a.Breaks, a.AvoidableTokens)
+			a.Requests, a.Breaks, a.RebilledTokens)
 	}
-	if math.Abs(a.CostUSD-10.5) > 1e-9 || math.Abs(a.AvoidableUSD-1) > 1e-9 {
-		t.Errorf("money must add: cost=%v avoidable=%v, want 10.5/1", a.CostUSD, a.AvoidableUSD)
+	if math.Abs(a.CostUSD-10.5) > 1e-9 || math.Abs(a.RebilledUSD-1) > 1e-9 {
+		t.Errorf("money must add: cost=%v re-billed=%v, want 10.5/1", a.CostUSD, a.RebilledUSD)
 	}
 	// A point in time, not a quantity. Summing or averaging two timestamps is
 	// meaningless; the session began when its earliest lane began.
@@ -263,15 +263,15 @@ func TestFoldSessionsSumsOnlyTheAdditiveFields(t *testing.T) {
 //
 // This is the property that makes the change safe to ship against a published
 // total: the corpus was already summing every lane, so the grand total, the
-// avoidable total and the avoidable share are identical before and after. Only
+// re-billed total and the re-billed share are identical before and after. Only
 // the median and the p90 move, and they move because they are now percentiles
 // over sessions rather than over files, which is the correction.
 func TestFoldSessionsConservesTheTotals(t *testing.T) {
 	lanes := []costUnit{
-		{ID: "aaaa", CostUSD: 1, AvoidableUSD: 0.5, AvoidableTokens: 10, Breaks: 1, Requests: 2},
-		{ID: "aaaa", CostUSD: 2, AvoidableUSD: 0.5, AvoidableTokens: 20, Breaks: 1, Requests: 3},
-		{ID: "aaaa", CostUSD: 3, AvoidableUSD: 1.0, AvoidableTokens: 30, Breaks: 0, Requests: 4},
-		{ID: "bbbb", CostUSD: 4, AvoidableUSD: 0.0, AvoidableTokens: 0, Breaks: 2, Requests: 5},
+		{ID: "aaaa", CostUSD: 1, RebilledUSD: 0.5, RebilledTokens: 10, Breaks: 1, Requests: 2},
+		{ID: "aaaa", CostUSD: 2, RebilledUSD: 0.5, RebilledTokens: 20, Breaks: 1, Requests: 3},
+		{ID: "aaaa", CostUSD: 3, RebilledUSD: 1.0, RebilledTokens: 30, Breaks: 0, Requests: 4},
+		{ID: "bbbb", CostUSD: 4, RebilledUSD: 0.0, RebilledTokens: 0, Breaks: 2, Requests: 5},
 	}
 	before, after := summarise(lanes), summarise(foldSessions(lanes))
 
@@ -279,16 +279,16 @@ func TestFoldSessionsConservesTheTotals(t *testing.T) {
 		t.Errorf("total moved: %v -> %v. Folding may not add or lose money",
 			before.TotalUSD, after.TotalUSD)
 	}
-	if math.Abs(before.AvoidableUSD-after.AvoidableUSD) > 1e-9 {
-		t.Errorf("avoidable moved: %v -> %v", before.AvoidableUSD, after.AvoidableUSD)
+	if math.Abs(before.RebilledUSD-after.RebilledUSD) > 1e-9 {
+		t.Errorf("re-billed moved: %v -> %v", before.RebilledUSD, after.RebilledUSD)
 	}
-	if before.AvoidableTokens != after.AvoidableTokens {
-		t.Errorf("avoidable tokens moved: %d -> %d", before.AvoidableTokens, after.AvoidableTokens)
+	if before.RebilledTokens != after.RebilledTokens {
+		t.Errorf("re-billed tokens moved: %d -> %d", before.RebilledTokens, after.RebilledTokens)
 	}
-	if math.Abs(before.AvoidableShare-after.AvoidableShare) > 1e-9 {
-		t.Errorf("avoidable share moved: %v -> %v. It is a ratio of two conserved "+
+	if math.Abs(before.RebilledShare-after.RebilledShare) > 1e-9 {
+		t.Errorf("re-billed share moved: %v -> %v. It is a ratio of two conserved "+
 			"sums and must not survive the fold as a different number",
-			before.AvoidableShare, after.AvoidableShare)
+			before.RebilledShare, after.RebilledShare)
 	}
 	if after.Tasks != 2 {
 		t.Errorf("tasks = %d, want 2 sessions", after.Tasks)

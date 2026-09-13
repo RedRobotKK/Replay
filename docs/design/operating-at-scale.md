@@ -42,8 +42,8 @@ against." That was wrong. `cmd/replay/budget.go` is 300 lines, dispatched at
 Step 4 of the money path was already done when this document said it was not.
 
 **And the second correction matters more than the first.** A free,
-build-failing CI gate already ships: `replay cost --max-avoidable-usd`
-(`cmd/replay/costgate.go`) exits non-zero when measured avoidable spend crosses
+build-failing CI gate already ships: `replay cost --max-rebilled-usd`
+(`cmd/replay/costgate.go`) exits non-zero when measured re-billed spend crosses
 a ceiling. So the question is not whether a gate exists. It is what the PAID
 gate can be that the free one is not, and `SPONSORS.md` binds the answer:
 nothing free today ever becomes paid, so `replay gate` must be a demonstrably

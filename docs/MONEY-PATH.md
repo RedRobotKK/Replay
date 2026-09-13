@@ -531,7 +531,7 @@ A distribution measurement over 116 sessions
 ([avoidable concentration](evidence/avoidable-concentration-2026-09-10.md))
 sharpens both sides of the objection above and settles neither.
 
-**Twenty-five fan-out sessions hold 98.8% of all avoidable spend; the ninety-one
+**Twenty-five fan-out sessions hold 98.8% of all re-billed spend; the ninety-one
 single-lane sessions hold 1.2%** — $2.03 in total. So the exposure is not a
 uniform tax on agent work. It is a property of fanning out to sub-agent lanes,
 and it recurs per session rather than sitting still waiting to be fixed once.

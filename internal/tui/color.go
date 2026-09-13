@@ -14,7 +14,7 @@ import (
 // Two rules govern everything here, and both exist because of how this fails.
 //
 // Colour is never the only carrier. Every distinction it draws is already in
-// the words: "avoidable" says what it is, a break count is a number, the
+// the words: "re-billed" says what it is, a break count is a number, the
 // selected row already has a ">" in the gutter. Roughly one man in twelve
 // cannot separate red from green, terminals are themed to taste, and this
 // output gets piped into files where colour does not exist at all. A screen

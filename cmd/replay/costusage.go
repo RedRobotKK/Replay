@@ -47,7 +47,7 @@ import (
 //
 // It is not replay.cost.v2. The two documents answer different questions from
 // different evidence, and a consumer handed this one under the transcript
-// report's version string would read `avoidableUsd: null` as a bug in a report
+// report's version string would read `rebilledUsd: null` as a bug in a report
 // it thought it understood.
 const usageCostSchema = "replay.cost.usage.v1"
 
@@ -62,12 +62,12 @@ type usageRow struct {
 	Model    string  `json:"model"`
 	Requests int     `json:"requests"`
 	CostUSD  float64 `json:"costUsd"`
-	// Breaks, AvoidableUSD and AvoidableTokens are nil when the export could
+	// Breaks, RebilledUSD and RebilledTokens are nil when the export could
 	// not support a sequence. See usageReport.NotMeasuredWhy.
-	Breaks          *int      `json:"breaks"`
-	AvoidableUSD    *float64  `json:"avoidableUsd"`
-	AvoidableTokens *int      `json:"avoidableTokens"`
-	At              time.Time `json:"at"`
+	Breaks         *int      `json:"breaks"`
+	RebilledUSD    *float64  `json:"rebilledUsd"`
+	RebilledTokens *int      `json:"rebilledTokens"`
+	At             time.Time `json:"at"`
 }
 
 // usageReport is the summary of a usage-only run.
@@ -83,10 +83,10 @@ type usageReport struct {
 	MedianUSD float64 `json:"medianUsd"`
 	P90USD    float64 `json:"p90Usd"`
 
-	Breaks          *int     `json:"breaks"`
-	AvoidableUSD    *float64 `json:"avoidableUsd"`
-	AvoidableTokens *int     `json:"avoidableTokens"`
-	AvoidableShare  *float64 `json:"avoidableShare"`
+	Breaks         *int     `json:"breaks"`
+	RebilledUSD    *float64 `json:"rebilledUsd"`
+	RebilledTokens *int     `json:"rebilledTokens"`
+	RebilledShare  *float64 `json:"rebilledShare"`
 
 	// Causes counts only the causes usage and timing settle on their own.
 	// CauseNotMeasured counts the breaks whose cause needs the message
@@ -135,7 +135,7 @@ func priceUsage(e *usage.Export) (usageReport, []usageRow) {
 	var rows []usageRow
 	var costs []float64
 	breaks, deficit, unexplained := 0, 0, 0
-	var avoidable float64
+	var rebilled float64
 
 	for _, g := range e.BySession() {
 		row := usageRow{ID: g.Session}
@@ -144,7 +144,7 @@ func priceUsage(e *usage.Export) (usageReport, []usageRow) {
 		// alternative and it is a second implementation of the same
 		// arithmetic, free to disagree with the summary above it.
 		sBreaks, sDeficit := 0, 0
-		var sAvoidable float64
+		var sRebilled float64
 		// The model column names the model that ran the largest share of the
 		// money, which is the one a routing decision is about. A session is not
 		// one model and this is a label, not a key.
@@ -189,7 +189,7 @@ func priceUsage(e *usage.Export) (usageReport, []usageRow) {
 			sBreaks++
 			sDeficit += d
 			if priced {
-				sAvoidable += float64(d) / 1_000_000 * price.InputPerMTok
+				sRebilled += float64(d) / 1_000_000 * price.InputPerMTok
 			}
 			if cause, ok := cachemodel.ClassifyBreak(prev.ToAnthropic(), u, prev.Model, r.Model, r.At.Sub(prev.At)); ok {
 				rep.Causes[string(cause)]++
@@ -207,12 +207,12 @@ func priceUsage(e *usage.Export) (usageReport, []usageRow) {
 			// Per-row figures only where the report as a whole has them. A row
 			// carrying a break count under a summary that says NOT MEASURED
 			// would be two answers to one question.
-			b, d, a := sBreaks, sDeficit, sAvoidable
-			row.Breaks, row.AvoidableTokens, row.AvoidableUSD = &b, &d, &a
+			b, d, a := sBreaks, sDeficit, sRebilled
+			row.Breaks, row.RebilledTokens, row.RebilledUSD = &b, &d, &a
 		}
 		breaks += sBreaks
 		deficit += sDeficit
-		avoidable += sAvoidable
+		rebilled += sRebilled
 		rows = append(rows, row)
 		costs = append(costs, row.CostUSD)
 		rep.TotalUSD += row.CostUSD
@@ -224,15 +224,15 @@ func priceUsage(e *usage.Export) (usageReport, []usageRow) {
 	rep.P90USD = percentile(costs, 0.9)
 
 	if sequenced {
-		rep.Breaks, rep.AvoidableTokens, rep.CauseNotMeasured = &breaks, &deficit, &unexplained
-		rep.AvoidableUSD = &avoidable
+		rep.Breaks, rep.RebilledTokens, rep.CauseNotMeasured = &breaks, &deficit, &unexplained
+		rep.RebilledUSD = &rebilled
 		// A share over a total of zero is a division, not a measurement. The
-		// avoidable dollars can be measured at nothing while the share of a
+		// re-billed dollars can be measured at nothing while the share of a
 		// nothing total is unknown, and those are two of the three values
 		// ADR-0018 keeps apart.
 		if rep.TotalUSD > 0 {
-			share := avoidable / rep.TotalUSD
-			rep.AvoidableShare = &share
+			share := rebilled / rep.TotalUSD
+			rep.RebilledShare = &share
 		}
 	}
 	return rep, rows
@@ -253,20 +253,20 @@ func renderUsageCost(rep usageReport, rows []usageRow, perTask bool) string {
 	fmt.Fprintf(&b, "  total          %s\n", fxCol(fx, rep.TotalUSD))
 	fmt.Fprintf(&b, "  median task    %s\n", fxCol(fx, rep.MedianUSD))
 	fmt.Fprintf(&b, "  p90 task       %s\n", fxCol(fx, rep.P90USD))
-	if rep.AvoidableUSD != nil {
+	if rep.RebilledUSD != nil {
 		// The share is its own measurement and can be absent while the dollars
 		// are present: a corpus that priced at zero has no denominator, and
 		// "(0% of the total)" over it would be a ratio nobody took.
 		share := "share NOT MEASURED: nothing priced to be a share of"
-		if rep.AvoidableShare != nil {
-			share = fmt.Sprintf("(%.0f%% of the total)", *rep.AvoidableShare*100)
+		if rep.RebilledShare != nil {
+			share = fmt.Sprintf("(%.0f%% of the total)", *rep.RebilledShare*100)
 		}
-		fmt.Fprintf(&b, "  avoidable      %s  %s\n", fxCol(fx, *rep.AvoidableUSD), share)
+		fmt.Fprintf(&b, "  re-billed      %s  %s\n", fxCol(fx, *rep.RebilledUSD), share)
 		fmt.Fprintf(&b, "                 %s tokens re-billed across %d cache break(s)\n",
-			shortTokens(*rep.AvoidableTokens), *rep.Breaks)
+			shortTokens(*rep.RebilledTokens), *rep.Breaks)
 	} else {
 		const indent = "                 "
-		fmt.Fprintf(&b, "  avoidable      NOT MEASURED\n")
+		fmt.Fprintf(&b, "  re-billed      NOT MEASURED\n")
 		// wrapAt indents continuation lines only, so the first one is indented
 		// here. Without it the reason starts in column zero, under a block
 		// where every other value is in a column, and reads as a new section.
@@ -310,11 +310,11 @@ func renderUsageCost(rep usageReport, rows []usageRow, perTask bool) string {
 		sorted := append([]usageRow(nil), rows...)
 		sort.Slice(sorted, func(i, j int) bool { return sorted[i].CostUSD > sorted[j].CostUSD })
 		fmt.Fprintf(&b, "\n  %-16s %-24s %8s %10s %10s %9s\n",
-			"session", "model", "requests", "cost", "avoidable", "breaks")
+			"session", "model", "requests", "cost", "re-billed", "breaks")
 		for _, r := range sorted {
 			avoid, brk := "NOT MEAS.", "NOT MEAS."
-			if r.AvoidableUSD != nil {
-				avoid = fmt.Sprintf("$%.2f", *r.AvoidableUSD)
+			if r.RebilledUSD != nil {
+				avoid = fmt.Sprintf("$%.2f", *r.RebilledUSD)
 				brk = fmt.Sprintf("%d", *r.Breaks)
 			}
 			fmt.Fprintf(&b, "  %-16s %-24s %8d %10s %10s %9s\n",
@@ -324,11 +324,11 @@ func renderUsageCost(rep usageReport, rows []usageRow, perTask bool) string {
 	return b.String()
 }
 
-// checkUsageCeiling enforces --max-avoidable-usd over a usage-only report.
+// checkUsageCeiling enforces --max-rebilled-usd over a usage-only report.
 //
-// The nothing-measured case is the reason this is not checkAvoidableCeiling
+// The nothing-measured case is the reason this is not checkRebilledCeiling
 // with a different argument. That one refuses when nothing was PRICED. Here a
-// corpus can be fully priced and still have no avoidable figure at all,
+// corpus can be fully priced and still have no re-billed figure at all,
 // because the export could not support a sequence — and that is the input a
 // regulated operator is most likely to hand it. A gate that treated the
 // absent figure as zero would report a clean bill of health nobody earned,
@@ -338,25 +338,25 @@ func checkUsageCeiling(ceiling float64, rep usageReport, stdout io.Writer) error
 		return nil // not asked for
 	}
 	if ceiling < 0 {
-		return fmt.Errorf("--max-avoidable-usd needs a positive ceiling, got %.2f", ceiling)
+		return fmt.Errorf("--max-rebilled-usd needs a positive ceiling, got %.2f", ceiling)
 	}
 	if rep.Sessions == 0 {
-		_, _ = fmt.Fprintf(stdout, "\n  GATE: NOT MEASURED. Nothing here priced, so there is no avoidable spend to\n"+
+		_, _ = fmt.Fprintf(stdout, "\n  GATE: NOT MEASURED. Nothing here priced, so there is no re-billed spend to\n"+
 			"  compare against $%.2f.\n", ceiling)
 		return fmt.Errorf("refusing to pass a gate over 0 priced sessions: NOT MEASURED")
 	}
-	if rep.AvoidableUSD == nil {
+	if rep.RebilledUSD == nil {
 		_, _ = fmt.Fprintf(stdout, "\n  GATE: NOT MEASURED. This export was priced, but it cannot support a cache\n"+
-			"  break figure, so there is no avoidable spend to compare against $%.2f.\n  %s\n",
+			"  break figure, so there is no re-billed spend to compare against $%.2f.\n  %s\n",
 			ceiling, rep.NotMeasuredWhy)
-		return fmt.Errorf("refusing to pass a gate over an avoidable figure that is NOT MEASURED")
+		return fmt.Errorf("refusing to pass a gate over an re-billed figure that is NOT MEASURED")
 	}
-	if *rep.AvoidableUSD > ceiling {
-		_, _ = fmt.Fprintf(stdout, "\n  GATE: avoidable spend $%.2f is over the $%.2f ceiling, across %d session(s).\n",
-			*rep.AvoidableUSD, ceiling, rep.Sessions)
-		return fmt.Errorf("%w: $%.2f over $%.2f", errGate, *rep.AvoidableUSD, ceiling)
+	if *rep.RebilledUSD > ceiling {
+		_, _ = fmt.Fprintf(stdout, "\n  GATE: re-billed spend $%.2f is over the $%.2f ceiling, across %d session(s).\n",
+			*rep.RebilledUSD, ceiling, rep.Sessions)
+		return fmt.Errorf("%w: $%.2f over $%.2f", errGate, *rep.RebilledUSD, ceiling)
 	}
-	_, _ = fmt.Fprintf(stdout, "\n  GATE: avoidable spend $%.2f is within the $%.2f ceiling.\n", *rep.AvoidableUSD, ceiling)
+	_, _ = fmt.Fprintf(stdout, "\n  GATE: re-billed spend $%.2f is within the $%.2f ceiling.\n", *rep.RebilledUSD, ceiling)
 	return nil
 }
 
@@ -416,7 +416,7 @@ func runCostUsage(path string, asJSON, perTask bool, ceiling float64, stdout io.
 func usageOnlyRefusals(share bool, png, compare, contribute string, perLane bool, rest []string) error {
 	switch {
 	case share:
-		return fmt.Errorf("--share publishes the avoidable rate as a headline, and a usage export may not " +
+		return fmt.Errorf("--share publishes the re-billed rate as a headline, and a usage export may not " +
 			"support one. --usage will not build a card on a figure it might have to mark NOT MEASURED")
 	case png != "":
 		return fmt.Errorf("--png writes the share card, which --usage refuses to build; see --share")

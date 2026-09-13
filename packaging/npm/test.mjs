@@ -34,3 +34,52 @@ test('an unreleased package version is refused rather than fetching a release th
   assert.throws(() => releaseVersion('0.0.0-set-by-release-workflow'));
   assert.equal(releaseVersion('1.0.0'), '1.0.0');
 });
+
+/**
+ * The launcher's fetch fallback (PRD E6). Run from a copy of this package
+ * carrying a released version, with no platform package installed and
+ * `fetch` replaced by a stub that records the URL and throws, so nothing
+ * in these tests reaches the network.
+ */
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, cpSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const HERE = new URL('.', import.meta.url).pathname;
+
+function runLauncher(env) {
+  const dir = mkdtempSync(join(tmpdir(), 'replay-doctor-npm-'));
+  try {
+    cpSync(join(HERE, 'bin'), join(dir, 'bin'), { recursive: true });
+    cpSync(join(HERE, 'lib'), join(dir, 'lib'), { recursive: true });
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'replay-doctor', version: '1.0.0', type: 'module' }));
+    writeFileSync(join(dir, 'stub-fetch.mjs'), "globalThis.fetch = async (url) => { throw new Error('stub fetch: ' + url); };\n");
+    return spawnSync(process.execPath, ['--import', pathToFileURL(join(dir, 'stub-fetch.mjs')).href, join(dir, 'bin', 'replay-doctor.js'), 'version'], {
+      env: { PATH: process.env.PATH, HOME: dir, REPLAY_DOCTOR_CACHE: join(dir, 'cache'), ...env },
+      encoding: 'utf8',
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('without REPLAY_DOCTOR_ALLOW_FETCH=1 the launcher refuses, names the platform package and the routes, and makes no network call', () => {
+  for (const env of [{}, { REPLAY_DOCTOR_ALLOW_FETCH: '0' }, { REPLAY_DOCTOR_ALLOW_FETCH: 'true' }]) {
+    const r = runLauncher(env);
+    const label = JSON.stringify(env);
+    assert.notEqual(r.status, 0, `${label}: exited 0`);
+    assert.ok(!r.stderr.includes('stub fetch'), `${label}: a network call was attempted: ${r.stderr}`);
+    assert.match(r.stderr, /REPLAY_DOCTOR_ALLOW_FETCH=1/, `${label}: ${r.stderr}`);
+    assert.ok(r.stderr.includes(`@replay-doctor/${process.platform}-${process.arch}`), `${label}: ${r.stderr}`);
+    assert.match(r.stderr, /go install github\.com\/RedRobotKK\/Replay\/cmd\/replay@latest/, `${label}: ${r.stderr}`);
+    assert.match(r.stderr, /https:\/\/github\.com\/RedRobotKK\/Replay\/releases/, `${label}: ${r.stderr}`);
+  }
+});
+
+test('with REPLAY_DOCTOR_ALLOW_FETCH=1 the launcher fetches this version\'s tarball from the release', () => {
+  const r = runLauncher({ REPLAY_DOCTOR_ALLOW_FETCH: '1' });
+  const t = target();
+  assert.ok(r.stderr.includes(`stub fetch: ${assetURL('1.0.0', archiveName('1.0.0', t))}`), r.stderr);
+});

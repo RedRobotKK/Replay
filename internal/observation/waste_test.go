@@ -19,8 +19,8 @@ import (
 func TestWasteFieldsDoNotChangeAnExistingDigest(t *testing.T) {
 	before := Corpus{
 		Schema: CorpusSchema, TakenAt: "2026-09-10T04:00:00Z",
-		Tasks: 116, TotalUSD: 3424.33, AvoidableUSD: 162.82,
-		AvoidableShare: 0.0475, MedianTaskUSD: 1.87,
+		Tasks: 116, TotalUSD: 3424.33, RebilledUSD: 162.82,
+		RebilledShare: 0.0475, MedianTaskUSD: 1.87,
 		PricedAt: "2026-09-07", RulesVersion: "anthropic-2026-09-01",
 		SourceTag: "a3f19c02b7e4d581", TagBasis: "local",
 	}.Digested()
