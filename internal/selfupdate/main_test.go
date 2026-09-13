@@ -10,13 +10,13 @@ import (
 //
 // WHY THIS EXISTS. On 2026-09-13 the v0.6.0 release build failed and CI had
 // been green the entire time. Fetch gained a Sigstore check that afternoon;
-// the tests written for it all pinned lookCosign, but two OLDER tests,
+// the tests written for it all pinned LookCosign, but two OLDER tests,
 // TestFetchRefusesASymlinkMember and TestFetchReturnsTheVerifiedBinary, were
 // written before Fetch called cosign at all and inherited whatever the host
 // had. Their httptest server serves the archive and checksums.txt and nothing
 // else, so:
 //
-//   - no cosign on the machine: lookCosign fails, the check returns
+//   - no cosign on the machine: LookCosign fails, the check returns
 //     SignatureUnchecked with no error, both tests pass
 //   - cosign on the machine: the check asks for checksums.txt.pem, does not
 //     get it, and refuses the whole download, so both tests fail
@@ -33,25 +33,25 @@ import (
 // this is the neighbouring case, a check whose result is not about its subject.
 //
 // So the default here is "no cosign", pinned, and a test that wants it present
-// says so by assigning lookCosign itself, which is what every test in
+// says so by assigning LookCosign itself, which is what every test in
 // verify_test.go already does.
 func TestMain(m *testing.M) {
-	productionLookCosign = lookCosign
-	lookCosign = func() (string, error) {
-		return "", errors.New("cosign is pinned absent by TestMain; a test that needs it present must assign lookCosign itself")
+	productionLookCosign = LookCosign
+	LookCosign = func() (string, error) {
+		return "", errors.New("cosign is pinned absent by TestMain; a test that needs it present must assign LookCosign itself")
 	}
 	os.Exit(m.Run())
 }
 
-// productionLookCosign holds what lookCosign was before TestMain replaced it,
+// productionLookCosign holds what LookCosign was before TestMain replaced it,
 // so the replacement cannot hide a broken production value. Without this, the
-// pin above would make the package's tests pass even if lookCosign shipped
+// pin above would make the package's tests pass even if LookCosign shipped
 // pointing at nothing.
 var productionLookCosign func() (string, error)
 
 // SU1: the production seam is intact behind the pin.
 //
-// TestMain replaces lookCosign for every other test in this package. That is
+// TestMain replaces LookCosign for every other test in this package. That is
 // the right default and it is also a blindfold: with the seam pinned, nothing
 // else here observes what production actually does. This is the one test that
 // looks at the real one.
@@ -69,7 +69,7 @@ var productionLookCosign func() (string, error)
 // returned names something that exists.
 func TestSU1_TheProductionCosignLookupIsIntact(t *testing.T) {
 	if productionLookCosign == nil {
-		t.Fatal("TestMain did not capture the production lookCosign")
+		t.Fatal("TestMain did not capture the production LookCosign")
 	}
 	path, err := productionLookCosign()
 
@@ -91,13 +91,13 @@ func TestSU1_TheProductionCosignLookupIsIntact(t *testing.T) {
 
 // SU2: the pin is actually in force, so the tests below it are hermetic.
 //
-// If TestMain stopped running, or something restored lookCosign globally, the
+// If TestMain stopped running, or something restored LookCosign globally, the
 // package would silently go back to reading the machine and this whole file
 // would be decoration. The failure that prompted it looked exactly like
 // nothing being wrong.
 func TestSU2_CosignIsPinnedAbsentForThisPackage(t *testing.T) {
-	if _, err := lookCosign(); err == nil {
-		t.Fatal("lookCosign reports cosign present, so this package's tests are " +
+	if _, err := LookCosign(); err == nil {
+		t.Fatal("LookCosign reports cosign present, so this package's tests are " +
 			"reading the machine again and their result is about the runner, " +
 			"not about the code")
 	}

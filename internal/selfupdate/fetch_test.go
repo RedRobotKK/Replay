@@ -295,9 +295,9 @@ func TestApplyReplacesAtomicallyAndLeavesItExecutable(t *testing.T) {
 // proving only that somebody signed something.
 
 func TestSIG1_NoCosignMeansChecksumsOnlyAndSaysSo(t *testing.T) {
-	restore := lookCosign
-	t.Cleanup(func() { lookCosign = restore })
-	lookCosign = func() (string, error) { return "", errors.New("not found") }
+	restore := LookCosign
+	t.Cleanup(func() { LookCosign = restore })
+	LookCosign = func() (string, error) { return "", errors.New("not found") }
 
 	srv, base := signedRelease(t, true)
 	defer srv.Close()
@@ -327,9 +327,9 @@ func TestSIG1_NoCosignMeansChecksumsOnlyAndSaysSo(t *testing.T) {
 }
 
 func TestSIG2_CosignPresentAndNoSignaturePublishedRefuses(t *testing.T) {
-	restoreLook, restoreRun := lookCosign, runCosign
-	t.Cleanup(func() { lookCosign, runCosign = restoreLook, restoreRun })
-	lookCosign = func() (string, error) { return "/usr/bin/cosign", nil }
+	restoreLook, restoreRun := LookCosign, runCosign
+	t.Cleanup(func() { LookCosign, runCosign = restoreLook, restoreRun })
+	LookCosign = func() (string, error) { return "/usr/bin/cosign", nil }
 	// Verification SUCCEEDS if it is reached. Without this the test passed for
 	// the wrong reason: neutralising the missing-signature branch let the real
 	// cosign run, fail because no such binary exists, and return the OTHER
@@ -355,9 +355,9 @@ func TestSIG2_CosignPresentAndNoSignaturePublishedRefuses(t *testing.T) {
 }
 
 func TestSIG3_AFailedVerificationInstallsNothing(t *testing.T) {
-	restoreLook, restoreRun := lookCosign, runCosign
-	t.Cleanup(func() { lookCosign, runCosign = restoreLook, restoreRun })
-	lookCosign = func() (string, error) { return "/usr/bin/cosign", nil }
+	restoreLook, restoreRun := LookCosign, runCosign
+	t.Cleanup(func() { LookCosign, runCosign = restoreLook, restoreRun })
+	LookCosign = func() (string, error) { return "/usr/bin/cosign", nil }
 	runCosign = func(_ context.Context, _ string, _ ...string) error {
 		return errors.New("signature did not verify")
 	}
@@ -377,9 +377,9 @@ func TestSIG3_AFailedVerificationInstallsNothing(t *testing.T) {
 }
 
 func TestSIG4_TheIdentityIsCheckedAgainstThisRepoAndCIsIssuer(t *testing.T) {
-	restoreLook, restoreRun := lookCosign, runCosign
-	t.Cleanup(func() { lookCosign, runCosign = restoreLook, restoreRun })
-	lookCosign = func() (string, error) { return "/usr/bin/cosign", nil }
+	restoreLook, restoreRun := LookCosign, runCosign
+	t.Cleanup(func() { LookCosign, runCosign = restoreLook, restoreRun })
+	LookCosign = func() (string, error) { return "/usr/bin/cosign", nil }
 
 	var seen []string
 	runCosign = func(_ context.Context, _ string, args ...string) error {
@@ -499,9 +499,9 @@ func TestSIG5_AFailureToStageTheSignatureInstallsNothing(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			rl, rr, rd, rw := lookCosign, runCosign, makeVerifyDir, writeVerifyFile
-			t.Cleanup(func() { lookCosign, runCosign, makeVerifyDir, writeVerifyFile = rl, rr, rd, rw })
-			lookCosign = func() (string, error) { return "/usr/bin/cosign", nil }
+			rl, rr, rd, rw := LookCosign, runCosign, makeVerifyDir, writeVerifyFile
+			t.Cleanup(func() { LookCosign, runCosign, makeVerifyDir, writeVerifyFile = rl, rr, rd, rw })
+			LookCosign = func() (string, error) { return "/usr/bin/cosign", nil }
 			runCosign = func(_ context.Context, _ string, _ ...string) error { return nil }
 			tc.damage()
 
