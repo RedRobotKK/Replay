@@ -107,12 +107,28 @@ Each line is a gate. A release cannot claim 1.0 with any of them unmet, and
 
 ### Platform
 
-- [ ] **Windows is either supported or the claim is removed from CI.** As of
-      2026-09-06 it is declared unsupported in the README, and the job remains in
-      the matrix as a non-blocking signal of how far away support is. Fourteen
-      tests fail, and the ones that matter assert Unix file-mode semantics that
-      guard the ledger and the masking vault. A Windows binary that runs while
-      not keeping those promises is worse than no Windows binary.
+- [x] **Windows is either supported or the claim is removed from CI.** Closed
+      2026-09-13, and every factual claim in the line this replaces was stale.
+      The fourteen failures were fixed on 2026-09-10 and the job has been green
+      and blocking since, which turned out to be the defect rather than the
+      progress: Windows passes because the promise is switched off there.
+      `internal/ownerdir` reports 100% statement coverage on ubuntu and 40% on
+      windows, `modeIsChecked()` returns false so `tighten` never chmods or
+      re-stats, and twenty-two tests across the ledger, the vault, the consent
+      gate and the contributor secret skip with "Unix permission bits". A
+      blocking green check whose greenness comes from disabling what it checks
+      is what ADR-0014 exists to forbid.
+      **The binary now refuses on Windows**, so "unsupported" is something the
+      program does rather than a line in a README, and two tests hold it: the
+      refusal fires, and `run()` still consults it. The route that made it
+      reachable is closed too, because install.sh refused Windows while offering
+      a release archive that does not exist and a `go install` that works.
+      The port is not refused on difficulty. An owner-only DACL needs no new
+      dependency, since `syscall` and `unsafe` are already on the import
+      allowlist. It is refused on evidence: `guard reachability` and
+      `frozen mutants` both run on ubuntu only, so every refusal in an ACL layer
+      would ship unmutated. **A Windows leg on those two jobs is the condition
+      that reopens this**, and it is the only thing that should.
 
 ### Measurement
 
