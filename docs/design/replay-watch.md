@@ -117,13 +117,23 @@ wire fields, and `TestWA15` fails if either moves. It is posted at the end of
 every session, so its size is a standing cost on somebody else's network and a
 claim in this file; changing it means changing both in one commit.
 
-## Not built
+## Not built, and deliberately not built yet
 
-2. The receiving endpoint, and the aggregation that turns records into a week.
-3. The emitter: a hook the operator installs, which is the only piece that makes
-   a network call and the only piece the consent file above governs.
+Step 1 above is the record. The other two are:
 
-Nothing here is wired to a command. `replay` today still sends nothing.
+1. The receiving endpoint, and the aggregation that turns records into a week.
+2. The emitter: the only piece that makes a network call, and the only piece
+   the consent file above governs.
+
+**Neither ships before a forensics week is sold.** That is a build-order
+decision taken on 2026-09-12, not a backlog accident. Watch is a hosted service
+standing in front of a business that has sold nothing, and the honest reading of
+"zero non-maintainer corpus submissions" is not that the ask is too heavy: it is
+that the ask has not been made to a single person face to face. A hosted product
+with no customer is the expensive way to find that out.
+
+Until then `replay` sends nothing, the plugin sends nothing, and the SessionEnd
+hook prints one line and stops.
 
 ---
 

@@ -555,10 +555,26 @@ own numbers.
 
 ## About the author
 
+<a href="https://github.com/saitodaniel">
+  <img src="https://github.com/saitodaniel.png?size=160" alt="Daniel Saito" width="120" align="left" hspace="20" vspace="6">
+</a>
+
 Replay Doctor is written and maintained by **Daniel Saito**, founder of
 [Red Robot K.K.](https://redrobot.jp), Tokyo. One person, one machine, one
 account: every figure this project publishes was measured on that machine, and
 every report says so rather than implying a population it does not have.
+
+[LinkedIn](https://www.linkedin.com/in/danielsaito/) ·
+[X @redrobotfdn](https://x.com/redrobotfdn) ·
+[GitHub](https://github.com/saitodaniel) ·
+[Hire me on Upwork](https://www.upwork.com/freelancers/~0136f9f71d1451b58d) ·
+[daniel@redrobot.jp](mailto:daniel@redrobot.jp)
+
+**[Support the work](https://buymeacoffee.com/saitodaniel)** ·
+[GitHub Sponsors](https://github.com/sponsors/saitodaniel) ·
+[What it pays for](FUNDING.md)
+
+<br clear="left">
 
 The habits in this repository come from that constraint. A single maintainer
 cannot review his own diff twice, so the checks do it instead: tests are

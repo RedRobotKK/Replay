@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -421,9 +422,16 @@ func TestWA14_WritingARecordRefusesToReplaceOrRedirect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Errorf("the record is mode %o. It is a record of what one account spent, and the "+
-			"default umask would publish it to everyone with a login", perm)
+	// Mode bits, where mode bits mean something. On Windows os.Stat synthesises
+	// a mode from the read-only attribute, so asserting 0600 there would be
+	// checking a number that does not mean what it looks like. That is the same
+	// reasoning internal/ownerdir uses to decline the check on Windows, and the
+	// same reasoning the binary uses to refuse to run there at all.
+	if runtime.GOOS != "windows" {
+		if perm := info.Mode().Perm(); perm != 0o600 {
+			t.Errorf("the record is mode %o. It is a record of what one account spent, and "+
+				"the default umask would publish it to everyone with a login", perm)
+		}
 	}
 	if _, err := WriteWatch(dir, w); err == nil {
 		t.Error("writing the same record twice replaced the first, so a session that was " +
@@ -435,7 +443,10 @@ func TestWA14_WritingARecordRefusesToReplaceOrRedirect(t *testing.T) {
 	other := t.TempDir()
 	target := filepath.Join(t.TempDir(), "elsewhere.json")
 	if err := os.Symlink(target, filepath.Join(other, filepath.Base(path))); err != nil {
-		t.Skipf("symlinks unavailable here: %v", err)
+		// Windows needs Developer Mode or an elevated process to create one.
+		// Skipping is honest here: there is nothing to test if the platform
+		// cannot build the situation being tested.
+		t.Skipf("symlinks unavailable on %s here: %v", runtime.GOOS, err)
 	}
 	_, symErr := WriteWatch(other, w)
 	if symErr == nil {
@@ -556,5 +567,40 @@ func TestWA16_TheProvenanceFieldsHaveAShape(t *testing.T) {
 					"record is lost with no error on the machine that made it.", f.field, v)
 			}
 		}
+	}
+}
+
+// WA17: a path WriteWatch cannot inspect refuses rather than overwrites.
+//
+// `guard reachability` reported this branch UNREACHED on 2026-09-13 and it was
+// right: every other test either finds nothing there or finds a file, and
+// neither makes Lstat fail for a third reason. The branch matters because its
+// two neighbours both decide "may I write here", and a decision that cannot be
+// tested is a decision that will be wrong the first time it is taken.
+//
+// The situation is built rather than mocked: a path whose parent is a regular
+// file makes Lstat fail with ENOTDIR, which is neither "it is there" nor "it is
+// not there" (ADR-0018 again, in a syscall).
+func TestWA17_APathThatCannotBeInspectedIsNotWrittenThrough(t *testing.T) {
+	dir := t.TempDir()
+	notADir := filepath.Join(dir, "regular-file")
+	if err := os.WriteFile(notADir, []byte("I am not a directory\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	w, err := BuildWatch(consent.Decision{State: consent.Granted}, watchFixture())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = WriteWatch(notADir, w)
+	if err == nil {
+		t.Fatal("WriteWatch accepted a directory that is a regular file")
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		t.Errorf("an uninspectable path was reported as an absent one, so the caller "+
+			"cannot tell 'nothing is there' from 'I could not look': %v", err)
+	}
+	if !strings.Contains(err.Error(), "cannot inspect") {
+		t.Errorf("the refusal does not say the path could not be inspected, so the "+
+			"operator is told the wrong thing to go and fix: %v", err)
 	}
 }
