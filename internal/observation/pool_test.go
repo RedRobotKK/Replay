@@ -12,15 +12,15 @@ import (
 // there is no way to produce a pooled number this repository could not hand
 // somebody the parts of. Every test below is a way that could stop being true.
 
-func corpusFor(tag, takenAt string, tasks int, total, avoidable, median float64) Corpus {
+func corpusFor(tag, takenAt string, tasks int, total, rebilled, median float64) Corpus {
 	share := 0.0
 	if total > 0 {
-		share = avoidable / total
+		share = rebilled / total
 	}
 	return Corpus{
 		Schema: CorpusSchema, TakenAt: takenAt,
-		Tasks: tasks, TotalUSD: total, AvoidableUSD: avoidable,
-		AvoidableShare: share, MedianTaskUSD: median,
+		Tasks: tasks, TotalUSD: total, RebilledUSD: rebilled,
+		RebilledShare: share, MedianTaskUSD: median,
 		PricedAt: "2026-09-07", RulesVersion: "anthropic-2026-09-01",
 		SourceTag: tag, TagBasis: BasisLocal,
 	}.Digested()
@@ -47,7 +47,7 @@ func TestPL1_TheTotalIsItsPartsAndThePartsAreNamed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Submissions != 2 || got.Tasks != 120 || got.TotalUSD != 1500 || got.AvoidableUSD != 75 {
+	if got.Submissions != 2 || got.Tasks != 120 || got.TotalUSD != 1500 || got.RebilledUSD != 75 {
 		t.Fatalf("the pooled figures do not match the roster: %+v", got)
 	}
 	var sum float64
@@ -99,7 +99,7 @@ func TestPL3_TheSameSubmissionTwiceIsRefused(t *testing.T) {
 // that machine's money twice.
 //
 // What makes it dangerous is that the result looks fine. The total rises, the
-// task count rises with it, and the avoidable share — the one figure a reader
+// task count rises with it, and the re-billed share — the one figure a reader
 // checks — barely moves, because numerator and denominator inflate together.
 //
 // PASS: the later submission replaces the earlier; the total is Tuesday's, not
@@ -187,7 +187,7 @@ func TestPL6_AnAmbiguousSupersessionIsRefused(t *testing.T) {
 // PL7: the pooled share is of the pooled money, not the mean of shares.
 //
 // The fixture is chosen so the two answers differ. A 10-task corpus at a 50%
-// avoidable rate and a 1,000-task corpus at 1%: the mean of the shares is
+// re-billed rate and a 1,000-task corpus at 1%: the mean of the shares is
 // 25.5%, and the share of the pooled money is 1.5%. Publishing the first would
 // let two tiny contributions move a population figure further than all the real
 // spend in the pool.
@@ -201,11 +201,11 @@ func TestPL7_TheShareIsOfPooledMoneyNotAMeanOfShares(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := 150.0 / 10100.0
-	if diff := got.AvoidableShare - want; diff > 1e-9 || diff < -1e-9 {
-		t.Errorf("pooled share is %.4f, want %.4f", got.AvoidableShare, want)
+	if diff := got.RebilledShare - want; diff > 1e-9 || diff < -1e-9 {
+		t.Errorf("pooled share is %.4f, want %.4f", got.RebilledShare, want)
 	}
 	meanOfShares := (0.50 + 0.01) / 2
-	if diff := got.AvoidableShare - meanOfShares; diff < 1e-6 && diff > -1e-6 {
+	if diff := got.RebilledShare - meanOfShares; diff < 1e-6 && diff > -1e-6 {
 		t.Error("the pooled share equals the mean of the submissions' shares, which weights " +
 			"a ten-task corpus like a thousand-task one")
 	}
@@ -271,7 +271,7 @@ func TestPL9_ATamperedSubmissionIsRefused(t *testing.T) {
 
 // PL10: corpora scored under different caching rules are not addable.
 //
-// Avoidable spend means a different quantity under each rules version, so the
+// Re-billed spend means a different quantity under each rules version, so the
 // sum is of nothing. The price-table date is treated differently on purpose:
 // these totals are dollars and that table is the display-currency reference, so
 // a spread of dates is disclosed rather than refused.

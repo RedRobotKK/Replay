@@ -114,7 +114,7 @@ renders it nowhere: grep the tree and that field appears twice, both inside the
 struct declaration. And nothing in this repository establishes that Claude Code
 sends either `context_window` or `prompt_cache` at all. There is no evidence
 file for the status line input schema, and every test fixture in
-`cmd/replay/statusline_test.go` was written here. **The whole avoidable-spend
+`cmd/replay/statusline_test.go` was written here. **The whole re-billed-spend
 figure rests on a payload shape this project asserted and never captured.** That
 is a checkable question rather than an accusation, and it is question 1 below.
 
@@ -387,7 +387,7 @@ Each of these has a checkable answer. None is a matter of preference.
 
 ### 1. Does Claude Code actually send `prompt_cache` and `context_window` to a status line?
 
-Everything in option B, and the credibility of the avoidable-spend figure
+Everything in option B, and the credibility of the re-billed-spend figure
 already shipped, rests on it. There is no evidence file, and every fixture in
 `cmd/replay/statusline_test.go` was written by this project.
 
@@ -395,7 +395,7 @@ already shipped, rests on it. There is no evidence file, and every fixture in
 one session that includes a cache miss, read the file. One session settles it.
 
 **If the answer is no**, option B collapses to whatever the client does send,
-`cmd/replay/statusline.go:36` is dead code, and the shipped avoidable figure
+`cmd/replay/statusline.go:36` is dead code, and the shipped re-billed figure
 needs a retraction note in the same style as [the lane isolation
 evidence](../evidence/lane-isolation-2026-09-06.md).
 

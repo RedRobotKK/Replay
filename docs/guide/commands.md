@@ -116,10 +116,10 @@ shown agent lanes and believed they were being shown work they did. This reposit
 retracted the same conflation once, in a published figure of "1363 sessions" that was a file count.
 
 Rows are now sessions. A session row sums its lanes, and which fields may be summed was decided one
-at a time: `requests`, `breaks`, `avoidableTokens`, `costUsd` and `avoidableUsd` are counts and
+at a time: `requests`, `breaks`, `rebilledTokens`, `costUsd` and `rebilledUsd` are counts and
 amounts within a lane, so they add; `at` is a point in time, so the session takes its *earliest*
 lane; `model` is a category, so the row names the model that ran the largest share of the money.
-Nothing that is a rate or a percentile is ever added — `avoidableShare`, the median and the p90 are
+Nothing that is a rate or a percentile is ever added — `rebilledShare`, the median and the p90 are
 derived from the finished rows. The grand total is identical either way; only the row a figure
 appears on changes.
 
@@ -146,11 +146,11 @@ than an invented default. `replay corpus` takes the same default for the same re
 
 There is deliberately no mean. One very long session drags an average somewhere no real task lives,
 so it reports the median and the p90, which is the spread you need before you can price a feature.
-The avoidable figure prices tokens the provider re-billed after a cache break: money already spent
+The re-billed figure prices tokens the provider re-billed after a cache break: money already spent
 twice, not a projection of what a different layout might save. Sessions whose model is not in the
 price table are excluded and counted, never treated as free.
 
-**Avoidable is stated in tokens as well as dollars, and the report says who the dollars are for.**
+**Re-billed is stated in tokens as well as dollars, and the report says who the dollars are for.**
 Most people running this hold a flat seat — Claude Pro or Max, Copilot, Cursor — where a broken cache
 costs no money at all, so a dollar-only finding is addressed to a minority and reads to everyone else
 as a number that does not apply. The token figure applies to all of them: a re-billed token is context
@@ -181,7 +181,7 @@ more than the work it saves.
 replay cost ~/.claude/projects/ --share
 ```
 
-It carries the avoidable rate, the median and p90 task cost, the session count and the break
+It carries the re-billed rate, the median and p90 task cost, the session count and the break
 count — and deliberately not the total. A total tells a reader your monthly burn and lets them infer team
 size; it is also the least comparable number in the set, because $3,000 means nothing without
 knowing how many engineers spent it. A rate reads the same from a solo developer and a team of
@@ -217,7 +217,7 @@ card that worked, and the next thing that happens to it is being posted.
 It carries what the text card carries — the rate, the row count and its noun, the cache breaks, the
 median and the p90 — plus one figure the text card does not: the tokens re-billed in the single
 worst session, which design b uses as its headline. That is a peak, not a corpus sum, deliberately.
-The corpus sum divided by the avoidable rate printed beside it would reconstruct an
+The corpus sum divided by the re-billed rate printed beside it would reconstruct an
 order-of-magnitude spend total, which is the one number the share card refuses to carry; a peak
 divides into nothing, because a reader cannot know how many sessions produced it.
 
@@ -249,7 +249,7 @@ shown differently, and a test renders both from one set of figures and asserts i
 
 **A card carries an absolute or the rate, never both.** That is the constraint the rekt register
 runs into, because it leads with a large exact number and the measured card leads with a
-percentage. A token total divided by the avoidable rate printed beside it reconstructs an
+percentage. A token total divided by the re-billed rate printed beside it reconstructs an
 order-of-magnitude spend total; neither half discloses it alone. So design **b** carries the peak
 session's re-billed tokens and no percentage, and design **c** carries the rate in the measured
 register and drops it entirely in the rekt one, where the absolute has moved into the headline.
@@ -264,7 +264,7 @@ would be a fabrication with a real figure in it.
 Both registers handle a measured zero. A card saying "tokens I paid for twice" in the largest type
 on the page, over a corpus where nothing was re-billed, is the card lying about its own figure.
 
-The install line on the card is `curl -fsSL https://redrobot.jp/c/<design> | sh` — no query string,
+The install line on the card is `curl -fsSL https://replay.doctor/<design> | sh` — no query string,
 no quotes, no shell metacharacter but the pipe. The earlier form carried `?src=card&v=b`, which zsh
 globs on the bare `?` and aborts with "no matches found" before curl runs, so it had to be quoted;
 quoting fixes the shell and breaks the human, because people retype this from a photograph of a
@@ -272,7 +272,7 @@ phone screen. Attribution moved into the path, which needs no protecting. It is 
 cap height, which is about 11px once a 1200px card is rendered at 375px in a feed: readable without
 tapping, which the 21px it started at was not.
 
-A plain `replay cost` run also names the tip jar under the figures when the avoidable amount is over
+A plain `replay cost` run also names the tip jar under the figures when the re-billed amount is over
 $5 — at the one moment the tool has just shown you money you already spent twice. It prints a line;
 it never opens a browser.
 
@@ -319,7 +319,7 @@ The file is one JSON document:
 | `session` | yes, per record | refused, by record index. The session is the unit of the report and a record that cannot be placed cannot be counted |
 | `model` | yes, per record | refused. It is the key into the price table, and it is how a model change is told apart from a cache break |
 | `prompt`, `fresh`, `cached_read`, `cached_write` | yes | refused unless `fresh + cached_read + cached_write == prompt`. Anthropic counts exclusively and OpenAI inclusively, and an exporter that copied an inclusive total has double-counted the cache — worst on exactly the sessions that cache best |
-| `at` | for the break figures | the cost is still measured; **breaks and avoidable print NOT MEASURED**, because a break is defined against the request before it and undated records have no "before" |
+| `at` | for the break figures | the cost is still measured; **breaks and re-billed print NOT MEASURED**, because a break is defined against the request before it and undated records have no "before" |
 | `complete` | for the break figures | same. A request missing from the export is indistinguishable from a cache break, and nothing in the file settles it, so the exporter declares it |
 | `output`, `cached_write_5m`, `cached_write_1h`, `lane`, `id` | no | priced or labelled where present |
 
@@ -337,7 +337,7 @@ Five figures a transcript run prints are structurally absent, and the report nam
 than omitting them: repeated tool results, tool errors, per-block blame, alternative layouts, and
 agent-lane fan-out. In `--json` they are `null`, never `0`.
 
-`--max-avoidable-usd` still gates, and **refuses to pass when the avoidable figure was not
+`--max-rebilled-usd` still gates, and **refuses to pass when the re-billed figure was not
 measured**. An export that could not support a break figure is not an export with no waste in it,
 and a build going green there would be a clean bill of health nobody earned.
 
@@ -423,7 +423,7 @@ replay statusline --install   # prints the settings.json snippet
 ```
 
 Claude Code already reports what a session has cost. What it cannot report is how much of that was
-avoidable, because it counts cache misses in tokens and does not price them. This does, on the JSON
+re-billed, because it counts cache misses in tokens and does not price them. This does, on the JSON
 Claude Code already hands a status line, in about 6ms per render. It opens no files and makes no
 network call.
 
@@ -745,16 +745,16 @@ describing last Tuesday rather than how you work.
 `--out` names the policy file written on selection (default `~/.replay/policy.json`); `--out -`
 writes none and prints only.
 
-#### `--max-avoidable-usd <n>` — fail the build on avoidable spend
+#### `--max-rebilled-usd <n>` — fail the build on re-billed spend
 
 ```sh
-replay cost --max-avoidable-usd 5      # exit 1 when more than $5 was re-billed
+replay cost --max-rebilled-usd 5      # exit 1 when more than $5 was re-billed
 ```
 
-Compares the avoidable figure this command already measures against a ceiling you
+Compares the re-billed figure this command already measures against a ceiling you
 type, and exits non-zero when it is breached, so CI can gate on it without
-parsing prose. Avoidable is the part nobody chose: context re-billed because a
-prompt cache broke.
+parsing prose. Re-billed is the part nobody chose: context billed twice because
+a prompt cache broke.
 
 It derives nothing of its own. A governance check whose numbers come from
 anywhere but the measurement can be confidently right about a corpus nobody ran.
@@ -1228,7 +1228,7 @@ pads a row to the column width so the row underneath disappears; down a pipe tha
 invisible junk that lands in a document and in every diff of it afterwards.
 
 Colour is the semantic layer and it never carries meaning alone. The total is bold because it is the
-answer; the avoidable figure is red because it is the only number on the screen that is money
+answer; the re-billed figure is red because it is the only number on the screen that is money
 already spent twice; headings and rules are dimmed so the figures rise without anything shouting.
 Every one of those distinctions is also in the words, because roughly one man in twelve cannot
 separate red from green and because this output gets piped into files where colour does not exist.
@@ -1448,11 +1448,38 @@ it exists to complement.
 
 It is off unless you ask for it, and it binds loopback only: the counters name
 repositories and token spend, which is not something to publish to a network.
-| `--upstream` | Provider base URL. Default `https://api.anthropic.com`. This is how the proxy is pointed at an OpenAI-compatible provider, or at another proxy, and it is the only setting that changes where your traffic goes — so it is worth reading twice |
+| `--upstream` | Provider base URL. Default `https://api.anthropic.com`. This is how the proxy is pointed at an OpenAI-compatible provider, or at another proxy, and it is the only setting that changes where your traffic goes, so it is worth reading twice. Pointing it at an OpenAI-compatible provider routes `/v1/chat/completions`, which is **EXPERIMENTAL, UNMASKED**: see below |
 | `--token`, or `REPLAY_TOKEN` | Require `x-replay-token` on every request |
 | `--ledger` | Where ledger files are written. Default `~/.replay/ledger`, owner-only |
 
 Browser-originated requests are refused regardless.
+
+### The OpenAI-compatible path is EXPERIMENTAL, UNMASKED
+
+`serve` reads two request shapes. `/v1/messages` is the one everything was built for.
+`/v1/chat/completions`, which DeepSeek, OpenAI and OpenAI-compatible gateways all speak, is
+read, guarded and ledgered, and it is labelled **EXPERIMENTAL, UNMASKED** everywhere it is
+offered. Both halves of that label mean something specific.
+
+**UNMASKED means `--mask` never runs on this traffic.** The masker walks the Messages body
+shape and this family's body is a different shape, so an API key or token pasted into a
+prompt on this path is forwarded to the provider exactly as typed. Turning `--mask` on does
+not change that, and the startup banner now says so under the `masking: on` line. The proxy
+also prints the label on stderr the first time it sees each such path. That disclosure is
+unconditional: it does not require `--mask`, and `REPLAY_NO_POLICY=1` does not silence it,
+because the operator who has turned every rewrite off is the last person who should lose the
+warning.
+
+**EXPERIMENTAL means the coverage is real but narrow.** This path has been driven against
+live DeepSeek (2026-09-05, four surfaces, where it caught a defect no stub could have shown)
+and against a local Ollama (2026-09-09). It has never been driven against OpenAI itself, nor
+against any third implementation of the same API, and no cache write has ever been observed
+in that response shape. No policy is applied to it either, deliberately: the family caches
+automatically, so there is no breakpoint to place and no TTL to choose.
+
+If you are deliberately running this path, the thing to do is keep credentials out of prompts
+on it rather than rely on `--mask`. Alert on `replay_unmasked_requests_total` if you want to
+know when that traffic starts.
 
 ### Live policy, experimental
 
@@ -1498,7 +1525,7 @@ is `/replay/status`, which you ask for.
 | `replay_cost_usd_day` | gauge | — | List-price cost for the current UTC day. A gauge because it resets at midnight, and a counter that resets makes every `rate()` wrong |
 | `replay_cost_unpriced_requests_total` | counter | — | Requests the rules could not price. Independent of the doctor's unenforced-cap warning, which also needs a dollar cap configured |
 | `replay_unparsed_requests_total` | counter | — | Requests on a path this build cannot read. **Excludes** `/v1/chat/completions`, which is read |
-| `replay_unmasked_requests_total` | counter | — | Requests the masker does not cover. This is what `/v1/chat/completions` increments |
+| `replay_unmasked_requests_total` | counter | — | Requests on a path the masker cannot cover. This is what `/v1/chat/completions` increments, and it counts them whether or not `--mask` was passed, because the question the counter answers is how much traffic took the unmaskable path |
 | `replay_refused_total` | counter | `guard` | Requests refused locally, by guard |
 | `replay_upstream_errors_total` | counter | `status` | Provider responses with an error status |
 | `replay_retries_total` | counter | — | Requests resent after a retryable failure |
@@ -1560,6 +1587,42 @@ nobody has.
 **The per-server breakdown is the point of committing it.** A later run that only said
 "the standing cost grew" would send the reader back to the configuration this command was
 designed not to read.
+
+## Exit codes, frozen
+
+A shell branches on these, so they are part of what the version number covers
+and they will not change inside a major version.
+
+| Code | Meaning | Should it block a merge |
+|---|---|---|
+| `0` | Success | no |
+| `1` | Usage error, or a failure nobody classified | no |
+| `2` | Payment required. A resource wants paying, which is a decision for whoever holds the wallet rather than a fault | no |
+| `3` | **A measured breach.** Spend crossed a ceiling you set | **yes, and only this one** |
+| `4` | Cannot evaluate. Nothing priced, a corpus that could not be read, a price table too old to trust | no |
+
+**Only 3 may fail a build**, and the reason is worth stating rather than
+assuming. A tool that blocks a merge because it could not measure anything has
+substituted its opinion for a measurement, which is the one thing this tool is
+built not to do. A CI runner with no transcripts is usually a wrong path, not an
+expensive month.
+
+**This was wrong until 2026-09-13 and it was wrong in the free gate.** Both a
+ceiling breach and the NOT MEASURED refusal exited 1, so a pipeline could not
+tell "your agents wasted money" from "there is no data here and I declined to
+bless it". Those are opposite situations and only one of them is a finding.
+
+In a shell:
+
+```sh
+replay cost --max-rebilled-usd 5 ~/.claude/projects
+case $? in
+  0) ;;                                  # under the ceiling
+  3) echo "over the ceiling"; exit 1 ;;  # the only blocking case
+  4) echo "could not measure; not failing the build" ;;
+  *) echo "replay itself failed"; exit 1 ;;
+esac
+```
 
 ---
 

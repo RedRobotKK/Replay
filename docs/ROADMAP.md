@@ -18,7 +18,7 @@ The sequence is chosen so the first release costs nothing to run, works for ever
 
 Read Claude Code transcripts. Reproduce the provider's caching turn by turn, print the calibration line, then score alternative layouts and rank token sources. Estimated tier only; Anthropic rules; macOS and Linux. (Windows was listed until 2026-09-06 and has never been tested; see the README.)
 
-**Status:** shipped, and the offline path is where most of 2026-09-06 went. Bare `replay` leads with the cost report over the transcript root it discovers, rather than a list of sixteen commands with the one that reports money eleventh; `cost` and `corpus` take that same root as their default; and `--help` is grouped and ranked by value. The cost report states the avoidable figure in tokens as well as dollars and names who the dollars are for, because most readers hold a flat seat and a dollar-only finding is addressed to a minority. It discloses transcript overlap instead of implying the total is exact, and it indexes rather than reparsing — the report over 1,483 transcripts cost 6.3s wall and 19.6s CPU, nearly all of it reparsing unchanged files. Compaction is parsed, so `replay context` now reports by how much its own attribution overstates a session that compacted; across this corpus the client wrote 39 such records at a median retention of 2.55%. `replay route --to` charges for the switch itself rather than comparing two per-turn rates. What breaks the cache is now measured across the whole corpus rather than a sample ([break causes](evidence/break-causes-2026-09-06.md)).
+**Status:** shipped, and the offline path is where most of 2026-09-06 went. Bare `replay` leads with the cost report over the transcript root it discovers, rather than a list of sixteen commands with the one that reports money eleventh; `cost` and `corpus` take that same root as their default; and `--help` is grouped and ranked by value. The cost report states the re-billed figure in tokens as well as dollars and names who the dollars are for, because most readers hold a flat seat and a dollar-only finding is addressed to a minority. It discloses transcript overlap instead of implying the total is exact, and it indexes rather than reparsing — the report over 1,483 transcripts cost 6.3s wall and 19.6s CPU, nearly all of it reparsing unchanged files. Compaction is parsed, so `replay context` now reports by how much its own attribution overstates a session that compacted; across this corpus the client wrote 39 such records at a median retention of 2.55%. `replay route --to` charges for the switch itself rather than comparing two per-turn rates. What breaks the cache is now measured across the whole corpus rather than a sample ([break causes](evidence/break-causes-2026-09-06.md)).
 
 **Gate:** spikes 1 and 2 pass; every output carries tier, calibration, and assumption lines; README shows real output from the maintainer's own sessions.
 
@@ -62,9 +62,297 @@ Two things came out of the attempt that outlive the null. The instrument now ref
 
 Closing it needs a quiet account rather than a bigger budget: the account-wide counter is the largest error term and it is removable, not reducible. Until then, the report states the waste in tokens as well as dollars, which is a statement that holds either way.
 
-## 1.0
+## v0.6: the pool can tell two builds apart
 
-External security review published, signed reproducible releases, caching rules for a second provider.
+Corpus submissions carry the binary that priced them.
+
+**Status: shipped in v0.6.0.** Defect #284: two builds read one transcript
+directory on one machine on one day and reported $4,088.49 and $11,969.37, both
+stamped `rulesVersion: anthropic-2026-09-01`. The label was honest, the provider
+had changed nothing, and the code had. A submission now carries `binaryVersion`,
+`commit` and `pricingDigest`, the last computed from the price table, the
+caching floors, the unknown-model fallback and any loaded rules document, so it
+moves when any of them moves. `RulesVersion` keeps its published meaning.
+
+**Gate: met.** Every pricing input is mutated in test and the digest is required
+to move; the roster carries the build; the published field count and byte bound
+are pinned by a test that names the documents quoting them.
+
+---
+
+## The path to 1.0
+
+Four gates in [`../RELEASE-CRITERIA.md`](../RELEASE-CRITERIA.md) are unmet. The
+releases below are the order they come off in, chosen by what unblocks what
+rather than by what is easiest.
+
+**These are gates, not dates.** Two of the remaining four depend on people who
+are not the maintainer: a security reviewer with a calendar, and contributors
+who do not exist until the launch produces them. Putting a date on either would
+be the kind of claim this project spends its time refusing in other people's
+numbers. A version ships when its gate is met, and the cadence rule in
+RELEASE-CRITERIA still applies: cut when the changelog holds something a user
+would act on, and do not let `Unreleased` run past roughly twenty entries.
+
+**One long-lead item starts now, not at 0.9.** An external security review has a
+scheduling lead time measured in weeks. Commissioning it is 0.7 work even though
+publishing it is 0.9 work, because a gate whose clock starts when you reach it
+is a gate you reach late.
+
+## v0.7: the tool states what it cannot see
+
+The theme is coverage honesty. Every release so far widened what Replay reads;
+this one makes it say precisely where it stops.
+
+- **The surface detection layer.** `cmd/replay/othersurfaces.go` extended to the
+  agent surfaces a 2026 reader might be spending on, under the rule in
+  `AGENTS_STATE.md`: verify on a real machine, mark everything else UNVERIFIED,
+  and ship no path that has not been seen. A detector that invents a directory
+  is worse than no detector, because it tells a reader their bill has no blind
+  spot when it does.
+- **The OpenAI-compatible path labelled `EXPERIMENTAL, UNMASKED`** wherever it is
+  offered. This closes a 1.0 gate the honest cheap way rather than the expensive
+  way: the path has only ever run against a test stub and masking does not cover
+  it, and a label costs nothing while an unlabelled path implies a parity that
+  does not exist. 0.8 upgrades the label to coverage.
+- **`--json` on every command that prints a figure**, asserted by
+  `scripts/surface-drift/drift.py`, which already exercises every documented
+  surface and is currently used only for drift.
+- **A mutation score with a denominator.** The 75 frozen mutants are a
+  regression catalogue, not a score. Killed over generated, with the equivalent
+  mutants named and the date attached, in the format every other figure in the
+  README already uses. This project's own rule is that a figure carries its
+  population, and this one does not.
+- **Corrections as a dated collection**, the way `docs/evidence/` already works,
+  rather than one generated page sliced out of a README heading. The retraction
+  record is the most quotable asset the project owns and it currently has no
+  per-entry URL and no per-entry date.
+- **Distribution a reviewer will accept.** A Homebrew tap and a documented
+  `go install`, standing beside the install script rather than replacing it. The
+  people most likely to refuse a pipe into a shell are the people most likely to
+  audit the signing, which is the project's best work.
+- **Provenance attestation** on release artifacts. The Sigstore identity proves
+  the tag ran the workflow; provenance proves what went into the build, and the
+  SBOM is already generated and unattested.
+- **Commission the external security review.** Lead time, not deliverable.
+
+**Gate:** no surface ships a path that has not been observed on a real machine;
+the OpenAI label appears everywhere the path is offered; the mutation figure
+carries its denominator or is withdrawn.
+
+## v0.8: someone else's machine
+
+The theme is independence. Everything up to here was measured on one machine,
+one account, one operator, and the roadmap has said so in every spike row since
+2026-09-06.
+
+- **The corpus stops being one machine.** Spikes 1 and 2 are marked met with the
+  standing caveat that independence is not, and no session count fixes it. This
+  is the one item on the path that the maintainer cannot do alone: it needs
+  contributed corpora from people who are not him, which is what the launch and
+  the 0.6 pool work exist to make possible. Until `replay pool` holds
+  submissions from more than one `sourceTag`, every headline figure is a fact
+  about one laptop.
+- **Windows: settled 2026-09-13, and not the way this line used to describe.**
+  The fourteen failing tests were fixed on 2026-09-10 and the job has been
+  green and blocking since. That turned out to be the problem rather than the
+  solution: Windows is green because the promise is switched off there.
+  `internal/ownerdir` reports 100% statement coverage on ubuntu and 40% on
+  windows, `modeIsChecked()` returns false so `tighten` never chmods or
+  re-stats, and twenty-two tests across the ledger, the vault, the consent gate
+  and the contributor secret skip with "Unix permission bits". A blocking green
+  check whose greenness comes from disabling what it checks is exactly what
+  ADR-0014 forbids.
+  The binary now refuses on Windows, so "unsupported" is a thing the program
+  does rather than a line in a README. The route that made it reachable is also
+  closed: install.sh refused Windows and then offered a release archive that
+  does not exist and a `go install` that works, which handed a reader a one
+  line path to the binary the project says must not ship.
+  **The port is not refused on difficulty.** An owner-only DACL is reachable
+  from the standard library with no new dependency, since `syscall` and
+  `unsafe` are already on the import allowlist. It is refused on evidence:
+  `guard reachability` and `frozen mutants` both run on ubuntu only, so every
+  refusal in an ACL layer would ship unmutated, and an unmutated guard is
+  indistinguishable from an absent one. A Windows leg on those two jobs is what
+  reopens this, and it is written into RELEASE-CRITERIA as the condition.
+- **Masking covers the OpenAI-compatible path**, upgrading 0.7's label to actual
+  coverage, and spike 5 answered by traffic from a real agent rather than by
+  fixtures.
+- **Caching rules for a second provider**, which 1.0 has required since this file
+  was written. It needs published provider rules and a calibration corpus for
+  them, so it starts here and lands when it calibrates.
+- **Multi-tenant spend accounting (SP-5, SP-6, SP-8)** only if a user asks. All
+  three are specified, unbuilt, and gated on ADR-0015 because every piece of
+  shared mutable state is scoped to one human today. Recorded here so that
+  building them stays a decision rather than drift.
+
+**Gate:** the pool holds corpora from more than one operator, and the figures on
+the website say how many; Windows is resolved in one direction or the other.
+
+## v0.9: nothing unexamined
+
+The theme is the security posture, which is the last gate with real uncertainty
+in it.
+
+- **Finding 3, the vault key boundary.** The remaining half of the oldest open
+  finding: the key file sits beside the ciphertext, so within the TTL the vault
+  is plaintext-equivalent to anyone who can read the directory. This is a
+  structural decision rather than a bug, because the obvious fix is the OS
+  keychain and reaching it needs `os/exec`, which
+  `TestX402_ExecIsConfinedToTheMutationHarness` keeps out of every ordinary
+  build on the grounds that it can call anything. RELEASE-CRITERIA already names
+  the acceptable outcomes: move the key, or say plainly in the README that
+  masking is a transit control and not storage. Either closes the gate. Deciding
+  which is the work.
+- **The external security review published**, with its findings open in the
+  tracker rather than summarised.
+- **Reproducible builds verified, not just signed.** Releases are signed and
+  carry an SBOM; `-trimpath` and `mod_timestamp` are set. Nobody has rebuilt a
+  published tag from source and compared the bytes. A reproducibility claim
+  nobody has tried to falsify is exactly the kind of claim this project refuses
+  elsewhere.
+
+**Gate:** finding 3 closed or explicitly scoped in the README; the review
+published; one shipped tag independently rebuilt to identical bytes.
+
+## v1.0
+
+Every box in [`../RELEASE-CRITERIA.md`](../RELEASE-CRITERIA.md) ticked, and
+"nearly" still does not count.
+
+That file's four gates, restated as they will read when they are met: the vault
+key boundary resolved; the OpenAI-compatible path exercised against a live
+provider or labelled; Windows supported or removed; and no headline figure
+published without something having first tried to falsify the instrument that
+produced it.
+
+1.0 does not mean feature complete. `replay recall` is designed and unbuilt,
+`breakpoint-on-stable-block` is unbuilt, ST-2 does not refit the lookback
+window, and marking a session important has no client mechanism. All of those
+are roadmap items and none of them are gates, which is recorded here so they
+cannot be smuggled in later as blockers.
+
+What 1.0 does mean is that the tool's claims about itself have all been
+checked by somebody other than the person who wrote them.
+
+---
+
+## After 1.0
+
+A feature list this far out would be fiction, and this file is not the place to
+start writing any. What follows is the part that is knowable: the obligations a
+1.0 creates, and the evidence that decides the direction.
+
+### v1.x: what a 1.0 actually commits you to
+
+The release that costs the most is the one after the promise. These are standing
+obligations rather than features, and none of them are optional once the number
+has a 1 in front of it.
+
+- **Compatibility surfaces, named.** Before 1.0 ships, this file has to say which
+  things are covered by the version number. The candidates are the corpus
+  submission schema (`replay.corpus.v1`), the pool document
+  (`replay.pool.v1`), the ledger format, the policy file, the budget artefact
+  (`schema 2`), **the exit codes**, and every `--json` output the 0.7 work adds.
+  The exit codes were frozen and published on 2026-09-13, which makes them the
+  first compatibility surface here written down before it had users rather than
+  after. The corpus schema has already survived two additive
+  changes without moving, which is the behaviour a contract should have; the
+  others have never been tested by a change. An unnamed compatibility surface is
+  one you break by accident and find out about from a user.
+- **A deprecation policy, written 2026-09-13 as [ADR-0024](adr/0024-deprecation-is-a-promise-made-before-1-0.md), because after 1.0 it cannot be: whatever it says, somebody's script is already relying on the absence of it. A surface gets a full minor release working and warning on stderr before it is removed, and the rule that makes that affordable is that adding a verb is the expensive decision rather than removing one. The 31 verbs should be reduced before 1.0, while removal is still free.** The original gap, as it read: There are 30 verbs and no
+  stated procedure for retiring one. The cheapest version is a sentence: what
+  warning a command prints, for how many minor releases, before it is removed.
+- **The price table goes stale on the provider's schedule, not ours.**
+  `PriceTableStaleDays` is 60, prices have moved several times a year, and the
+  cache multiples that the advice turns on move with them. This is the one
+  maintenance cost that recurs forever and does not scale with users, and it is
+  precisely what the x402 rules feed exists to fund. A 1.0 that ships with a
+  table nobody has budgeted to maintain is a 1.0 with a shelf life.
+- **Security response with an audience.** The SLA in `SECURITY.md` currently has
+  one reader. After 1.0 it has reporters who will hold it to the letter, which is
+  why the escalation path went in before the launch rather than after the first
+  missed acknowledgement.
+
+### The three doors, and which one opens is not up to the maintainer
+
+Every roadmap past here forks on one fact that does not exist yet: whether
+anybody else contributes a corpus. The 0.6 pool work and the launch exist to
+find out. All three of these are acceptable outcomes and only one of them is a
+failure of nerve.
+
+**Door A. The pool stays at one operator.** The honest response is to say so on
+the front page and keep the tool as what it demonstrably is: a personal
+instrument that reads your own transcripts and is very good at it. No pooled
+percentile, no "teams like yours", no benchmark. This door is only a failure if
+it arrives and the site keeps implying the other one.
+
+**Door B. Corpora arrive from people who are not the maintainer.** Then the
+pooled benchmark becomes the product rather than a supporting claim, and the
+work is distributional: percentiles that survive a small n, a stated method for
+refusing a figure when the population cannot carry it, and the order-statistics
+discipline the 0.5 benchmark work already had to learn once. The thing that
+makes this defensible is already built, which is that every roster row is a file
+a reader can download and re-hash.
+
+**Door C. A team pays for a forensics week.** Then ADR-0015 gets revisited and
+SP-5, SP-6 and SP-8 unblock, because the reason they are specified and unbuilt
+is that every piece of shared mutable state here is scoped to one human and a
+centralised deployment would turn a day cap into an organisation-wide denial of
+service. That is a real architecture change and it should follow a paying user,
+not precede one. `docs/design/forensics-week-qualification.md` already describes
+how to find out quickly that a week is not worth selling, which is the part most
+people skip.
+
+**How a buyer is recognised is already decided, and it is not an account.**
+[ADR-0023](adr/0023-entitlement-is-a-signed-document-not-an-account.md): a signed
+document installed from a local file, verified offline against a key compiled
+into the binary, expiring on a date read from the local clock. No licence server,
+no callback, no identifier that leaves the machine. The recurring proposal in
+this category is a hosted service with an account bound to a user name, and the
+reason that is refused is not taste: the identifier would be the only personal
+data this tool has ever held, and the binary sits in a credential path where a
+network dependency is a new failure mode. The two MCP servers already split along
+the line that matters, the hosted one answering questions about the world and the
+local one about this machine, and only the first can ever be sold.
+[`MONEY-PATH.md`](MONEY-PATH.md) carries the tiers, including what an enterprise
+buyer is told no about.
+
+### What would justify a 2.0
+
+Not features. A major version is a promise broken on purpose, and there are only
+two honest reasons to break one here: a published data format has to change in a
+way that cannot be additive, or a provider or platform gets dropped. The corpus
+schema absorbed six new fields across two releases without moving, so the bar is
+not theoretical. If a 2.0 happens it should be nameable in one sentence, and the
+sentence should be about what stopped working.
+
+### What stays a not goal
+
+Restated so that a busy year does not quietly adopt them: translating between
+provider API shapes, replacing server-side compaction or context editing, any
+server component, and Cursor agent mode. Padded cache slots are rejected
+outright by ADR-0001, which is the rule that the tool measures and does not act.
+Vector store, agent to agent messaging, virtual filesystem, a Rust sidecar and a
+web dashboard remain deferred until a user asks, and "a user asked" means a user
+asked rather than a maintainer imagining one.
+
+### What would end it
+
+Worth writing down while it is cheap to write down.
+
+The open measured question in this file is whether a cache break costs a flat
+seat anything. Measured on 2026-09-06 with matched arms, 3.09M tokens moved the
+utilisation counter by zero steps, and a ratio near 12.5 and a ratio near 1.0
+remain equally consistent with what has been observed. **If that resolves toward
+1.0, the majority of people who run this tool are not losing money**, and the
+case Replay makes to them evaporates even though every figure it prints stays
+correct. The tool would still be right and would still be worth much less.
+
+Closing it needs a quiet account rather than a bigger budget. Until then the
+report states the waste in tokens as well as dollars, which is a statement that
+holds either way, and this paragraph stays here so that the outcome is a result
+rather than a surprise.
 
 ## Deferred until a user asks
 

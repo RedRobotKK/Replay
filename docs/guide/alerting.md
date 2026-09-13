@@ -30,7 +30,8 @@ increase(replay_unmasked_requests_total[5m]) > 0
 **Severity: page.** This is the sharpest unguarded edge in v0.2.0. `--mask` understands the
 Messages body shape and not `/v1/chat/completions`, so any agent pointed at an
 OpenAI-compatible provider is sending secrets in clear while the operator believes masking is
-on. The proxy already prints `NOT MASKED` once per path; this catches it when nobody is
+on. The proxy already prints `EXPERIMENTAL, UNMASKED` on stderr once per path, whether or not
+`--mask` was passed and whatever `REPLAY_NO_POLICY` is set to; this catches it when nobody is
 reading the log.
 
 Threshold is zero because there is no acceptable rate. If you are deliberately running that

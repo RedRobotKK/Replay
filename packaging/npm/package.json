@@ -1,0 +1,19 @@
+{
+  "name": "replay-doctor",
+  "version": "0.0.0-set-by-release-workflow",
+  "description": "Replay Doctor: names the turn your prompt cache broke on and what it cost. This package fetches the signed release binary for your platform, verifies it against checksums.txt, and runs it. macOS and Linux.",
+  "license": "BUSL-1.1",
+  "homepage": "https://replay.doctor",
+  "repository": { "type": "git", "url": "git+https://github.com/RedRobotKK/Replay.git", "directory": "packaging/npm" },
+  "bugs": { "url": "https://github.com/RedRobotKK/Replay/issues" },
+  "keywords": ["prompt-cache", "claude-code", "codex", "coding-agent", "token-cost", "cache-break", "llm-observability"],
+  "type": "module",
+  "bin": { "replay-doctor": "bin/replay-doctor.js" },
+  "files": ["bin", "lib", "README.md"],
+  "optionalDependencies": {},
+  "engines": { "node": ">=18" },
+  "os": ["darwin", "linux"],
+  "cpu": ["x64", "arm64"],
+  "scripts": { "test": "node --test test.mjs" },
+  "publishConfig": { "access": "public", "provenance": true }
+}

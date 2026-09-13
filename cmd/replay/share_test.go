@@ -12,7 +12,7 @@ import (
 func TestShareCardOmitsTheTotal(t *testing.T) {
 	s := costSummary{
 		Tasks: 1384, TotalUSD: 2906.39, MedianUSD: 0.65,
-		P90USD: 2.29, AvoidableUSD: 151.54, AvoidableShare: 0.052,
+		P90USD: 2.29, RebilledUSD: 151.54, RebilledShare: 0.052,
 	}
 	card := shareCard(s, 67)
 
@@ -22,7 +22,7 @@ func TestShareCardOmitsTheTotal(t *testing.T) {
 		}
 	}
 	if !strings.Contains(card, "5%") {
-		t.Errorf("the card must lead with the avoidable rate:\n%s", card)
+		t.Errorf("the card must lead with the re-billed rate:\n%s", card)
 	}
 	for _, want := range []string{"0.65", "2.29", "1384"} {
 		if !strings.Contains(card, want) {
@@ -32,13 +32,13 @@ func TestShareCardOmitsTheTotal(t *testing.T) {
 	// The card is read as a screenshot, so the action has to be executable from
 	// what is on screen. A repo URL costs a click and a scroll before anyone
 	// reaches the install line.
-	if !strings.Contains(card, "curl -fsSL") || !strings.Contains(card, "redrobot.jp/replay.sh") {
+	if !strings.Contains(card, "curl -fsSL") || !strings.Contains(card, "replay.doctor/replay.sh") {
 		t.Errorf("the card must carry the install one-liner:\n%s", card)
 	}
 	// The URL carries a query string, and zsh — the macOS default shell —
 	// treats a bare ? as a glob and aborts with "no matches found" before curl
 	// runs. An unquoted install line would fail for most people who tried it.
-	if strings.Contains(card, "?") && !strings.Contains(card, `"https://redrobot.jp/replay.sh?src=card"`) {
+	if strings.Contains(card, "?") && !strings.Contains(card, `"https://replay.doctor/replay.sh?src=card"`) {
 		t.Errorf("the install URL carries a ? and must be quoted, or zsh will refuse it:\n%s", card)
 	}
 	// And the repo beside it. A bare curl-into-shell with no verifiable source
@@ -60,7 +60,7 @@ func TestShareCardRefusesEmpty(t *testing.T) {
 
 // Nothing in the card may identify a project, a path, or a machine.
 func TestShareCardCarriesNoIdentifiers(t *testing.T) {
-	s := costSummary{Tasks: 12, MedianUSD: 1.10, P90USD: 4.00, AvoidableShare: 0.11, TotalUSD: 90}
+	s := costSummary{Tasks: 12, MedianUSD: 1.10, P90USD: 4.00, RebilledShare: 0.11, TotalUSD: 90}
 	// The route is derived from a model id, and a real Vertex id embeds the
 	// caller's GCP project and region — "projects/acme-prod/locations/..." is
 	// the ordinary shape, not a contrived one. Built from a bare literal this

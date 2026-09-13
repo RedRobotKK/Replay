@@ -41,6 +41,179 @@ the prices and cache floors that every dollar figure rests on change on the prov
 Both of those are per-repository problems with a named owner and a budget, which is why the unit is
 a repository and not a person.
 
+## 0. The constraint this has to clear, worked backwards
+
+**Added 2026-09-13.** Everything below was written to answer "is this a fair
+price". It was never asked to answer "does this pay the person who maintains
+it", and those are different questions with different answers.
+
+The target is **$500,000 post-tax, take home, per year.** Stated as a design
+requirement rather than an aspiration, because a model that cannot reach it is
+one the maintainer eventually stops running, and that outcome belongs in the
+document rather than in a surprise.
+
+**Everything in this section is MODELLED, not measured.** It is arithmetic over
+assumptions, and the assumptions are named so they can be argued with. That is a
+weaker class of claim than anything in `evidence/`, and it is labelled as such
+here for the same reason every other figure in this repository carries its
+provenance.
+
+### 0.1 Gross compensation
+
+**Corrected 2026-09-13. The residency assumption was wrong and it was the
+headline.**
+
+This section was priced on Japan tax residency because Red Robot K.K. is a
+Japanese company. The company is; **the maintainer is currently in Los
+Angeles**, and which of those two facts sets the rate is the open question
+rather than a detail. The Japan row is kept because the K.K. is real and the
+arrangement may end there, but it is no longer the number the section leads
+with, and nothing downstream should quote $1.05M as though the question were
+settled.
+
+For reference, the Japan arrangement: director's remuneration from the K.K. at
+¥150 to the dollar, where above roughly ¥40M taxable the marginal rate is 45%
+national plus a 2.1% reconstruction surtax plus 10% inhabitant tax, with the
+employment income deduction capped, giving an effective marginal take of about
+**55.9%**. A US-person California resident lands materially lower, and a
+non-resident director fee out of Japan carries 20.42% withholding that is
+creditable but brings real double-tax friction.
+
+**This is a question for an accountant and not for this document.** What the
+document can say is the sensitivity, which is below and which is larger than any
+pricing decision in the rest of the file.
+
+| Scenario | Gross needed |
+|---|---|
+| **US person, California resident** | **≈ $0.94M to $1.00M** |
+| Japan resident, salary, ¥150/USD | ≈ $1.05M |
+| Japan resident, ¥130/USD | ≈ $1.22M |
+| Japan resident, ¥170/USD | ≈ $0.93M |
+| Dividends rather than salary | ≈ $1.27M, so salary is the correct instrument |
+
+The assumption that moves the answer most is **residency and US-person status**,
+worth about ±$120k. Then FX, worth ±15% across a plausible band. Both are
+outside the business's control, which is worth knowing before optimising the
+price by a few percent.
+
+### 0.2 The cost of the business
+
+| | Annual |
+|---|---|
+| K.K. statutory, accounting and filing with a non-resident director, registered agent, banking and FX | $8k to $15k |
+| Professional liability, once a paid week carries a contractual deliverable | $4k to $10k |
+| Infrastructure: site, rules feed, x402 endpoint, CI, signing | $2k to $6k |
+| Legal: first enterprise contract, liability cap, a JP entity selling into the US and EU | $15k to $30k once, then $5k to $10k |
+| Price-table maintenance, the forever cost | founder time, or $30k to $60k outsourced |
+| **Solo floor** | **$25k to $45k** |
+| With half a person so the enterprise response time is real rather than a promise to be awake | $110k to $160k |
+| With one salesperson | $420k to $550k |
+
+### 0.3 Required ARR, and what that is in customers
+
+**Solo, with payment fees: about $1.12M ARR.** Every hire adds $150k to $300k.
+
+| Price | Customers needed |
+|---|---|
+| $199 per repository per month | **469** |
+| $199 annual prepay, two months free | 563 |
+| $25 design-partner price | 3,733 |
+| $399 per CI pipeline per month, recommended in 0.5 | **234** |
+| Enterprise at $60k / $100k / $150k a year | **19 / 12 / 8 logos** |
+
+Add churn. At 3% monthly logo churn, which is optimistic against this document's
+own sentence about the customer who cancels in month two, holding 469 needs
+roughly **14 net-new repositories every month, forever**, on top of building the
+base.
+
+### 0.4 The number that decides it
+
+Measured 2026-09-07: **53 lifetime fetches of the install script, from 2 distinct
+IP addresses.** No external user has ever been observed.
+
+Working the funnel back from 469 paying repositories at generous developer-tool
+rates, 5% of visitors install and 2% of installs pay:
+
+- **23,450 installs**, which is **440 times the lifetime fetch count**
+- **469,000 visitors**, against a measured distinct-user count of two
+
+A first-place Hacker News day plus a top-three Product Hunt day is plausibly
+50,000 to 75,000 visitors and a few thousand installs, decaying more than 90%
+inside a week. **That is 8% to 16% of one year's requirement, on the best day
+this project will ever have, and it converts to zero**, because on 2026-09-14
+`replay gate` does not exist, ADR-0023 is Proposed, and there is no rail.
+
+Sustaining 469,000 visitors a year organically is roughly eight to twelve front
+pages a year. One person does not produce that. Paid acquisition is closed by
+arithmetic rather than by preference: at a $2,388 annual contract value against
+the $449 to $1,628 lifetime value computed in section 6, allowable acquisition
+cost is $150 to $550, developer-audience clicks run $3 to $12, so an advertisement
+would need a three to eight percent click-to-paid conversion. Nothing converts at
+that rate.
+
+**Conclusion, and it is not a pricing conclusion.** A per-repository subscription
+at $199 cannot fund $500k post-tax. It is short by roughly two orders of
+magnitude on the only input that matters, and no number on the page changes that.
+**The constraint is distribution, which this document already said, and the
+$500k target is what makes the size of the gap legible.**
+
+### 0.5 The shape that does clear it
+
+Not one line. A blend, in the order the money actually arrives:
+
+| Line | Contribution | Why it is here |
+|---|---|---|
+| **Forensics week at $25,000** | $175k to $260k from 6 to 8 weeks | The only line that can produce revenue in year one, because it needs no software that does not exist. It is also the land motion: the first engagement produces the first corpus that is not the maintainer's laptop, which is the v0.8 blocker in `ROADMAP.md` |
+| **10 to 14 organisation agreements at $60k to $100k** | $600k to $1.0M | The only shape whose customer count is compatible with a measured population of two |
+| **40 to 80 self-serve pipelines at $399** | $95k to $380k | Priced per CI pipeline rather than per repository, for the reason in 0.6 |
+| **Rules feed and sponsorship** | $10k to $30k | Real, and not a business on its own |
+| **Total** | **$880k to $1.67M gross** | Clears $500k post-tax at the midpoint |
+
+**Time: 30 to 42 months, and one hire.** Honest expected value in year one is
+**$40k to $75k gross**, which is $20k to $50k post-tax. The probability of ever
+reaching $500k post-tax on this model is roughly **20% to 30%**: a reasonable
+number for a startup and a poor one for a salary replacement.
+
+**The bar this actually has to clear is not $500k.** A principal engineering role
+in Tokyo or Los Angeles nets $150k to $250k post-tax with near-certainty, so that
+is the real hurdle, and $500k post-tax puts this in roughly the top one percent of
+one-person software companies. Recording that distinction here because the
+alternative is discovering it in year two.
+
+### 0.6 The unit changes from repository to CI pipeline
+
+Section 1 settles that the unit is not a seat, and that still stands. It picked
+the repository, and the repository is the most arbitrage-able unit available.
+
+A forty-repository organisation paying $7,960 a month runs `git subtree` and pays
+$199. That is a 97.5% price cut available in an afternoon, the industry is already
+consolidating into monorepos, and the buyer is the kind of engineer who enjoys
+doing it. **The unit chosen for its commercial convenience is the one the
+customer most easily collapses.**
+
+A **CI pipeline** does not collapse the same way. It is the thing that actually
+consumes `replay gate`, a monorepo still runs many of them, and merging two
+pipelines has real engineering cost that a subtree merge does not. At $399 a
+month the required count falls from 469 to 234, and the price sits against a
+budget line the buyer already approves next to their CI spend.
+
+### 0.7 What is not decided, and why it matters more than the price
+
+The $199 anchor rests on the throttling finding: cache-blind budget arithmetic
+runs 7.94x high, so a $500-a-day ceiling halts execution at $62.94 of real spend,
+leaving roughly $13,000 a month of approved capacity unreachable.
+
+**Nobody has asked whether that is value to the buyer or a bill they were
+deliberately avoiding.** If the cap was a guardrail against runaway agents, then
+correcting the arithmetic unlocks capacity they already paid for and the value is
+real. If the cap was a budget, correcting the arithmetic hands them a $13,000 a
+month increase, sold to the person who set the limit. **Those are opposite
+products and no measurement in this repository distinguishes them.**
+
+Five conversations settle it. Until they happen, the figure that justifies the
+price is load-bearing and untested, which is the condition this project refuses
+to ship a technical number in.
+
 ## 1. The unit of value
 
 **The recurring thing worth paying for is a standing-cost budget for a repository's agent
@@ -322,13 +495,26 @@ suite recurs, and nobody argues that a test suite is rent because the bug was fi
 
 Two more objections, weaker but worth answering rather than leaving for someone else to raise.
 
-**"Apache 2.0 means the entitlement check is deleted in one commit."** True, and it does not matter
-much. The check is a payment fence for honest buyers, not a DRM scheme, and the buyer in section 2
-is a company that will not ship a patched binary through its own compliance process to avoid $25.
-The part that a fork genuinely cannot take is the paid feed, because that is data measured against
-real traffic and it is not in the repository. [ADR-0012](adr/0012-dual-licensing-deferred.md) reached
-the same place from the other direction: revenue has to come from a separate work, and data is the
-separate work that is already half built.
+**"The licence means the entitlement check is deleted in one commit."** True, and the paragraph that
+used to sit here was wrong twice, so it is corrected rather than quietly rewritten.
+
+It argued this under **Apache 2.0**, and the project has been **BUSL 1.1** since 2026-09-06 with a
+Change Date of 2029-09-06 ([ADR-0016](adr/0016-business-source-license.md)). It also argued that a
+buyer would not patch a binary "to avoid $25", and $25 is no longer the number: list is now stated
+below as provisional, and the figure that paragraph was defending has moved by an order of
+magnitude. **A stale premise inside the document that defines the business is exactly the defect
+class this project spends its time finding in other people's output**, and it survived here because
+nothing checks prose against a licence file.
+
+The corrected version is weaker for the fence and unchanged for the conclusion. BUSL's Additional
+Use Grant **expressly permits modifying the work for your own internal use**, so an enterprise
+buyer removing an entitlement check is not even a licence breach, let alone a fork. The fence is a
+convenience for honest buyers and it should never be described as more than that.
+
+What a copy genuinely cannot take is unchanged: the paid feed is data measured against real traffic
+and it is not in the repository, and neither is a week of somebody's attention.
+[ADR-0012](adr/0012-dual-licensing-deferred.md) reached the same place from the other direction:
+revenue has to come from a separate work, and data and labour are the separate works.
 
 **"78 sessions on one machine is not enough to sell a threshold."** Also true, and
 [PRODUCT-DIRECTION.md](PRODUCT-DIRECTION.md) makes the sharper version of the point: run over the 40
@@ -345,7 +531,7 @@ A distribution measurement over 116 sessions
 ([avoidable concentration](evidence/avoidable-concentration-2026-09-10.md))
 sharpens both sides of the objection above and settles neither.
 
-**Twenty-five fan-out sessions hold 98.8% of all avoidable spend; the ninety-one
+**Twenty-five fan-out sessions hold 98.8% of all re-billed spend; the ninety-one
 single-lane sessions hold 1.2%** — $2.03 in total. So the exposure is not a
 uniform tax on agent work. It is a property of fanning out to sub-agent lanes,
 and it recurs per session rather than sitting still waiting to be fixed once.
@@ -402,6 +588,15 @@ resentment, or churn. Discounting from a higher list costs nothing and reads as 
 gift. This asymmetry is the whole argument, and it does not depend on any figure
 above being exactly right.
 
+**Nothing is for sale on 2026-09-14, and no price is published that day.** That is a decision
+taken 2026-09-13 and it is not modesty. The paid capability does not exist: `replay gate` is
+unbuilt, [ADR-0023](adr/0023-entitlement-is-a-signed-document-not-an-account.md) is Proposed, the
+`crypto/ed25519` allowlist narrowing it needs is unshipped, and there is no rail. Publishing a
+number nobody can transact anchors it permanently in exchange for nothing, and it hands a launch
+audience the easiest possible reading: **$199 a month to recover a measured $60 to $90 a month.**
+That comparison is not unfair. It is the arithmetic in section 1 of this document, and the answer
+to it is `replay gate` and the throttling finding rather than a defence of the number.
+
 So the shape, which is what is being decided here — the number remains
 provisional until someone has run the tool and been asked:
 
@@ -409,7 +604,7 @@ provisional until someone has run the tool and been asked:
 |---|---|
 | **Individuals** | free, permanently. This is the adoption motion and it is not a trial |
 | **Public / OSS repositories** | free. Distribution, honestly labelled |
-| **List** | $199 per repository per month |
+| **List** | **Provisional and not offered.** $199 per repository per month is the working figure, kept here with its reasoning and deliberately absent from the README, the website and anything a launch reader sees |
 | **Design partner** | $25, explicitly a time-boxed discount off list, not the price |
 | **Annual prepay** | two months free |
 | **Price lock** | a subscribed price never rises |
@@ -417,6 +612,113 @@ provisional until someone has run the tool and been asked:
 The price lock is doing two jobs. It makes early adoption safe, and it frees list
 to move later without churning anyone who was there first — which is the only way
 to hold a high anchor and a low first cohort at the same time.
+
+## Enterprise, and the unusual thing this tool has to sell them
+
+Proposed, and nobody has been quoted any of it. Recorded because the shape is
+decided by the architecture rather than by negotiation, and the architecture is
+already built.
+
+**The selling point is the absence.** Most of the cost of selling a developer
+tool into a large company is the data-handling review: where does our code go,
+who can read it, which sub-processors touch it, what happens on a breach. Replay
+holds none of it. Transcripts never leave the machine, there is no account, and
+`internal/observation` cannot import `net/http` with a test that walks the
+imports and fails the build if it ever can. That is not a policy commitment that
+a questionnaire has to take on trust. It is a property of the binary that a
+security reviewer can verify in an afternoon from source they already have.
+
+A tool with no data to lose skips most of the questionnaire, and the pieces
+procurement asks for next already exist: an SBOM per release artifact, Sigstore
+keyless signatures bound to the exact workflow at the exact tag, a published
+`SECURITY.md` with a disclosure window, and a licence that permits unlimited
+internal and commercial use in writing. **SOC 2 is not applicable and saying so
+plainly is stronger than pursuing it**, because the control set audits how a
+vendor handles customer data and this vendor receives none.
+
+**What is actually sold at this tier is labour and liability, not features.**
+That distinction is forced by [`../SPONSORS.md`](../SPONSORS.md): nothing free
+today ever becomes paid, and a paid capability must be something that does not
+exist today. So an enterprise tier cannot be the free tool with a badge on it.
+
+| | Proposed |
+|---|---|
+| **Unit** | per repository, same as list. An organisation agreement is a volume commitment across repositories, not a different product |
+| **Indicative** | list with volume tiers above roughly 10 repositories, and a floor rather than a per-unit price above roughly 50 |
+| **Support** | a named response time, in a contract, with a human on the other end. This is the thing that genuinely cannot be given away at the current headcount, and it is priced as the labour it is |
+| **Air-gapped operation** | supported by construction. The entitlement is a signed file verified offline ([ADR-0023](adr/0023-entitlement-is-a-signed-document-not-an-account.md)) and the rules feed is a document that can be mirrored internally. No call home to fail |
+| **Self-hosted rules mirror** | the maintained feed, delivered as a file the customer serves themselves, for buyers whose build machines have no egress |
+| **`replay gate` in CI** | the standing-cost budget, which is the thing an organisation buys rather than an individual. It does not exist yet |
+| **Invoicing** | bank transfer and purchase orders. The rail does not reach the binary, so it can be anything |
+| **What is NOT sold** | priority on the public issue tracker, early access to fixes, or any measurement gated behind payment. A security fix reaches everyone at once |
+
+**Indicative annual figures, modelled rather than quoted.** Per section 0.3, the
+enterprise line has to carry $600k to $1.0M of a $1.12M requirement, and it is
+the only line whose customer count is compatible with a measured population of
+two.
+
+| Tier | Annual | Shape | Count needed to carry the line |
+|---|---|---|---|
+| **Team** | $24k to $36k | 5 to 10 pipelines, email support, no SLA | 20 to 40 |
+| **Organisation** | $60k to $100k | unlimited pipelines in one legal entity, named response time, self-hosted rules mirror | **10 to 14** |
+| **Regulated** | $120k to $180k | the above plus air-gapped operation, a signed entitlement with a stated term, and a security questionnaire answered by a person | 6 to 9 |
+
+The middle row is the one the model runs on. Ten to fourteen agreements is a
+number one person can actually service, and it is reachable from a forensics week
+in a way that 469 self-serve repositories is not.
+
+**Why the top tier is the cheapest to serve rather than the most expensive.** Air
+gapping is normally where margin goes to die: per-customer builds, a licence
+server, an offline update channel. Here it falls out of
+[ADR-0023](adr/0023-entitlement-is-a-signed-document-not-an-account.md) at no
+marginal cost, because the entitlement is a signed file verified offline against
+a key compiled into the binary, and the rules feed is a document the customer
+mirrors internally. There is no call home to fail. Every competitor in this
+category is a hosted dashboard that cannot serve these buyers at all.
+
+### The gate on all of it, and it is measured rather than commercial
+
+**ADR-0015 records that across roughly 100,000 requests in the measured corpus,
+every observed model id is first-party: 87,264 `claude-opus-5`, 8,895
+`claude-opus-4-8`, 1,497 `claude-haiku-4-5`, and no Bedrock inference profile or
+Vertex publisher path anywhere.**
+
+Enterprises overwhelmingly reach Claude through Bedrock or Vertex, whose caches
+are a different API with different economics. So the tiers above are, today, a
+price list for traffic this project has never once observed.
+
+That is not a reason to delete them. It is a reason to state the precondition in
+the same table as the price:
+
+**No enterprise tier is quoted to anyone until Replay reads Bedrock and Vertex
+traffic and has calibrated against at least one real corpus of it.** Until then
+the honest answer to an enterprise enquiry is the forensics week, which prices
+what it can actually see and says so, and which is how the first Bedrock corpus
+arrives in the first place.
+
+This is the same rule the tool applies to a model it cannot price. It declines,
+and it says why, and the declining is the product.
+
+**Two things a buyer will ask for that the answer is no to.**
+
+A central dashboard aggregating every developer's spend is the most requested
+thing in this category and it is refused until [ADR-0015](adr/0015-single-tenant-state-is-a-boundary.md)'s
+tenant dimension exists in the spend guard, the session table, the metrics
+surface and the credential path. Shipping it before that turns one team's day cap
+into an organisation-wide denial of service, and the acceptance test for it is
+already written in `requirements.md` as SP-6 precisely because it fails against
+the current guard.
+
+Binding a licence to named users, seats or SSO is refused for the reason
+ADR-0023 gives: the identifier would be the only piece of personal data this tool
+has ever held, and it would be created to solve a problem the signed document
+already solves without it.
+
+**The honest caveat is the same one the rest of this document carries.** No
+external user has been observed, the constraint is distribution rather than
+price, and an enterprise motion needs a reference customer before any of the
+above is more than a plan. It is written down now so that the first buyer to ask
+gets a considered answer rather than an improvised one.
 
 **What this does not settle, and must not be presented as if it did.** No one has
 been quoted any price. The figures above are measured on one machine and the

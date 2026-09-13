@@ -22,7 +22,7 @@ the 5h utilisation counter by **zero** steps
 finding in either direction, and it is published as one.
 
 What survives the null is the part that needed no counter. A re-billed token is context the work did
-not get: it occupied the window and bought nothing. That is why `replay cost` states the avoidable
+not get: it occupied the window and bought nothing. That is why `replay cost` states the re-billed
 figure in tokens beside the dollars, and says under the figures that on a flat seat the dollars are
 list price for somebody else. A subscriber reading a dollars-only report reasonably concludes the
 finding is not about them.

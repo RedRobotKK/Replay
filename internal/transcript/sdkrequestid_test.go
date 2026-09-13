@@ -209,9 +209,9 @@ func TestRedactedSDKTranscriptStaysReadable(t *testing.T) {
 // non-model in a model column and a zero where no measurement was ever taken.
 //
 // It matters beyond tidiness. cmd/replay/cost.go names a lane's model from its
-// FIRST request, and prices the avoidable figure only for a model the table
+// FIRST request, and prices the re-billed figure only for a model the table
 // knows. One placeholder landing at the head of a lane took that lane's
-// avoidable tokens from 1,586,545 to zero with its cost unchanged - the exact
+// re-billed tokens from 1,586,545 to zero with its cost unchanged - the exact
 // shape ADR-0018 is about, arithmetically fine and epistemically silent.
 func TestAPIErrorPlaceholderIsNotARequest(t *testing.T) {
 	line := func(uuid, parent, rid, ts, text string, apiErr bool) string {

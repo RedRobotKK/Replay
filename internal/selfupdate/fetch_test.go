@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -265,4 +266,162 @@ func TestApplyReplacesAtomicallyAndLeavesItExecutable(t *testing.T) {
 	if len(entries) != 1 {
 		t.Errorf("expected only the binary in %s, got %d entries", dir, len(entries))
 	}
+}
+
+// SIG. `upgrade` verified the hash and never the signature.
+//
+// The releases ARE signed: release.yml runs cosign at a pinned SHA and
+// publishes checksums.txt.pem and checksums.txt.sig. install.sh checks them and
+// refuses when cosign is present and no signature is published. This package
+// fetched checksums.txt over HTTPS, compared a sha256, and never looked at
+// either signature file.
+//
+// So the two install routes made different promises and nothing said so. A user
+// who ran install.sh got signature verification; the same user running
+// `replay upgrade` the following week did not. Recorded as
+// docs/evidence/upgrade-verifies-hash-not-signature-2026-09-13.md before it was
+// closed.
+//
+// The hash alone covers a corrupted download and an archive swapped against an
+// unmodified checksums.txt. It cannot cover anything that can modify
+// checksums.txt itself, because the file that is trusted is the file that is
+// fetched. That is exactly what the signature is for, and it was published and
+// unused.
+//
+// cosign is shelled out to rather than reimplemented. Verifying a Sigstore
+// bundle properly needs a Fulcio chain, a Rekor inclusion proof and a
+// certificate identity check, and this module has zero third-party
+// dependencies on purpose. A partial check would read as verification while
+// proving only that somebody signed something.
+
+func TestSIG1_NoCosignMeansChecksumsOnlyAndSaysSo(t *testing.T) {
+	restore := lookCosign
+	t.Cleanup(func() { lookCosign = restore })
+	lookCosign = func() (string, error) { return "", errors.New("not found") }
+
+	srv, base := signedRelease(t, true)
+	defer srv.Close()
+	c := &Client{ReleasesBase: base}
+
+	got, err := c.Fetch(context.Background(), "v9.9.9", "linux", "amd64")
+	if err != nil {
+		t.Fatalf("a machine without cosign could not upgrade: %v", err)
+	}
+	if len(got) == 0 {
+		t.Error("no binary came back")
+	}
+}
+
+func TestSIG2_CosignPresentAndNoSignaturePublishedRefuses(t *testing.T) {
+	restoreLook, restoreRun := lookCosign, runCosign
+	t.Cleanup(func() { lookCosign, runCosign = restoreLook, restoreRun })
+	lookCosign = func() (string, error) { return "/usr/bin/cosign", nil }
+	// Verification SUCCEEDS if it is reached. Without this the test passed for
+	// the wrong reason: neutralising the missing-signature branch let the real
+	// cosign run, fail because no such binary exists, and return the OTHER
+	// refusal, whose message also contains the word "signature".
+	runCosign = func(_ context.Context, _ string, _ ...string) error { return nil }
+
+	// A release with no .pem and no .sig.
+	srv, base := signedRelease(t, false)
+	defer srv.Close()
+	c := &Client{ReleasesBase: base}
+
+	_, err := c.Fetch(context.Background(), "v9.9.9", "linux", "amd64")
+	if err == nil {
+		t.Fatal("cosign is installed, no signature was published, and the upgrade " +
+			"proceeded. Every release this project's CI builds is signed, so a missing " +
+			"signature means these assets are not the ones CI produced.")
+	}
+	if !strings.Contains(err.Error(), "No Sigstore signature was published") &&
+		!strings.Contains(err.Error(), "no Sigstore signature was published") {
+		t.Errorf("the refusal is not the missing-signature one, so this test would pass "+
+			"even if that branch were removed: %v", err)
+	}
+}
+
+func TestSIG3_AFailedVerificationInstallsNothing(t *testing.T) {
+	restoreLook, restoreRun := lookCosign, runCosign
+	t.Cleanup(func() { lookCosign, runCosign = restoreLook, restoreRun })
+	lookCosign = func() (string, error) { return "/usr/bin/cosign", nil }
+	runCosign = func(_ context.Context, _ string, _ ...string) error {
+		return errors.New("signature did not verify")
+	}
+
+	srv, base := signedRelease(t, true)
+	defer srv.Close()
+	c := &Client{ReleasesBase: base}
+
+	_, err := c.Fetch(context.Background(), "v9.9.9", "linux", "amd64")
+	if err == nil {
+		t.Fatal("the signature did not verify and the upgrade proceeded anyway")
+	}
+	if !strings.Contains(err.Error(), "Nothing was installed") {
+		t.Errorf("the refusal does not say nothing was installed, which is the one thing "+
+			"the reader needs to know: %v", err)
+	}
+}
+
+func TestSIG4_TheIdentityIsCheckedAgainstThisRepoAndCIsIssuer(t *testing.T) {
+	restoreLook, restoreRun := lookCosign, runCosign
+	t.Cleanup(func() { lookCosign, runCosign = restoreLook, restoreRun })
+	lookCosign = func() (string, error) { return "/usr/bin/cosign", nil }
+
+	var seen []string
+	runCosign = func(_ context.Context, _ string, args ...string) error {
+		seen = args
+		return nil
+	}
+	srv, base := signedRelease(t, true)
+	defer srv.Close()
+	c := &Client{ReleasesBase: base}
+	if _, err := c.Fetch(context.Background(), "v9.9.9", "linux", "amd64"); err != nil {
+		t.Fatal(err)
+	}
+
+	joined := strings.Join(seen, " ")
+	// Without an identity check, cosign proves only that SOMEBODY signed it.
+	// install.sh pins both and this must pin the same two or the convenient
+	// route is the weaker one again.
+	for _, want := range []string{
+		"verify-blob",
+		"--certificate-identity-regexp",
+		"https://github.com/" + Repo + "/.*",
+		"--certificate-oidc-issuer",
+		"https://token.actions.githubusercontent.com",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("cosign was run without %q, so it proves only that somebody signed "+
+				"something:\n  %s", want, joined)
+		}
+	}
+}
+
+// signedRelease serves a release whose archive matches its checksums, with the
+// Sigstore signature files present or absent.
+func signedRelease(t *testing.T, withSignature bool) (*httptest.Server, string) {
+	t.Helper()
+	const tag = "v9.9.9"
+	archive := tarGz(t, "replay", []byte("#!/bin/sh\necho hi\n"), tar.TypeReg, "")
+	name := ArchiveName(tag, "linux", "amd64")
+	sum := sha256.Sum256(archive)
+	sums := fmt.Sprintf("%s  %s\n", hex.EncodeToString(sum[:]), name)
+
+	mux := http.NewServeMux()
+	base := "/releases/download/" + tag
+	mux.HandleFunc(base+"/"+name, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(archive)
+	})
+	mux.HandleFunc(base+"/checksums.txt", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(sums))
+	})
+	if withSignature {
+		for _, suffix := range []string{".pem", ".sig"} {
+			mux.HandleFunc(base+"/checksums.txt"+suffix, func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte("-----BEGIN EXAMPLE-----\n"))
+			})
+		}
+	}
+	srv := httptest.NewServer(mux)
+	return srv, srv.URL
 }

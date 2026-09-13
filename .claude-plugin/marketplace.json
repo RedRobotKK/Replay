@@ -1,0 +1,22 @@
+{
+  "name": "replay",
+  "owner": { "name": "Red Robot K.K.", "url": "https://replay.doctor" },
+  "metadata": {
+    "description": "Replay Doctor for Claude Code: names the turn your prompt cache broke on and what it cost, from the transcripts already on your disk. Prints one line at the end of each session; sends nothing unless you configure a repository to watch.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "replay",
+      "source": "./plugins/replay",
+      "description": "Prompt-cache forensics at the end of every session. Local only; the binary cannot send. Optional: post a counts-only record per session to a repository you named on replay.doctor.",
+      "version": "1.0.0",
+      "author": { "name": "Daniel Saito", "email": "daniel@redrobot.jp" },
+      "homepage": "https://replay.doctor",
+      "repository": "https://github.com/RedRobotKK/Replay",
+      "license": "BUSL-1.1",
+      "keywords": ["prompt-cache", "cost", "forensics", "claude-code", "codex"],
+      "category": "productivity"
+    }
+  ]
+}

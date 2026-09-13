@@ -11,6 +11,7 @@ import (
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/version"
 )
 
 // The standing cost of a configuration, as a file a repository can commit.
@@ -51,7 +52,15 @@ import (
 // BudgetSchema versions the artefact. A committed file outlives the binary that
 // wrote it, and a gate that cannot tell which shape it is reading is a gate
 // that will one day compare two different things and call it a pass.
-const BudgetSchema = 1
+//
+// 2, from 2026-09-13: the artefact gained BinaryVersion and Commit. Nothing
+// reads a budget file yet, because the gate does not exist, so there is no
+// installed base to keep readable and no reason to make the fields optional.
+// That is the opposite of the call made for corpus submissions in v0.6.0, where
+// an installed base did exist and the fields had to be omitempty to keep every
+// published digest reproducible. Same problem, different answer, because the
+// populations differ.
+const BudgetSchema = 2
 
 type budgetFile struct {
 	Schema    int       `json:"schema"`
@@ -63,13 +72,93 @@ type budgetFile struct {
 	// point the reader at something that does not exist.
 	Servers  map[string]int `json:"servers"`
 	Measured measured       `json:"measured"`
+
+	// TokensAreEstimated is stamped on every artefact, always true, and it is
+	// not redundant.
+	//
+	// A consumer months from now has this JSON and nothing else. Without the
+	// flag the token figures read as measurements, and they are a coefficient
+	// fitted on one session of prose applied to schema JSON. A field is harder
+	// to miss than a comment in a repository the reader may never open.
+	TokensAreEstimated bool `json:"tokens_are_estimated"`
+
+	// Which build produced the counts above.
+	//
+	// `Measured` records the corpus. This records the code, and both are needed
+	// because they fail differently: the same build over two corpora is what
+	// Measured already covered, and the same corpus read by two builds is this.
+	//
+	// It is not hypothetical. `Standing.TokensPerRequest` is a count this tree
+	// produced, and what counts as a tool token, how the system prompt is
+	// measured and which requests are admissible are all decisions here rather
+	// than facts about the world. Two builds can read one ledger and write
+	// different standing costs. A gate reading this file months later would
+	// compare them and call the difference a regression in the user's
+	// configuration, which is the worst available failure: it fails a stranger's
+	// build and blames them for a change we made.
+	//
+	// THERE IS DELIBERATELY NO PRICING DIGEST. A review recommended one by
+	// analogy with the corpus submission, and the analogy does not hold: this
+	// file contains no dollar, and every figure in it is a token count. Prices
+	// moving does not move a token count, so a pricing digest here would be
+	// provenance for a computation that never happened. If a gate ever compares
+	// dollars, it becomes necessary in that commit and not before.
+	BinaryVersion string `json:"binary_version"`
+	Commit        string `json:"commit"`
+}
+
+// newBudgetFile builds the artefact with its provenance attached.
+//
+// A constructor rather than a struct literal, so that provenance cannot be
+// omitted by writing a literal somewhere else. The gate will read this file and
+// fail builds on it; a second construction path that forgot the build fields is
+// the defect this shape exists to prevent.
+func newBudgetFile(st standing, servers map[string]int, m measured) budgetFile {
+	if servers == nil {
+		servers = map[string]int{}
+	}
+	return budgetFile{
+		Schema:             BudgetSchema,
+		Generated:          time.Now().UTC(),
+		Standing:           st,
+		Servers:            servers,
+		Measured:           m,
+		TokensAreEstimated: true,
+		BinaryVersion:      version.Version,
+		Commit:             version.Commit,
+	}
 }
 
 type standing struct {
+	// The token figures are ESTIMATES and the artefact says so in
+	// TokensAreEstimated below. They are a tokens-per-byte coefficient applied
+	// to a byte count, the coefficient is fitted on ONE session, and it is
+	// fitted on PROSE: analysis.TokenFit deliberately excludes every turn that
+	// re-laid the shared prefix, on the stated grounds that tool definitions
+	// are denser than prose and would drag the fit. These figures then apply it
+	// to tool definitions, which is the population it was built by excluding.
+	//
+	// They are kept because a reader thinks in tokens and a bill is charged in
+	// them. They are not what anything should compare.
 	TokensPerRequest int `json:"tokens_per_request"`
 	SystemTokens     int `json:"system_tokens"`
 	ToolTokens       int `json:"tool_tokens"`
 	ToolCount        int `json:"tool_count"`
+
+	// The bytes are EXACT, and they are what a later comparison should use.
+	//
+	// transcript.Block.Bytes and ToolDef.Bytes are decoded textual sizes, so
+	// they are unaffected by JSON escaping and identical across two readings of
+	// an unchanged configuration. The tokens above are not: measured across the
+	// 1,751 rows of docs/evidence/calibration-corpus-2026-09-10.md the
+	// coefficient runs from about 0.58 to 1.00 tokens per byte between
+	// sessions, so two regenerations of a byte-identical setup can differ by
+	// more than adding a whole MCP server would move the real figure.
+	//
+	// Both were already computed here. Only the estimate was kept, and that is
+	// the defect this pair fixes.
+	SystemBytes int `json:"system_bytes"`
+	ToolBytes   int `json:"tool_bytes"`
 }
 
 // measured is the provenance, and it is not optional.
@@ -78,10 +167,23 @@ type standing struct {
 // this repository says how it was obtained, and a file that will be committed
 // and read months later by a gate needs that more than most.
 type measured struct {
+	// Sessions and Requests describe the corpus WALKED.
 	Sessions int    `json:"sessions"`
 	Requests int    `json:"requests"`
 	Source   string `json:"source"`
 	Model    string `json:"model,omitempty"`
+
+	// FitSessions is how many sessions the token coefficient was fitted on,
+	// and it is not the same number.
+	//
+	// It is one, deliberately: the newest session wins because the question is
+	// what the configuration costs now, and a mean across a fortnight of edits
+	// describes a setup nobody has. That reasoning is sound and the reporting
+	// was not. Printing "measured from 400 requests across 12 sessions" beside
+	// a figure that rests on one session's fit overstates the evidence behind
+	// it, which is exactly what this project looks for in other people's
+	// numbers.
+	FitSessions int `json:"fit_sessions"`
 }
 
 // budgetRefusal decides whether the corpus can price a standing cost.
@@ -228,17 +330,24 @@ func runBudget(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	out := budgetFile{
-		Schema:    BudgetSchema,
-		Generated: time.Now().UTC(),
-		Standing: standing{
-			SystemTokens: fit.EstimateTokens(sysBytes),
-			ToolTokens:   fit.EstimateTokens(toolBytes),
+	out := newBudgetFile(
+		standing{
+			// EstimateOutsideFit, not EstimateTokens. The value is the same
+			// arithmetic; the call site is the documentation. fit.go wrote that
+			// function for precisely this case and says why: nobody has measured
+			// tokens-per-byte on schema JSON for this provider, so the figure
+			// carries no error bar rather than borrowing the prose fit's, and
+			// "stating no uncertainty is honest; stating the prose fit's was
+			// not." This file was calling the other one.
+			SystemTokens: fit.EstimateOutsideFit(sysBytes).Value,
+			ToolTokens:   fit.EstimateOutsideFit(toolBytes).Value,
 			ToolCount:    toolCount,
+			SystemBytes:  sysBytes,
+			ToolBytes:    toolBytes,
 		},
-		Servers:  map[string]int{},
-		Measured: measured{Sessions: sessions, Requests: requests, Source: "ledger", Model: model},
-	}
+		nil,
+		measured{Sessions: sessions, Requests: requests, Source: "ledger", Model: model, FitSessions: 1},
+	)
 	// The headline is the sum of its parts by construction, never computed
 	// separately. Two paths to one number is how they come to disagree.
 	out.Standing.TokensPerRequest = out.Standing.SystemTokens + out.Standing.ToolTokens
@@ -275,7 +384,11 @@ func runBudget(args []string, stdout, stderr io.Writer) error {
 			p.Printf("  %-24s %9s tokens/request\n", n, comma(out.Servers[n]))
 		}
 	}
-	p.Printf("\nMeasured from %d request(s) across %d session(s) of ledger.\n", requests, sessions)
+	// Two sentences because they are two facts, and running them together is
+	// what made the old single line overstate the evidence.
+	p.Printf("\nRead %d request(s) across %d session(s) of ledger.\n", requests, sessions)
+	p.Printf("Byte counts are exact. Token figures are estimated from the newest session's\n" +
+		"ratio, which is fitted on prose rather than on tool schemas, so compare the bytes.\n")
 	p.Printf("Commit `replay budget <dir> --json` and a later run can tell you what grew.\n")
 	return p.Err()
 }

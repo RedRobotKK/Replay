@@ -54,7 +54,7 @@ func tipURL(arm string) string {
 }
 
 // tipBody renders one arm's text.
-func tipBody(arm string, avoidableUSD float64, coffees int, unit, link string) string {
+func tipBody(arm string, rebilledUSD float64, coffees int, unit, link string) string {
 	// Who the coffees went to instead is the arm's own variable, so the lead
 	// names Daniel in B and not in A. Naming him in a shared lead would have
 	// put the named person in both arms and left the experiment measuring
@@ -63,14 +63,14 @@ func tipBody(arm string, avoidableUSD float64, coffees int, unit, link string) s
 	if arm == "B" {
 		rival = "Daniel"
 	}
-	lead := fmt.Sprintf("Replay just found $%.2f you had already paid for once.", avoidableUSD)
-	if c := wastedCoffees(avoidableUSD, coffees); c > 0 {
+	lead := fmt.Sprintf("Replay just found $%.2f you had already paid for once.", rebilledUSD)
+	if c := wastedCoffees(rebilledUSD, coffees); c > 0 {
 		// The same number in a unit a person can picture, and cheeky on
 		// purpose. It is not a rhetorical trick: at $5 a coffee this is
 		// arithmetic, and the contrast is what makes the ask below look as
 		// small as it actually is.
 		lead = fmt.Sprintf("Replay just found $%.2f you had already paid for once.\n"+
-			"That is %d coffees you bought your provider instead of %s.", avoidableUSD, c, rival)
+			"That is %d coffees you bought your provider instead of %s.", rebilledUSD, c, rival)
 	}
 	if arm == "B" {
 		return fmt.Sprintf(
@@ -94,8 +94,8 @@ func tipBody(arm string, avoidableUSD float64, coffees int, unit, link string) s
 // the contrast, and at the $5 floor there is none: "you wasted one coffee,
 // spare one coffee" is a worse sentence than not mentioning it, and it makes a
 // small honest finding sound like a reproach.
-func wastedCoffees(avoidableUSD float64, asking int) int {
-	c := int(avoidableUSD / float64(tipUnitUSD))
+func wastedCoffees(rebilledUSD float64, asking int) int {
+	c := int(rebilledUSD / float64(tipUnitUSD))
 	if c < asking*3 {
 		return 0
 	}

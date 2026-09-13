@@ -8,7 +8,7 @@ authors:
     affiliation: Red Robot K.K.
     website: "https://redrobot.jp"
 repository-code: "https://github.com/RedRobotKK/Replay"
-url: "https://redrobot.jp"
+url: "https://replay.doctor"
 abstract: >-
   A local tool that reproduces an LLM provider's prompt caching turn by turn,
   shows which turn broke the cache and what it cost, and scores alternative

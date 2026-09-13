@@ -5,11 +5,14 @@
 [![Go](https://img.shields.io/badge/go-1.24-00ADD8?logo=go&logoColor=white)](go.mod)
 [![Dependencies](https://img.shields.io/badge/dependencies-0-success)](cmd/replay/x402_test.go)
 [![Coverage](https://img.shields.io/badge/coverage-%E2%89%A585%25-success)](scripts/coverage-gate.sh)
+[![govulncheck](https://img.shields.io/badge/govulncheck-no%20known%20vulnerabilities-success)](.github/workflows/ci.yml)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)](#platform-support-macos-and-linux-only)
-[![License](https://img.shields.io/badge/license-BSL%201.1-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-BUSL%201.1%20(source--available)-blue)](LICENSE)
 
 **Your prompt cache expired while you were at lunch.** Replay finds the turn it happened on, and
 what that one turn cost.
+
+![A triage session: pick a finding, open the evidence behind it, mark it applied](docs/demo/triage.gif)
 
 > **The refusals are the feature.** Anything this tool cannot measure, it declines to print — and
 > says why, in the place the number would have gone. `replay route` will not quote you dollars for a
@@ -42,8 +45,43 @@ Replay replays your sessions against the provider's caching rules, turn by turn,
 that broke.
 
 ```sh
-curl -fsSL https://redrobot.jp/replay.sh | sh
+curl -fsSL https://replay.doctor/replay.sh | sh
 ```
+
+**Other ways in.** Every release carries a Linux package and a signed checksum
+for it.
+
+```sh
+# Fedora, RHEL, CentOS, openSUSE
+sudo rpm -i replay_<version>_linux_amd64.rpm
+
+# Debian, Ubuntu
+sudo dpkg -i replay_<version>_linux_amd64.deb
+
+# Alpine
+sudo apk add --allow-untrusted replay_<version>_linux_amd64.apk
+
+# Arch
+sudo pacman -U replay_<version>_linux_amd64.pkg.tar.zst
+
+# From source, any platform Go builds for
+go install github.com/RedRobotKK/Replay/cmd/replay@latest
+```
+
+Packages are on the [releases page](https://github.com/RedRobotKK/Replay/releases)
+in `deb`, `rpm`, `apk` and Arch form for amd64 and arm64. Every one of them is
+listed in `checksums.txt`, and that file is what cosign signs, so a package
+inherits the same verification chain as the tarball rather than a weaker one.
+
+**What that is not.** There is no hosted yum or apt repository, so there is no
+`dnf install replay` from a configured remote and no automatic upgrade. You
+download a file and install it. "We build an rpm" and "we run a repository" are
+different promises, and only the first is being made: the second needs a signing
+key with a lifetime and somebody to answer for a broken metadata refresh, and
+neither exists yet. `replay upgrade` is the upgrade path in the meantime.
+
+The packages declare no dependencies, which is a fact rather than an omission.
+The binary links nothing outside the standard library.
 
 ![The cost screen: what one task cost, and the share of it nobody chose](docs/screens/cost.svg)
 
@@ -63,8 +101,8 @@ If you are pointing an agent through the proxy, `l` answers the question the tra
 Reading it first is reasonable, and the script is written expecting you to:
 
 ```sh
-curl -fsSL https://redrobot.jp/replay.sh | less                  # read it
-curl -fsSL https://redrobot.jp/replay.sh | sh -s -- --dry-run    # see what it would do
+curl -fsSL https://replay.doctor/replay.sh | less                  # read it
+curl -fsSL https://replay.doctor/replay.sh | sh -s -- --dry-run    # see what it would do
 ```
 
 It verifies a checksum and refuses to fall back to building from source when it cannot verify.
@@ -78,35 +116,34 @@ replay
 ```
 
 ```text
-Cost per task, across 115 sessions (1631 agent lanes) at list prices dated
-2026-09-07 (caching rules anthropic-2026-09-01).
+Cost per task, across 122 sessions (1957 agent lanes) of Claude Code, at list prices dated 2026-09-07 (caching rules anthropic-2026-09-01).
 
-  total          $3172.41
-  median task    $0.77
-  p90 task       $2.30
-  avoidable      $156.72  (5% of the total)
-                 33.3M tokens re-billed
+  cache write    $2023.72
+  cache read     $9812.82
+  uncached       $1.82
+  output         $823.07
+  total          $12661.43
+  median task    $0.79
+  p90 task       $5.62
+  re-billed      $349.02  (3% of the total)
+                 71.5M tokens re-billed
 
-Avoidable is the part nobody chose: tokens re-billed because a prompt cache
+Re-billed is the part nobody chose: tokens billed twice because a prompt cache
 broke. It is not a forecast of savings, it is what was already spent twice.
-
-On a subscription seat - Claude Pro or Max, Copilot, Cursor - none of that is
-money: you are not billed per token, so the dollars above are list price for
-someone who is. The tokens are still yours.
-
-What they cost you instead is not established. Whether a re-billed token draws
-down a rate-limit window was measured here across 3.09M tokens and the
-utilisation counter did not move: a null result, not a saving. `replay advise`
-ranks what to cut by token count, which is the part that was measured.
 ```
 
-Those are one machine's numbers on 2026-09-07, generated by running the command rather than typed
-into this file. They are a session count, not a transcript count: a session writes one transcript per
+Those are one machine's numbers, read **2026-09-13 at 00:29 PDT**, generated by running the command
+rather than typed into this file. The time is there as well as the date because the corpus grows while
+it is being read: this machine adds about six requests a minute to it, so two runs an hour apart will
+not match to the cent. They are a session count, not a transcript count: a session writes one transcript per
 agent lane, and the three totals published before this one disagreed with each other because that
-distinction was lost between them. Point it
+distinction was lost between them. A fourth disagreement has since been measured and it is not a
+counting bug: this block read 5% on v0.5.4 and reads 3% on the build that ships it, because the newer
+binary reads 27,067 more requests out of the same files and prices six models the old one declined to
+price ([two builds, one corpus](docs/evidence/two-builds-one-corpus-2026-09-13.md)). Point it
 at yours, or give it a directory of your own.
 
-**The avoidable figure is stated twice on purpose.** Most of the people who run this hold a flat seat,
+**The re-billed figure is stated twice on purpose.** Most of the people who run this hold a flat seat,
 and a dollar figure addressed to someone else reads as a number that does not apply — which is how a
 real finding gets dismissed. The tokens apply to everyone: a re-billed token is context the work did
 not get, on a window you are rate-limited against either way. Whether a break also burns a
@@ -429,15 +466,29 @@ The project's governing rule is [ADR-0014](docs/adr/0014-checks-must-be-able-to-
 is not evidence until it has been observed to fail.** Roughly twenty defects in a single day shared
 one shape — a verification that could not fail — so the rule is now mechanical.
 
-`internal/mutation` keeps **75 real past defects frozen as re-runnable mutants** (numbered to M76;
-M71 was retired), each with the named test that must catch it.
+`internal/mutation` keeps **76 real past defects frozen as re-runnable mutants** (numbered M1 to
+M77; M71 was retired), each with the named test that must catch it.
 `go test -tags mutation ./internal/mutation/` re-applies them all.
 It has already caught a false kill (a mutant the compiler rejected, scored as caught), a test that
 hung instead of failing, and a catalogue entry naming a test that was not actually load-bearing.
 
-This is error seeding, not mutation analysis: the denominator is 72 chosen edits, not a generated
-operator population, and a first run is a kill by construction. The value is temporal — it asks
-whether each guard still exists and still discriminates on a tree that has moved.
+This is error seeding, not mutation analysis: the denominator is the 76 chosen edits themselves,
+not a generated operator population, and a first run is a kill by construction. The value is
+temporal, asking whether each guard still exists and still discriminates on a tree that has moved.
+
+**The mutation score, which is a different figure and was missing until 2026-09-13.** A catalogue
+has a numerator and no denominator, so it cannot say what fraction of the mutants this tree admits
+are caught, which means it cannot say whether that fraction is rising or falling. Measured now:
+**73.3% of viable, non-equivalent mutants killed (275 of 375), 95% CI [68.6%, 77.6%]**, on a
+uniform random sample of 400 drawn with seed 20260913 from a generated population of **8,150**
+mutants across 206 production files, six operators, read at commit `c0ed888`. Nine equivalent
+mutants were identified by hand and excluded; the other 100 survivors were not examined, so the
+tree-wide equivalent rate is unknown and the true score is somewhat higher than 73.3%.
+
+The actionable part is not the headline. By operator, negate-conditional is killed 85% of the time
+and **conditional-boundary only 49%**: the suite tests what a branch decides far better than it
+tests where the branch sits. The full reading, including the worst packages and every named
+equivalent, is in [the evidence file](docs/evidence/mutation-score-2026-09-13.md).
 
 Until 2026-09-09 that catalogue had **never run**. It sits behind a build tag, no CI job passed the
 tag, and the run needs 659 seconds against Go's 10-minute default — so the obvious invocation dies
@@ -479,8 +530,102 @@ the [roadmap](docs/ROADMAP.md) says plainly what is unfinished.
 If it saved you something, [FUNDING.md](FUNDING.md) says how to say so. The tool is free; the
 measurements behind it are real API spend.
 
+## What it costs
+
+**Nothing, and nothing is for sale today.**
+
+Every command works, on every model, with no account, no key and no network call.
+Nothing that works in a release you already have will ever move behind a payment:
+that is a promise in [SPONSORS.md](SPONSORS.md), and it is narrower and more
+useful than the sentence it replaced, which is [recorded there too](SPONSORS.md).
+If a paid capability is ever added it will be **something that does not exist
+today**, and it will not be gated on sponsorship either.
+
+There is one paid thing that does exist and it is not a tier: a week of the
+maintainer's attention over your own corpus, described and priced in
+[the deliverable](docs/design/forensics-week-deliverable.md), with
+[three commands you run yourself](docs/design/forensics-week-qualification.md)
+that tell you before any money is discussed whether it is worth either side's
+time. Nobody has bought one.
+
+[The money path](docs/MONEY-PATH.md) is the whole commercial argument, including
+the arithmetic that says a per-seat subscription does not survive this project's
+own numbers.
+
+## About the author
+
+<a href="https://github.com/saitodaniel">
+  <img src="https://github.com/saitodaniel.png?size=160" alt="Daniel Saito" width="120" align="left" hspace="20" vspace="6">
+</a>
+
+Replay Doctor is written and maintained by **Daniel Saito**, founder of
+[Red Robot K.K.](https://redrobot.jp), Tokyo. One person, one machine, one
+account: every figure this project publishes was measured on that machine, and
+every report says so rather than implying a population it does not have.
+
+[LinkedIn](https://www.linkedin.com/in/danielsaito/) ·
+[X @redrobotfdn](https://x.com/redrobotfdn) ·
+[GitHub](https://github.com/saitodaniel) ·
+[Hire me on Upwork](https://www.upwork.com/freelancers/~0136f9f71d1451b58d) ·
+[daniel@redrobot.jp](mailto:daniel@redrobot.jp)
+
+**[Support the work](https://buymeacoffee.com/saitodaniel)** ·
+[GitHub Sponsors](https://github.com/sponsors/saitodaniel) ·
+[What it pays for](FUNDING.md)
+
+<br clear="left">
+
+The habits in this repository come from that constraint. A single maintainer
+cannot review his own diff twice, so the checks do it instead: tests are
+neutralised and watched to go red before they are trusted, guards that no test
+can reach are reported rather than deleted, and a figure that loses its
+population is withdrawn rather than refreshed. The corrections are published with
+the wrong number left standing, because a project that only records its wins is
+a project whose numbers you cannot check.
+
+## A note from Daniel, who maintains this
+
+Replay is free to run and stays that way: every command, every model, no account,
+no key, no network call. Nothing that works in a release you already have will
+ever move behind a payment.
+
+What is not free is the measurement behind it. Replay's cache figures are
+measured rather than estimated because they were calibrated against **32,188 real
+requests across 115 sessions** of my own agent work, read on 2026-09-07. Adding
+each provider costs the same again: the Codex support came out of **148 sessions
+and 610 million tokens** of my own logs.
+
+I am not going to pretend that corpus was money out of my pocket. I was on a
+subscription, so what I actually paid was the monthly fee and the time. At list
+prices it is a four-figure sum, and the exact number lives in
+[FUNDING.md](FUNDING.md) with its date rather than here, because a figure typed
+into a second file drifts from the first and nothing notices. Replay prints that
+same caveat every time it prints a dollar, and an appeal that quietly dropped it
+would be the one place the tool's own rule did not apply.
+
+The tool found **five percent of my own bill re-billed** by broken caches before
+it found anyone else's. If it found something on your machine that you had
+already paid for once, a share of that back is what keeps this maintained.
+
+**[Support the work](https://buymeacoffee.com/saitodaniel)** ·
+[What it pays for](FUNDING.md) · [Sponsors](SPONSORS.md)
+
+There is no deadline, no counter, and nothing stops if nobody pays. None of
+those would be true.
+
 ## License
 
-Business Source License 1.1, converting to Apache 2.0 on 2029-09-06. Running it
-at work is free and unrestricted; reselling it as a hosted service is not. See
-[LICENSE](LICENSE), [NOTICE](NOTICE) and [ADR-0016](docs/adr/0016-business-source-license.md).
+**BUSL 1.1 is a source-available licence, not an OSI-approved open-source one.**
+Saying that here rather than leaving it to be pointed out: the distinction is
+real and the project does not get to blur it.
+
+What the licence actually permits is wider than the label suggests. Running
+Replay at work, in production, at any scale, on any number of machines, in CI,
+and using everything it outputs, is free and unrestricted. The one thing it
+forbids is reselling it as a hosted or managed service. It converts to Apache
+2.0 on 2029-09-06, which is three years rather than the indefinite Change Date
+some adopters choose.
+
+See [LICENSE](LICENSE), [NOTICE](NOTICE) and
+[ADR-0016](docs/adr/0016-business-source-license.md), which records that this
+was Apache 2.0 until 2026-09-06 and why that changed.

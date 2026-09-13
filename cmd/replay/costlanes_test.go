@@ -83,11 +83,11 @@ func TestCostPricesEveryLaneOfASession(t *testing.T) {
 	}
 	var doc struct {
 		Tasks []struct {
-			Session      string  `json:"session"`
-			Requests     int     `json:"requests"`
-			CostUSD      float64 `json:"costUsd"`
-			AvoidableUSD float64 `json:"avoidableUsd"`
-			Breaks       int     `json:"breaks"`
+			Session     string  `json:"session"`
+			Requests    int     `json:"requests"`
+			CostUSD     float64 `json:"costUsd"`
+			RebilledUSD float64 `json:"rebilledUsd"`
+			Breaks      int     `json:"breaks"`
 		} `json:"tasks"`
 	}
 	if err := json.Unmarshal(out.Bytes(), &doc); err != nil {
@@ -119,10 +119,10 @@ func TestCostPricesEveryLaneOfASession(t *testing.T) {
 	}
 	var single struct {
 		Tasks []struct {
-			Requests     int     `json:"requests"`
-			CostUSD      float64 `json:"costUsd"`
-			AvoidableUSD float64 `json:"avoidableUsd"`
-			Breaks       int     `json:"breaks"`
+			Requests    int     `json:"requests"`
+			CostUSD     float64 `json:"costUsd"`
+			RebilledUSD float64 `json:"rebilledUsd"`
+			Breaks      int     `json:"breaks"`
 		} `json:"tasks"`
 	}
 	if err := json.Unmarshal(one.Bytes(), &single); err != nil || len(single.Tasks) != 1 {
@@ -138,7 +138,7 @@ func TestCostPricesEveryLaneOfASession(t *testing.T) {
 	}
 
 	// The causes have to cover the same traffic as the cost. A total that
-	// doubled beside an unchanged avoidable figure reads as "the waste got
+	// doubled beside an unchanged re-billed figure reads as "the waste got
 	// proportionally smaller", which is a claim nobody made and nothing
 	// measured.
 	if single.Tasks[0].Breaks == 0 {
@@ -150,10 +150,10 @@ func TestCostPricesEveryLaneOfASession(t *testing.T) {
 			"are still being counted on the main lane alone",
 			got, single.Tasks[0].Breaks, want)
 	}
-	if single.Tasks[0].AvoidableUSD > 0 {
-		ar := doc.Tasks[0].AvoidableUSD / single.Tasks[0].AvoidableUSD
+	if single.Tasks[0].RebilledUSD > 0 {
+		ar := doc.Tasks[0].RebilledUSD / single.Tasks[0].RebilledUSD
 		if ar < 1.9 || ar > 2.1 {
-			t.Errorf("avoidable over two lanes is %.3fx one lane, want 2x", ar)
+			t.Errorf("re-billed over two lanes is %.3fx one lane, want 2x", ar)
 		}
 	}
 }

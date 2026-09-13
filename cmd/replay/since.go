@@ -76,14 +76,14 @@ func saveSeen(at time.Time) error {
 // costReport is the part of replay.cost.v2 this command consumes.
 type costReport struct {
 	Tasks []struct {
-		Session         string    `json:"session"`
-		Model           string    `json:"model"`
-		Requests        int       `json:"requests"`
-		CostUSD         float64   `json:"costUsd"`
-		AvoidableUSD    float64   `json:"avoidableUsd"`
-		AvoidableTokens int       `json:"avoidableTokens"`
-		Breaks          int       `json:"breaks"`
-		At              time.Time `json:"at"`
+		Session        string    `json:"session"`
+		Model          string    `json:"model"`
+		Requests       int       `json:"requests"`
+		CostUSD        float64   `json:"costUsd"`
+		RebilledUSD    float64   `json:"rebilledUsd"`
+		RebilledTokens int       `json:"rebilledTokens"`
+		Breaks         int       `json:"breaks"`
+		At             time.Time `json:"at"`
 	} `json:"tasks"`
 	Unpriced int `json:"unpriced"`
 }
@@ -159,17 +159,17 @@ func runSince(args []string, stdout, stderr io.Writer) error {
 		return nil
 	}
 
-	var total, avoidable float64
-	var breaks, reqs, avoidTok int
+	var total, rebilled float64
+	var breaks, reqs, rebilledTok int
 	worst := -1
 	for _, i := range window {
 		t := rep.Tasks[i]
 		total += t.CostUSD
-		avoidable += t.AvoidableUSD
-		avoidTok += t.AvoidableTokens
+		rebilled += t.RebilledUSD
+		rebilledTok += t.RebilledTokens
 		breaks += t.Breaks
 		reqs += t.Requests
-		if worst < 0 || t.AvoidableTokens > rep.Tasks[worst].AvoidableTokens {
+		if worst < 0 || t.RebilledTokens > rep.Tasks[worst].RebilledTokens {
 			worst = i
 		}
 	}
@@ -178,12 +178,12 @@ func runSince(args []string, stdout, stderr io.Writer) error {
 	_, _ = fmt.Fprintf(stdout, "    %d session(s)   %d request(s)   $%.2f\n", len(window), reqs, total)
 	if breaks > 0 {
 		_, _ = fmt.Fprintf(stdout, "    %d cache break(s)   $%.2f re-billed, %s tokens\n",
-			breaks, avoidable, thousands(avoidTok))
+			breaks, rebilled, thousands(rebilledTok))
 	}
 	if worst >= 0 && rep.Tasks[worst].Breaks > 0 {
 		w := rep.Tasks[worst]
 		_, _ = fmt.Fprintf(stdout, "\n    largest: session %s at %s, %s tokens re-billed\n",
-			w.Session, w.At.Local().Format("15:04"), thousands(w.AvoidableTokens))
+			w.Session, w.At.Local().Format("15:04"), thousands(w.RebilledTokens))
 		// The cause lives per turn, and this row does not carry it. Pointing at
 		// the command that does beats guessing at one here.
 		_, _ = fmt.Fprintf(stdout, "    for the cause:  replay diff <transcript>\n")
