@@ -5,6 +5,7 @@
 [![Go](https://img.shields.io/badge/go-1.24-00ADD8?logo=go&logoColor=white)](go.mod)
 [![Dependencies](https://img.shields.io/badge/dependencies-0-success)](cmd/replay/x402_test.go)
 [![Coverage](https://img.shields.io/badge/coverage-%E2%89%A585%25-success)](scripts/coverage-gate.sh)
+[![govulncheck](https://img.shields.io/badge/govulncheck-no%20known%20vulnerabilities-success)](.github/workflows/ci.yml)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)](#platform-support-macos-and-linux-only)
 [![License](https://img.shields.io/badge/license-BUSL%201.1%20(source--available)-blue)](LICENSE)
 
@@ -480,6 +481,51 @@ the [roadmap](docs/ROADMAP.md) says plainly what is unfinished.
 
 If it saved you something, [FUNDING.md](FUNDING.md) says how to say so. The tool is free; the
 measurements behind it are real API spend.
+
+## About the author
+
+Replay Doctor is written and maintained by **Daniel Saito**, founder of
+[Red Robot K.K.](https://redrobot.jp), Tokyo. One person, one machine, one
+account: every figure this project publishes was measured on that machine, and
+every report says so rather than implying a population it does not have.
+
+The habits in this repository come from that constraint. A single maintainer
+cannot review his own diff twice, so the checks do it instead: tests are
+neutralised and watched to go red before they are trusted, guards that no test
+can reach are reported rather than deleted, and a figure that loses its
+population is withdrawn rather than refreshed. The corrections are published with
+the wrong number left standing, because a project that only records its wins is
+a project whose numbers you cannot check.
+
+## A note from Daniel, who maintains this
+
+Replay is free to run and stays that way: every command, every model, no account,
+no key, no network call. Nothing that works in a release you already have will
+ever move behind a payment.
+
+What is not free is the measurement behind it. Replay's cache figures are
+measured rather than estimated because they were calibrated against **32,188 real
+requests across 115 sessions** of my own agent work, read on 2026-09-07. Adding
+each provider costs the same again: the Codex support came out of **148 sessions
+and 610 million tokens** of my own logs.
+
+I am not going to pretend that corpus was money out of my pocket. I was on a
+subscription, so what I actually paid was the monthly fee and the time. At list
+prices it is a four-figure sum, and the exact number lives in
+[FUNDING.md](FUNDING.md) with its date rather than here, because a figure typed
+into a second file drifts from the first and nothing notices. Replay prints that
+same caveat every time it prints a dollar, and an appeal that quietly dropped it
+would be the one place the tool's own rule did not apply.
+
+The tool found **five percent of my own bill re-billed** by broken caches before
+it found anyone else's. If it found something on your machine that you had
+already paid for once, a share of that back is what keeps this maintained.
+
+**[Support the work](https://buymeacoffee.com/saitodaniel)** ·
+[What it pays for](FUNDING.md) · [Sponsors](SPONSORS.md)
+
+There is no deadline, no counter, and nothing stops if nobody pays. None of
+those would be true.
 
 ## License
 

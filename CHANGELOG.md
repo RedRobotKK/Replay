@@ -311,7 +311,6 @@ All notable changes to this project are documented here. The format follows [Kee
   pin, checked on 2026-09-12 with go1.27.1 installed and used, so `go-latest`
   still tests against the newest release.
 
-
 - **`replay cost` prints four billed legs.** Cache write, cache read, uncached
   input, output. Token cuts that only shrink cached prefix save at the read
   multiple, not at input.

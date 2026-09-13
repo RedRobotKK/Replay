@@ -78,7 +78,7 @@ func TestPD2_APriceChangeMovesTheDigest(t *testing.T) {
 	before := PricingDigest()
 
 	rows, unknown := snapshot()
-	rows[0].price.InputPerMTok += 1
+	rows[0].price.InputPerMTok++
 	withPricing(t, rows, unknown)
 
 	if after := PricingDigest(); after == before {
@@ -98,7 +98,7 @@ func TestPD3_AnOutputPriceChangeMovesTheDigest(t *testing.T) {
 	before := PricingDigest()
 
 	rows, unknown := snapshot()
-	rows[0].price.OutputPerMTok += 1
+	rows[0].price.OutputPerMTok++
 	withPricing(t, rows, unknown)
 
 	if after := PricingDigest(); after == before {
@@ -116,7 +116,7 @@ func TestPD4_TheCacheReadMultipleMovesTheDigest(t *testing.T) {
 	before := PricingDigest()
 
 	rows, unknown := snapshot()
-	rows[0].price.ReadMult = rows[0].price.ReadMult / 4
+	rows[0].price.ReadMult /= 4
 	withPricing(t, rows, unknown)
 
 	if after := PricingDigest(); after == before {
@@ -188,7 +188,7 @@ func TestPD7_TheUnknownModelFallbackMovesTheDigest(t *testing.T) {
 	before := PricingDigest()
 
 	rows, unknown := snapshot()
-	unknown.price.ReadMult = unknown.price.ReadMult / 4
+	unknown.price.ReadMult /= 4
 	withPricing(t, rows, unknown)
 
 	if after := PricingDigest(); after == before {
@@ -206,7 +206,9 @@ func TestPD8_AddingOrRemovingARowMovesTheDigest(t *testing.T) {
 	before := PricingDigest()
 
 	rows, unknown := snapshot()
-	grown := append(rows, modelRow{"a-model-that-does-not-exist", minPrefixStandard, Price{7, 21, ReadMultiplier}, true})
+	grown := make([]modelRow, len(rows), len(rows)+1)
+	copy(grown, rows)
+	grown = append(grown, modelRow{"a-model-that-does-not-exist", minPrefixStandard, Price{7, 21, ReadMultiplier}, true})
 	withPricing(t, grown, unknown)
 	grownDigest := PricingDigest()
 	if grownDigest == before {

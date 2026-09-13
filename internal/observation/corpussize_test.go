@@ -107,16 +107,16 @@ func TestCS2_TheWireFormStaysUnderTheDocumentedBound(t *testing.T) {
 // to stay valid and stay poolable, which is the promise CB1 and CB5 make and
 // this one measures.
 func TestCS3_TheSmallestSubmissionIsStillValid(t *testing.T) {
-	min := Corpus{
+	smallest := Corpus{
 		Schema: CorpusSchema, TakenAt: "2026-09-12T00:00:00Z",
 		Tasks: 1, TotalUSD: 1, MedianTaskUSD: 1,
 		PricedAt: "2026-09-07", RulesVersion: "anthropic-2026-09-01",
 		SourceTag: "a", TagBasis: "operator",
 	}.Digested()
-	if err := min.Validate(); err != nil {
+	if err := smallest.Validate(); err != nil {
 		t.Fatalf("the minimum submission does not validate: %v", err)
 	}
-	body, _ := json.Marshal(min)
+	body, _ := json.Marshal(smallest)
 	if len(body) > corpusDocumentedMaxBytes {
 		t.Errorf("the minimum submission is %d bytes", len(body))
 	}

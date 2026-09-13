@@ -32,6 +32,8 @@ field list and the size, not an assurance.
 > fields are a ratio and two counts, with no path from any of them back to code,
 > prompts or a project.
 
+---
+
 > **Amended 2026-09-12, and this one changes a claim rather than extending it.**
 > Three more optional fields were added for defect #284: `binaryVersion`,
 > `commit` and `pricingDigest`. A populated submission is now **19 fields**, and

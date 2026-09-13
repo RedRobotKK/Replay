@@ -80,7 +80,7 @@ are pinned by a test that names the documents quoting them.
 
 ---
 
-# The path to 1.0
+## The path to 1.0
 
 Four gates in [`../RELEASE-CRITERIA.md`](../RELEASE-CRITERIA.md) are unmet. The
 releases below are the order they come off in, chosen by what unblocks what
@@ -221,13 +221,13 @@ checked by somebody other than the person who wrote them.
 
 ---
 
-# After 1.0
+## After 1.0
 
 A feature list this far out would be fiction, and this file is not the place to
 start writing any. What follows is the part that is knowable: the obligations a
 1.0 creates, and the evidence that decides the direction.
 
-## v1.x: what a 1.0 actually commits you to
+### v1.x: what a 1.0 actually commits you to
 
 The release that costs the most is the one after the promise. These are standing
 obligations rather than features, and none of them are optional once the number
@@ -255,7 +255,7 @@ has a 1 in front of it.
   why the escalation path went in before the launch rather than after the first
   missed acknowledgement.
 
-## The three doors, and which one opens is not up to the maintainer
+### The three doors, and which one opens is not up to the maintainer
 
 Every roadmap past here forks on one fact that does not exist yet: whether
 anybody else contributes a corpus. The 0.6 pool work and the launch exist to
@@ -299,7 +299,7 @@ local one about this machine, and only the first can ever be sold.
 [`MONEY-PATH.md`](MONEY-PATH.md) carries the tiers, including what an enterprise
 buyer is told no about.
 
-## What would justify a 2.0
+### What would justify a 2.0
 
 Not features. A major version is a promise broken on purpose, and there are only
 two honest reasons to break one here: a published data format has to change in a
@@ -308,7 +308,7 @@ schema absorbed six new fields across two releases without moving, so the bar is
 not theoretical. If a 2.0 happens it should be nameable in one sentence, and the
 sentence should be about what stopped working.
 
-## What stays a not goal
+### What stays a not goal
 
 Restated so that a busy year does not quietly adopt them: translating between
 provider API shapes, replacing server-side compaction or context editing, any
@@ -318,7 +318,7 @@ Vector store, agent to agent messaging, virtual filesystem, a Rust sidecar and a
 web dashboard remain deferred until a user asks, and "a user asked" means a user
 asked rather than a maintainer imagining one.
 
-## What would end it
+### What would end it
 
 Worth writing down while it is cheap to write down.
 
