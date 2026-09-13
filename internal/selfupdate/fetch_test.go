@@ -436,7 +436,7 @@ func signedRelease(t *testing.T, withSignature bool) (*httptest.Server, string) 
 func TestSIG5_AFailureToStageTheSignatureInstallsNothing(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
-		break_ func()
+		damage func()
 	}{
 		{"the temp directory cannot be made", func() {
 			makeVerifyDir = func() (string, error) { return "", errors.New("no space left on device") }
@@ -450,7 +450,7 @@ func TestSIG5_AFailureToStageTheSignatureInstallsNothing(t *testing.T) {
 			t.Cleanup(func() { lookCosign, runCosign, makeVerifyDir, writeVerifyFile = rl, rr, rd, rw })
 			lookCosign = func() (string, error) { return "/usr/bin/cosign", nil }
 			runCosign = func(_ context.Context, _ string, _ ...string) error { return nil }
-			tc.break_()
+			tc.damage()
 
 			srv, base := signedRelease(t, true)
 			defer srv.Close()
