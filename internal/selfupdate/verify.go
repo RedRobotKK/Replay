@@ -101,6 +101,17 @@ func (c *Client) verifyChecksumSignature(ctx context.Context, base string, sums 
 		return fmt.Errorf("the signature could not be staged for checking, so it was not "+
 			"checked and nothing was installed: %w", err)
 	}
+	// An empty path with no error would make every filepath.Join below relative
+	// to the working directory, so the three staged files would be written into
+	// whatever directory the user happened to run `replay upgrade` from, and
+	// cosign would be handed those instead. Found while mutation-testing the
+	// branch above: neutralising it left dir empty and three files appeared in
+	// the package directory. That was a mutant rather than a defect, and the
+	// hazard it exposed is real and one line to close.
+	if dir == "" {
+		return fmt.Errorf("the signature staging directory came back empty, so the " +
+			"signature was not checked and nothing was installed")
+	}
 	defer func() { _ = os.RemoveAll(dir) }()
 
 	for name, body := range map[string][]byte{

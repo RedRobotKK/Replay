@@ -441,6 +441,9 @@ func TestSIG5_AFailureToStageTheSignatureInstallsNothing(t *testing.T) {
 		{"the temp directory cannot be made", func() {
 			makeVerifyDir = func() (string, error) { return "", errors.New("no space left on device") }
 		}},
+		{"the staging directory comes back empty", func() {
+			makeVerifyDir = func() (string, error) { return "", nil }
+		}},
 		{"a staged file cannot be written", func() {
 			writeVerifyFile = func(string, []byte) error { return errors.New("no space left on device") }
 		}},

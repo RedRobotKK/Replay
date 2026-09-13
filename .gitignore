@@ -52,3 +52,7 @@ docs/demo/.replay-demo-bin
 # figures that are snapshots rather than maintained claims, so it must not be
 # published from here where a reader would take it for documentation.
 /.canvas/
+
+# Python bytecode from the packaging test scripts.
+__pycache__/
+*.pyc
