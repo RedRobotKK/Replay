@@ -10,6 +10,7 @@
   "type": "module",
   "bin": { "replay-doctor": "bin/replay-doctor.js" },
   "files": ["bin", "lib", "README.md"],
+  "optionalDependencies": {},
   "engines": { "node": ">=18" },
   "os": ["darwin", "linux"],
   "cpu": ["x64", "arm64"],

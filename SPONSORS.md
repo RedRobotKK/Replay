@@ -29,6 +29,32 @@ Sponsorship pays for the parts that are not fun:
 - Adding a second provider properly, instead of pretending one caching model
   fits three different mechanisms.
 
+## The free CI gate, named so it cannot be taken back
+
+**Added 2026-09-13.** `replay cost --max-avoidable-usd <ceiling>` fails a build
+when measured avoidable spend crosses a ceiling you type. It is free, it has
+been free since it shipped, and **nothing that is free today ever becomes
+paid**, so it stays free. Naming it here is the point: a promise that covers
+"everything free today" protects a capability nobody wrote down only until
+somebody forgets it exists.
+
+**Why this needs saying now.** A paid `replay gate` is designed in
+[the money path](docs/MONEY-PATH.md), and the two would be easy to confuse. If
+the paid one turned out to be a better version of this, the promise above would
+already have been broken. So the distinction is written before the code, in one
+sentence a customer would have to accept:
+
+> The free gate is retrospective. It reads transcripts you already have and
+> refuses when the waste that already happened is over a ceiling. A paid gate
+> would be prospective: it prices the standing per-request cost of the
+> configuration you just committed, against an artefact committed beside it,
+> and answers a question no transcript can, because the requests have not
+> happened yet.
+
+One measures a bill. The other prices a change before it is charged for. If
+that distinction ever stops being true, the paid capability is not a new
+capability and must not be sold.
+
 ## Current sponsors
 
 Nobody yet. This section is empty on purpose rather than seeded with names, and

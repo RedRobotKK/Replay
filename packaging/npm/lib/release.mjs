@@ -39,8 +39,20 @@ export function expectedHash(checksums, name) {
   return null;
 }
 
-/** Strip the pre-release marker the workflow uses before publishing. */
+/**
+ * The version the launcher will fetch, which must be a real release tag.
+ *
+ * The checked-in package.json carries a placeholder that the publish workflow
+ * replaces from the tag. A prefix match let "0.0.0-set-by-release-workflow"
+ * through as 0.0.0, which would have sent a launcher run from the repository
+ * to fetch a release that does not exist. Whole-string semver, with an
+ * optional pre-release suffix for release candidates, and the placeholder is
+ * refused by name.
+ */
 export function releaseVersion(pkgVersion) {
-  if (!/^\d+\.\d+\.\d+/.test(pkgVersion)) throw new Error(`package version ${pkgVersion} was not set by the release workflow`);
-  return pkgVersion;
+  const v = String(pkgVersion || '');
+  if (v.includes('set-by-release-workflow') || !/^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/.test(v)) {
+    throw new Error(`package version "${v}" is not a released version; the publish workflow sets it from the tag`);
+  }
+  return v;
 }

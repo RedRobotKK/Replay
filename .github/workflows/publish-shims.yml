@@ -1,0 +1,79 @@
+name: Publish the npm and PyPI shims
+
+# Runs when goreleaser has published a release (release.yml creates it), so the
+# shims can only ever point at a release that exists and is signed. Both jobs
+# download the release assets with gh, verify against checksums.txt in code,
+# and publish with the registries' provenance mechanisms: npm provenance and
+# PyPI Trusted Publishing, both from this workflow's OIDC identity, no long
+# lived tokens.
+#
+# ONE-TIME SETUP, by a human:
+#   npm:  create the package once (npm publish from a laptop is fine for 0.0.1,
+#         or use npm's trusted publishing for RedRobotKK/Replay + this workflow),
+#         then either set NPM_TOKEN (automation token) or rely on trusted
+#         publishing. `id-token: write` is what --provenance needs.
+#   PyPI: create the project replay-doctor and add a trusted publisher:
+#         owner RedRobotKK, repository Replay, workflow publish-shims.yml,
+#         environment pypi.
+#
+# Actions are pinned by tag here; this repository's policy is SHA pins, and the
+# SHAs should be filled in before the first tag that runs this (the session
+# that wrote it could not resolve them).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: release tag to publish shims for, e.g. v1.0.0
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', registry-url: 'https://registry.npmjs.org' }
+      - name: Unit tests for the shim
+        run: cd packaging/npm && npm test
+      - name: Download the release assets
+        env: { GH_TOKEN: ${{ github.token }} }
+        run: gh release download "$TAG" -p 'replay_*_*.tar.gz' -p 'checksums.txt' -D dist-release
+      - name: Build the four platform packages, verified against checksums.txt
+        run: node packaging/npm/scripts/build-platform-packages.mjs --version "${TAG#v}" --dist dist-release
+      # Platform packages first, then the main package that depends on them,
+      # so there is never a published main package whose optional dependency
+      # does not exist yet.
+      - name: Publish the platform packages with provenance
+        run: for d in packaging/npm/build/*/; do (cd "$d" && npm publish --provenance --access public); done
+        env: { NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} }
+      - name: Publish replay-doctor with provenance
+        run: cd packaging/npm && npm publish --provenance --access public
+        env: { NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} }
+
+  pypi:
+    runs-on: ubuntu-latest
+    environment: pypi
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Unit tests for the wheel builder
+        run: python3 -m unittest packaging/pypi/test_build_wheels.py
+      - name: Download the release assets
+        env: { GH_TOKEN: ${{ github.token }} }
+        run: gh release download "$TAG" -p 'replay_*_*.tar.gz' -p 'checksums.txt' -D dist-release
+      - name: Build one wheel per platform, verified against checksums.txt
+        run: python3 packaging/pypi/build_wheels.py --version "${TAG#v}" --dist dist-release --out wheelhouse
+      - name: Publish with Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with: { packages-dir: wheelhouse/ }

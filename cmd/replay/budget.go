@@ -11,6 +11,7 @@ import (
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/transcript"
+	"github.com/RedRobotKK/Replay/internal/version"
 )
 
 // The standing cost of a configuration, as a file a repository can commit.
@@ -51,7 +52,15 @@ import (
 // BudgetSchema versions the artefact. A committed file outlives the binary that
 // wrote it, and a gate that cannot tell which shape it is reading is a gate
 // that will one day compare two different things and call it a pass.
-const BudgetSchema = 1
+//
+// 2, from 2026-09-13: the artefact gained BinaryVersion and Commit. Nothing
+// reads a budget file yet, because the gate does not exist, so there is no
+// installed base to keep readable and no reason to make the fields optional.
+// That is the opposite of the call made for corpus submissions in v0.6.0, where
+// an installed base did exist and the fields had to be omitempty to keep every
+// published digest reproducible. Same problem, different answer, because the
+// populations differ.
+const BudgetSchema = 2
 
 type budgetFile struct {
 	Schema    int       `json:"schema"`
@@ -63,6 +72,51 @@ type budgetFile struct {
 	// point the reader at something that does not exist.
 	Servers  map[string]int `json:"servers"`
 	Measured measured       `json:"measured"`
+
+	// Which build produced the counts above.
+	//
+	// `Measured` records the corpus. This records the code, and both are needed
+	// because they fail differently: the same build over two corpora is what
+	// Measured already covered, and the same corpus read by two builds is this.
+	//
+	// It is not hypothetical. `Standing.TokensPerRequest` is a count this tree
+	// produced, and what counts as a tool token, how the system prompt is
+	// measured and which requests are admissible are all decisions here rather
+	// than facts about the world. Two builds can read one ledger and write
+	// different standing costs. A gate reading this file months later would
+	// compare them and call the difference a regression in the user's
+	// configuration, which is the worst available failure: it fails a stranger's
+	// build and blames them for a change we made.
+	//
+	// THERE IS DELIBERATELY NO PRICING DIGEST. A review recommended one by
+	// analogy with the corpus submission, and the analogy does not hold: this
+	// file contains no dollar, and every figure in it is a token count. Prices
+	// moving does not move a token count, so a pricing digest here would be
+	// provenance for a computation that never happened. If a gate ever compares
+	// dollars, it becomes necessary in that commit and not before.
+	BinaryVersion string `json:"binary_version"`
+	Commit        string `json:"commit"`
+}
+
+// newBudgetFile builds the artefact with its provenance attached.
+//
+// A constructor rather than a struct literal, so that provenance cannot be
+// omitted by writing a literal somewhere else. The gate will read this file and
+// fail builds on it; a second construction path that forgot the build fields is
+// the defect this shape exists to prevent.
+func newBudgetFile(st standing, servers map[string]int, m measured) budgetFile {
+	if servers == nil {
+		servers = map[string]int{}
+	}
+	return budgetFile{
+		Schema:        BudgetSchema,
+		Generated:     time.Now().UTC(),
+		Standing:      st,
+		Servers:       servers,
+		Measured:      m,
+		BinaryVersion: version.Version,
+		Commit:        version.Commit,
+	}
 }
 
 type standing struct {
@@ -228,17 +282,15 @@ func runBudget(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	out := budgetFile{
-		Schema:    BudgetSchema,
-		Generated: time.Now().UTC(),
-		Standing: standing{
+	out := newBudgetFile(
+		standing{
 			SystemTokens: fit.EstimateTokens(sysBytes),
 			ToolTokens:   fit.EstimateTokens(toolBytes),
 			ToolCount:    toolCount,
 		},
-		Servers:  map[string]int{},
-		Measured: measured{Sessions: sessions, Requests: requests, Source: "ledger", Model: model},
-	}
+		nil,
+		measured{Sessions: sessions, Requests: requests, Source: "ledger", Model: model},
+	)
 	// The headline is the sum of its parts by construction, never computed
 	// separately. Two paths to one number is how they come to disagree.
 	out.Standing.TokensPerRequest = out.Standing.SystemTokens + out.Standing.ToolTokens
