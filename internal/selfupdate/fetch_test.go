@@ -434,19 +434,55 @@ func signedRelease(t *testing.T, withSignature bool) (*httptest.Server, string) 
 // here: staging fails, the check is skipped, and the upgrade proceeds having
 // verified nothing while reporting success.
 func TestSIG5_AFailureToStageTheSignatureInstallsNothing(t *testing.T) {
+	// Each case isolates ONE branch: everything that is not the subject is
+	// stubbed to succeed, and each asserts the message only its own branch
+	// produces.
+	//
+	// Written loosely first, and it passed for the wrong reason. The
+	// "cannot be made" case left the real writeVerifyFile in place, so
+	// neutralising the error branch let execution fall through and fail at the
+	// WRITE instead. The refusal still arrived, the assertion still matched,
+	// and the branch under test went unobserved while looking covered. A
+	// shared assertion across three cases is three chances to pass on somebody
+	// else's failure.
+	okDir := func() (string, error) { return t.TempDir(), nil }
+	okWrite := func(path string, body []byte) error { return os.WriteFile(path, body, 0o600) }
+
 	for _, tc := range []struct {
 		name   string
 		damage func()
+		want   string
 	}{
-		{"the temp directory cannot be made", func() {
-			makeVerifyDir = func() (string, error) { return "", errors.New("no space left on device") }
-		}},
-		{"the staging directory comes back empty", func() {
-			makeVerifyDir = func() (string, error) { return "", nil }
-		}},
-		{"a staged file cannot be written", func() {
-			writeVerifyFile = func(string, []byte) error { return errors.New("no space left on device") }
-		}},
+		{
+			name: "the temp directory cannot be made",
+			damage: func() {
+				// A NON-EMPTY path with the error, so the dir == "" guard
+				// below cannot catch this one instead.
+				makeVerifyDir = func() (string, error) {
+					return "/nonexistent/replay-verify", errors.New("no space left on device")
+				}
+				writeVerifyFile = okWrite
+			},
+			want: "staging directory for the signature could not be created",
+		},
+		{
+			name: "the staging directory comes back empty",
+			damage: func() {
+				makeVerifyDir = func() (string, error) { return "", nil }
+				writeVerifyFile = okWrite
+			},
+			want: "came back empty",
+		},
+		{
+			name: "a staged file cannot be written",
+			damage: func() {
+				makeVerifyDir = okDir
+				writeVerifyFile = func(string, []byte) error {
+					return errors.New("no space left on device")
+				}
+			},
+			want: "could not be staged for checking",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rl, rr, rd, rw := lookCosign, runCosign, makeVerifyDir, writeVerifyFile
@@ -463,6 +499,10 @@ func TestSIG5_AFailureToStageTheSignatureInstallsNothing(t *testing.T) {
 			if err == nil {
 				t.Fatal("staging failed, so the signature was never checked, and the " +
 					"upgrade proceeded anyway")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("the refusal is not this branch's, so this case would pass on "+
+					"another branch's failure. want %q, got: %v", tc.want, err)
 			}
 			if !strings.Contains(err.Error(), "nothing was installed") {
 				t.Errorf("the refusal does not say nothing was installed: %v", err)

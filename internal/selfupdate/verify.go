@@ -98,8 +98,14 @@ func (c *Client) verifyChecksumSignature(ctx context.Context, base string, sums 
 
 	dir, err := makeVerifyDir()
 	if err != nil {
-		return fmt.Errorf("the signature could not be staged for checking, so it was not "+
-			"checked and nothing was installed: %w", err)
+		// A DISTINCT message from the write failure below. Both said "could not
+		// be staged" until 2026-09-13, and with one message for two branches a
+		// test asserting on it passed whichever branch produced it: removing
+		// this one entirely let execution fall through to the write, which
+		// failed with the same words. Two failures, one sentence, one of them
+		// unobservable.
+		return fmt.Errorf("the staging directory for the signature could not be created, "+
+			"so the signature was not checked and nothing was installed: %w", err)
 	}
 	// An empty path with no error would make every filepath.Join below relative
 	// to the working directory, so the three staged files would be written into

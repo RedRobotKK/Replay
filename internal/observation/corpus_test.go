@@ -244,6 +244,15 @@ func TestCRMALFORMED_UnparseableAndMistypedDocumentsAreRefused(t *testing.T) {
 		{"an array, not an object", `[1,2,3]`},
 		{"a field of the wrong type", `{"schema":"replay.corpus.v1","tasks":"one hundred"}`},
 		{"totalUsd is a string", `{"schema":"replay.corpus.v1","totalUsd":"4236.17"}`},
+		// Every required key PRESENT and one of them the wrong type. Without
+		// this the real decode's error branch is unreachable: encoding/json
+		// rejects malformed bytes before UnmarshalJSON is ever called, and the
+		// other cases here all fail the presence check first, so nothing
+		// reached the type error at all.
+		{"rebilledUsd is a string", `{"schema":"replay.corpus.v2","rebilledUsd":"lots",` +
+			`"rebilledShare":0.0275,"tasks":121,"totalUsd":12630.61}`},
+		{"rebilledShare is an object", `{"schema":"replay.corpus.v2","rebilledUsd":347.53,` +
+			`"rebilledShare":{"x":1},"tasks":121}`},
 	} {
 		var c Corpus
 		if err := json.Unmarshal([]byte(tc.doc), &c); err == nil {
