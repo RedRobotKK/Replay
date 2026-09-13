@@ -32,13 +32,13 @@ func TestShareCardOmitsTheTotal(t *testing.T) {
 	// The card is read as a screenshot, so the action has to be executable from
 	// what is on screen. A repo URL costs a click and a scroll before anyone
 	// reaches the install line.
-	if !strings.Contains(card, "curl -fsSL") || !strings.Contains(card, "redrobot.jp/replay.sh") {
+	if !strings.Contains(card, "curl -fsSL") || !strings.Contains(card, "replay.doctor/replay.sh") {
 		t.Errorf("the card must carry the install one-liner:\n%s", card)
 	}
 	// The URL carries a query string, and zsh — the macOS default shell —
 	// treats a bare ? as a glob and aborts with "no matches found" before curl
 	// runs. An unquoted install line would fail for most people who tried it.
-	if strings.Contains(card, "?") && !strings.Contains(card, `"https://redrobot.jp/replay.sh?src=card"`) {
+	if strings.Contains(card, "?") && !strings.Contains(card, `"https://replay.doctor/replay.sh?src=card"`) {
 		t.Errorf("the install URL carries a ? and must be quoted, or zsh will refuse it:\n%s", card)
 	}
 	// And the repo beside it. A bare curl-into-shell with no verifiable source

@@ -264,7 +264,7 @@ would be a fabrication with a real figure in it.
 Both registers handle a measured zero. A card saying "tokens I paid for twice" in the largest type
 on the page, over a corpus where nothing was re-billed, is the card lying about its own figure.
 
-The install line on the card is `curl -fsSL https://redrobot.jp/c/<design> | sh` — no query string,
+The install line on the card is `curl -fsSL https://replay.doctor/<design> | sh` — no query string,
 no quotes, no shell metacharacter but the pipe. The earlier form carried `?src=card&v=b`, which zsh
 globs on the bare `?` and aborts with "no matches found" before curl runs, so it had to be quoted;
 quoting fixes the shell and breaks the human, because people retype this from a photograph of a

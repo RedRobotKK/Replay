@@ -109,8 +109,36 @@ var (
 // -fsSL stays. Without -f an HTML error page is piped into sh, and without -L a
 // redirect ends the install; they are two characters each and they are the
 // difference between a failure that says so and one that does something.
+//
+// TWO CORRECTIONS, 2026-09-13, and the second one mattered more.
+//
+// The host was redrobot.jp and the canonical install host is replay.doctor.
+//
+// And /c/<arm> was designed here and never created on either site. It returned
+// 404 on redrobot.jp and on replay.doctor, so the one artifact in this project
+// built to be posted in public carried an install command that did nothing. It
+// now resolves, through public/_redirects on replay.doctor, as a 302 to
+// /replay.sh?src=card-<arm> so the arm survives as attribution. The -L above is
+// what makes that work, which is the second reason it stays.
+//
+// The /c/ segment is gone, and the reason is the layout rather than taste.
+// replay.doctor is two characters longer than redrobot.jp, which took the line
+// from 39 characters to 41 and from a 1175px right edge to 1232px on a 1200px
+// card. TestNoCardOverrunsItsRightMargin caught it. The alternative was
+// dropping the type size from 47px to about 44px, and the paragraph above
+// argues at length that 47 is the largest that fits and that this line is the
+// one thing on the card that does anything. So the path absorbed the two
+// characters instead, and the line is 39 characters again at the same size.
+//
+// Single-letter paths at the site root are therefore a reserved namespace.
+// There are two of them and they are cheap, but a future page called /b would
+// break every card already posted.
+//
+// Nothing caught it. The install-host test added earlier the same day walks
+// markdown, and this is Go, so the most public install line in the project sat
+// outside the check written to protect install lines.
 func InstallLine(v Variant) string {
-	return "curl -fsSL https://redrobot.jp/c/" + string(v) + " | sh"
+	return "curl -fsSL https://replay.doctor/" + string(v) + " | sh"
 }
 
 // installSize is the type size of that line, and it is the number the rest of

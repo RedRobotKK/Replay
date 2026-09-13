@@ -1,7 +1,7 @@
 #!/bin/sh
 # Replay installer.
 #
-#   curl -fsSL https://redrobot.jp/replay.sh | sh
+#   curl -fsSL https://replay.doctor/replay.sh | sh
 #
 # Replay sits in the path between your agent and your model provider, so this
 # script is written to be read before it is run. It is short on purpose. It
@@ -63,7 +63,7 @@ usage() {
   cat <<'USAGE'
 Replay installer.
 
-  curl -fsSL https://redrobot.jp/replay.sh | sh
+  curl -fsSL https://replay.doctor/replay.sh | sh
 
   --version <tag>     install a specific release instead of the latest
   --bin-dir <dir>     where the binary lands

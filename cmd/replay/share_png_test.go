@@ -216,8 +216,8 @@ func TestTheDefaultDesignIsCAndIsNotAnExperiment(t *testing.T) {
 // needing a redesign to introduce later.
 func TestEachDesignCarriesItsOwnPath(t *testing.T) {
 	for arm, want := range map[string]string{
-		"b": "curl -fsSL https://redrobot.jp/c/b | sh",
-		"c": "curl -fsSL https://redrobot.jp/c/c | sh",
+		"b": "curl -fsSL https://replay.doctor/b | sh",
+		"c": "curl -fsSL https://replay.doctor/c | sh",
 	} {
 		v, err := pickVariant(arm)
 		if err != nil {
