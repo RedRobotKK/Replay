@@ -1,0 +1,10 @@
+{
+  "name": "replay",
+  "version": "1.0.0",
+  "description": "Replay Doctor: at the end of each session, one line naming what the prompt cache re-billed and the command to see which turn. Local only; nothing is sent unless a repository to watch is configured.",
+  "author": { "name": "Daniel Saito", "email": "daniel@redrobot.jp", "url": "https://replay.doctor" },
+  "homepage": "https://replay.doctor",
+  "repository": "https://github.com/RedRobotKK/Replay",
+  "license": "BUSL-1.1",
+  "keywords": ["prompt-cache", "cost", "forensics", "claude-code"]
+}

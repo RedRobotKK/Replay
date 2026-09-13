@@ -59,8 +59,58 @@ jobs:
           git diff --exit-code -- go.mod go.sum || (echo "run 'go mod tidy' and commit" && exit 1)
       - name: Vet
         run: go vet ./...
+      # Everywhere the binary actually runs.
+      #
+      # Scoped away from Windows because the binary REFUSES there (see
+      # cmd/replay/platformguard.go), so every test that calls run() fails, and
+      # it fails correctly: those tests assert behaviour the binary has just
+      # declared it will not perform on that platform. Demanding they pass
+      # would be demanding Windows do the thing the refusal exists to prevent,
+      # and the cheapest way to get the tick back would be to delete the
+      # refusal.
+      #
+      # This is not a loss of coverage. It is the end of a false one. The
+      # Windows leg was green for weeks because internal/ownerdir's check is a
+      # no-op there: 40% statement coverage against 100% on ubuntu, and
+      # twenty-two tests skipping with "Unix permission bits".
       - name: Test
+        if: matrix.os != 'windows-latest'
         run: go test -race -count=1 -coverprofile=coverage.out ./...
+      # What is true on Windows: the tree compiles, and every package with no
+      # platform refusal in it passes.
+      - name: Test the packages that do not refuse
+        if: matrix.os == 'windows-latest'
+        run: go test -race -count=1 ./internal/...
+      # And the refusal itself, against the built artifact.
+      #
+      # This is the only end-to-end evidence anywhere that the refusal reaches a
+      # user, and before 2026-09-13 it was checked by nothing. A check against
+      # the source is what passed for weeks while the artifact went unexamined.
+      - name: Windows refuses
+        if: matrix.os == 'windows-latest'
+        run: |
+          go build -trimpath -o replay.exe ./cmd/replay
+          set +e
+          out=$(./replay.exe version 2>&1 >/dev/null)
+          code=$?
+          set -e
+          echo "$out"
+          if [ "$code" -eq 0 ]; then
+            echo "FAIL: the Windows build ran the command instead of refusing." >&2
+            exit 1
+          fi
+          if [ "$code" -eq 3 ]; then
+            echo "FAIL: exit 3 is exitGateBreached, the only code that may block a merge." >&2
+            echo "A platform that cannot be evaluated is not a measured breach." >&2
+            exit 1
+          fi
+          case "$out" in
+            *Windows*ownerdir*) ;;
+            *) echo "FAIL: the refusal does not name Windows and ownerdir, so a user" >&2
+               echo "cannot tell what specifically is not being done for them." >&2
+               exit 1 ;;
+          esac
+          echo "ok: the Windows build refuses, exit $code, and says why."
       # Enforced on one runner, printed on the rest.
       #
       # Coverage is not comparable across the matrix: files tagged
@@ -75,7 +125,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: ./scripts/coverage-gate.sh coverage.out
       - name: Coverage
-        if: matrix.os != 'ubuntu-latest'
+        if: matrix.os == 'macos-latest'
         run: go tool cover -func=coverage.out | tail -1
       - name: Build
         run: go build -trimpath ./...
