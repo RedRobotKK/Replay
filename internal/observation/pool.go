@@ -439,6 +439,82 @@ type poolDoc struct {
 	SupersededNote string      `json:"supersededNote,omitempty"`
 }
 
+// UnmarshalJSON refuses a roster entry written before the 2026-09-13 rename,
+// and one that simply omits the figures.
+//
+// Corpus needed this guard twice, once for each half, and Pool was given the
+// v2 schema bump in the same commit and neither refusal. A v1 roster therefore
+// read back with totalUsd intact and rebilledUsd zero: verified before this
+// existed, schema replay.pool.v1 accepted, totalUsd 100 preserved, RebilledUSD 0.
+//
+// THE POOL IS MORE EXPOSED THAN A SUBMISSION, NOT LESS. A corpus file is one
+// contributor's. The pool is the PUBLISHED artifact: what the site renders, what
+// a stranger downloads to check the arithmetic, what `replay pool` regenerates.
+// A silent zero there is a zero in the number this project asks people to trust.
+//
+// Presence, not a value, for the same reason as Corpus: a perfect cache measures
+// zero and that row is worth having.
+func (e *PoolEntry) UnmarshalJSON(b []byte) error {
+	var probe map[string]json.RawMessage
+	// The probe's error is discarded and the real decode below reports it, as
+	// in Corpus.UnmarshalJSON and for the same reason: two spellings of one
+	// refusal, one of them untestable.
+	_ = json.Unmarshal(b, &probe)
+
+	var found []string
+	for _, old := range sortedKeys(renamedCorpusFields) {
+		if _, ok := probe[old]; ok {
+			found = append(found, fmt.Sprintf("%s (now %s)", old, renamedCorpusFields[old]))
+		}
+	}
+	if len(found) > 0 {
+		return fmt.Errorf("this roster entry carries %s. Those names were retired on "+
+			"2026-09-13 and reading this pool would report zero rather than its real "+
+			"figures", strings.Join(found, ", "))
+	}
+	for _, need := range []string{"rebilledUsd", "rebilledShare"} {
+		if _, ok := probe[need]; !ok {
+			return fmt.Errorf("this roster entry has no %q key. A missing figure and a "+
+				"measured zero are different things, and this document is the one a "+
+				"stranger downloads to check the arithmetic", need)
+		}
+	}
+
+	type plain PoolEntry
+	var out plain
+	if err := json.Unmarshal(b, &out); err != nil {
+		return err
+	}
+	*e = PoolEntry(out)
+	return nil
+}
+
+// UnmarshalJSON refuses a pool document declaring a schema this build does not
+// write.
+//
+// The entries under replay.pool.v1 mean something different from the ones under
+// v2, and reading them under this version is guessing rather than reading.
+func (p *Pool) UnmarshalJSON(b []byte) error {
+	var probe struct {
+		Schema string `json:"schema"`
+	}
+	if err := json.Unmarshal(b, &probe); err != nil {
+		return err
+	}
+	if probe.Schema != PoolSchema {
+		return fmt.Errorf("this pool declares schema %q and this build writes %q. The "+
+			"field names changed in v2 (avoidableUsd became rebilledUsd), so its rows "+
+			"do not mean what this build would read them to mean", probe.Schema, PoolSchema)
+	}
+	type plain Pool
+	var out plain
+	if err := json.Unmarshal(b, &out); err != nil {
+		return err
+	}
+	*p = Pool(out)
+	return nil
+}
+
 // MarshalJSON emits the roster with its derived totals, or fails.
 //
 // An empty pool does not serialise. Same rule as Totals: there is no such
