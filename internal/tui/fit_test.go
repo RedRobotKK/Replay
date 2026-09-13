@@ -24,7 +24,7 @@ import (
 
 // FT1: a long sentence is wrapped to the width.
 func TestFT1_ProseWraps(t *testing.T) {
-	in := "  Median $32.25, p90 $32.25, $1.89 avoidable. List price, not your bill."
+	in := "  Median $32.25, p90 $32.25, $1.89 re-billed. List price, not your bill."
 	got := Fit(in, 40)
 	if len(got) < 2 {
 		t.Fatalf("a %d-cell line did not wrap at 40: %q", VisibleLen(in), got)

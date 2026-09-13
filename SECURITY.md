@@ -11,6 +11,8 @@ Replay will sit between developers and their model provider and will hold API ke
 
 Include the version (`replay version`), platform, a reproduction, and the impact as you understand it. You will get an acknowledgement within 3 working days and a status update at least every 7 days until resolution.
 
+**If 3 working days pass with no acknowledgement, escalate.** Email `hello@redrobot.jp` with `SECURITY ESCALATION` in the subject, and if that also goes unanswered, treat the 90-day coordinated-disclosure clock below as having started on the date you first wrote. This project is maintained by one person and is launching on 2026-09-14; the clock a reporter is held to should not depend on one inbox being read. Saying that here costs nothing and removes the only thing that makes a private report worse than a public one.
+
 ## Scope
 
 In scope: anything in this repository, including the daemon, its build and release pipeline, and the documentation where it would lead a user into an unsafe configuration.

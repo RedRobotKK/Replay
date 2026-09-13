@@ -8,7 +8,7 @@ You do not need to change how your agent works, and nothing leaves your machine.
 ## Install
 
 ```sh
-curl -fsSL https://redrobot.jp/replay.sh | sh
+curl -fsSL https://replay.doctor/replay.sh | sh
 ```
 
 If you already have Go, `go install github.com/RedRobotKK/Replay/cmd/replay@latest` does the same
@@ -49,10 +49,10 @@ of that spend nobody chose. Nothing to configure and nothing to point it at. If 
 transcripts it prints the command list instead, which is the honest answer to a machine with nothing
 on it yet.
 
-The avoidable line comes in two currencies, and the second one is probably yours:
+The re-billed line comes in two currencies, and the second one is probably yours:
 
 ```text
-  avoidable      $150.27  (5% of the total)
+  re-billed      $150.27  (5% of the total)
                  31.4M tokens re-billed
 ```
 

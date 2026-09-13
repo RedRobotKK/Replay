@@ -132,7 +132,7 @@ func TestIW5_TheLongTTLMovesTheDeadline(t *testing.T) {
 //
 // PASS: silent on a prefix whose loss is negligible.
 // FAIL: a warning on every short session, which is how a signal becomes
-// furniture. 56% of sessions in the measured corpus have no avoidable spend at
+// furniture. 56% of sessions in the measured corpus have no re-billed spend at
 // all; a tool that speaks on all of them is right rarely and ignored quickly.
 func TestIW6_TrivialLossIsSilent(t *testing.T) {
 	r := MeasureIdleRisk("claude-opus-5", 6_000, 4*time.Minute, 0)

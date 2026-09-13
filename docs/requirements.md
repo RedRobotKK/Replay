@@ -345,7 +345,7 @@ and this row's answer does not change. See
 |----------|--------|
 | macOS (arm64, amd64) | Supported from v0.1 |
 | Linux (amd64, arm64) | Supported from v0.1 |
-| Windows | **UNSUPPORTED, and never tested.** This row said "proxy verified in CI from v0.2". It was not: the Windows job failed at `go vet` before reaching its test step, so no test has ever run there. Corrected 2026-09-06, when fixing the compile error produced the first Windows test run and fourteen failed. See [RELEASE-CRITERIA.md](../RELEASE-CRITERIA.md) |
+| Windows | **UNSUPPORTED, and the binary refuses there as of 2026-09-13. It IS tested: the job runs on every push and passes, which is the defect rather than the reassurance, because it passes by skipping the ownership checks.** This row said "proxy verified in CI from v0.2". It was not: the Windows job failed at `go vet` before reaching its test step, so no test has ever run there. Corrected 2026-09-06, when fixing the compile error produced the first Windows test run and fourteen failed. See [RELEASE-CRITERIA.md](../RELEASE-CRITERIA.md) |
 | Devcontainers and WSL | Loopback TCP with token; documented networking pattern from v0.2 |
 
 ## 10. Security

@@ -87,7 +87,7 @@ func (s bScript) script() Script {
 // sayB writes the receipt.
 //
 // The figure is the peak row's re-billed tokens in both tones, never the corpus
-// sum. See peakAvoidableTokens in cmd/replay/sharepng.go: a sum divides by the
+// sum. See peakRebilledTokens in cmd/replay/sharepng.go: a sum divides by the
 // rate into a spend total, and a peak divides into nothing because a reader
 // cannot know how many rows produced it. The rekt tone prints that peak exactly
 // where the measured tone abbreviates it, and says which row it came from,
@@ -109,12 +109,12 @@ func sayB(t Tone, d Data) bScript {
 				commas(d.Tasks), d.unit(), d.MedianUSD, d.P90USD),
 			commas(d.Breaks) + " cache breaks",
 		}
-		s.Figure = commas(d.PeakAvoidableTokens)
+		s.Figure = commas(d.PeakRebilledTokens)
 		s.Legs = []string{
 			"tokens I paid for twice.",
 			"One " + d.unitSingular() + ". No warning. No line item.",
 		}
-		if d.PeakAvoidableTokens == 0 {
+		if d.PeakRebilledTokens == 0 {
 			// A zero under "tokens I paid for twice" is the card lying in the
 			// largest type on the page.
 			s.Legs = []string{"tokens were billed twice.", "Nothing was re-billed. I checked."}
@@ -126,9 +126,9 @@ func sayB(t Tone, d Data) bScript {
 			d.Tasks, d.unit(), d.MedianUSD, d.P90USD),
 		fmt.Sprintf("%d cache breaks", d.Breaks),
 	}
-	s.Figure = shortTokens(d.PeakAvoidableTokens)
+	s.Figure = shortTokens(d.PeakRebilledTokens)
 	s.Legs = []string{"tokens billed twice,", "in one " + d.unitSingular() + ".", "Nothing told me."}
-	if d.PeakAvoidableTokens == 0 {
+	if d.PeakRebilledTokens == 0 {
 		s.Legs = []string{"tokens billed twice.", "Nothing was re-billed.", "Now I can tell."}
 	}
 	return s
@@ -169,12 +169,12 @@ func (s cScript) script() Script {
 func sayC(t Tone, d Data) cScript {
 	s := cScript{Install: InstallLine(VariantC)}
 	if t == ToneRekt {
-		s.Head = []string{"I paid for", commas(d.PeakAvoidableTokens) + " tokens twice."}
+		s.Head = []string{"I paid for", commas(d.PeakRebilledTokens) + " tokens twice."}
 		s.Sub = "In one " + d.unitSingular() + ". Nothing told me."
-		s.Absolute = commas(d.PeakAvoidableTokens)
+		s.Absolute = commas(d.PeakRebilledTokens)
 		s.Lead = commas(d.Breaks)
 		s.Segs = []string{"cache breaks", "none of them said so", commas(d.Tasks) + " " + d.unit()}
-		if d.PeakAvoidableTokens == 0 {
+		if d.PeakRebilledTokens == 0 {
 			s.Head = []string{"Nothing was", "paid for twice."}
 			s.Sub = "I checked."
 			s.Segs = []string{"cache breaks", commas(d.Tasks) + " " + d.unit()}
@@ -186,7 +186,7 @@ func sayC(t Tone, d Data) cScript {
 	// figures, in the largest type on the page.
 	s.Head = []string{"My coding agent", "billed me twice."}
 	s.Sub = "I only found out because I measured it."
-	if d.AvoidableShare == 0 {
+	if d.RebilledShare == 0 {
 		s.Head = []string{"Nothing was", "billed twice."}
 		s.Sub = "I only know that because I measured it."
 	}

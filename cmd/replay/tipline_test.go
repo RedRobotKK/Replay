@@ -11,10 +11,10 @@ import (
 // has told you what you already paid twice. It is not a nag, so it has rules.
 func TestTipLine(t *testing.T) {
 	cases := []struct {
-		name      string
-		avoidable float64
-		want      bool
-		why       string
+		name     string
+		rebilled float64
+		want     bool
+		why      string
 	}{
 		{"nothing found", 0, false, "asking for money after finding nothing is a nag"},
 		{"trivial finding", 0.40, false, "a 40-cent finding does not earn an ask"},
@@ -26,7 +26,7 @@ func TestTipLine(t *testing.T) {
 		{"large finding", 4000, true, ""},
 	}
 	for _, c := range cases {
-		got := tipLineFor(c.avoidable, false)
+		got := tipLineFor(c.rebilled, false)
 		if (got != "") != c.want {
 			t.Errorf("%s: line=%q, want shown=%v. %s", c.name, got, c.want, c.why)
 		}
@@ -83,8 +83,8 @@ func TestTipLine(t *testing.T) {
 		if sug < tipMinUSD {
 			t.Errorf("%s: suggested $%.2f is below the $%.2f floor", c.name, sug, tipMinUSD)
 		}
-		if sug > c.avoidable {
-			t.Errorf("%s: suggested $%.2f is more than the $%.2f it found", c.name, sug, c.avoidable)
+		if sug > c.rebilled {
+			t.Errorf("%s: suggested $%.2f is more than the $%.2f it found", c.name, sug, c.rebilled)
 		}
 	}
 }

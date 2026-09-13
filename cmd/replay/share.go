@@ -33,7 +33,7 @@ const (
 	// not pass the word through as bash does — it aborts with "no matches
 	// found" before curl ever runs. An unquoted install line on a card that is
 	// posted publicly would fail for most of the people who tried it.
-	shareInstall = `curl -fsSL "https://redrobot.jp/replay.sh?src=card" | sh`
+	shareInstall = `curl -fsSL "https://replay.doctor/replay.sh?src=card" | sh`
 )
 
 // shareCard renders a paste-ready summary, or the empty string when there is
@@ -44,7 +44,7 @@ func shareCard(s costSummary, breaks int) string {
 		return ""
 	}
 
-	pct := s.AvoidableShare * 100
+	pct := s.RebilledShare * 100
 	headline := fmt.Sprintf("%.0f%% of my agent spend was paid twice.", pct)
 	if pct > 0 && pct < 1 {
 		// Rounding a real number to "0%" would report a finding as nothing.

@@ -59,8 +59,58 @@ jobs:
           git diff --exit-code -- go.mod go.sum || (echo "run 'go mod tidy' and commit" && exit 1)
       - name: Vet
         run: go vet ./...
+      # Everywhere the binary actually runs.
+      #
+      # Scoped away from Windows because the binary REFUSES there (see
+      # cmd/replay/platformguard.go), so every test that calls run() fails, and
+      # it fails correctly: those tests assert behaviour the binary has just
+      # declared it will not perform on that platform. Demanding they pass
+      # would be demanding Windows do the thing the refusal exists to prevent,
+      # and the cheapest way to get the tick back would be to delete the
+      # refusal.
+      #
+      # This is not a loss of coverage. It is the end of a false one. The
+      # Windows leg was green for weeks because internal/ownerdir's check is a
+      # no-op there: 40% statement coverage against 100% on ubuntu, and
+      # twenty-two tests skipping with "Unix permission bits".
       - name: Test
+        if: matrix.os != 'windows-latest'
         run: go test -race -count=1 -coverprofile=coverage.out ./...
+      # What is true on Windows: the tree compiles, and every package with no
+      # platform refusal in it passes.
+      - name: Test the packages that do not refuse
+        if: matrix.os == 'windows-latest'
+        run: go test -race -count=1 ./internal/...
+      # And the refusal itself, against the built artifact.
+      #
+      # This is the only end-to-end evidence anywhere that the refusal reaches a
+      # user, and before 2026-09-13 it was checked by nothing. A check against
+      # the source is what passed for weeks while the artifact went unexamined.
+      - name: Windows refuses
+        if: matrix.os == 'windows-latest'
+        run: |
+          go build -trimpath -o replay.exe ./cmd/replay
+          set +e
+          out=$(./replay.exe version 2>&1 >/dev/null)
+          code=$?
+          set -e
+          echo "$out"
+          if [ "$code" -eq 0 ]; then
+            echo "FAIL: the Windows build ran the command instead of refusing." >&2
+            exit 1
+          fi
+          if [ "$code" -eq 3 ]; then
+            echo "FAIL: exit 3 is exitGateBreached, the only code that may block a merge." >&2
+            echo "A platform that cannot be evaluated is not a measured breach." >&2
+            exit 1
+          fi
+          case "$out" in
+            *Windows*ownerdir*) ;;
+            *) echo "FAIL: the refusal does not name Windows and ownerdir, so a user" >&2
+               echo "cannot tell what specifically is not being done for them." >&2
+               exit 1 ;;
+          esac
+          echo "ok: the Windows build refuses, exit $code, and says why."
       # Enforced on one runner, printed on the rest.
       #
       # Coverage is not comparable across the matrix: files tagged
@@ -75,7 +125,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: ./scripts/coverage-gate.sh coverage.out
       - name: Coverage
-        if: matrix.os != 'ubuntu-latest'
+        if: matrix.os == 'macos-latest'
         run: go tool cover -func=coverage.out | tail -1
       - name: Build
         run: go build -trimpath ./...
@@ -141,6 +191,50 @@ jobs:
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:
           version: v2.5
+      # The workflows themselves, because a workflow that will not parse fails
+      # INVISIBLY: no jobs, no check run, nothing red in the pull request.
+      #
+      # publish-shims.yml sat unparseable from the day it was written until
+      # 2026-09-13 over one unquoted expression in a YAML flow mapping. It is
+      # the workflow that publishes the npm and PyPI shims on a release tag, so
+      # two advertised distribution channels would have published nothing and
+      # the only symptom would have been a missing package.
+      #
+      # Installed with `go install` rather than an action, because this repo
+      # pins actions by SHA and a linter for the workflows should not be the one
+      # unpinned thing in them.
+      - name: Lint the workflows
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          "$(go env GOPATH)/bin/actionlint"
+
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      # go.mod has no third-party requires, and the README badge says so. That
+      # removes the transitive-dependency problem; it does not remove the
+      # dependency. Every line this binary runs that it did not write comes from
+      # the standard library and the toolchain that compiles it, and both move.
+      # The go-latest job already exists because a stdlib shutdown change broke
+      # this project once, so the empirical guard is here and the declarative one
+      # was not.
+      #
+      # govulncheck is the right tool rather than a generic scanner because it
+      # reports only vulnerabilities in code paths actually reachable from this
+      # module, so a finding here is a finding about Replay and not about a
+      # package it happens to link.
+      #
+      # Pinned, for the reason the release workflow spells out about cosign: an
+      # action SHA pins the action, never the tool it fetches.
+      - name: Vulnerabilities in reachable code
+        run: |
+          go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
 
   x402-e2e:
     name: x402 end to end
@@ -297,7 +391,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      # 75 mutants, frozen as data in internal/mutation/testdata/mutants.json,
+      # 76 mutants, frozen as data in internal/mutation/testdata/mutants.json,
       # thawed one at a time against a scratch copy of the tree to ask whether
       # the check that caught each one still works.
       #
@@ -307,7 +401,7 @@ jobs:
       # returning quietly was itself unreachable.
       #
       # -timeout matters as much as the tag. Go's default is 10 minutes and the
-      # run needs eleven, so the obvious invocation dies around mutant 66 of 72
+      # run needs eleven, so the obvious invocation dies around mutant 66 of 76
       # with a timeout panic that looks like a broken harness.
       - name: Thaw every frozen mutant and confirm it still dies
         run: go test -tags mutation -timeout 45m -count=1 ./internal/mutation/
@@ -317,7 +411,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-go@v5
+      # Pinned to the same v5 the rest of this file already uses. The v5 tag
+      # has moved since that SHA was chosen, which is the argument for pinning
+      # stated as a fact rather than a principle.
+      - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5
         with:
           go-version-file: go.mod
       # Every command and flag in docs/CLI.md, run three times, with the exit
@@ -342,7 +439,7 @@ jobs:
         run: |
           go build -o /tmp/replay ./cmd/replay
           python3 scripts/surface-drift/drift.py --bin /tmp/replay --out /tmp/surface-drift.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: surface-drift

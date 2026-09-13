@@ -178,7 +178,7 @@ live window as though it were this user's.
 **What the command prints instead.** The token count, on its own terms, with the
 refusal beside it:
 
-- avoidable (re-billed) tokens over the ledger, and their share of total tokens
+- re-billed tokens over the ledger, and their share of total tokens
   — **structural**, arithmetic over `Response.Usage` counts that the existing
   cost path already produces and `cmd/replay/since.go:172-176` already consumes;
 - one sentence saying that the weight those tokens carry against the window is
@@ -462,7 +462,7 @@ Schema `replay.quota.v1`, versioned for the same reason `BudgetSchema`
     "undercount": {"reason": "the proxy retries 429s and records only the final attempt's headers",
                    "retried_requests": 0}
   },
-  "avoidable": {
+  "rebilled": {
     "tokens": 0, "share_of_tokens": 0.0, "tier": "structural",
     "window_share": {"status": "NOT MEASURED", "why": "<Comparison.Why, verbatim>"}
   }

@@ -178,26 +178,26 @@ func TestUO10_ACompleteDatedExportMeasuresTheBreakDeficit(t *testing.T) {
 	if *rep.Breaks != usageFixtureBreaks {
 		t.Errorf("counted %d breaks, want %d", *rep.Breaks, usageFixtureBreaks)
 	}
-	if rep.AvoidableTokens == nil || *rep.AvoidableTokens != usageFixtureDeficit {
-		t.Errorf("re-billed tokens %v, want %d", rep.AvoidableTokens, usageFixtureDeficit)
+	if rep.RebilledTokens == nil || *rep.RebilledTokens != usageFixtureDeficit {
+		t.Errorf("re-billed tokens %v, want %d", rep.RebilledTokens, usageFixtureDeficit)
 	}
 	wantUSD := float64(usageFixtureDeficit) / 1_000_000 * usageFixtureInputRate
-	if rep.AvoidableUSD == nil {
-		t.Fatal("avoidable dollars came back NOT MEASURED beside a measured token deficit")
+	if rep.RebilledUSD == nil {
+		t.Fatal("re-billed dollars came back NOT MEASURED beside a measured token deficit")
 	}
-	if diff := *rep.AvoidableUSD - wantUSD; diff > 1e-9 || diff < -1e-9 {
-		t.Errorf("avoidable $%.6f, want $%.6f", *rep.AvoidableUSD, wantUSD)
+	if diff := *rep.RebilledUSD - wantUSD; diff > 1e-9 || diff < -1e-9 {
+		t.Errorf("re-billed $%.6f, want $%.6f", *rep.RebilledUSD, wantUSD)
 	}
 	if len(rows) != 1 || rows[0].ID != "s1" {
 		t.Fatalf("expected one session row for s1, got %d rows", len(rows))
 	}
 	// The share is a measurement in its own right whenever there is a total to
 	// be a share of, and the summary block leads with it.
-	if rep.AvoidableShare == nil {
-		t.Fatal("the avoidable share was withheld over a corpus with a real total; it is measured here")
+	if rep.RebilledShare == nil {
+		t.Fatal("the re-billed share was withheld over a corpus with a real total; it is measured here")
 	}
-	if diff := *rep.AvoidableShare - wantUSD/rep.TotalUSD; diff > 1e-9 || diff < -1e-9 {
-		t.Errorf("share %.6f, want %.6f", *rep.AvoidableShare, wantUSD/rep.TotalUSD)
+	if diff := *rep.RebilledShare - wantUSD/rep.TotalUSD; diff > 1e-9 || diff < -1e-9 {
+		t.Errorf("share %.6f, want %.6f", *rep.RebilledShare, wantUSD/rep.TotalUSD)
 	}
 	if out := renderUsageCost(rep, rows, false); !strings.Contains(out, "% of the total") {
 		t.Errorf("the measured share never reaches the screen:\n%s", out)
@@ -226,8 +226,8 @@ func TestUO11_AnUndeclaredExportWithholdsBreaksAndKeepsTheCost(t *testing.T) {
 	if partial.Breaks != nil {
 		t.Errorf("breaks reported as %d over an export that cannot support the figure", *partial.Breaks)
 	}
-	if partial.AvoidableUSD != nil || partial.AvoidableTokens != nil {
-		t.Errorf("avoidable reported (%v / %v) over an export that cannot support it", partial.AvoidableUSD, partial.AvoidableTokens)
+	if partial.RebilledUSD != nil || partial.RebilledTokens != nil {
+		t.Errorf("re-billed reported (%v / %v) over an export that cannot support it", partial.RebilledUSD, partial.RebilledTokens)
 	}
 	if partial.NotMeasuredWhy == "" {
 		t.Error("no reason given for withholding the break figure; a refusal a reader cannot act on is a blank screen")
@@ -347,22 +347,22 @@ func TestUO14_TheReportNamesWhatUsageAloneCannotReport(t *testing.T) {
 	}
 }
 
-// UO15: --max-avoidable-usd refuses to pass when avoidable is NOT MEASURED.
+// UO15: --max-rebilled-usd refuses to pass when re-billed is NOT MEASURED.
 //
 // The gate exists to fail a build on spend nobody chose. Over an export whose
 // break figure could not be measured there is no such spend to compare, and a
 // gate that went green there would report a clean bill of health nobody
 // earned — on exactly the input a regulated operator is most likely to hand
-// it. This mirrors checkAvoidableCeiling's refusal over an unpriced corpus.
+// it. This mirrors checkRebilledCeiling's refusal over an unpriced corpus.
 //
 // PASS: an error, and the exit is non-zero.
-// FAIL: green. Reintroduce by treating a nil avoidable as 0 in the gate.
-func TestUO15_TheGateRefusesAnUnmeasuredAvoidableFigure(t *testing.T) {
+// FAIL: green. Reintroduce by treating a nil re-billed as 0 in the gate.
+func TestUO15_TheGateRefusesAnUnmeasuredRebilledFigure(t *testing.T) {
 	path := writeExport(t, exportDoc(false, true, usageFixture()))
 	var out, errb bytes.Buffer
-	err := run([]string{"cost", "--usage", path, "--max-avoidable-usd", "1.00"}, &out, &errb)
+	err := run([]string{"cost", "--usage", path, "--max-rebilled-usd", "1.00"}, &out, &errb)
 	if err == nil {
-		t.Fatalf("the gate passed over an avoidable figure that was never measured:\n%s", out.String())
+		t.Fatalf("the gate passed over an re-billed figure that was never measured:\n%s", out.String())
 	}
 	if !strings.Contains(strings.ToUpper(err.Error()+out.String()), "NOT MEASURED") {
 		t.Errorf("the refusal does not carry the tier: %v\n%s", err, out.String())
@@ -372,8 +372,8 @@ func TestUO15_TheGateRefusesAnUnmeasuredAvoidableFigure(t *testing.T) {
 	// above is just the flag being broken.
 	good := writeExport(t, exportDoc(true, true, usageFixture()))
 	var out2, errb2 bytes.Buffer
-	if err := run([]string{"cost", "--usage", good, "--max-avoidable-usd", "1.00"}, &out2, &errb2); err != nil {
-		t.Errorf("a measured avoidable figure of $0.04 was refused against a $1.00 ceiling: %v\n%s", err, out2.String())
+	if err := run([]string{"cost", "--usage", good, "--max-rebilled-usd", "1.00"}, &out2, &errb2); err != nil {
+		t.Errorf("a measured re-billed figure of $0.04 was refused against a $1.00 ceiling: %v\n%s", err, out2.String())
 	}
 }
 
@@ -413,7 +413,7 @@ func TestUO16_UnpricedRecordsAreExcludedAndNamedNotCountedAsFree(t *testing.T) {
 
 // UO17: the JSON carries nulls where the figure was not measured, never zeros.
 //
-// The renderer is not the only consumer. A dashboard reading `avoidableUsd: 0`
+// The renderer is not the only consumer. A dashboard reading `rebilledUsd: 0`
 // plots a corpus with no waste; reading `null` it has to decide what to do,
 // which is the decision ADR-0018 says must not be made for it. This is the
 // same distinction `errorShare` already draws with a *float64 in cost.go.
@@ -435,7 +435,7 @@ func TestUO17_TheJSONSaysNullNotZeroForWhatItDidNotMeasure(t *testing.T) {
 	if !ok {
 		t.Fatalf("no summary object in the output:\n%s", out.String())
 	}
-	for _, key := range []string{"avoidableUsd", "avoidableTokens", "breaks"} {
+	for _, key := range []string{"rebilledUsd", "rebilledTokens", "breaks"} {
 		v, present := summary[key]
 		if !present {
 			t.Errorf("%q is absent rather than null; a consumer defaulting a missing key to zero has been handed the same lie one layer up", key)
@@ -455,7 +455,7 @@ func TestUO17_TheJSONSaysNullNotZeroForWhatItDidNotMeasure(t *testing.T) {
 
 // UO18: --usage refuses the surfaces it cannot honestly produce.
 //
-// --share and --png publish a card built on the avoidable rate; --compare
+// --share and --png publish a card built on the re-billed rate; --compare
 // splits a corpus by date and reports the change; --contribute pools figures
 // into the calibration corpus. Each is either unavailable or would carry a
 // figure this path did not measure into somewhere it cannot be retracted from
@@ -600,7 +600,7 @@ func TestUO21_ASessionThatCouldNotBePricedIsNotARow(t *testing.T) {
 	// And it must not print the spend block at all. "median task $0.00" over a
 	// corpus where nothing had a price is the clean bill of health nobody
 	// earned, and it reads as a measurement.
-	for _, forbidden := range []string{"median task", "p90 task", "avoidable"} {
+	for _, forbidden := range []string{"median task", "p90 task", "re-billed"} {
 		if strings.Contains(out, forbidden) {
 			t.Errorf("the empty report prints %q over zero priced sessions:\n%s", forbidden, out)
 		}
@@ -609,14 +609,14 @@ func TestUO21_ASessionThatCouldNotBePricedIsNotARow(t *testing.T) {
 	// And the gate must not go green over it.
 	path := writeExport(t, exportDoc(true, true, unpricedFixture()))
 	var so, se bytes.Buffer
-	if err := run([]string{"cost", "--usage", path, "--max-avoidable-usd", "1.00"}, &so, &se); err == nil {
+	if err := run([]string{"cost", "--usage", path, "--max-rebilled-usd", "1.00"}, &so, &se); err == nil {
 		t.Errorf("the gate passed over a corpus that priced nothing:\n%s", so.String())
 	}
 }
 
 // UO22: a share of a zero total is NOT MEASURED, not 0%.
 //
-// This is the same figure split three ways in one row. The avoidable dollars
+// This is the same figure split three ways in one row. The re-billed dollars
 // were measured, and measured at nothing. The share of them was not measured
 // at all, because there is no denominator. Printing "(0% of the total)" would
 // collapse the second into the first — ADR-0018's rule 2, inside a single
@@ -637,11 +637,11 @@ func TestUO22_AShareOfNothingIsNotMeasuredNotZeroPercent(t *testing.T) {
 	if rep.Sessions != 1 {
 		t.Fatalf("want the session counted, got %d", rep.Sessions)
 	}
-	if rep.AvoidableShare != nil {
-		t.Errorf("a share of %v was computed over a total of $0.00", *rep.AvoidableShare)
+	if rep.RebilledShare != nil {
+		t.Errorf("a share of %v was computed over a total of $0.00", *rep.RebilledShare)
 	}
-	if rep.AvoidableUSD == nil {
-		t.Fatal("the avoidable dollars were withheld; they were measured, and measured at nothing")
+	if rep.RebilledUSD == nil {
+		t.Fatal("the re-billed dollars were withheld; they were measured, and measured at nothing")
 	}
 	out := renderUsageCost(rep, rows, false)
 	if strings.Contains(out, "0% of the total") {
@@ -680,16 +680,16 @@ func TestUO23_TheRowsSumToTheSummary(t *testing.T) {
 	}
 	breaks, deficit, cost := 0, 0, 0.0
 	for _, r := range rows {
-		if r.Breaks == nil || r.AvoidableTokens == nil {
+		if r.Breaks == nil || r.RebilledTokens == nil {
 			t.Fatalf("row %s carries no break figures under a summary that has them", r.ID)
 		}
 		breaks += *r.Breaks
-		deficit += *r.AvoidableTokens
+		deficit += *r.RebilledTokens
 		cost += r.CostUSD
 	}
-	if breaks != *rep.Breaks || deficit != *rep.AvoidableTokens {
+	if breaks != *rep.Breaks || deficit != *rep.RebilledTokens {
 		t.Errorf("rows sum to %d breaks / %d tokens; the summary says %d / %d",
-			breaks, deficit, *rep.Breaks, *rep.AvoidableTokens)
+			breaks, deficit, *rep.Breaks, *rep.RebilledTokens)
 	}
 	if diff := cost - rep.TotalUSD; diff > 1e-9 || diff < -1e-9 {
 		t.Errorf("rows sum to $%.6f, summary says $%.6f", cost, rep.TotalUSD)
@@ -719,7 +719,7 @@ func TestUO24_PerTaskRowsCarryTheirOwnTier(t *testing.T) {
 		t.Errorf("a row says NOT MEAS. under a summary that measured it:\n%s", mout)
 	}
 	if !strings.Contains(mout, "$0.04") {
-		t.Errorf("the measured row carries no avoidable figure:\n%s", mout)
+		t.Errorf("the measured row carries no re-billed figure:\n%s", mout)
 	}
 	unmeasured, urows := priceUsage(parsedFixture(t, false, true))
 	out := renderUsageCost(unmeasured, urows, true)
@@ -755,13 +755,13 @@ func TestUO25_TheGateFiresAndRefusesANegativeCeiling(t *testing.T) {
 	path := writeExport(t, exportDoc(true, true, usageFixture()))
 
 	var so, se bytes.Buffer
-	err := run([]string{"cost", "--usage", path, "--max-avoidable-usd", "0.01"}, &so, &se)
+	err := run([]string{"cost", "--usage", path, "--max-rebilled-usd", "0.01"}, &so, &se)
 	if err == nil {
-		t.Errorf("$0.04 of measured avoidable spend passed a $0.01 ceiling:\n%s", so.String())
+		t.Errorf("$0.04 of measured re-billed spend passed a $0.01 ceiling:\n%s", so.String())
 	}
 
 	var so2, se2 bytes.Buffer
-	err = run([]string{"cost", "--usage", path, "--max-avoidable-usd", "-1"}, &so2, &se2)
+	err = run([]string{"cost", "--usage", path, "--max-rebilled-usd", "-1"}, &so2, &se2)
 	if err == nil {
 		t.Error("a negative ceiling was accepted; every figure is under it and the gate can never fire")
 	} else if !strings.Contains(err.Error(), "positive") {
