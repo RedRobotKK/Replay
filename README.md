@@ -467,15 +467,29 @@ The project's governing rule is [ADR-0014](docs/adr/0014-checks-must-be-able-to-
 is not evidence until it has been observed to fail.** Roughly twenty defects in a single day shared
 one shape — a verification that could not fail — so the rule is now mechanical.
 
-`internal/mutation` keeps **75 real past defects frozen as re-runnable mutants** (numbered to M76;
-M71 was retired), each with the named test that must catch it.
+`internal/mutation` keeps **76 real past defects frozen as re-runnable mutants** (numbered M1 to
+M77; M71 was retired), each with the named test that must catch it.
 `go test -tags mutation ./internal/mutation/` re-applies them all.
 It has already caught a false kill (a mutant the compiler rejected, scored as caught), a test that
 hung instead of failing, and a catalogue entry naming a test that was not actually load-bearing.
 
-This is error seeding, not mutation analysis: the denominator is 72 chosen edits, not a generated
-operator population, and a first run is a kill by construction. The value is temporal — it asks
-whether each guard still exists and still discriminates on a tree that has moved.
+This is error seeding, not mutation analysis: the denominator is the 76 chosen edits themselves,
+not a generated operator population, and a first run is a kill by construction. The value is
+temporal, asking whether each guard still exists and still discriminates on a tree that has moved.
+
+**The mutation score, which is a different figure and was missing until 2026-09-13.** A catalogue
+has a numerator and no denominator, so it cannot say what fraction of the mutants this tree admits
+are caught, which means it cannot say whether that fraction is rising or falling. Measured now:
+**73.3% of viable, non-equivalent mutants killed (275 of 375), 95% CI [68.6%, 77.6%]**, on a
+uniform random sample of 400 drawn with seed 20260913 from a generated population of **8,150**
+mutants across 206 production files, six operators, read at commit `c0ed888`. Nine equivalent
+mutants were identified by hand and excluded; the other 100 survivors were not examined, so the
+tree-wide equivalent rate is unknown and the true score is somewhat higher than 73.3%.
+
+The actionable part is not the headline. By operator, negate-conditional is killed 85% of the time
+and **conditional-boundary only 49%**: the suite tests what a branch decides far better than it
+tests where the branch sits. The full reading, including the worst packages and every named
+equivalent, is in [the evidence file](docs/evidence/mutation-score-2026-09-13.md).
 
 Until 2026-09-09 that catalogue had **never run**. It sits behind a build tag, no CI job passed the
 tag, and the run needs 659 seconds against Go's 10-minute default — so the obvious invocation dies

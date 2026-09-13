@@ -73,6 +73,15 @@ type budgetFile struct {
 	Servers  map[string]int `json:"servers"`
 	Measured measured       `json:"measured"`
 
+	// TokensAreEstimated is stamped on every artefact, always true, and it is
+	// not redundant.
+	//
+	// A consumer months from now has this JSON and nothing else. Without the
+	// flag the token figures read as measurements, and they are a coefficient
+	// fitted on one session of prose applied to schema JSON. A field is harder
+	// to miss than a comment in a repository the reader may never open.
+	TokensAreEstimated bool `json:"tokens_are_estimated"`
+
 	// Which build produced the counts above.
 	//
 	// `Measured` records the corpus. This records the code, and both are needed
@@ -109,21 +118,47 @@ func newBudgetFile(st standing, servers map[string]int, m measured) budgetFile {
 		servers = map[string]int{}
 	}
 	return budgetFile{
-		Schema:        BudgetSchema,
-		Generated:     time.Now().UTC(),
-		Standing:      st,
-		Servers:       servers,
-		Measured:      m,
-		BinaryVersion: version.Version,
-		Commit:        version.Commit,
+		Schema:             BudgetSchema,
+		Generated:          time.Now().UTC(),
+		Standing:           st,
+		Servers:            servers,
+		Measured:           m,
+		TokensAreEstimated: true,
+		BinaryVersion:      version.Version,
+		Commit:             version.Commit,
 	}
 }
 
 type standing struct {
+	// The token figures are ESTIMATES and the artefact says so in
+	// TokensAreEstimated below. They are a tokens-per-byte coefficient applied
+	// to a byte count, the coefficient is fitted on ONE session, and it is
+	// fitted on PROSE: analysis.TokenFit deliberately excludes every turn that
+	// re-laid the shared prefix, on the stated grounds that tool definitions
+	// are denser than prose and would drag the fit. These figures then apply it
+	// to tool definitions, which is the population it was built by excluding.
+	//
+	// They are kept because a reader thinks in tokens and a bill is charged in
+	// them. They are not what anything should compare.
 	TokensPerRequest int `json:"tokens_per_request"`
 	SystemTokens     int `json:"system_tokens"`
 	ToolTokens       int `json:"tool_tokens"`
 	ToolCount        int `json:"tool_count"`
+
+	// The bytes are EXACT, and they are what a later comparison should use.
+	//
+	// transcript.Block.Bytes and ToolDef.Bytes are decoded textual sizes, so
+	// they are unaffected by JSON escaping and identical across two readings of
+	// an unchanged configuration. The tokens above are not: measured across the
+	// 1,751 rows of docs/evidence/calibration-corpus-2026-09-10.md the
+	// coefficient runs from about 0.58 to 1.00 tokens per byte between
+	// sessions, so two regenerations of a byte-identical setup can differ by
+	// more than adding a whole MCP server would move the real figure.
+	//
+	// Both were already computed here. Only the estimate was kept, and that is
+	// the defect this pair fixes.
+	SystemBytes int `json:"system_bytes"`
+	ToolBytes   int `json:"tool_bytes"`
 }
 
 // measured is the provenance, and it is not optional.
@@ -132,10 +167,23 @@ type standing struct {
 // this repository says how it was obtained, and a file that will be committed
 // and read months later by a gate needs that more than most.
 type measured struct {
+	// Sessions and Requests describe the corpus WALKED.
 	Sessions int    `json:"sessions"`
 	Requests int    `json:"requests"`
 	Source   string `json:"source"`
 	Model    string `json:"model,omitempty"`
+
+	// FitSessions is how many sessions the token coefficient was fitted on,
+	// and it is not the same number.
+	//
+	// It is one, deliberately: the newest session wins because the question is
+	// what the configuration costs now, and a mean across a fortnight of edits
+	// describes a setup nobody has. That reasoning is sound and the reporting
+	// was not. Printing "measured from 400 requests across 12 sessions" beside
+	// a figure that rests on one session's fit overstates the evidence behind
+	// it, which is exactly what this project looks for in other people's
+	// numbers.
+	FitSessions int `json:"fit_sessions"`
 }
 
 // budgetRefusal decides whether the corpus can price a standing cost.
@@ -284,12 +332,21 @@ func runBudget(args []string, stdout, stderr io.Writer) error {
 
 	out := newBudgetFile(
 		standing{
-			SystemTokens: fit.EstimateTokens(sysBytes),
-			ToolTokens:   fit.EstimateTokens(toolBytes),
+			// EstimateOutsideFit, not EstimateTokens. The value is the same
+			// arithmetic; the call site is the documentation. fit.go wrote that
+			// function for precisely this case and says why: nobody has measured
+			// tokens-per-byte on schema JSON for this provider, so the figure
+			// carries no error bar rather than borrowing the prose fit's, and
+			// "stating no uncertainty is honest; stating the prose fit's was
+			// not." This file was calling the other one.
+			SystemTokens: fit.EstimateOutsideFit(sysBytes).Value,
+			ToolTokens:   fit.EstimateOutsideFit(toolBytes).Value,
 			ToolCount:    toolCount,
+			SystemBytes:  sysBytes,
+			ToolBytes:    toolBytes,
 		},
 		nil,
-		measured{Sessions: sessions, Requests: requests, Source: "ledger", Model: model},
+		measured{Sessions: sessions, Requests: requests, Source: "ledger", Model: model, FitSessions: 1},
 	)
 	// The headline is the sum of its parts by construction, never computed
 	// separately. Two paths to one number is how they come to disagree.
@@ -327,7 +384,11 @@ func runBudget(args []string, stdout, stderr io.Writer) error {
 			p.Printf("  %-24s %9s tokens/request\n", n, comma(out.Servers[n]))
 		}
 	}
-	p.Printf("\nMeasured from %d request(s) across %d session(s) of ledger.\n", requests, sessions)
+	// Two sentences because they are two facts, and running them together is
+	// what made the old single line overstate the evidence.
+	p.Printf("\nRead %d request(s) across %d session(s) of ledger.\n", requests, sessions)
+	p.Printf("Byte counts are exact. Token figures are estimated from the newest session's\n" +
+		"ratio, which is fitted on prose rather than on tool schemas, so compare the bytes.\n")
 	p.Printf("Commit `replay budget <dir> --json` and a later run can tell you what grew.\n")
 	return p.Err()
 }

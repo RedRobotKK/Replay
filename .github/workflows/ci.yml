@@ -325,7 +325,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      # 75 mutants, frozen as data in internal/mutation/testdata/mutants.json,
+      # 76 mutants, frozen as data in internal/mutation/testdata/mutants.json,
       # thawed one at a time against a scratch copy of the tree to ask whether
       # the check that caught each one still works.
       #
@@ -335,7 +335,7 @@ jobs:
       # returning quietly was itself unreachable.
       #
       # -timeout matters as much as the tag. Go's default is 10 minutes and the
-      # run needs eleven, so the obvious invocation dies around mutant 66 of 72
+      # run needs eleven, so the obvious invocation dies around mutant 66 of 76
       # with a timeout panic that looks like a broken harness.
       - name: Thaw every frozen mutant and confirm it still dies
         run: go test -tags mutation -timeout 45m -count=1 ./internal/mutation/
