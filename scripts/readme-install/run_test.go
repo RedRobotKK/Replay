@@ -356,3 +356,128 @@ func resolve(t *testing.T, path string) string {
 	}
 	return p
 }
+
+// RI13: the generated headings sit exactly one level below the section that
+// encloses the block.
+//
+// Two markdownlint failures in a row came from this one fact, and neither was
+// about the words. The generator first emitted **bold** on its own line, which
+// is MD036 (emphasis used as a heading); that became `####`, which is MD001
+// (a heading level skipped) because the block sits under an `##`. A third
+// spelling picked by hand would have been a third guess.
+//
+// So the test reads the README rather than a constant: it finds the heading
+// that encloses the install block and requires the generated ones to be one
+// deeper. Moving the block under a different section, or renumbering the
+// headings above it, now fails here rather than in CI's linter.
+func TestRI13_GeneratedHeadingsAreOneLevelBelowTheEnclosingSection(t *testing.T) {
+	readme := readReadme(t)
+	start := strings.Index(readme, beginMarker)
+	if start == -1 {
+		t.Fatal("README.md has no install-matrix begin marker")
+	}
+
+	// The nearest heading above the block is the section it belongs to.
+	enclosing := 0
+	for _, line := range strings.Split(readme[:start], "\n") {
+		if h := headingLevel(line); h > 0 {
+			enclosing = h
+		}
+	}
+	if enclosing == 0 {
+		t.Fatal("the install block sits under no heading at all")
+	}
+
+	block, err := render(readManifest(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := 0
+	for _, line := range strings.Split(block, "\n") {
+		h := headingLevel(line)
+		if h == 0 {
+			continue
+		}
+		seen++
+		if h != enclosing+1 {
+			t.Errorf("the generator emits %q at level %d under a level %d section.\n"+
+				"markdownlint MD001 fails on a skipped level and MD036 fails on bold "+
+				"used instead of a heading, so the level has to be derived, not chosen.",
+				strings.TrimSpace(line), h, enclosing)
+		}
+	}
+	if seen == 0 {
+		t.Error("no headings in the generated block, so this test proved nothing")
+	}
+}
+
+// headingLevel returns the ATX heading level of a line, or 0 if it is not a
+// heading. A line inside a fenced code block is not a heading, and the install
+// block is full of shell comments starting with #, so the caller must not feed
+// this fenced content. render only emits fences around commands, and no
+// command in the manifest starts a line with #.
+func headingLevel(line string) int {
+	n := 0
+	for n < len(line) && line[n] == '#' {
+		n++
+	}
+	if n == 0 || n > 6 || n >= len(line) || line[n] != ' ' {
+		return 0
+	}
+	return n
+}
+
+// RI14: a status the generator does not know is a refusal, not a deletion.
+//
+// The switch in render knew live, building and blocked. The manifest carries
+// planned and skipped too, so those rows fell through and printed nothing.
+// That was the intended outcome for them and the wrong mechanism for it: the
+// same fall-through swallows a typo.
+//
+// The case that matters is the third row below. "liv" is one keystroke from
+// "live", and before this refusal it removed a working install route from the
+// README while every check in the repository stayed green.
+func TestRI14_AnUnknownStatusRefusesInsteadOfDroppingTheChannel(t *testing.T) {
+	for _, tc := range []struct {
+		name, status string
+		wantErr      bool
+	}{
+		{"live", "live", false},
+		{"planned is omitted on purpose", "planned", false},
+		{"skipped is omitted on purpose", "skipped", false},
+		{"a typo for live", "liv", true},
+		{"empty", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := []byte(`{"channels":[{"name":"Example","command":"example install","status":"` + tc.status + `"}]}`)
+			out, err := render(raw)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("status %q was accepted and the channel rendered as %q", tc.status, out)
+				}
+				if !strings.Contains(err.Error(), tc.status) || !strings.Contains(err.Error(), "Example") {
+					t.Errorf("the refusal names neither the status nor the channel: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("status %q was refused: %v", tc.status, err)
+			}
+			if got := strings.Contains(out, "example install"); got != (tc.status == "live") {
+				t.Errorf("status %q: command present = %v, want %v", tc.status, got, tc.status == "live")
+			}
+		})
+	}
+}
+
+// RI15: every status the manifest actually uses is one the generator knows.
+//
+// RI14 pins the mechanism with invented statuses. This points the same
+// question at the real file, so adding a status to distribution/channels.json
+// without teaching the generator fails here, at the place the manifest is
+// edited, rather than in whatever release first notices a missing route.
+func TestRI15_TheRealManifestUsesNoStatusTheGeneratorRejects(t *testing.T) {
+	if _, err := render(readManifest(t)); err != nil {
+		t.Errorf("distribution/channels.json does not render: %v", err)
+	}
+}

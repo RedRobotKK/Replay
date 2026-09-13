@@ -69,7 +69,7 @@ func render(raw []byte) (string, error) {
 		}
 		switch c.Status {
 		case "live":
-			fmt.Fprintf(&b, "\n#### %s\n\n```sh\n%s\n```\n", c.Name, c.Command)
+			fmt.Fprintf(&b, "\n### %s\n\n```sh\n%s\n```\n", c.Name, c.Command)
 			if c.Verify != "" {
 				fmt.Fprintf(&b, "\nCheck: `%s`\n", c.Verify)
 			}
@@ -77,6 +77,27 @@ func render(raw []byte) (string, error) {
 			coming = append(coming, c.Name)
 		case "blocked":
 			blocked = append(blocked, fmt.Sprintf("Not offered: %s (%s)", c.Name, c.Gate))
+		case "planned", "skipped":
+			// Deliberately nothing. A channel nobody has started is not a
+			// route a reader can take, and listing it under "Coming" would
+			// promise work that is not underway.
+			//
+			// These two cases print nothing and they still have to be here,
+			// because without them they fall to the default below and the
+			// difference between "omitted on purpose" and "not recognised"
+			// disappears. ADR-0018: absence, zero and unknown are three
+			// values, and this switch used to have two.
+		default:
+			// A status the generator does not know silently deleted the
+			// channel until 2026-09-13. The manifest carries five statuses
+			// and this switch knew three, so thirty-odd rows vanished from
+			// the README and nothing said so. The failure mode that matters
+			// is not the thirty: it is that a typo in one live channel's
+			// status removes its install instructions from the README and
+			// every check in this repository stays green.
+			return "", fmt.Errorf("channel %q has status %q, which this generator does not know. "+
+				"Add a case for it rather than letting the channel disappear from the README",
+				c.Name, c.Status)
 		}
 	}
 	if len(coming) > 0 {
