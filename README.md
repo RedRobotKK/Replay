@@ -48,6 +48,41 @@ that broke.
 curl -fsSL https://replay.doctor/replay.sh | sh
 ```
 
+**Other ways in.** Every release carries a Linux package and a signed checksum
+for it.
+
+```sh
+# Fedora, RHEL, CentOS, openSUSE
+sudo rpm -i replay_<version>_linux_amd64.rpm
+
+# Debian, Ubuntu
+sudo dpkg -i replay_<version>_linux_amd64.deb
+
+# Alpine
+sudo apk add --allow-untrusted replay_<version>_linux_amd64.apk
+
+# Arch
+sudo pacman -U replay_<version>_linux_amd64.pkg.tar.zst
+
+# From source, any platform Go builds for
+go install github.com/RedRobotKK/Replay/cmd/replay@latest
+```
+
+Packages are on the [releases page](https://github.com/RedRobotKK/Replay/releases)
+in `deb`, `rpm`, `apk` and Arch form for amd64 and arm64. Every one of them is
+listed in `checksums.txt`, and that file is what cosign signs, so a package
+inherits the same verification chain as the tarball rather than a weaker one.
+
+**What that is not.** There is no hosted yum or apt repository, so there is no
+`dnf install replay` from a configured remote and no automatic upgrade. You
+download a file and install it. "We build an rpm" and "we run a repository" are
+different promises, and only the first is being made: the second needs a signing
+key with a lifetime and somebody to answer for a broken metadata refresh, and
+neither exists yet. `replay upgrade` is the upgrade path in the meantime.
+
+The packages declare no dependencies, which is a fact rather than an omission.
+The binary links nothing outside the standard library.
+
 ![The cost screen: what one task cost, and the share of it nobody chose](docs/screens/cost.svg)
 
 `replay tui` puts the same answers on ten screens, one keystroke apart. The images in this README

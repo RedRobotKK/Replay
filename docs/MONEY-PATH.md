@@ -41,6 +41,161 @@ the prices and cache floors that every dollar figure rests on change on the prov
 Both of those are per-repository problems with a named owner and a budget, which is why the unit is
 a repository and not a person.
 
+## 0. The constraint this has to clear, worked backwards
+
+**Added 2026-09-13.** Everything below was written to answer "is this a fair
+price". It was never asked to answer "does this pay the person who maintains
+it", and those are different questions with different answers.
+
+The target is **$500,000 post-tax, take home, per year.** Stated as a design
+requirement rather than an aspiration, because a model that cannot reach it is
+one the maintainer eventually stops running, and that outcome belongs in the
+document rather than in a surprise.
+
+**Everything in this section is MODELLED, not measured.** It is arithmetic over
+assumptions, and the assumptions are named so they can be argued with. That is a
+weaker class of claim than anything in `evidence/`, and it is labelled as such
+here for the same reason every other figure in this repository carries its
+provenance.
+
+### 0.1 Gross compensation
+
+Priced on: Japan tax resident, director's remuneration from Red Robot K.K.,
+¥150 to the dollar. Above roughly ¥40M taxable the marginal rate is 45% national
+plus a 2.1% reconstruction surtax plus 10% inhabitant tax, and the employment
+income deduction is capped, so the effective marginal take is about **55.9%**.
+
+| Scenario | Gross needed |
+|---|---|
+| Japan resident, salary, ¥150/USD | **≈ $1.05M** |
+| Japan resident, ¥130/USD | ≈ $1.22M |
+| Japan resident, ¥170/USD | ≈ $0.93M |
+| US person, California resident | ≈ $0.94M to $1.00M |
+| Dividends rather than salary | ≈ $1.27M, so salary is the correct instrument |
+
+The assumption that moves the answer most is **residency and US-person status**,
+worth about ±$120k. Then FX, worth ±15% across a plausible band. Both are
+outside the business's control, which is worth knowing before optimising the
+price by a few percent.
+
+### 0.2 The cost of the business
+
+| | Annual |
+|---|---|
+| K.K. statutory, accounting and filing with a non-resident director, registered agent, banking and FX | $8k to $15k |
+| Professional liability, once a paid week carries a contractual deliverable | $4k to $10k |
+| Infrastructure: site, rules feed, x402 endpoint, CI, signing | $2k to $6k |
+| Legal: first enterprise contract, liability cap, a JP entity selling into the US and EU | $15k to $30k once, then $5k to $10k |
+| Price-table maintenance, the forever cost | founder time, or $30k to $60k outsourced |
+| **Solo floor** | **$25k to $45k** |
+| With half a person so the enterprise response time is real rather than a promise to be awake | $110k to $160k |
+| With one salesperson | $420k to $550k |
+
+### 0.3 Required ARR, and what that is in customers
+
+**Solo, with payment fees: about $1.12M ARR.** Every hire adds $150k to $300k.
+
+| Price | Customers needed |
+|---|---|
+| $199 per repository per month | **469** |
+| $199 annual prepay, two months free | 563 |
+| $25 design-partner price | 3,733 |
+| $399 per CI pipeline per month, recommended in 0.5 | **234** |
+| Enterprise at $60k / $100k / $150k a year | **19 / 12 / 8 logos** |
+
+Add churn. At 3% monthly logo churn, which is optimistic against this document's
+own sentence about the customer who cancels in month two, holding 469 needs
+roughly **14 net-new repositories every month, forever**, on top of building the
+base.
+
+### 0.4 The number that decides it
+
+Measured 2026-09-07: **53 lifetime fetches of the install script, from 2 distinct
+IP addresses.** No external user has ever been observed.
+
+Working the funnel back from 469 paying repositories at generous developer-tool
+rates, 5% of visitors install and 2% of installs pay:
+
+- **23,450 installs**, which is **440 times the lifetime fetch count**
+- **469,000 visitors**, against a measured distinct-user count of two
+
+A first-place Hacker News day plus a top-three Product Hunt day is plausibly
+50,000 to 75,000 visitors and a few thousand installs, decaying more than 90%
+inside a week. **That is 8% to 16% of one year's requirement, on the best day
+this project will ever have, and it converts to zero**, because on 2026-09-14
+`replay gate` does not exist, ADR-0023 is Proposed, and there is no rail.
+
+Sustaining 469,000 visitors a year organically is roughly eight to twelve front
+pages a year. One person does not produce that. Paid acquisition is closed by
+arithmetic rather than by preference: at a $2,388 annual contract value against
+the $449 to $1,628 lifetime value computed in section 6, allowable acquisition
+cost is $150 to $550, developer-audience clicks run $3 to $12, so an advertisement
+would need a three to eight percent click-to-paid conversion. Nothing converts at
+that rate.
+
+**Conclusion, and it is not a pricing conclusion.** A per-repository subscription
+at $199 cannot fund $500k post-tax. It is short by roughly two orders of
+magnitude on the only input that matters, and no number on the page changes that.
+**The constraint is distribution, which this document already said, and the
+$500k target is what makes the size of the gap legible.**
+
+### 0.5 The shape that does clear it
+
+Not one line. A blend, in the order the money actually arrives:
+
+| Line | Contribution | Why it is here |
+|---|---|---|
+| **Forensics week at $25,000** | $175k to $260k from 6 to 8 weeks | The only line that can produce revenue in year one, because it needs no software that does not exist. It is also the land motion: the first engagement produces the first corpus that is not the maintainer's laptop, which is the v0.8 blocker in `ROADMAP.md` |
+| **10 to 14 organisation agreements at $60k to $100k** | $600k to $1.0M | The only shape whose customer count is compatible with a measured population of two |
+| **40 to 80 self-serve pipelines at $399** | $95k to $380k | Priced per CI pipeline rather than per repository, for the reason in 0.6 |
+| **Rules feed and sponsorship** | $10k to $30k | Real, and not a business on its own |
+| **Total** | **$880k to $1.67M gross** | Clears $500k post-tax at the midpoint |
+
+**Time: 30 to 42 months, and one hire.** Honest expected value in year one is
+**$40k to $75k gross**, which is $20k to $50k post-tax. The probability of ever
+reaching $500k post-tax on this model is roughly **20% to 30%**: a reasonable
+number for a startup and a poor one for a salary replacement.
+
+**The bar this actually has to clear is not $500k.** A principal engineering role
+in Tokyo or Los Angeles nets $150k to $250k post-tax with near-certainty, so that
+is the real hurdle, and $500k post-tax puts this in roughly the top one percent of
+one-person software companies. Recording that distinction here because the
+alternative is discovering it in year two.
+
+### 0.6 The unit changes from repository to CI pipeline
+
+Section 1 settles that the unit is not a seat, and that still stands. It picked
+the repository, and the repository is the most arbitrage-able unit available.
+
+A forty-repository organisation paying $7,960 a month runs `git subtree` and pays
+$199. That is a 97.5% price cut available in an afternoon, the industry is already
+consolidating into monorepos, and the buyer is the kind of engineer who enjoys
+doing it. **The unit chosen for its commercial convenience is the one the
+customer most easily collapses.**
+
+A **CI pipeline** does not collapse the same way. It is the thing that actually
+consumes `replay gate`, a monorepo still runs many of them, and merging two
+pipelines has real engineering cost that a subtree merge does not. At $399 a
+month the required count falls from 469 to 234, and the price sits against a
+budget line the buyer already approves next to their CI spend.
+
+### 0.7 What is not decided, and why it matters more than the price
+
+The $199 anchor rests on the throttling finding: cache-blind budget arithmetic
+runs 7.94x high, so a $500-a-day ceiling halts execution at $62.94 of real spend,
+leaving roughly $13,000 a month of approved capacity unreachable.
+
+**Nobody has asked whether that is value to the buyer or a bill they were
+deliberately avoiding.** If the cap was a guardrail against runaway agents, then
+correcting the arithmetic unlocks capacity they already paid for and the value is
+real. If the cap was a budget, correcting the arithmetic hands them a $13,000 a
+month increase, sold to the person who set the limit. **Those are opposite
+products and no measurement in this repository distinguishes them.**
+
+Five conversations settle it. Until they happen, the figure that justifies the
+price is load-bearing and untested, which is the condition this project refuses
+to ship a technical number in.
+
 ## 1. The unit of value
 
 **The recurring thing worth paying for is a standing-cost budget for a repository's agent
@@ -478,6 +633,53 @@ exist today. So an enterprise tier cannot be the free tool with a badge on it.
 | **`replay gate` in CI** | the standing-cost budget, which is the thing an organisation buys rather than an individual. It does not exist yet |
 | **Invoicing** | bank transfer and purchase orders. The rail does not reach the binary, so it can be anything |
 | **What is NOT sold** | priority on the public issue tracker, early access to fixes, or any measurement gated behind payment. A security fix reaches everyone at once |
+
+**Indicative annual figures, modelled rather than quoted.** Per section 0.3, the
+enterprise line has to carry $600k to $1.0M of a $1.12M requirement, and it is
+the only line whose customer count is compatible with a measured population of
+two.
+
+| Tier | Annual | Shape | Count needed to carry the line |
+|---|---|---|---|
+| **Team** | $24k to $36k | 5 to 10 pipelines, email support, no SLA | 20 to 40 |
+| **Organisation** | $60k to $100k | unlimited pipelines in one legal entity, named response time, self-hosted rules mirror | **10 to 14** |
+| **Regulated** | $120k to $180k | the above plus air-gapped operation, a signed entitlement with a stated term, and a security questionnaire answered by a person | 6 to 9 |
+
+The middle row is the one the model runs on. Ten to fourteen agreements is a
+number one person can actually service, and it is reachable from a forensics week
+in a way that 469 self-serve repositories is not.
+
+**Why the top tier is the cheapest to serve rather than the most expensive.** Air
+gapping is normally where margin goes to die: per-customer builds, a licence
+server, an offline update channel. Here it falls out of
+[ADR-0023](adr/0023-entitlement-is-a-signed-document-not-an-account.md) at no
+marginal cost, because the entitlement is a signed file verified offline against
+a key compiled into the binary, and the rules feed is a document the customer
+mirrors internally. There is no call home to fail. Every competitor in this
+category is a hosted dashboard that cannot serve these buyers at all.
+
+### The gate on all of it, and it is measured rather than commercial
+
+**ADR-0015 records that across roughly 100,000 requests in the measured corpus,
+every observed model id is first-party: 87,264 `claude-opus-5`, 8,895
+`claude-opus-4-8`, 1,497 `claude-haiku-4-5`, and no Bedrock inference profile or
+Vertex publisher path anywhere.**
+
+Enterprises overwhelmingly reach Claude through Bedrock or Vertex, whose caches
+are a different API with different economics. So the tiers above are, today, a
+price list for traffic this project has never once observed.
+
+That is not a reason to delete them. It is a reason to state the precondition in
+the same table as the price:
+
+**No enterprise tier is quoted to anyone until Replay reads Bedrock and Vertex
+traffic and has calibrated against at least one real corpus of it.** Until then
+the honest answer to an enterprise enquiry is the forensics week, which prices
+what it can actually see and says so, and which is how the first Bedrock corpus
+arrives in the first place.
+
+This is the same rule the tool applies to a model it cannot price. It declines,
+and it says why, and the declining is the product.
 
 **Two things a buyer will ask for that the answer is no to.**
 

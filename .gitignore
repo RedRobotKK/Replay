@@ -46,3 +46,9 @@ node_modules/
 # Demo binaries are built on demand, never committed: a recording that
 # picks up whatever is on PATH records the wrong software.
 docs/demo/.replay-demo-bin
+
+# Design scratch. HTML prototypes rendered while iterating on the website and
+# the share cards. Output of a conversation rather than source, and it carries
+# figures that are snapshots rather than maintained claims, so it must not be
+# published from here where a reader would take it for documentation.
+/.canvas/

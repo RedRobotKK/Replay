@@ -153,12 +153,28 @@ one account, one operator, and the roadmap has said so in every spike row since
   the 0.6 pool work exist to make possible. Until `replay pool` holds
   submissions from more than one `sourceTag`, every headline figure is a fact
   about one laptop.
-- **Windows: supported, or the claim removed from CI.** Fourteen tests fail and
-  the ones that matter assert Unix file-mode semantics guarding the ledger and
-  the masking vault. A Windows binary that runs while not keeping those promises
-  is worse than no Windows binary, so the honest outcomes are a real port or a
-  deleted matrix entry. This is a 1.0 gate and it is bounded engineering, which
-  is why it sits here rather than later.
+- **Windows: settled 2026-09-13, and not the way this line used to describe.**
+  The fourteen failing tests were fixed on 2026-09-10 and the job has been
+  green and blocking since. That turned out to be the problem rather than the
+  solution: Windows is green because the promise is switched off there.
+  `internal/ownerdir` reports 100% statement coverage on ubuntu and 40% on
+  windows, `modeIsChecked()` returns false so `tighten` never chmods or
+  re-stats, and twenty-two tests across the ledger, the vault, the consent gate
+  and the contributor secret skip with "Unix permission bits". A blocking green
+  check whose greenness comes from disabling what it checks is exactly what
+  ADR-0014 forbids.
+  The binary now refuses on Windows, so "unsupported" is a thing the program
+  does rather than a line in a README. The route that made it reachable is also
+  closed: install.sh refused Windows and then offered a release archive that
+  does not exist and a `go install` that works, which handed a reader a one
+  line path to the binary the project says must not ship.
+  **The port is not refused on difficulty.** An owner-only DACL is reachable
+  from the standard library with no new dependency, since `syscall` and
+  `unsafe` are already on the import allowlist. It is refused on evidence:
+  `guard reachability` and `frozen mutants` both run on ubuntu only, so every
+  refusal in an ACL layer would ship unmutated, and an unmutated guard is
+  indistinguishable from an absent one. A Windows leg on those two jobs is what
+  reopens this, and it is written into RELEASE-CRITERIA as the condition.
 - **Masking covers the OpenAI-compatible path**, upgrading 0.7's label to actual
   coverage, and spike 5 answered by traffic from a real agent rather than by
   fixtures.

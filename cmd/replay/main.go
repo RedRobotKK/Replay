@@ -25,6 +25,12 @@ import (
 // errUsage is returned for malformed invocations after usage is printed.
 var errUsage = errors.New("invalid usage")
 
+// errUnsupportedPlatform is returned when the build cannot keep the ownership
+// promise this program makes about the ledger and the masking vault. It is
+// distinct from errUsage: the user did nothing wrong, and there is no argument
+// they could have passed instead.
+var errUnsupportedPlatform = errors.New("unsupported platform")
+
 // defaultBlameLimit bounds the blame table so it fits a terminal.
 const defaultBlameLimit = 20
 
@@ -57,6 +63,15 @@ func exitCode(err error) int {
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
+	// Before anything opens a file. See cmd/replay/platformguard.go: on Windows
+	// the ownership check that guards the ledger and the masking vault is a
+	// no-op, so the binary declines rather than writing secrets into a directory
+	// it cannot verify is private.
+	refusalCheckedAtEntry = platformRefusal
+	if msg := platformRefusal(); msg != "" {
+		fmt.Fprint(stderr, msg)
+		return errUnsupportedPlatform
+	}
 	if len(args) == 0 {
 		return runDefault(stdout, stderr)
 	}
