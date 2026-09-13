@@ -133,3 +133,32 @@ func TestUP2_NoCosignIsReportedRatherThanImplied(t *testing.T) {
 		t.Errorf("a dry run must say the binary was left alone:\n%s", out.String())
 	}
 }
+
+// UP3: both signature outcomes produce a line that says which one happened.
+//
+// The branch this covers was UNREACHED as a branch inside runUpgrade, and I had
+// written that off in a comment as an equivalent mutant because the seams that
+// reach it are unexported. `guard reachability` did not accept the excuse and
+// was right: an untested branch does not become tested by a paragraph
+// explaining why it is hard. Extracting it made both arms reachable without
+// exporting anything.
+func TestUP3_BothSignatureOutcomesAreDistinguishable(t *testing.T) {
+	verified := signatureLine(selfupdate.SignatureVerified)
+	unchecked := signatureLine(selfupdate.SignatureUnchecked)
+
+	if verified == unchecked {
+		t.Fatalf("both outcomes print the same line, which is the defect this whole "+
+			"change exists to fix: %q", verified)
+	}
+	if !strings.Contains(verified, "Signature verified") {
+		t.Errorf("the verified line does not say so: %q", verified)
+	}
+	if !strings.Contains(unchecked, "not checked") {
+		t.Errorf("the unchecked line does not say the signature went unchecked: %q", unchecked)
+	}
+	// And the unchecked line must not read as a success. A leading tick is how
+	// a reader skims, and this outcome is not one.
+	if strings.HasPrefix(strings.TrimSpace(unchecked), "✓") {
+		t.Errorf("the unchecked line is marked with a tick and will be read as a pass: %q", unchecked)
+	}
+}

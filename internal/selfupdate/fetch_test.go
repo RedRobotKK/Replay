@@ -524,3 +524,27 @@ func TestSIG5_AFailureToStageTheSignatureInstallsNothing(t *testing.T) {
 		})
 	}
 }
+
+// SIG6: the two statuses say different things, and neither is silent.
+//
+// String() had a branch nothing depended on. The type exists so `replay upgrade`
+// can tell a user which of two promises it kept; a String that returned the same
+// text for both, or an empty one, would defeat the whole change while every
+// other test still passed.
+func TestSIG6_TheStatusesReadDifferently(t *testing.T) {
+	v, u := SignatureVerified.String(), SignatureUnchecked.String()
+	if v == u {
+		t.Fatalf("both statuses render identically: %q", v)
+	}
+	for name, got := range map[string]string{"verified": v, "unchecked": u} {
+		if strings.TrimSpace(got) == "" {
+			t.Errorf("the %s status renders empty, so upgrade would print a blank line", name)
+		}
+	}
+	if !strings.Contains(v, "verified") {
+		t.Errorf("the verified status does not say verified: %q", v)
+	}
+	if !strings.Contains(u, "not checked") {
+		t.Errorf("the unchecked status does not say it was not checked: %q", u)
+	}
+}

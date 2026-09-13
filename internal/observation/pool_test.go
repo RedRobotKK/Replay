@@ -432,3 +432,32 @@ func TestPLOLD_APreRenamePoolIsRefused(t *testing.T) {
 			"different, and reading them under this version is guessing.")
 	}
 }
+
+// PL-MALFORMED: a pool whose types are wrong is refused, not half-read.
+//
+// Pool and PoolEntry each gained an UnmarshalJSON with its own decode-error
+// branch, and `guard reachability` reported both UNREACHED. The reason is the
+// same one Corpus hit: encoding/json rejects malformed BYTES before
+// UnmarshalJSON is ever called, so the only way to reach these branches is a
+// document that parses and then mismatches a type.
+//
+// It matters because this is the entry point for the published artifact. A
+// pool that half-decodes is worse than one that is refused: the refusal is
+// visible and the half is not.
+func TestPLMALFORMED_WrongTypesAreRefused(t *testing.T) {
+	for _, tc := range []struct{ name, doc string }{
+		{"roster is not an array", `{"schema":"` + PoolSchema + `","pooledAt":"x","roster":42}`},
+		{"an entry field has the wrong type", `{"schema":"` + PoolSchema + `","pooledAt":"x",
+		 "roster":[{"sourceTag":"a","tagBasis":"m","digest":"d","file":"f","takenAt":"t",
+		 "tasks":"ten","totalUsd":100,"rebilledUsd":5,"rebilledShare":0.05,"medianTaskUsd":1}]}`},
+		{"totalUsd is an object", `{"schema":"` + PoolSchema + `","pooledAt":"x",
+		 "roster":[{"sourceTag":"a","tagBasis":"m","digest":"d","file":"f","takenAt":"t",
+		 "tasks":10,"totalUsd":{"x":1},"rebilledUsd":5,"rebilledShare":0.05,"medianTaskUsd":1}]}`},
+		{"the schema itself is not a string", `{"schema":7,"pooledAt":"x","roster":[]}`},
+	} {
+		var p Pool
+		if err := json.Unmarshal([]byte(tc.doc), &p); err == nil {
+			t.Errorf("%s was accepted, and parsed to %d roster entries", tc.name, len(p.Roster))
+		}
+	}
+}
