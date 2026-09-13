@@ -277,6 +277,12 @@ func TestO7_ThisPackageCannotSend(t *testing.T) {
 		"crypto/hmac": true, "crypto/sha256": true, "encoding/hex": true,
 		"encoding/json": true, "errors": true, "fmt": true, "os": true,
 		"path/filepath": true, "sort": true, "strings": true, "time": true,
+		// math is pure arithmetic with no I/O of any kind. Added when the
+		// benchmark needed IsNaN, IsInf and Round to stop non-finite figures
+		// reaching a reader as "$NaN". Widening this list is a deliberate act:
+		// the point of the list is that a transport cannot arrive by accident,
+		// and the check below proves it still refuses one.
+		"math": true,
 		"github.com/RedRobotKK/Replay/internal/consent": true,
 		"github.com/RedRobotKK/Replay/internal/probe":   true,
 	}

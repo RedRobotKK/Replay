@@ -15,6 +15,7 @@ import (
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/card"
 	"github.com/RedRobotKK/Replay/internal/money"
+	"github.com/RedRobotKK/Replay/internal/observation"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -501,6 +502,48 @@ func renderCost(s costSummary, unpriced, unreadable int, out io.Writer, stateDir
 		// label that cannot be wrong, which is not the same as being right.
 		fmt.Fprintf(&b, "\n%d session(s) changed tool set mid-run. Their totals are the sum of what was\nspent, not one as-run figure: the prefix differed across the requests inside\nthem, so comparing such a total against a single-epoch session compares two\ndifferent things.\n", s.MixedEpochSessions)
 	}
+	// The pool, which is the only finding available to a reader who has no
+	// avoidable spend at all.
+	//
+	// Measured across 1,506 transcripts, 56% of sessions have none. Those
+	// readers ran the tool, got an honest null, and walked away with nothing to
+	// act on: the instrument worked perfectly and told them nothing. Placing
+	// them against the contributed corpora is a finding for everyone rather
+	// than for the 44% whose caches happen to be broken.
+	//
+	// It refuses below observation.BenchmarkMinTags and says why, which is the
+	// state today: one submission, one machine tag, and that machine is this
+	// tool's author. The refusal names `replay cost --contribute` as the only
+	// thing that changes it, which is the honest version of the flywheel.
+	{
+		// Absence and zero are different on both figures. `s.MedianUSD > 0`
+		// was the guard here and it turned a measured $0.00 median into
+		// "nothing here was priced", which is the ADR-0018 defect the pointer
+		// was introduced to prevent, reintroduced at the only call site.
+		var median, share *float64
+		if s.Tasks > 0 {
+			m := s.MedianUSD
+			median = &m
+		}
+		if s.TotalUSD > 0 {
+			a := s.AvoidableShare
+			share = &a
+		}
+		bench := observation.Benchmark{
+			MedianTaskUSD:  median,
+			AvoidableShare: share,
+			RulesVersion:   cachemodel.RulesVersion,
+			Tasks:          s.Tasks,
+			// Unit travels because --per-lane makes MedianUSD a median over
+			// lanes, and placing a per-lane median among per-task medians
+			// compares two different quantities.
+			Unit: s.Unit,
+		}
+		if lines := bench.Against(observation.Pooled()).Lines(); strings.TrimSpace(lines) != "" {
+			b.WriteString("\n" + lines + "\n")
+		}
+	}
+
 	// tipLine names a coffee count and returns nothing below its floor, so a
 	// modest corpus produced a result and no ask at all. Below the floor the
 	// ask still belongs; it just cannot quote a share of a figure this small.

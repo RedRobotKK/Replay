@@ -3,6 +3,7 @@ package observation
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -241,6 +242,24 @@ type PoolTotals struct {
 	// There is no pooled median — see MedianSpan.
 	MedianTaskUSDLow  float64 `json:"medianTaskUsdLow"`
 	MedianTaskUSDHigh float64 `json:"medianTaskUsdHigh"`
+	// MedianTaskUSDs is every submission's own median, sorted ascending.
+	//
+	// The bracket above is a min and a max, which is two submissions' worth of
+	// evidence however many are in the pool. It also never converges: as the
+	// pool grows the bracket widens until "inside it" means nothing, and at
+	// small n it is badly calibrated in the other direction. The min and max of
+	// n exchangeable draws contain an n+1th with probability (n-1)/(n+1), so at
+	// five submissions one ordinary reader in three falls outside by luck.
+	//
+	// Publishing the sorted vector costs one number per submission and lets a
+	// consumer state a rank: "above 31 of the 41 submitted medians". That uses
+	// every submission rather than two, it sharpens as the pool grows instead of
+	// decaying, and it still names no central figure, so the refusal to compute
+	// a median of medians stands.
+	//
+	// It is the submitted medians themselves, not task costs. Publishing task
+	// costs would be publishing the corpus.
+	MedianTaskUSDs []float64 `json:"medianTaskUsds"`
 
 	// RulesVersion is shared by every member; Add refuses a pool where it is
 	// not.
@@ -307,6 +326,15 @@ func (p Pool) Totals() (PoolTotals, error) {
 			t.PricedAtHigh = e.PricedAt
 		}
 	}
+	// Every submission's own median, sorted, so a consumer can state a rank
+	// instead of a bracket. See the field comment for why the bracket alone is
+	// not enough.
+	t.MedianTaskUSDs = make([]float64, 0, len(p.Roster))
+	for _, e := range p.Roster {
+		t.MedianTaskUSDs = append(t.MedianTaskUSDs, e.MedianTaskUSD)
+	}
+	sort.Float64s(t.MedianTaskUSDs)
+
 	t.DistinctTags = len(tags)
 	t.PricedAtDistinct = len(dates)
 	if t.TotalUSD > 0 {
