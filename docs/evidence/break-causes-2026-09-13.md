@@ -57,9 +57,19 @@ The **shape**, which never moved:
 - **Client re-render is frequent and small:** 600 breaks at a mean of 29,240.
 - The ratio of means is **6.8x**, and it was about 10x on 2026-09-06.
 
-One developer going to lunch still costs more than a hundred re-renders. That
-is the claim worth making, it survived three readings and a rank flip, and it
-does not depend on which cause is first.
+**One developer going to lunch costs about seven re-renders**, and 97 of them
+account for more re-billed tokens than 600 re-renders do. That is the claim
+worth making, it survived three readings and a rank flip, and it does not depend
+on which cause is first.
+
+**Corrected 2026-09-13, hours after this file was written.** The sentence said
+"more than a hundred re-renders", and 198,268 divided by 29,240 is 6.8. The
+error was inherited verbatim from the 2026-09-06 reading, where the same
+sentence sat under a ratio of ten, and it was carried into the launch
+announcement before a reviewer with a calculator caught it. It is the exact
+failure this project exists to prevent, committed in the file stating the one
+claim it said it was willing to stand behind, and it survived three readings
+because nobody divided the two numbers printed above it.
 
 ## What this does not measure
 

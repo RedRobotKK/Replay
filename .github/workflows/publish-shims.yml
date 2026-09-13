@@ -20,9 +20,25 @@ name: Publish the npm and PyPI shims
 # SHAs should be filled in before the first tag that runs this (the session
 # that wrote it could not resolve them).
 
+# TRIGGERED BY THE RELEASE WORKFLOW FINISHING, not by the release being
+# published, and this is the difference between running and never running.
+#
+# It was `release: [published]` until 2026-09-13 and would have fired zero
+# times. goreleaser creates the release using secrets.GITHUB_TOKEN
+# (release.yml), and GitHub does not start workflow runs from events raised by
+# that token. The release would have gone green, been signed, carried all 21
+# assets, and npm and PyPI would have received nothing, with no failure
+# anywhere to notice. The first report would have been a user typing
+# `npx replay-doctor`.
+#
+# workflow_run also fixes the second half of the same problem. `release:
+# published` fires when the release is CREATED, and goreleaser uploads the
+# artifacts afterwards, so the download step would have raced an empty release.
+# Waiting for the whole Release workflow to complete means the assets are there.
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
@@ -34,13 +50,21 @@ permissions:
   id-token: write
 
 env:
-  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+  # head_branch is the tag name when the Release run was started by a tag push.
+  TAG: ${{ github.event.workflow_run.head_branch || inputs.tag }}
 
 jobs:
   npm:
     runs-on: ubuntu-latest
+    # A failed or cancelled Release must not publish shims pointing at assets
+    # that were never uploaded.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     steps:
+      # ref: the TAG. A bare checkout takes the default branch, which on a
+      # workflow_dispatch is whatever main has moved to, and would publish shim
+      # code from main under the tag's version number.
       - uses: actions/checkout@v4
+        with: { ref: "${{ env.TAG }}" }
       - uses: actions/setup-node@v4
         with: { node-version: '22', registry-url: 'https://registry.npmjs.org' }
       - name: Unit tests for the shim
@@ -63,8 +87,10 @@ jobs:
   pypi:
     runs-on: ubuntu-latest
     environment: pypi
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v4
+        with: { ref: "${{ env.TAG }}" }
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - name: Unit tests for the wheel builder

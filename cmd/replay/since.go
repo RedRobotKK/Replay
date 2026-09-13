@@ -88,6 +88,25 @@ type costReport struct {
 	Unpriced int `json:"unpriced"`
 }
 
+// worstByRebilledTokens returns the index of the window's largest re-billed
+// session, or -1 for an empty window.
+//
+// A function rather than three lines inside the loop, because `guard
+// reachability` reported the comparison UNREACHED: every transcript fixture in
+// the suite carries identical figures, so no test could ever make one session
+// larger than another, and nothing checked that the session this names is
+// actually the largest one. Naming the wrong session is the single worst thing
+// this command can do, since naming the right one IS the product.
+func worstByRebilledTokens(rep costReport, window []int) int {
+	worst := -1
+	for _, i := range window {
+		if worst < 0 || rep.Tasks[i].RebilledTokens > rep.Tasks[worst].RebilledTokens {
+			worst = i
+		}
+	}
+	return worst
+}
+
 func runSince(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("since", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -161,7 +180,6 @@ func runSince(args []string, stdout, stderr io.Writer) error {
 
 	var total, rebilled float64
 	var breaks, reqs, rebilledTok int
-	worst := -1
 	for _, i := range window {
 		t := rep.Tasks[i]
 		total += t.CostUSD
@@ -169,10 +187,8 @@ func runSince(args []string, stdout, stderr io.Writer) error {
 		rebilledTok += t.RebilledTokens
 		breaks += t.Breaks
 		reqs += t.Requests
-		if worst < 0 || t.RebilledTokens > rep.Tasks[worst].RebilledTokens {
-			worst = i
-		}
 	}
+	worst := worstByRebilledTokens(rep, window)
 
 	_, _ = fmt.Fprintf(stdout, "\n  Since you last looked, %s ago\n\n", roughly(now.Sub(mark)))
 	_, _ = fmt.Fprintf(stdout, "    %d session(s)   %d request(s)   $%.2f\n", len(window), reqs, total)

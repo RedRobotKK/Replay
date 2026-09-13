@@ -211,10 +211,15 @@ var renamedCorpusFields = map[string]string{
 // a person decide whether to re-derive the submission or to pool it in its own
 // group, and either decision is better than a silent sum.
 func (c *Corpus) UnmarshalJSON(b []byte) error {
+	// The probe's own error is DISCARDED, and the branch that returned it is
+	// gone. `guard reachability` reported it running with nothing depending on
+	// it, and reading the code says why: any input that fails to parse as a map
+	// also fails to parse as the struct below, which returns the same error from
+	// encoding/json. Two spellings of one refusal, one of them untestable, is
+	// the shape ADR-0014 rules out. A nil probe ranges zero times, so malformed
+	// input simply falls through to the real decode and is refused there.
 	var probe map[string]json.RawMessage
-	if err := json.Unmarshal(b, &probe); err != nil {
-		return err
-	}
+	_ = json.Unmarshal(b, &probe)
 	// Sorted, and reporting EVERY retired field rather than the first one hit.
 	// Ranging a map here made the message depend on Go's randomised iteration
 	// order, so the same document produced a different error each run and a

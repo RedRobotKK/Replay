@@ -16,12 +16,12 @@ flipped. **So the announcement does not lead with a cause ranking.** It leads
 with the shape, which held across all three, and it publishes the drift itself.
 
 That is not a defensive choice. A post that shows its own headline moving and
-explains why is the only post in this category that will do it, and it is the
-entire reason to believe the rest.
+explains why gives a reader something to check, which is the only reason to
+believe anything else in it.
 
 ## Show HN
 
-**Title:** `Show HN: Replay – find the exact turn your agent's prompt cache broke`
+**Title:** `Show HN: Replay - find the exact turn your agent's prompt cache broke`
 
 Keep it under 80 characters. No numbers in the title; every number needs a
 population and a title has no room for one.
@@ -36,14 +36,30 @@ population and a title has no room for one.
 >
 > Replay is a local Go binary that reads the transcripts your agent already
 > writes and names the turn that re-billed, against which predecessor, and why.
-> No account, no key, no network call.
+> Reading your transcripts needs no account and no key and makes no network
+> call.
+>
+> It is not a binary that never touches the network, and I am not going to say
+> it is. `replay proxy` is a proxy, `probe --execute` bills real requests on
+> purpose, and `replay upgrade` fetches a release. Those are the four typed
+> network commands and you invoke them. What cannot send is the CONTRIBUTION
+> path: `internal/observation` builds a file and has no transport in it, which
+> an import allowlist test enforces, so a submission cannot leave by accident.
 >
 > **What it found on my own machine.** 1,950 transcript files, 121 sessions,
-> 72,439 requests, 32 days to 2026-09-12. One machine, one operator. 833 cache
-> breaks, about 44.2M tokens re-billed.
+> 72,439 requests, over 32 days to 2026-09-12 of which 27 were active. One
+> machine, one operator. **833 cache breaks and about 44.2M re-billed tokens,
+> read by `replay diff` on the v0.6.0 build on 2026-09-13.**
 >
-> The interesting part is not which cause is biggest. It is that I do not know,
-> and I can show you why. Three readings in nine days:
+> That figure needs its command and its build attached, and here is why, since
+> it is the best thing I can show you about how this project works. `replay
+> cost` on v0.5.4 reports 44,214,854 re-billed tokens for the same corpus. Two
+> numbers agreeing to 0.03%, and they are not the same quantity. On the current
+> build `cost` reports 71.4M and `diff` reports 44.2M, because they count
+> different things. I nearly shipped that collision in this post.
+>
+> I do not know which cause is biggest, and I can show you why. Three readings
+> in nine days:
 >
 > | read | corpus | client re-render | TTL expiry |
 > |---|---|---|---|
@@ -58,13 +74,18 @@ population and a title has no room for one.
 >
 > **What held all three times is the shape.** TTL expiries are rare and
 > enormous: 97 breaks at a mean of 198,268 tokens. Re-renders are frequent and
-> small: 600 breaks at a mean of 29,240. One developer going to lunch costs more
-> than a hundred re-renders. That survived a rank flip, which is why it is the
+> small: 600 breaks at a mean of 29,240. **One developer going to lunch costs
+> about seven re-renders**, and 97 of them account for more re-billed tokens
+> than 600 re-renders do. That survived a rank flip, which is why it is the
 > claim I am willing to make.
 >
-> **What it will not do.** If you are on a flat seat with short single-lane
-> sessions, the recoverable figure is zero dollars. That is published as a null
-> result, not buried. Set `promptCacheTtl: 1h`, freeze your tool list, and you
+> **What it will not do.** On a flat seat you are not billed per token, so every
+> dollar here is list price for somebody else and the tokens are still yours.
+> Whether a re-billed token also burns your rate-limit window is **measured,
+> unresolved and published as a null**: 3.09M tokens moved the utilisation
+> counter by zero steps, which is a null about the instrument's sensitivity
+> rather than a finding that nothing is recoverable. The file says in terms that
+> nothing licenses a claim in either direction. Set `promptCacheTtl: 1h`, freeze your tool list, and you
 > do not need this. It reads Claude Code and Codex transcripts; Cursor's store
 > carries no cache fields so there is nothing to read. It refuses to run on
 > Windows, because the directory-privacy check it relies on is a no-op there and
@@ -101,27 +122,37 @@ it.** So it goes first, in the author's own voice:
 > the roster says so. Every population claim in this post is a claim about one
 > operator's laptop, and the single thing I want from today is a second machine.
 >
-> **I am trying to build a business on this and the plan is in the repo.**
-> `docs/MONEY-PATH.md` has the pricing thinking, the revenue arithmetic and the
-> parts that do not work. It is unflattering in places. I would rather you read
-> it from me than find it.
+> **I am trying to build a business on this and the plan is in the repo, with
+> the numbers.** `docs/MONEY-PATH.md` carries a provisional $199 per repository
+> per month, a $500,000 post-tax target, and this sentence of mine about the
+> first of those: "$199 a month to recover a measured $60 to $90 a month."
+> Nothing is for sale today and no price is on any public page. I would rather
+> you read that from me than find it.
 >
 > **The licence is BUSL 1.1, which is not open source.** It converts to Apache
 > 2.0 on 2029-09-06. Running it at work, in production, at any scale, in CI is
-> free and unrestricted. The one thing it forbids is reselling it as a hosted
-> service.
+> free and unrestricted. It forbids two things: offering it to third parties as
+> a hosted or managed service, and embedding it in a product that derives
+> substantial value from its measurement of agent traffic and cost. Read the
+> Additional Use Grant rather than my summary of it.
 >
-> The tool's own retractions are in `docs/evidence/`, including a 98.8% that
-> became 4.2% the same day, with the wrong figure still on the page.
+> The tool's own retractions are in `docs/evidence/`. The largest: a 98.8% and
+> an 11.0% that were **both retracted** when the instrument turned out to be
+> comparing each request against whichever sibling lane wrote last. 4.2% is the
+> replacement measurement and it is **a different quantity, not a corrected
+> estimate of the same one**, because the retracted figures were shares of a
+> broken run's own deficit total. All of it is still on the page. A separate,
+> un-retracted 98.8% in a later file is a different measurement again, which is
+> exactly why every figure here carries its population.
 
 ## What is being asked for, and it is not a star
 
 **The ask is a corpus, not a star.** Stars do not close the one gap that matters.
 
-> If you run agents on a metered bill, `replay cost --contribute` writes about
-> 19 numbers to a file, prints the exact curl line, and sends nothing on its own.
-> You read the file first. The pool and every contributed file are public. That
-> is the only thing on this page I actually want.
+> If you run agents on a metered bill, `replay cost --contribute` writes 19
+> fields to a file and prints the path. It sends nothing and it has nowhere to
+> send. You read the file, and if you are happy with it you attach it to a pull
+> request. The pool and every contributed file are public.
 
 ## Product Hunt
 
@@ -141,13 +172,15 @@ not spend the day's energy there.** Ship it because it costs an hour.
 > Codex already write, and names the turn that re-billed, which predecessor it
 > broke against, and why.
 >
-> It sends nothing. No account, no key, no network call. An import allowlist
-> test in the repository enforces that rather than a promise in a README.
+> Reading your transcripts needs no account, no key and no network call. The
+> contribution path cannot send at all: it builds a file, and an import
+> allowlist test refuses every transport in that package. The proxy, the probe
+> and the upgrader do reach the network, you invoke them, and they are listed.
 >
-> On one machine over 32 days it found 833 cache breaks and about 44.2M
-> re-billed tokens. That is one operator's laptop, it is labelled as such
-> everywhere it appears, and widening it past one machine is the only thing this
-> launch is for.
+> On one machine, over 32 days to 2026-09-12, `replay diff` on the v0.6.0 build
+> found 833 cache breaks and about 44.2M re-billed tokens. That is one
+> operator's laptop, it is labelled as such everywhere it appears, and widening
+> it past one machine is the only thing this launch is for.
 >
 > Every figure carries its population and its date. The corrections stay on the
 > page with the wrong number still readable.

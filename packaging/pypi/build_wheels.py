@@ -115,13 +115,34 @@ def build(version: str, dist: str, out: str) -> list:
     with open(os.path.join(dist, "checksums.txt"), encoding="utf-8") as f:
         checksums = f.read()
     os.makedirs(out, exist_ok=True)
+    # EVERY tarball is checked before ANY wheel is written.
+    #
+    # Two defects, found together on 2026-09-13. This loop skipped a missing
+    # tarball and raised only when nothing at all was built, so a partial
+    # download published a partial platform set, and a PyPI filename cannot be
+    # reused once taken. The npm builder already refused; these two now agree.
+    #
+    # And refusing inside the loop was not enough: the wheels for the platforms
+    # processed before the missing one were already on disk, where a later step
+    # could publish them. A refusal that leaves its output behind is not a
+    # refusal. So the check is a separate pass and it names every absence at
+    # once rather than the first.
+    missing = [
+        f"replay_{version}_{key}.tar.gz"
+        for key in TARGETS
+        if not os.path.exists(os.path.join(dist, f"replay_{version}_{key}.tar.gz"))
+    ]
+    if missing:
+        raise SystemExit(
+            f"not in {dist}: {', '.join(missing)}. Refusing to publish a partial platform "
+            "set, and refusing before writing any wheel: a PyPI filename cannot be reused "
+            "once taken, so publishing three of four cannot be undone."
+        )
+
     built = []
     for key, tags in TARGETS.items():
         name = f"replay_{version}_{key}.tar.gz"
         path = os.path.join(dist, name)
-        if not os.path.exists(path):
-            print(f"build_wheels: {name} not in {dist}, skipping", file=sys.stderr)
-            continue
         with open(path, "rb") as f:
             blob = f.read()
         want = expected_hash(checksums, name)

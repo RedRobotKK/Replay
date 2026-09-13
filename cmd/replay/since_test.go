@@ -177,3 +177,70 @@ func TestSN5_OlderWorkIsExcluded(t *testing.T) {
 		t.Errorf("a session already reported appeared again:\n%s", b.String()+be.String())
 	}
 }
+
+// SN-WORST: the session named as largest is actually the largest.
+//
+// `guard reachability` reported the comparison UNREACHED on 2026-09-13, and it
+// was right for a reason worth recording: every transcript fixture in this
+// suite carries identical figures, so no test driving the command could ever
+// make one session larger than another. The loop ran on every run and nothing
+// depended on which session it chose.
+//
+// Naming the wrong session is the worst thing this command can do, because
+// naming the right one IS the product.
+func TestSNWORST_TheLargestSessionIsTheOneNamed(t *testing.T) {
+	build := func(tokens ...int) costReport {
+		var rep costReport
+		for i, n := range tokens {
+			var task = struct {
+				Session        string    `json:"session"`
+				Model          string    `json:"model"`
+				Requests       int       `json:"requests"`
+				CostUSD        float64   `json:"costUsd"`
+				RebilledUSD    float64   `json:"rebilledUsd"`
+				RebilledTokens int       `json:"rebilledTokens"`
+				Breaks         int       `json:"breaks"`
+				At             time.Time `json:"at"`
+			}{Session: string(rune('a' + i)), RebilledTokens: n, Breaks: 1}
+			rep.Tasks = append(rep.Tasks, task)
+		}
+		return rep
+	}
+	all := func(n int) []int {
+		out := make([]int, n)
+		for i := range out {
+			out[i] = i
+		}
+		return out
+	}
+
+	for _, tc := range []struct {
+		name   string
+		tokens []int
+		want   int
+	}{
+		{"largest in the middle", []int{10, 900, 20}, 1},
+		{"largest last", []int{10, 20, 900}, 2},
+		{"largest first", []int{900, 20, 10}, 0},
+		{"one session", []int{7}, 0},
+		{"ties take the first", []int{50, 50}, 0},
+		{"zeros are still a maximum", []int{0, 0, 0}, 0},
+	} {
+		if got := worstByRebilledTokens(build(tc.tokens...), all(len(tc.tokens))); got != tc.want {
+			t.Errorf("%s: named index %d, want %d (tokens %v)", tc.name, got, tc.want, tc.tokens)
+		}
+	}
+
+	// An empty window names nobody rather than naming task zero.
+	if got := worstByRebilledTokens(build(1, 2, 3), nil); got != -1 {
+		t.Errorf("an empty window named index %d; it must name nobody", got)
+	}
+
+	// The window is a subset, and the maximum is the maximum OF THE WINDOW
+	// rather than of the report. A session outside the window is not this
+	// week's largest however big it is.
+	if got := worstByRebilledTokens(build(9999, 10, 900), []int{1, 2}); got != 2 {
+		t.Errorf("named index %d; the largest inside the window is index 2, and index 0 "+
+			"is outside it", got)
+	}
+}

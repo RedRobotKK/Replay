@@ -865,9 +865,7 @@ func costState(m tui.Machine) tui.Machine {
 	breaks, peak := 0, 0
 	for _, t := range out.Tasks {
 		breaks += t.Breaks
-		if t.RebilledTokens > peak {
-			peak = t.RebilledTokens
-		}
+		peak = higher(peak, t.RebilledTokens)
 	}
 	m.Card, m.ShareOK = shareFrom(sm, breaks, peak)
 
@@ -1063,4 +1061,17 @@ func liveState() tui.Live {
 		})
 	}
 	return l
+}
+
+// higher returns the larger of two counts.
+//
+// Extracted because `guard reachability` found the comparison it replaces ran
+// with nothing depending on the result: peak feeds the share card's headline
+// number, and no test asserted it was the maximum rather than the last value
+// seen. A card that publishes the wrong peak publishes it in public.
+func higher(a, b int) int {
+	if b > a {
+		return b
+	}
+	return a
 }
