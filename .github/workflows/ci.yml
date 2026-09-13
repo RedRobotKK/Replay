@@ -191,6 +191,22 @@ jobs:
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:
           version: v2.5
+      # The workflows themselves, because a workflow that will not parse fails
+      # INVISIBLY: no jobs, no check run, nothing red in the pull request.
+      #
+      # publish-shims.yml sat unparseable from the day it was written until
+      # 2026-09-13 over one unquoted expression in a YAML flow mapping. It is
+      # the workflow that publishes the npm and PyPI shims on a release tag, so
+      # two advertised distribution channels would have published nothing and
+      # the only symptom would have been a missing package.
+      #
+      # Installed with `go install` rather than an action, because this repo
+      # pins actions by SHA and a linter for the workflows should not be the one
+      # unpinned thing in them.
+      - name: Lint the workflows
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          "$(go env GOPATH)/bin/actionlint"
 
   govulncheck:
     name: govulncheck

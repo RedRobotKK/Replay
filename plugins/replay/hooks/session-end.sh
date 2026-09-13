@@ -29,10 +29,18 @@ if ! command -v replay >/dev/null 2>&1; then
   exit 0
 fi
 
-# The tip line: what this session re-billed, and how to see the turn. `replay`
-# prints its own one-line summary for a single transcript; if the binary is too
-# old to, or the transcript is empty, it says nothing and so do we.
-replay cost --one-line "$transcript" 2>/dev/null || true
+# The tip line: what this session re-billed, and how to see the turn. Read from
+# `cost --json` on the one transcript and reduced to a single line here, so the
+# hook never prints the full report at the end of every session. If the read
+# fails, the transcript is empty, or the figures cannot be found, print nothing.
+summary=$(replay cost --json "$transcript" 2>/dev/null || true)
+if [ -n "$summary" ]; then
+  usd=$(printf '%s' "$summary" | tr -d '\n' | sed -n 's/.*"avoidableUsd"[[:space:]]*:[[:space:]]*\([0-9.]*\).*/\1/p' | head -1)
+  tok=$(printf '%s' "$summary" | tr -d '\n' | sed -n 's/.*"avoidableTokens"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' | head -1)
+  if [ -n "$usd" ] && [ -n "$tok" ] && [ "$tok" != "0" ]; then
+    printf 'replay: $%s at list billed twice in this session (%s tokens). Which turn: replay diff "%s"\n' "$usd" "$tok" "$transcript"
+  fi
+fi
 
 # Optional watch. Off unless the operator wrote the config file.
 cfg="${XDG_CONFIG_HOME:-$HOME/.config}/replay/watch.toml"

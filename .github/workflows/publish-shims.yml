@@ -46,7 +46,7 @@ jobs:
       - name: Unit tests for the shim
         run: cd packaging/npm && npm test
       - name: Download the release assets
-        env: { GH_TOKEN: ${{ github.token }} }
+        env: { GH_TOKEN: "${{ github.token }}" }
         run: gh release download "$TAG" -p 'replay_*_*.tar.gz' -p 'checksums.txt' -D dist-release
       - name: Build the four platform packages, verified against checksums.txt
         run: node packaging/npm/scripts/build-platform-packages.mjs --version "${TAG#v}" --dist dist-release
@@ -55,10 +55,10 @@ jobs:
       # does not exist yet.
       - name: Publish the platform packages with provenance
         run: for d in packaging/npm/build/*/; do (cd "$d" && npm publish --provenance --access public); done
-        env: { NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} }
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
       - name: Publish replay-doctor with provenance
         run: cd packaging/npm && npm publish --provenance --access public
-        env: { NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} }
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
 
   pypi:
     runs-on: ubuntu-latest
@@ -68,9 +68,11 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - name: Unit tests for the wheel builder
-        run: python3 -m unittest packaging/pypi/test_build_wheels.py
+        # By path, not -m unittest: `packaging` is also an installed PyPI
+        # library on the runner, and the module form imports that one instead.
+        run: python3 packaging/pypi/test_build_wheels.py
       - name: Download the release assets
-        env: { GH_TOKEN: ${{ github.token }} }
+        env: { GH_TOKEN: "${{ github.token }}" }
         run: gh release download "$TAG" -p 'replay_*_*.tar.gz' -p 'checksums.txt' -D dist-release
       - name: Build one wheel per platform, verified against checksums.txt
         run: python3 packaging/pypi/build_wheels.py --version "${TAG#v}" --dist dist-release --out wheelhouse
