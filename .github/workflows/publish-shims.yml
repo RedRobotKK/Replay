@@ -16,9 +16,26 @@ name: Publish the npm and PyPI shims
 #         owner RedRobotKK, repository Replay, workflow publish-shims.yml,
 #         environment pypi.
 #
-# Actions are pinned by tag here; this repository's policy is SHA pins, and the
-# SHAs should be filled in before the first tag that runs this (the session
-# that wrote it could not resolve them).
+# Actions are pinned by SHA, resolved 2026-09-13.
+#
+# The header used to say the SHAs "should be filled in before the first tag that
+# runs this", and that tag was hours away. Five floating refs, and one of them,
+# pypa/gh-action-pypi-publish@release/v1, was a MOVING BRANCH in the job that
+# holds the PyPI Trusted Publishing OIDC token. release.yml pins every action
+# and carries two comments about why floating refs burned this project twice;
+# this file inherited none of it.
+#
+# Nothing enforces the policy. There is no pinning job, actionlint does not
+# check it, and ci.yml runs on push to main and on pull requests, so on a tag
+# push the only workflow that executes is release.yml.
+#
+# Pinned to the SHA of the version ALREADY IN USE rather than to the latest
+# release, deliberately. actions/setup-node is on v4 and the newest is v7;
+# resolving "latest" would have moved two majors silently while claiming to be
+# a safety change. checkout goes to v7's SHA because that is what every other
+# workflow here already uses. gh-action-pypi-publish v1.14.2 is the commit
+# release/v1 points at today, so the pin changes nothing except who decides
+# when it moves.
 
 # TRIGGERED BY THE RELEASE WORKFLOW FINISHING, not by the release being
 # published, and this is the difference between running and never running.
@@ -63,9 +80,9 @@ jobs:
       # ref: the TAG. A bare checkout takes the default branch, which on a
       # workflow_dispatch is whatever main has moved to, and would publish shim
       # code from main under the tag's version number.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with: { ref: "${{ env.TAG }}" }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: '22', registry-url: 'https://registry.npmjs.org' }
       - name: Unit tests for the shim
         run: cd packaging/npm && npm test
@@ -89,9 +106,9 @@ jobs:
     environment: pypi
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with: { ref: "${{ env.TAG }}" }
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with: { python-version: '3.12' }
       - name: Unit tests for the wheel builder
         # By path, not -m unittest: `packaging` is also an installed PyPI
@@ -103,5 +120,5 @@ jobs:
       - name: Build one wheel per platform, verified against checksums.txt
         run: python3 packaging/pypi/build_wheels.py --version "${TAG#v}" --dist dist-release --out wheelhouse
       - name: Publish with Trusted Publishing
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with: { packages-dir: wheelhouse/ }

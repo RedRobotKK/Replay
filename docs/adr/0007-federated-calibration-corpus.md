@@ -150,6 +150,35 @@ Whether to build the flag is still open, and section 2 above is the constraint a
 to satisfy. Until then this record is a plan, and the surface map
 ([`../SURFACES.md`](../SURFACES.md)) is the description of what exists.
 
+
+## Correction, 2026-09-13: "no network request at all" is false and was true when written
+
+The bolded sentence above, **"The released binary makes no network request at
+all"**, is wrong. It stays on the page.
+
+It was accurate on the date of this record. It went false by ADDITION
+ELSEWHERE: `replay probe --execute` shipped afterwards, deliberately, with its
+own tests saying in plain words that it originates billable requests on the
+operator's credential, and nothing came back to edit this line. That is the one
+kind of documentation error no amount of care in the edit catches, and
+`cmd/replay/outbound_drift_test.go` exists because of it.
+
+Five packages in the binary can reach the network, each listed in
+[SURFACES.md](../SURFACES.md) and derived from the code rather than typed: the
+proxy forwarding your own traffic, `probe --execute`, `rules --check-prices`,
+`doctor` probing loopback, and `replay upgrade`.
+
+**The accurate promise, which is narrower and is the one the project keeps, is
+in `cmd/replay/upgrade.go`: replay originates no request you did not type.**
+
+The last sentence of the passage above is the part worth keeping and the part
+that caused this. "Any claim that undersells a privacy property is still an
+inaccurate claim" is true, and reaching for the stronger form of a true claim is
+how a true claim became a false one. The README carried the same sentence until
+2026-09-13 and `internal/regression` now has FC-NET watching for its return.
+
+The DECISION this record contains is unaffected and stands.
+
 ---
 
 [Decision records](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)
