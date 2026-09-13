@@ -71,7 +71,7 @@ func TestFCAL2_NoUnquotedExpressionInAFlowMapping(t *testing.T) {
 	}
 	var checked int
 	for _, e := range entries {
-		if e.IsDir() || !(strings.HasSuffix(e.Name(), ".yml") || strings.HasSuffix(e.Name(), ".yaml")) {
+		if e.IsDir() || (!strings.HasSuffix(e.Name(), ".yml") && !strings.HasSuffix(e.Name(), ".yaml")) {
 			continue
 		}
 		checked++

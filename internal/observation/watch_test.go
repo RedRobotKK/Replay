@@ -507,3 +507,54 @@ func TestWA15_APopulatedRecordStaysSmall(t *testing.T) {
 			"are a promise about what travels", len(m), fields)
 	}
 }
+
+// WA16: the three provenance fields have a shape, not just a presence.
+//
+// WA10 proves each is required. That is not enough once something else
+// validates these records: the receiving endpoint checks shapes, so a record
+// BuildWatch happily produces and the endpoint refuses is a silent data loss
+// with no error anybody sees on the machine that produced it. The two rules
+// have to be identical and this side is the source.
+//
+// binaryVersion must admit what the binary actually reports. `replay version`
+// on an untagged build prints a git-describe string like v0.5.4-201-gbe39707,
+// and the contribution charset had to be widened for exactly that once already.
+// A rule that only admits v1.2.3 rejects every development build.
+func TestWA16_TheProvenanceFieldsHaveAShape(t *testing.T) {
+	type tc struct {
+		field string
+		set   func(*Watch, string)
+	}
+	fields := []tc{
+		{"binaryVersion", func(w *Watch, s string) { w.BinaryVersion = s }},
+		{"commit", func(w *Watch, s string) { w.Commit = s }},
+		{"pricingDigest", func(w *Watch, s string) { w.PricingDigest = s }},
+	}
+	good := map[string][]string{
+		"binaryVersion": {"v0.6.0", "0.6.0", "v1.0.0", "v0.5.4-201-gbe39707", "v1.2.3-rc.1"},
+		"commit":        {"cccc3f0", "be39707", strings.Repeat("a", 40)},
+		"pricingDigest": {"p02eb9163145c", "p" + strings.Repeat("f", 12)},
+	}
+	bad := map[string][]string{
+		"binaryVersion": {"v", "version six", "v0.6", "v0.6.0.1", "v0.6.0-", "v0.6.0-bad!suffix", "va.b.c", "0.6.0 ", "vv0.6.0", "v-1.0.0"},
+		"commit":        {"CCCC3F0", "cccc3f", "zzzzzzz", strings.Repeat("a", 41), "cccc 3f0"},
+		"pricingDigest": {"02eb9163145c", "p02EB9163145C", "p02eb9163145", "p02eb9163145cc", "pzzzzzzzzzzzz"},
+	}
+	for _, f := range fields {
+		for _, v := range good[f.field] {
+			w := watchFixture()
+			f.set(&w, v)
+			if err := w.Digested().Validate(); err != nil {
+				t.Errorf("%s=%q was refused, and the binary can produce it: %v", f.field, v, err)
+			}
+		}
+		for _, v := range bad[f.field] {
+			w := watchFixture()
+			f.set(&w, v)
+			if err := w.Digested().Validate(); err == nil {
+				t.Errorf("%s=%q validated here. The endpoint refuses that shape, so the "+
+					"record is lost with no error on the machine that made it.", f.field, v)
+			}
+		}
+	}
+}

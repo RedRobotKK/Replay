@@ -93,6 +93,72 @@ func validWatchRepo(s string) bool {
 	return true
 }
 
+// isLowerHex reports whether s is n to m lowercase hex characters.
+func isLowerHex(s string, atLeast, atMost int) bool {
+	if len(s) < atLeast || len(s) > atMost {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= '0' && r <= '9', r >= 'a' && r <= 'f':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// validBinaryVersion reports whether s is a version this binary could report.
+//
+// It must admit what `replay version` ACTUALLY prints, which on an untagged
+// build is a git-describe string like v0.5.4-201-gbe39707. A rule that only
+// admits v1.2.3 rejects every development build, and the contribution charset
+// had to be widened for exactly that string once already.
+//
+// Optional leading "v", three dot-separated numbers, then optionally a "-" and
+// a pre-release or describe suffix of [0-9A-Za-z.-].
+func validBinaryVersion(s string) bool {
+	s = strings.TrimPrefix(s, "v")
+	core := s
+	if i := strings.Index(s, "-"); i >= 0 {
+		core = s[:i]
+		suffix := s[i+1:]
+		if suffix == "" {
+			return false
+		}
+		for _, r := range suffix {
+			switch {
+			case r >= '0' && r <= '9', r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z':
+			case r == '.' || r == '-':
+			default:
+				return false
+			}
+		}
+	}
+	parts := strings.Split(core, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	for _, part := range parts {
+		if part == "" || len(part) > 10 {
+			return false
+		}
+		for _, r := range part {
+			if r < '0' || r > '9' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// validPricingDigest reports whether s is a pricing digest: "p" and 12
+// lowercase hex characters. The prefix is there so a digest is recognisable in
+// a log line without being mistaken for a commit.
+func validPricingDigest(s string) bool {
+	return strings.HasPrefix(s, "p") && isLowerHex(s[1:], 12, 12)
+}
+
 // Watch is one session against one repository, counts only.
 //
 // Replay reads one machine once. Watch is the standing version: the record is
@@ -252,6 +318,25 @@ func (w Watch) Validate() error {
 			return fmt.Errorf("watch record has no %s. A timeline that mixes two builds shows "+
 				"an arithmetic change as a spend change", f.name)
 		}
+	}
+	// And the SHAPES, not only the presence.
+	//
+	// The receiving endpoint checks these. A record BuildWatch produces happily
+	// and the endpoint refuses is a silent loss: the session is gone and the
+	// machine that measured it saw no error. The two rules have to be identical
+	// and this side is the source of them.
+	if !validBinaryVersion(w.BinaryVersion) {
+		return fmt.Errorf("watch record's binaryVersion %q is not a version. Expected an "+
+			"optional v, three numbers, and optionally a pre-release or git-describe "+
+			"suffix, as `replay version` prints", w.BinaryVersion)
+	}
+	if !isLowerHex(w.Commit, 7, 40) {
+		return fmt.Errorf("watch record's commit %q is not a commit. Expected 7 to 40 "+
+			"lowercase hex characters so a reader can go and look at the build", w.Commit)
+	}
+	if !validPricingDigest(w.PricingDigest) {
+		return fmt.Errorf("watch record's pricingDigest %q is not a digest. Expected \"p\" "+
+			"and 12 lowercase hex characters", w.PricingDigest)
 	}
 	if w.Digest == "" {
 		return errors.New("watch record has no digest, so nothing names it and a published " +

@@ -10,11 +10,18 @@
 #   - If `replay` is not installed, print how to install it once, then nothing.
 #   - If the transcript cannot be read, print nothing. A hook that fails loudly
 #     at the end of every session is a hook people remove.
-#   - Nothing is sent unless BOTH of these exist: ~/.config/replay/watch.toml
-#     naming a repository and a key, and a record the binary agreed to write
-#     (it refuses without the watch consent grant). Then, and only then, this
-#     script posts that one file with curl. The binary itself never sends;
-#     this script is the "something outside the package" that does.
+#   - NOTHING IS SENT. This hook makes no network call of any kind, and the
+#     v0.6.0 plugin has no code that could. That is a deliberate build-order
+#     decision taken on 2026-09-12, not an oversight: Replay Watch, the paid
+#     per-repository service, does not merge ahead of the first sold forensics
+#     week. The sending half arrives with the first engagement that pays for
+#     it, and until then this hook prints a line and stops.
+#
+#     What was here until today: a curl POST to replay.doctor/api/watch, gated
+#     on a config file, calling `replay watch emit`. That verb does not exist,
+#     so the block could not have worked, and every failure in it was swallowed
+#     by `2>/dev/null || true`. A silent no-op shipped to everyone who installs
+#     is worse than an absent feature, because the absent one is honest.
 #
 # Input: Claude Code's SessionEnd JSON on stdin (session_id, transcript_path,
 # cwd, reason). Only transcript_path is used.
@@ -42,26 +49,10 @@ if [ -n "$summary" ]; then
   fi
 fi
 
-# Optional watch. Off unless the operator wrote the config file.
-cfg="${XDG_CONFIG_HOME:-$HOME/.config}/replay/watch.toml"
-[ -r "$cfg" ] || exit 0
-repo=$(sed -n 's/^[[:space:]]*repo[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$cfg" | head -1)
-key=$(sed -n 's/^[[:space:]]*key[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$cfg" | head -1)
-endpoint=$(sed -n 's/^[[:space:]]*endpoint[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$cfg" | head -1)
-[ -n "$repo" ] && [ -n "$key" ] || exit 0
-endpoint=${endpoint:-https://replay.doctor/api/watch}
-
-out=$(mktemp -d 2>/dev/null) || exit 0
-trap 'rm -rf "$out"' EXIT
-
-# The binary writes the record only if the watch consent grant exists; it
-# refuses otherwise and this script has nothing to send. Counts only, no text.
-replay watch emit --repo "$repo" --key "$key" --out "$out" "$transcript" >/dev/null 2>&1 || exit 0
-rec=$(ls "$out"/replay-watch-*.json 2>/dev/null | head -1)
-[ -n "$rec" ] || exit 0
-
-# One typed-by-config POST. The reply names the digest; failures are silent
-# here and visible on the repository page as a missing week, which is the
-# honest place for them.
-curl -sS --max-time 8 -X POST -H "Authorization: Bearer $key" --data-binary @"$rec" "$endpoint" >/dev/null 2>&1 || true
+# The hook ends here, and ending here is the feature.
+#
+# A reader who installs this can confirm in one screen that it reads one file,
+# prints at most one line, and opens no socket. That is the claim the project
+# is sold on, and it is worth more before a launch than a send path with no
+# customer behind it.
 exit 0
