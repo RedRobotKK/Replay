@@ -115,13 +115,17 @@ func (c *Client) get(ctx context.Context, url string) ([]byte, error) {
 // The verification mirrors install.sh exactly, because an upgrade path that
 // checked less than the installer would let someone weaken their own guarantees
 // by using the tool the convenient way.
-func (c *Client) Fetch(ctx context.Context, tag, goos, goarch string) ([]byte, error) {
+// The SignatureStatus says which promise this download actually kept, so the
+// caller can print it. Fetch returned ([]byte, error) until 2026-09-13 and
+// therefore could not report it, which is why `replay upgrade` printed
+// "Checksum verified" whether or not a signature had been checked.
+func (c *Client) Fetch(ctx context.Context, tag, goos, goarch string) ([]byte, SignatureStatus, error) {
 	name := ArchiveName(tag, goos, goarch)
 	base := c.base() + "/releases/download/" + tag
 
 	archive, err := c.get(ctx, base+"/"+name)
 	if err != nil {
-		return nil, fmt.Errorf("no build for %s/%s in %s: %w", goos, goarch, tag, err)
+		return nil, SignatureUnchecked, fmt.Errorf("no build for %s/%s in %s: %w", goos, goarch, tag, err)
 	}
 
 	// A checksums file that cannot be fetched is not a reason to proceed. There
@@ -129,24 +133,26 @@ func (c *Client) Fetch(ctx context.Context, tag, goos, goarch string) ([]byte, e
 	// bootstrapping, and a machine that already runs replay is past that.
 	sums, err := c.get(ctx, base+"/checksums.txt")
 	if err != nil {
-		return nil, fmt.Errorf("checksums.txt could not be fetched from %s, so the download cannot be verified. Nothing was installed: %w", base, err)
+		return nil, SignatureUnchecked, fmt.Errorf("checksums.txt could not be fetched from %s, so the download cannot be verified. Nothing was installed: %w", base, err)
 	}
 	want, err := DigestFor(sums, name)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s. Nothing was installed", err, name)
+		return nil, SignatureUnchecked, fmt.Errorf("%w: %s. Nothing was installed", err, name)
 	}
 	sum := sha256.Sum256(archive)
 	if got := hex.EncodeToString(sum[:]); got != want {
-		return nil, fmt.Errorf("checksum mismatch for %s. Nothing was installed.\nchecksums.txt says %s, the download hashes to %s", name, want, got)
+		return nil, SignatureUnchecked, fmt.Errorf("checksum mismatch for %s. Nothing was installed.\nchecksums.txt says %s, the download hashes to %s", name, want, got)
 	}
 
 	// The hash proves the archive matches checksums.txt. This proves
 	// checksums.txt is the one this project's CI signed.
-	if err := c.verifyChecksumSignature(ctx, base, sums); err != nil {
-		return nil, err
+	sig, err := c.verifyChecksumSignature(ctx, base, sums)
+	if err != nil {
+		return nil, SignatureUnchecked, err
 	}
 
-	return unpack(archive)
+	bin, err := unpack(archive)
+	return bin, sig, err
 }
 
 // unpack pulls the single binary out of the release tarball.

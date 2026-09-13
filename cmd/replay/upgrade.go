@@ -28,6 +28,19 @@ import (
 // request you did not type, not that it never sends one. `internal/selfupdate`
 // is named in cmd/replay/outbound_drift_test.go's inventory and in
 // docs/SURFACES.md §2 for that reason.
+// newUpdateClient is the seam this command is tested through.
+//
+// NewClient hardcodes the real release origin, so runUpgrade could not be
+// pointed anywhere and had NO TESTS AT ALL: the command that downloads a binary
+// and replaces the one you are running was the least covered path in the
+// repository. That was found on 2026-09-13 when a mutation removing the
+// signature line from its output survived, because nothing read its output.
+//
+// A var rather than an environment variable, deliberately. An env override on
+// the release origin is a supply-chain hole: anyone who can set it chooses
+// where the next binary comes from. Production never assigns this.
+var newUpdateClient = selfupdate.NewClient
+
 func runUpgrade(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("upgrade", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -61,7 +74,7 @@ func runUpgrade(args []string, stdout, stderr io.Writer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	client := selfupdate.NewClient()
+	client := newUpdateClient()
 	current := version.Version
 
 	target := *tag
@@ -109,11 +122,26 @@ func runUpgrade(args []string, stdout, stderr io.Writer) error {
 	}
 
 	_, _ = fmt.Fprintf(stderr, "→ Downloading %s %s\n", selfupdate.Binary, target)
-	bin, err := client.Fetch(ctx, target, runtime.GOOS, runtime.GOARCH)
+	bin, sig, err := client.Fetch(ctx, target, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return err
 	}
+	// Two lines, because two different things were checked and a user is
+	// entitled to know which.
+	//
+	// This printed "✓ Checksum verified" in all three outcomes until
+	// 2026-09-13: signature verified, cosign absent, signature skipped.
+	// install.sh has always printed three distinct lines, so somebody who
+	// installed the documented way got signature verification and the same
+	// person upgrading a week later did not, with nothing saying the guarantee
+	// had changed. Fetch could not report it either; it returned
+	// ([]byte, error).
 	_, _ = fmt.Fprintln(stderr, "✓ Checksum verified")
+	if sig == selfupdate.SignatureVerified {
+		_, _ = fmt.Fprintf(stderr, "✓ Signature verified (Sigstore, built by CI from the tag)\n")
+	} else {
+		_, _ = fmt.Fprintf(stderr, "  %s\n", sig)
+	}
 
 	if *dryRun {
 		_, _ = fmt.Fprintf(stdout, "\nVerified %s for %s/%s (%d bytes). Dry run: %s was not touched.\n",
