@@ -417,13 +417,13 @@ func main() {
 	report("These branches are never entered by any test. The fix is a test that\n"+
 		"makes the condition true:", unreached)
 	report("These branches run, and no test depends on whether they did. Either the\n"+
-		"statement is redundant with the code below it — delete it — or it changes\n"+
+		"statement is redundant with the code below it, so delete it, or it changes\n"+
 		"something real that nothing asserts on. Read it before choosing: a test\n"+
 		"written to satisfy this verdict can freeze dead code in place:", inert)
 	report("These survived and coverage carried no block for them, so which of the\n"+
 		"two above they are is NOT MEASURED:", unobserved)
 	report("These were not scored at all. They are in files this host does not\n"+
-		"compile, so there is no build to neutralise them against — and a pass that\n"+
+		"compile, so there is no build to neutralise them against, and a pass that\n"+
 		"left them out of the count would print a clean line over guards nothing\n"+
 		"looked at. Run the reviewer on a host that builds them, or treat them as\n"+
 		"unreviewed:", unbuilt)
@@ -656,8 +656,8 @@ func reportPreExisting(gs []guardcheck.Guard, verdicts map[guardcheck.Guard]stri
 	if len(gs) == 0 {
 		return
 	}
-	fmt.Printf("\nThese survived here AND in %s, where the same condition — same package,\n"+
-		"same function, same text — was neutralised and survived too. They are not this\n"+
+	fmt.Printf("\nThese survived here AND in %s, where the same condition (same package,\n"+
+		"same function, same text) was neutralised and survived too. They are not this\n"+
 		"change's doing and do not fail it. Read them anyway: where one function holds\n"+
 		"several identical conditions the pairing is by count, so this says one of them\n"+
 		"was already unobserved, not that this one was; and a condition whose text is\n"+

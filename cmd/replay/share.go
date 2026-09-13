@@ -93,7 +93,7 @@ func shareCard(s costSummary, breaks int) string {
 // safe to post without the poster having to edit anything out of it.
 func shareNote() string {
 	return "\n" + "Copy the block above. It carries no paths, no project names, and no\n" +
-		"spend total — a total tells a reader your burn rate, a rate does not.\n\n" +
+		"spend total. A total tells a reader your burn rate, a rate does not.\n\n" +
 		"If Replay found something worth posting, a star is how it reaches the\n" +
 		"next person: " + shareRepo + "\n"
 }
