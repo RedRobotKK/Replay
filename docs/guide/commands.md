@@ -1588,6 +1588,43 @@ nobody has.
 "the standing cost grew" would send the reader back to the configuration this command was
 designed not to read.
 
+## Exit codes, frozen
+
+A shell branches on these, so they are part of what the version number covers
+and they will not change inside a major version.
+
+| Code | Meaning | Should it block a merge |
+|---|---|---|
+| `0` | Success | no |
+| `1` | Usage error, or a failure nobody classified | no |
+| `2` | Payment required. A resource wants paying, which is a decision for whoever holds the wallet rather than a fault | no |
+| `3` | **A measured breach.** Spend crossed a ceiling you set | **yes, and only this one** |
+| `4` | Cannot evaluate. Nothing priced, a corpus that could not be read, a price table too old to trust | no |
+
+**Only 3 may fail a build**, and the reason is worth stating rather than
+assuming. A tool that blocks a merge because it could not measure anything has
+substituted its opinion for a measurement, which is the one thing this tool is
+built not to do. A CI runner with no transcripts is usually a wrong path, not an
+expensive month.
+
+**This was wrong until 2026-09-13 and it was wrong in the free gate.** Both a
+ceiling breach and the NOT MEASURED refusal exited 1, so a pipeline could not
+tell "your agents wasted money" from "there is no data here and I declined to
+bless it". Those are opposite situations and only one of them is a finding.
+
+In a shell:
+
+```sh
+replay cost --max-avoidable-usd 5 ~/.claude/projects
+case $? in
+  0) ;;                                  # under the ceiling
+  3) echo "over the ceiling"; exit 1 ;;  # the only blocking case
+  4) echo "could not measure; not failing the build" ;;
+  *) echo "replay itself failed"; exit 1 ;;
+esac
+```
+
+
 ---
 
 [Guide](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)

@@ -21,6 +21,15 @@ import (
 // an error so a shell gates on the exit code without parsing prose.
 var errGate = errors.New("avoidable spend is over the ceiling")
 
+// errNotMeasured is the gate declining to answer rather than finding anything.
+//
+// It was indistinguishable from errGate to a shell until 2026-09-13: both
+// returned 1, so a CI runner with no transcripts failed a merge exactly as
+// agents that had wasted money did. Those are opposite situations, and the
+// second usually means a path is wrong rather than that anything is expensive.
+// See the exit code contract in main.go.
+var errNotMeasured = errors.New("NOT MEASURED")
+
 // checkAvoidableCeiling enforces --max-avoidable-usd against a measured summary.
 //
 // The nothing-measured case is the one worth reading. `replay cost` exits 0 on a
@@ -41,7 +50,7 @@ func checkAvoidableCeiling(ceiling float64, s costSummary, unpriced, unreadable 
 			"\n  GATE: NOT MEASURED. This corpus priced nothing, so there is no avoidable\n"+
 				"  spend to compare against $%.2f. A ceiling met by measuring nothing is not\n"+
 				"  a ceiling met.\n", ceiling)
-		return fmt.Errorf("refusing to pass a gate over 0 priced %s: NOT MEASURED", s.Unit)
+		return fmt.Errorf("refusing to pass a gate over 0 priced %s: %w", s.Unit, errNotMeasured)
 	}
 
 	if s.AvoidableUSD > ceiling {

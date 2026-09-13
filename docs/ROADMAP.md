@@ -252,8 +252,11 @@ has a 1 in front of it.
 - **Compatibility surfaces, named.** Before 1.0 ships, this file has to say which
   things are covered by the version number. The candidates are the corpus
   submission schema (`replay.corpus.v1`), the pool document
-  (`replay.pool.v1`), the ledger format, the policy file, and every `--json`
-  output the 0.7 work adds. The corpus schema has already survived two additive
+  (`replay.pool.v1`), the ledger format, the policy file, the budget artefact
+  (`schema 2`), **the exit codes**, and every `--json` output the 0.7 work adds.
+  The exit codes were frozen and published on 2026-09-13, which makes them the
+  first compatibility surface here written down before it had users rather than
+  after. The corpus schema has already survived two additive
   changes without moving, which is the behaviour a contract should have; the
   others have never been tested by a change. An unnamed compatibility surface is
   one you break by accident and find out about from a user.

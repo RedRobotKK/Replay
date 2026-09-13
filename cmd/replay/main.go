@@ -54,12 +54,50 @@ func main() {
 //
 // It is a function rather than a few lines inside main so that the mapping can
 // be tested: main() calls os.Exit, which no test can observe.
+// The exit codes, frozen. Published in docs/CLI.md and part of the
+// compatibility surface the version number covers.
+//
+// Freezing them now is the point. The moment any gate runs in a stranger's
+// pipeline these become something that cannot change without breaking builds,
+// and this is the first compatibility surface in the project written down
+// before it had users rather than after.
+const (
+	// exitUsage is the caller's fault, or an error nobody classified. Never 0:
+	// a tool that exits 0 on an unanticipated error reports success for a
+	// failure, which is worse than crashing.
+	exitUsage = 1
+	// exitPaymentRequired means a resource wants paying. Kept at 2 because it
+	// shipped at 2 and agents already branch on it.
+	exitPaymentRequired = 2
+	// exitGateBreached is a measured finding: spend crossed a ceiling the
+	// caller set. THE ONLY CODE THAT MAY BLOCK A MERGE.
+	exitGateBreached = 3
+	// exitCannotEvaluate is the tool declining to answer: nothing priced, a
+	// corpus it could not read, a price table too old to trust. It is not a
+	// finding and must not fail a build, because blocking on an inability to
+	// measure substitutes an opinion for a measurement.
+	exitCannotEvaluate = 4
+)
+
+// blocksAMerge says whether a code should stop a pipeline.
+//
+// A function rather than a comment, so the rule is testable and so a caller in
+// a shell has one thing to copy. Only a measured breach qualifies; everything
+// else is a reason to warn.
+func blocksAMerge(code int) bool { return code == exitGateBreached }
+
 func exitCode(err error) int {
 	var pay *paymentRequiredError
 	if errors.As(err, &pay) {
-		return 2
+		return exitPaymentRequired
 	}
-	return 1
+	if errors.Is(err, errGate) {
+		return exitGateBreached
+	}
+	if errors.Is(err, errNotMeasured) {
+		return exitCannotEvaluate
+	}
+	return exitUsage
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
