@@ -296,7 +296,7 @@ func (r *Rules) validate() error {
 	}
 	if r.AccountDiscount < 0 || r.AccountDiscount >= 1 {
 		return fmt.Errorf("accountDiscount is %v; it is a multiplier strictly between 0 and 1, and a value outside that "+
-			"is far more likely to be a typo than a deal — a negative one turns spend into savings", r.AccountDiscount)
+			"is far more likely to be a typo than a deal, and a negative one turns spend into savings", r.AccountDiscount)
 	}
 	// Two dated rows covering the same instant for the same model make the
 	// price depend on file order. A figure that depends on which line came

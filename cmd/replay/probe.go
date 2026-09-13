@@ -214,7 +214,7 @@ func reportProbe(out io.Writer, s *probe.Search) {
 	case s.NonDeterministic():
 		_, _ = fmt.Fprintf(out, "\nThe same prefix cached on one request and not the next. There is no single\n"+
 			"floor to report, and that is the finding: something else is moving the\n"+
-			"boundary — block granularity, a per-account difference, or a change during\n"+
+			"boundary: block granularity, a per-account difference, or a change during\n"+
 			"the run. Averaging it would hide the only interesting thing here.\n")
 		return
 	case s.Contradicted():

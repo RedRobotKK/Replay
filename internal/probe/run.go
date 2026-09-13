@@ -170,7 +170,7 @@ func (r *Runner) Plan(cfg Config, model string) {
 	}
 	if s.BudgetTooSmall() {
 		_, _ = fmt.Fprintf(r.Out, "\n  This budget cannot reach that resolution. The run will stop early\n"+
-			"  with a wider bracket, which is fine — it is said here so it is not\n"+
+			"  with a wider bracket, which is fine. It is said here so it is not\n"+
 			"  a surprise afterwards.\n")
 	}
 	_, _ = fmt.Fprintf(r.Out, "\nEach probe is one billable request to your provider, with a cache\n"+
