@@ -138,7 +138,7 @@ nothing unless all five are present:
 
 | Variable | Value |
 |---|---|
-| `X402_PAY_TO` | `0x2733E9BE752848D578937fDB6029D7c739dc89Cb` |
+| `X402_PAY_TO` | `0xa5dB841b59cFac070d78C51eCaf86dADf0509b5E` |
 | `X402_NETWORK` | `base` |
 | `X402_ASSET` | USDC on Base, `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 | `X402_FACILITATOR` | facilitator base URL |
