@@ -260,7 +260,7 @@ has a 1 in front of it.
   changes without moving, which is the behaviour a contract should have; the
   others have never been tested by a change. An unnamed compatibility surface is
   one you break by accident and find out about from a user.
-- **A deprecation policy, which does not exist.** There are 30 verbs and no
+- **A deprecation policy, written 2026-09-13 as [ADR-0024](adr/0024-deprecation-is-a-promise-made-before-1-0.md), because after 1.0 it cannot be: whatever it says, somebody's script is already relying on the absence of it. A surface gets a full minor release working and warning on stderr before it is removed, and the rule that makes that affordable is that adding a verb is the expensive decision rather than removing one. The 31 verbs should be reduced before 1.0, while removal is still free.** The original gap, as it read: There are 30 verbs and no
   stated procedure for retiring one. The cheapest version is a sentence: what
   warning a command prints, for how many minor releases, before it is removed.
 - **The price table goes stale on the provider's schedule, not ours.**

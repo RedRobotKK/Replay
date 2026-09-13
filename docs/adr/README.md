@@ -29,6 +29,7 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | [0021](0021-unknown-model-cache-read-multiple.md) | Unknown-model cache-read multiple is two questions: 0.025 for the instrument, unpriced for money | Superseded by 0022 |
 | [0022](0022-unknown-model-read-multiple-the-bias-runs-the-other-way.md) | Unknown-model read multiple: the bias runs the other way | Accepted |
 | [0023](0023-entitlement-is-a-signed-document-not-an-account.md) | Entitlement is a signed document, not an account | Proposed |
+| [0024](0024-deprecation-is-a-promise-made-before-1-0.md) | Deprecation is a promise that has to be made before 1.0 | Proposed |
 
 ---
 
