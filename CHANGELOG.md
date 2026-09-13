@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-## [0.6.0] - 2026-09-12
+## [0.6.0] - 2026-09-13
 
 ### Fixed
 
@@ -144,14 +144,14 @@ All notable changes to this project are documented here. The format follows [Kee
   Claude Code writes an API error as an assistant line with
   `isApiErrorMessage`, a model of the literal string `<synthetic>` and a usage
   object of all zeros. One landing at the head of a lane renamed that lane's
-  model to `<synthetic>`, which no price table knows, and took its avoidable
+  model to `<synthetic>`, which no price table knows, and took its re-billed
   figure from 1,586,545 tokens to zero with the cost unchanged.
 - **A transcript that could not be read is no longer reported as read.** `cost`
   counted transcripts that parsed and priced to nothing, and counted nothing at
   all for transcripts that did not parse, so over a single unreadable file it
   printed "0 were read" about a file with 183 assistant turns in it. The two
   are now separate counts with separate sentences, in the report, in the
-  `--max-avoidable-usd` gate and in `--json` as `unreadable`.
+  `--max-rebilled-usd` gate and in `--json` as `unreadable`.
 - Redaction keeps `message.id`, which it had been dropping. Every fixture here
   is a redacted transcript, so a bug report about an SDK transcript arrived with
   the only identifier the file carried removed.
@@ -179,6 +179,41 @@ All notable changes to this project are documented here. The format follows [Kee
   that the report does not cover it.
 
 ### Added
+
+- **`replay upgrade` verifies the Sigstore signature, not only the checksum.**
+  It verified the hash and never the signature, while `install.sh` refused when
+  cosign was present and no signature was published. Two install routes, two
+  different promises, and nothing told the reader which one they had: `upgrade`
+  printed "Checksum verified" in all three outcomes. The releases were signed
+  the whole time and the signature went unread. The hash covers a corrupted
+  download and an archive swapped against an unmodified `checksums.txt`; it
+  cannot cover anything able to modify `checksums.txt` itself, because the file
+  that is trusted is the file that is fetched. cosign is shelled out to rather
+  than reimplemented, with the signer pinned to this repository's workflows and
+  to GitHub's OIDC issuer, the same two flags `install.sh` passes. No cosign on
+  the machine still means checksums only, because refusing to upgrade a machine
+  that installed the documented way would strand its users, and the printed line
+  now says which of the three promises the download actually kept.
+- **`scripts/reproduce-release.sh` rebuilds a published tag and byte-compares.**
+  It reads the toolchain out of the binary, clones rather than using a linked
+  worktree, and uses the binary's own VCS stamps. The worktree detail is the
+  finding: under go1.24 a linked worktree stamps the module `(devel)` instead of
+  the tag, so the compiled code is identical and only the build-info blob
+  differs. This repository believed its releases were not reproducible on that
+  evidence. v0.5.4 reproduces byte for byte on all four platforms.
+- **The README's install matrix is generated from `distribution/channels.json`.**
+  The README carried its own copy in prose and the two disagreed: the prose said
+  packages were on the releases page while the manifest marked them building. A
+  generated block cannot disagree with its source, and CI fails when the block
+  is not what the generator prints.
+- **Groundwork for Replay Watch, which does not ship in this release.** The
+  payload shape, its validation and a third consent grant
+  (`watch-consent.toml`) exist in `internal/`. Nothing sends, and no command
+  exposes them. The grant is separate from the update and corpus grants on
+  purpose: update permits a version check, corpus permits building a file a
+  human then moves, and watch would permit a machine to send on a schedule with
+  nobody present. Those are three different permissions and one checkbox cannot
+  stand for all three.
 
 - **New evidence: [does the ±10% band decide the re-render headline?](docs/evidence/rerender-band-sensitivity-2026-09-11.md).**
   An external reviewer put it that `rerenderTolerance = 0.10` in `diff.go` is
@@ -217,7 +252,7 @@ All notable changes to this project are documented here. The format follows [Kee
   - cached_write` must equal `prompt`, which refuses an export copied from a
   provider that counts inclusively — the error is largest on exactly the
   sessions that cache best.
-- `--max-avoidable-usd` refuses to pass when the avoidable figure was not
+- `--max-rebilled-usd` refuses to pass when the re-billed figure was not
   measured. `--share`, `--png`, `--compare`, `--contribute` and `--per-lane` are
   refused on this path rather than served with a blank.
 - A file that is not readable JSON is refused for that reason, in its own
@@ -265,6 +300,38 @@ All notable changes to this project are documented here. The format follows [Kee
   `unjoinableRequests` in the JSON.
 
 ### Changed
+
+- **BREAKING for readers of the corpus and pool files: `avoidable*` is now
+  `rebilled*`, and both schemas move to v2.** `avoidableUsd`, `avoidableShare`
+  and `avoidableTokens` become `rebilledUsd`, `rebilledShare` and
+  `rebilledTokens`; `replay.corpus.v1` becomes `replay.corpus.v2` and
+  `replay.pool.v1` becomes `replay.pool.v2`. "Avoidable" said the spend could be
+  avoided going forward, which is a forecast wearing a noun, and this payload is
+  forbidden from carrying a forecast. "Re-billed" says what happened: the same
+  bytes were billed twice.
+  The schema string moves because a rename is not an additive change. A v1
+  reader handed a v2 document finds no figure where it expects one and reports
+  zero, and it does that whether or not the version string moved; moving it is
+  what makes the retirement visible instead of silent.
+  Both decoders refuse rather than read a missing figure as zero. Go cannot tell
+  an absent JSON key from a zero value, so without this a pre-rename submission
+  parses cleanly, reports `RebilledUSD` of 0, passes validation, and adds
+  nothing to a pooled total while reporting success. The refusal names every
+  retired spelling it found, and separately refuses a document that is missing
+  `rebilledUsd` or `rebilledShare`, on presence rather than on value, because zero
+  re-billed spend is a real and reportable answer.
+- **The licence is stated in words because GitHub cannot state it.** GitHub
+  labels this repository "Other" as its detector does not know BUSL-1.1. The
+  canonical text is in `LICENSE` and the README now says the licence, its
+  change date and its change licence in prose.
+- **The release shim workflow had never run.** `publish-shims.yml` was
+  unparseable from the day it was written until today, over one unquoted `${{ }}`
+  expression inside a YAML flow mapping, and an unparseable workflow fails
+  invisibly: no jobs, no check run, nothing red on the pull request. Fixing that
+  exposed a second failure behind it, that GitHub does not start workflow runs
+  from events raised by `GITHUB_TOKEN`, so the trigger moved from `release:
+  published` to `workflow_run`. Two independent invisible failures in one file.
+  CI now parses every workflow in the repository.
 
 - **Every documented install command pointed at the wrong host, four days before
   launch.** The README install line, the getting-started guide, the first-run
