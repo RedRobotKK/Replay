@@ -418,6 +418,66 @@ The price lock is doing two jobs. It makes early adoption safe, and it frees lis
 to move later without churning anyone who was there first — which is the only way
 to hold a high anchor and a low first cohort at the same time.
 
+## Enterprise, and the unusual thing this tool has to sell them
+
+Proposed, and nobody has been quoted any of it. Recorded because the shape is
+decided by the architecture rather than by negotiation, and the architecture is
+already built.
+
+**The selling point is the absence.** Most of the cost of selling a developer
+tool into a large company is the data-handling review: where does our code go,
+who can read it, which sub-processors touch it, what happens on a breach. Replay
+holds none of it. Transcripts never leave the machine, there is no account, and
+`internal/observation` cannot import `net/http` with a test that walks the
+imports and fails the build if it ever can. That is not a policy commitment that
+a questionnaire has to take on trust. It is a property of the binary that a
+security reviewer can verify in an afternoon from source they already have.
+
+A tool with no data to lose skips most of the questionnaire, and the pieces
+procurement asks for next already exist: an SBOM per release artifact, Sigstore
+keyless signatures bound to the exact workflow at the exact tag, a published
+`SECURITY.md` with a disclosure window, and a licence that permits unlimited
+internal and commercial use in writing. **SOC 2 is not applicable and saying so
+plainly is stronger than pursuing it**, because the control set audits how a
+vendor handles customer data and this vendor receives none.
+
+**What is actually sold at this tier is labour and liability, not features.**
+That distinction is forced by [`../SPONSORS.md`](../SPONSORS.md): nothing free
+today ever becomes paid, and a paid capability must be something that does not
+exist today. So an enterprise tier cannot be the free tool with a badge on it.
+
+| | Proposed |
+|---|---|
+| **Unit** | per repository, same as list. An organisation agreement is a volume commitment across repositories, not a different product |
+| **Indicative** | list with volume tiers above roughly 10 repositories, and a floor rather than a per-unit price above roughly 50 |
+| **Support** | a named response time, in a contract, with a human on the other end. This is the thing that genuinely cannot be given away at the current headcount, and it is priced as the labour it is |
+| **Air-gapped operation** | supported by construction. The entitlement is a signed file verified offline ([ADR-0023](adr/0023-entitlement-is-a-signed-document-not-an-account.md)) and the rules feed is a document that can be mirrored internally. No call home to fail |
+| **Self-hosted rules mirror** | the maintained feed, delivered as a file the customer serves themselves, for buyers whose build machines have no egress |
+| **`replay gate` in CI** | the standing-cost budget, which is the thing an organisation buys rather than an individual. It does not exist yet |
+| **Invoicing** | bank transfer and purchase orders. The rail does not reach the binary, so it can be anything |
+| **What is NOT sold** | priority on the public issue tracker, early access to fixes, or any measurement gated behind payment. A security fix reaches everyone at once |
+
+**Two things a buyer will ask for that the answer is no to.**
+
+A central dashboard aggregating every developer's spend is the most requested
+thing in this category and it is refused until [ADR-0015](adr/0015-single-tenant-state-is-a-boundary.md)'s
+tenant dimension exists in the spend guard, the session table, the metrics
+surface and the credential path. Shipping it before that turns one team's day cap
+into an organisation-wide denial of service, and the acceptance test for it is
+already written in `requirements.md` as SP-6 precisely because it fails against
+the current guard.
+
+Binding a licence to named users, seats or SSO is refused for the reason
+ADR-0023 gives: the identifier would be the only piece of personal data this tool
+has ever held, and it would be created to solve a problem the signed document
+already solves without it.
+
+**The honest caveat is the same one the rest of this document carries.** No
+external user has been observed, the constraint is distribution rather than
+price, and an enterprise motion needs a reference customer before any of the
+above is more than a plan. It is written down now so that the first buyer to ask
+gets a considered answer rather than an improvised one.
+
 **What this does not settle, and must not be presented as if it did.** No one has
 been quoted any price. The figures above are measured on one machine and the
 comparables are borrowed from an adjacent category. The instrument for a real
