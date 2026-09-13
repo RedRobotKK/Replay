@@ -56,7 +56,7 @@ func releaseServer(t *testing.T, tag string, archive []byte, checksums string) *
 	t.Helper()
 	name := ArchiveName(tag, runtime.GOOS, runtime.GOARCH)
 	mux := http.NewServeMux()
-	mux.HandleFunc("/releases/latest", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/releases/latest", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/releases/tag/"+tag, http.StatusFound)
 	})
 	mux.HandleFunc("/releases/download/"+tag+"/"+name, func(w http.ResponseWriter, _ *http.Request) {
