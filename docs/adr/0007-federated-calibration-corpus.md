@@ -150,7 +150,6 @@ Whether to build the flag is still open, and section 2 above is the constraint a
 to satisfy. Until then this record is a plan, and the surface map
 ([`../SURFACES.md`](../SURFACES.md)) is the description of what exists.
 
-
 ## Correction, 2026-09-13: "no network request at all" is false and was true when written
 
 The bolded sentence above, **"The released binary makes no network request at

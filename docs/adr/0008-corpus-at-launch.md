@@ -153,7 +153,6 @@ and any claim that undersells a privacy property is still an inaccurate claim.
 The reasoning above stands as the standard a future build has to meet. It is a decision record, not
 a feature list.
 
-
 ## Correction, 2026-09-13: "no network request at all" is false and was true when written
 
 The bolded sentence above, **"The released binary makes no network request at
