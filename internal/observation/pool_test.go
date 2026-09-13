@@ -365,3 +365,99 @@ func TestPL12_TheRosterPrecedesTheHeadline(t *testing.T) {
 		t.Error("the report does not tell the reader the rows are checkable")
 	}
 }
+
+// PL-OLD. A pre-rename pool document is refused rather than read as zero.
+//
+// Corpus got this guard twice: once for the retired field names, and again for
+// the case where the new names are simply absent. Pool got the v2 schema bump
+// in the same commit and neither refusal, so a v1 roster read back with
+// totalUsd intact and rebilledUsd zero. Verified before this test existed:
+// schema replay.pool.v1 accepted, totalUsd 100 preserved, RebilledUSD 0.
+//
+// THE POOL IS MORE EXPOSED THAN THE CORPUS, NOT LESS. A corpus submission is
+// one contributor's file. The pool is the PUBLISHED artifact: it is what the
+// site renders, what a stranger downloads to check the arithmetic, and what
+// `replay pool` regenerates. A zero there is a zero in the number the project
+// asks people to trust.
+func TestPLOLD_APreRenamePoolIsRefused(t *testing.T) {
+	entry := func(extra string) []byte {
+		return []byte(`{"schema":"` + PoolSchema + `","pooledAt":"2026-09-13T00:00:00Z",
+		 "roster":[{"sourceTag":"a","tagBasis":"machine","digest":"d","file":"f.json",
+		 "takenAt":"2026-09-13T00:00:00Z","tasks":10,"totalUsd":100,
+		 "medianTaskUsd":1` + extra + `}]}`)
+	}
+
+	// The retired names.
+	for _, old := range []string{"avoidableUsd", "avoidableShare"} {
+		var p Pool
+		err := json.Unmarshal(entry(`,"`+old+`":5,"rebilledUsd":5,"rebilledShare":0.05`), &p)
+		if err == nil {
+			t.Errorf("a roster entry carrying %q was accepted", old)
+			continue
+		}
+		if !strings.Contains(err.Error(), old) {
+			t.Errorf("the refusal does not name %q: %v", old, err)
+		}
+	}
+
+	// The new names absent, which is the half that reads as a measured zero.
+	for _, missing := range []string{"rebilledUsd", "rebilledShare"} {
+		other := "rebilledShare"
+		if missing == "rebilledShare" {
+			other = "rebilledUsd"
+		}
+		var p Pool
+		err := json.Unmarshal(entry(`,"`+other+`":5`), &p)
+		if err == nil {
+			t.Errorf("a roster entry with no %q was accepted, and read as zero", missing)
+			continue
+		}
+		if !strings.Contains(err.Error(), missing) {
+			t.Errorf("the refusal does not name %q: %v", missing, err)
+		}
+	}
+
+	// A current document round trips, including a genuine measured zero.
+	for _, v := range []string{`,"rebilledUsd":5,"rebilledShare":0.05`, `,"rebilledUsd":0,"rebilledShare":0`} {
+		var p Pool
+		if err := json.Unmarshal(entry(v), &p); err != nil {
+			t.Errorf("a current pool document was refused: %v", err)
+		}
+	}
+
+	// And a document declaring a schema this build does not write.
+	var p Pool
+	if err := json.Unmarshal([]byte(`{"schema":"replay.pool.v1","pooledAt":"x","roster":[]}`), &p); err == nil {
+		t.Error("a pool declaring replay.pool.v1 was accepted. Its entries mean something " +
+			"different, and reading them under this version is guessing.")
+	}
+}
+
+// PL-MALFORMED: a pool whose types are wrong is refused, not half-read.
+//
+// Pool and PoolEntry each gained an UnmarshalJSON with its own decode-error
+// branch, and `guard reachability` reported both UNREACHED. The reason is the
+// same one Corpus hit: encoding/json rejects malformed BYTES before
+// UnmarshalJSON is ever called, so the only way to reach these branches is a
+// document that parses and then mismatches a type.
+//
+// It matters because this is the entry point for the published artifact. A
+// pool that half-decodes is worse than one that is refused: the refusal is
+// visible and the half is not.
+func TestPLMALFORMED_WrongTypesAreRefused(t *testing.T) {
+	for _, tc := range []struct{ name, doc string }{
+		{"roster is not an array", `{"schema":"` + PoolSchema + `","pooledAt":"x","roster":42}`},
+		{"an entry field has the wrong type", `{"schema":"` + PoolSchema + `","pooledAt":"x",
+		 "roster":[{"sourceTag":"a","tagBasis":"m","digest":"d","file":"f","takenAt":"t",
+		 "tasks":"ten","totalUsd":100,"rebilledUsd":5,"rebilledShare":0.05,"medianTaskUsd":1}]}`},
+		{"totalUsd is an object", `{"schema":"` + PoolSchema + `","pooledAt":"x",
+		 "roster":[{"sourceTag":"a","tagBasis":"m","digest":"d","file":"f","takenAt":"t",
+		 "tasks":10,"totalUsd":{"x":1},"rebilledUsd":5,"rebilledShare":0.05,"medianTaskUsd":1}]}`},
+		{"the schema itself is not a string", `{"schema":7,"pooledAt":"x","roster":[]}`},
+	} {
+		var p Pool
+		if err := json.Unmarshal([]byte(tc.doc), &p); err == nil {
+			t.Errorf("%s was accepted, and parsed to %d roster entries", tc.name, len(p.Roster))
+		}
+	}
+}

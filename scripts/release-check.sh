@@ -108,6 +108,46 @@ else
   note "unmeasured models are not 'calibrated'" "no per-model table in this run"
 fi
 
+# 6. The wire contract this release is named for.
+#
+# v0.6.0 renames avoidableUsd to rebilledUsd across the payloads and bumps the
+# corpus and pool schemas to v2. Nothing here could see that: every assertion
+# above reads human prose, and a binary shipping the old field names would have
+# passed all five.
+#
+# THE SEVERITY IS WHY THIS IS HERE RATHER THAN IN A UNIT TEST. This script runs
+# AFTER goreleaser uploads, on purpose, because the artifact is what has to be
+# right. So a wrong field name discovered here means a public release to pull.
+# A unit test on the tree would not have caught a build that shipped from the
+# wrong commit, which is the whole reason this file inspects the binary.
+json="$("$BIN" cost --json "$work/corpus" 2>&1 || true)"
+case "$json" in
+  *'"rebilledUsd"'*) note "the payload uses the v0.6.0 field names" "rebilledUsd present" ;;
+  *) bad "the payload uses the v0.6.0 field names" "no rebilledUsd in cost --json" ;;
+esac
+case "$json" in
+  *'"avoidableUsd"'*|*'"avoidableShare"'*|*'"avoidableTokens"'*)
+    bad "the retired field names are gone" "the binary still emits an avoidable* key" ;;
+  *) note "the retired field names are gone" "no avoidable* key in cost --json" ;;
+esac
+
+# 7. The flag the CI gate is documented under still exists.
+#
+# --max-avoidable-usd became --max-rebilled-usd in the same release. Anyone
+# whose pipeline calls the old name gets "flag provided but not defined" and
+# exit 1, which docs/guide/commands.md tells CI authors means replay itself
+# failed. Checking the new one exists is the half this script can prove.
+# Captured first, then matched. This was a pipeline with grep, and `cost --help`
+# exits non-zero the way usage output does, which `set -o pipefail` at the top of
+# this script turned into a failed assertion about a flag that was present all
+# along. An assertion that fails for a reason unrelated to what it asserts is
+# the exact defect this file exists to catch, committed inside it.
+help_out="$("$BIN" cost --help 2>&1 || true)"
+case "$help_out" in
+  *-max-rebilled-usd*) note "the CI gate flag is present" "--max-rebilled-usd" ;;
+  *) bad "the CI gate flag is present" "--max-rebilled-usd is not in cost --help" ;;
+esac
+
 if [ "$fail" -ne 0 ]; then
   echo "release-check: FAILED" >&2
   exit 1

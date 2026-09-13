@@ -105,7 +105,7 @@ func TestFetchRefusesAChecksumMismatch(t *testing.T) {
 	defer srv.Close()
 
 	c := &Client{ReleasesBase: srv.URL}
-	_, err := c.Fetch(context.Background(), tag, runtime.GOOS, runtime.GOARCH)
+	_, _, err := c.Fetch(context.Background(), tag, runtime.GOOS, runtime.GOARCH)
 	if err == nil {
 		t.Fatal("a checksum mismatch must be an error")
 	}
@@ -133,7 +133,7 @@ func TestFetchRefusesWhenChecksumsAreMissing(t *testing.T) {
 	defer srv.Close()
 
 	c := &Client{ReleasesBase: srv.URL}
-	if _, err := c.Fetch(context.Background(), tag, runtime.GOOS, runtime.GOARCH); err == nil {
+	if _, _, err := c.Fetch(context.Background(), tag, runtime.GOOS, runtime.GOARCH); err == nil {
 		t.Fatal("a missing checksums.txt must abort the upgrade")
 	}
 }
@@ -154,7 +154,7 @@ func TestFetchRefusesASymlinkMember(t *testing.T) {
 	defer srv.Close()
 
 	c := &Client{ReleasesBase: srv.URL}
-	_, err := c.Fetch(context.Background(), tag, runtime.GOOS, runtime.GOARCH)
+	_, _, err := c.Fetch(context.Background(), tag, runtime.GOOS, runtime.GOARCH)
 	if err == nil {
 		t.Fatal("a symlink where the binary should be must be refused")
 	}
@@ -178,7 +178,7 @@ func TestFetchReturnsTheVerifiedBinary(t *testing.T) {
 	defer srv.Close()
 
 	c := &Client{ReleasesBase: srv.URL}
-	got, err := c.Fetch(context.Background(), tag, runtime.GOOS, runtime.GOARCH)
+	got, _, err := c.Fetch(context.Background(), tag, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -303,12 +303,26 @@ func TestSIG1_NoCosignMeansChecksumsOnlyAndSaysSo(t *testing.T) {
 	defer srv.Close()
 	c := &Client{ReleasesBase: base}
 
-	got, err := c.Fetch(context.Background(), "v9.9.9", "linux", "amd64")
+	got, sig, err := c.Fetch(context.Background(), "v9.9.9", "linux", "amd64")
 	if err != nil {
 		t.Fatalf("a machine without cosign could not upgrade: %v", err)
 	}
 	if len(got) == 0 {
 		t.Error("no binary came back")
+	}
+	// AND IT SAYS SO, which this test is named for and did not check.
+	//
+	// Until 2026-09-13 Fetch returned ([]byte, error) and could not report
+	// which promise it had kept, so `replay upgrade` printed "Checksum
+	// verified" in all three outcomes: signature verified, cosign absent,
+	// signature skipped. install.sh prints three distinct lines. The
+	// convenient route made the weaker promise and said the same words.
+	if sig != SignatureUnchecked {
+		t.Errorf("no cosign on the machine and Fetch reports %v; it must say the "+
+			"signature was not checked rather than imply it was", sig)
+	}
+	if !strings.Contains(sig.String(), "not checked") {
+		t.Errorf("the status reads %q, which does not tell a user what they got", sig)
 	}
 }
 
@@ -327,7 +341,7 @@ func TestSIG2_CosignPresentAndNoSignaturePublishedRefuses(t *testing.T) {
 	defer srv.Close()
 	c := &Client{ReleasesBase: base}
 
-	_, err := c.Fetch(context.Background(), "v9.9.9", "linux", "amd64")
+	_, _, err := c.Fetch(context.Background(), "v9.9.9", "linux", "amd64")
 	if err == nil {
 		t.Fatal("cosign is installed, no signature was published, and the upgrade " +
 			"proceeded. Every release this project's CI builds is signed, so a missing " +
@@ -352,7 +366,7 @@ func TestSIG3_AFailedVerificationInstallsNothing(t *testing.T) {
 	defer srv.Close()
 	c := &Client{ReleasesBase: base}
 
-	_, err := c.Fetch(context.Background(), "v9.9.9", "linux", "amd64")
+	_, _, err := c.Fetch(context.Background(), "v9.9.9", "linux", "amd64")
 	if err == nil {
 		t.Fatal("the signature did not verify and the upgrade proceeded anyway")
 	}
@@ -375,7 +389,7 @@ func TestSIG4_TheIdentityIsCheckedAgainstThisRepoAndCIsIssuer(t *testing.T) {
 	srv, base := signedRelease(t, true)
 	defer srv.Close()
 	c := &Client{ReleasesBase: base}
-	if _, err := c.Fetch(context.Background(), "v9.9.9", "linux", "amd64"); err != nil {
+	if _, _, err := c.Fetch(context.Background(), "v9.9.9", "linux", "amd64"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -495,7 +509,7 @@ func TestSIG5_AFailureToStageTheSignatureInstallsNothing(t *testing.T) {
 			defer srv.Close()
 			c := &Client{ReleasesBase: base}
 
-			_, err := c.Fetch(context.Background(), "v9.9.9", "linux", "amd64")
+			_, _, err := c.Fetch(context.Background(), "v9.9.9", "linux", "amd64")
 			if err == nil {
 				t.Fatal("staging failed, so the signature was never checked, and the " +
 					"upgrade proceeded anyway")
@@ -508,5 +522,29 @@ func TestSIG5_AFailureToStageTheSignatureInstallsNothing(t *testing.T) {
 				t.Errorf("the refusal does not say nothing was installed: %v", err)
 			}
 		})
+	}
+}
+
+// SIG6: the two statuses say different things, and neither is silent.
+//
+// String() had a branch nothing depended on. The type exists so `replay upgrade`
+// can tell a user which of two promises it kept; a String that returned the same
+// text for both, or an empty one, would defeat the whole change while every
+// other test still passed.
+func TestSIG6_TheStatusesReadDifferently(t *testing.T) {
+	v, u := SignatureVerified.String(), SignatureUnchecked.String()
+	if v == u {
+		t.Fatalf("both statuses render identically: %q", v)
+	}
+	for name, got := range map[string]string{"verified": v, "unchecked": u} {
+		if strings.TrimSpace(got) == "" {
+			t.Errorf("the %s status renders empty, so upgrade would print a blank line", name)
+		}
+	}
+	if !strings.Contains(v, "verified") {
+		t.Errorf("the verified status does not say verified: %q", v)
+	}
+	if !strings.Contains(u, "not checked") {
+		t.Errorf("the unchecked status does not say it was not checked: %q", u)
 	}
 }
