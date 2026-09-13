@@ -534,7 +534,23 @@ measurements behind it are real API spend.
 
 **Nothing, and nothing is for sale today.**
 
-Every command works, on every model, with no account, no key and no network call.
+Every command works, on every model, with no account and no key.
+
+**It is not a binary that never touches the network, and this page is not going
+to say it is.** The promise, as `cmd/replay/upgrade.go` states it, is that
+*replay originates no request you did not type*. Reading your transcripts sends
+nothing. Five packages can reach the network and every one of them is written
+down in [SURFACES.md](docs/SURFACES.md) and derived from the code by
+`TestOutboundSurfacesAreAllDocumented`, which fails when a new one appears:
+the proxy forwarding your own traffic, `probe --execute` originating billable
+requests on your own key, `rules --check-prices` fetching a public price table,
+`doctor` probing loopback, and `replay upgrade` downloading a release you asked
+for.
+
+That sentence said "and no network call" until 2026-09-13, and it was false.
+The drift test above exists because the same sentence went false once before,
+when `probe` shipped and nothing edited the claim.
+
 Nothing that works in a release you already have will ever move behind a payment:
 that is a promise in [SPONSORS.md](SPONSORS.md), and it is narrower and more
 useful than the sentence it replaced, which is [recorded there too](SPONSORS.md).
@@ -585,9 +601,10 @@ a project whose numbers you cannot check.
 
 ## A note from Daniel, who maintains this
 
-Replay is free to run and stays that way: every command, every model, no account,
-no key, no network call. Nothing that works in a release you already have will
-ever move behind a payment.
+Replay is free to run and stays that way: every command, every model, no account
+and no key. It originates no request you did not type, which is a narrower claim
+than "no network call" and is the true one. Nothing that works in a release you
+already have will ever move behind a payment.
 
 What is not free is the measurement behind it. Replay's cache figures are
 measured rather than estimated because they were calibrated against **32,188 real

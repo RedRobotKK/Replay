@@ -142,3 +142,64 @@ func TestFCWK2_TheNoNetworkClaimIsScopedToTheBinary(t *testing.T) {
 			"project doing the thing it says it does not do.")
 	}
 }
+
+// FC-NET. The README must not claim the binary makes no network call.
+//
+// It said "no account, no key and no network call" until 2026-09-13, in two
+// places, and it was false. `internal/observation/observation.go` says so in
+// the source, unprompted: "the binary as a whole is a proxy and also originates
+// billable requests under `probe --execute`, so a claim that the binary never
+// reaches the network would be false."
+//
+// THIS IS THE SECOND TIME. `cmd/replay/outbound_drift_test.go` exists because
+// the same sentence went false once before: the README said the binary made no
+// request except the proxy and one you type, then `replay probe` shipped and
+// nothing edited the claim. That test catches a new outbound PACKAGE. Nothing
+// caught the SENTENCE, so the sentence broke again in the same way.
+//
+// The true promise is the one cmd/replay/upgrade.go states: replay originates
+// no request you did not type. That is narrower and defensible, and it is what
+// the README says now.
+func TestFCNET_TheReadmeDoesNotClaimNoNetworkCall(t *testing.T) {
+	root := repoRoot(t)
+	raw, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil {
+		t.Fatalf("reading README.md: %v", err)
+	}
+	flat := strings.Join(strings.Fields(string(raw)), " ")
+
+	// The claim, in the shapes it has actually taken. Each is checked outside
+	// quotation marks, so the README can still describe the retired sentence.
+	for _, claim := range []string{
+		"no key and no network call",
+		"no key, no network call",
+		"makes no network call",
+		"never reaches the network",
+	} {
+		idx := 0
+		for {
+			i := strings.Index(flat[idx:], claim)
+			if i < 0 {
+				break
+			}
+			at := idx + i
+			// Quoted, so it is the README talking ABOUT the claim.
+			if at > 0 && flat[at-1] == '"' {
+				idx = at + len(claim)
+				continue
+			}
+			t.Errorf("README asserts %q. The binary reaches the network from five "+
+				"packages, every one listed in docs/SURFACES.md and derived from the "+
+				"code by TestOutboundSurfacesAreAllDocumented. The true promise is "+
+				"upgrade.go's: replay originates no request you did not type.", claim)
+			break
+		}
+	}
+
+	// And the narrower promise must actually be there, or this test only
+	// forbids a sentence without requiring the honest one.
+	if !strings.Contains(flat, "originates no request you did not type") {
+		t.Error("README no longer carries the promise it can keep. Forbidding the false " +
+			"claim without stating the true one leaves a reader with nothing.")
+	}
+}
