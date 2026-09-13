@@ -44,6 +44,14 @@ summary=$(replay cost --json "$transcript" 2>/dev/null || true)
 if [ -n "$summary" ]; then
   usd=$(printf '%s' "$summary" | tr -d '\n' | sed -n 's/.*"rebilledUsd"[[:space:]]*:[[:space:]]*\([0-9.]*\).*/\1/p' | head -1)
   tok=$(printf '%s' "$summary" | tr -d '\n' | sed -n 's/.*"rebilledTokens"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' | head -1)
+  # Two decimal places. cost --json carries the unrounded float, so without
+  # this the line reads "$1.89229 at list billed twice", which is a number
+  # nobody says out loud and which reads as false precision on a figure that
+  # rests on a byte-to-token fit.
+  #
+  # awk rather than the shell's own printf: dash and bash disagree on %f, and
+  # this hook runs under whatever /bin/sh is on the machine.
+  usd=$(printf '%s' "$usd" | LC_ALL=C awk '{ printf "%.2f", $1 }')
   if [ -n "$usd" ] && [ -n "$tok" ] && [ "$tok" != "0" ]; then
     printf 'replay: $%s at list billed twice in this session (%s tokens). Which turn: replay diff "%s"\n' "$usd" "$tok" "$transcript"
   fi

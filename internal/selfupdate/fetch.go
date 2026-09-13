@@ -140,6 +140,12 @@ func (c *Client) Fetch(ctx context.Context, tag, goos, goarch string) ([]byte, e
 		return nil, fmt.Errorf("checksum mismatch for %s. Nothing was installed.\nchecksums.txt says %s, the download hashes to %s", name, want, got)
 	}
 
+	// The hash proves the archive matches checksums.txt. This proves
+	// checksums.txt is the one this project's CI signed.
+	if err := c.verifyChecksumSignature(ctx, base, sums); err != nil {
+		return nil, err
+	}
+
 	return unpack(archive)
 }
 

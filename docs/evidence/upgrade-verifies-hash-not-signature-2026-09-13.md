@@ -1,5 +1,11 @@
 # `replay upgrade` verifies the hash, not the signature
 
+**CLOSED the same day.** Option 2 below was taken: `upgrade` now shells out to
+`cosign` when it is on PATH, exactly as `install.sh` does, so the two install
+routes make the same promise. The finding is kept as written because it is the
+reason the change was made, and because the state it describes shipped in
+v0.5.4 and every release before it.
+
 **Read 2026-09-13.** Answers open question 4 of the PRD: *"Does `upgrade`
 verify the signature? To read in `internal/selfupdate`; add if it only hashes."*
 
