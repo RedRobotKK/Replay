@@ -7,7 +7,9 @@
 [![Coverage](https://img.shields.io/badge/coverage-%E2%89%A585%25-success)](scripts/coverage-gate.sh)
 [![govulncheck](https://img.shields.io/badge/govulncheck-no%20known%20vulnerabilities-success)](.github/workflows/ci.yml)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)](#platform-support-macos-and-linux-only)
-[![License](https://img.shields.io/badge/license-BUSL%201.1%20(source--available)-blue)](LICENSE)
+[![License](https://img.shields.io/badge/licence-BUSL--1.1-blue)](LICENSE)
+
+GitHub labels this repository 'Other' because its licence detector does not know BUSL-1.1; the licence is the Business Source License 1.1, converting to the Apache License 2.0 on 2029-09-06, and the text is in LICENSE.
 
 **Your prompt cache expired while you were at lunch.** Replay finds the turn it happened on, and
 what that one turn cost.
@@ -629,3 +631,7 @@ some adopters choose.
 See [LICENSE](LICENSE), [NOTICE](NOTICE) and
 [ADR-0016](docs/adr/0016-business-source-license.md), which records that this
 was Apache 2.0 until 2026-09-06 and why that changed.
+
+GitHub labels this repository 'Other' because its licence detector does not
+know BUSL-1.1; the licence is the Business Source License 1.1, converting to
+the Apache License 2.0 on 2029-09-06, and the text is in LICENSE.
