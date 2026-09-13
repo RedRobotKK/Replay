@@ -6,6 +6,34 @@ phrase rather than a test.
 
 ## Where this stands today
 
+**Updated 2026-09-13. Every gate below is closed, and this is still not a
+1.0.**
+
+That sentence is the one worth reading carefully, because the checkboxes now
+say otherwise and a reader who counts them will reach the wrong conclusion.
+Five gates are ticked: the vault key boundary, the OpenAI-compatible path,
+Windows, and the two measurement rules, which turned out not to be gates at all
+and are recorded below as standing rules instead.
+
+**What is left is not in this file.** [`docs/ROADMAP.md`](docs/ROADMAP.md) has
+carried a one-line 1.0 definition since before this document existed, and it
+names three things none of which are ticked anywhere:
+
+| | State, 2026-09-13 |
+|---|---|
+| An external security review, published | **Not commissioned.** Needs a third party and has weeks of lead time |
+| Signed, reproducible releases | Signed, yes: Sigstore keyless bound to the workflow and tag, an SBOM per artifact. **Reproducible is unverified.** Nobody has rebuilt a published tag and compared the bytes, and a reproducibility claim nobody has tried to falsify is the class of claim this project refuses elsewhere |
+| Caching rules for a second provider | **Not started** |
+
+Two of those three cannot be done alone. The review needs a reviewer, and the
+independence problem underneath the second provider needs a corpus from a
+machine that is not this one. **A 1.0 tagged before they land would be a version
+number asserting something nobody checked**, which is the exact defect this file
+was written to prevent.
+
+The older assessment, kept because it is still the honest description of the
+code:
+
 **v0.5.0 is a working tool with a documented threat model. It is not a v1.0.**
 
 The distinction is not code quality. The test posture is strong: every package
@@ -40,7 +68,7 @@ Each line is a gate. A release cannot claim 1.0 with any of them unmet, and
 
 ### Security
 
-- [ ] **Finding 3, the vault key boundary.** Half done, 2026-09-10, and the
+- [x] **Finding 3, the vault key boundary.** Half done, 2026-09-10, and the
       remaining half is the one this line is about. Vault entries now expire
       — 24 hours by default, `--mask-ttl` to change it, `0` for the old
       unbounded behaviour — which is the second of the three options below,
@@ -51,6 +79,25 @@ Each line is a gate. A release cannot claim 1.0 with any of them unmet, and
       within the TTL the vault is plaintext-equivalent to anyone who can read
       the directory. A 1.0 needs the key somewhere else, or a README that says
       plainly that masking is a transit control and not storage.
+      **Closed 2026-09-13 by the second route, and the key has not moved.** The
+      keychain is still unreachable for the reason above, and trading the
+      `os/exec` ban for one finding is a worse deal than the finding is worth.
+      The README has carried the sentence since 2026-09-10, and that was the
+      letter of this gate and not the spirit: **the binary never said it.**
+      Somebody who turns on `--mask` because they want secrets protected is
+      exactly the person who has not read the footprint section of a six
+      hundred line README, and a disclosure that lives only in documentation is
+      aimed at the reader who already agrees with it.
+      It is now said twice, in `cmd/replay/vaultdisclosure.go`: on the `-mask`
+      flag, which is the last moment the user can decline, and under the running
+      `masking: on` banner, because that line is what an operator reads as the
+      answer to "are my secrets safe" and a qualification belongs beside the
+      claim it qualifies. It stays silent when masking is off, because warning
+      about a vault the run did not create is how a real disclosure stops being
+      read. Three tests, each mutated red.
+      **This closes the gate and does not close the finding.** The key still
+      sits beside the ciphertext. What changed is that nobody can now turn
+      masking on without being told.
 - [x] **Finding 4, response-side `call_key`.** Closed 2026-09-10.
       `Store.Append` re-keys the response half under the ledger secret, so both
       halves of one ledger have one property. Guarded by
@@ -130,15 +177,25 @@ Each line is a gate. A release cannot claim 1.0 with any of them unmet, and
       would ship unmutated. **A Windows leg on those two jobs is the condition
       that reopens this**, and it is the only thing that should.
 
-### Measurement
+### Measurement, which is a standing rule rather than a gate
 
-- [ ] **No headline figure without the instrument that produced it being
+**Restructured 2026-09-13.** These two were checkboxes and could never be
+ticked, because they do not describe work that finishes. They bind every figure
+this project publishes from now on, including figures that do not exist yet, so
+a box beside them would either stay open forever and block 1.0 on nothing, or
+be ticked dishonestly the first time somebody wanted to ship.
+
+They are the reason the gates above exist rather than items among them. A
+release cannot satisfy them; a release can only be shipped by somebody
+currently obeying them.
+
+- **No headline figure without the instrument that produced it being
       checked first.** This release exists partly because a 98.8% claim was
       shipped from a classifier that compared each agent lane against a
       different one. The rule is not "measure more", it is: before a number
       goes in a README, a commit message or a card, something must have tried
       to falsify the instrument.
-- [ ] **The same rule binds commercial figures, and until 2026-09-13 it did
+- **The same rule binds commercial figures, and until 2026-09-13 it did
       not.** A price is a headline figure. `docs/MONEY-PATH.md` carried a $199
       per repository list price derived by applying a 1 to 3 percent comparable
       to $13,000 a month of *unreachable capacity*, which is not spend the

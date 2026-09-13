@@ -74,7 +74,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	guardrail := fs.Float64("guardrail-reread", 0, "revert the policy from -policy-file for new sessions once treated sessions' re-read rate after the provider's first clear reaches this share (0 = off)")
 	revertAfter := fs.Int("revert-after", proxy.DefaultRevertAfter, "how many sessions must breach the guardrail before the policy is reverted")
 	freezePrefix := fs.Bool("freeze-prefix", false, "EXPERIMENTAL: pin a cc_version in the request body to a same-length constant so the cached prefix does not fork when the client's billing header changes WITHOUT changing length, and label a tool-set epoch from the tools JSON as forwarded. A version string that changes length still forks the prefix ("+envNoPolicy+"=1 forces off)")
-	mask := fs.Bool("mask", false, "EXPERIMENTAL: replace secrets matching the named pattern set with vault placeholders before requests leave the machine, and restore them in responses within -rehydrate-scope (see README). It reads "+proxy.MessagesPath+" and nothing else: "+proxy.ChatCompletionsPath+" is EXPERIMENTAL, UNMASKED, so secrets in OpenAI-compatible traffic are forwarded to the provider in clear even with this on, and the proxy says so on stderr once per path")
+	mask := fs.Bool("mask", false, maskFlagHelp())
 	maskPatterns := fs.String("mask-patterns", "", "file of user-defined patterns for -mask, one per line as name<TAB>regexp")
 	maskEntropy := fs.Bool("mask-entropy", false, "with -mask, also mask runs that look like credentials by shape and entropy. Needs mixed case and digits over "+strconv.Itoa(masking.EntropyMinLength)+" characters, so bare hex and lowercase secrets are NOT caught by shape; those are caught only when a name like TOKEN= or api_key: sits beside them. Reported as pattern "+masking.EntropyPattern)
 	maskTTL := fs.Duration("mask-ttl", masking.DefaultVaultTTL, "with -mask, how long a masked secret stays in the vault before it is evicted. Masking turns a transient secret into one at rest and the vault key sits beside the ciphertext, so this is the window a compromised host hands over. 0 keeps entries forever, which was the behaviour before v0.6 and is the wrong default. Re-sending a secret restores its entry, and the placeholder is unchanged")
@@ -194,6 +194,9 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 			// qualifies. Both exist because neither alone is where the reader
 			// is looking.
 			_, _ = fmt.Fprintf(stdout, "masking: %s is EXPERIMENTAL, UNMASKED and NOT covered; an API key in one of those requests reaches the provider in clear\n", proxy.ChatCompletionsPath)
+			// Finding 3, said where the claim is made rather than only in the
+			// README. See vaultAtRestNotice.
+			_, _ = fmt.Fprintln(stdout, vaultAtRestNotice())
 		}
 		if strings.HasPrefix(*listen, proxy.UnixScheme) {
 			// A socket has no URL, and saying otherwise would send people to
