@@ -243,7 +243,7 @@ It does not replace `--contribute`. A published population answers "how does
 this compare to a large sample of somebody else's traffic". Only a pool of
 Replay users answers "how does this compare to other people running Replay",
 and only that pool can carry the metrics no publication reports — cache-break
-causes, avoidable share, the waste taxonomy ADR-0009 is actually about. The
+causes, re-billed share, the waste taxonomy ADR-0009 is actually about. The
 reference set is the thing that works while the pool has one member; it is not
 the pool.
 

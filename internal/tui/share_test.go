@@ -10,12 +10,12 @@ import (
 
 func aCard() card.Data {
 	return card.Data{
-		AvoidableShare:      0.03,
-		Tasks:               1384,
-		Breaks:              748,
-		MedianUSD:           0.77,
-		P90USD:              2.30,
-		PeakAvoidableTokens: 32_635_820,
+		RebilledShare:      0.03,
+		Tasks:              1384,
+		Breaks:             748,
+		MedianUSD:          0.77,
+		P90USD:             2.30,
+		PeakRebilledTokens: 32_635_820,
 	}
 }
 

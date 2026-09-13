@@ -20,7 +20,7 @@ import (
 
 func figures() corpusFigures {
 	return corpusFigures{Tasks: 115, Unpriced: 6, TotalUSD: 3382.13,
-		AvoidableUSD: 161.66, AvoidableShare: 0.0478, MedianTaskUSD: 0.77}
+		RebilledUSD: 161.66, RebilledShare: 0.0478, MedianTaskUSD: 0.77}
 }
 
 // consentHome lays down a HOME with the given consent file body, or none.

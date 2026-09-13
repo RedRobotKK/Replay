@@ -149,7 +149,7 @@ func (c *costCache) save() error {
 // declared.
 //
 // The index was keyed on a hand-written "replay.cost.v1" plus the price and
-// rules versions. When costUnit gained AvoidableTokens the literal was not
+// rules versions. When costUnit gained RebilledTokens the literal was not
 // bumped, so every entry already on disk deserialized with the new field
 // absent: the same binary printed 763k tokens on a warm run and 31.4M on a
 // cold one, with the dollar column - already cached - agreeing in both.

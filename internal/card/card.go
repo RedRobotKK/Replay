@@ -50,8 +50,8 @@ const (
 // and from a team of fifty, which is what makes it comparable, and comparison
 // is the only mechanism by which a number like this travels.
 type Data struct {
-	// AvoidableShare is the fraction of priced spend that was re-billed, 0..1.
-	AvoidableShare float64
+	// RebilledShare is the fraction of priced spend that was re-billed, 0..1.
+	RebilledShare float64
 	// Tasks is the row count and LaneUnit says what a row is, exactly as
 	// costSummary carries them. The two travel together because a count under
 	// the wrong noun is the defect that pair was introduced to prevent, and a
@@ -64,13 +64,13 @@ type Data struct {
 	MedianUSD float64
 	P90USD    float64
 
-	// PeakAvoidableTokens is the largest number of tokens re-billed within a
+	// PeakRebilledTokens is the largest number of tokens re-billed within a
 	// single row — one session, or one agent lane. A peak rather than the
-	// corpus sum on purpose: the corpus sum divided by the avoidable rate
+	// corpus sum on purpose: the corpus sum divided by the re-billed rate
 	// reconstructs an order-of-magnitude spend total, which is the one figure
 	// the share card refuses to carry. A peak divided by the rate reconstructs
 	// nothing, because a reader does not know how many rows there were.
-	PeakAvoidableTokens int
+	PeakRebilledTokens int
 }
 
 // The palette. Fixed, and the same values the prototype was designed against.
@@ -109,8 +109,36 @@ var (
 // -fsSL stays. Without -f an HTML error page is piped into sh, and without -L a
 // redirect ends the install; they are two characters each and they are the
 // difference between a failure that says so and one that does something.
+//
+// TWO CORRECTIONS, 2026-09-13, and the second one mattered more.
+//
+// The host was redrobot.jp and the canonical install host is replay.doctor.
+//
+// And /c/<arm> was designed here and never created on either site. It returned
+// 404 on redrobot.jp and on replay.doctor, so the one artifact in this project
+// built to be posted in public carried an install command that did nothing. It
+// now resolves, through public/_redirects on replay.doctor, as a 302 to
+// /replay.sh?src=card-<arm> so the arm survives as attribution. The -L above is
+// what makes that work, which is the second reason it stays.
+//
+// The /c/ segment is gone, and the reason is the layout rather than taste.
+// replay.doctor is two characters longer than redrobot.jp, which took the line
+// from 39 characters to 41 and from a 1175px right edge to 1232px on a 1200px
+// card. TestNoCardOverrunsItsRightMargin caught it. The alternative was
+// dropping the type size from 47px to about 44px, and the paragraph above
+// argues at length that 47 is the largest that fits and that this line is the
+// one thing on the card that does anything. So the path absorbed the two
+// characters instead, and the line is 39 characters again at the same size.
+//
+// Single-letter paths at the site root are therefore a reserved namespace.
+// There are two of them and they are cheap, but a future page called /b would
+// break every card already posted.
+//
+// Nothing caught it. The install-host test added earlier the same day walks
+// markdown, and this is Go, so the most public install line in the project sat
+// outside the check written to protect install lines.
 func InstallLine(v Variant) string {
-	return "curl -fsSL https://redrobot.jp/c/" + string(v) + " | sh"
+	return "curl -fsSL https://replay.doctor/" + string(v) + " | sh"
 }
 
 // installSize is the type size of that line, and it is the number the rest of
@@ -176,7 +204,7 @@ func (d Data) unitSingular() string {
 // The same three cases as the text card: a real fraction under one percent
 // would print as "0%", which reports a measurement as nothing.
 func (d Data) rateText() string {
-	pct := d.AvoidableShare * 100
+	pct := d.RebilledShare * 100
 	switch {
 	case pct == 0:
 		return "0%"

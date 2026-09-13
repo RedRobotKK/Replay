@@ -23,8 +23,8 @@ import (
 func sampleCorpus() Corpus {
 	return Corpus{
 		Schema: CorpusSchema, TakenAt: "2026-09-10T00:00Z",
-		Tasks: 115, TotalUSD: 3382.13, AvoidableUSD: 161.66,
-		AvoidableShare: 0.0478, MedianTaskUSD: 0.77,
+		Tasks: 115, TotalUSD: 3382.13, RebilledUSD: 161.66,
+		RebilledShare: 0.0478, MedianTaskUSD: 0.77,
 		PricedAt: "2026-09-07", RulesVersion: "anthropic-2026-09-01",
 		Unpriced: 6, SourceTag: "abc123", TagBasis: "local",
 	}.Digested()
@@ -48,7 +48,7 @@ func TestCW1_TheCorpusIsWrittenAndReadable(t *testing.T) {
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatalf("the written payload is not JSON: %v", err)
 	}
-	if got.Tasks != 115 || got.TotalUSD != 3382.13 || got.AvoidableUSD != 161.66 {
+	if got.Tasks != 115 || got.TotalUSD != 3382.13 || got.RebilledUSD != 161.66 {
 		t.Errorf("the figures did not survive the round trip: %+v", got)
 	}
 	if got.PricedAt == "" || got.RulesVersion == "" {

@@ -93,9 +93,9 @@ without being measured.
 Business Source License 1.1, converting to Apache 2.0 on 2029-09-06.
 
 ```bash
-curl -fsSL https://redrobot.jp/replay.sh | less               # read it first
-curl -fsSL https://redrobot.jp/replay.sh | sh -s -- --dry-run # see what it does
-curl -fsSL https://redrobot.jp/replay.sh | sh                 # install
+curl -fsSL https://replay.doctor/replay.sh | less               # read it first
+curl -fsSL https://replay.doctor/replay.sh | sh -s -- --dry-run # see what it does
+curl -fsSL https://replay.doctor/replay.sh | sh                 # install
 ```
 
 <https://github.com/RedRobotKK/Replay>

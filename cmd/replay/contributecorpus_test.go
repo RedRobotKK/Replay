@@ -71,8 +71,8 @@ func TestCN1_TheSubmissionMatchesTheReportedFigures(t *testing.T) {
 	}
 	var report struct {
 		Summary struct {
-			Tasks                                             int
-			TotalUSD, AvoidableUSD, AvoidableShare, MedianUSD float64
+			Tasks                                           int
+			TotalUSD, RebilledUSD, RebilledShare, MedianUSD float64
 		} `json:"summary"`
 		Unpriced int `json:"unpriced"`
 	}
@@ -87,8 +87,8 @@ func TestCN1_TheSubmissionMatchesTheReportedFigures(t *testing.T) {
 	}{
 		{"tasks", float64(report.Summary.Tasks)},
 		{"totalUsd", report.Summary.TotalUSD},
-		{"avoidableUsd", report.Summary.AvoidableUSD},
-		{"avoidableShare", report.Summary.AvoidableShare},
+		{"rebilledUsd", report.Summary.RebilledUSD},
+		{"rebilledShare", report.Summary.RebilledShare},
 		{"medianTaskUsd", report.Summary.MedianUSD},
 		{"unpriced", float64(report.Unpriced)},
 	} {

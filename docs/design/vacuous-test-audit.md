@@ -281,7 +281,7 @@ by SGR sequences emitted per screen with `-color always`:
 | share | 2 | 4 |
 
 On CI the `cost` screen emits two dim sequences. **The bold total, the red, the
-yellow and the cyan are never rendered** — including `Alarm` on the avoidable
+yellow and the cyan are never rendered** — including `Alarm` on the re-billed
 figure, which `internal/tui/measured.go:308` calls out as *"the only number
 here that is money already spent twice"*.
 
@@ -622,18 +622,18 @@ So the only thing standing between this defect and a release is a test about
 something else, and it is defeated by keeping the width constant — which is
 what a real shear does.
 
-### 6.2 The avoidable-money figure loses its alarm colour; ten colour and width tests stay green
+### 6.2 The re-billed-money figure loses its alarm colour; ten colour and width tests stay green
 
 **Tests:** all of `TestCL1`–`TestCL6`, `TestTC2`–`TestTC4`, `TestTW1`–`TestTW4`.
 
 **Mutation** — `internal/tui/measured.go:309`:
 
 ```diff
--        paint(Alarm, money(m.AvoidableUSD))+" avoidable. List price, not your bill.",
-+        money(m.AvoidableUSD)+" avoidable. List price, not your bill.",
+-        paint(Alarm, money(m.Re-billedUSD))+" re-billed. List price, not your bill.",
++        money(m.Re-billedUSD)+" re-billed. List price, not your bill.",
 ```
 
-`internal/tui/measured.go:308` says what this costs: *"Alarm on the avoidable
+`internal/tui/measured.go:308` says what this costs: *"Alarm on the re-billed
 figure because it is the only number here that is money already spent twice."*
 
 **Result, run against this machine's real 1,744-transcript corpus** — the

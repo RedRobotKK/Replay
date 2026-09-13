@@ -49,7 +49,7 @@ func TestOB1_ObservationCarriesNoSpend(t *testing.T) {
 
 // CC1: a corpus contribution carries the five figures and states its basis.
 //
-// PASS: total, avoidable, share, median and the task count are present, and so
+// PASS: total, re-billed, share, median and the task count are present, and so
 // is what priced them.
 // FAIL: a figure without its basis. An aggregate of totals priced on different
 // tables is a number nobody can defend, which is the shape of the retraction
@@ -57,8 +57,8 @@ func TestOB1_ObservationCarriesNoSpend(t *testing.T) {
 func TestCC1_TheFiveFiguresTravelWithTheirBasis(t *testing.T) {
 	c := Corpus{
 		Schema: CorpusSchema, TakenAt: "2026-09-10T00:00Z",
-		Tasks: 115, TotalUSD: 3382.13, AvoidableUSD: 161.66,
-		AvoidableShare: 0.0478, MedianTaskUSD: 0.77,
+		Tasks: 115, TotalUSD: 3382.13, RebilledUSD: 161.66,
+		RebilledShare: 0.0478, MedianTaskUSD: 0.77,
 		PricedAt: "2026-09-07", RulesVersion: "anthropic-2026-09-01",
 		Unpriced: 6, SourceTag: "abc", TagBasis: "random",
 	}
@@ -67,7 +67,7 @@ func TestCC1_TheFiveFiguresTravelWithTheirBasis(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(b)
-	for _, want := range []string{"tasks", "totalUsd", "avoidableUsd", "avoidableShare",
+	for _, want := range []string{"tasks", "totalUsd", "rebilledUsd", "rebilledShare",
 		"medianTaskUsd", "pricedAt", "rulesVersion", "unpriced"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the contribution does not carry %q:\n%s", want, got)
@@ -158,5 +158,209 @@ func TestCC3_AnEmptyCorpusIsNotAContribution(t *testing.T) {
 
 	if err := base.Digested().Validate(); err != nil {
 		t.Errorf("a real corpus was refused: %v", err)
+	}
+}
+
+// CR-OLD. A pre-rename submission must be refused, not read as zero.
+//
+// On 2026-09-13 `avoidableUsd` became `rebilledUsd` across the payload. The
+// rename was mechanical and complete, and it introduced a defect no test
+// caught: a submission written before it parses cleanly into the new struct
+// with RebilledUSD = 0, and Validate() returns nil, because a missing JSON key
+// is indistinguishable from a zero value in Go.
+//
+// The one contributed corpus in existence was written under the old spelling.
+// Pooled by the new build it would have added $0.00 to the total and reported
+// success. That is ADR-0018 exactly: absence read as zero, silently, in the
+// payload whose entire job is to carry a figure somebody can check.
+//
+// REFUSED RATHER THAN TRANSLATED, and the reason is measured. The same corpus
+// reads 4.99% on v0.5.4 and 2.75% on the build that renamed these fields
+// (two-builds-one-corpus-2026-09-13.md). Silently mapping the old key onto the
+// new field would pool two instruments as one number, which is the thing that
+// file exists to prevent. A refusal makes somebody decide.
+func TestCROLD_APreRenameSubmissionIsRefusedRatherThanReadAsZero(t *testing.T) {
+	// One document per retired field, so removing any single entry from the
+	// map fails here. A single fixture carrying all three passed even when two
+	// of the three checks were deleted.
+	for _, tc := range []struct{ field, replacement, doc string }{
+		{"avoidableUsd", "rebilledUsd", `"avoidableUsd":211.42`},
+		{"avoidableShare", "rebilledShare", `"avoidableShare":0.0499`},
+		{"avoidableTokens", "rebilledTokens", `"avoidableTokens":44214854`},
+	} {
+		doc := []byte(`{"schema":"replay.corpus.v1","takenAt":"2026-09-12T00:00:00Z",
+		 "tasks":119,"totalUsd":4236.17,` + tc.doc + `,
+		 "medianTaskUsd":1.2,"pricedAt":"2026-09-12","rulesVersion":"anthropic-2026-09-01",
+		 "unpriced":6,"sourceTag":"abc","tagBasis":"machine","digest":"65abc02f"}`)
+
+		var c Corpus
+		err := json.Unmarshal(doc, &c)
+		if err == nil {
+			t.Errorf("a submission carrying %s parsed cleanly. RebilledUSD=%v and Validate "+
+				"says %v, so it would add $0.00 to a pooled total and report success.",
+				tc.field, c.RebilledUSD, c.Validate())
+			continue
+		}
+		for _, want := range []string{tc.field, tc.replacement} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("the refusal for %s does not name %q, so the operator cannot tell "+
+					"what to do about it: %v", tc.field, want, err)
+			}
+		}
+	}
+
+	// A current submission is unaffected.
+	fresh, err := json.Marshal(Corpus{
+		Schema: CorpusSchema, TakenAt: "2026-09-13T00:00:00Z", Tasks: 121,
+		TotalUSD: 12630.61, RebilledUSD: 347.53, RebilledShare: 0.0275,
+		MedianTaskUSD: 1.2, PricedAt: "2026-09-13", RulesVersion: "anthropic-2026-09-01",
+		SourceTag: "abc", TagBasis: "machine",
+	}.Digested())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var round Corpus
+	if err := json.Unmarshal(fresh, &round); err != nil {
+		t.Fatalf("a current submission was refused: %v", err)
+	}
+	if round.RebilledUSD != 347.53 {
+		t.Errorf("round trip lost the figure: %v", round.RebilledUSD)
+	}
+}
+
+// CR-MALFORMED: a document that is not JSON, and one whose types are wrong.
+//
+// Corpus gained an UnmarshalJSON on 2026-09-13 to refuse pre-rename
+// submissions. It carries two error branches of its own, and `guard
+// reachability` reported both UNREACHED: the probe pass and the real pass.
+//
+// They matter because this is the entry point for a file a stranger sends. A
+// panic or a silent zero here is reached by anybody who can put a file in front
+// of the pooler, which is the whole point of the contribution path.
+func TestCRMALFORMED_UnparseableAndMistypedDocumentsAreRefused(t *testing.T) {
+	for _, tc := range []struct{ name, doc string }{
+		{"not JSON at all", `this is not json`},
+		{"truncated", `{"schema":"replay.corpus.v1","tasks":`},
+		{"an array, not an object", `[1,2,3]`},
+		{"a field of the wrong type", `{"schema":"replay.corpus.v1","tasks":"one hundred"}`},
+		{"totalUsd is a string", `{"schema":"replay.corpus.v1","totalUsd":"4236.17"}`},
+		// Every required key PRESENT and one of them the wrong type. Without
+		// this the real decode's error branch is unreachable: encoding/json
+		// rejects malformed bytes before UnmarshalJSON is ever called, and the
+		// other cases here all fail the presence check first, so nothing
+		// reached the type error at all.
+		{"rebilledUsd is a string", `{"schema":"replay.corpus.v2","rebilledUsd":"lots",` +
+			`"rebilledShare":0.0275,"tasks":121,"totalUsd":12630.61}`},
+		{"rebilledShare is an object", `{"schema":"replay.corpus.v2","rebilledUsd":347.53,` +
+			`"rebilledShare":{"x":1},"tasks":121}`},
+	} {
+		var c Corpus
+		if err := json.Unmarshal([]byte(tc.doc), &c); err == nil {
+			t.Errorf("%s was accepted, and it parsed to %+v", tc.name, c)
+		}
+	}
+}
+
+// CR-V2. The schema string moved with the field names, and Validate enforces it.
+//
+// Daniel ruled on 2026-09-13: bump rather than re-derive. The rename changed
+// what the wire form looks like, so a document under the old version string and
+// the new spelling, or the reverse, is a document nobody wrote and nobody
+// should read.
+//
+// UnmarshalJSON already refuses the old SPELLING. This is the other half: a
+// document that claims a version this build does not write. The two catch
+// different lies. A hand-edited file carrying the new spelling under
+// "replay.corpus.v1" passes the spelling check and is still not a thing this
+// project ever produced.
+func TestCRV2_TheSchemaStringMovedAndIsChecked(t *testing.T) {
+	if CorpusSchema != "replay.corpus.v2" {
+		t.Errorf("CorpusSchema is %q. The rename changed the wire form, so the version "+
+			"string had to move with it", CorpusSchema)
+	}
+	// Watch must NOT move: it has never shipped, so there is no older reader to
+	// protect and v1 has never meant anything else.
+	if WatchSchema != "replay.watch.v1" {
+		t.Errorf("WatchSchema is %q. No watch record has ever been written, so there is "+
+			"nothing a bump would protect and the first version should be v1", WatchSchema)
+	}
+	if PoolSchema != "replay.pool.v2" {
+		t.Errorf("PoolSchema is %q. The pooled document carries rebilledUsd and "+
+			"rebilledShare in its own entries, so its wire form changed too", PoolSchema)
+	}
+
+	base := Corpus{
+		Schema: CorpusSchema, TakenAt: "2026-09-13T00:00:00Z", Tasks: 121,
+		TotalUSD: 12630.61, RebilledUSD: 347.53, RebilledShare: 0.0275,
+		MedianTaskUSD: 1.2, PricedAt: "2026-09-13", RulesVersion: "anthropic-2026-09-01",
+		SourceTag: "abc", TagBasis: "machine",
+	}.Digested()
+	if err := base.Validate(); err != nil {
+		t.Fatalf("a current submission was refused: %v", err)
+	}
+
+	for _, bad := range []string{"replay.corpus.v1", "replay.corpus.v3", "", "replay.watch.v1"} {
+		wrong := base
+		wrong.Schema = bad
+		wrong = wrong.Digested()
+		if err := wrong.Validate(); err == nil {
+			t.Errorf("a document claiming schema %q validated. It is not a shape this "+
+				"build writes, so reading it means guessing what its fields mean.", bad)
+		}
+	}
+}
+
+// CR-ABSENT: a v2 document that simply omits the figure is refused.
+//
+// The retired-spelling refusal was only half the guard, and a reviewer proved
+// the other half was missing on 2026-09-13: a document declaring
+// replay.corpus.v2 with no rebilledUsd key parsed to zero and PASSED Validate,
+// because Go cannot tell an absent key from a zero value and Validate guards
+// tasks, totals, tags and the digest but never the re-billed figure.
+//
+// That is the identical defect the spelling refusal was written to close,
+// surviving inside the fix for it.
+func TestCRABSENT_AMissingFigureIsNotAMeasuredZero(t *testing.T) {
+	for _, missing := range []string{"rebilledUsd", "rebilledShare"} {
+		doc := map[string]any{
+			"schema": CorpusSchema, "takenAt": "2026-09-13T00:00:00Z", "tasks": 121,
+			"totalUsd": 12630.61, "rebilledUsd": 347.53, "rebilledShare": 0.0275,
+			"medianTaskUsd": 1.2, "pricedAt": "2026-09-13",
+			"rulesVersion": "anthropic-2026-09-01", "unpriced": 0,
+			"sourceTag": "abc", "tagBasis": "machine", "digest": "x",
+		}
+		delete(doc, missing)
+		b, err := json.Marshal(doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var c Corpus
+		err = json.Unmarshal(b, &c)
+		if err == nil {
+			t.Errorf("a document with no %q parsed cleanly to %v and Validate says %v. "+
+				"A missing figure and a measured zero are different things.",
+				missing, c.RebilledUSD, c.Validate())
+			continue
+		}
+		if !strings.Contains(err.Error(), missing) {
+			t.Errorf("the refusal does not name %q: %v", missing, err)
+		}
+	}
+
+	// A genuine measured zero is still accepted. A perfect cache is a
+	// submission worth having, and refusing it would be the opposite error.
+	zero := Corpus{
+		Schema: CorpusSchema, TakenAt: "2026-09-13T00:00:00Z", Tasks: 121,
+		TotalUSD: 12630.61, RebilledUSD: 0, RebilledShare: 0,
+		MedianTaskUSD: 1.2, PricedAt: "2026-09-13", RulesVersion: "anthropic-2026-09-01",
+		SourceTag: "abc", TagBasis: "machine",
+	}.Digested()
+	b, err := json.Marshal(zero)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back Corpus
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Errorf("a measured zero was refused, which is the opposite error: %v", err)
 	}
 }

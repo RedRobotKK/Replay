@@ -113,9 +113,9 @@ func TestCU4_CostCountsUnreadableFilesEndToEnd(t *testing.T) {
 // completely, and was named nowhere.
 func TestCU5_TheGateNamesTranscriptsItCouldNotRead(t *testing.T) {
 	var out bytes.Buffer
-	err := checkAvoidableCeiling(1, summarise([]costUnit{{CostUSD: 100, AvoidableUSD: 50}}), 0, 2, &out)
+	err := checkRebilledCeiling(1, summarise([]costUnit{{CostUSD: 100, RebilledUSD: 50}}), 0, 2, &out)
 	if err == nil {
-		t.Fatal("avoidable spend of $50 must not pass a $1 ceiling; the disclosure is not under test")
+		t.Fatal("re-billed spend of $50 must not pass a $1 ceiling; the disclosure is not under test")
 	}
 	if !strings.Contains(out.String(), "2 transcript(s) could not be read") {
 		t.Errorf("the gate failed over a total with two transcripts missing from it and did "+

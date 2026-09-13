@@ -21,7 +21,7 @@ CacheBreak    *struct{ Short, Long int }  // ephemeral_5m / ephemeral_1h
 ```
 
 Those fields separate a cache **write** from a cache **read**, and separate the
-five-minute tier from the one-hour tier. Avoidable spend is the difference
+five-minute tier from the one-hour tier. Re-billed spend is the difference
 between what was written and what a different layout would have read. A surface
 that does not distinguish a write from a read cannot answer the question,
 however cleanly its responses parse.
@@ -38,7 +38,7 @@ their caching products differ:
   construction.
 - **OpenAI** reports one number, `cached_tokens` under `prompt_tokens_details`.
   Caching is automatic. There is no write signal, no TTL tier, and no caller
-  decision to have gotten wrong. A hit rate is computable. Avoidable spend is
+  decision to have gotten wrong. A hit rate is computable. Re-billed spend is
   not.
 - **Gemini** reports `cachedContentTokenCount` against explicit cache objects
   with caller-set TTLs. A different shape of the same question, answerable, but
@@ -79,7 +79,7 @@ Two further facts constrain the design.
 
 **A missing capability must not read as a zero.** ADR-0018 fixed the rule that
 absence, zero and unknown are three values. Adding OpenAI under the current
-architecture would emit `avoidableUsd: 0` on every OpenAI report — a measured
+architecture would emit `rebilledUsd: 0` on every OpenAI report — a measured
 zero that was never measured. Since 2026-09 those figures flow into pooled
 corpus contributions across contributors, so the defect would not stay local to
 one reader's terminal; it would bias a published population figure downward and
@@ -155,7 +155,7 @@ The mechanism is named per surface, along with the honest scope of support:
 | Anthropic 1P (direct) | Proxy on loopback; `ANTHROPIC_BASE_URL` | Yes — env injection into a child process | Everything, Measured tier |
 | Bedrock | Proxy; SDK endpoint override | Yes, where the SDK honours it | Everything, plus metered by construction |
 | Vertex | Proxy; SDK endpoint override | Yes, same caveat | Same as Bedrock |
-| OpenAI | Proxy; `OPENAI_BASE_URL` | Yes | Cache hit rate, prefix stability, context growth, spend. **Not avoidable spend** |
+| OpenAI | Proxy; `OPENAI_BASE_URL` | Yes | Cache hit rate, prefix stability, context growth, spend. **Not re-billed spend** |
 | xAI (Grok) — proxy | Proxy; `/responses` at `cli-chat-proxy.grok.com`. **A third wire family, not parsed today** | Yes, once parsed | Unknown until probed; SSE usage events must be read first |
 | xAI (Grok) — transcript | Read `~/.grok/sessions` (3.8 GB / 6,787 files on one machine) | Yes | Prompt structure, context growth. Usage fields **unverified** |
 | Gemini | Proxy; endpoint override | Yes | Utilisation of explicit caches; prefix stability; context growth; spend |
@@ -198,7 +198,7 @@ So the analyses split by what they actually consume, not by provider:
 | Context growth per turn | request bytes | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Total and per-task spend | tokens + price table | ✅ | ✅ | ✅ | — | ✅ |
 | Cache hit rate | `CapCacheRead` | ✅ | ✅ | ✅ | — | ✅ |
-| **Avoidable spend** | `CapCacheWrite` | ✅ | ❌ | partial | — | ❌ |
+| **Re-billed spend** | `CapCacheWrite` | ✅ | ❌ | partial | — | ❌ |
 
 One row is unavailable off the reference surface. Seven are not.
 
@@ -270,7 +270,7 @@ each is a precondition for trusting the next:
   intake, probe the capability set, and let every analysis that needs a missing
   capability say so. It stops being an open-ended promise that the tool "works
   with OpenAI".
-- The product argument stops depending on the avoidable-spend figure. Seven of
+- The product argument stops depending on the re-billed-spend figure. Seven of
   the eight analyses need only request bytes, so a third-party surface is not a
   degraded version of the reference surface — it is the same diagnostic with one
   row missing and a different headline. That headline is *what mutated your

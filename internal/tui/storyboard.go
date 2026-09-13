@@ -132,7 +132,7 @@ func Storyboard() []Scene {
 			"", "  traffic",
 		}, append(hdr,
 			Traffic("15:06:44", "anthropic", "api.anthropic.com", "messages", "parsed"),
-			Traffic("15:06:41", "openai", "api.openai.com", "chat/completions", "stub"),
+			Traffic("15:06:41", "openai", "api.openai.com", "chat/completions", "unmasked"),
 			Traffic("15:05:58", "grok", "cli-chat-proxy.grok.com", "/responses", "forwarded"),
 			Traffic("15:05:44", "anthropic", "api.anthropic.com", "messages", "parsed"),
 			"", "  notes",
@@ -140,7 +140,8 @@ func Storyboard() []Scene {
 			"      be priced, so they add nothing to the total and it cannot be reached.",
 			note(false, "grok /responses is forwarded unread: no ledger record, no cap,"),
 			"      no masking and no loop detection apply to it.",
-			note(false, "openai is parsed against a stub, never verified live."),
+			note(true, "openai chat/completions is EXPERIMENTAL, UNMASKED: parsed and"),
+			"      capped, but --mask never runs on it, so secrets go out in clear.",
 			"", Footer(0))...)...)
 
 	add(6, "A path forwarded blind",
@@ -219,7 +220,7 @@ func Storyboard() []Scene {
 
 	add(5, "Parsed against a stub, never verified live",
 		append([]string{"  traffic"}, append(hdr,
-			Traffic("15:06:41", "openai", "api.openai.com", "chat/completions", "stub"),
+			Traffic("15:06:41", "openai", "api.openai.com", "chat/completions", "unmasked"),
 			"", "  notes",
 			note(false, "this path parses a payload we wrote and has never been checked"),
 			"      against a live provider. Figures from it carry that caveat.")...)...)

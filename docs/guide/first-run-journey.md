@@ -42,7 +42,7 @@ to provide, and one status count taken from a 700-session corpus.
 ## Step 1: install, and read the closing lines
 
 ```sh
-curl -fsSL https://redrobot.jp/replay.sh | sh
+curl -fsSL https://replay.doctor/replay.sh | sh
 ```
 
 What the script does is download a released binary, check it against the release checksums, and
@@ -97,11 +97,11 @@ Cost per task, across 1 sessions at list prices dated 2026-09-07 (caching rules 
   total          $32.25
   median task    $32.25
   p90 task       $32.25
-  avoidable      $1.89  (6% of the total)
+  re-billed      $1.89  (6% of the total)
                  189k tokens re-billed
 ```
 
-`avoidable` is the finding. It is not a forecast and not a saving: it is the part of what you already
+`re-billed` is the finding. It is not a forecast and not a saving: it is the part of what you already
 paid that was paid twice, because a prompt cache broke and content that was already in the provider's
 cache was billed as new input again.
 
@@ -417,7 +417,7 @@ cached prefix of every session, so its size is a cost paid on every request:
 because a prompt cache broke. It reads transcripts already on disk and sends
 nothing anywhere.
 
-- `replay` - cost per task across this machine's transcripts, and the avoidable share
+- `replay` - cost per task across this machine's transcripts, and the re-billed share
 - `replay diff <transcript>` - where the cache broke, and the cause of each break
 - `replay blame <transcript>` - what is filling the prompt, ranked
 - `replay advise <dir>` - what to change, measured against this corpus

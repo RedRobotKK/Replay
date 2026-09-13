@@ -37,6 +37,22 @@ const FileName = "update-consent.toml"
 // only a human does, deliberately, having seen the payload.
 const CorpusFileName = "corpus-consent.toml"
 
+// WatchFileName is the opt-in for Replay Watch, and it is a THIRD file rather
+// than a flag inside one of the other two.
+//
+// The three grants are genuinely different and merging any two of them would
+// be answering a question the user was not asked. Update consent permits a
+// version check. Corpus consent permits BUILDING a submission that a human
+// then moves by hand, and the file says so: nothing in the release transmits
+// it. Watch consent is the only one of the three that permits a machine to
+// send, on a schedule, without a person present for each send.
+//
+// That is a different promise and it gets its own answer. Somebody who opted
+// into the corpus because a human carries each file has not agreed to a hook
+// that posts one at the end of every session, and a design that read one file
+// for both would have quietly upgraded their answer.
+const WatchFileName = "watch-consent.toml"
+
 // State is what the user has said. Three states, not two.
 //
 // Unset and Declined both mean "do not check now", so a boolean would merge
@@ -105,6 +121,17 @@ func ReadUpdateConsent(configDir string) (Decision, error) {
 // writable by anyone else is refused rather than believed.
 func ReadCorpusConsent(configDir string) (Decision, error) {
 	return readDecision(filepath.Join(configDir, "replay", CorpusFileName), "corpus_opt_in")
+}
+
+// ReadWatchConsent reports whether this machine may emit Watch records.
+//
+// Unset is the default and means no. There is no implicit grant anywhere in
+// this path: a machine that has never been told sends nothing, which is the
+// same answer it gives when the file says no, and the two are distinguished
+// only so that a prompt can tell somebody who declined from somebody who was
+// never asked.
+func ReadWatchConsent(configDir string) (Decision, error) {
+	return readDecision(filepath.Join(configDir, "replay", WatchFileName), "watch_opt_in")
 }
 
 func readDecision(path, key string) (Decision, error) {

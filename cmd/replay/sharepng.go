@@ -28,21 +28,21 @@ import (
 // only place a figure could be added to one without being added to the other.
 func cardData(s costSummary, breaks, peakTokens int) card.Data {
 	return card.Data{
-		AvoidableShare:      s.AvoidableShare,
-		Tasks:               s.Tasks,
-		LaneUnit:            s.Unit == unitLane,
-		Breaks:              breaks,
-		MedianUSD:           s.MedianUSD,
-		P90USD:              s.P90USD,
-		PeakAvoidableTokens: peakTokens,
+		RebilledShare:      s.RebilledShare,
+		Tasks:              s.Tasks,
+		LaneUnit:           s.Unit == unitLane,
+		Breaks:             breaks,
+		MedianUSD:          s.MedianUSD,
+		P90USD:             s.P90USD,
+		PeakRebilledTokens: peakTokens,
 	}
 }
 
-// peakAvoidableTokens is the largest number of tokens re-billed within a single
+// peakRebilledTokens is the largest number of tokens re-billed within a single
 // row — one session, or one agent lane.
 //
 // The corpus sum is the figure `replay cost` prints and it is the wrong one
-// here. Divided by the avoidable rate, which is on the same card, it
+// here. Divided by the re-billed rate, which is on the same card, it
 // reconstructs an order-of-magnitude spend total: exactly the number share.go
 // refuses to carry, arrived at by arithmetic instead of by printing it. A peak
 // divides into nothing, because a reader has no way to know how many rows
@@ -51,11 +51,11 @@ func cardData(s costSummary, breaks, peakTokens int) card.Data {
 // It is also the more honest headline for the card that shows it. "189k tokens
 // billed twice, in one session" is a claim about one session, and a corpus sum
 // under that sentence would be a fabrication with a real number in it.
-func peakAvoidableTokens(units []costUnit) int {
+func peakRebilledTokens(units []costUnit) int {
 	peak := 0
 	for _, u := range units {
-		if u.AvoidableTokens > peak {
-			peak = u.AvoidableTokens
+		if u.RebilledTokens > peak {
+			peak = u.RebilledTokens
 		}
 	}
 	return peak

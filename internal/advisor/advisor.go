@@ -440,7 +440,7 @@ func Suggest(obs []Observation, applied map[string]bool) []Suggestion {
 		s.Share /= float64(len(a.evidence))
 		switch a.kind {
 		case KindHotFile:
-			// Only the repeats are avoidable.
+			// Only the repeats are re-billed.
 			s.Share *= float64(a.reads-1) / float64(a.reads)
 			s.PredictedShare = s.Share
 			s.PredictedTokens = a.tokens * (a.reads - 1) / a.reads

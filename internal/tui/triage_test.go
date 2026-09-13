@@ -147,7 +147,7 @@ func TestTR6_ADetailWithNoPredictionSaysSo(t *testing.T) {
 //
 // The obvious next step for this screen is to turn "14.1% of prompt tokens"
 // into money, because a percentage of prompt tokens is an abstraction nobody
-// feels. `replay cost` already knows the avoidable dollars, so it would be one
+// feels. `replay cost` already knows the re-billed dollars, so it would be one
 // line.
 //
 // It would also be misleading to most of the people who run this. On a

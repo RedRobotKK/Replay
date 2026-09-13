@@ -69,17 +69,17 @@ func canHyperlink(out io.Writer) bool {
 	return tui.IsTerminal(f)
 }
 
-func tipLineFor(avoidableUSD float64, hyperlink bool) string {
-	return tipLineArm("A", avoidableUSD, hyperlink)
+func tipLineFor(rebilledUSD float64, hyperlink bool) string {
+	return tipLineArm("A", rebilledUSD, hyperlink)
 }
 
-func tipLineArm(arm string, avoidableUSD float64, hyperlink bool) string {
-	if avoidableUSD < tipFloorUSD {
+func tipLineArm(arm string, rebilledUSD float64, hyperlink bool) string {
+	if rebilledUSD < tipFloorUSD {
 		return ""
 	}
 	// Round up to a whole coffee: rounding down would suggest less than the
 	// share, and the page cannot sell a fraction of one anyway.
-	units := int(math.Ceil(avoidableUSD * tipShare / float64(tipUnitUSD)))
+	units := int(math.Ceil(rebilledUSD * tipShare / float64(tipUnitUSD)))
 	suggested := float64(units * tipUnitUSD)
 	if suggested < tipMinUSD {
 		suggested = tipMinUSD
@@ -99,7 +99,7 @@ func tipLineArm(arm string, avoidableUSD float64, hyperlink bool) string {
 	if hyperlink {
 		link = "\x1b]8;;https://" + dest + "\x1b\\" + dest + "\x1b]8;;\x1b\\"
 	}
-	return tipBody(arm, avoidableUSD, coffees, unit, link)
+	return tipBody(arm, rebilledUSD, coffees, unit, link)
 }
 
 const shareCoffee = "buymeacoffee.com/saitodaniel"

@@ -122,14 +122,14 @@ type Machine struct {
 	// the delay to the keyboard. Until CostReady the screen shows the field
 	// waiting rather than a zero, which is the same rule the doctor screen
 	// keeps about nothing-found.
-	CostReady       bool
-	Tasks           int
-	TotalUSD        float64
-	MedianUSD       float64
-	P90USD          float64
-	AvoidableUSD    float64
-	AvoidableShare  float64
-	AvoidableTokens int
+	CostReady      bool
+	Tasks          int
+	TotalUSD       float64
+	MedianUSD      float64
+	P90USD         float64
+	RebilledUSD    float64
+	RebilledShare  float64
+	RebilledTokens int
 	// PriceDate and CorpusFiles say what the figures were computed from, so a
 	// reader can check the total against the same two numbers replay cost
 	// prints.
@@ -155,12 +155,12 @@ type Machine struct {
 
 // Task is one session's cost, and enough to go and look at it.
 type Task struct {
-	Session   string
-	Model     string
-	CostUSD   float64
-	Breaks    int
-	Requests  int
-	Avoidable float64
+	Session  string
+	Model    string
+	CostUSD  float64
+	Breaks   int
+	Requests int
+	Rebilled float64
 	// Path is the transcript, resolved from the session prefix. Empty when the
 	// file could not be found, and a row with no path cannot be opened, which
 	// the screen says rather than failing on enter.
@@ -407,7 +407,7 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 			"  This takes a few seconds the first time and is cached after.", "",
 			Awaiting("total", tick),
 			Awaiting("median task", tick),
-			Awaiting("avoidable", tick),
+			Awaiting("re-billed", tick),
 			"", "  notes",
 			note(false, "the keys still work while this counts. Nothing is blocked."))
 		lines = WithBanner(lines, Unavailable, "still counting")
@@ -420,7 +420,7 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 	//
 	// Strong on the total because it is the answer to the question the screen
 	// asks, and bold rather than a hue so it survives a monochrome terminal.
-	// Alarm on the avoidable figure because it is the only number here that is
+	// Alarm on the re-billed figure because it is the only number here that is
 	// money already spent twice; median and p90 describe what the work cost,
 	// which is not a fault. Painting all four would say they are all the same
 	// kind of number, and the reader would stop reading any of them.
@@ -458,7 +458,7 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 		"  Median "+paint(Strong, money(m.MedianUSD))+", p90 "+paint(Strong, money(m.P90USD))+
 			" per task. List price, not your bill.",
 		"  "+paint(Strong, money(m.TotalUSD))+alsoIn(m.FX, m.TotalUSD)+" across "+commas(m.Tasks)+
-			" tasks, "+paint(Alarm, money(m.AvoidableUSD))+" avoidable.",
+			" tasks, "+paint(Alarm, money(m.RebilledUSD))+" re-billed.",
 		"")
 
 	rows := TaskLines(m.TaskRows)
@@ -539,7 +539,7 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 		// dollars are a number with no basis. The tokens are what a flat-seat
 		// reader actually lost, and they are most of the readership, so a
 		// screen that shows only dollars is talking to somebody else.
-		note(false, commas(m.AvoidableTokens)+" tokens is what the waste cost you: "+
+		note(false, commas(m.RebilledTokens)+" tokens is what the waste cost you: "+
 			"context the work did not get."),
 		note(false, "prices dated "+m.PriceDate+", across "+commas(m.CorpusFiles)+
 			" transcripts."))

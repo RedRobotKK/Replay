@@ -10,12 +10,12 @@ import (
 
 func sample() Data {
 	return Data{
-		AvoidableShare:      0.031,
-		Tasks:               64,
-		Breaks:              4,
-		MedianUSD:           0.20,
-		P90USD:              0.40,
-		PeakAvoidableTokens: 189_000,
+		RebilledShare:      0.031,
+		Tasks:              64,
+		Breaks:             4,
+		MedianUSD:          0.20,
+		P90USD:             0.40,
+		PeakRebilledTokens: 189_000,
 	}
 }
 
@@ -50,8 +50,8 @@ func TestRenderedCardIsExactlyOpenGraphSize(t *testing.T) {
 // first check alone, and the card is a picture, not a string.
 func TestInstallLineCarriesTheVariantInPixels(t *testing.T) {
 	want := map[Variant]string{
-		VariantB: "curl -fsSL https://redrobot.jp/c/b | sh",
-		VariantC: "curl -fsSL https://redrobot.jp/c/c | sh",
+		VariantB: "curl -fsSL https://replay.doctor/b | sh",
+		VariantC: "curl -fsSL https://replay.doctor/c | sh",
 	}
 	for v, line := range want {
 		if got := InstallLine(v); got != line {
@@ -69,11 +69,21 @@ func TestInstallLineCarriesTheVariantInPixels(t *testing.T) {
 		// card and the comparison they exist for cannot be read. Matched on the
 		// fragment that differs: one character of a 39-character line is inside
 		// the antialiasing tolerance, so the whole line cannot tell them apart.
-		if find(t, hays, v, "/c/"+string(otherArm(v))+" ") {
-			t.Errorf("card %s carries the other arm's path /c/%s", v, otherArm(v))
+		// The arm is the last path segment now, not /c/<arm>: replay.doctor is
+		// two characters longer than the host these cards used to name, and the
+		// line had to stay 39 characters to keep the 47px size the layout is
+		// built around. See InstallLine.
+		// A SHORT fragment, for the reason the comment above gives: one
+		// character of a 39-character line is inside the antialiasing
+		// tolerance, so matching the whole line cannot tell the two arms
+		// apart. The arm is the last path segment now rather than /c/<arm>,
+		// so the discriminating fragment is the slash, the arm and the space
+		// before the pipe.
+		if find(t, hays, v, "/"+string(otherArm(v))+" ") {
+			t.Errorf("card %s carries the other arm's path /%s", v, otherArm(v))
 		}
-		if !find(t, hays, v, "/c/"+string(v)+" ") {
-			t.Errorf("card %s does not carry its own arm's path /c/%s", v, v)
+		if !find(t, hays, v, "/"+string(v)+" ") {
+			t.Errorf("card %s does not carry its own arm's path /%s", v, v)
 		}
 	}
 }
@@ -154,10 +164,10 @@ func TestRenderIsDeterministic(t *testing.T) {
 func TestTheFiguresActuallyReachThePicture(t *testing.T) {
 	base := sample()
 	moved := base
-	moved.AvoidableShare = 0.19
+	moved.RebilledShare = 0.19
 	moved.Breaks = 41
 	moved.Tasks = 900
-	moved.PeakAvoidableTokens = 12_345
+	moved.PeakRebilledTokens = 12_345
 	for _, v := range Variants() {
 		var a, b bytes.Buffer
 		if err := Encode(&a, v, ToneMeasured, base); err != nil {

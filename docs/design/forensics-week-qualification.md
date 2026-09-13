@@ -65,7 +65,7 @@ key or a subscription, so it is reported and not claimed.
 
 ```text
 total          $11696.09
-avoidable      $329.68  (3% of the total)
+re-billed      $329.68  (3% of the total)
                69.0M tokens re-billed
 ```
 
@@ -83,9 +83,9 @@ against rate-limit budget instead moved 3.09M tokens and shifted the utilisation
 counter by **zero** steps. There is no second currency. Say so in the first
 email and do not sell them a week.
 
-**Worth a conversation:** metered spend where `avoidable` is a figure their
+**Worth a conversation:** metered spend where `re-billed` is a figure their
 finance function would notice. What counts as noticeable is theirs to say, not
-ours to assert — and the honest framing is that `avoidable` is **what was
+ours to assert — and the honest framing is that `re-billed` is **what was
 already spent twice**, never a forecast of what a change recovers.
 
 ### 3. Can causes be attributed — `replay corpus`
@@ -127,5 +127,5 @@ a billed week.
    screen, which is slower and answers the same questions.
 2. Is the calibration check moveable earlier? It needs the corpus, and the
    corpus needs redaction, and redaction is the step with wall-clock cost.
-3. What `avoidable` figure is worth a week is unknown, because nobody has sold
+3. What `re-billed` figure is worth a week is unknown, because nobody has sold
    one. It should be recorded after the first, not guessed before it.

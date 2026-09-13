@@ -106,3 +106,22 @@ the re-render share moves 8.1 points in total and the shipped 10% sits 1.5
 points into that range; 589 of 597 classifications land on exact integer
 equality between two provider-reported numbers. **The tolerance is not why the
 number moved.** [Full sweep](rerender-band-sensitivity-2026-09-11.md).
+
+## Appended 2026-09-13: "more than a hundred re-renders" is wrong arithmetic
+
+The sentence above reads: "TTL expiries rare and enormous, about ten times the
+size. A single developer going to lunch costs more than a hundred re-renders."
+
+Those two sentences contradict each other, and the second is wrong. This
+reading's own means are 271,436 tokens for a TTL expiry and 27,232 for a
+re-render, a ratio of **ten**. A hundred re-renders is 2.72M tokens, which is
+ten times larger than the largest cause in the table.
+
+The figure stays as written, because that is the rule. The correction is that
+**one lunch cost about ten re-renders on this reading, and about seven on the
+2026-09-13 reading**, not a hundred.
+
+It went unnoticed for a week and was copied forward into
+[the third reading](break-causes-2026-09-13.md) and into the launch
+announcement. Nobody divided the two numbers printed directly above it,
+including the person who wrote both.

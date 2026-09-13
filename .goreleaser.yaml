@@ -54,6 +54,61 @@ archives:
       - NOTICE
       - README.md
 
+# ── Linux packages ────────────────────────────────────────────────
+#
+# rpm, deb, apk and Arch, attached to the GitHub release. This is the cheapest
+# distribution channel available to a Go binary and it needs no infrastructure:
+# nfpm builds the package, the release carries it, and a user installs it with
+# the tool their machine already has.
+#
+# WHAT THIS IS NOT. It is not a hosted yum or apt repository, so there is no
+# `dnf install replay` from a configured remote and no automatic upgrades. A
+# user downloads a file and installs it. Saying that plainly matters, because
+# "we support rpm" and "we run a repository" are different promises and only
+# the first one is being made here. The second needs a signing key with a
+# lifetime, a repository layout, and somebody to answer for it when a metadata
+# refresh breaks, and none of that exists yet.
+#
+# The dependency list is empty and that is a fact rather than an omission. The
+# binary links nothing outside the standard library, which the zero-dependency
+# badge and the import allowlist in cmd/replay/x402_test.go both enforce, so an
+# rpm that declared Requires would be inventing one.
+nfpms:
+  - id: packages
+    package_name: replay
+    vendor: Red Robot K.K.
+    homepage: https://replay.doctor
+    maintainer: Daniel Saito <hello@redrobot.jp>
+    description: |-
+      Find the turn your coding agent's prompt cache broke, and what it cost.
+      Reads transcripts already on disk. No account, no network call, no telemetry.
+    license: BUSL-1.1
+    formats:
+      - deb
+      - rpm
+      - apk
+      - archlinux
+    bindir: /usr/bin
+    # Only linux is built, so the package formats follow. Darwin users get the
+    # archive or Homebrew, and Windows is refused by the binary itself: see
+    # cmd/replay/platformguard_windows.go.
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/replay/LICENSE
+      - src: NOTICE
+        dst: /usr/share/doc/replay/NOTICE
+      - src: README.md
+        dst: /usr/share/doc/replay/README.md
+    rpm:
+      group: Development/Tools
+    deb:
+      lintian_overrides:
+        # A Go binary is statically linked by construction, and lintian flags
+        # that on every Go package in existence. Overriding it is standard and
+        # is recorded here so the override is a decision rather than noise
+        # somebody silences later without knowing why.
+        - statically-linked-binary
+
 checksum:
   name_template: "checksums.txt"
   algorithm: sha256

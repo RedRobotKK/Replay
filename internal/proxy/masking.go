@@ -176,7 +176,8 @@ func (s *Server) noteRehydration(rec *ledger.Record, h *rehydration) {
 	}
 }
 
-// noteUnmasked warns that secret masking does not cover a path, once per path.
+// noteExperimentalUnmasked labels the OpenAI-compatible family at runtime,
+// once per path.
 //
 // This is the narrower sibling of noteUnparsed and exists for the same reason.
 // Once /v1/chat/completions became readable it stopped being announced as
@@ -184,10 +185,38 @@ func (s *Server) noteRehydration(rec *ledger.Record, h *rehydration) {
 // who ran with --mask would have had every reason to think secrets were being
 // redacted on that traffic. A gap that used to be announced and quietly stops
 // being announced is worse than one that never was.
-func (s *Server) noteUnmasked(path string) {
+//
+// WHY THE LINE CARRIES TWO FACTS RATHER THAN ONE.
+//
+// Masking is the expensive half and it comes first: a credential pasted into a
+// prompt on this path reaches the provider as typed, and the operator's belief
+// to the contrary is the whole damage. But a reader who is told only that will
+// reasonably infer the rest of the path is as settled as the Messages one, and
+// it is not. So the second clause bounds what this family has actually been
+// driven against.
+//
+// The bound is stated as what it is NOT rather than as "a stub only", because
+// "a stub only" is false. A live DeepSeek run on 2026-09-05 exercised four
+// surfaces of this path and caught a defect a stub structurally cannot produce,
+// and a local Ollama exercised it again on 2026-09-09. What has never happened
+// is OpenAI itself, or any third implementation of the same API. Naming the
+// two that did happen is also what makes the sentence checkable: a reader can
+// go and find both runs.
+//
+// WHY IT IS NOT GATED ON THE MASKER.
+//
+// It was, and that made the disclosure conditional on the operator having
+// already suspected the problem. Worse, REPLAY_NO_POLICY=1 clears the mask flag
+// in serve, so the one switch a cautious operator reaches for removed the
+// warning their caution depended on. A label that an ordinary flag turns off is
+// not a label, and RELEASE-CRITERIA.md makes this path's labelling a 1.0 gate
+// precisely because the alternative is implying a parity that does not exist.
+func (s *Server) noteExperimentalUnmasked(path string) {
 	if !s.stats.noteUnmasked(path) || s.cfg.Logger == nil {
 		return
 	}
-	s.cfg.Logger.Printf("NOT MASKED %s: this path is read, guarded and ledgered, but --mask "+
-		"understands only %s, so secrets in this traffic are forwarded in clear.", path, messagesPath)
+	s.cfg.Logger.Printf("EXPERIMENTAL, UNMASKED %s: --mask does not read this body shape, so an API key "+
+		"or any other secret in a request on this path is forwarded to the provider in clear; only %s is "+
+		"masked. This path is verified against DeepSeek and a local Ollama, never against OpenAI itself "+
+		"or any other OpenAI-compatible provider.", path, messagesPath)
 }

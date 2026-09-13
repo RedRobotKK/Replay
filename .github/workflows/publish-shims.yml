@@ -1,0 +1,124 @@
+name: Publish the npm and PyPI shims
+
+# Runs when goreleaser has published a release (release.yml creates it), so the
+# shims can only ever point at a release that exists and is signed. Both jobs
+# download the release assets with gh, verify against checksums.txt in code,
+# and publish with the registries' provenance mechanisms: npm provenance and
+# PyPI Trusted Publishing, both from this workflow's OIDC identity, no long
+# lived tokens.
+#
+# ONE-TIME SETUP, by a human:
+#   npm:  create the package once (npm publish from a laptop is fine for 0.0.1,
+#         or use npm's trusted publishing for RedRobotKK/Replay + this workflow),
+#         then either set NPM_TOKEN (automation token) or rely on trusted
+#         publishing. `id-token: write` is what --provenance needs.
+#   PyPI: create the project replay-doctor and add a trusted publisher:
+#         owner RedRobotKK, repository Replay, workflow publish-shims.yml,
+#         environment pypi.
+#
+# Actions are pinned by SHA, resolved 2026-09-13.
+#
+# The header used to say the SHAs "should be filled in before the first tag that
+# runs this", and that tag was hours away. Five floating refs, and one of them,
+# pypa/gh-action-pypi-publish@release/v1, was a MOVING BRANCH in the job that
+# holds the PyPI Trusted Publishing OIDC token. release.yml pins every action
+# and carries two comments about why floating refs burned this project twice;
+# this file inherited none of it.
+#
+# Nothing enforces the policy. There is no pinning job, actionlint does not
+# check it, and ci.yml runs on push to main and on pull requests, so on a tag
+# push the only workflow that executes is release.yml.
+#
+# Pinned to the SHA of the version ALREADY IN USE rather than to the latest
+# release, deliberately. actions/setup-node is on v4 and the newest is v7;
+# resolving "latest" would have moved two majors silently while claiming to be
+# a safety change. checkout goes to v7's SHA because that is what every other
+# workflow here already uses. gh-action-pypi-publish v1.14.2 is the commit
+# release/v1 points at today, so the pin changes nothing except who decides
+# when it moves.
+
+# TRIGGERED BY THE RELEASE WORKFLOW FINISHING, not by the release being
+# published, and this is the difference between running and never running.
+#
+# It was `release: [published]` until 2026-09-13 and would have fired zero
+# times. goreleaser creates the release using secrets.GITHUB_TOKEN
+# (release.yml), and GitHub does not start workflow runs from events raised by
+# that token. The release would have gone green, been signed, carried all 21
+# assets, and npm and PyPI would have received nothing, with no failure
+# anywhere to notice. The first report would have been a user typing
+# `npx replay-doctor`.
+#
+# workflow_run also fixes the second half of the same problem. `release:
+# published` fires when the release is CREATED, and goreleaser uploads the
+# artifacts afterwards, so the download step would have raced an empty release.
+# Waiting for the whole Release workflow to complete means the assets are there.
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: release tag to publish shims for, e.g. v1.0.0
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  # head_branch is the tag name when the Release run was started by a tag push.
+  TAG: ${{ github.event.workflow_run.head_branch || inputs.tag }}
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    # A failed or cancelled Release must not publish shims pointing at assets
+    # that were never uploaded.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    steps:
+      # ref: the TAG. A bare checkout takes the default branch, which on a
+      # workflow_dispatch is whatever main has moved to, and would publish shim
+      # code from main under the tag's version number.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: { ref: "${{ env.TAG }}" }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: '22', registry-url: 'https://registry.npmjs.org' }
+      - name: Unit tests for the shim
+        run: cd packaging/npm && npm test
+      - name: Download the release assets
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: gh release download "$TAG" -p 'replay_*_*.tar.gz' -p 'checksums.txt' -D dist-release
+      - name: Build the four platform packages, verified against checksums.txt
+        run: node packaging/npm/scripts/build-platform-packages.mjs --version "${TAG#v}" --dist dist-release
+      # Platform packages first, then the main package that depends on them,
+      # so there is never a published main package whose optional dependency
+      # does not exist yet.
+      - name: Publish the platform packages with provenance
+        run: for d in packaging/npm/build/*/; do (cd "$d" && npm publish --provenance --access public); done
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+      - name: Publish replay-doctor with provenance
+        run: cd packaging/npm && npm publish --provenance --access public
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+
+  pypi:
+    runs-on: ubuntu-latest
+    environment: pypi
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: { ref: "${{ env.TAG }}" }
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with: { python-version: '3.12' }
+      - name: Unit tests for the wheel builder
+        # By path, not -m unittest: `packaging` is also an installed PyPI
+        # library on the runner, and the module form imports that one instead.
+        run: python3 packaging/pypi/test_build_wheels.py
+      - name: Download the release assets
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: gh release download "$TAG" -p 'replay_*_*.tar.gz' -p 'checksums.txt' -D dist-release
+      - name: Build one wheel per platform, verified against checksums.txt
+        run: python3 packaging/pypi/build_wheels.py --version "${TAG#v}" --dist dist-release --out wheelhouse
+      - name: Publish with Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with: { packages-dir: wheelhouse/ }

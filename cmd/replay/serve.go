@@ -50,7 +50,9 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	listen := fs.String("listen", defaultListen, "address to bind: a loopback host:port, or unix:///path/to/socket for an owner-only socket")
 	metricsListen := fs.String("metrics-listen", "", "bind a second, read-only listener for /replay/metrics, /replay/status and /replay/healthz. It never proxies. Use it when the proxy is on a socket and a scraper needs a port")
-	upstream := fs.String("upstream", envOr(envUpstream, defaultUpstream), "provider base URL")
+	upstream := fs.String("upstream", envOr(envUpstream, defaultUpstream), "provider base URL. The default is Anthropic, whose "+proxy.MessagesPath+" is the only shape "+
+		"this build masks. Pointing this at an OpenAI-compatible provider routes "+proxy.ChatCompletionsPath+", which is EXPERIMENTAL, UNMASKED: -mask cannot read that "+
+		"body shape, so an API key in one of those requests reaches the provider in clear, and the path is verified against DeepSeek and a local Ollama only")
 	ledgerDir := fs.String("ledger", "", "ledger directory (default ~/.replay/ledger)")
 	token := fs.String("token", "", "require this value in the "+proxy.HeaderToken+" header (or set "+envToken+")")
 	maxSession := fs.Int("max-session-tokens", 0, "refuse a session's next request once it has consumed this many tokens (0 = off)")
@@ -72,7 +74,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	guardrail := fs.Float64("guardrail-reread", 0, "revert the policy from -policy-file for new sessions once treated sessions' re-read rate after the provider's first clear reaches this share (0 = off)")
 	revertAfter := fs.Int("revert-after", proxy.DefaultRevertAfter, "how many sessions must breach the guardrail before the policy is reverted")
 	freezePrefix := fs.Bool("freeze-prefix", false, "EXPERIMENTAL: pin a cc_version in the request body to a same-length constant so the cached prefix does not fork when the client's billing header changes WITHOUT changing length, and label a tool-set epoch from the tools JSON as forwarded. A version string that changes length still forks the prefix ("+envNoPolicy+"=1 forces off)")
-	mask := fs.Bool("mask", false, "EXPERIMENTAL: replace secrets matching the named pattern set with vault placeholders before requests leave the machine, and restore them in responses within -rehydrate-scope (see README)")
+	mask := fs.Bool("mask", false, maskFlagHelp())
 	maskPatterns := fs.String("mask-patterns", "", "file of user-defined patterns for -mask, one per line as name<TAB>regexp")
 	maskEntropy := fs.Bool("mask-entropy", false, "with -mask, also mask runs that look like credentials by shape and entropy. Needs mixed case and digits over "+strconv.Itoa(masking.EntropyMinLength)+" characters, so bare hex and lowercase secrets are NOT caught by shape; those are caught only when a name like TOKEN= or api_key: sits beside them. Reported as pattern "+masking.EntropyPattern)
 	maskTTL := fs.Duration("mask-ttl", masking.DefaultVaultTTL, "with -mask, how long a masked secret stays in the vault before it is evicted. Masking turns a transient secret into one at rest and the vault key sits beside the ciphertext, so this is the window a compromised host hands over. 0 keeps entries forever, which was the behaviour before v0.6 and is the wrong default. Re-sending a secret restores its entry, and the placeholder is unchanged")
@@ -180,6 +182,21 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 			_, _ = fmt.Fprintf(stdout, "masking: on (experimental); rehydration scope %s, project %s\n", rehydrator.Scopes().Default, rehydrator.Scopes().Project)
 		} else if masker != nil {
 			_, _ = fmt.Fprintf(stdout, "masking: on (experimental); rehydration off, placeholders stay in responses\n")
+		}
+		if masker != nil {
+			// Said at the moment the belief forms.
+			//
+			// "masking: on" is the line an operator reads as the answer to
+			// "are my keys safe now", and for the OpenAI-compatible family the
+			// answer is no. The per-path stderr disclosure fires only once
+			// that traffic actually arrives, which can be minutes later and
+			// scrolled past; this one sits directly under the claim it
+			// qualifies. Both exist because neither alone is where the reader
+			// is looking.
+			_, _ = fmt.Fprintf(stdout, "masking: %s is EXPERIMENTAL, UNMASKED and NOT covered; an API key in one of those requests reaches the provider in clear\n", proxy.ChatCompletionsPath)
+			// Finding 3, said where the claim is made rather than only in the
+			// README. See vaultAtRestNotice.
+			_, _ = fmt.Fprintln(stdout, vaultAtRestNotice())
 		}
 		if strings.HasPrefix(*listen, proxy.UnixScheme) {
 			// A socket has no URL, and saying otherwise would send people to

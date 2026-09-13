@@ -59,6 +59,15 @@ said "nothing in Replay is ever behind it" and read wider than the feed it meant
 **sponsorship gates nothing**, and **nothing that is free today ever becomes
 paid**. See [SPONSORS.md](SPONSORS.md) and [the money path](docs/MONEY-PATH.md).
 
+That second promise now names the capability most likely to be caught by it.
+`replay cost --max-rebilled-usd` fails a build on measured re-billed spend, it
+is free, and it stays free. A paid gate is designed in the money path, and it
+has to be a different thing rather than a better version of this one: the free
+gate reads transcripts you already have and refuses on waste that already
+happened, while a paid gate prices the standing cost of a configuration before
+the requests it describes have been made. SPONSORS.md carries the full
+statement.
+
 ## Card
 
 [buymeacoffee.com/saitodaniel](https://buymeacoffee.com/saitodaniel), coffees

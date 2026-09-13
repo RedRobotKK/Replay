@@ -107,7 +107,7 @@ func aCountedMachine() Machine {
 	m := aMachine()
 	m.CostReady = true
 	m.Tasks, m.TotalUSD, m.MedianUSD, m.P90USD = 1599, 3102.84, 0.63, 2.14
-	m.AvoidableUSD, m.AvoidableShare, m.AvoidableTokens = 152.88, 0.05, 41_200_000
+	m.RebilledUSD, m.RebilledShare, m.RebilledTokens = 152.88, 0.05, 41_200_000
 	m.PriceDate, m.CorpusFiles = "2026-06-24", 1614
 	// Task rows, because without them the screen takes the no-breakdown path
 	// and the assertions below measure a branch nobody sees.

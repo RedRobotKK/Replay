@@ -95,7 +95,7 @@ lines are not reliably runnable. So the four `next:` lines there — two of whic
 are genuinely runnable — got skimmed rather than trusted.
 
 **What would have kept me:** the single most valuable command in this tool is
-`replay` with no arguments. It prints `total $3306.29 / avoidable $159.43`.
+`replay` with no arguments. It prints `total $3306.29 / re-billed $159.43`.
 That is the answer to the question I installed the tool to ask. `doctor` — the
 command whose stated job is "what to do next" — never mentions it.
 

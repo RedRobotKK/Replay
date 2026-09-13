@@ -138,7 +138,7 @@ elsewhere in this file. -->
 
 | Flag | Command | Type |
 |---|---|---|
-| `--max-avoidable-usd` | `cost` | float |
+| `--max-rebilled-usd` | `cost` | float |
 | `--peek` | `since` | bool |
 | `--before` | `prefix` | string |
 | `--after` | `prefix` | string |

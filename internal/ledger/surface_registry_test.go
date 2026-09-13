@@ -88,12 +88,22 @@ var surfaces = []Surface{
 	{
 		Client: "Cursor and other OpenAI-compatible CLIs", Wire: "openai:/v1/chat/completions",
 		Status: StatusStub, Fixture: "",
-		Evidence: "CHANGELOG 0.3.0 and docs/SURFACES.md both say verified against a stub " +
-			"and never against a live OpenAI-compatible provider. Masking does not cover " +
-			"this path and the proxy warns at runtime",
+		// The row above holds the live evidence for this wire; what is stub-only
+		// here is the CLIENT half. No Cursor, and no generic OpenAI-compatible
+		// CLI, has ever been pointed at replay serve. That distinction is the
+		// reason these are two rows: the DeepSeek run proves the parser against
+		// real provider bytes and proves nothing about what an unseen client
+		// sends, which is exactly where the SessionHash defect lived.
+		Evidence: "no capture from any OpenAI-compatible CLI exists. docs/SURFACES.md " +
+			"and RELEASE-CRITERIA.md both said this WIRE had never met a live provider " +
+			"until 2026-09-12, which was false and is corrected in both; the DeepSeek row " +
+			"above holds the live bytes. Masking does not cover this path at all, and " +
+			"the proxy prints EXPERIMENTAL, UNMASKED on stderr once per path, " +
+			"unconditionally",
 		Promote: "point one at replay serve on the fleet and capture a real response. " +
-			"RELEASE-CRITERIA.md makes this a v1.0 gate: verified live, or labelled " +
-			"EXPERIMENTAL and UNMASKED wherever it is offered",
+			"RELEASE-CRITERIA.md made this a v1.0 gate: verified live, or labelled " +
+			"EXPERIMENTAL and UNMASKED wherever it is offered. The gate was closed on " +
+			"2026-09-12 by the label, not by the capture, so this row is still STUB",
 	},
 	{
 		Client: "Cursor, transcript path", Wire: "cursor:sqlite",

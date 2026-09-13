@@ -157,9 +157,21 @@ func TestSiblingsAreHeldUntilTheFirstResponseBegins(t *testing.T) {
 			t.Fatalf("%s waited for a sibling and should not have: held_ms by session: %v", id, held)
 		}
 	}
-	if !strings.Contains(logs.String(), "session=sib") || !strings.Contains(logs.String(), " held_ms=") {
-		t.Fatalf("the wait must be logged:\n%s", logs.String())
-	}
+	// WAIT for the log line rather than assuming it is already there.
+	//
+	// This read logs.String() directly and failed once on CI, on 2026-09-13,
+	// having passed the four runs before it. The evidence said what happened:
+	// four log lines, no session=sib among them, and yet held["sib"] above was
+	// correct, so the LEDGER record for sib existed. The test synchronised on
+	// the ledger through waitLedger and then asserted on the log, and the two
+	// are written at different moments. Under load the gap opened.
+	//
+	// Not a data race: logs is a syncBuffer and this job runs -race, which
+	// reported nothing. An ordering assumption, in the test, about the product.
+	waitFor(t, "the sibling wait to reach the log", func() bool {
+		l := logs.String()
+		return strings.Contains(l, "session=sib") && strings.Contains(l, " held_ms=")
+	})
 	st := getStatus(t, base)
 	for _, s := range st.Sessions {
 		if (s.Session == "sib") != (s.Held == 1 && s.HeldMS >= siblingProbe.Milliseconds()) {

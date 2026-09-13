@@ -6,6 +6,34 @@ phrase rather than a test.
 
 ## Where this stands today
 
+**Updated 2026-09-13. Every gate below is closed, and this is still not a
+1.0.**
+
+That sentence is the one worth reading carefully, because the checkboxes now
+say otherwise and a reader who counts them will reach the wrong conclusion.
+Five gates are ticked: the vault key boundary, the OpenAI-compatible path,
+Windows, and the two measurement rules, which turned out not to be gates at all
+and are recorded below as standing rules instead.
+
+**What is left is not in this file.** [`docs/ROADMAP.md`](docs/ROADMAP.md) has
+carried a one-line 1.0 definition since before this document existed, and it
+names three things none of which are ticked anywhere:
+
+| | State, 2026-09-13 |
+|---|---|
+| An external security review, published | **Not commissioned.** Needs a third party and has weeks of lead time |
+| Signed, reproducible releases | Signed, yes: Sigstore keyless bound to the workflow and tag, an SBOM per artifact. **Reproducible is unverified.** Nobody has rebuilt a published tag and compared the bytes, and a reproducibility claim nobody has tried to falsify is the class of claim this project refuses elsewhere |
+| Caching rules for a second provider | **Not started** |
+
+Two of those three cannot be done alone. The review needs a reviewer, and the
+independence problem underneath the second provider needs a corpus from a
+machine that is not this one. **A 1.0 tagged before they land would be a version
+number asserting something nobody checked**, which is the exact defect this file
+was written to prevent.
+
+The older assessment, kept because it is still the honest description of the
+code:
+
 **v0.5.0 is a working tool with a documented threat model. It is not a v1.0.**
 
 The distinction is not code quality. The test posture is strong: every package
@@ -19,8 +47,13 @@ functions across 358 test files against 202 source files, so two of the three
 were wrong by more than double. Fresher counts would rot the same way.
 `go test ./... -count=1` runs what exists, and
 `find . -name '*_test.go' | wc -l` counts the files. What is missing is
-that one security finding is open in part by choice, and one provider path has
-never touched a live provider.
+that one security finding is open in part by choice, and one provider path is
+labelled rather than covered.
+
+That second clause read "one provider path has never touched a live provider"
+until 2026-09-12, and it was wrong: see the correction under the provider
+coverage gate below. The path has touched two live providers. What it has never
+touched is the masker.
 
 **Updated 2026-09-10.** Findings 4, 6 and 7 are closed and finding 3 is closed
 on eviction. Each closure is a test that fails when the guard is removed; the
@@ -35,7 +68,7 @@ Each line is a gate. A release cannot claim 1.0 with any of them unmet, and
 
 ### Security
 
-- [ ] **Finding 3, the vault key boundary.** Half done, 2026-09-10, and the
+- [x] **Finding 3, the vault key boundary.** Half done, 2026-09-10, and the
       remaining half is the one this line is about. Vault entries now expire
       — 24 hours by default, `--mask-ttl` to change it, `0` for the old
       unbounded behaviour — which is the second of the three options below,
@@ -46,6 +79,25 @@ Each line is a gate. A release cannot claim 1.0 with any of them unmet, and
       within the TTL the vault is plaintext-equivalent to anyone who can read
       the directory. A 1.0 needs the key somewhere else, or a README that says
       plainly that masking is a transit control and not storage.
+      **Closed 2026-09-13 by the second route, and the key has not moved.** The
+      keychain is still unreachable for the reason above, and trading the
+      `os/exec` ban for one finding is a worse deal than the finding is worth.
+      The README has carried the sentence since 2026-09-10, and that was the
+      letter of this gate and not the spirit: **the binary never said it.**
+      Somebody who turns on `--mask` because they want secrets protected is
+      exactly the person who has not read the footprint section of a six
+      hundred line README, and a disclosure that lives only in documentation is
+      aimed at the reader who already agrees with it.
+      It is now said twice, in `cmd/replay/vaultdisclosure.go`: on the `-mask`
+      flag, which is the last moment the user can decline, and under the running
+      `masking: on` banner, because that line is what an operator reads as the
+      answer to "are my secrets safe" and a qualification belongs beside the
+      claim it qualifies. It stays silent when masking is off, because warning
+      about a vault the run did not create is how a real disclosure stops being
+      read. Three tests, each mutated red.
+      **This closes the gate and does not close the finding.** The key still
+      sits beside the ciphertext. What changed is that nobody can now turn
+      masking on without being told.
 - [x] **Finding 4, response-side `call_key`.** Closed 2026-09-10.
       `Store.Append` re-keys the response half under the ledger secret, so both
       halves of one ledger have one property. Guarded by
@@ -63,29 +115,98 @@ Each line is a gate. A release cannot claim 1.0 with any of them unmet, and
 
 ### Provider coverage
 
-- [ ] **The OpenAI-compatible path** is either exercised against a live
+- [x] **The OpenAI-compatible path** is either exercised against a live
       provider, or labelled **EXPERIMENTAL, UNMASKED** wherever it is offered.
-      It has only ever run against a test stub, and secret masking does not
-      cover it at all. Shipping it unlabelled implies a parity that does not
-      exist.
+      **Closed 2026-09-12 by the labelling route, not the verification route.**
+      The path is labelled, not newly proven: `/v1/chat/completions` still
+      applies no masking, and no Cursor or other generic OpenAI-compatible CLI
+      has ever been pointed at `replay serve`. What changed is that a reader
+      now meets the label before their first request instead of after it. The
+      label is on the `-upstream` and `-mask` flag help (which is where the
+      path is offered, and where a user who never opens `docs/` will be), on
+      the `masking: on` startup banner, on the `s` screen in the TUI, in
+      `docs/SURFACES.md`, `docs/CLI.md` and the command guide, and on stderr
+      from the proxy itself once per path. Each says what UNMASKED costs in the
+      same breath as the word, because "unmasked" alone does not tell a reader
+      their API keys are in flight. Guarded by
+      `internal/proxy/unmasked_test.go` and `cmd/replay/openailabel_test.go`;
+      three mutations of the runtime disclosure and two of the flag help were
+      run and watched to go red.
+
+      **Correction to this gate's own premise, 2026-09-12.** The sentence that
+      stood here said the path "has only ever run against a test stub". That
+      was false when it was written, and the repository held its own refutation
+      the whole time: `docs/architecture/multi-provider.md` records a live
+      DeepSeek run on 2026-09-05 across four surfaces which caught a defect a
+      stub structurally cannot produce (`RawUsage` was silently dropping
+      `prompt_cache_hit_tokens`), `docs/evidence/ollama-cache-observable-2026-09-09.md`
+      records the same endpoint driven against a local Ollama, and
+      `internal/ledger/testdata/deepseek` holds the captured bytes. The
+      surface registry had it right in `internal/ledger/surface_registry_test.go`,
+      splitting the live DeepSeek row from the stub-only Cursor row, and
+      nothing reconciled the two. What is genuinely unproven is narrower and
+      is what the label now says: never OpenAI itself, never a third
+      implementation of the API, no cache write ever observed in that response
+      shape, and no OpenAI-compatible CLI ever pointed at the proxy. **A gate
+      that overstates its own gap is the same defect as one that hides it**,
+      and it is worse here than elsewhere, because this file is the document
+      that decides what the release is allowed to claim.
 
 ### Platform
 
-- [ ] **Windows is either supported or the claim is removed from CI.** As of
-      2026-09-06 it is declared unsupported in the README, and the job remains in
-      the matrix as a non-blocking signal of how far away support is. Fourteen
-      tests fail, and the ones that matter assert Unix file-mode semantics that
-      guard the ledger and the masking vault. A Windows binary that runs while
-      not keeping those promises is worse than no Windows binary.
+- [x] **Windows is either supported or the claim is removed from CI.** Closed
+      2026-09-13, and every factual claim in the line this replaces was stale.
+      The fourteen failures were fixed on 2026-09-10 and the job has been green
+      and blocking since, which turned out to be the defect rather than the
+      progress: Windows passes because the promise is switched off there.
+      `internal/ownerdir` reports 100% statement coverage on ubuntu and 40% on
+      windows, `modeIsChecked()` returns false so `tighten` never chmods or
+      re-stats, and twenty-two tests across the ledger, the vault, the consent
+      gate and the contributor secret skip with "Unix permission bits". A
+      blocking green check whose greenness comes from disabling what it checks
+      is what ADR-0014 exists to forbid.
+      **The binary now refuses on Windows**, so "unsupported" is something the
+      program does rather than a line in a README, and two tests hold it: the
+      refusal fires, and `run()` still consults it. The route that made it
+      reachable is closed too, because install.sh refused Windows while offering
+      a release archive that does not exist and a `go install` that works.
+      The port is not refused on difficulty. An owner-only DACL needs no new
+      dependency, since `syscall` and `unsafe` are already on the import
+      allowlist. It is refused on evidence: `guard reachability` and
+      `frozen mutants` both run on ubuntu only, so every refusal in an ACL layer
+      would ship unmutated. **A Windows leg on those two jobs is the condition
+      that reopens this**, and it is the only thing that should.
 
-### Measurement
+### Measurement, which is a standing rule rather than a gate
 
-- [ ] **No headline figure without the instrument that produced it being
+**Restructured 2026-09-13.** These two were checkboxes and could never be
+ticked, because they do not describe work that finishes. They bind every figure
+this project publishes from now on, including figures that do not exist yet, so
+a box beside them would either stay open forever and block 1.0 on nothing, or
+be ticked dishonestly the first time somebody wanted to ship.
+
+They are the reason the gates above exist rather than items among them. A
+release cannot satisfy them; a release can only be shipped by somebody
+currently obeying them.
+
+- **No headline figure without the instrument that produced it being
       checked first.** This release exists partly because a 98.8% claim was
       shipped from a classifier that compared each agent lane against a
       different one. The rule is not "measure more", it is: before a number
       goes in a README, a commit message or a card, something must have tried
       to falsify the instrument.
+- **The same rule binds commercial figures, and until 2026-09-13 it did
+      not.** A price is a headline figure. `docs/MONEY-PATH.md` carried a $199
+      per repository list price derived by applying a 1 to 3 percent comparable
+      to $13,000 a month of *unreachable capacity*, which is not spend the
+      customer makes, and no instrument had been pointed at it. A twelve-person
+      review found the term change between two paragraphs. The list price is now
+      marked provisional and is published nowhere a launch reader sees it, and
+      the falsifier is pre-registered in that document: if a Van Westendorp
+      series over about ten people who have actually run the tool clusters "too
+      expensive" below $99, the section is corrected rather than defended.
+      **A number nobody has tried to falsify does not become exempt by being
+      about money.**
 
 ## Deliberately NOT gates
 

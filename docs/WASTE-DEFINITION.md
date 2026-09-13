@@ -32,7 +32,7 @@ I had five and called them all waste. **Only two survive.**
 
 **So the honest split is three tiers, not one bucket:**
 
-- **Avoidable** — cache breaks, true duplicate re-reads, identical repeated calls. Strictly better if
+- **Re-billed** — cache breaks, true duplicate re-reads, identical repeated calls. Strictly better if
   removed. **This is the only tier that should ever be called waste.**
 - **Priced trades** — fan-out, unused tools, retries. Cost bought something: latency, flexibility,
   resilience. Report the price, never the verdict.
@@ -80,7 +80,7 @@ That is a real market and a smaller one. **It should not be the headline.**
 
 ## What this changes
 
-**In the tool.** Report avoidable spend and priced trades in separate columns, never one total. A
+**In the tool.** Report re-billed spend and priced trades in separate columns, never one total. A
 number that mixes "you could have had this for free" with "you bought latency" is not a measurement,
 it is an opinion with a decimal point.
 

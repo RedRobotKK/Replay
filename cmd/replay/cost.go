@@ -63,17 +63,17 @@ type costUnit struct {
 	// Lanes is how many agent lanes were folded into this row. Present only on
 	// a session row, where it is the fan-out, and it is the number that makes
 	// the difference between the two units visible instead of inferred.
-	Lanes           int     `json:"lanes,omitempty"`
-	Model           string  `json:"model"`
-	Requests        int     `json:"requests"`
-	CostUSD         float64 `json:"costUsd"`
-	UncachedUSD     float64 `json:"uncachedUsd,omitempty"`
-	WriteUSD        float64 `json:"cacheWriteUsd,omitempty"`
-	ReadUSD         float64 `json:"cacheReadUsd,omitempty"`
-	OutputUSD       float64 `json:"outputUsd,omitempty"`
-	AvoidableUSD    float64 `json:"avoidableUsd"`
-	AvoidableTokens int     `json:"avoidableTokens,omitempty"`
-	Breaks          int     `json:"breaks"`
+	Lanes          int     `json:"lanes,omitempty"`
+	Model          string  `json:"model"`
+	Requests       int     `json:"requests"`
+	CostUSD        float64 `json:"costUsd"`
+	UncachedUSD    float64 `json:"uncachedUsd,omitempty"`
+	WriteUSD       float64 `json:"cacheWriteUsd,omitempty"`
+	ReadUSD        float64 `json:"cacheReadUsd,omitempty"`
+	OutputUSD      float64 `json:"outputUsd,omitempty"`
+	RebilledUSD    float64 `json:"rebilledUsd"`
+	RebilledTokens int     `json:"rebilledTokens,omitempty"`
+	Breaks         int     `json:"breaks"`
 	// MixedEpochs is set when this session's requests ran under more than one
 	// labelled tool-set epoch, so its total is a sum across tool sets rather
 	// than one as-run figure. Empty on every session recorded without
@@ -103,23 +103,23 @@ type costUnit struct {
 // accidentally be handed lanes. The lane figures themselves are copied
 // unchanged — this is a renaming, not a second calculation.
 type costLaneRow struct {
-	Lane            string    `json:"lane,omitempty"`
-	OfSession       string    `json:"ofSession"`
-	Model           string    `json:"model"`
-	Requests        int       `json:"requests"`
-	CostUSD         float64   `json:"costUsd"`
-	AvoidableUSD    float64   `json:"avoidableUsd"`
-	AvoidableTokens int       `json:"avoidableTokens,omitempty"`
-	Breaks          int       `json:"breaks"`
-	At              time.Time `json:"at"`
+	Lane           string    `json:"lane,omitempty"`
+	OfSession      string    `json:"ofSession"`
+	Model          string    `json:"model"`
+	Requests       int       `json:"requests"`
+	CostUSD        float64   `json:"costUsd"`
+	RebilledUSD    float64   `json:"rebilledUsd"`
+	RebilledTokens int       `json:"rebilledTokens,omitempty"`
+	Breaks         int       `json:"breaks"`
+	At             time.Time `json:"at"`
 }
 
 func laneRows(units []costUnit) []costLaneRow {
 	rows := make([]costLaneRow, 0, len(units))
 	for _, u := range units {
 		rows = append(rows, costLaneRow{Lane: u.Lane, OfSession: u.ID, Model: u.Model,
-			Requests: u.Requests, CostUSD: u.CostUSD, AvoidableUSD: u.AvoidableUSD,
-			AvoidableTokens: u.AvoidableTokens, Breaks: u.Breaks, At: u.At})
+			Requests: u.Requests, CostUSD: u.CostUSD, RebilledUSD: u.RebilledUSD,
+			RebilledTokens: u.RebilledTokens, Breaks: u.Breaks, At: u.At})
 	}
 	return rows
 }
@@ -145,8 +145,8 @@ const unitMain = "main"
 // Which fields may be summed was checked one at a time, because the fast way
 // to get an aggregation wrong is to sum something that is not a quantity:
 //
-//	requests, breaks, avoidableTokens  counts of events within one lane. Additive.
-//	costUsd, avoidableUsd              money already spent on that lane. Additive.
+//	requests, breaks, rebilledTokens  counts of events within one lane. Additive.
+//	costUsd, rebilledUsd              money already spent on that lane. Additive.
 //	at                                 a point in time, not a quantity. A session
 //	                                   began when its earliest lane began, so this
 //	                                   is a minimum, never a sum and never a mean.
@@ -157,7 +157,7 @@ const unitMain = "main"
 //	                                   why the route line is still derived from
 //	                                   every lane rather than from these rows.
 //
-// No rate or percentile passes through here. avoidableShare, the median and
+// No rate or percentile passes through here. rebilledShare, the median and
 // the p90 are all derived in summarise from the rows this returns, so folding
 // cannot silently average an average.
 //
@@ -209,8 +209,8 @@ func foldSessions(units []costUnit) []costUnit {
 		s.WriteUSD += u.WriteUSD
 		s.ReadUSD += u.ReadUSD
 		s.OutputUSD += u.OutputUSD
-		s.AvoidableUSD += u.AvoidableUSD
-		s.AvoidableTokens += u.AvoidableTokens
+		s.RebilledUSD += u.RebilledUSD
+		s.RebilledTokens += u.RebilledTokens
 		s.Breaks += u.Breaks
 		s.Repeated += u.Repeated
 		s.Errored += u.Errored
@@ -266,17 +266,17 @@ type costSummary struct {
 	// actually read and priced. On a session-unit report it is the larger
 	// number and printing both is what stops either being mistaken for the
 	// other. On a lane-unit report it equals Tasks.
-	Lanes          int     `json:"lanes"`
-	TotalUSD       float64 `json:"totalUsd"`
-	UncachedUSD    float64 `json:"uncachedUsd,omitempty"`
-	WriteUSD       float64 `json:"cacheWriteUsd,omitempty"`
-	ReadUSD        float64 `json:"cacheReadUsd,omitempty"`
-	OutputUSD      float64 `json:"outputUsd,omitempty"`
-	MedianUSD      float64 `json:"medianUsd"`
-	P90USD         float64 `json:"p90Usd"`
-	AvoidableUSD   float64 `json:"avoidableUsd"`
-	AvoidableShare float64 `json:"avoidableShare"`
-	// AvoidableTokens is the same waste before it is multiplied by a price.
+	Lanes         int     `json:"lanes"`
+	TotalUSD      float64 `json:"totalUsd"`
+	UncachedUSD   float64 `json:"uncachedUsd,omitempty"`
+	WriteUSD      float64 `json:"cacheWriteUsd,omitempty"`
+	ReadUSD       float64 `json:"cacheReadUsd,omitempty"`
+	OutputUSD     float64 `json:"outputUsd,omitempty"`
+	MedianUSD     float64 `json:"medianUsd"`
+	P90USD        float64 `json:"p90Usd"`
+	RebilledUSD   float64 `json:"rebilledUsd"`
+	RebilledShare float64 `json:"rebilledShare"`
+	// RebilledTokens is the same waste before it is multiplied by a price.
 	//
 	// The dollar figure is meaningless to a flat-seat subscriber, who is not
 	// billed per token and is most of the readership. The tokens are what they
@@ -284,7 +284,7 @@ type costSummary struct {
 	// tokens go on to cost such a reader is a quota question, and the one
 	// measurement of it came back null (README.md:228-235). The deficit was
 	// always in tokens first, and in tokens is where it can be stated.
-	AvoidableTokens int `json:"avoidableTokens,omitempty"`
+	RebilledTokens int `json:"rebilledTokens,omitempty"`
 	// MixedEpochSessions counts sessions whose total spans more than one
 	// labelled tool-set epoch. Such a total is still the sum of what was
 	// spent; it is simply not one as-run, and a reader comparing it against
@@ -301,7 +301,7 @@ type costSummary struct {
 //
 // Deliberately no mean: one very long session drags it somewhere no real task
 // lives, and a median with a p90 beside it describes the actual distribution of
-// work. The avoidable share is a share of what was priced, never of what was
+// work. The re-billed share is a share of what was priced, never of what was
 // merely walked past.
 // requestIDs collects a session's request ids across every lane, marking each
 // as seen and counting the ones another file already carried.
@@ -355,7 +355,7 @@ func summarise(units []costUnit) costSummary {
 	}
 	s.Route = routeLine(models)
 	for _, u := range units {
-		s.AvoidableTokens += u.AvoidableTokens
+		s.RebilledTokens += u.RebilledTokens
 		if u.MixedEpochs {
 			s.MixedEpochSessions++
 		}
@@ -367,7 +367,7 @@ func summarise(units []costUnit) costSummary {
 		s.WriteUSD += u.WriteUSD
 		s.ReadUSD += u.ReadUSD
 		s.OutputUSD += u.OutputUSD
-		s.AvoidableUSD += u.AvoidableUSD
+		s.RebilledUSD += u.RebilledUSD
 		costs = append(costs, u.CostUSD)
 	}
 	sort.Float64s(costs)
@@ -375,7 +375,7 @@ func summarise(units []costUnit) costSummary {
 	s.MedianUSD = percentile(costs, 0.5)
 	s.P90USD = percentile(costs, 0.9)
 	if s.TotalUSD > 0 {
-		s.AvoidableShare = s.AvoidableUSD / s.TotalUSD
+		s.RebilledShare = s.RebilledUSD / s.TotalUSD
 	}
 	return s
 }
@@ -449,15 +449,15 @@ func renderCost(s costSummary, unpriced, unreadable int, out io.Writer, stateDir
 	}
 	fmt.Fprintf(&b, "  median %-8s%s\n", noun, fxCol(fx, s.MedianUSD))
 	fmt.Fprintf(&b, "  p90 %-11s%s\n", noun, fxCol(fx, s.P90USD))
-	fmt.Fprintf(&b, "  avoidable      %s  (%.0f%% of the total)\n", fxCol(fx, s.AvoidableUSD), s.AvoidableShare*100)
-	if s.AvoidableTokens > 0 {
-		fmt.Fprintf(&b, "                 %s tokens re-billed\n", shortTokens(s.AvoidableTokens))
+	fmt.Fprintf(&b, "  re-billed      %s  (%.0f%% of the total)\n", fxCol(fx, s.RebilledUSD), s.RebilledShare*100)
+	if s.RebilledTokens > 0 {
+		fmt.Fprintf(&b, "                 %s tokens re-billed\n", shortTokens(s.RebilledTokens))
 	}
 	if n := fx.Note(); n != "" {
 		fmt.Fprintf(&b, "\n%s\n", wrapAt(n, 78, ""))
 	}
-	fmt.Fprintf(&b, "\nAvoidable is the part nobody chose: tokens re-billed because a prompt cache\nbroke. It is not a forecast of savings, it is what was already spent twice.\n")
-	if s.AvoidableTokens > 0 {
+	fmt.Fprintf(&b, "\nRe-billed is the part nobody chose: tokens billed twice because a prompt cache\nbroke. It is not a forecast of savings, it is what was already spent twice.\n")
+	if s.RebilledTokens > 0 {
 		// What this paragraph may and may not assert.
 		//
 		// It may say what re-billed tokens ARE: that is arithmetic from the
@@ -511,11 +511,11 @@ func renderCost(s costSummary, unpriced, unreadable int, out io.Writer, stateDir
 	ask := true
 	if stateDir != "" {
 		arm = tipVariant(tipSeed(stateDir))
-		ask = shouldAsk(stateDir, s.AvoidableUSD, time.Now())
+		ask = shouldAsk(stateDir, s.RebilledUSD, time.Now())
 	}
-	if tip := tipLineArm(arm, s.AvoidableUSD, canHyperlink(out)); ask && tip != "" {
+	if tip := tipLineArm(arm, s.RebilledUSD, canHyperlink(out)); ask && tip != "" {
 		if stateDir != "" {
-			noteAsked(stateDir, s.AvoidableUSD, time.Now())
+			noteAsked(stateDir, s.RebilledUSD, time.Now())
 		}
 		b.WriteString(tip)
 	} else {
@@ -542,10 +542,10 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	perLane := fs.Bool("per-lane", false, "report agent lanes instead of sessions: a session that spawned sub-agents wrote one transcript per lane, and this is the fan-out view of them")
 	since := fs.String("compare", "", "split at this date (YYYY-MM-DD) and report cost per task before and after")
 	predicted := fs.Float64("predicted", 0, "with --compare, the fractional change you predicted (e.g. -0.2 for a 20% saving)")
-	maxAvoidable := fs.Float64("max-avoidable-usd", 0,
-		"fail the build when measured avoidable spend exceeds this many dollars (0 = off). "+
+	maxRebilled := fs.Float64("max-rebilled-usd", 0,
+		"fail the build when measured re-billed spend exceeds this many dollars (0 = off). "+
 			"Refuses to pass when nothing was priced")
-	share := fs.Bool("share", false, "print a paste-ready summary: the avoidable rate and the task spread, with no spend total, no paths and no project names")
+	share := fs.Bool("share", false, "print a paste-ready summary: the re-billed rate and the task spread, with no spend total, no paths and no project names")
 	png := fs.String("png", "", "with --share, also write the same figures as a 1200x630 social card at this path")
 	design := fs.String("card", "", "which card design --png writes: b (the dark receipt) or c (the paper statement, the default)")
 	tone := fs.String("tone", "", "the register the card is written in: measured (what was found, stated, the default) or rekt (the same figures, exact and deadpan)")
@@ -568,7 +568,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		if err := usageOnlyRefusals(*share, *png, *since, *contributeTo, *perLane, fs.Args()); err != nil {
 			return err
 		}
-		return runCostUsage(*usageOnly, *asJSON, *perTask, *maxAvoidable, stdout)
+		return runCostUsage(*usageOnly, *asJSON, *perTask, *maxRebilled, stdout)
 	}
 	// Resolved before any transcript is read, so a typo in --card costs
 	// nothing and is reported as what it is rather than after a full scan.
@@ -604,12 +604,12 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			// to report and that is a fact about the machine, not a failure of
 			// the command, so the exit status says so.
 			//
-			// Unless a ceiling was asked for. Passing --max-avoidable-usd is a
+			// Unless a ceiling was asked for. Passing --max-rebilled-usd is a
 			// request to assert that spend is under a number, and that cannot
 			// be asserted over nothing: a CI runner has no transcripts, so a
 			// gate that stayed silent here would go green having measured
 			// nothing, which is the failure this flag exists to prevent.
-			return checkAvoidableCeiling(*maxAvoidable, costSummary{Unit: unitSession}, 0, 0, stdout)
+			return checkRebilledCeiling(*maxRebilled, costSummary{Unit: unitSession}, 0, 0, stdout)
 		}
 		_, _ = fmt.Fprintf(stderr, "reading %s\n", roots[0])
 		args = append(args, roots...)
@@ -691,12 +691,12 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 
 			MixedEpochs: asRun.MixedEpochs(),
 		}
-		// Breaks, re-reads, errors and the avoidable deficit are counted over
+		// Breaks, re-reads, errors and the re-billed deficit are counted over
 		// every lane too. Fixing the dollar figure and leaving these on the
 		// main lane would report a session's whole cost beside a fraction of
 		// its causes — the same defect one column over, and the more
 		// misleading direction: a total that tripled beside an unchanged
-		// avoidable figure reads as "the waste got proportionally smaller".
+		// re-billed figure reads as "the waste got proportionally smaller".
 		//
 		// One analysis pass, reused for all four, because a second walk of a
 		// seventeen-lane session is the expensive thing here.
@@ -715,8 +715,8 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		// is tokens the provider re-billed, which is spend that already
 		// happened, not a projection of what a different layout might save.
 		if price, ok := cachemodel.PriceForAt(model, u.At); ok {
-			u.AvoidableUSD = float64(deficit) / 1_000_000 * price.InputPerMTok
-			u.AvoidableTokens = deficit
+			u.RebilledUSD = float64(deficit) / 1_000_000 * price.InputPerMTok
+			u.RebilledTokens = deficit
 		}
 		u.UncachedUSD = asRun.UncachedUSD
 		u.WriteUSD = asRun.WriteUSD
@@ -762,7 +762,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	}
 
 	s := summarise(units)
-	gateCeiling := *maxAvoidable
+	gateCeiling := *maxRebilled
 	s.Unit, s.Lanes = unit, lanesRead
 	// The route is the one summary field that must not be derived from the
 	// rows.
@@ -809,7 +809,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		}
 		f := corpusFigures{
 			Tasks: s.Tasks, Unpriced: unpriced, TotalUSD: s.TotalUSD,
-			AvoidableUSD: s.AvoidableUSD, AvoidableShare: s.AvoidableShare,
+			RebilledUSD: s.RebilledUSD, RebilledShare: s.RebilledShare,
 			MedianTaskUSD: s.MedianUSD,
 			CacheBreaks:   &breaks,
 			ReReads:       &repeated,
@@ -858,7 +858,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		// Same guard, same figures, one extra: the peak row's re-billed tokens,
 		// which the picture needs and the text card does not carry. See
 		// sharepng.go for why it is a peak and not the corpus sum.
-		return writeCard(*png, variant, register, cardData(s, breaks, peakAvoidableTokens(units)), stderr)
+		return writeCard(*png, variant, register, cardData(s, breaks, peakRebilledTokens(units)), stderr)
 	}
 
 	if *asJSON {
@@ -957,21 +957,21 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		// JSON defect looked like.
 		if *perLane {
 			_, _ = fmt.Fprintf(stdout, "\n  %-10s %-10s %-24s %8s %10s %10s %7s\n",
-				"lane", "of session", "model", "requests", "cost", "avoidable", "breaks")
+				"lane", "of session", "model", "requests", "cost", "re-billed", "breaks")
 			for _, u := range units {
 				_, _ = fmt.Fprintf(stdout, "  %-10s %-10s %-24s %8d %10s %10s %7d\n", u.Lane, u.ID, u.Model,
-					u.Requests, fmt.Sprintf("$%.2f", u.CostUSD), fmt.Sprintf("$%.2f", u.AvoidableUSD), u.Breaks)
+					u.Requests, fmt.Sprintf("$%.2f", u.CostUSD), fmt.Sprintf("$%.2f", u.RebilledUSD), u.Breaks)
 			}
 			return nil
 		}
 		_, _ = fmt.Fprintf(stdout, "\n  %-10s %5s %-24s %8s %10s %10s %7s\n",
-			"session", "lanes", "model", "requests", "cost", "avoidable", "breaks")
+			"session", "lanes", "model", "requests", "cost", "re-billed", "breaks")
 		for _, u := range units {
 			_, _ = fmt.Fprintf(stdout, "  %-10s %5d %-24s %8d %10s %10s %7d\n", u.ID, u.Lanes, u.Model,
-				u.Requests, fmt.Sprintf("$%.2f", u.CostUSD), fmt.Sprintf("$%.2f", u.AvoidableUSD), u.Breaks)
+				u.Requests, fmt.Sprintf("$%.2f", u.CostUSD), fmt.Sprintf("$%.2f", u.RebilledUSD), u.Breaks)
 		}
 	}
-	return checkAvoidableCeiling(gateCeiling, s, unpriced, unreadable, stdout)
+	return checkRebilledCeiling(gateCeiling, s, unpriced, unreadable, stdout)
 }
 
 // sessionTime is when a session ran, taken from its first request.

@@ -825,14 +825,14 @@ func costState(m tui.Machine) tui.Machine {
 	// screen cannot pick up a field under a name the report stopped using.
 	var out struct {
 		Tasks []struct {
-			Session         string  `json:"session"`
-			Lanes           int     `json:"lanes"`
-			Model           string  `json:"model"`
-			Requests        int     `json:"requests"`
-			CostUSD         float64 `json:"costUsd"`
-			AvoidableUSD    float64 `json:"avoidableUsd"`
-			AvoidableTokens int     `json:"avoidableTokens"`
-			Breaks          int     `json:"breaks"`
+			Session        string  `json:"session"`
+			Lanes          int     `json:"lanes"`
+			Model          string  `json:"model"`
+			Requests       int     `json:"requests"`
+			CostUSD        float64 `json:"costUsd"`
+			RebilledUSD    float64 `json:"rebilledUsd"`
+			RebilledTokens int     `json:"rebilledTokens"`
+			Breaks         int     `json:"breaks"`
 		} `json:"tasks"`
 		Summary costSummary `json:"summary"`
 	}
@@ -850,8 +850,8 @@ func costState(m tui.Machine) tui.Machine {
 	m.CostReady = true
 	m.Tasks = sm.Tasks
 	m.TotalUSD, m.MedianUSD, m.P90USD = sm.TotalUSD, sm.MedianUSD, sm.P90USD
-	m.AvoidableUSD, m.AvoidableShare = sm.AvoidableUSD, sm.AvoidableShare
-	m.AvoidableTokens = sm.AvoidableTokens
+	m.RebilledUSD, m.RebilledShare = sm.RebilledUSD, sm.RebilledShare
+	m.RebilledTokens = sm.RebilledTokens
 	m.PriceDate = cachemodel.PriceTableVersion
 	m.CorpusFiles = m.Transcripts
 
@@ -865,9 +865,7 @@ func costState(m tui.Machine) tui.Machine {
 	breaks, peak := 0, 0
 	for _, t := range out.Tasks {
 		breaks += t.Breaks
-		if t.AvoidableTokens > peak {
-			peak = t.AvoidableTokens
-		}
+		peak = higher(peak, t.RebilledTokens)
 	}
 	m.Card, m.ShareOK = shareFrom(sm, breaks, peak)
 
@@ -880,7 +878,7 @@ func costState(m tui.Machine) tui.Machine {
 	for _, t := range out.Tasks {
 		m.TaskRows = append(m.TaskRows, tui.Task{
 			Session: t.Session, Model: t.Model, CostUSD: t.CostUSD,
-			Breaks: t.Breaks, Requests: t.Requests, Avoidable: t.AvoidableUSD,
+			Breaks: t.Breaks, Requests: t.Requests, Rebilled: t.RebilledUSD,
 			Path: index[t.Session],
 		})
 	}
@@ -1063,4 +1061,17 @@ func liveState() tui.Live {
 		})
 	}
 	return l
+}
+
+// higher returns the larger of two counts.
+//
+// Extracted because `guard reachability` found the comparison it replaces ran
+// with nothing depending on the result: peak feeds the share card's headline
+// number, and no test asserted it was the maximum rather than the last value
+// seen. A card that publishes the wrong peak publishes it in public.
+func higher(a, b int) int {
+	if b > a {
+		return b
+	}
+	return a
 }

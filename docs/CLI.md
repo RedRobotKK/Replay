@@ -82,12 +82,12 @@ Cost per task from transcripts already on disk.
 | `-contribute` | string | build a corpus submission for this campaign from the figures below; writes a file, sends nothing. Unlike the probe submission, this one CARRIES SPEND |
 | `-contribute-dir` | string | where --contribute writes its file (default ".") |
 | `-json` | bool | emit the figures as JSON |
-| `-max-avoidable-usd` | float | fail the build when measured avoidable spend exceeds this many dollars (0 = off). Refuses to pass when nothing was priced |
+| `-max-rebilled-usd` | float | fail the build when measured re-billed spend exceeds this many dollars (0 = off). Refuses to pass when nothing was priced |
 | `-per-lane` | bool | report agent lanes instead of sessions: a session that spawned sub-agents wrote one transcript per lane, and this is the fan-out view of them |
 | `-per-task` | bool | list every priced session, most expensive first |
 | `-png` | string | with --share, also write the same figures as a 1200x630 social card at this path |
 | `-predicted` | float | with --compare, the fractional change you predicted (e.g. -0.2 for a 20% saving) |
-| `-share` | bool | print a paste-ready summary: the avoidable rate and the task spread, with no spend total, no paths and no project names |
+| `-share` | bool | print a paste-ready summary: the re-billed rate and the task spread, with no spend total, no paths and no project names |
 | `-tone` | string | the register the card is written in: measured (what was found, stated, the default) or rekt (the same figures, exact and deadpan) |
 | `-usage` | string | price a usage export instead of transcripts: token counts per request, no conversation content. Figures that cannot be sourced from token counts alone print NOT MEASURED rather than zero |
 
@@ -141,7 +141,7 @@ Local proxy: forwards to the provider, records a ledger.
 | `-listen` | string | address to bind: a loopback host:port, or unix:///path/to/socket for an owner-only socket (default "127.0.0.1:4000") |
 | `-loop-block` | int | refuse the request when one identical tool call repeats this many times (0 = off) |
 | `-loop-warn` | int | add a warning header when one identical tool call repeats this many times (0 = off) |
-| `-mask` | bool | EXPERIMENTAL: replace secrets matching the named pattern set with vault placeholders before requests leave the machine, and restore them in responses within -rehydrate-scope (see README) |
+| `-mask` | bool | EXPERIMENTAL: replace secrets matching the named pattern set with vault placeholders before requests leave the machine, and restore them in responses within -rehydrate-scope (see README). It reads /v1/messages and nothing else: /v1/chat/completions is EXPERIMENTAL, UNMASKED, so secrets in OpenAI-compatible traffic are forwarded to the provider in clear even with this on, and the proxy says so on stderr once per path. It also writes what it masks to a vault under ~/.replay, which puts a credential at rest that was not at rest before, and the vault key file sits in that same directory: this is a control on what leaves the machine, not storage, and anyone who can read the directory within the retention window can read the secrets |
 | `-mask-entropy` | bool | with -mask, also mask runs that look like credentials by shape and entropy. Needs mixed case and digits over 32 characters, so bare hex and lowercase secrets are NOT caught by shape; those are caught only when a name like TOKEN= or api_key: sits beside them. Reported as pattern entropy |
 | `-mask-patterns` | string | file of user-defined patterns for -mask, one per line as name<TAB>regexp |
 | `-mask-ttl` | duration | with -mask, how long a masked secret stays in the vault before it is evicted. Masking turns a transient secret into one at rest and the vault key sits beside the ciphertext, so this is the window a compromised host hands over. 0 keeps entries forever, which was the behaviour before v0.6 and is the wrong default. Re-sending a secret restores its entry, and the placeholder is unchanged (default 24h0m0s) |
@@ -160,7 +160,7 @@ Local proxy: forwards to the provider, records a ledger.
 | `-revert-after` | int | how many sessions must breach the guardrail before the policy is reverted (default 2) |
 | `-token` | string | require this value in the x-replay-token header (or set REPLAY_TOKEN) |
 | `-trial-share` | float | share of new sessions that get the policy from -policy-file; the rest run as controls (stable per session id) (default 1) |
-| `-upstream` | string | provider base URL (default "`https://api.anthropic.com`") |
+| `-upstream` | string | provider base URL. The default is Anthropic, whose /v1/messages is the only shape this build masks. Pointing this at an OpenAI-compatible provider routes /v1/chat/completions, which is EXPERIMENTAL, UNMASKED: -mask cannot read that body shape, so an API key in one of those requests reaches the provider in clear, and the path is verified against DeepSeek and a local Ollama only (default "`https://api.anthropic.com`") |
 
 ### tui
 

@@ -150,11 +150,15 @@ func Outcome(key rune) Screen {
 			Row(safeCols, "path", "parsed", "masked"),
 			Row(safeCols, "------------------------", "----------------", "----------------"),
 			Row(safeCols, "/v1/messages", "yes", "yes, 14 rules"),
-			Row(safeCols, "/v1/chat/completions", "against a stub", "no"),
+			Row(safeCols, "/v1/chat/completions", "yes", "NO, in clear"),
 			Row(safeCols, "/responses", "no", "no"),
 			"",
-			"  ! a path Replay does not parse cannot be masked. If you point a Grok",
-			"    or OpenAI-compatible client here, its payloads are forwarded whole.",
+			"  ! /v1/chat/completions is EXPERIMENTAL, UNMASKED. It is parsed, so the",
+			"    caps and the ledger apply, but --mask never runs on it: an API key",
+			"    in one of those prompts reaches the provider exactly as you typed it.",
+			"",
+			"  ! a path Replay does not parse cannot be masked either. If you point a",
+			"    Grok or other unknown client here, its payloads are forwarded whole.",
 			"",
 			"  corpus contribution  refused, 2026-09-04    update checks  undecided")
 	case 'd':

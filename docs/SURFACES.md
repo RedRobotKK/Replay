@@ -23,7 +23,7 @@ of the document.
 | `~/.replay/advice.json` | write | `advise` output. **Contains raw tool names and file base names** taken from your transcripts | Read |
 | `~/.replay/vault/vault.tmp` | write | Fixed-path temp file, rewritten per newly-seen secret. The §3b claim of "no predictable-path temp file" was true of `os.TempDir` and wrong as a conclusion | Read |
 | `~/.replay/cost-index.json` | **read and write** | Added 2026-09-06. `replay cost`'s transcript index: per file, its size, modification time, the priced unit derived from it, and the provider request ids used to detect overlap between lanes. **Entries are keyed by the transcript's full path**, so like `advice.json` above it this file names your projects — no message text, but not path-free either. `0600`, directory `0700`, written atomically through a `.tmp` sibling. Discarded wholesale when the price table or rules version changes, and treated as a cache miss when unreadable, so deleting it costs one slow run and nothing else | Read |
-| `~/.replay/tip.json` | **read and write** | Added 2026-09-06. When the tip line was last shown, the avoidable amount at that moment, and a random 16-byte seed minted once on this machine to pick between two wordings. The seed is random and local on purpose: a hostname or a hardware id would be an identifier, and this needs to be a stable coin flip and nothing more. `0600`, directory `0700`. Nothing here is transmitted — the binary has no path to send it | Read |
+| `~/.replay/tip.json` | **read and write** | Added 2026-09-06. When the tip line was last shown, the re-billed amount at that moment, and a random 16-byte seed minted once on this machine to pick between two wordings. The seed is random and local on purpose: a hostname or a hardware id would be an identifier, and this needs to be a stable coin flip and nothing more. `0600`, directory `0700`. Nothing here is transmitted — the binary has no path to send it | Read |
 | `~/.replay/measurements.jsonl` | write | `probe --record` (on by default when `--execute` runs). Append-only, owner-only, never rewritten: the bracket, method version, documented figure, provenance and any anomalies for each probe run. `--record -` disables it | Read |
 | `~/.replay/rules.json` | **read and write** | Written by `rules --update`, read at startup by every command that prices anything. Like `policy.json`, anything that can write this file changes the figures Replay reports — and unlike it, a wrong file here is refused at load rather than trusted | Read |
 | `$GOMODCACHE`, `$GOCACHE` | write | **Only via the installer's `go install` fallback**, which since v0.1.2 runs only when the releases API reports nothing published. Hundreds of MB | Read |
@@ -34,7 +34,7 @@ of the document.
 | `~/.replay/seen.json` | **read and write** | One timestamp: when `replay since` last reported (`cmd/replay/since.go:37`) | **Added 2026-09-10** |
 | `~/.replay/archive/` | write | Ledger records rotated out of the active directory. Same shape, same absence of content | **Added 2026-09-10** |
 | any directory `serve --ledger` names | write | The ledger path is a flag, so a second upstream gets a second directory beside `~/.replay/ledger`. **Its HMAC label key is per-directory**, so the same file is not comparable across them | **Added 2026-09-10** |
-| `<--contribute-dir>`, default the working directory | write | The corpus submission JSON (`internal/observation/corpus.go:212`), `0600`. Thirteen scalars, no paths, no content. It is written, never sent — `internal/observation` cannot import `net/http` and a test enforces that | **Added 2026-09-10** |
+| `<--contribute-dir>`, default the working directory | write | The corpus submission JSON (`internal/observation/corpus.go:212`), `0600`. **Nineteen fields, under 600 bytes** (measured 328 to 572; `internal/observation/corpussize_test.go` fails if that moves). No paths, no content. Sixteen are counts, ratios, dates and labels; three are build identity added 2026-09-12 for #284 (`binaryVersion`, `commit`, `pricingDigest`), which describe the binary and not its operator. It is written, never sent — `internal/observation` cannot import `net/http` and a test enforces that | **Added 2026-09-10** |
 | `<--png>` output path | write | `cost --png` writes the share card at **`0644`** (`cmd/replay/sharepng.go:111`), not `0600` like the rest. Deliberate for a file meant to be posted, but it is the one artifact here that is world-readable by design | **Added 2026-09-10** |
 | `<dest>/.replay.new.<pid>` | write | `upgrade` stages the downloaded binary beside the destination at `0755` before renaming over it (`internal/selfupdate/fetch.go:200`) | **Added 2026-09-10** |
 | `/usr/local/bin/replay` or `~/.local/bin/replay` | write | The binary, at install. Since 2026-09-05 the installer runs `replay version` before reporting success, so a binary that lands but cannot execute fails the install instead of being announced as one | **Verified** end to end |
@@ -167,14 +167,25 @@ worth, the tests beside it: each was neutralised and watched to fail before it w
 | Surface | Status |
 |---|---|
 | `POST …/v1/messages` | **Verified** end to end against the real provider (spike 4). Parsed, guarded, masked, ledgered, policy applied |
-| `POST …/v1/chat/completions` | **Read, guarded and ledgered since 2026-09-05.** Usage is converted out of inclusive counting, the raw payload is kept, and the spend cap, error budget and loop detector all apply. **NOT masked**: `--mask` walks the Messages body shape only, and the proxy warns once per path (`NOT MASKED`) and counts `replay_unmasked_requests_total`. **No policy applied**, deliberately: this family caches automatically, so there is no breakpoint to place and no TTL to choose, and ADR-0003 admits only a parameter the client left unset. **Streaming works**: OpenAI SSE has its own parser, and because this family sends no usage on a stream unless `stream_options.include_usage` is set, Replay sets it when the client did not (ADR-0003 kind one, a parameter the client left unset; a client that set it keeps its own value). **Verified against a stub, not against any live OpenAI-compatible provider** |
+| `POST …/v1/chat/completions` | **EXPERIMENTAL, UNMASKED.** Read, guarded and ledgered since 2026-09-05: usage is converted out of inclusive counting, the raw payload is kept, and the spend cap, error budget and loop detector all apply. **UNMASKED means `--mask` never runs on this traffic**, so an API key pasted into a prompt here reaches the provider exactly as typed. `--mask` walks the Messages body shape only. The proxy prints `EXPERIMENTAL, UNMASKED` on stderr once per path and counts `replay_unmasked_requests_total`; that disclosure is unconditional and no flag turns it off. **EXPERIMENTAL means the coverage is real but narrow**: verified against live DeepSeek and a local Ollama, never against OpenAI itself or any third implementation of the same API, and no cache write has ever been observed on it. **No policy applied**, deliberately: this family caches automatically, so there is no breakpoint to place and no TTL to choose, and ADR-0003 admits only a parameter the client left unset. **Streaming works**: OpenAI SSE has its own parser, and because this family sends no usage on a stream unless `stream_options.include_usage` is set, Replay sets it when the client did not (ADR-0003 kind one, a parameter the client left unset; a client that set it keeps its own value) |
 | **Any other POST path**, e.g. `/v1/responses` | **Forwarded unchanged and NOT read.** No ledger record, no guard, no masking. The proxy warns once per path (`NOT PARSED`) and counts `replay_unparsed_requests_total` |
 
-**This surface is expected to change.** The chat/completions row is verified
-against a stub only. What a real provider reports, whether a cache write is even
-distinguishable in that shape, and whether streaming carries usage the same way
-are all open. Until each is measured, the warnings are the contract: Replay says
-what it cannot see rather than letting a running proxy imply protection.
+**This surface is expected to change.** What the chat/completions row is still
+missing is not "a live provider" but breadth: whether a cache write is even
+distinguishable in that response shape, what the write penalty actually is, and
+what a third implementation of the same API reports. Until each is measured, the
+label is the contract: Replay says what it cannot see rather than letting a
+running proxy imply protection.
+
+**Correction, 2026-09-12.** This row said "verified against a stub, not against
+any live OpenAI-compatible provider" and that was false when it was written.
+`architecture/multi-provider.md` records a live DeepSeek run on 2026-09-05 across
+four surfaces, which caught a defect a stub cannot produce (`RawUsage` was
+dropping `prompt_cache_hit_tokens`), and `evidence/ollama-cache-observable-2026-09-09.md`
+records the same endpoint driven against a local Ollama. `internal/ledger/testdata/deepseek`
+holds the captured bytes. RELEASE-CRITERIA.md carried the same wrong sentence and
+is corrected there too. The masking gap was and is real; the verification gap was
+overstated, and overstating a gap costs the same credibility as hiding one.
 
 **Correction, 2026-09-06.** This page and the README both said the binary makes no network request
 except the proxy and `rules --check-prices`. That stopped being true when `replay probe` was added:

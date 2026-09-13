@@ -207,3 +207,31 @@ func TestGuardBaseFallsBackToTheAddressServeBindsTo(t *testing.T) {
 		t.Errorf("a base URL from the environment was replaced by %q", got)
 	}
 }
+
+// PEAK: the share card's peak is the maximum, not the last value seen.
+//
+// `guard reachability` found this comparison running with nothing depending on
+// its result. The value feeds the share card's headline token count, and a card
+// publishes its number in public.
+func TestPEAK_TheCardsPeakIsTheMaximum(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   []int
+		want int
+	}{
+		{"maximum in the middle", []int{10, 900, 20}, 900},
+		{"maximum last", []int{10, 20, 900}, 900},
+		{"maximum first", []int{900, 20, 10}, 900},
+		{"all equal", []int{5, 5, 5}, 5},
+		{"all zero", []int{0, 0}, 0},
+		{"single", []int{42}, 42},
+	} {
+		peak := 0
+		for _, n := range tc.in {
+			peak = higher(peak, n)
+		}
+		if peak != tc.want {
+			t.Errorf("%s: peak %d, want %d (from %v)", tc.name, peak, tc.want, tc.in)
+		}
+	}
+}

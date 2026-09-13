@@ -121,7 +121,7 @@ func TestN6_NoModelsYieldsNoLine(t *testing.T) {
 // FAIL: an empty "routed via" label, which reads as a measurement returning
 // nothing rather than as a measurement not taken.
 func TestN7_TheCardCarriesTheRouteOnlyWhenObserved(t *testing.T) {
-	base := costSummary{Tasks: 12, MedianUSD: 1.10, P90USD: 4.00, AvoidableShare: 0.11, TotalUSD: 90}
+	base := costSummary{Tasks: 12, MedianUSD: 1.10, P90USD: 4.00, RebilledShare: 0.11, TotalUSD: 90}
 
 	with := base
 	with.Route = routeLine([]string{"claude-opus-5"})

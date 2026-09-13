@@ -72,7 +72,7 @@ ptv=$(grep -E '^const PriceTableVersion' internal/cachemodel/anthropic.go \
 if [ -x "$TMP/replay" ] && [ -d "$HOME/.claude/projects" ]; then
   "$TMP/replay" cost "$HOME/.claude/projects/" >"$TMP/cost" 2>&1
   missing=""
-  for pat in "median task" "p90 task" "avoidable"; do
+  for pat in "median task" "p90 task" "re-billed"; do
     grep -q "$pat" "$TMP/cost" || missing="$missing '$pat'"
   done
   [ -z "$missing" ] && ok "cost prints every line the README quotes" \

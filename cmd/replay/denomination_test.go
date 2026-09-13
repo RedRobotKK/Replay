@@ -29,19 +29,19 @@ import (
 // each figure is for. That is a presentation change over data already in hand,
 // not a new measurement.
 
-// DN-1: avoidable is reported in tokens as well as dollars.
+// DN-1: re-billed is reported in tokens as well as dollars.
 //
 // PASS: both denominations present.
 // FAIL: dollars alone, which is the current report and is meaningless to a
 // subscriber.
-func TestDN1_AvoidableIsAlsoInTokens(t *testing.T) {
+func TestDN1_RebilledIsAlsoInTokens(t *testing.T) {
 	s := costSummary{
 		Tasks: 1477, TotalUSD: 3000.56, MedianUSD: 0.65, P90USD: 2.21,
-		AvoidableUSD: 149.44, AvoidableShare: 0.0498, AvoidableTokens: 31_264_349,
+		RebilledUSD: 149.44, RebilledShare: 0.0498, RebilledTokens: 31_264_349,
 	}
 	out := renderCost(s, 0, 0, io.Discard, "")
 	if !strings.Contains(out, "31.3M") {
-		t.Errorf("the avoidable figure is not stated in tokens:\n%s", out)
+		t.Errorf("the re-billed figure is not stated in tokens:\n%s", out)
 	}
 	if !strings.Contains(out, "149.44") {
 		t.Errorf("the dollar figure must survive for metered readers:\n%s", out)
@@ -55,7 +55,7 @@ func TestDN1_AvoidableIsAlsoInTokens(t *testing.T) {
 func TestDN2_TheReportNamesWhoPaysDollars(t *testing.T) {
 	s := costSummary{
 		Tasks: 1477, TotalUSD: 3000.56, MedianUSD: 0.65, P90USD: 2.21,
-		AvoidableUSD: 149.44, AvoidableShare: 0.0498, AvoidableTokens: 31_264_349,
+		RebilledUSD: 149.44, RebilledShare: 0.0498, RebilledTokens: 31_264_349,
 	}
 	out := strings.ToLower(renderCost(s, 0, 0, io.Discard, ""))
 	if !strings.Contains(out, "subscription") && !strings.Contains(out, "flat seat") {
@@ -69,7 +69,7 @@ func TestDN2_TheReportNamesWhoPaysDollars(t *testing.T) {
 // FAIL: "0 tokens re-billed", which reads as a measurement that found nothing
 // rather than one that was not taken.
 func TestDN3_NoTokensNoClaim(t *testing.T) {
-	s := costSummary{Tasks: 3, TotalUSD: 10, MedianUSD: 1, AvoidableUSD: 0.5, AvoidableShare: 0.05}
+	s := costSummary{Tasks: 3, TotalUSD: 10, MedianUSD: 1, RebilledUSD: 0.5, RebilledShare: 0.05}
 	out := renderCost(s, 0, 0, io.Discard, "")
 	if strings.Contains(out, "0 tokens re-billed") || strings.Contains(out, "0.0M") {
 		t.Errorf("printed a token figure it did not measure:\n%s", out)

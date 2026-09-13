@@ -338,11 +338,11 @@ nothing reconciles them.
 `cmd/replay/costgate.go:47-61` — on **failure**, the gate prints *"%d transcript(s) were excluded as
 unpriced, so the real figure is higher"*, with a comment explaining that *"Excluded is not free."*
 
-`cmd/replay/costgate.go:63-64` — on **pass**, it prints only *"avoidable spend $X is within the $Y
+`cmd/replay/costgate.go:63-64` — on **pass**, it prints only *"re-billed spend $X is within the $Y
 ceiling"* and **no unpriced caveat at all**.
 
 The caveat is attached to the outcome that does not need it. A build passes a spend ceiling on a
-corpus with unpriced holes and says nothing. Falsifier: run `--max-avoidable-usd` over a corpus where
+corpus with unpriced holes and says nothing. Falsifier: run `--max-rebilled-usd` over a corpus where
 the unpriced transcripts alone exceed the ceiling; the gate returns 0.
 
 ### 2.8 Measurement claims — for contrast, these *are* audited
@@ -706,7 +706,7 @@ servers while `docs/WASTE-DEFINITION.md:29` says that is insurance and must not 
 returned a null. X4 — `error_share` is "money that bought nothing" in one doc and explicitly retracted
 as an overclaim in the next. X5 — three surfaces disclaim forecasting and a fourth forecasts.
 
-**C7c. The `--max-avoidable-usd` CI gate prints its data-quality caveat only when it fails**
+**C7c. The `--max-rebilled-usd` CI gate prints its data-quality caveat only when it fails**
 (§2.7, `cmd/replay/costgate.go:47-64`). A build passes a spend ceiling over a corpus with unpriced
 holes and says nothing.
 

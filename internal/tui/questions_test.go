@@ -154,7 +154,7 @@ func TestQT5_TheCostScreenLeadsWithTheDistribution(t *testing.T) {
 	paintOn(t)
 	m := aMachine()
 	m.CostReady = true
-	m.Tasks, m.TotalUSD, m.MedianUSD, m.P90USD, m.AvoidableUSD = 116, 3739.80, 0.77, 3.41, 177.22
+	m.Tasks, m.TotalUSD, m.MedianUSD, m.P90USD, m.RebilledUSD = 116, 3739.80, 0.77, 3.41, 177.22
 	m.TaskRows = []Task{{Session: "abcd1234", Model: "opus-5", CostUSD: 9.0, Path: "/c/a.jsonl"}}
 	sc := CostScreen(m, 0, Selection{Window: 6})
 

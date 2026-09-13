@@ -61,6 +61,21 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		// operator infer protection from a running proxy.
 		s.noteUnparsed(r.URL.Path)
 	}
+	if openai && r.Method == http.MethodPost {
+		// The OpenAI-compatible family is read, guarded and ledgered, so the
+		// NOT PARSED line above does not fire for it and nothing else would
+		// tell the operator that the masker is not running on this traffic
+		// or how far this path has actually been proven.
+		//
+		// It sits here, beside its sibling and before any configuration is
+		// consulted, because the previous version sat two hundred lines down
+		// behind `s.cfg.Masker != nil && !s.cfg.NoPolicy`. That gate meant the
+		// operator who had turned every rewrite off, which is the cautious
+		// thing to do with an experimental path, was the one operator who
+		// never saw the label. Position is the guard: a disclosure reachable
+		// only through a config branch will eventually be lost to one.
+		s.noteExperimentalUnmasked(r.URL.Path)
+	}
 	rec := ledger.Record{Timestamp: start, Path: r.URL.Path, SessionID: r.Header.Get(HeaderSessionID), AgentID: r.Header.Get(HeaderAgentID)}
 
 	ok, probe, wait := s.cfg.Breaker.Allow()
@@ -145,15 +160,6 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			rec.Frozen = true
 		}
 		rec.Epoch = toolsWireHash(body)
-	}
-
-	if openai && s.cfg.Masker != nil && !s.cfg.NoPolicy {
-		// The masker walks the Messages body shape. This family's body is
-		// different and it is not masked. Saying so matters more here than
-		// anywhere: the path is now read, guarded and ledgered, so the
-		// NOT PARSED warning no longer fires and nothing else would tell the
-		// operator that --mask is not running on this traffic.
-		s.noteUnmasked(r.URL.Path)
 	}
 
 	summarized := false
@@ -363,6 +369,20 @@ func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Recor
 const (
 	messagesPath        = "/v1/messages"
 	chatCompletionsPath = "/v1/chat/completions"
+)
+
+// MessagesPath and ChatCompletionsPath name the two request shapes this build
+// reads, for callers outside the package.
+//
+// They are exported because serve's flag help has to name them, and naming
+// them by retyping the literal would make the handler and the help text two
+// sources for one fact. The one that goes stale is always the one a user
+// reads. RELEASE-CRITERIA.md gates 1.0 on this family being labelled wherever
+// it is offered, and a flag description is where it is offered, so the label
+// and the routing decision are now the same string.
+const (
+	MessagesPath        = messagesPath
+	ChatCompletionsPath = chatCompletionsPath
 )
 
 func isMessages(path string) bool {

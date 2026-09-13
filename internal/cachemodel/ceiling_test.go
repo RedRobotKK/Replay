@@ -120,7 +120,7 @@ func TestCE4_TheCeilingDividesByTheRatio(t *testing.T) {
 // CE5: a ceiling of zero is off, not a division.
 //
 // Zero means no ceiling, the convention `serve --max-day-usd` and
-// `cost --max-avoidable-usd` already use. Dividing it would answer $0.00 and
+// `cost --max-rebilled-usd` already use. Dividing it would answer $0.00 and
 // read as "your agents stop immediately".
 func TestCE5_AZeroCeilingIsOff(t *testing.T) {
 	e := CeilingEffect{Requests: 10, CorrectUSD: 100, BlindUSD: 810}

@@ -28,7 +28,7 @@ const (
 
 	// warnFloorTokens is the smallest loss worth interrupting anyone for.
 	//
-	// 56% of sessions in the measured corpus have no avoidable spend at all. A
+	// 56% of sessions in the measured corpus have no re-billed spend at all. A
 	// tool that speaks on every session is right rarely and ignored quickly,
 	// so the floor is set where the loss is worth a sentence: roughly a
 	// tenth of the mean TTL break.

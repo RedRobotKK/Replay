@@ -23,12 +23,12 @@ import (
 // mistaken for each other in an assertion.
 func loud() Data {
 	return Data{
-		AvoidableShare:      0.03,
-		Tasks:               1384,
-		Breaks:              748,
-		MedianUSD:           0.77,
-		P90USD:              2.30,
-		PeakAvoidableTokens: 32_635_820,
+		RebilledShare:      0.03,
+		Tasks:              1384,
+		Breaks:             748,
+		MedianUSD:          0.77,
+		P90USD:             2.30,
+		PeakRebilledTokens: 32_635_820,
 	}
 }
 
@@ -60,9 +60,9 @@ func allowedFigures(d Data) map[string]bool {
 	for _, s := range []string{
 		d.rateText(),
 		strings.TrimPrefix(d.rateText(), "<"),
-		shortTokens(d.PeakAvoidableTokens),
-		commas(d.PeakAvoidableTokens),
-		fmt.Sprint(d.PeakAvoidableTokens),
+		shortTokens(d.PeakRebilledTokens),
+		commas(d.PeakRebilledTokens),
+		fmt.Sprint(d.PeakRebilledTokens),
 		commas(d.Tasks), fmt.Sprint(d.Tasks),
 		commas(d.Breaks), fmt.Sprint(d.Breaks),
 		fmt.Sprintf("%.2f", d.MedianUSD),
@@ -121,7 +121,7 @@ func TestTheTwoTonesAreDifferentRegisters(t *testing.T) {
 // A card carries an absolute or the rate, never both.
 //
 // The corpus figures divide. An absolute number of re-billed tokens, divided by
-// the avoidable rate printed beside it, reconstructs an order-of-magnitude
+// the re-billed rate printed beside it, reconstructs an order-of-magnitude
 // spend total: the one figure share.go exists to refuse, arrived at by
 // arithmetic instead of by printing it. Neither half is a disclosure on its
 // own, and the pair is.
@@ -157,9 +157,9 @@ func TestNoCardCarriesBothAnAbsoluteAndARate(t *testing.T) {
 			}
 			if s.Rate != "" {
 				for _, abs := range []string{
-					commas(d.PeakAvoidableTokens),
-					shortTokens(d.PeakAvoidableTokens),
-					fmt.Sprint(d.PeakAvoidableTokens),
+					commas(d.PeakRebilledTokens),
+					shortTokens(d.PeakRebilledTokens),
+					fmt.Sprint(d.PeakRebilledTokens),
 				} {
 					if strings.Contains(body, abs) {
 						t.Errorf("card %s/%s carries the rate %q and the token total "+
@@ -347,7 +347,7 @@ func TestTheLayoutsSpellNoFigures(t *testing.T) {
 // fifteen pixels is a line that did not fit.
 func TestNoCardOverrunsItsRightMargin(t *testing.T) {
 	big := loud()
-	big.PeakAvoidableTokens = 987_654_321
+	big.PeakRebilledTokens = 987_654_321
 	big.Tasks = 12_845
 	big.Breaks = 9_999
 	for _, v := range Variants() {
