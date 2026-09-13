@@ -3,7 +3,6 @@ package selfupdate
 import (
 	"errors"
 	"os"
-	"os/exec"
 	"testing"
 )
 
@@ -50,30 +49,43 @@ func TestMain(m *testing.M) {
 // pointing at nothing.
 var productionLookCosign func() (string, error)
 
-// SU1: the production seam really does resolve cosign from PATH.
+// SU1: the production seam is intact behind the pin.
 //
 // TestMain replaces lookCosign for every other test in this package. That is
 // the right default and it is also a blindfold: with the seam pinned, nothing
 // else here observes what production actually does. This is the one test that
 // looks at the real one.
 //
-// It asserts agreement with exec.LookPath rather than a fixed answer, because
-// the answer differs between a machine with cosign and a machine without, and
+// It asserts the CONTRACT rather than a fixed answer, for two reasons. The
+// answer differs between a machine with cosign and a machine without, and
 // requiring either would put this test back in the position that caused the
-// defect.
-func TestSU1_TheProductionCosignLookupReadsPath(t *testing.T) {
+// defect it was written for. And comparing against exec.LookPath directly
+// would import os/exec into a test file, which
+// TestX402_ExecIsConfinedToTheMutationHarness refuses: this repository allows
+// os/exec in two reviewed places and a test file is not one of them. That
+// guard caught this test on the first run.
+//
+// The contract: exactly one of path and error is set, and a path that is
+// returned names something that exists.
+func TestSU1_TheProductionCosignLookupIsIntact(t *testing.T) {
 	if productionLookCosign == nil {
 		t.Fatal("TestMain did not capture the production lookCosign")
 	}
-	gotPath, gotErr := productionLookCosign()
-	wantPath, wantErr := exec.LookPath("cosign")
+	path, err := productionLookCosign()
 
-	if (gotErr == nil) != (wantErr == nil) {
-		t.Fatalf("production lookCosign disagrees with exec.LookPath on whether cosign exists: %v vs %v",
-			gotErr, wantErr)
-	}
-	if gotPath != wantPath {
-		t.Errorf("production lookCosign returned %q, exec.LookPath returned %q", gotPath, wantPath)
+	switch {
+	case err == nil && path == "":
+		t.Error("the production lookup reported success with no path, so a caller " +
+			"would run the empty string as a program")
+	case err != nil && path != "":
+		t.Errorf("the production lookup reported both a failure and a path %q", path)
+	case err == nil:
+		// It found something. It must be something that is there, or the
+		// signature check would fail at exec time on a machine that just
+		// reported cosign present.
+		if _, statErr := os.Stat(path); statErr != nil {
+			t.Errorf("the production lookup returned %q, which does not stat: %v", path, statErr)
+		}
 	}
 }
 

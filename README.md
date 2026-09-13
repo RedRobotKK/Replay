@@ -12,8 +12,9 @@
 
 GitHub labels this repository 'Other' because its licence detector does not know BUSL-1.1; the licence is the Business Source License 1.1, converting to the Apache License 2.0 on 2029-09-06, and the text is in LICENSE.
 
-**Your prompt cache expired while you were at lunch.** Replay finds the turn it happened on, and
-what that one turn cost.
+**If the agent bill went up and nothing errored, a prompt cache broke.** Replay Doctor reads the
+transcripts already on your disk and names the turn it broke on, the cause, and the tokens
+re-billed at write prices.
 
 ![A triage session: pick a finding, open the evidence behind it, mark it applied](docs/demo/triage.gif)
 

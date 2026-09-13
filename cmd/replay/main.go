@@ -617,7 +617,8 @@ More:
 }
 
 func printUsage(w io.Writer) error {
-	_, err := fmt.Fprint(w, `replay - see where your coding agent's prompt cache broke and what it cost
+	_, err := fmt.Fprint(w, `replay - if the agent bill went up and nothing errored, a prompt cache broke.
+         This names the turn it broke on, the cause, and what it cost.
 
 Start here:
   replay <no args>                 what your sessions cost, from transcripts already on disk
