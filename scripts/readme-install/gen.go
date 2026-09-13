@@ -68,7 +68,7 @@ func render(raw []byte) (string, error) {
 		}
 		switch c.Status {
 		case "live":
-			fmt.Fprintf(&b, "\n**%s**\n\n```sh\n%s\n```\n", c.Name, c.Command)
+			fmt.Fprintf(&b, "\n#### %s\n\n```sh\n%s\n```\n", c.Name, c.Command)
 			if c.Verify != "" {
 				fmt.Fprintf(&b, "\nCheck: `%s`\n", c.Verify)
 			}

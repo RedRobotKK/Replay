@@ -173,7 +173,7 @@ func TestBlockedRowsNameTheirGate(t *testing.T) {
 	for _, want := range []string{
 		"Not offered: homebrew-core (OSI; notability thresholds)",
 		"Coming: a tap",
-		"**a live one**",
+		"#### a live one",
 		"Check: `replay version`",
 	} {
 		if !strings.Contains(block, want) {
