@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,14 +117,25 @@ func splice(readme, body string) (string, error) {
 	return readme[:start] + "\n" + body + readme[start+end:], nil
 }
 
-// moduleRoot walks up from the working directory to the directory holding
-// go.mod, so the generator runs from the module root and the tests run from
-// the package directory against the same files.
-func moduleRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
+// getwd is the seam the "cannot resolve the working directory" branch is
+// tested through.
+//
+// os.Getwd fails when the directory the process is sitting in has been removed
+// underneath it. That is reachable on a real machine and not reachable from a
+// test that has to keep running afterwards, which is the shape this repository
+// already uses a seam for in internal/selfupdate/verify.go. Production never
+// assigns it.
+var getwd = os.Getwd
+
+// moduleRoot walks up from dir to the directory holding go.mod, so the
+// generator runs from the module root and the tests run from the package
+// directory against the same files.
+//
+// It took no argument until 2026-09-13 and called os.Getwd itself, which put
+// two untestable things in one function: resolving the working directory, and
+// the walk. Splitting them is what lets a test hand it a temporary directory
+// with no go.mod above it and watch the walk give up.
+func moduleRoot(dir string) (string, error) {
 	for {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
 			return dir, nil
@@ -136,18 +148,55 @@ func moduleRoot() (string, error) {
 	}
 }
 
+// main holds no conditional on purpose.
+//
+// `guard reachability` reported the `if err != nil` that used to live here as
+// UNREACHED, and it was right: main calls os.Exit, so nothing a unit test can
+// call observes either arm. The first instinct was to write a subprocess test
+// to satisfy the verdict. The second, and the one taken, was to notice that a
+// branch which cannot be watched should not be in the function that cannot be
+// called. cli returns the status instead of exiting with it, and main is the
+// one line that turns a status into an exit.
 func main() {
-	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "readme-install:", err)
-		os.Exit(1)
-	}
+	os.Exit(cli(os.Stderr))
 }
 
+// cli runs the generator and returns the process exit status, writing any
+// failure to stderr.
+func cli(stderr io.Writer) int {
+	if err := run(); err != nil {
+		// Discarded deliberately: the only thing to do about a stderr that
+		// will not take the message is to exit non-zero, which is the next
+		// line. errcheck flags this because stderr is an io.Writer here and
+		// not os.Stderr, which its defaults exempt.
+		_, _ = fmt.Fprintln(stderr, "readme-install:", err)
+		return 1
+	}
+	return 0
+}
+
+// run resolves the module root and regenerates the block beneath it.
 func run() error {
-	root, err := moduleRoot()
+	dir, err := getwd()
 	if err != nil {
 		return err
 	}
+	root, err := moduleRoot(dir)
+	if err != nil {
+		return err
+	}
+	return generate(root)
+}
+
+// generate rewrites the install block in root's README.md from root's
+// distribution/channels.json.
+//
+// It takes the root rather than finding it so that every refusal below is
+// reachable from a test holding a temporary directory: a manifest that is
+// missing, a manifest that is not JSON, a README that is missing, a README
+// with no markers, and a README that is already correct are five different
+// outcomes and they were all unreached until 2026-09-13.
+func generate(root string) error {
 	raw, err := os.ReadFile(filepath.Join(root, "distribution", "channels.json"))
 	if err != nil {
 		return err

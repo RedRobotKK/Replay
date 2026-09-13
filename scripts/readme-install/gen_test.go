@@ -15,7 +15,11 @@ import (
 
 func repoRoot(t *testing.T) string {
 	t.Helper()
-	root, err := moduleRoot()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("resolving the working directory: %v", err)
+	}
+	root, err := moduleRoot(dir)
 	if err != nil {
 		t.Fatalf("locating go.mod: %v", err)
 	}
