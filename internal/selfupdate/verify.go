@@ -40,6 +40,19 @@ var (
 	runCosign  = func(ctx context.Context, bin string, args ...string) error {
 		return exec.CommandContext(ctx, bin, args...).Run()
 	}
+	// makeVerifyDir and writeVerifyFile are the staging seam.
+	//
+	// Their error branches were reported UNREACHED by `guard reachability`, and
+	// it was right: a fresh 0700 temp directory does not fail to be created or
+	// written to on a healthy machine, so nothing could ever watch those
+	// branches fire. They are the error paths of an UPGRADE'S SIGNATURE CHECK.
+	// "It cannot fail here so nobody checked" is precisely the state that makes
+	// a security branch wrong the first time it is finally taken, and a
+	// full disk during an upgrade is not an exotic scenario.
+	//
+	// Production never assigns either.
+	makeVerifyDir   = func() (string, error) { return os.MkdirTemp("", "replay-verify-") }
+	writeVerifyFile = func(path string, body []byte) error { return os.WriteFile(path, body, 0o600) }
 )
 
 // verifyChecksumSignature checks the Sigstore signature on checksums.txt.
@@ -83,9 +96,10 @@ func (c *Client) verifyChecksumSignature(ctx context.Context, base string, sums 
 			"Nothing was installed")
 	}
 
-	dir, err := os.MkdirTemp("", "replay-verify-")
+	dir, err := makeVerifyDir()
 	if err != nil {
-		return err
+		return fmt.Errorf("the signature could not be staged for checking, so it was not "+
+			"checked and nothing was installed: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 
@@ -94,8 +108,9 @@ func (c *Client) verifyChecksumSignature(ctx context.Context, base string, sums 
 		"checksums.txt.pem": pem,
 		"checksums.txt.sig": sig,
 	} {
-		if err := os.WriteFile(filepath.Join(dir, name), body, 0o600); err != nil {
-			return err
+		if err := writeVerifyFile(filepath.Join(dir, name), body); err != nil {
+			return fmt.Errorf("%s could not be staged for checking, so the signature was "+
+				"not checked and nothing was installed: %w", name, err)
 		}
 	}
 

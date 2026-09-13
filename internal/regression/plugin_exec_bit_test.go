@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -48,6 +49,23 @@ func TestFCPX_EveryHookScriptIsExecutable(t *testing.T) {
 		t.Fatalf("hooks.json does not parse, so no hook can run at all: %v", err)
 	}
 
+	// Not on Windows, and the reason is that the answer there is meaningless
+	// rather than inconvenient. Git does not preserve the execute bit on a
+	// Windows checkout, so os.Stat reports 666 for a file that is 100755 in the
+	// index and 0755 on every machine that will actually run this hook. The
+	// first version of this test failed on the Windows runner for exactly that
+	// reason.
+	//
+	// The index mode is the platform-independent fact and would be the better
+	// assertion, but reading it means running git, and this repository confines
+	// os/exec to the mutation harness for good reasons that a test's
+	// convenience does not outweigh. The plugin targets machines where the
+	// binary runs, and the binary refuses to run on Windows.
+	if runtime.GOOS == "windows" {
+		t.Skip("git does not preserve the execute bit on a Windows checkout, so the " +
+			"filesystem mode here is a fact about the checkout rather than about what ships")
+	}
+
 	var checked int
 	for event, groups := range doc.Hooks {
 		for _, g := range groups {
@@ -78,8 +96,9 @@ func TestFCPX_EveryHookScriptIsExecutable(t *testing.T) {
 					t.Errorf("%s hook execs %s by path and it is mode %o. Every session on "+
 						"every machine that installs this plugin fails with a permission "+
 						"error, and the tip line this prints is described in its own header "+
-						"as the whole distribution mechanism of this project.",
-						event, rel, info.Mode().Perm())
+						"as the whole distribution mechanism of this project. Fix with: "+
+						"git update-index --chmod=+x plugins/replay/%s",
+						event, rel, info.Mode().Perm(), rel)
 				}
 			}
 		}

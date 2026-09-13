@@ -227,3 +227,27 @@ func TestCROLD_APreRenameSubmissionIsRefusedRatherThanReadAsZero(t *testing.T) {
 		t.Errorf("round trip lost the figure: %v", round.RebilledUSD)
 	}
 }
+
+// CR-MALFORMED: a document that is not JSON, and one whose types are wrong.
+//
+// Corpus gained an UnmarshalJSON on 2026-09-13 to refuse pre-rename
+// submissions. It carries two error branches of its own, and `guard
+// reachability` reported both UNREACHED: the probe pass and the real pass.
+//
+// They matter because this is the entry point for a file a stranger sends. A
+// panic or a silent zero here is reached by anybody who can put a file in front
+// of the pooler, which is the whole point of the contribution path.
+func TestCRMALFORMED_UnparseableAndMistypedDocumentsAreRefused(t *testing.T) {
+	for _, tc := range []struct{ name, doc string }{
+		{"not JSON at all", `this is not json`},
+		{"truncated", `{"schema":"replay.corpus.v1","tasks":`},
+		{"an array, not an object", `[1,2,3]`},
+		{"a field of the wrong type", `{"schema":"replay.corpus.v1","tasks":"one hundred"}`},
+		{"totalUsd is a string", `{"schema":"replay.corpus.v1","totalUsd":"4236.17"}`},
+	} {
+		var c Corpus
+		if err := json.Unmarshal([]byte(tc.doc), &c); err == nil {
+			t.Errorf("%s was accepted, and it parsed to %+v", tc.name, c)
+		}
+	}
+}

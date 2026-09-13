@@ -425,3 +425,45 @@ func signedRelease(t *testing.T, withSignature bool) (*httptest.Server, string) 
 	srv := httptest.NewServer(mux)
 	return srv, srv.URL
 }
+
+// SIG5: if the signature cannot be STAGED, nothing is installed.
+//
+// Both branches were UNREACHED until this existed. They are the error paths of
+// an upgrade's signature check, and a full disk during an upgrade is ordinary
+// rather than exotic. The failure mode they prevent is the worst one available
+// here: staging fails, the check is skipped, and the upgrade proceeds having
+// verified nothing while reporting success.
+func TestSIG5_AFailureToStageTheSignatureInstallsNothing(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		break_ func()
+	}{
+		{"the temp directory cannot be made", func() {
+			makeVerifyDir = func() (string, error) { return "", errors.New("no space left on device") }
+		}},
+		{"a staged file cannot be written", func() {
+			writeVerifyFile = func(string, []byte) error { return errors.New("no space left on device") }
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rl, rr, rd, rw := lookCosign, runCosign, makeVerifyDir, writeVerifyFile
+			t.Cleanup(func() { lookCosign, runCosign, makeVerifyDir, writeVerifyFile = rl, rr, rd, rw })
+			lookCosign = func() (string, error) { return "/usr/bin/cosign", nil }
+			runCosign = func(_ context.Context, _ string, _ ...string) error { return nil }
+			tc.break_()
+
+			srv, base := signedRelease(t, true)
+			defer srv.Close()
+			c := &Client{ReleasesBase: base}
+
+			_, err := c.Fetch(context.Background(), "v9.9.9", "linux", "amd64")
+			if err == nil {
+				t.Fatal("staging failed, so the signature was never checked, and the " +
+					"upgrade proceeded anyway")
+			}
+			if !strings.Contains(err.Error(), "nothing was installed") {
+				t.Errorf("the refusal does not say nothing was installed: %v", err)
+			}
+		})
+	}
+}
