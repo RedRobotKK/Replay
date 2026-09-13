@@ -1,7 +1,3 @@
-// Command replay analyzes coding-agent sessions for prompt-cache behavior.
-//
-// replay, blame, and diff work offline on transcripts the agent already
-// wrote and on the ledger the proxy records. serve is the proxy.
 package main
 
 import (
