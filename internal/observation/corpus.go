@@ -54,7 +54,15 @@ func EarlierSubmissions(dir, tag, exclude string) []string {
 
 // CorpusSchema versions a corpus contribution independently of a probe
 // observation, because they are different submissions with different bargains.
-const CorpusSchema = "replay.corpus.v1"
+//
+// v2 on 2026-09-13. avoidableUsd and avoidableShare became rebilledUsd and
+// rebilledShare, so the wire form changed and the version string moved with it.
+// Bumping rather than re-deriving the single existing submission was decided
+// deliberately: a document's digest is computed over its own content, so the
+// published v1 file still verifies against itself, and what it needs is a
+// reader that knows which shape it is rather than a rewrite that destroys the
+// artefact it was.
+const CorpusSchema = "replay.corpus.v2"
 
 // Corpus is one machine's aggregate spend, offered for pooling.
 //
@@ -276,8 +284,20 @@ func (c Corpus) Digested() Corpus {
 // biases the pooled share downward for everyone else in it.
 func (c Corpus) Validate() error {
 	switch {
+	// This check already existed and a duplicate of it was briefly added above
+	// on 2026-09-13, which mutation testing caught: neutralising the new one
+	// changed nothing because this one was still here. Deleted rather than
+	// kept, and its message moved here instead.
+	//
+	// UnmarshalJSON refuses the retired field NAMES. This refuses a document
+	// claiming a version this build does not write, which is a different lie: a
+	// hand-edited file carrying the new spelling under the old version passes
+	// the spelling check and is still not a shape this project ever produced.
 	case c.Schema != CorpusSchema:
-		return fmt.Errorf("schema is %q, want %q", c.Schema, CorpusSchema)
+		return fmt.Errorf("this submission declares schema %q and this build writes %q. "+
+			"The field names changed in v2 (avoidableUsd became rebilledUsd), so reading "+
+			"it under the wrong version means guessing what its numbers mean",
+			c.Schema, CorpusSchema)
 	case c.Digest == "":
 		return fmt.Errorf("the submission has no content digest, so a pooled figure could " +
 			"not name it or let a reader check it")

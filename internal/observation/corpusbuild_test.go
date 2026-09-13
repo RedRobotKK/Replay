@@ -201,14 +201,39 @@ func TestCB6_AbsentBuildIdentitySurvivesARoundTrip(t *testing.T) {
 	}
 }
 
-// CB7: the schema string did not move.
+// CB7: an ADDITIVE change does not move the schema string, and a rename does.
 //
-// It is published, and readers key on it. These fields are additive and
-// optional, which is precisely the change that does not need a new schema; the
-// last three fields added here were added the same way and for the same reason.
-func TestCB7_TheSchemaStringDidNotMove(t *testing.T) {
-	if CorpusSchema != "replay.corpus.v1" {
-		t.Errorf("CorpusSchema is %q. Bumping it retires every submission already "+
-			"written, because Validate refuses anything that does not match.", CorpusSchema)
+// This test asserted `CorpusSchema == "replay.corpus.v1"` until 2026-09-13, and
+// its reasoning was right for the change it was written about. binaryVersion,
+// commit and pricingDigest are additive and optional, which is precisely the
+// change that does not need a new version: an older reader ignores them and a
+// newer one finds them, and every submission written before they existed stays
+// readable. CB6 above is what protects that, and it still passes.
+//
+// A RENAME IS NOT ADDITIVE. avoidableUsd became rebilledUsd, so a v1 reader
+// handed a v2 document finds no figure where it expects one and reports zero.
+// The old test's own warning is the argument for the bump rather than against
+// it: "bumping retires every submission already written" is true, and a rename
+// retires them whether the string moves or not. Moving it is what makes the
+// retirement VISIBLE instead of silent.
+//
+// Daniel chose bump over re-derivation on 2026-09-13. There is one submission
+// in existence, it is the maintainer's, and its digest still verifies against
+// its own content: what it needs is a reader that knows which shape it is.
+func TestCB7_AdditiveChangesDoNotMoveTheSchemaAndRenamesDo(t *testing.T) {
+	if CorpusSchema != "replay.corpus.v2" {
+		t.Errorf("CorpusSchema is %q, want replay.corpus.v2. The 2026-09-13 rename "+
+			"changed field names, which is not an additive change.", CorpusSchema)
+	}
+
+	// The additive rule this test was originally written to protect. Adding an
+	// optional field must not require a bump, or every future addition costs a
+	// version and readers churn for nothing.
+	withBuild := base()
+	withBuild.BinaryVersion, withBuild.Commit, withBuild.PricingDigest =
+		"v0.6.0", "0bcb2cb", "p02eb9163145c"
+	if withBuild.Digested().Schema != base().Digested().Schema {
+		t.Error("filling in the optional build-identity fields changed the schema " +
+			"string. Those fields are additive and an addition must not cost a version.")
 	}
 }

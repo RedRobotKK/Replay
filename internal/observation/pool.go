@@ -38,7 +38,12 @@ import (
 // PoolSchema versions the pooled document independently of the submissions in
 // it, because a change to how pooling works is not a change to what was
 // contributed.
-const PoolSchema = "replay.pool.v1"
+//
+// v2 on 2026-09-13, and this one IS a change to the document rather than to the
+// pooling. Its own entries carry rebilledUsd and rebilledShare now, so a reader
+// holding a v1 pool and a v2 pool is holding two different shapes under one
+// name.
+const PoolSchema = "replay.pool.v2"
 
 // PoolEntry is one submission's row in the roster.
 //

@@ -251,3 +251,52 @@ func TestCRMALFORMED_UnparseableAndMistypedDocumentsAreRefused(t *testing.T) {
 		}
 	}
 }
+
+// CR-V2. The schema string moved with the field names, and Validate enforces it.
+//
+// Daniel ruled on 2026-09-13: bump rather than re-derive. The rename changed
+// what the wire form looks like, so a document under the old version string and
+// the new spelling, or the reverse, is a document nobody wrote and nobody
+// should read.
+//
+// UnmarshalJSON already refuses the old SPELLING. This is the other half: a
+// document that claims a version this build does not write. The two catch
+// different lies. A hand-edited file carrying the new spelling under
+// "replay.corpus.v1" passes the spelling check and is still not a thing this
+// project ever produced.
+func TestCRV2_TheSchemaStringMovedAndIsChecked(t *testing.T) {
+	if CorpusSchema != "replay.corpus.v2" {
+		t.Errorf("CorpusSchema is %q. The rename changed the wire form, so the version "+
+			"string had to move with it", CorpusSchema)
+	}
+	// Watch must NOT move: it has never shipped, so there is no older reader to
+	// protect and v1 has never meant anything else.
+	if WatchSchema != "replay.watch.v1" {
+		t.Errorf("WatchSchema is %q. No watch record has ever been written, so there is "+
+			"nothing a bump would protect and the first version should be v1", WatchSchema)
+	}
+	if PoolSchema != "replay.pool.v2" {
+		t.Errorf("PoolSchema is %q. The pooled document carries rebilledUsd and "+
+			"rebilledShare in its own entries, so its wire form changed too", PoolSchema)
+	}
+
+	base := Corpus{
+		Schema: CorpusSchema, TakenAt: "2026-09-13T00:00:00Z", Tasks: 121,
+		TotalUSD: 12630.61, RebilledUSD: 347.53, RebilledShare: 0.0275,
+		MedianTaskUSD: 1.2, PricedAt: "2026-09-13", RulesVersion: "anthropic-2026-09-01",
+		SourceTag: "abc", TagBasis: "machine",
+	}.Digested()
+	if err := base.Validate(); err != nil {
+		t.Fatalf("a current submission was refused: %v", err)
+	}
+
+	for _, bad := range []string{"replay.corpus.v1", "replay.corpus.v3", "", "replay.watch.v1"} {
+		wrong := base
+		wrong.Schema = bad
+		wrong = wrong.Digested()
+		if err := wrong.Validate(); err == nil {
+			t.Errorf("a document claiming schema %q validated. It is not a shape this "+
+				"build writes, so reading it means guessing what its fields mean.", bad)
+		}
+	}
+}

@@ -45,11 +45,14 @@ import (
 
 // usageCostSchema is the report's own schema.
 //
+// v2 on 2026-09-13: this report carries rebilledUsd, which was avoidableUsd
+// until the rename, so its shape moved with everything else.
+//
 // It is not replay.cost.v2. The two documents answer different questions from
 // different evidence, and a consumer handed this one under the transcript
 // report's version string would read `rebilledUsd: null` as a bug in a report
 // it thought it understood.
-const usageCostSchema = "replay.cost.usage.v1"
+const usageCostSchema = "replay.cost.usage.v2"
 
 // usageRow is one session priced from usage records.
 //

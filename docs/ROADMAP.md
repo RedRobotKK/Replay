@@ -251,8 +251,8 @@ has a 1 in front of it.
 
 - **Compatibility surfaces, named.** Before 1.0 ships, this file has to say which
   things are covered by the version number. The candidates are the corpus
-  submission schema (`replay.corpus.v1`), the pool document
-  (`replay.pool.v1`), the ledger format, the policy file, the budget artefact
+  submission schema (`replay.corpus.v2`), the pool document
+  (`replay.pool.v2`), the ledger format, the policy file, the budget artefact
   (`schema 2`), **the exit codes**, and every `--json` output the 0.7 work adds.
   The exit codes were frozen and published on 2026-09-13, which makes them the
   first compatibility surface here written down before it had users rather than

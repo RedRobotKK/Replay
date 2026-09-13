@@ -448,8 +448,21 @@ func TestUO17_TheJSONSaysNullNotZeroForWhatItDidNotMeasure(t *testing.T) {
 	if summary["totalUsd"] == nil {
 		t.Error("totalUsd is null; the cost WAS measured and withholding it is the opposite error")
 	}
-	if doc["schema"] != "replay.cost.usage.v1" {
-		t.Errorf("schema is %v; a usage-only report must not arrive under the transcript report's schema, because the two answer different questions", doc["schema"])
+	// Compared against the CONSTANT rather than a literal version.
+	//
+	// This pinned "replay.cost.usage.v1" until 2026-09-13 and then failed when
+	// the rename moved it to v2, which is the test breaking on a change it does
+	// not care about. What it cares about is the sentence in its own error
+	// message: this report must not arrive under the transcript report's
+	// schema, because the two answer different questions from different
+	// evidence. That is asserted directly below.
+	if doc["schema"] != usageCostSchema {
+		t.Errorf("schema is %v, want %v", doc["schema"], usageCostSchema)
+	}
+	if doc["schema"] == "replay.cost.v2" {
+		t.Error("a usage-only report arrived under the transcript report's schema. " +
+			"A consumer handed this one under that version string would read a null " +
+			"figure as a bug in a report it thought it understood")
 	}
 }
 
