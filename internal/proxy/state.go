@@ -52,8 +52,20 @@ type laneState struct {
 }
 
 type sessionState struct {
-	last       transcript.Usage
-	lastSeen   time.Time
+	last     transcript.Usage
+	lastSeen time.Time
+	// admitted is the order this session was first seen, and it exists to
+	// break lastSeen ties when evicting.
+	//
+	// Eviction compares lastSeen with Before, which is strict, so equal
+	// timestamps fall through to Go's randomised map iteration order and the
+	// session evicted is whichever key came up first. That needs a clock
+	// coarse enough for two sessions to share a reading: time.Now on Windows
+	// advances in steps of about 15ms, so a burst of new sessions all carry
+	// one timestamp, and the proxy drops an arbitrary one instead of the
+	// least recently used. TestSessionStateIsBounded found it on 2026-09-13
+	// by failing on the Windows runner and nowhere else.
+	admitted   uint64
 	model      string
 	prefixHash string
 	// lanes holds the per-lane comparison state, keyed by AgentID with "" for
@@ -169,10 +181,13 @@ type stats struct {
 	// and told nobody anything about the code.
 	analysed atomic.Int64
 
-	mu            sync.Mutex
-	now           func() time.Time
-	started       time.Time
-	sessions      map[string]*sessionState
+	mu       sync.Mutex
+	now      func() time.Time
+	started  time.Time
+	sessions map[string]*sessionState
+	// admittedSeq issues sessionState.admitted. Monotonic, so it orders
+	// sessions even when the clock cannot.
+	admittedSeq   uint64
 	requests      map[string]int // by status class: 2xx, 4xx, 5xx, refused
 	upstreamErrs  map[int]int
 	breakCauses   map[cachemodel.BreakCause]int
@@ -439,15 +454,24 @@ func (s *stats) session(id string) *sessionState {
 		return st
 	}
 	for len(s.sessions) >= maxSessions {
-		oldest, oldestSeen := "", time.Time{}
+		oldest, oldestSeen, oldestAdmitted := "", time.Time{}, uint64(0)
 		for k, v := range s.sessions {
-			if oldest == "" || v.lastSeen.Before(oldestSeen) {
-				oldest, oldestSeen = k, v.lastSeen
+			switch {
+			case oldest == "":
+			case v.lastSeen.Before(oldestSeen):
+			// Equal timestamps are not a tie to be broken by map order. The
+			// session admitted first is the older one, and on a coarse clock
+			// this is the only thing that says so.
+			case v.lastSeen.Equal(oldestSeen) && v.admitted < oldestAdmitted:
+			default:
+				continue
 			}
+			oldest, oldestSeen, oldestAdmitted = k, v.lastSeen, v.admitted
 		}
 		delete(s.sessions, oldest)
 	}
-	st = &sessionState{lastSeen: time.Now()}
+	s.admittedSeq++
+	st = &sessionState{lastSeen: time.Now(), admitted: s.admittedSeq}
 	s.sessions[id] = st
 	return st
 }
