@@ -76,7 +76,30 @@ no amount of goodwill gets back, and none of these addresses can return it.
 | USDC | Avalanche C-Chain | `0x585ef883e750694E4ba1463bc20820e9C4fBF369` |
 | BTC | Bitcoin | `3HzfvNb1iKjeKsRMgMSttP1oqJzyHULhGu` |
 | cbBTC | Base | `0xdaC0fCFa02b20aF55e6e34e931fB169a0C8Ddb98` |
+| ETH | Base | `0xa5dB841b59cFac070d78C51eCaf86dADf0509b5E` |
+| ETH | Ethereum | `0xa5dB841b59cFac070d78C51eCaf86dADf0509b5E` |
 | BTC | Solana | `F7XcHFFGe4uJUTrQJUELwfC4VzPYNvy9th1Yx3jVz6zc` |
+
+The two ether rows are one address twice, and that is deliberate. An
+Ethereum address is derived from a key, not from a chain, so the same key
+controls the same address on Base and on Ethereum. It is checked to be an
+ordinary account rather than a contract on both, which is the case where
+that stops being true. It is also the x402 receiving wallet below.
+
+**No wallet, and curious?** Base is where most of the above lands, and
+`saitodaniel.base.eth` is the account at that address:
+<https://base.app/profile/0xa5dB841b59cFac070d78C51eCaf86dADf0509b5E?inviteCode=55GXK9T4>
+
+That link carries an invite code, which means it is a referral: if you sign up
+through it, the maintainer may receive whatever Base gives referrers. The plain
+link without it is
+<https://base.app/profile/0xa5dB841b59cFac070d78C51eCaf86dADf0509b5E>, and it
+reaches the same account. Both are here so the choice is yours rather than
+hidden in a redirect. A project that asks you to trust its arithmetic does not
+get to be coy about its own incentives.
+
+Nothing on this page needs a wallet. There is a card link at the top, and the
+tool itself never asks for either.
 
 ## Paid: the rules feed
 
@@ -93,7 +116,7 @@ Keeping it current is ongoing work. So it is sold, to agents, over
 |---|---|
 | Free feed | `https://redrobot.jp/Replay/rules/free.json` |
 | Paid feed | `https://redrobot.jp/Replay/rules/latest.json` |
-| Receiving wallet | `0x2733E9BE752848D578937fDB6029D7c739dc89Cb` (USDC on Base) |
+| Receiving wallet | `0xa5dB841b59cFac070d78C51eCaf86dADf0509b5E` (USDC on Base) |
 | Asset | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` (the USDC token contract on Base) |
 
 That second row is not somewhere to send anything. It is the token the terms

@@ -28,11 +28,25 @@ const fundingAddress = "0x585ef883e750694E4ba1463bc20820e9C4fBF369"
 // Bitcoin-shaped string in the documentation must be one of these.
 var fundingAddresses = map[string]string{
 	"0x585ef883e750694E4ba1463bc20820e9C4fBF369": "USDC on Avalanche C-Chain",
-	// The x402 receiving wallet. It is separate from the donation addresses on
-	// purpose: donations are gifts, and this one takes payments for a product,
-	// so keeping them apart keeps the accounting honest and lets either be
-	// rotated without disturbing the other. EIP-55 verified 2026-09-05.
-	"0x2733E9BE752848D578937fDB6029D7c739dc89Cb": "x402 receiving wallet, USDC on Base",
+	// The x402 receiving wallet, and from 2026-09-12 also the destination for
+	// ether. Rotated on that date at the maintainer's instruction, replacing
+	// 0x2733E9BE752848D578937fDB6029D7c739dc89Cb.
+	//
+	// This merges two addresses that the previous note argued for keeping
+	// apart, so the argument is withdrawn rather than left standing next to a
+	// contradiction. The separation bought per-purpose rotation and cleaner
+	// accounting; it cost a second key to hold, and a gift and a payment
+	// arriving at one address are still distinguishable by the transaction
+	// that carried them. The maintainer holds one key now. That is the trade,
+	// stated rather than quietly made.
+	//
+	// EIP-55 verified 2026-09-12 with an implementation self-tested against
+	// the specification's own vectors, and cross-checked by re-deriving all
+	// four addresses already pinned here. Confirmed an externally owned
+	// account, not a contract, on both Base (nonce 9) and Ethereum mainnet
+	// (eth_getCode returned 0x on each), which is what makes one address safe
+	// to publish for two chains: the same key controls it on both.
+	"0xa5dB841b59cFac070d78C51eCaf86dADf0509b5E": "x402 receiving wallet on Base, and ether on Base or Ethereum",
 	// Not a destination — the USDC token contract on Base, which the x402
 	// terms name as the asset. It is pinned for the same reason as the
 	// destinations: a buyer who pays the right address in the wrong token has
