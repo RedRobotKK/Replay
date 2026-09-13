@@ -76,7 +76,18 @@ func knownSurfaces(home string) []otherSurface {
 		{
 			name: "Cursor",
 			dir:  firstWithEntries(filepath.Join(home, ".cursor")),
-			why:  "Replay cannot read Cursor yet: its local history carries structure but no token usage",
+			// Measured on Cursor 3.17.19, 2026-09-12: state.vscdb holds 29,665
+			// bubbleId rows, every one carries a tokenCount object, and every
+			// inputTokens and outputTokens in them is zero. There is no
+			// cacheRead or cacheWrite key anywhere in bubbleId, agentKv or
+			// composerData, and usageData is {} on all 234 composers.
+			//
+			// The wording matters more than it looks. "carries structure but no
+			// token usage" reads as "there is no such field", which points a
+			// reader at writing a parser. The field is there and it is empty, so
+			// no parser recovers anything: Cursor did not record it. Saying
+			// which of the two it is decides who has to act.
+			why: "Replay cannot read Cursor yet: every message row in its state.vscdb carries a tokenCount field and every one of them is zero",
 		},
 	}
 }
@@ -108,10 +119,31 @@ func findOtherSurfaces(home string) []otherSurface {
 	return found
 }
 
-// firstWithEntries returns dir when it holds at least one file, else "".
-func firstWithEntries(dir string) string {
-	if hasEntries(dir) {
-		return dir
+// firstWithEntries returns the first candidate directory that holds a file, or
+// "".
+//
+// It took exactly one directory for as long as every surface this build knew
+// about kept its records in one place. That stopped being true. A survey of the
+// 2026 surfaces found the same agent writing under ~/Library/Application
+// Support on macOS, ~/.config or ~/.local/share on Linux, and a path the user
+// can move with an environment variable: Roo Code has customStoragePath, Kilo
+// Code has KILO_DB and XDG_DATA_HOME, the Copilot CLI has COPILOT_HOME. A
+// detector that checks one of those and reports nothing tells a reader their
+// bill has no blind spot when it has one, which is worse than not knowing the
+// surface exists at all.
+//
+// An empty string candidate is safe to pass: os.ReadDir("") returns no entries,
+// so hasEntries already answers false and a caller building a path from an unset
+// environment variable does not have to branch first. An explicit `dir != ""`
+// guard sat here doing that job and mutating it away failed no test, because it
+// could not: it guarded nothing hasEntries did not already handle. A guard that
+// cannot fail is not a guard (ADR-0014), so it is gone rather than left as a
+// claim nothing enforces.
+func firstWithEntries(dirs ...string) string {
+	for _, dir := range dirs {
+		if hasEntries(dir) {
+			return dir
+		}
 	}
 	return ""
 }
