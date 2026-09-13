@@ -112,53 +112,138 @@ price has to be set knowing that, or the policy quietly becomes a discount.
 
 ## 6. What the fee is a fraction of, and who the buyer therefore is
 
-Measured on this machine, 32 calendar days to 2026-09-12: **$12,575.91 at list
-prices**, of which **$346.40 was avoidable, 2.8%**. That is **$393 per calendar
-day for one operator**.
+**This section was written once, was wrong by more than an order of magnitude,
+and the wrong version is described here rather than deleted.**
 
-**Everything in this section is an extrapolation from one machine and is
-labelled as such.** It is not a population. It is used only to answer "who could
-possibly buy this", which is a question about orders of magnitude.
+The first version sized the buyer from this machine: $12,575.91 over 32 calendar
+days is $393 per calendar day, which annualises to about $143,000 per operator,
+which made eight metered operators enough to carry a $20,000 fee at a sane
+percentage. That arithmetic is correct and the input is not representative.
 
-At that intensity one operator generates about **$143,000 a year** of agent
-spend at list.
+**$393 per calendar day is about $11,950 per developer per month.** Against the
+published figures:
 
-| Metered operators | Annual bill at list | A $20,000 audit is |
+| Source | Per developer per month | This corpus is |
 |---|---|---|
-| 1 | $143,000 | **13.9%**, which nobody buys |
-| 3 | $430,000 | 4.6% |
-| 5 | $717,000 | 2.8% |
-| 10 | $1,434,000 | 1.4% |
-| 20 | $2,869,000 | 0.7% |
+| Anthropic's own Claude Code cost documentation, enterprise deployments | $150 to $250 | **48x to 80x** |
+| Gartner, June 2026, the band 23 to 25% of technology leaders report | $200 to $500 | 24x to 60x |
+| DX, blended seat plus token | $200 to $600 | 20x to 60x |
+| Gartner, the heavy tail, about 6% of organisations | $2,000 to $4,000 | 3x to 6x |
 
-**This is the qualification criterion, and it came out of arithmetic rather than
-opinion: the buyer needs roughly eight or more metered operators.** Below five,
-the fee is a double-digit share of the thing it examines and the conversation is
-over regardless of how good the finding is.
+The calibration corpus is one founder running agents at maximum intensity
+through a launch sprint. **It is an outlier by one to two orders of magnitude
+and cannot be used to size a buyer.** It is exactly the error this project
+publishes retractions about, committed inside a document arguing for a price,
+which is the worst available place for it.
 
-And the sentence that does not forecast anything:
+### On published figures instead
 
-> At ten operators, this audit costs **half of what you already spent twice this
-> year**.
+A $20,000 audit, as a share of an organisation's annual agent bill:
 
-That is backward-looking, it is derived from a measured share, and it is the
-only value sentence here that the deliverable rules permit.
+| Developers | At Anthropic's published $150-250 | At Gartner's modal $200-500 | At the heavy tail $2,000-4,000 |
+|---|---|---|---|
+| 20 | 33% to 56% | 17% to 42% | **2.1% to 4.2%** |
+| 50 | 13% to 22% | 6.7% to 17% | 0.8% to 1.7% |
+| 100 | 6.7% to 11% | 3.3% to 8.3% | 0.4% to 0.8% |
+| 200 | 3.3% to 5.6% | 1.7% to 4.2% | 0.2% to 0.4% |
 
-**The load-bearing caveat: those dollars are list prices, and the corpus that
-produced them was generated on a subscription.** For the fee to be a fraction of
-a real invoice, the customer must be metered. A flat-seat buyer is not a
-smaller version of this customer, they are not a customer, and the site already
-says so.
+The comparables in section 7 land a one-off audit at roughly **1% to 5%** of the
+spend it examines. Taking 5% as the ceiling:
 
-## 7. What this does not settle
+| Buyer profile | Developers needed to carry $20,000 |
+|---|---|
+| Typical spend, Anthropic's own figure | **135** |
+| Typical spend, Gartner's modal band | **70** |
+| Typical spend, DX blended | **60** |
+| **The heavy tail, above $2,000 per developer per month** | **10** |
 
-- **No market comparables in this file.** Cost to produce sets a floor, never a
-  price. What similar specialist audits actually sell for is a separate input.
+**So there are two buyers and they are not the same company.** Either an
+organisation of roughly 60 to 135 developers at ordinary spend, or **a team of
+ten in the heavy-usage tail**, which Gartner puts at about 6% of organisations.
+
+The second is the target, and the reason is in this document's own mistake: the
+outlier corpus that broke the first draft is precisely that profile. **The buyer
+looks like this machine.** A team whose per-developer spend is 10x the published
+median already knows it has a problem, has already been asked about it, and is
+the 6% for whom the fee is 2% rather than 40%.
+
+That is a sharper targeting statement than the first draft produced, and it came
+from the figure that was wrong.
+
+## 7. What the market pays for this shape
+
+Normalised to a five-day single-specialist engagement whose deliverable is a
+written report. Full provenance in the research note; tier is marked.
+
+| Comparable | Normalised | Note |
+|---|---|---|
+| **Percona Database Health Audit** | **$11,400** | Published list price. Report in 5 to 7 business days plus a live rundown. **The closest shape of anything found**: fixed scope, written findings ranked by impact and effort, live Q&A |
+| Trail of Bits, OpenZeppelin | $25,000 | Per engineer-week, from public Arbitrum and Venus procurement filings |
+| Runtime Verification | $20,000 | Published rate card, per week |
+| Dedaub | $17,500 | $3,500 per engineer-day published, times five |
+| Spearbit | $9,500 to $16,000 | $1,900 to $3,200 per researcher-day, times five |
+| Deloitte, G-Cloud 14 SFIA L6 to L7 | $12,000 to $15,250 | £1,925 to £2,450 per day at ~1.25. **The card itself says fixed-price deliverables may carry a premium** |
+| Revenant Systems PostgreSQL audit | $6,200 | £4,950, two-week turnaround, effort days not stated |
+
+Security-audit cluster mean: **$18,000 to $19,625**. Median of all midpoints:
+$13,625.
+
+Two cautions on this table. The security figures come from a market where funds
+at risk inflate willingness to pay, so they are a ceiling rather than a
+midpoint. And Percona's $11,400 is the most honest single comparable here
+precisely because it is the least exciting one.
+
+**Utilisation, checked rather than assumed.** Section 4 guessed 45%. The only
+real survey found is SPI's 2026 Professional Services Maturity Benchmark,
+n=509: **66.4% billable utilisation in 2025, an all-time low**, and that
+measures staffed consultants inside firms who carry no sales or admin load of
+their own. It is a ceiling for a solo operator who also builds the product, not
+a comparable. 45% survives as an assumption; it is not contradicted, and it is
+not confirmed either. **No citable survey of solo independent utilisation
+exists**; the 120-to-160-billable-days figures in circulation are unsourced blog
+assertions.
+
+## 8. Where the two methods meet
+
+| | Range |
+|---|---|
+| Market comparables for this shape | $11,400 to $25,000, clustering $17,500 to $25,000 |
+| Cost floor at realistic year-one volume (6 to 10 weeks, $120k to $180k compensation) | $14,900 to $29,167 |
+| **Overlap** | **$17,500 to $25,000** |
+
+Bottom-up cost and top-down market agree, which is the only reason to trust
+either. Then the termination policy is applied, because a list price that
+ignores it is quoting a number nobody will realise:
+
+| List | Realised at 15% to 25% Day-1 termination |
+|---|---|
+| $18,000 | $14,400 to $15,840 |
+| $20,000 | $16,000 to $17,600 |
+| **$22,000** | **$17,600 to $19,360** |
+| $25,000 | $20,000 to $22,000 |
+
+**The recommendation is $22,000 flat, quoted as $18,000 to $25,000 by scope.**
+$22,000 is the list price whose realised revenue lands inside the overlap rather
+than below it.
+
+**The current $8,000 low end should go.** It is below every published comparable
+except one whose "week" is calendar rather than effort, and it is below the cost
+floor at any volume this business will see in year one. Section 3's table is the
+argument: fixed costs over fewer engagements means year one is the year to
+charge *more*, and year one is now.
+
+## 9. What this does not settle
+
+- **The comparables are mostly from adjacent markets.** No published rate card
+  from anyone selling an AI-spend audit was found, because the category does not
+  have public comparables yet. Percona and the security firms are the closest
+  shapes available, not the same product.
 - **Every hour above is an estimate by the person who would work them**, and no
   week has been run. The first engagement measures this table, and the table is
   corrected afterwards with the original left standing.
-- **Utilisation is assumed at 45%**, from nothing. It is the single figure here
-  most likely to be wrong.
+- **Utilisation is still assumed at 45%.** The only real survey measures
+  staffed consultants in firms (66.4%, n=509) and is a ceiling, not a
+  comparable. It remains the single figure here most likely to be wrong.
 - **The termination rate is invented.** There is no history to draw it from.
 
 ---
