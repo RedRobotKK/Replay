@@ -41,6 +41,23 @@ import (
 // where the next binary comes from. Production never assigns this.
 var newUpdateClient = selfupdate.NewClient
 
+// signatureLine is the one line that says which of the two checks happened.
+//
+// A function rather than a branch inside runUpgrade, and `guard reachability`
+// is why. As a branch, the verified arm was UNREACHED: lookCosign and runCosign
+// are unexported seams in internal/selfupdate, so no test in this package could
+// make it true, and I had written that off in a comment as an equivalent
+// mutant. Documenting an untested branch does not test it.
+//
+// As a function it takes a value and returns a string, so both arms are
+// reachable from a table test without exporting anything.
+func signatureLine(sig selfupdate.SignatureStatus) string {
+	if sig == selfupdate.SignatureVerified {
+		return "✓ Signature verified (Sigstore, built by CI from the tag)"
+	}
+	return "  " + sig.String()
+}
+
 func runUpgrade(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("upgrade", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -137,11 +154,7 @@ func runUpgrade(args []string, stdout, stderr io.Writer) error {
 	// had changed. Fetch could not report it either; it returned
 	// ([]byte, error).
 	_, _ = fmt.Fprintln(stderr, "✓ Checksum verified")
-	if sig == selfupdate.SignatureVerified {
-		_, _ = fmt.Fprintf(stderr, "✓ Signature verified (Sigstore, built by CI from the tag)\n")
-	} else {
-		_, _ = fmt.Fprintf(stderr, "  %s\n", sig)
-	}
+	_, _ = fmt.Fprintln(stderr, signatureLine(sig))
 
 	if *dryRun {
 		_, _ = fmt.Fprintf(stdout, "\nVerified %s for %s/%s (%d bytes). Dry run: %s was not touched.\n",

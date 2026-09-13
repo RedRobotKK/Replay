@@ -495,21 +495,28 @@ func (e *PoolEntry) UnmarshalJSON(b []byte) error {
 // The entries under replay.pool.v1 mean something different from the ones under
 // v2, and reading them under this version is guessing rather than reading.
 func (p *Pool) UnmarshalJSON(b []byte) error {
-	var probe struct {
-		Schema string `json:"schema"`
-	}
-	if err := json.Unmarshal(b, &probe); err != nil {
-		return err
-	}
-	if probe.Schema != PoolSchema {
-		return fmt.Errorf("this pool declares schema %q and this build writes %q. The "+
-			"field names changed in v2 (avoidableUsd became rebilledUsd), so its rows "+
-			"do not mean what this build would read them to mean", probe.Schema, PoolSchema)
-	}
+	// DECODE FIRST, then check the version. The order is the fix for a
+	// redundant branch, and it also improves both messages.
+	//
+	// This probed for the schema first, and that probe had its own decode-error
+	// branch which `guard reachability` reported as running with nothing
+	// depending on it. It was right: any document the probe cannot parse the
+	// real decode cannot parse either, so the branch was a second spelling of
+	// one refusal. Worse, a malformed document reached the SCHEMA error with an
+	// empty string, which told the reader their pool declared schema "" when
+	// the truth was that it did not parse.
+	//
+	// Decoding first means malformed input is reported as malformed and a
+	// version mismatch is reported as a version mismatch.
 	type plain Pool
 	var out plain
 	if err := json.Unmarshal(b, &out); err != nil {
 		return err
+	}
+	if out.Schema != PoolSchema {
+		return fmt.Errorf("this pool declares schema %q and this build writes %q. The "+
+			"field names changed in v2 (avoidableUsd became rebilledUsd), so its rows "+
+			"do not mean what this build would read them to mean", out.Schema, PoolSchema)
 	}
 	*p = Pool(out)
 	return nil
