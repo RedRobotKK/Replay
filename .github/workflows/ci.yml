@@ -142,6 +142,34 @@ jobs:
         with:
           version: v2.5
 
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      # go.mod has no third-party requires, and the README badge says so. That
+      # removes the transitive-dependency problem; it does not remove the
+      # dependency. Every line this binary runs that it did not write comes from
+      # the standard library and the toolchain that compiles it, and both move.
+      # The go-latest job already exists because a stdlib shutdown change broke
+      # this project once, so the empirical guard is here and the declarative one
+      # was not.
+      #
+      # govulncheck is the right tool rather than a generic scanner because it
+      # reports only vulnerabilities in code paths actually reachable from this
+      # module, so a finding here is a finding about Replay and not about a
+      # package it happens to link.
+      #
+      # Pinned, for the reason the release workflow spells out about cosign: an
+      # action SHA pins the action, never the tool it fetches.
+      - name: Vulnerabilities in reachable code
+        run: |
+          go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+
   x402-e2e:
     name: x402 end to end
     runs-on: ubuntu-latest
@@ -317,7 +345,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-go@v5
+      # Pinned to the same v5 the rest of this file already uses. The v5 tag
+      # has moved since that SHA was chosen, which is the argument for pinning
+      # stated as a fact rather than a principle.
+      - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5
         with:
           go-version-file: go.mod
       # Every command and flag in docs/CLI.md, run three times, with the exit
@@ -342,7 +373,7 @@ jobs:
         run: |
           go build -o /tmp/replay ./cmd/replay
           python3 scripts/surface-drift/drift.py --bin /tmp/replay --out /tmp/surface-drift.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: surface-drift

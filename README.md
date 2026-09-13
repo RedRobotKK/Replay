@@ -6,10 +6,12 @@
 [![Dependencies](https://img.shields.io/badge/dependencies-0-success)](cmd/replay/x402_test.go)
 [![Coverage](https://img.shields.io/badge/coverage-%E2%89%A585%25-success)](scripts/coverage-gate.sh)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)](#platform-support-macos-and-linux-only)
-[![License](https://img.shields.io/badge/license-BSL%201.1-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-BUSL%201.1%20(source--available)-blue)](LICENSE)
 
 **Your prompt cache expired while you were at lunch.** Replay finds the turn it happened on, and
 what that one turn cost.
+
+![A triage session: pick a finding, open the evidence behind it, mark it applied](docs/demo/triage.gif)
 
 > **The refusals are the feature.** Anything this tool cannot measure, it declines to print — and
 > says why, in the place the number would have gone. `replay route` will not quote you dollars for a
@@ -42,7 +44,7 @@ Replay replays your sessions against the provider's caching rules, turn by turn,
 that broke.
 
 ```sh
-curl -fsSL https://redrobot.jp/replay.sh | sh
+curl -fsSL https://replay.doctor/replay.sh | sh
 ```
 
 ![The cost screen: what one task cost, and the share of it nobody chose](docs/screens/cost.svg)
@@ -63,8 +65,8 @@ If you are pointing an agent through the proxy, `l` answers the question the tra
 Reading it first is reasonable, and the script is written expecting you to:
 
 ```sh
-curl -fsSL https://redrobot.jp/replay.sh | less                  # read it
-curl -fsSL https://redrobot.jp/replay.sh | sh -s -- --dry-run    # see what it would do
+curl -fsSL https://replay.doctor/replay.sh | less                  # read it
+curl -fsSL https://replay.doctor/replay.sh | sh -s -- --dry-run    # see what it would do
 ```
 
 It verifies a checksum and refuses to fall back to building from source when it cannot verify.
@@ -481,6 +483,17 @@ measurements behind it are real API spend.
 
 ## License
 
-Business Source License 1.1, converting to Apache 2.0 on 2029-09-06. Running it
-at work is free and unrestricted; reselling it as a hosted service is not. See
-[LICENSE](LICENSE), [NOTICE](NOTICE) and [ADR-0016](docs/adr/0016-business-source-license.md).
+**BUSL 1.1 is a source-available licence, not an OSI-approved open-source one.**
+Saying that here rather than leaving it to be pointed out: the distinction is
+real and the project does not get to blur it.
+
+What the licence actually permits is wider than the label suggests. Running
+Replay at work, in production, at any scale, on any number of machines, in CI,
+and using everything it outputs, is free and unrestricted. The one thing it
+forbids is reselling it as a hosted or managed service. It converts to Apache
+2.0 on 2029-09-06, which is three years rather than the indefinite Change Date
+some adopters choose.
+
+See [LICENSE](LICENSE), [NOTICE](NOTICE) and
+[ADR-0016](docs/adr/0016-business-source-license.md), which records that this
+was Apache 2.0 until 2026-09-06 and why that changed.

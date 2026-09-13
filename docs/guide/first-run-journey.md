@@ -42,7 +42,7 @@ to provide, and one status count taken from a 700-session corpus.
 ## Step 1: install, and read the closing lines
 
 ```sh
-curl -fsSL https://redrobot.jp/replay.sh | sh
+curl -fsSL https://replay.doctor/replay.sh | sh
 ```
 
 What the script does is download a released binary, check it against the release checksums, and

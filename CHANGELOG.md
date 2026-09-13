@@ -49,7 +49,10 @@ All notable changes to this project are documented here. The format follows [Kee
   `internal/observation/corpussize_test.go` pins the field count and a byte
   bound, measured by serialising the type, and its failure message lists the
   documents that have to change with it. A populated submission is **19 fields**
-  and **under 600 bytes**: 328 at its smallest, 572 at its largest.
+  and **under 600 bytes**: 328 for a submission with no optional field set, 572
+  for one with every optional field set and every float at full round-trip
+  width. Under 600 is the part the test enforces and the only part true for
+  every contributor; 572 is a measurement of one shape, not a proven ceiling.
   The "no text" wording is restated rather than dropped. These are the first
   three strings in the payload that are not a date, a schema or a tag the
   contributor chose. They carry a semantic version, a short hex SHA of a public
@@ -262,6 +265,52 @@ All notable changes to this project are documented here. The format follows [Kee
   `unjoinableRequests` in the JSON.
 
 ### Changed
+
+- **Every documented install command pointed at the wrong host, four days before
+  launch.** The README install line, the getting-started guide, the first-run
+  journey and the launch post all said `curl -fsSL https://redrobot.jp/replay.sh
+  | sh`, while the product ships at replay.doctor. The site's own Getting Started
+  page is generated from `docs/guide/getting-started.md` here, so replay.doctor
+  was telling its own visitors to install from a different domain. Both hosts
+  served a byte-identical script, verified by SHA-256 against `install.sh`, so
+  nothing was broken and nothing was going to say so. A `curl | sh` line is the
+  highest-trust sentence this project prints, and two domains for one tool at the
+  moment when every visitor is new spends the credibility the signing and the
+  checksums were built to earn. `internal/regression/install_host_test.go` now
+  fails on any tracked document naming the other host, and a companion test
+  refuses the empty case, so deleting the install line cannot pass for fixing it.
+- **The licence badge named a different licence.** It read `BSL 1.1`. BSL 1.0 is
+  the Boost Software License, which is OSI-approved and permissive; this project
+  is `BUSL-1.1`, which is neither. The SPDX identifier was correct in `NOTICE` and
+  `CITATION.cff` and wrong on the one surface a stranger reads first. The badge
+  now says `BUSL 1.1 (source-available)`, and the License section states plainly
+  that it is not OSI-approved before saying what it does permit.
+- **Two published response promises had no capacity behind them.** `SUPPORT.md`
+  promised triage in two working days and `SECURITY.md` an acknowledgement in
+  three, from one maintainer, days before a Hacker News and Product Hunt launch.
+  Both now carry the launch week by name, and `SECURITY.md` gains an escalation
+  path and says the 90-day disclosure clock starts when the reporter first wrote,
+  not when an inbox was read. A promise missed in silence is a worse failure here
+  than a modest one kept.
+- The canonical label set was never applied, so `type: security`, `status: triage`
+  and `type: dependencies` did not exist. Three mechanisms were silently inert:
+  issue templates labelled nothing, Dependabot could not apply its label, and the
+  stale bot's `type: security` exemption matched no issue, so it would have closed
+  a security report at day 59.
+- `main` now carries a ruleset: required status checks, signed commits, linear
+  history, no force-push and no deletion. It deliberately does not require a pull
+  request review, because a self-approval on a one-person project is not a control
+  and pretending otherwise is the kind of check this repository exists to refuse.
+- The last two unpinned GitHub Actions are pinned. The `setup-go` v5 tag had moved
+  since the SHA already used elsewhere in the file was chosen, which is the
+  argument for pinning as a fact rather than a principle.
+- A `govulncheck` job, and a `toolchain` floor in `go.mod`. Zero third-party
+  dependencies removes the transitive-trust problem, not the dependency: the
+  standard library and the compiler both move, and `go-latest` exists because one
+  of them broke this project once. The toolchain line is a floor rather than a
+  pin, checked on 2026-09-12 with go1.27.1 installed and used, so `go-latest`
+  still tests against the newest release.
+
 
 - **`replay cost` prints four billed legs.** Cache write, cache read, uncached
   input, output. Token cuts that only shrink cached prefix save at the read
