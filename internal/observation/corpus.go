@@ -126,6 +126,40 @@ type Corpus struct {
 	SourceTag string `json:"sourceTag"`
 	TagBasis  string `json:"tagBasis"`
 
+	// Which binary did the arithmetic (#284).
+	//
+	// RulesVersion above names the provider's published rule document. It is
+	// not enough, and 2026-09-12 is how we found out: two builds read the same
+	// directory on the same machine and reported $4,088.49 and $11,969.37,
+	// both stamped "anthropic-2026-09-01". The label was honest. The provider
+	// had changed nothing; we had. Six models one build declined to price
+	// became priced, and the unknown-model read multiple became a named rule
+	// and moved.
+	//
+	// A pool that adds two such submissions is summing different arithmetic
+	// under one name. PricingDigest is computed from the price table, the
+	// caching floors and the unknown-model fallback actually compiled into
+	// this binary, so it moves when any of them does, whatever the provider's
+	// label says. BinaryVersion and Commit say which build, so a reader can go
+	// and look at it.
+	//
+	// ALL THREE ARE OPTIONAL AND THAT IS DELIBERATE. Digested marshals this
+	// struct, so a field that serialised when absent would change the digest of
+	// every submission written before today and orphan every roster entry that
+	// names one. Empty means a build from before these existed, which is a fact
+	// a pool can act on rather than a gap it has to guess at (ADR-0018). It is
+	// also why the schema string does not move: this is additive, exactly as
+	// CacheBreaks, ReReads and ErrorShare were.
+	//
+	// These are strings, and they are the first strings in this payload that
+	// are not a date, a schema or a tag the contributor chose. They carry no
+	// path, no project and no content: a semantic version, a short hex SHA of
+	// a public commit, and a hex digest of numbers that ship in every copy of
+	// the binary. Anyone can compute the third from a release they downloaded.
+	BinaryVersion string `json:"binaryVersion,omitempty"`
+	Commit        string `json:"commit,omitempty"`
+	PricingDigest string `json:"pricingDigest,omitempty"`
+
 	// Digest names this submission by its content, so a pooled figure can list
 	// what it is made of and a reader can check that the file they downloaded
 	// is the one that was counted.

@@ -74,6 +74,26 @@ type PoolEntry struct {
 	// make a pool of quiet contributors look like a pool of clean ones.
 	CacheBreaks *int `json:"cacheBreaks,omitempty"`
 	ReReads     *int `json:"reReads,omitempty"`
+
+	// Which build produced the row, and which numbers it priced with.
+	//
+	// Widening this projection is a deliberate act, which is what the comment
+	// on the type says and why these are here rather than arriving by
+	// accident. #284 is the argument: replay.doctor/pool/ was stating by hand,
+	// in prose, which build produced its first row, because two builds read
+	// one directory on one day and reported $4,088.49 and $11,969.37 under the
+	// same rulesVersion. A roster whose reader cannot tell which rows are
+	// comparable is a table of numbers that must not be added up, presented as
+	// one that may.
+	//
+	// Nothing identifying is added. A semantic version and a short SHA of a
+	// public commit describe the binary, not its operator, and two
+	// contributors running the same release carry the same two strings.
+	//
+	// Empty means a submission from before these existed, which is a fact the
+	// roster can show rather than a gap it has to guess at.
+	BinaryVersion string `json:"binaryVersion,omitempty"`
+	PricingDigest string `json:"pricingDigest,omitempty"`
 }
 
 // Pool is a roster of submissions and nothing else.
@@ -167,6 +187,7 @@ func (p *Pool) Add(c Corpus, file string) error {
 		MedianTaskUSD: c.MedianTaskUSD, PricedAt: c.PricedAt,
 		RulesVersion: c.RulesVersion, Unpriced: c.Unpriced,
 		CacheBreaks: c.CacheBreaks, ReReads: c.ReReads,
+		BinaryVersion: c.BinaryVersion, PricingDigest: c.PricingDigest,
 	}
 	for i, e := range p.Roster {
 		if e.SourceTag != c.SourceTag {

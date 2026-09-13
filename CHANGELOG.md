@@ -4,7 +4,57 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-12
+
 ### Fixed
+
+- **Two builds priced one corpus at $4,088.49 and $11,969.37 and both called it
+  `anthropic-2026-09-01`.** Read on 2026-09-12, same machine, same transcript
+  directory, same day (#284). The rules label was not lying: the provider's
+  published document had not changed. This code had. Six models the older build
+  declined to price became priced, and the unknown-model cache-read multiple
+  became a named rule and moved. A pool that added those two submissions was
+  summing figures produced by different arithmetic under one name, and
+  `replay.doctor/pool/` had been stating which build produced its first row by
+  hand, in prose, because the file could not say it.
+  A submission now carries `binaryVersion`, `commit` and `pricingDigest`, and
+  the roster carries the first and third. `PricingDigest` is computed from the
+  price table, the caching floors, the unknown-model fallback and any loaded
+  rules document, so it moves when any of them moves, whatever the provider's
+  label says. It is computed rather than declared because the alternative was a
+  constant somebody remembers to bump, and #284 is what that looks like the
+  first time somebody is busy: every one of those changes went through review
+  and the label sat still through all of them.
+  `RulesVersion` keeps its published meaning. It names the provider's document,
+  it is quoted on the website and in dated evidence files, and redefining a
+  published field underneath the people citing it would have been a second
+  defect on top of the first.
+  All three fields are optional and the schema string does not move, so every
+  submission already written stays valid and keeps its digest. Fifteen tests
+  mutate a pricing input and require the digest to move; four of them failed
+  when first written, because the digest read only the compiled table and would
+  have named numbers the report did not use whenever `replay rules` had loaded
+  a document.
+- **A corpus submission named the compiled rules version even when a loaded
+  document had priced it.** `contributeCorpus` stamped `cachemodel.RulesVersion`
+  while the calibration submission built ten lines below it used
+  `RulesVersionInEffect()`. After `replay rules` loads a document, every dollar
+  figure in the submission comes from that document, and the file named the
+  table built into the binary instead. Found while fixing #284; nothing had
+  reconciled the two call sites.
+- **The payload's published size and field count had nothing holding them to the
+  code.** "502 bytes", "16 fields" and "sixteen counts and ratios, no text" are
+  quoted in a dozen places across the repository and the website, and all of
+  them became wrong the moment a field was added, with nothing to notice.
+  `internal/observation/corpussize_test.go` pins the field count and a byte
+  bound, measured by serialising the type, and its failure message lists the
+  documents that have to change with it. A populated submission is **19 fields**
+  and **under 600 bytes**: 328 at its smallest, 572 at its largest.
+  The "no text" wording is restated rather than dropped. These are the first
+  three strings in the payload that are not a date, a schema or a tag the
+  contributor chose. They carry a semantic version, a short hex SHA of a public
+  commit, and a hex digest of numbers compiled into every copy of the binary, so
+  two contributors running the same release send the same three strings.
 
 - **The match rate never said how much of it was exact.** `MatchRate` counts a
   turn as matched when the provider's cache read was reproduced exactly OR
@@ -677,7 +727,8 @@ change: it has never been tested there. See the README.
 - README and roadmap now describe the replay-first sequence (`replay`, `blame`, `diff`, then `serve`).
 - Ledger schema 2: records carry provider-named usage fields and a typed break cause. Files written by schema 1 are skipped by the reader rather than misread; delete `~/.replay/ledger` from earlier builds.
 
-[Unreleased]: https://github.com/RedRobotKK/Replay/compare/main...HEAD
+[Unreleased]: https://github.com/RedRobotKK/Replay/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/RedRobotKK/Replay/compare/v0.5.4...v0.6.0
 
 ### Fixed
 

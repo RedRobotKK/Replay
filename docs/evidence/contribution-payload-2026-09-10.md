@@ -32,6 +32,55 @@ field list and the size, not an assurance.
 > fields are a ratio and two counts, with no path from any of them back to code,
 > prompts or a project.
 
+> **Amended 2026-09-12, and this one changes a claim rather than extending it.**
+> Three more optional fields were added for defect #284: `binaryVersion`,
+> `commit` and `pricingDigest`. A populated submission is now **19 fields**, and
+> the bound is **under 600 bytes**: 328 at its smallest, 572 for a submission
+> with every optional field set and every float at full round-trip width. All
+> three figures were measured by serialising the type, not estimated, and
+> `internal/observation/corpussize_test.go` fails if they move.
+>
+> ```json
+>   "binaryVersion": "v0.6.0",
+>   "commit": "87a9b2a",
+>   "pricingDigest": "p02eb9163145c",
+> ```
+>
+> **WHY THE SIZE CLAIM MOVED, AND WHY THE "NO TEXT" ONE NEEDS RESTATING.**
+>
+> On 2026-09-12 two builds read the same transcript directory on the same
+> machine and reported $4,088.49 and $11,969.37. Both stamped
+> `rulesVersion: anthropic-2026-09-01`, and the label was honest: the provider's
+> document had not changed, the code applying it had. Six models one build
+> declined to price became priced, and the unknown-model read multiple became a
+> named rule and moved. A pool adding those two submissions was summing
+> different arithmetic under one name, and `replay.doctor/pool/` was saying so
+> by hand, in prose, because the file could not say it itself.
+>
+> `pricingDigest` is computed from the price table, the caching floors, the
+> unknown-model fallback and any loaded rules document, so it moves when any of
+> them does. `binaryVersion` and `commit` say which build, so a reader can go and
+> look at it.
+>
+> **These are the first three strings in this payload that are not a date, a
+> schema, or a tag the contributor chose, so the sentence "counts and ratios, no
+> text" stops being exactly true and is restated here rather than quietly
+> dropped.** What they carry: a semantic version, a short hex SHA of a public
+> commit, and a hex digest of numbers compiled into every copy of the binary.
+> Anyone can compute the third from a release they downloaded. Two contributors
+> running the same release send the same three strings, which is the test that
+> matters: they describe the binary, not its operator.
+>
+> Everything below about what is NOT in the payload still holds. No paths, no
+> project names, no session ids, no model ids, no tool names, no message text,
+> no timings, no per-task rows, no hostname, username or hardware identifier.
+>
+> All three are optional and the schema string did not move, for the reason the
+> previous amendment gives: `Pool.Add` recomputes the digest, so a field that
+> serialised when absent would invalidate every submission already written.
+> Absent means a build from before they existed, which is a fact a pool can show
+> rather than a gap it has to guess at.
+
 ## The payload: 13 scalars, 394-432 bytes
 
 `observation.Corpus` (`internal/observation/corpus.go:81-119`), serialized with

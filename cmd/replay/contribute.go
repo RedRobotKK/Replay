@@ -19,6 +19,7 @@ import (
 	"github.com/RedRobotKK/Replay/internal/money"
 	"github.com/RedRobotKK/Replay/internal/observation"
 	"github.com/RedRobotKK/Replay/internal/probe"
+	"github.com/RedRobotKK/Replay/internal/version"
 )
 
 // Contribution: build a submission, print where it is, send nothing.
@@ -253,13 +254,29 @@ func contributeCorpus(campaign, dir string, f corpusFigures, now time.Time) (str
 		AvoidableShare: f.AvoidableShare,
 		MedianTaskUSD:  f.MedianTaskUSD,
 		PricedAt:       money.RatesDate,
-		RulesVersion:   cachemodel.RulesVersion,
-		Unpriced:       f.Unpriced,
-		CacheBreaks:    f.CacheBreaks,
-		ReReads:        f.ReReads,
-		ErrorShare:     f.ErrorShare,
-		SourceTag:      tag.Value,
-		TagBasis:       tag.Basis,
+		// In effect, not compiled. `replay rules` can load a document that
+		// Override installs for the process, and from that point every dollar
+		// figure above comes from the document rather than the table built
+		// into this binary. Stamping the compiled constant here named a table
+		// the figures had not been produced with. The calibration submission
+		// immediately below always used RulesVersionInEffect; this one did not,
+		// and nothing reconciled the two.
+		RulesVersion: cachemodel.RulesVersionInEffect(),
+		Unpriced:     f.Unpriced,
+		CacheBreaks:  f.CacheBreaks,
+		ReReads:      f.ReReads,
+		ErrorShare:   f.ErrorShare,
+		SourceTag:    tag.Value,
+		TagBasis:     tag.Basis,
+
+		// Which binary, and which numbers it priced with (#284). RulesVersion
+		// above names the provider's document and is not enough on its own:
+		// two builds reported $4,088.49 and $11,969.37 for one directory on
+		// one day under one rules label, because the code changed and the
+		// label could not.
+		BinaryVersion: version.Version,
+		Commit:        version.Commit,
+		PricingDigest: cachemodel.PricingDigest(),
 	}.Digested()
 	// No `dir == ""` default here, and its absence is deliberate: filepath.Join
 	// discards empty elements, so Join("", name) and Join(".", name) are the
