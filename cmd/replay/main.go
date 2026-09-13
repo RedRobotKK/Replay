@@ -69,7 +69,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	// it cannot verify is private.
 	refusalCheckedAtEntry = platformRefusal
 	if msg := platformRefusal(); msg != "" {
-		fmt.Fprint(stderr, msg)
+		_, _ = fmt.Fprint(stderr, msg)
 		return errUnsupportedPlatform
 	}
 	if len(args) == 0 {

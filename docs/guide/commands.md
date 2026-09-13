@@ -1448,11 +1448,38 @@ it exists to complement.
 
 It is off unless you ask for it, and it binds loopback only: the counters name
 repositories and token spend, which is not something to publish to a network.
-| `--upstream` | Provider base URL. Default `https://api.anthropic.com`. This is how the proxy is pointed at an OpenAI-compatible provider, or at another proxy, and it is the only setting that changes where your traffic goes — so it is worth reading twice |
+| `--upstream` | Provider base URL. Default `https://api.anthropic.com`. This is how the proxy is pointed at an OpenAI-compatible provider, or at another proxy, and it is the only setting that changes where your traffic goes, so it is worth reading twice. Pointing it at an OpenAI-compatible provider routes `/v1/chat/completions`, which is **EXPERIMENTAL, UNMASKED**: see below |
 | `--token`, or `REPLAY_TOKEN` | Require `x-replay-token` on every request |
 | `--ledger` | Where ledger files are written. Default `~/.replay/ledger`, owner-only |
 
 Browser-originated requests are refused regardless.
+
+### The OpenAI-compatible path is EXPERIMENTAL, UNMASKED
+
+`serve` reads two request shapes. `/v1/messages` is the one everything was built for.
+`/v1/chat/completions`, which DeepSeek, OpenAI and OpenAI-compatible gateways all speak, is
+read, guarded and ledgered, and it is labelled **EXPERIMENTAL, UNMASKED** everywhere it is
+offered. Both halves of that label mean something specific.
+
+**UNMASKED means `--mask` never runs on this traffic.** The masker walks the Messages body
+shape and this family's body is a different shape, so an API key or token pasted into a
+prompt on this path is forwarded to the provider exactly as typed. Turning `--mask` on does
+not change that, and the startup banner now says so under the `masking: on` line. The proxy
+also prints the label on stderr the first time it sees each such path. That disclosure is
+unconditional: it does not require `--mask`, and `REPLAY_NO_POLICY=1` does not silence it,
+because the operator who has turned every rewrite off is the last person who should lose the
+warning.
+
+**EXPERIMENTAL means the coverage is real but narrow.** This path has been driven against
+live DeepSeek (2026-09-05, four surfaces, where it caught a defect no stub could have shown)
+and against a local Ollama (2026-09-09). It has never been driven against OpenAI itself, nor
+against any third implementation of the same API, and no cache write has ever been observed
+in that response shape. No policy is applied to it either, deliberately: the family caches
+automatically, so there is no breakpoint to place and no TTL to choose.
+
+If you are deliberately running this path, the thing to do is keep credentials out of prompts
+on it rather than rely on `--mask`. Alert on `replay_unmasked_requests_total` if you want to
+know when that traffic starts.
 
 ### Live policy, experimental
 
@@ -1498,7 +1525,7 @@ is `/replay/status`, which you ask for.
 | `replay_cost_usd_day` | gauge | — | List-price cost for the current UTC day. A gauge because it resets at midnight, and a counter that resets makes every `rate()` wrong |
 | `replay_cost_unpriced_requests_total` | counter | — | Requests the rules could not price. Independent of the doctor's unenforced-cap warning, which also needs a dollar cap configured |
 | `replay_unparsed_requests_total` | counter | — | Requests on a path this build cannot read. **Excludes** `/v1/chat/completions`, which is read |
-| `replay_unmasked_requests_total` | counter | — | Requests the masker does not cover. This is what `/v1/chat/completions` increments |
+| `replay_unmasked_requests_total` | counter | — | Requests on a path the masker cannot cover. This is what `/v1/chat/completions` increments, and it counts them whether or not `--mask` was passed, because the question the counter answers is how much traffic took the unmaskable path |
 | `replay_refused_total` | counter | `guard` | Requests refused locally, by guard |
 | `replay_upstream_errors_total` | counter | `status` | Provider responses with an error status |
 | `replay_retries_total` | counter | — | Requests resent after a retryable failure |

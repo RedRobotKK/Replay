@@ -19,8 +19,13 @@ functions across 358 test files against 202 source files, so two of the three
 were wrong by more than double. Fresher counts would rot the same way.
 `go test ./... -count=1` runs what exists, and
 `find . -name '*_test.go' | wc -l` counts the files. What is missing is
-that one security finding is open in part by choice, and one provider path has
-never touched a live provider.
+that one security finding is open in part by choice, and one provider path is
+labelled rather than covered.
+
+That second clause read "one provider path has never touched a live provider"
+until 2026-09-12, and it was wrong: see the correction under the provider
+coverage gate below. The path has touched two live providers. What it has never
+touched is the masker.
 
 **Updated 2026-09-10.** Findings 4, 6 and 7 are closed and finding 3 is closed
 on eviction. Each closure is a test that fails when the guard is removed; the
@@ -63,11 +68,42 @@ Each line is a gate. A release cannot claim 1.0 with any of them unmet, and
 
 ### Provider coverage
 
-- [ ] **The OpenAI-compatible path** is either exercised against a live
+- [x] **The OpenAI-compatible path** is either exercised against a live
       provider, or labelled **EXPERIMENTAL, UNMASKED** wherever it is offered.
-      It has only ever run against a test stub, and secret masking does not
-      cover it at all. Shipping it unlabelled implies a parity that does not
-      exist.
+      **Closed 2026-09-12 by the labelling route, not the verification route.**
+      The path is labelled, not newly proven: `/v1/chat/completions` still
+      applies no masking, and no Cursor or other generic OpenAI-compatible CLI
+      has ever been pointed at `replay serve`. What changed is that a reader
+      now meets the label before their first request instead of after it. The
+      label is on the `-upstream` and `-mask` flag help (which is where the
+      path is offered, and where a user who never opens `docs/` will be), on
+      the `masking: on` startup banner, on the `s` screen in the TUI, in
+      `docs/SURFACES.md`, `docs/CLI.md` and the command guide, and on stderr
+      from the proxy itself once per path. Each says what UNMASKED costs in the
+      same breath as the word, because "unmasked" alone does not tell a reader
+      their API keys are in flight. Guarded by
+      `internal/proxy/unmasked_test.go` and `cmd/replay/openailabel_test.go`;
+      three mutations of the runtime disclosure and two of the flag help were
+      run and watched to go red.
+
+      **Correction to this gate's own premise, 2026-09-12.** The sentence that
+      stood here said the path "has only ever run against a test stub". That
+      was false when it was written, and the repository held its own refutation
+      the whole time: `docs/architecture/multi-provider.md` records a live
+      DeepSeek run on 2026-09-05 across four surfaces which caught a defect a
+      stub structurally cannot produce (`RawUsage` was silently dropping
+      `prompt_cache_hit_tokens`), `docs/evidence/ollama-cache-observable-2026-09-09.md`
+      records the same endpoint driven against a local Ollama, and
+      `internal/ledger/testdata/deepseek` holds the captured bytes. The
+      surface registry had it right in `internal/ledger/surface_registry_test.go`,
+      splitting the live DeepSeek row from the stub-only Cursor row, and
+      nothing reconciled the two. What is genuinely unproven is narrower and
+      is what the label now says: never OpenAI itself, never a third
+      implementation of the API, no cache write ever observed in that response
+      shape, and no OpenAI-compatible CLI ever pointed at the proxy. **A gate
+      that overstates its own gap is the same defect as one that hides it**,
+      and it is worse here than elsewhere, because this file is the document
+      that decides what the release is allowed to claim.
 
 ### Platform
 

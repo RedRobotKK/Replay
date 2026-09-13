@@ -167,14 +167,25 @@ worth, the tests beside it: each was neutralised and watched to fail before it w
 | Surface | Status |
 |---|---|
 | `POST …/v1/messages` | **Verified** end to end against the real provider (spike 4). Parsed, guarded, masked, ledgered, policy applied |
-| `POST …/v1/chat/completions` | **Read, guarded and ledgered since 2026-09-05.** Usage is converted out of inclusive counting, the raw payload is kept, and the spend cap, error budget and loop detector all apply. **NOT masked**: `--mask` walks the Messages body shape only, and the proxy warns once per path (`NOT MASKED`) and counts `replay_unmasked_requests_total`. **No policy applied**, deliberately: this family caches automatically, so there is no breakpoint to place and no TTL to choose, and ADR-0003 admits only a parameter the client left unset. **Streaming works**: OpenAI SSE has its own parser, and because this family sends no usage on a stream unless `stream_options.include_usage` is set, Replay sets it when the client did not (ADR-0003 kind one, a parameter the client left unset; a client that set it keeps its own value). **Verified against a stub, not against any live OpenAI-compatible provider** |
+| `POST …/v1/chat/completions` | **EXPERIMENTAL, UNMASKED.** Read, guarded and ledgered since 2026-09-05: usage is converted out of inclusive counting, the raw payload is kept, and the spend cap, error budget and loop detector all apply. **UNMASKED means `--mask` never runs on this traffic**, so an API key pasted into a prompt here reaches the provider exactly as typed. `--mask` walks the Messages body shape only. The proxy prints `EXPERIMENTAL, UNMASKED` on stderr once per path and counts `replay_unmasked_requests_total`; that disclosure is unconditional and no flag turns it off. **EXPERIMENTAL means the coverage is real but narrow**: verified against live DeepSeek and a local Ollama, never against OpenAI itself or any third implementation of the same API, and no cache write has ever been observed on it. **No policy applied**, deliberately: this family caches automatically, so there is no breakpoint to place and no TTL to choose, and ADR-0003 admits only a parameter the client left unset. **Streaming works**: OpenAI SSE has its own parser, and because this family sends no usage on a stream unless `stream_options.include_usage` is set, Replay sets it when the client did not (ADR-0003 kind one, a parameter the client left unset; a client that set it keeps its own value) |
 | **Any other POST path**, e.g. `/v1/responses` | **Forwarded unchanged and NOT read.** No ledger record, no guard, no masking. The proxy warns once per path (`NOT PARSED`) and counts `replay_unparsed_requests_total` |
 
-**This surface is expected to change.** The chat/completions row is verified
-against a stub only. What a real provider reports, whether a cache write is even
-distinguishable in that shape, and whether streaming carries usage the same way
-are all open. Until each is measured, the warnings are the contract: Replay says
-what it cannot see rather than letting a running proxy imply protection.
+**This surface is expected to change.** What the chat/completions row is still
+missing is not "a live provider" but breadth: whether a cache write is even
+distinguishable in that response shape, what the write penalty actually is, and
+what a third implementation of the same API reports. Until each is measured, the
+label is the contract: Replay says what it cannot see rather than letting a
+running proxy imply protection.
+
+**Correction, 2026-09-12.** This row said "verified against a stub, not against
+any live OpenAI-compatible provider" and that was false when it was written.
+`architecture/multi-provider.md` records a live DeepSeek run on 2026-09-05 across
+four surfaces, which caught a defect a stub cannot produce (`RawUsage` was
+dropping `prompt_cache_hit_tokens`), and `evidence/ollama-cache-observable-2026-09-09.md`
+records the same endpoint driven against a local Ollama. `internal/ledger/testdata/deepseek`
+holds the captured bytes. RELEASE-CRITERIA.md carried the same wrong sentence and
+is corrected there too. The masking gap was and is real; the verification gap was
+overstated, and overstating a gap costs the same credibility as hiding one.
 
 **Correction, 2026-09-06.** This page and the README both said the binary makes no network request
 except the proxy and `rules --check-prices`. That stopped being true when `replay probe` was added:
