@@ -12,19 +12,19 @@ import (
 
 // corpusFixture builds a valid submission, digested the way the writer digests
 // one, so the digest a test hands the pool is the digest the pool recomputes.
-func corpusFixture(tag string, tasks int, total, avoidable float64) string {
+func corpusFixture(tag string, tasks int, total, rebilled float64) string {
 	c := observation.Corpus{
-		Schema:         observation.CorpusSchema,
-		TakenAt:        "2026-09-10T04:00:00Z",
-		Tasks:          tasks,
-		TotalUSD:       total,
-		AvoidableUSD:   avoidable,
-		AvoidableShare: avoidable / total,
-		MedianTaskUSD:  total / float64(tasks),
-		PricedAt:       "2026-09-07",
-		RulesVersion:   "anthropic-2026-09-01",
-		SourceTag:      tag,
-		TagBasis:       "local",
+		Schema:        observation.CorpusSchema,
+		TakenAt:       "2026-09-10T04:00:00Z",
+		Tasks:         tasks,
+		TotalUSD:      total,
+		RebilledUSD:   rebilled,
+		RebilledShare: rebilled / total,
+		MedianTaskUSD: total / float64(tasks),
+		PricedAt:      "2026-09-07",
+		RulesVersion:  "anthropic-2026-09-01",
+		SourceTag:     tag,
+		TagBasis:      "local",
 	}.Digested()
 	b, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {

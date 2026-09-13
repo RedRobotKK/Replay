@@ -14,12 +14,12 @@ import (
 func aPreviewable() tui.ShareState {
 	return tui.ShareState{
 		Data: card.Data{
-			AvoidableShare:      0.03,
-			Tasks:               1384,
-			Breaks:              748,
-			MedianUSD:           0.77,
-			P90USD:              2.30,
-			PeakAvoidableTokens: 32_635_820,
+			RebilledShare:      0.03,
+			Tasks:              1384,
+			Breaks:             748,
+			MedianUSD:          0.77,
+			P90USD:             2.30,
+			PeakRebilledTokens: 32_635_820,
 		},
 		Ready: true, Tasks: 1384,
 		Variant: card.VariantB, Tone: card.ToneRekt,
@@ -220,13 +220,13 @@ func TestShareScreenOverARealCorpusIsMeasured(t *testing.T) {
 func TestTheShareScreenAsksTheCommandsOwnGuard(t *testing.T) {
 	priced := costSummary{
 		Tasks: 1384, Unit: unitSession, MedianUSD: 0.77, P90USD: 2.30,
-		AvoidableShare: 0.03,
+		RebilledShare: 0.03,
 	}
 	d, ok := shareFrom(priced, 748, 32_635_820)
 	if !ok {
 		t.Error("a priced corpus was reported as having nothing worth posting")
 	}
-	if d.PeakAvoidableTokens != 32_635_820 || d.Tasks != 1384 || d.Breaks != 748 {
+	if d.PeakRebilledTokens != 32_635_820 || d.Tasks != 1384 || d.Breaks != 748 {
 		t.Errorf("the figures were re-derived rather than taken from the report: %+v", d)
 	}
 

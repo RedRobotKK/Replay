@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// A build that fails on avoidable spend.
+// A build that fails on re-billed spend.
 //
 // The gate reads the figure `replay cost` already computes and compares it to a
 // ceiling the caller types. It derives nothing of its own: a governance check
@@ -28,9 +28,9 @@ import (
 func TestCG1_OverTheCeilingFails(t *testing.T) {
 	corpus(t)
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"cost", "--max-avoidable-usd", "0.01"}, &stdout, &stderr)
+	err := run([]string{"cost", "--max-rebilled-usd", "0.01"}, &stdout, &stderr)
 	if err == nil {
-		t.Fatal("avoidable spend above the ceiling exited 0, so a CI gate built on it " +
+		t.Fatal("re-billed spend above the ceiling exited 0, so a CI gate built on it " +
 			"would pass the one build it exists to stop")
 	}
 	out := stdout.String() + stderr.String() + err.Error()
@@ -46,10 +46,10 @@ func TestCG1_OverTheCeilingFails(t *testing.T) {
 func TestCG2_UnderTheCeilingPasses(t *testing.T) {
 	corpus(t)
 	var stdout, stderr bytes.Buffer
-	if err := run([]string{"cost", "--max-avoidable-usd", "10000"}, &stdout, &stderr); err != nil {
+	if err := run([]string{"cost", "--max-rebilled-usd", "10000"}, &stdout, &stderr); err != nil {
 		t.Fatalf("spend well under the ceiling failed the build: %v", err)
 	}
-	if !strings.Contains(stdout.String(), "avoidable") {
+	if !strings.Contains(stdout.String(), "re-billed") {
 		t.Error("the cost report was suppressed by the gate")
 	}
 }
@@ -67,7 +67,7 @@ func TestCG3_NothingMeasuredIsNotAPass(t *testing.T) {
 	t.Setenv("USERPROFILE", dir)
 
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"cost", "--max-avoidable-usd", "5"}, &stdout, &stderr)
+	err := run([]string{"cost", "--max-rebilled-usd", "5"}, &stdout, &stderr)
 	if err == nil {
 		t.Fatal("a gate over zero priced tasks passed; nothing was measured, so there is " +
 			"no spend to be under a ceiling")
@@ -91,9 +91,9 @@ func TestCG4_ANegativeCeilingIsRefused(t *testing.T) {
 	corpus(t)
 	for _, v := range []string{"-1", "-0.5"} {
 		var stdout, stderr bytes.Buffer
-		err := run([]string{"cost", "--max-avoidable-usd", v}, &stdout, &stderr)
+		err := run([]string{"cost", "--max-rebilled-usd", v}, &stdout, &stderr)
 		if err == nil {
-			t.Errorf("--max-avoidable-usd %s was accepted; an unset variable expands to "+
+			t.Errorf("--max-rebilled-usd %s was accepted; an unset variable expands to "+
 				"empty and would silently fail every build", v)
 		}
 	}

@@ -5,6 +5,7 @@ files under [evidence](../evidence/README.md), and neither is published.
 
 | Document | What is in it |
 |---|---|
+| [**The launch announcement, 2026-09-14**](announcement-2026-09-14.md) | The Show HN and Product Hunt copy actually being posted, built on the 2026-09-13 re-read. **Supersedes the Show HN section of the launch drafts**, which leads with a cause table this repository retracted on 2026-09-11 |
 | [Launch drafts](launch-draft.md) | Show HN and LinkedIn copy, with a table mapping every figure to the corpus and provenance tier it came from, and a record of the numbers that were struck |
 | [Preprint](replay-preprint.tex) | An arXiv-style write-up of the cache-invalidation attribution study. **Not compiled** — no LaTeX toolchain was available where it was written, so it is checked structurally only |
 

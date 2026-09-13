@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -86,11 +87,11 @@ type Corpus struct {
 	// The five figures the money-path argument is built on. Tasks is the
 	// denominator and travels with them, because a total without an n is a
 	// number nobody can weight.
-	Tasks          int     `json:"tasks"`
-	TotalUSD       float64 `json:"totalUsd"`
-	AvoidableUSD   float64 `json:"avoidableUsd"`
-	AvoidableShare float64 `json:"avoidableShare"`
-	MedianTaskUSD  float64 `json:"medianTaskUsd"`
+	Tasks         int     `json:"tasks"`
+	TotalUSD      float64 `json:"totalUsd"`
+	RebilledUSD   float64 `json:"rebilledUsd"`
+	RebilledShare float64 `json:"rebilledShare"`
+	MedianTaskUSD float64 `json:"medianTaskUsd"`
 
 	// What priced them. An aggregate of totals computed against different
 	// price tables or caching rules is not an aggregate of anything, and the
@@ -126,6 +127,40 @@ type Corpus struct {
 	SourceTag string `json:"sourceTag"`
 	TagBasis  string `json:"tagBasis"`
 
+	// Which binary did the arithmetic (#284).
+	//
+	// RulesVersion above names the provider's published rule document. It is
+	// not enough, and 2026-09-12 is how we found out: two builds read the same
+	// directory on the same machine and reported $4,088.49 and $11,969.37,
+	// both stamped "anthropic-2026-09-01". The label was honest. The provider
+	// had changed nothing; we had. Six models one build declined to price
+	// became priced, and the unknown-model read multiple became a named rule
+	// and moved.
+	//
+	// A pool that adds two such submissions is summing different arithmetic
+	// under one name. PricingDigest is computed from the price table, the
+	// caching floors and the unknown-model fallback actually compiled into
+	// this binary, so it moves when any of them does, whatever the provider's
+	// label says. BinaryVersion and Commit say which build, so a reader can go
+	// and look at it.
+	//
+	// ALL THREE ARE OPTIONAL AND THAT IS DELIBERATE. Digested marshals this
+	// struct, so a field that serialised when absent would change the digest of
+	// every submission written before today and orphan every roster entry that
+	// names one. Empty means a build from before these existed, which is a fact
+	// a pool can act on rather than a gap it has to guess at (ADR-0018). It is
+	// also why the schema string does not move: this is additive, exactly as
+	// CacheBreaks, ReReads and ErrorShare were.
+	//
+	// These are strings, and they are the first strings in this payload that
+	// are not a date, a schema or a tag the contributor chose. They carry no
+	// path, no project and no content: a semantic version, a short hex SHA of
+	// a public commit, and a hex digest of numbers that ship in every copy of
+	// the binary. Anyone can compute the third from a release they downloaded.
+	BinaryVersion string `json:"binaryVersion,omitempty"`
+	Commit        string `json:"commit,omitempty"`
+	PricingDigest string `json:"pricingDigest,omitempty"`
+
 	// Digest names this submission by its content, so a pooled figure can list
 	// what it is made of and a reader can check that the file they downloaded
 	// is the one that was counted.
@@ -136,6 +171,80 @@ type Corpus struct {
 	// computed over the payload with this field empty, so it can be recomputed
 	// from the file as published.
 	Digest string `json:"digest"`
+}
+
+// renamedCorpusFields maps every wire name retired on 2026-09-13 to the one
+// that replaced it.
+//
+// "avoidable" said the spend could be avoided going forward, which is a
+// forecast wearing a noun, and this payload is forbidden from carrying a
+// forecast. "Re-billed" says what happened: the same bytes were billed twice.
+var renamedCorpusFields = map[string]string{
+	"avoidableUsd":    "rebilledUsd",
+	"avoidableShare":  "rebilledShare",
+	"avoidableTokens": "rebilledTokens",
+}
+
+// UnmarshalJSON refuses a submission written before the 2026-09-13 rename
+// instead of reading its figures as zero.
+//
+// Go cannot tell a missing JSON key from a zero value, so without this a
+// pre-rename submission parses cleanly, reports RebilledUSD of 0, passes
+// Validate, and adds nothing to a pooled total while reporting success. The one
+// contributed corpus in existence was written under the old spelling. That is
+// ADR-0018 in the payload whose whole job is to carry a figure somebody can
+// check: absence read as zero, silently.
+//
+// IT REFUSES RATHER THAN TRANSLATING, and the reason is measured rather than
+// stylistic. The same corpus reads 4.99% on v0.5.4 and 2.75% on the build that
+// performed this rename (docs/evidence/two-builds-one-corpus-2026-09-13.md).
+// Mapping the old key onto the new field would pool two instruments as one
+// number, which is precisely what that file exists to prevent. A refusal makes
+// a person decide whether to re-derive the submission or to pool it in its own
+// group, and either decision is better than a silent sum.
+func (c *Corpus) UnmarshalJSON(b []byte) error {
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(b, &probe); err != nil {
+		return err
+	}
+	// Sorted, and reporting EVERY retired field rather than the first one hit.
+	// Ranging a map here made the message depend on Go's randomised iteration
+	// order, so the same document produced a different error each run and a
+	// test asserting on it failed about two runs in three. A refusal that
+	// cannot be quoted is a refusal nobody can act on.
+	var found []string
+	for _, old := range sortedKeys(renamedCorpusFields) {
+		if _, ok := probe[old]; ok {
+			found = append(found, fmt.Sprintf("%s (now %s)", old, renamedCorpusFields[old]))
+		}
+	}
+	if len(found) > 0 {
+		return fmt.Errorf("this submission carries %s. Those names were retired on "+
+			"2026-09-13 because the old one stated a forecast, and reading this file "+
+			"would report zero rather than its real figures. It was also written by a "+
+			"build whose arithmetic differs measurably from this one, so re-derive it "+
+			"on this build or pool it in its own group; do not translate the fields",
+			strings.Join(found, ", "))
+	}
+	// A distinct type, so this does not call itself.
+	type plain Corpus
+	var out plain
+	if err := json.Unmarshal(b, &out); err != nil {
+		return err
+	}
+	*c = Corpus(out)
+	return nil
+}
+
+// sortedKeys returns m's keys in a stable order, so a message built from them
+// is the same on every run.
+func sortedKeys(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Digested returns the corpus with its content digest filled in.

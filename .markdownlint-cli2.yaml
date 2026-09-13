@@ -3,3 +3,10 @@ globs:
   - "**/*.md"
 ignores:
   - node_modules/**
+  # AGENTS_STATE.md is a working log, not documentation. It is the shared state
+  # file several agents append findings to during a survey, and it is kept
+  # because the VERIFIED-PRESENT and VERIFIED-ABSENT results in it are worth
+  # having. It is not written to be read as prose, and holding a scratchpad to
+  # the same rules as a published page produced 104 of the 106 findings in this
+  # repository without improving anything a reader sees.
+  - AGENTS_STATE.md

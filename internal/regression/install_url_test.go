@@ -30,13 +30,22 @@ import (
 // canonicalInstallURL is what the README leads with and what `replay cost
 // --share` puts on the card, which is also the address most people will have
 // seen before they reach the repository.
-
-const canonicalInstallURL = "https://redrobot.jp/replay.sh"
+//
+// Moved to replay.doctor on 2026-09-13, which is where the product ships. The
+// old host still serves a byte-identical script, and that is exactly why this
+// needed a test rather than a habit: nothing broke when a document named the
+// other one.
+//
+// This guard caught its own vacuity when the host moved, which is the property
+// worth having. It matched only the three shapes that had shipped, so the
+// moment they all changed it found nothing and said so, rather than passing
+// over an empty set.
+const canonicalInstallURL = "https://replay.doctor/replay.sh"
 
 // installURL matches any address that serves the installer, in any of the
 // three shapes that shipped.
 var installURL = regexp.MustCompile(
-	`https://(?:redrobot\.jp/(?:replay\.sh|Replay/install\.sh)|raw\.githubusercontent\.com/RedRobotKK/Replay/[^/\s"'` + "`" + `]+/install\.sh)`)
+	`https://(?:(?:replay\.doctor|redrobot\.jp)/(?:replay\.sh|Replay/install\.sh)|raw\.githubusercontent\.com/RedRobotKK/Replay/[^/\s"'` + "`" + `]+/install\.sh)`)
 
 // IU1: every surface that prints an install command prints the same one.
 func TestIU1_TheInstallCommandIsTheSameEverywhere(t *testing.T) {

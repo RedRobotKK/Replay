@@ -60,7 +60,7 @@ func TestStatuslineWillNotPriceAnUnknownModel(t *testing.T) {
 	in := `{"model":{"id":"some-model-we-do-not-know"},
 	        "prompt_cache":{"hit_ratio":0.5,"miss_recache_tokens":1000000,"ttl":"1h"}}`
 	got := statusLine(mustParseStatus(t, in), false)
-	if strings.Contains(got, "avoidable") {
+	if strings.Contains(got, "re-billed") {
 		t.Fatalf("priced an unknown model: %q", got)
 	}
 }
@@ -70,7 +70,7 @@ func TestStatuslineSaysNothingIsWrongWhenNothingIs(t *testing.T) {
 	in := `{"model":{"id":"claude-opus-5"},"cost":{"total_cost_usd":0.2},
 	        "prompt_cache":{"warm":true,"hit_ratio":1,"misses":0,"miss_recache_tokens":0}}`
 	got := statusLine(mustParseStatus(t, in), false)
-	if strings.Contains(got, "avoidable") {
+	if strings.Contains(got, "re-billed") {
 		t.Fatalf("a clean session must not show a waste figure: %q", got)
 	}
 }
@@ -116,10 +116,10 @@ func stripANSI(s string) string {
 	return b.String()
 }
 
-// Avoidable spend is priced from token counts at list rates; total cost is what
+// Re-billed spend is priced from token counts at list rates; total cost is what
 // the session was actually charged. When the first exceeds the second, the two
 // numbers are contradicting each other, and the one to doubt is ours. Showing
-// "$57.50 avoidable" beside "$42.10 spent" is arithmetic a reader can see is
+// "$57.50 re-billed" beside "$42.10 spent" is arithmetic a reader can see is
 // wrong, on the tool whose entire pitch is that its numbers can be trusted.
 func TestStatuslineWillNotClaimMoreWasteThanWasSpent(t *testing.T) {
 	in := `{"model":{"id":"claude-opus-5"},"cost":{"total_cost_usd":42.10},

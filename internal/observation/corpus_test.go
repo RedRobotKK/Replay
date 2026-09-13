@@ -49,7 +49,7 @@ func TestOB1_ObservationCarriesNoSpend(t *testing.T) {
 
 // CC1: a corpus contribution carries the five figures and states its basis.
 //
-// PASS: total, avoidable, share, median and the task count are present, and so
+// PASS: total, re-billed, share, median and the task count are present, and so
 // is what priced them.
 // FAIL: a figure without its basis. An aggregate of totals priced on different
 // tables is a number nobody can defend, which is the shape of the retraction
@@ -57,8 +57,8 @@ func TestOB1_ObservationCarriesNoSpend(t *testing.T) {
 func TestCC1_TheFiveFiguresTravelWithTheirBasis(t *testing.T) {
 	c := Corpus{
 		Schema: CorpusSchema, TakenAt: "2026-09-10T00:00Z",
-		Tasks: 115, TotalUSD: 3382.13, AvoidableUSD: 161.66,
-		AvoidableShare: 0.0478, MedianTaskUSD: 0.77,
+		Tasks: 115, TotalUSD: 3382.13, RebilledUSD: 161.66,
+		RebilledShare: 0.0478, MedianTaskUSD: 0.77,
 		PricedAt: "2026-09-07", RulesVersion: "anthropic-2026-09-01",
 		Unpriced: 6, SourceTag: "abc", TagBasis: "random",
 	}
@@ -67,7 +67,7 @@ func TestCC1_TheFiveFiguresTravelWithTheirBasis(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(b)
-	for _, want := range []string{"tasks", "totalUsd", "avoidableUsd", "avoidableShare",
+	for _, want := range []string{"tasks", "totalUsd", "rebilledUsd", "rebilledShare",
 		"medianTaskUsd", "pricedAt", "rulesVersion", "unpriced"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the contribution does not carry %q:\n%s", want, got)
@@ -158,5 +158,72 @@ func TestCC3_AnEmptyCorpusIsNotAContribution(t *testing.T) {
 
 	if err := base.Digested().Validate(); err != nil {
 		t.Errorf("a real corpus was refused: %v", err)
+	}
+}
+
+// CR-OLD. A pre-rename submission must be refused, not read as zero.
+//
+// On 2026-09-13 `avoidableUsd` became `rebilledUsd` across the payload. The
+// rename was mechanical and complete, and it introduced a defect no test
+// caught: a submission written before it parses cleanly into the new struct
+// with RebilledUSD = 0, and Validate() returns nil, because a missing JSON key
+// is indistinguishable from a zero value in Go.
+//
+// The one contributed corpus in existence was written under the old spelling.
+// Pooled by the new build it would have added $0.00 to the total and reported
+// success. That is ADR-0018 exactly: absence read as zero, silently, in the
+// payload whose entire job is to carry a figure somebody can check.
+//
+// REFUSED RATHER THAN TRANSLATED, and the reason is measured. The same corpus
+// reads 4.99% on v0.5.4 and 2.75% on the build that renamed these fields
+// (two-builds-one-corpus-2026-09-13.md). Silently mapping the old key onto the
+// new field would pool two instruments as one number, which is the thing that
+// file exists to prevent. A refusal makes somebody decide.
+func TestCROLD_APreRenameSubmissionIsRefusedRatherThanReadAsZero(t *testing.T) {
+	// One document per retired field, so removing any single entry from the
+	// map fails here. A single fixture carrying all three passed even when two
+	// of the three checks were deleted.
+	for _, tc := range []struct{ field, replacement, doc string }{
+		{"avoidableUsd", "rebilledUsd", `"avoidableUsd":211.42`},
+		{"avoidableShare", "rebilledShare", `"avoidableShare":0.0499`},
+		{"avoidableTokens", "rebilledTokens", `"avoidableTokens":44214854`},
+	} {
+		doc := []byte(`{"schema":"replay.corpus.v1","takenAt":"2026-09-12T00:00:00Z",
+		 "tasks":119,"totalUsd":4236.17,` + tc.doc + `,
+		 "medianTaskUsd":1.2,"pricedAt":"2026-09-12","rulesVersion":"anthropic-2026-09-01",
+		 "unpriced":6,"sourceTag":"abc","tagBasis":"machine","digest":"65abc02f"}`)
+
+		var c Corpus
+		err := json.Unmarshal(doc, &c)
+		if err == nil {
+			t.Errorf("a submission carrying %s parsed cleanly. RebilledUSD=%v and Validate "+
+				"says %v, so it would add $0.00 to a pooled total and report success.",
+				tc.field, c.RebilledUSD, c.Validate())
+			continue
+		}
+		for _, want := range []string{tc.field, tc.replacement} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("the refusal for %s does not name %q, so the operator cannot tell "+
+					"what to do about it: %v", tc.field, want, err)
+			}
+		}
+	}
+
+	// A current submission is unaffected.
+	fresh, err := json.Marshal(Corpus{
+		Schema: CorpusSchema, TakenAt: "2026-09-13T00:00:00Z", Tasks: 121,
+		TotalUSD: 12630.61, RebilledUSD: 347.53, RebilledShare: 0.0275,
+		MedianTaskUSD: 1.2, PricedAt: "2026-09-13", RulesVersion: "anthropic-2026-09-01",
+		SourceTag: "abc", TagBasis: "machine",
+	}.Digested())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var round Corpus
+	if err := json.Unmarshal(fresh, &round); err != nil {
+		t.Fatalf("a current submission was refused: %v", err)
+	}
+	if round.RebilledUSD != 347.53 {
+		t.Errorf("round trip lost the figure: %v", round.RebilledUSD)
 	}
 }

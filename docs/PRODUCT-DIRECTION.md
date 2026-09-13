@@ -68,11 +68,11 @@ Every figure here already exists. This is presentation, not new measurement, and
 highest-leverage change available.
 
 **Update, 2026-09-06: the headline half of this shipped, the breakdown half did not.** `replay cost`
-now leads with one number — the avoidable amount, as a share of the total — and bare `replay` prints
+now leads with one number — the re-billed amount, as a share of the total — and bare `replay` prints
 it with no arguments at all. It also does something this section did not anticipate: it states the
 same finding in **tokens** as well as dollars, and names who the dollars are for. The reason is in the
 next paragraph but one — most readers hold a flat seat, and a dollar-only waste figure is addressed to
-a minority. What is still missing is the five-way split. Today the report says how much was avoidable
+a minority. What is still missing is the five-way split. Today the report says how much was re-billed
 and `replay diff` says which causes produced it; nothing puts the two on one screen.
 
 **2. The compaction question, which nobody has data for.** Replay can see the turn where a session

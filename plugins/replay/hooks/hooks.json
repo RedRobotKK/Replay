@@ -1,0 +1,16 @@
+{
+  "description": "SessionEnd only. Nothing runs on a turn, so the hook can never add latency to a request; it reads the session that just closed and prints one line.",
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-end.sh\"",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}

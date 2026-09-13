@@ -208,7 +208,7 @@ func ParseClaudeCode(r io.Reader) (*Session, error) {
 		// "<synthetic>" and their usage is all zeros, and cmd/replay/cost.go
 		// names a lane's model from its FIRST request: one placeholder at the
 		// head of a lane took that lane from claude-opus-5 to "<synthetic>",
-		// which is not in any price table, and its avoidable figure from
+		// which is not in any price table, and its re-billed figure from
 		// 1,586,545 tokens to zero with the cost unchanged.
 		//
 		// They stay in the parent chain, because the next turn genuinely saw

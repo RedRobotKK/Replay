@@ -48,10 +48,27 @@ func TestFirstWithEntriesPicksTheFirstThatHasAny(t *testing.T) {
 	}
 }
 
-// A directory holding only directories is not evidence the surface has run.
-// Several agents create their home eagerly on install and write nothing until
-// first use, and reporting that as "detected" would name a blind spot that is
-// not there.
+// A tree of EMPTY directories is not evidence the surface has run.
+//
+// The name and the comment here used to say "a directory holding only
+// directories", which stopped being true on 2026-09-13 and was never quite
+// what this fixture tested. `hasEntries` now looks up to entryProbeDepth
+// levels down, because a surface that keeps its records one directory below
+// the probe root (Oracle's sessions/<slug>/meta.json, OpenClaw's
+// agents/<id>/sessions/) was otherwise reported absent while sitting in front
+// of the tool. HE1 in hasentries_test.go is the control for that direction.
+//
+// What this test pins is the other direction, which did NOT change and is the
+// easier one to lose while fixing the first: a directory of directories with
+// nothing underneath is still not a corpus. Several agents create their store
+// eagerly on install and write nothing until first use, and reporting that as
+// "detected" names a blind spot that is not there and sends a reader after
+// data that does not exist.
+//
+// Note the fixture only ever built EMPTY subdirectories, so it passed both
+// before and after the change. That is worth saying out loud rather than
+// leaving as a coincidence: this test did not catch the direct-children defect
+// and was never able to, despite a name that sounded like it would.
 func TestADirectoryOfDirectoriesIsNotEvidence(t *testing.T) {
 	base := t.TempDir()
 	shell := filepath.Join(base, "shell")

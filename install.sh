@@ -1,7 +1,7 @@
 #!/bin/sh
 # Replay installer.
 #
-#   curl -fsSL https://redrobot.jp/replay.sh | sh
+#   curl -fsSL https://replay.doctor/replay.sh | sh
 #
 # Replay sits in the path between your agent and your model provider, so this
 # script is written to be read before it is run. It is short on purpose. It
@@ -63,7 +63,7 @@ usage() {
   cat <<'USAGE'
 Replay installer.
 
-  curl -fsSL https://redrobot.jp/replay.sh | sh
+  curl -fsSL https://replay.doctor/replay.sh | sh
 
   --version <tag>     install a specific release instead of the latest
   --bin-dir <dir>     where the binary lands
@@ -120,7 +120,25 @@ case "$os" in
   linux)  ;;
   darwin) ;;
   msys*|mingw*|cygwin*)
-    die "Windows is not handled by this script. Use the release archive, or: go install github.com/$REPO/cmd/$BIN@latest" ;;
+    # Both remedies this used to offer were wrong, which made it the most
+    # misleading sentence in the project. There is no Windows release archive:
+    # .goreleaser.yaml builds linux and darwin only. And `go install` WORKS,
+    # because the tree builds and vets clean on Windows on every push, so this
+    # line handed the reader a one line route to a binary that would write a
+    # ledger and an encrypted masking vault into a directory whose privacy it
+    # had declined to check. The binary now refuses on Windows for that reason;
+    # see cmd/replay/platformguard_windows.go.
+    die "Replay does not run on Windows.
+
+It verifies that its ledger and masking vault directories are private before
+opening them, and on Windows that check is a no-op, so the binary refuses
+rather than writing your secrets somewhere it cannot vouch for.
+
+Run it under WSL2, or on Linux or macOS:
+  curl -fsSL https://replay.doctor/replay.sh | sh
+
+Do not use 'go install' here. It will build, and the binary it produces will
+refuse to run, for the same reason." ;;
   *) die "unsupported OS: $os." ;;
 esac
 
