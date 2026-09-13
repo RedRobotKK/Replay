@@ -581,6 +581,13 @@ Replay Doctor is written and maintained by **Daniel Saito**, founder of
 account: every figure this project publishes was measured on that machine, and
 every report says so rather than implying a population it does not have.
 
+One maintainer cannot review his own diff twice, so the tests do it: every guard
+here is neutralised in the source and watched to go red before it is trusted.
+And a figure that turns out wrong stays on the page with its correction beside
+it. A 98.8% that became 4.2% is still readable in
+[docs/evidence](docs/evidence/README.md), because a project that publishes only
+its wins is one whose numbers you cannot check.
+
 [LinkedIn](https://www.linkedin.com/in/danielsaito/) ·
 [X @redrobotfdn](https://x.com/redrobotfdn) ·
 [GitHub](https://github.com/saitodaniel) ·
@@ -592,14 +599,6 @@ every report says so rather than implying a population it does not have.
 [What it pays for](FUNDING.md)
 
 <br clear="left">
-
-The habits in this repository come from that constraint. A single maintainer
-cannot review his own diff twice, so the checks do it instead: tests are
-neutralised and watched to go red before they are trusted, guards that no test
-can reach are reported rather than deleted, and a figure that loses its
-population is withdrawn rather than refreshed. The corrections are published with
-the wrong number left standing, because a project that only records its wins is
-a project whose numbers you cannot check.
 
 ## A note from Daniel, who maintains this
 
