@@ -22,12 +22,13 @@ names three things none of which are ticked anywhere:
 | | State, 2026-09-13 |
 |---|---|
 | An external security review, published | **Not commissioned.** Needs a third party and has weeks of lead time |
-| Signed, reproducible releases | Signed, yes: Sigstore keyless bound to the workflow and tag, an SBOM per artifact. **Reproducible is unverified.** Nobody has rebuilt a published tag and compared the bytes, and a reproducibility claim nobody has tried to falsify is the class of claim this project refuses elsewhere |
+| Signed, reproducible releases | Signed, yes: Sigstore keyless bound to the workflow and tag, an SBOM per ARCHIVE (the ten Linux packages get none; `artifacts: archive` in .goreleaser.yaml). **Reproducible: verified once, on 2026-09-13, not yet enforced.** All four published platforms of v0.5.4 rebuild to identical bytes, by a script anybody can run ([evidence](docs/evidence/reproducible-build-2026-09-13.md), [script](scripts/reproduce-release.sh)). Nothing runs it on a new tag, so this is a fact about v0.5.4 rather than a property of releases |
 | Caching rules for a second provider | **Not started** |
 
 Two of those three cannot be done alone. The review needs a reviewer, and the
 independence problem underneath the second provider needs a corpus from a
-machine that is not this one. **A 1.0 tagged before they land would be a version
+machine that is not this one. The third was done alone, on 2026-09-13, and is
+the only one of the three that moved. **A 1.0 tagged before they land would be a version
 number asserting something nobody checked**, which is the exact defect this file
 was written to prevent.
 
