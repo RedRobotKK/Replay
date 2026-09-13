@@ -231,6 +231,28 @@ func (c *Corpus) UnmarshalJSON(b []byte) error {
 			found = append(found, fmt.Sprintf("%s (now %s)", old, renamedCorpusFields[old]))
 		}
 	}
+	// AND the current names must be PRESENT.
+	//
+	// Refusing the retired spelling was only half the guard, and the missing
+	// half was the same defect it was written to close. A document declaring
+	// replay.corpus.v2 that simply omits rebilledUsd parsed to zero and passed
+	// Validate, because Go cannot tell an absent key from a zero value and
+	// Validate guards tasks, totals, tags and the digest but never the re-billed
+	// figure itself. Absence read as zero, in the payload whose entire job is
+	// carrying a checkable figure (ADR-0018).
+	//
+	// Presence, not a value. A perfect cache genuinely measures zero and that
+	// submission is worth having; what is not worth having is a document that
+	// never said.
+	if len(found) == 0 {
+		for _, need := range []string{"rebilledUsd", "rebilledShare"} {
+			if _, ok := probe[need]; !ok {
+				return fmt.Errorf("this submission has no %q key. A missing figure and a "+
+					"measured zero are different things, and reading this one would pool "+
+					"an absence as a zero", need)
+			}
+		}
+	}
 	if len(found) > 0 {
 		return fmt.Errorf("this submission carries %s. Those names were retired on "+
 			"2026-09-13 because the old one stated a forecast, and reading this file "+

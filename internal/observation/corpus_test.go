@@ -300,3 +300,58 @@ func TestCRV2_TheSchemaStringMovedAndIsChecked(t *testing.T) {
 		}
 	}
 }
+
+// CR-ABSENT: a v2 document that simply omits the figure is refused.
+//
+// The retired-spelling refusal was only half the guard, and a reviewer proved
+// the other half was missing on 2026-09-13: a document declaring
+// replay.corpus.v2 with no rebilledUsd key parsed to zero and PASSED Validate,
+// because Go cannot tell an absent key from a zero value and Validate guards
+// tasks, totals, tags and the digest but never the re-billed figure.
+//
+// That is the identical defect the spelling refusal was written to close,
+// surviving inside the fix for it.
+func TestCRABSENT_AMissingFigureIsNotAMeasuredZero(t *testing.T) {
+	for _, missing := range []string{"rebilledUsd", "rebilledShare"} {
+		doc := map[string]any{
+			"schema": CorpusSchema, "takenAt": "2026-09-13T00:00:00Z", "tasks": 121,
+			"totalUsd": 12630.61, "rebilledUsd": 347.53, "rebilledShare": 0.0275,
+			"medianTaskUsd": 1.2, "pricedAt": "2026-09-13",
+			"rulesVersion": "anthropic-2026-09-01", "unpriced": 0,
+			"sourceTag": "abc", "tagBasis": "machine", "digest": "x",
+		}
+		delete(doc, missing)
+		b, err := json.Marshal(doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var c Corpus
+		err = json.Unmarshal(b, &c)
+		if err == nil {
+			t.Errorf("a document with no %q parsed cleanly to %v and Validate says %v. "+
+				"A missing figure and a measured zero are different things.",
+				missing, c.RebilledUSD, c.Validate())
+			continue
+		}
+		if !strings.Contains(err.Error(), missing) {
+			t.Errorf("the refusal does not name %q: %v", missing, err)
+		}
+	}
+
+	// A genuine measured zero is still accepted. A perfect cache is a
+	// submission worth having, and refusing it would be the opposite error.
+	zero := Corpus{
+		Schema: CorpusSchema, TakenAt: "2026-09-13T00:00:00Z", Tasks: 121,
+		TotalUSD: 12630.61, RebilledUSD: 0, RebilledShare: 0,
+		MedianTaskUSD: 1.2, PricedAt: "2026-09-13", RulesVersion: "anthropic-2026-09-01",
+		SourceTag: "abc", TagBasis: "machine",
+	}.Digested()
+	b, err := json.Marshal(zero)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back Corpus
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Errorf("a measured zero was refused, which is the opposite error: %v", err)
+	}
+}

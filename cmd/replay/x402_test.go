@@ -1141,6 +1141,7 @@ func TestX402_CosignExecIsNotArbitrary(t *testing.T) {
 
 	var used []string
 	var literals []string
+	commandContexts := 0
 	ast.Inspect(f, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
 		if !ok {
@@ -1172,6 +1173,29 @@ func TestX402_CosignExecIsNotArbitrary(t *testing.T) {
 		case "CommandContext":
 			// A deadline, for the same reason fetch.go needs one: a hung
 			// verifier is a hung upgrade.
+			//
+			// AND the program is the one LookPath resolved. This arm had a
+			// comment-only body until 2026-09-13 and asserted nothing at all,
+			// so the exemption was a general permission to exec: a reviewer
+			// proved it by adding a second exec call to verify.go and by
+			// swapping the binary for an environment variable, both green.
+			// Pinning LookPath to the literal "cosign" is the half that does
+			// not matter if the thing actually run is chosen elsewhere.
+			commandContexts++
+			if len(call.Args) < 2 {
+				t.Errorf("exec.CommandContext called with %d arguments", len(call.Args))
+				return true
+			}
+			ident, ok := call.Args[1].(*ast.Ident)
+			if !ok {
+				t.Error("the program passed to exec.CommandContext in verify.go is not a " +
+					"plain identifier, so what gets run is computed rather than resolved")
+				return true
+			}
+			if ident.Name != "bin" {
+				t.Errorf("exec.CommandContext runs %q; it must run the identifier bound "+
+					"from lookCosign, or LookPath pins a name nothing uses", ident.Name)
+			}
 		default:
 			t.Errorf("exec.%s is used in verify.go; only LookPath and CommandContext "+
 				"are exempted here", sel.Sel.Name)
@@ -1182,6 +1206,13 @@ func TestX402_CosignExecIsNotArbitrary(t *testing.T) {
 	if len(used) == 0 {
 		t.Fatal("verify.go no longer execs anything, so its execExempt entry is stale " +
 			"and must be removed")
+	}
+	// Exactly one. The sibling pin caps fetch.go the same way, and an
+	// exemption granted for one call is precisely the thing that grows.
+	if commandContexts != 1 {
+		t.Errorf("verify.go makes %d exec.CommandContext calls; the exemption covers one, "+
+			"the cosign verification, and a second is a new permission nobody reviewed",
+			commandContexts)
 	}
 
 	// The two identity flags, asserted on the source rather than described in a
