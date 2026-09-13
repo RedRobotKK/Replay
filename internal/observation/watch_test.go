@@ -392,7 +392,7 @@ func TestWA13_TheRepositoryKeyCannotCarryAPath(t *testing.T) {
 				"path gets in, and this record is posted somewhere.", bad)
 		}
 	}
-	for _, good := range []string{"acme/billing", "billing", "acme-corp/web.api", "a_b/c-d"} {
+	for _, good := range []string{"acme/billing", "billing", "acme-corp/web.api", "a_b/c-d", "team9/svc-2024", "0"} {
 		w := watchFixture()
 		w.Repo = good
 		if err := w.Digested().Validate(); err != nil {
@@ -542,12 +542,20 @@ func TestWA16_TheProvenanceFieldsHaveAShape(t *testing.T) {
 		{"pricingDigest", func(w *Watch, s string) { w.PricingDigest = s }},
 	}
 	good := map[string][]string{
-		"binaryVersion": {"v0.6.0", "0.6.0", "v1.0.0", "v0.5.4-201-gbe39707", "v1.2.3-rc.1"},
+		"binaryVersion": {"v0.6.0", "0.6.0", "v1.0.0", "v0.5.4-201-gbe39707", "v1.2.3-rc.1",
+			// Uppercase in the suffix. Admitted on purpose (the endpoint`s rule
+			// is [0-9A-Za-z.-]) and covered by nothing until guard reachability
+			// neutralised that arm on its own and watched every test pass.
+			"v1.2.3-RC1", "v2.0.0-Beta.2"},
 		"commit":        {"cccc3f0", "be39707", strings.Repeat("a", 40)},
 		"pricingDigest": {"p02eb9163145c", "p" + strings.Repeat("f", 12)},
 	}
 	bad := map[string][]string{
-		"binaryVersion": {"v", "version six", "v0.6", "v0.6.0.1", "v0.6.0-", "v0.6.0-bad!suffix", "va.b.c", "0.6.0 ", "vv0.6.0", "v-1.0.0"},
+		"binaryVersion": {"v", "version six", "v0.6", "v0.6.0.1", "v0.6.0-", "v0.6.0-bad!suffix", "va.b.c",
+			// An empty and an over-long numeric part. `guard reachability`
+			// found both halves of `part == "" || len(part) > 10`
+			// unreached on 2026-09-13.
+			"v0.6.", "v.6.0", "v1.2.34567890123", "0.6.0 ", "vv0.6.0", "v-1.0.0"},
 		"commit":        {"CCCC3F0", "cccc3f", "zzzzzzz", strings.Repeat("a", 41), "cccc 3f0"},
 		"pricingDigest": {"02eb9163145c", "p02EB9163145C", "p02eb9163145", "p02eb9163145cc", "pzzzzzzzzzzzz"},
 	}
@@ -595,6 +603,19 @@ func TestWA17_APathThatCannotBeInspectedIsNotWrittenThrough(t *testing.T) {
 	if err == nil {
 		t.Fatal("WriteWatch accepted a directory that is a regular file")
 	}
+	// Nothing was written, on every platform. That is the safety property and
+	// it is asserted before the platform-specific part below.
+	if entries, _ := os.ReadDir(dir); len(entries) != 1 {
+		t.Errorf("a refused write left %d entries where 1 was expected", len(entries))
+	}
+	if runtime.GOOS == "windows" {
+		// Windows maps a path through a regular file to ERROR_PATH_NOT_FOUND,
+		// which Go reports as os.ErrNotExist. So the three-way distinction this
+		// test is about does not exist there: the operating system itself
+		// collapses "I could not look" into "it is not there". The write still
+		// refuses, which is checked above; only the reason is unavailable.
+		return
+	}
 	if errors.Is(err, os.ErrNotExist) {
 		t.Errorf("an uninspectable path was reported as an absent one, so the caller "+
 			"cannot tell 'nothing is there' from 'I could not look': %v", err)
@@ -602,5 +623,85 @@ func TestWA17_APathThatCannotBeInspectedIsNotWrittenThrough(t *testing.T) {
 	if !strings.Contains(err.Error(), "cannot inspect") {
 		t.Errorf("the refusal does not say the path could not be inspected, so the "+
 			"operator is told the wrong thing to go and fix: %v", err)
+	}
+}
+
+// WA18: the two redundant-looking guards earn their place by what they say.
+//
+// `guard reachability` flagged `if w.Repo == ""` and `if ts.val == ""` as
+// branches that run with nothing depending on whether they did. Both are
+// technically subsumed: an empty repo also fails the charset rule, and an empty
+// timestamp also fails the hour-suffix rule. Deleting them would keep every
+// refusal and change every message.
+//
+// The message is the product here. "Names no repository" sends somebody to
+// their config file; "is not a key" sends them to read a charset rule that is
+// not their problem. So the guards stay and this makes a test depend on them,
+// which is the other half of the tool's verdict and the correct half.
+func TestWA18_TheEmptyCaseGetsItsOwnMessage(t *testing.T) {
+	noRepo := watchFixture()
+	noRepo.Repo = ""
+	err := noRepo.Digested().Validate()
+	if err == nil {
+		t.Fatal("an empty repository validated")
+	}
+	if !strings.Contains(err.Error(), "names no repository") {
+		t.Errorf("an absent repository is reported as a malformed one, which sends the "+
+			"reader to a charset rule instead of to their config file: %v", err)
+	}
+
+	noStart := watchFixture()
+	noStart.StartedAt = ""
+	err = noStart.Digested().Validate()
+	if err == nil {
+		t.Fatal("an empty startedAt validated")
+	}
+	if !strings.Contains(err.Error(), "has no startedAt") {
+		t.Errorf("an absent timestamp is reported as a too-precise one, which is the "+
+			"opposite of the problem: %v", err)
+	}
+}
+
+// WA19: a digest shorter than the name needs does not panic the writer.
+//
+// `guard reachability` flagged `if len(d) > 12` in watchFileName as running with
+// nothing depending on it. Digested always produces 64 hex characters, so the
+// true branch is the only one taken in practice and the guard looks like
+// scaffolding. It is not: watchFileName slices, and WriteWatch validates a
+// digest for PRESENCE rather than for length, so a hand-built record with a
+// short digest reaches the slice. Without the guard that is a panic in the one
+// function whose job is to write the file safely.
+func TestWA19_AShortDigestNamesAFileRatherThanPanicking(t *testing.T) {
+	w := watchFixture()
+	w = w.Digested()
+	w.Digest = "abc" // shorter than the 12 the name wants
+	if err := w.Validate(); err != nil {
+		t.Fatalf("a short digest should still validate, since Validate checks presence: %v", err)
+	}
+	dir := t.TempDir()
+	path, err := WriteWatch(dir, w)
+	if err != nil {
+		t.Fatalf("writing a record with a short digest: %v", err)
+	}
+	if !strings.Contains(filepath.Base(path), "abc") {
+		t.Errorf("the file name dropped the digest it was given: %s", filepath.Base(path))
+	}
+
+	// And the other direction, which nothing asserted: a full 64-character
+	// digest must be TRUNCATED into the name. Neutralising the length guard
+	// left all 64 in the file name and every test still passed, so the
+	// truncation was unobserved rather than checked.
+	full := watchFixture().Digested()
+	fullPath, err := WriteWatch(t.TempDir(), full)
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := filepath.Base(fullPath)
+	if strings.Contains(name, full.Digest) {
+		t.Errorf("the file name carries the whole %d-character digest: %s",
+			len(full.Digest), name)
+	}
+	if !strings.Contains(name, full.Digest[:12]) {
+		t.Errorf("the file name does not carry the first 12 digest characters: %s", name)
 	}
 }

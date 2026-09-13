@@ -55,6 +55,40 @@ func WatchCauses() []string {
 	return out
 }
 
+// isRepoKeyRune reports whether r may appear in a repository key segment.
+//
+// A named function rather than an arm of a switch, and the reason is evidence
+// rather than taste. The accept arms of that switch had EMPTY bodies, so
+// neutralising them changed nothing and `guard reachability` correctly reported
+// that no test depended on them. A rule that cannot be neutralised cannot be
+// shown to work, which is ADR-0014 applied to the shape of the code rather than
+// to a missing test.
+func isRepoKeyRune(r rune) bool {
+	switch {
+	case r >= 'a' && r <= 'z':
+		return true
+	case r >= '0' && r <= '9':
+		return true
+	case r == '.' || r == '-' || r == '_':
+		return true
+	}
+	return false
+}
+
+// isVersionSuffixRune reports whether r may appear in a pre-release or
+// git-describe suffix. Same reasoning as isRepoKeyRune.
+func isVersionSuffixRune(r rune) bool {
+	switch {
+	case r >= '0' && r <= '9':
+		return true
+	case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z':
+		return true
+	case r == '.' || r == '-':
+		return true
+	}
+	return false
+}
+
 // validWatchRepo reports whether s is a repository KEY rather than a path.
 //
 // This is the one free-text field in the record, so it is the one place a path
@@ -70,9 +104,13 @@ func WatchCauses() []string {
 // refuses a legal-but-unusual name costs them a rename, while a rule that
 // admits "../.." costs them the promise the record is sold on.
 func validWatchRepo(s string) bool {
-	if s == "" || len(s) > 129 {
-		return false
-	}
+	// There is deliberately no length guard here, and `guard reachability`
+	// is why. It reported one UNREACHED on 2026-09-13 and was right in both
+	// halves: Validate refuses an empty Repo before this is called, and the
+	// longest string two segments of at most 64 can make is 129, so no input
+	// reaching here can exceed it without a segment already failing below.
+	// Writing a test to satisfy the tool would have frozen dead code in place,
+	// which is the failure mode the tool's own message warns about.
 	segs := strings.Split(s, "/")
 	if len(segs) > 2 {
 		return false
@@ -82,10 +120,7 @@ func validWatchRepo(s string) bool {
 			return false
 		}
 		for _, r := range seg {
-			switch {
-			case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			case r == '.' || r == '-' || r == '_':
-			default:
+			if !isRepoKeyRune(r) {
 				return false
 			}
 		}
@@ -127,10 +162,7 @@ func validBinaryVersion(s string) bool {
 			return false
 		}
 		for _, r := range suffix {
-			switch {
-			case r >= '0' && r <= '9', r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z':
-			case r == '.' || r == '-':
-			default:
+			if !isVersionSuffixRune(r) {
 				return false
 			}
 		}
