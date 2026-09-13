@@ -86,6 +86,18 @@ Each line is a gate. A release cannot claim 1.0 with any of them unmet, and
       different one. The rule is not "measure more", it is: before a number
       goes in a README, a commit message or a card, something must have tried
       to falsify the instrument.
+- [ ] **The same rule binds commercial figures, and until 2026-09-13 it did
+      not.** A price is a headline figure. `docs/MONEY-PATH.md` carried a $199
+      per repository list price derived by applying a 1 to 3 percent comparable
+      to $13,000 a month of *unreachable capacity*, which is not spend the
+      customer makes, and no instrument had been pointed at it. A twelve-person
+      review found the term change between two paragraphs. The list price is now
+      marked provisional and is published nowhere a launch reader sees it, and
+      the falsifier is pre-registered in that document: if a Van Westendorp
+      series over about ten people who have actually run the tool clusters "too
+      expensive" below $99, the section is corrected rather than defended.
+      **A number nobody has tried to falsify does not become exempt by being
+      about money.**
 
 ## Deliberately NOT gates
 

@@ -322,13 +322,26 @@ suite recurs, and nobody argues that a test suite is rent because the bug was fi
 
 Two more objections, weaker but worth answering rather than leaving for someone else to raise.
 
-**"Apache 2.0 means the entitlement check is deleted in one commit."** True, and it does not matter
-much. The check is a payment fence for honest buyers, not a DRM scheme, and the buyer in section 2
-is a company that will not ship a patched binary through its own compliance process to avoid $25.
-The part that a fork genuinely cannot take is the paid feed, because that is data measured against
-real traffic and it is not in the repository. [ADR-0012](adr/0012-dual-licensing-deferred.md) reached
-the same place from the other direction: revenue has to come from a separate work, and data is the
-separate work that is already half built.
+**"The licence means the entitlement check is deleted in one commit."** True, and the paragraph that
+used to sit here was wrong twice, so it is corrected rather than quietly rewritten.
+
+It argued this under **Apache 2.0**, and the project has been **BUSL 1.1** since 2026-09-06 with a
+Change Date of 2029-09-06 ([ADR-0016](adr/0016-business-source-license.md)). It also argued that a
+buyer would not patch a binary "to avoid $25", and $25 is no longer the number: list is now stated
+below as provisional, and the figure that paragraph was defending has moved by an order of
+magnitude. **A stale premise inside the document that defines the business is exactly the defect
+class this project spends its time finding in other people's output**, and it survived here because
+nothing checks prose against a licence file.
+
+The corrected version is weaker for the fence and unchanged for the conclusion. BUSL's Additional
+Use Grant **expressly permits modifying the work for your own internal use**, so an enterprise
+buyer removing an entitlement check is not even a licence breach, let alone a fork. The fence is a
+convenience for honest buyers and it should never be described as more than that.
+
+What a copy genuinely cannot take is unchanged: the paid feed is data measured against real traffic
+and it is not in the repository, and neither is a week of somebody's attention.
+[ADR-0012](adr/0012-dual-licensing-deferred.md) reached the same place from the other direction:
+revenue has to come from a separate work, and data and labour are the separate works.
 
 **"78 sessions on one machine is not enough to sell a threshold."** Also true, and
 [PRODUCT-DIRECTION.md](PRODUCT-DIRECTION.md) makes the sharper version of the point: run over the 40
@@ -402,6 +415,15 @@ resentment, or churn. Discounting from a higher list costs nothing and reads as 
 gift. This asymmetry is the whole argument, and it does not depend on any figure
 above being exactly right.
 
+**Nothing is for sale on 2026-09-14, and no price is published that day.** That is a decision
+taken 2026-09-13 and it is not modesty. The paid capability does not exist: `replay gate` is
+unbuilt, [ADR-0023](adr/0023-entitlement-is-a-signed-document-not-an-account.md) is Proposed, the
+`crypto/ed25519` allowlist narrowing it needs is unshipped, and there is no rail. Publishing a
+number nobody can transact anchors it permanently in exchange for nothing, and it hands a launch
+audience the easiest possible reading: **$199 a month to recover a measured $60 to $90 a month.**
+That comparison is not unfair. It is the arithmetic in section 1 of this document, and the answer
+to it is `replay gate` and the throttling finding rather than a defence of the number.
+
 So the shape, which is what is being decided here — the number remains
 provisional until someone has run the tool and been asked:
 
@@ -409,7 +431,7 @@ provisional until someone has run the tool and been asked:
 |---|---|
 | **Individuals** | free, permanently. This is the adoption motion and it is not a trial |
 | **Public / OSS repositories** | free. Distribution, honestly labelled |
-| **List** | $199 per repository per month |
+| **List** | **Provisional and not offered.** $199 per repository per month is the working figure, kept here with its reasoning and deliberately absent from the README, the website and anything a launch reader sees |
 | **Design partner** | $25, explicitly a time-boxed discount off list, not the price |
 | **Annual prepay** | two months free |
 | **Price lock** | a subscribed price never rises |

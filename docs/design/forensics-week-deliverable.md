@@ -210,7 +210,56 @@ The second week is sold by the first week being true, or it is not sold.
    need for our own integrity and they ignore? Worth knowing, because it is the
    most expensive part to produce.
 
-## What this document does not cover
+## Price
 
-Price. The band lives with the commercial decisions, and nobody has paid one, so
-any number here would be an opening position wearing the clothes of a rate card.
+**$25,000 for the week. $15,000 for the first three, which is a first-cohort
+price and is labelled as one rather than presented as the rate.**
+
+This section used to say that any number here would be "an opening position
+wearing the clothes of a rate card", and declined to give one. That reasoning was
+right about the risk and wrong about the cost of silence. A buyer who arrives on
+a launch day and finds no number does not wait for one: they assume it is either
+unaffordable or not really for sale, and both readings end the conversation
+without a reply. So the number is here, and it is labelled as exactly what the
+old paragraph feared, which removes the thing that made it dangerous.
+
+**Why $25,000 and not less.** The week is a person's undivided attention, and the
+price has to survive the honest version of the pitch: the finding may be that
+there is nothing to find. At $5,000 that outcome feels like a loss to both sides.
+At $25,000 the buyer is purchasing a decision rather than a saving, which is the
+only thing this engagement can truthfully promise. It also has to cover the weeks
+it is not sold, the price-table maintenance that recurs whether or not anyone
+buys, and the qualification calls that end in a no.
+
+**Why the first three are $15,000.** They are worth more than the money. The
+first engagement produces the first corpus this project has ever seen that is not
+the maintainer's own laptop, which is the single blocker named in
+[`../ROADMAP.md`](../ROADMAP.md) for v0.8 and in every spike row in that file
+since 2026-09-06. A discount labelled as a discount buys that. A permanently low
+list price buys it once and then caps the business, which is the mistake
+[`../MONEY-PATH.md`](../MONEY-PATH.md) already corrected once for the
+subscription and should not repeat here.
+
+**Day 1 can still end it, and now that costs the buyer nothing.** The deliverable
+above says a corpus that cannot answer the question is itself the finding,
+delivered, with the remaining days unbilled. A review called that an unpriced
+refund liability, correctly, and
+[`forensics-week-qualification.md`](forensics-week-qualification.md) moved two of
+the three abort conditions to three commands the prospect runs on their own
+machine before money is discussed. The third genuinely needs Day 1.
+
+So the invoice is raised **after Day 1, not before it**. If Day 1 ends the
+engagement the buyer receives the finding and no invoice, which is the same
+promise as a refund without either side handling money. Nothing about this
+requires trust: the three qualifying commands read files they already have, send
+nothing, and they can read the source of all three first.
+
+**What is not sold at any price.** Priority on the public issue tracker, early
+access to a fix, or any measurement gated behind payment. A security fix reaches
+everyone at once. The week is attention, and attention is the only thing here
+that is genuinely scarce.
+
+**Nobody has paid this.** It is an opening position, it is labelled as one, and
+the first three engagements are the instrument that tells us whether it is
+right. If the first five qualifications disqualify at the three-line stage, the
+price is not the problem and this document should say so rather than discount.

@@ -482,6 +482,28 @@ the [roadmap](docs/ROADMAP.md) says plainly what is unfinished.
 If it saved you something, [FUNDING.md](FUNDING.md) says how to say so. The tool is free; the
 measurements behind it are real API spend.
 
+## What it costs
+
+**Nothing, and nothing is for sale today.**
+
+Every command works, on every model, with no account, no key and no network call.
+Nothing that works in a release you already have will ever move behind a payment:
+that is a promise in [SPONSORS.md](SPONSORS.md), and it is narrower and more
+useful than the sentence it replaced, which is [recorded there too](SPONSORS.md).
+If a paid capability is ever added it will be **something that does not exist
+today**, and it will not be gated on sponsorship either.
+
+There is one paid thing that does exist and it is not a tier: a week of the
+maintainer's attention over your own corpus, described and priced in
+[the deliverable](docs/design/forensics-week-deliverable.md), with
+[three commands you run yourself](docs/design/forensics-week-qualification.md)
+that tell you before any money is discussed whether it is worth either side's
+time. Nobody has bought one.
+
+[The money path](docs/MONEY-PATH.md) is the whole commercial argument, including
+the arithmetic that says a per-seat subscription does not survive this project's
+own numbers.
+
 ## About the author
 
 Replay Doctor is written and maintained by **Daniel Saito**, founder of
