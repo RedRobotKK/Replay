@@ -214,6 +214,20 @@ jobs:
   merge-guard:
     name: merge result
     runs-on: ubuntu-latest
+    # Only meaningful on a pull request, for the same reason guard-reachability
+    # below says so: there has to be a base to merge into.
+    #
+    # GITHUB_BASE_REF is set only for pull_request events. On a push to main it
+    # is empty, so the step below ran `git fetch --no-tags origin ""` and then
+    # `merge-guard origin/`, and failed. Every push to main, since the job was
+    # written.
+    #
+    # That is the defect this repository keeps naming in other people's work and
+    # had shipped in its own: a check that goes red for a structural reason on
+    # every merge is a check nobody reads, and a check nobody reads is how the
+    # vendored installer went stale for two days with a green board. main has
+    # been red for three consecutive runs with all twelve other jobs passing.
+    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
