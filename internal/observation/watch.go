@@ -7,6 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/RedRobotKK/Replay/internal/consent"
@@ -18,6 +21,77 @@ import (
 // a reader who accepts one has not accepted the others. Merging them would make
 // a version bump on any of them a renegotiation of all three.
 const WatchSchema = "replay.watch.v1"
+
+// The cause classes a Watch record may count, named by the mechanism each one
+// is. A record carrying any other key is refused, because a class nobody
+// defined is a number nobody can check, and on a page it is worse than absent:
+// it gets a row, a colour and a share of the total.
+const (
+	CauseRerender     = "rerender"
+	CauseTTLExpiry    = "ttlExpiry"
+	CauseToolChange   = "toolChange"
+	CauseSystemChange = "systemChange"
+	CauseModelSwitch  = "modelSwitch"
+	CauseUnknown      = "unknown"
+)
+
+var watchCauses = map[string]bool{
+	CauseRerender: true, CauseTTLExpiry: true, CauseToolChange: true,
+	CauseSystemChange: true, CauseModelSwitch: true, CauseUnknown: true,
+}
+
+// WatchCauses lists the admitted classes in a stable order, for anything that
+// renders or checks them outside this package.
+//
+// CauseUnknown is one of them on purpose (ADR-0018): a break this binary could
+// not classify is a third state, and folding it into the nearest named class
+// would report a mechanism nobody measured.
+func WatchCauses() []string {
+	out := make([]string, 0, len(watchCauses))
+	for k := range watchCauses {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// validWatchRepo reports whether s is a repository KEY rather than a path.
+//
+// This is the one free-text field in the record, so it is the one place a path
+// could get in. The distinction the charset enforces is the product's whole
+// claim: a key is a label the customer chose, and a path is a directory the
+// tool discovered. Without a charset those are the same string arriving by two
+// routes, and only one of them is something the customer agreed to send.
+//
+// At most two segments of at most 64 characters from [a-z0-9._-_]. No slashes
+// beyond the one, no backslashes, no spaces, no capitals, no tilde, and no
+// segment that is "." or "..". Deliberately narrower than what a forge allows:
+// this is a label somebody types once into a config file, and a rule that
+// refuses a legal-but-unusual name costs them a rename, while a rule that
+// admits "../.." costs them the promise the record is sold on.
+func validWatchRepo(s string) bool {
+	if s == "" || len(s) > 129 {
+		return false
+	}
+	segs := strings.Split(s, "/")
+	if len(segs) > 2 {
+		return false
+	}
+	for _, seg := range segs {
+		if seg == "" || len(seg) > 64 || seg == "." || seg == ".." {
+			return false
+		}
+		for _, r := range seg {
+			switch {
+			case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			case r == '.' || r == '-' || r == '_':
+			default:
+				return false
+			}
+		}
+	}
+	return true
+}
 
 // Watch is one session against one repository, counts only.
 //
@@ -140,6 +214,19 @@ func (w Watch) Validate() error {
 	if w.Repo == "" {
 		return errors.New("watch record names no repository, and the repository is the unit")
 	}
+	if !validWatchRepo(w.Repo) {
+		return fmt.Errorf("watch record's repository key %q is not a key. It is the one "+
+			"field a person types, so it is the one place a path could reach a record "+
+			"that gets posted: at most two segments of at most 64 characters from "+
+			"a-z, 0-9, dot, dash and underscore", w.Repo)
+	}
+	for cause, n := range w.BreaksByCause {
+		if !watchCauses[cause] {
+			return fmt.Errorf("watch record counts %d breaks under %q, which is not one of "+
+				"%v. A class nobody defined gets a row and a share of the total on a page, "+
+				"which is worse than being absent", n, cause, WatchCauses())
+		}
+	}
 	if w.SessionTag == "" {
 		return errors.New("watch record has no session tag, so re-reading it would double count")
 	}
@@ -203,4 +290,46 @@ func BuildWatch(d consent.Decision, w Watch) (Watch, error) {
 		return Watch{}, err
 	}
 	return out, nil
+}
+
+// watchFileName names the file after the record rather than after a clock, so
+// two runs that read the same session produce the same name and the duplicate
+// is visible in a directory listing instead of arriving at the far end.
+func watchFileName(w Watch) string {
+	d := w.Digest
+	if len(d) > 12 {
+		d = d[:12]
+	}
+	return fmt.Sprintf("replay-watch-%s-%s-%s.json", safe(w.Repo), safe(w.SessionTag), safe(d))
+}
+
+// WriteWatch writes a validated record where the operator can read it before
+// anything moves it, and returns the path.
+//
+// The same two refusals as the corpus writer, for the same reason. This is the
+// artifact a person or a hook is about to post: replacing one that has not been
+// sent loses a session nobody knows is missing, and following a symlink means
+// somebody other than the operator chose where their spend lands.
+//
+// Mode 0600. It is a record of what one account spent, and on a shared machine
+// the default umask would publish it to everyone with a login.
+func WriteWatch(dir string, w Watch) (string, error) {
+	if err := w.Validate(); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, watchFileName(w))
+	if info, err := os.Lstat(path); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return "", fmt.Errorf("%s is a symlink, so writing here would let somebody "+
+				"other than you choose where your record lands", path)
+		}
+		return "", fmt.Errorf("%s already exists. Move or delete it rather than replacing "+
+			"a record that may not have been sent yet", path)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("cannot inspect %s, so whether a record is already there is "+
+			"unknown and it will not be overwritten: %w", path, err)
+	}
+	// MarshalIndent cannot fail on this type, for the reason Digested gives.
+	body, _ := json.MarshalIndent(w, "", "  ")
+	return path, os.WriteFile(path, append(body, '\n'), 0o600)
 }

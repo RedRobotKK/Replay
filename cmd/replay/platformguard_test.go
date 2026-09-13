@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"runtime"
 	"strings"
 	"testing"
@@ -56,27 +57,64 @@ func TestPG1_WindowsRefusesAndOtherPlatformsDoNot(t *testing.T) {
 	}
 }
 
-// PG2: the refusal is reachable from the entry point rather than defined and
-// forgotten.
+// PG3: the refusal branch is entered, on the platform the maintainer is
+// actually running.
 //
-// A guard nothing calls is the same defect one level up. This asserts the
-// string the entry point would print is the one platformRefusal produces, so
-// deleting the call site fails here and not only on a Windows runner nobody
-// watches.
-func TestPG2_TheEntryPointConsultsTheGuard(t *testing.T) {
-	// Drive the real entry point, with the cheapest subcommand there is, so the
-	// assertion is about the code path a user takes rather than about a variable
-	// this test set itself.
-	refusalCheckedAtEntry = nil
-	var out, errOut strings.Builder
-	_ = run([]string{"version"}, &out, &errOut)
+// PG2 proved the call site exists. It did not prove the branch behind it is
+// ever taken, and `guard reachability` said so out loud on 2026-09-13:
+//
+//	cmd/replay/main.go:109  if msg := platformRefusal(); msg != "" {
+//	      UNREACHED: no test makes this condition true
+//
+// It was right, and the reason is the whole problem the guard's own comment
+// names: `guard reachability` and `frozen mutants` run on ubuntu only, where
+// platformRefusal returns "". So the one refusal that decides whether secrets
+// get written to an unverified directory was shipping unmutated, which is the
+// state this project treats as indistinguishable from having no guard at all.
+//
+// The fix is a seam rather than a second code path: run() consults a variable
+// whose default IS platformRefusal, production never assigns it, and a test on
+// any platform can make the condition true and watch what the entry point does.
+func TestPG3_TheRefusalBranchIsTakenAndSaysSo(t *testing.T) {
+	const notice = "this build refuses because the test said so"
+	restore := platformRefusalAtEntry
+	t.Cleanup(func() { platformRefusalAtEntry = restore })
+	platformRefusalAtEntry = func() string { return notice }
 
-	if refusalCheckedAtEntry == nil {
-		t.Fatal("run() did not consult platformRefusal, so the refusal cannot fire and a " +
-			"Windows build would proceed to write a ledger and a masking vault into a " +
-			"directory ownerdir declines to verify")
+	var out, errOut strings.Builder
+	err := run([]string{"version"}, &out, &errOut)
+
+	if err == nil {
+		t.Fatal("a refusing build ran the command anyway")
 	}
-	if got, want := refusalCheckedAtEntry(), platformRefusal(); got != want {
-		t.Errorf("the entry point sees %q and the guard says %q", got, want)
+	if !errors.Is(err, errUnsupportedPlatform) {
+		t.Errorf("refused with %v, which the exit-code table cannot classify", err)
+	}
+	if !strings.Contains(errOut.String(), notice) {
+		t.Errorf("the reason never reached stderr, so the user is told nothing: %q", errOut.String())
+	}
+	if out.Len() != 0 {
+		t.Errorf("a refusing build still wrote to stdout, which is somebody's pipe: %q", out.String())
+	}
+	// Exit 1 rather than 3. ADR: exitGateBreached is the only code that may
+	// block a merge, and a platform that cannot be evaluated is not a breach.
+	if code := exitCode(err); blocksAMerge(code) {
+		t.Errorf("an unsupported platform exits %d, which blocks a merge. A build that "+
+			"could not evaluate anything must not read as a measured breach", code)
+	}
+}
+
+// PG4: the seam's default is the real guard.
+//
+// PG3 substitutes the variable, so on its own it would pass against a binary
+// whose default is a function that never refuses. This is the half that keeps a
+// Windows build refusing.
+func TestPG4_TheSeamDefaultsToTheRealGuard(t *testing.T) {
+	if got, want := platformRefusalAtEntry(), platformRefusal(); got != want {
+		t.Errorf("the entry point consults a guard that says %q while the platform's own "+
+			"guard says %q", got, want)
+	}
+	if runtime.GOOS == "windows" && platformRefusalAtEntry() == "" {
+		t.Fatal("a Windows build's entry point does not refuse")
 	}
 }

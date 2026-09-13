@@ -76,6 +76,25 @@ a measurement. Both arrive at the far end as no record, and the operator at the
 terminal has to be told which, because "watch is off" is fixed by a command and
 "nothing measured" is not fixed by anything.
 
+## The six cause classes, by mechanism
+
+These are the labels the classifier already produces for `replay diff`, restated as the mechanism each one names so a reviewer who knows how prefix caches work can check the definition rather than the name. A provider cache is a byte-stable prefix of the request as assembled on the wire; a break is the first byte that differs, and everything after it is written again.
+
+| Class | Mechanism | How the classifier decides |
+|---|---|---|
+| `rerender` | the client re-serialised history (block merge, reminder stripped in place, a newline at a boundary) so the prefix bytes changed with no edit visible in the persisted transcript | cache-read tokens fall on a turn whose persisted messages are byte-identical to the previous turn's prefix; inferred, not observed, and the record says so by keeping this class separate |
+| `ttlExpiry` | the gap since the previous request exceeded the TTL in force (5 minutes, or 1 hour when requested); the entry aged out | inter-request gap greater than the TTL, and cache-creation tokens on the next turn approximately equal to the previous prefix length |
+| `toolChange` | the tool list or a tool schema changed; tools precede system and messages in the cached prefix on Anthropic's order, so every byte after them is rewritten | tool block set or bytes differ between consecutive requests |
+| `systemChange` | the system prompt bytes changed (a clock, a cwd, a memory file inserted before the breakpoint) | system block differs between consecutive requests |
+| `modelSwitch` | the cache is per model; a different model starts cold | model id differs between consecutive requests |
+| `unknown` | the prefix diverged inside message history and the block could not be named | none of the above matched and cache reads fell |
+
+Counts, never shares: the ranking of these classes flipped between two readings of the same corpus on 2026-09-06 and 2026-09-11 (`docs/evidence/rerender-band-sensitivity-2026-09-11.md`), so a share is a snapshot and a count is a fact.
+
+## What a local-server record would need, not decided here
+
+vLLM and SGLang implement prefix caching at block granularity (a hash over token blocks, evicted under memory pressure), not as a TTL over a byte prefix. A `provider: "vllm"` record would need the block size and the eviction policy in its provenance to make `ttlExpiry` and `rerender` meaningful, and `idleGapsOverTtl` would have no TTL to compare against. This ADR leaves `provider` open and refuses nothing, but the classifier must not label a local-server session with the Anthropic classes until an evidence file has measured what a break looks like there; `docs/evidence/ollama-cache-observable-2026-09-09.md` is the starting point.
+
 ## Build identity is mandatory here
 
 `binaryVersion`, `pricingDigest` and `rulesVersion` are required on a Watch
@@ -90,6 +109,13 @@ $4,088.49 and $11,969.37 under one rules label. A weekly timeline that silently
 mixes them reports a step change in spend that was a step change in arithmetic,
 which is the worst failure available to a product whose job is explaining why a
 number moved.
+
+## The size, pinned
+
+A fully populated record is **625 bytes** of a 1,024-byte ceiling, across 20
+wire fields, and `TestWA15` fails if either moves. It is posted at the end of
+every session, so its size is a standing cost on somebody else's network and a
+claim in this file; changing it means changing both in one commit.
 
 ## Not built
 

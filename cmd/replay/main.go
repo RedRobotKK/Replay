@@ -105,8 +105,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	// the ownership check that guards the ledger and the masking vault is a
 	// no-op, so the binary declines rather than writing secrets into a directory
 	// it cannot verify is private.
-	refusalCheckedAtEntry = platformRefusal
-	if msg := platformRefusal(); msg != "" {
+	if msg := platformRefusalAtEntry(); msg != "" {
 		_, _ = fmt.Fprint(stderr, msg)
 		return errUnsupportedPlatform
 	}

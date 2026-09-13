@@ -336,3 +336,174 @@ func TestWA11_WatchConsentReadsTheWatchAnswer(t *testing.T) {
 			"answered and the answer was discarded without an error.", d.State)
 	}
 }
+
+// WA12: a cause class nobody defined is refused.
+//
+// BreaksByCause is a map, so it is the one place in this record where a caller
+// chooses a key rather than filling in a field. A class nobody defined is a
+// number nobody can check, and on a dashboard it is worse than absent: it gets
+// a row, a colour and a share of the total.
+func TestWA12_AnUndefinedCauseClassIsRefused(t *testing.T) {
+	w := watchFixture()
+	w.BreaksByCause = map[string]int{"toolChange": 3, "becauseTheModelFeltLikeIt": 9}
+	if err := w.Digested().Validate(); err == nil {
+		t.Error("a record carrying a cause class nothing defines validated. On a page it " +
+			"gets a row and a share of the total, which is worse than being absent.")
+	}
+	for _, c := range WatchCauses() {
+		ok := watchFixture()
+		ok.BreaksByCause = map[string]int{c: 1}
+		if err := ok.Digested().Validate(); err != nil {
+			t.Errorf("the admitted class %q was refused: %v", c, err)
+		}
+	}
+}
+
+// WA13: the repository key is the one string a person types, so it is the one
+// place a path could get in.
+//
+// Every other field is a number, a date, a digest or a value this binary
+// computed. WA1 proves no FIELD can carry content; this proves the single field
+// that carries free text cannot either. A key is a label the customer chose,
+// not a directory the tool discovered, and the charset is what makes those two
+// different things rather than the same string arriving by different routes.
+func TestWA13_TheRepositoryKeyCannotCarryAPath(t *testing.T) {
+	for _, bad := range []string{
+		"/Users/daniel/Development/Replay-clean",
+		"../../etc/passwd",
+		"C:\\Users\\daniel\\secret",
+		"acme/billing/../../home",
+		"~/work/acme",
+		"acme billing",
+		"ACME/Billing",
+		"acme/billing/deep/nesting",
+		"acme/billing/deep",
+		"acme/..",
+		"../acme",
+		"acme/.",
+		strings.Repeat("a", 65),
+		"",
+	} {
+		w := watchFixture()
+		w.Repo = bad
+		if err := w.Digested().Validate(); err == nil {
+			t.Errorf("the repository key %q was accepted. The one typed field is where a "+
+				"path gets in, and this record is posted somewhere.", bad)
+		}
+	}
+	for _, good := range []string{"acme/billing", "billing", "acme-corp/web.api", "a_b/c-d"} {
+		w := watchFixture()
+		w.Repo = good
+		if err := w.Digested().Validate(); err != nil {
+			t.Errorf("the ordinary key %q was refused: %v", good, err)
+		}
+	}
+}
+
+// WA14: writing a record does not replace one that has not been sent, and does
+// not write through a redirected path.
+//
+// Same two refusals as the corpus writer and the same reason. A record is the
+// artifact a person or a hook is about to post; silently replacing one loses a
+// session nobody knows is missing, and following a symlink means somebody other
+// than the operator chose where this operator's data lands.
+func TestWA14_WritingARecordRefusesToReplaceOrRedirect(t *testing.T) {
+	dir := t.TempDir()
+	w, err := BuildWatch(consent.Decision{State: consent.Granted}, watchFixture())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := WriteWatch(dir, w)
+	if err != nil {
+		t.Fatalf("writing the first record: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("the record is mode %o. It is a record of what one account spent, and the "+
+			"default umask would publish it to everyone with a login", perm)
+	}
+	if _, err := WriteWatch(dir, w); err == nil {
+		t.Error("writing the same record twice replaced the first, so a session that was " +
+			"never posted is gone and nothing says so")
+	}
+
+	// A redirected path. The name is derived from the record, so the link has to
+	// be made at the name WriteWatch will choose.
+	other := t.TempDir()
+	target := filepath.Join(t.TempDir(), "elsewhere.json")
+	if err := os.Symlink(target, filepath.Join(other, filepath.Base(path))); err != nil {
+		t.Skipf("symlinks unavailable here: %v", err)
+	}
+	_, symErr := WriteWatch(other, w)
+	if symErr == nil {
+		t.Fatal("a record was written through a symlink, so somebody other than the " +
+			"operator chose where their spend lands")
+	}
+	// The MESSAGE, not just the refusal. Lstat succeeds on a symlink, so the
+	// already-exists branch would refuse this too and the write is safe either
+	// way; what the symlink branch changes is what the operator is told. Those
+	// are two different things to go and do, and neutralising the branch leaves
+	// a refusal that sends them to delete a file that is not the problem.
+	if !strings.Contains(symErr.Error(), "symlink") {
+		t.Errorf("the refusal does not say the path is redirected, so the operator is "+
+			"told to move a file when the problem is where it points: %v", symErr)
+	}
+
+	// An unvalidatable record never reaches the disk at all.
+	bad := watchFixture()
+	bad.Turns = 0
+	empty := t.TempDir()
+	if _, err := WriteWatch(empty, bad.Digested()); err == nil {
+		t.Error("a record that does not validate was written to disk anyway")
+	}
+	if entries, _ := os.ReadDir(empty); len(entries) != 0 {
+		t.Errorf("a refused write still left %d file(s) behind", len(entries))
+	}
+}
+
+// WA15: a populated record stays small, and the number is pinned.
+//
+// Same reason as the corpus payload's size pin. This is a record a hook posts
+// at the end of every session, so its size is a standing cost on somebody
+// else's network and a standing claim in the documentation. A field added
+// without thought is how "roughly 600 bytes" quietly becomes six kilobytes,
+// and the person who finds out is the customer reading their own egress.
+func TestWA15_APopulatedRecordStaysSmall(t *testing.T) {
+	w, err := BuildWatch(consent.Decision{State: consent.Granted}, watchFixture())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Every cause class present, which is the largest this record gets.
+	full := w
+	full.BreaksByCause = map[string]int{}
+	for _, c := range WatchCauses() {
+		full.BreaksByCause[c] = 999
+	}
+	full = full.Digested()
+
+	body, err := json.Marshal(full)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const limit = 1024
+	if len(body) > limit {
+		t.Errorf("a fully populated record is %d bytes, over the %d this project documents. "+
+			"It is posted at the end of every session, so the size is a standing cost on "+
+			"somebody else's network and a claim in the docs", len(body), limit)
+	}
+	t.Logf("fully populated record: %d bytes of %d", len(body), limit)
+
+	var m map[string]any
+	if err := json.Unmarshal(body, &m); err != nil {
+		t.Fatal(err)
+	}
+	const fields = 20
+	if len(m) != fields {
+		t.Errorf("the wire form has %d fields, not %d. If that is deliberate, change this "+
+			"number and docs/design/replay-watch.md in the same commit, because the two "+
+			"are a promise about what travels", len(m), fields)
+	}
+}

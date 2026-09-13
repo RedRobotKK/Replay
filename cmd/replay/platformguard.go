@@ -39,9 +39,19 @@ package main
 // The path back is written down in RELEASE-CRITERIA.md: a Windows leg on the
 // mutation jobs, and then this refusal has earned its own removal.
 
-// refusalCheckedAtEntry is set by run() to the guard it actually consults.
+// platformRefusalAtEntry is the guard run() consults.
 //
-// A guard nothing calls is the same defect one level up, and on a platform the
-// developer is not using, nothing would report it. This lets a test on any
-// platform assert the call site still exists.
-var refusalCheckedAtEntry func() string
+// It is a variable rather than a direct call, and the reason is the sentence
+// four paragraphs up: the mutation and reachability jobs run on ubuntu only,
+// where platformRefusal returns "". `guard reachability` reported the branch
+// UNREACHED on 2026-09-13 and it was right — the one refusal standing between a
+// Windows user and an unverified secrets directory was shipping unmutated,
+// which this project treats as indistinguishable from having no guard.
+//
+// A seam, not a second code path. PRODUCTION NEVER ASSIGNS THIS. A test
+// substitutes it to make the condition true and watch what the entry point
+// does (PG3); another test asserts the default is the real guard, so a Windows
+// build still refuses (PG4). Neither of those is reachable if run() stops
+// calling it, which is the property the flag this replaced was checking less
+// directly.
+var platformRefusalAtEntry = platformRefusal
