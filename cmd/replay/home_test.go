@@ -1,10 +1,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/RedRobotKK/Replay/internal/selfupdate"
 )
 
 // The test suite must not write to the machine it runs on.
@@ -63,7 +66,25 @@ func TestMain(m *testing.M) {
 		panic("isolating USERPROFILE for the test suite: " + err.Error())
 	}
 
+	// The machine's cosign is taken away for the same reason its HOME is.
+	//
+	// `replay upgrade` verifies a Sigstore signature, and it decides whether to
+	// by asking the PATH for cosign. So TestUP1 and TestUP2 passed on every
+	// machine without cosign and failed on every machine with it: their subject
+	// was the runner, not the code. That is not hypothetical. Every CI runner
+	// here has no cosign, the release job installs it in order to sign, and the
+	// v0.6.0 release build failed on those two tests after a first fix had
+	// already pinned the same seam one package over.
+	//
+	// A test that wants cosign present assigns selfupdate.LookCosign itself.
+	restoreCosign := selfupdate.LookCosign
+	selfupdate.LookCosign = func() (string, error) {
+		return "", errors.New("cosign is pinned absent for this suite; a test that " +
+			"needs it present must assign selfupdate.LookCosign itself")
+	}
+
 	code := m.Run()
+	selfupdate.LookCosign = restoreCosign
 	if err := os.RemoveAll(dir); err != nil {
 		// Worth a line on stderr and not worth failing a green suite over: the
 		// directory is under the system temp root and the OS will reclaim it.

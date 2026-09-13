@@ -29,14 +29,37 @@ import (
 // zero third-party dependencies. It is not a new exposure introduced here, but
 // it is a real one and it should not be discovered by a reader.
 
-// lookCosign and runCosign are the seam the signature check is tested through.
+// LookCosign and runCosign are the seam the signature check is tested through.
+//
+// LookCosign is EXPORTED, and that is the point of this change.
+//
+// It was unexported until 2026-09-13, so only this package could pin it. The
+// v0.6.0 release then failed TWICE for one reason, in two different packages:
+// tests whose result was decided by whether cosign happened to be on the PATH
+// of the machine running them. Every CI runner has no cosign. The release job
+// installs it, in order to sign. So the release runner is the only machine in
+// this project's history that runs the suite WITH cosign present, and it is the
+// machine that publishes.
+//
+// The first fix pinned this variable for this package only. cmd/replay reaches
+// the same code through `replay upgrade` and could not pin an unexported
+// variable, so its two upgrade tests kept reading the machine and the second
+// release attempt died on them. That is the shape of fixing a defect where it
+// was found rather than where it lives.
+//
+// NOT AN ENVIRONMENT VARIABLE, deliberately. A package variable is assigned at
+// compile time by code in this module. An env var would let anyone who controls
+// the environment during an upgrade switch the signature check off, which is
+// the supply-chain hole this seam exists to protect.
+//
+// Production never assigns it.
 //
 // Production never assigns either. A test substitutes them to say whether
 // cosign exists on this machine and what it decided, because the alternative is
 // a guard that only fires on a machine with cosign installed and a real signed
 // release to hand, which is a guard nothing in CI can ever watch fail.
 var (
-	lookCosign = func() (string, error) { return exec.LookPath("cosign") }
+	LookCosign = func() (string, error) { return exec.LookPath("cosign") }
 	runCosign  = func(ctx context.Context, bin string, args ...string) error {
 		return exec.CommandContext(ctx, bin, args...).Run()
 	}
@@ -109,7 +132,7 @@ func (s SignatureStatus) String() string {
 // exactly what install.sh does, and refusing to upgrade a machine that has no
 // cosign would strand every user who installed the documented way.
 func (c *Client) verifyChecksumSignature(ctx context.Context, base string, sums []byte) (SignatureStatus, error) {
-	bin, err := lookCosign()
+	bin, err := LookCosign()
 	if err != nil {
 		// Same posture as install.sh: verify what can be verified, leave the
 		// stronger check to machines that have the tool, and SAY WHICH.
