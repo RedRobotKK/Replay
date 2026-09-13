@@ -71,7 +71,42 @@ func knownSurfaces(home string) []otherSurface {
 		{
 			name: "Grok",
 			dir:  firstWithEntries(filepath.Join(home, ".grok")),
-			why:  "Replay cannot read Grok's wire yet: it posts to /responses, which this build does not parse",
+			// THE SHIPPED STRING BLAMED THE WRONG THING, and this replaces it.
+			// It read "Replay cannot read Grok's wire yet: it posts to
+			// /responses, which this build does not parse". The wire is not the
+			// blocker. A reader who acted on that sentence would go and write a
+			// /responses parser and gain nothing, because the numbers are
+			// already on disk.
+			//
+			// MEASURED here, 2026-09-12:
+			// ~/.grok/sessions/<urlencoded-cwd>/<uuid>/updates.jsonl, 105 files,
+			// 33,929 JSON-RPC records shaped {timestamp, method, params}. 1,131
+			// of them carry `params.update.usage` holding inputTokens,
+			// outputTokens, totalTokens, cachedReadTokens, cacheCreationTokens,
+			// reasoningTokens, costUsdTicks, modelCalls, apiDurationMs and
+			// numTurns, plus a per-model `modelUsage` breakdown keyed by model
+			// id. That per-model key is the backend attribution most surfaces in
+			// this file are missing, and Grok has it.
+			//
+			// So why is this still not priceable. cachedReadTokens is non-zero
+			// on 1,120 of the 1,131 records and totals 762,715,904 tokens, while
+			// cacheCreationTokens is present on all 1,131 and ZERO on every one.
+			// Grok is the same shape as OpenClaw below: the read side counted in
+			// the hundreds of millions, the write side never counted at all.
+			//
+			// Both halves are in the sentence deliberately. Naming the file
+			// retires the wire claim and tells a reader where to look. Naming
+			// the zero stops the next person concluding that a reader is all
+			// that stands between this file and a bill.
+			//
+			// The verb is "cannot read", not "cannot price", and OS5 in
+			// otherSurfaces_test.go holds it there. That is the right word for
+			// this row rather than a concession to a test: there is genuinely no
+			// reader for updates.jsonl in this build, so reading is the first
+			// thing that fails. The zero cacheCreationTokens is what would fail
+			// second, and the sentence carries both so that nobody writes the
+			// reader expecting a bill at the end of it.
+			why: "Replay cannot read Grok yet: its per-turn usage sits in ~/.grok/sessions/*/*/updates.jsonl with cachedReadTokens and a per-model breakdown that this build has no reader for, and the cacheCreationTokens counter beside them is zero on every record",
 		},
 		{
 			name: "Cursor",
@@ -182,6 +217,35 @@ func knownSurfaces(home string) []otherSurface {
 			// data", which is false and points at the wrong repository.
 			why: "Replay cannot price OpenClaw yet: every assistant row in its session log carries a cacheWrite counter and every one of them is zero, beside cacheRead counters on the same rows that are not",
 		},
+		{
+			name: "Oracle",
+			// A dir-of-dirs root, and the first shipped row that needs
+			// hasEntries to look past its direct children: every session is a
+			// slug directory holding meta.json, and nothing is loose at the
+			// sessions root. Probed at `sessions` rather than `~/.oracle`
+			// because ~/.oracle holds nothing else, so the two would be the same
+			// claim, and this one points the reader at the actual records.
+			dir: firstWithEntries(filepath.Join(home, ".oracle", "sessions")),
+			// Measured on this machine, 2026-09-12, Oracle 0.8.6: three sessions
+			// under ~/.oracle/sessions. Only one carries a `usage` object at
+			// all; the other two have keys through `status` and stop. That one
+			// reads, in full:
+			//
+			//	{inputTokens: 4256, outputTokens: 0, reasoningTokens: 0,
+			//	 totalTokens: 6, cost: 0.089376}
+			//
+			// There is no cache field of any kind, which alone would be enough.
+			// The reason the string says more is that the record does not agree
+			// with itself: a totalTokens of 6 against an inputTokens of 4256 is
+			// not a rounding problem or a unit mismatch, it is two numbers that
+			// cannot both be counting the same request. No arithmetic recovers a
+			// bill from it, and repricing the input column on its own would mean
+			// trusting one half of a record whose other half is visibly wrong.
+			//
+			// Saying that rather than only "no cache field" is what stops the
+			// next reader trying to price the input and output columns instead.
+			why: "Replay cannot price Oracle: its meta.json records inputTokens and outputTokens and no cache field of any kind, and on the one session here that has usage at all the totalTokens is 6 against an inputTokens of 4256",
+		},
 	}
 }
 
@@ -208,8 +272,25 @@ func knownSurfaces(home string) []otherSurface {
 // it, so a branch here could never be taken and would be a guard that cannot
 // fail (ADR-0014). A missing or unreadable directory yields no matches, which
 // firstWithEntries already answers "" for.
+// The state directory moves wholesale with OPENCLAW_STATE_DIR. VERIFIED from
+// the installed bundle, openclaw 2026.2.15 at
+// /opt/homebrew/lib/node_modules/openclaw: `NEW_STATE_DIRNAME = ".openclaw"`,
+// and OPENCLAW_STATE_DIR occurs 217 times, including in the CLI's own help
+// text ("Write completion scripts to $OPENCLAW_STATE_DIR/completions"). A
+// probe that knows only ~/.openclaw goes blind for anyone who set it, which is
+// the same class of miss as hardcoding the agent id and just as quiet.
 func openclawSessions(home string) string {
-	matches, _ := filepath.Glob(filepath.Join(home, ".openclaw", "agents", "*", "sessions"))
+	roots := []string{filepath.Join(home, ".openclaw")}
+	// The override comes first: a reader who set it meant it, and the default
+	// tree may still exist behind it holding a stale session from before.
+	if moved := os.Getenv("OPENCLAW_STATE_DIR"); moved != "" {
+		roots = []string{moved, roots[0]}
+	}
+	var matches []string
+	for _, root := range roots {
+		found, _ := filepath.Glob(filepath.Join(root, "agents", "*", "sessions"))
+		matches = append(matches, found...)
+	}
 	return firstWithEntries(matches...)
 }
 

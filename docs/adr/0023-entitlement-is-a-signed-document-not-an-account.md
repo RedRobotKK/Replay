@@ -74,23 +74,39 @@ and for a flat-seat user the recoverable figure is zero dollars with a published
 null result behind it. Per repository closes without asking anyone to believe a
 savings claim.
 
-## The blocker, and where the line actually belongs
+## The blocker, which was already removed, and where the line actually belongs
 
-`cmd/replay/x402_test.go` fails the build on any `crypto/` import outside `aes`,
-`cipher`, `hmac`, `rand` and `sha256`, and `TestX402_AllowlistIsMeaningful`
-asserts that `crypto/ed25519` and friends are never added, with a comment saying
-that doing so "is the conversation this list exists to force."
+**Corrected 2026-09-13, the day this ADR was written, after a review found it.**
+The paragraph here originally said that `crypto/ed25519` was banned and that
+this ADR was "the conversation the list exists to force." That conversation had
+already happened. `crypto/ed25519` was allowlisted for `internal/feed` in
+`c69c875` on **2026-09-07**, six days earlier, for verifying a signed vendor
+feed, and the blanket ban was replaced by `TestFeedVerifiesAndNeverSigns`, which
+reads the tree for construction paths rather than trusting the import list.
 
-This is that conversation, and the test is right to have forced it.
+So this ADR opened by describing a blocker that was not there. It is worth
+saying plainly why that happened rather than quietly deleting it: the claim came
+from `MONEY-PATH.md` section 4, which was written before the change and never
+re-read against the code, and I repeated it because it was in a document rather
+than because I had looked. **A published document is not evidence about the
+tree, and this project spends most of its time finding exactly that mistake in
+other people's numbers.**
 
-The property being protected is that a binary piped from `curl` onto machines
-holding provider credentials cannot move money. **Verifying a signature does not
-move money. Signing does.** So the allowlist is drawn one level coarser than its
-own stated purpose, and the fix is to draw it at the operation rather than the
-package: permit importing `crypto/ed25519`, and fail the build on any reference
-to a construction path (`ed25519.Sign`, `ed25519.GenerateKey`, `ecdsa.Sign`) by
-the same file walk that exists today. `TestX402_AllowlistIsMeaningful` keeps its
-job on the narrower line, so it still has something it can fail on.
+What survives is the reasoning, and it is unchanged: verifying a signature does
+not move money, signing does, so the line belongs at the operation rather than
+the package. `TestX402_AllowlistIsMeaningful` still bans `crypto/ecdsa`,
+`crypto/elliptic`, `crypto/ecdh` and `math/big`, and those are still the right
+bans.
+
+**One objection this ADR must not leave unanswered.** The guard is a file walk
+asserting that `ed25519.Sign` and `ed25519.GenerateKey` appear in no non-test
+file. That is a syntactic control on a semantic property, and it is defeated by
+`var sign = ed25519.Sign`, by any value of type `crypto.Signer`, or by an
+ordinary refactor that nobody intended as an evasion. A check that can be made
+not to fail by accident is the defect class ADR-0014 exists to name. **Keep the
+property and change the mechanism: assert on the built binary's symbol table
+rather than on the source AST.** That is unbuilt, and it is a precondition for
+the entitlement key existing rather than a nice-to-have.
 
 **An HMAC token is rejected explicitly.** A symmetric check ships the
 verification key inside the binary, so anyone who reads it can mint entitlements.

@@ -21,10 +21,11 @@ say what would verify it.** NOT RECORDED beats a guess.
 | Claude Code | read fully |
 | Codex | read fully (`replay codex`) |
 | Ollama | detected; `replay burn` reads logs, refuses a cache hit rate, says why |
-| Grok | detected, not read: "posts to /responses, which this build does not parse" |
+| Grok | detected, not read: usage IS on disk in updates.jsonl, cacheCreationTokens zero on every record (corrected by AGENT-5; the /responses claim was wrong) |
 | Cursor | detected, not read: tokenCount present and zero in state.vscdb, and no usage field in 4,566 agent-transcript rows |
 | AnythingLLM | detected, not read: metrics object carries prompt_tokens and completion_tokens and no cache field (added by AGENT-5) |
 | OpenClaw | detected, not read: cacheWrite counter present and zero on every assistant row, beside non-zero cacheRead (added by AGENT-5) |
+| Oracle | detected, not read: no cache field, and the one session with usage has totalTokens 6 against inputTokens 4256 (added by AGENT-5) |
 
 ## What each agent returns
 
@@ -1502,3 +1503,162 @@ the new binary: 141 surfaces, 38 OK, 4 EXPECTED REFUSAL, 48 NEEDS ARGUMENT,
 (`serve --mask-ttl`, `serve --freeze-prefix`, `mcp --install`, `probe --vary`,
 `cost --usage`) are flags other agents added to `docs/CLI.md` concurrently and
 are unrelated to this work.
+
+### AGENT-5, second pass: the dir-of-dirs defect, two terminal agents, one wrong row
+
+#### The hasEntries defect: confirmed, and it was not what the existing test said
+
+Reproduced independently. `hasEntries` counted only non-directory DIRECT
+children, so a root holding `project/chats/session.jsonl` and nothing loose
+answered false. Every surface shipped before 2026-09-13 happens to keep a file
+directly at its probe root (`~/.grok`, `~/.cursor`, `~/.ollama/logs`,
+`~/.codex`), which is the only reason it never bit.
+
+**Another agent landed the fix in `othersurfaces.go` while this pass was
+running**, with a bounded recursive walk (`entryProbeDepth = 3`, direct children
+checked before any descent) and `cmd/replay/hasentries_test.go` (HE1 to HE4).
+That work is theirs, not double-done here. What this pass contributes is the
+shipped-row control, OS15: Oracle is the first shipped surface whose probe root
+holds only directories, so the row exercises the fix against a real layout
+rather than a fixture.
+
+**A finding about the test that was supposed to cover this.**
+`TestADirectoryOfDirectoriesIsNotEvidence` in `surfacepaths_test.go` is named as
+though it pinned this behaviour. It did not and could not: its fixture builds
+only EMPTY subdirectories, so it passes identically before and after the change.
+A mutation forcing the depth back to 0 (M9) leaves it green while HE1, OS15 and
+OS16 all go red. The comment has been rewritten to say what the fixture actually
+tests, and to say plainly that it never caught the defect its name implies. A
+test whose name overstates its fixture is how a defect survives a green suite.
+
+The opposite direction still holds and is still guarded: a tree of empty
+directories is not a corpus, because several agents create their store eagerly
+on install. OS13 and HE2 both pin it.
+
+#### Oracle (new row, VERIFIED-PRESENT)
+
+- Oracle 0.8.6. dir: `~/.oracle/sessions` VERIFIED-PRESENT, 3 session
+  directories. `~/.oracle` holds nothing but `sessions`.
+- format: `~/.oracle/sessions/<slug>/meta.json`. A dir-of-dirs root with no
+  loose file, which is why this row could not have fired before the hasEntries
+  fix.
+- MEASURED: only 1 of the 3 sessions carries a `usage` object at all. The other
+  two have keys through `status` and stop. The one that does reads in full:
+  `{inputTokens: 4256, outputTokens: 0, reasoningTokens: 0, totalTokens: 6,
+  cost: 0.089376}`.
+- cache tokens? **None, of any kind.**
+- PASS: a meta.json carrying a cache field and a self-consistent total.
+- FAIL: no cache field, and the record does not agree with itself. A
+  totalTokens of 6 against an inputTokens of 4256 is not rounding and not a
+  unit mismatch, it is two numbers that cannot both be counting the same
+  request. Repricing the input column alone would mean trusting one half of a
+  record whose other half is visibly wrong.
+- `why:` `Replay cannot price Oracle: its meta.json records inputTokens and outputTokens and no cache field of any kind, and on the one session here that has usage at all the totalTokens is 6 against an inputTokens of 4256`
+
+#### Grok: the shipped row was wrong, and is corrected
+
+The shipped string blamed the wire: "Replay cannot read Grok's wire yet: it
+posts to /responses, which this build does not parse". **The wire is not the
+blocker.** A reader acting on that sentence would write a /responses parser and
+gain nothing, because the numbers are already on disk.
+
+MEASURED here: `~/.grok/sessions/<urlencoded-cwd>/<uuid>/updates.jsonl`, 105
+files, 33,929 JSON-RPC records shaped `{timestamp, method, params}`. 1,131 carry
+`params.update.usage` with inputTokens, outputTokens, totalTokens,
+cachedReadTokens, cacheCreationTokens, reasoningTokens, costUsdTicks,
+modelCalls, apiDurationMs, numTurns, plus a per-model `modelUsage` breakdown
+keyed by model id (`grok-4.6-build`). That per-model key is exactly the backend
+attribution most rows in this file are missing.
+
+**And one thing the handover did not say, which changes the verdict.** The
+suggested replacement implied both cache fields carry data and only a reader is
+missing. Measured: cachedReadTokens is non-zero on 1,120 of 1,131 records and
+totals 762,715,904 tokens, while **cacheCreationTokens is present on all 1,131
+and zero on every one**. Grok is the same shape as OpenClaw, not a surface one
+reader away from a bill. Both facts are in the shipped sentence: naming the file
+retires the wire claim, naming the zero stops the next person expecting a bill
+at the end of the parser.
+
+(The handover said 166 usage records; measured here it is 1,131.)
+
+- `why:` `Replay cannot read Grok yet: its per-turn usage sits in ~/.grok/sessions/*/*/updates.jsonl with cachedReadTokens and a per-model breakdown that this build has no reader for, and the cacheCreationTokens counter beside them is zero on every record`
+- The verb stays "cannot read" because OS5 in `otherSurfaces_test.go` asserts it
+  for this row, and because it is the right word: reading is what fails first.
+
+#### OpenClaw: corrections to the handover, and one addition
+
+- **The probe was never hardcoded to the agent id.** It has globbed
+  `agents/*/sessions` since it landed, and OS11 is the test that holds it there.
+  The handover's concern was already addressed.
+- **Added: `OPENCLAW_STATE_DIR`.** VERIFIED from the installed bundle, openclaw
+  2026.2.15 at `/opt/homebrew/lib/node_modules/openclaw`:
+  `NEW_STATE_DIRNAME = ".openclaw"`, and `OPENCLAW_STATE_DIR` occurs 217 times
+  including in the CLI's own help text ("Write completion scripts to
+  $OPENCLAW_STATE_DIR/completions"). The whole tree relocates with it, so a
+  probe that knows only `~/.openclaw` goes blind for anyone who set it. Guarded
+  by OS18, and the override is tried before the default.
+- On `cacheWrite`: the handover reads the zero as a route property (the
+  OpenRouter openai-completions route returns `cached_tokens` only) rather than
+  a missing field. That is a reasonable reading and it is not verified here, so
+  the shipped string states the measurement (the counter is zero on every row)
+  and does not assert the cause. The `totalTokens == input+output+cacheRead+
+  cacheWrite` identity holding on all 447 rows is confirmed.
+
+#### Settled: the two repository renames
+
+Left open in the handover, settled with one API call each rather than guessed:
+
+- `gh api repos/block/goose` resolves to `{"full_name": "aaif-goose/goose",
+  "archived": false, "fork": false}`.
+- `gh api repos/sst/opencode` resolves to `{"full_name": "anomalyco/opencode",
+  "archived": false, "fork": false}`.
+
+Both renames are real and neither repository is archived or a fork. AGENT-2's
+note was correct and the disagreeing agent was wrong. No URL is hardcoded in
+this build either way, so nothing in the tree depended on the answer.
+
+#### Still NOT shipped, and why the standard did not move
+
+The handover marked Aider, Gemini CLI, Goose, OpenCode and Warp
+SOURCE-VERIFIED and suggested detect-and-decline rows. **All five are
+VERIFIED-ABSENT on this machine** (re-probed independently: no `~/.aider`,
+`~/.gemini`, `~/.local/share/goose`, `~/.local/share/opencode`, and no Warp
+directory). Their path spellings have never been observed by anyone here, so a
+probe cannot be watched firing and a silent never-firing probe is the failure
+the rule at the top of this file names. They stay out, exactly as Hermes and
+VS Code chat do.
+
+Two of the handover's sharper findings are recorded here so the next pass does
+not have to rediscover them:
+
+- **Aider**: the defect is not only rounding. The cache lines reach disk only
+  under `--no-stream`, and streaming is the default, so on a normal install
+  those two numbers are never written at all.
+- **Goose**: its `usage_ledger` is per provider response, so it is per-call
+  priceable. The earlier AGENT-2 draft in this file describes it as
+  per-session, which understates it.
+- **Gemini CLI**: probe `~/.gemini`, not `~/.gemini/tmp`, per the dir-of-dirs
+  question above.
+- **OpenCode**: storage is `opencode.db` (SQLite) now. The AGENT-2 draft above
+  probes the legacy JSON tree.
+
+HOLD, unchanged: Amp (schema unverified), Crush (writes nothing under `$HOME`;
+a `~/.config/crush` probe proves configuration and never a session), Plandex
+(records live on a Docker volume), Mentat (archived, caching never enabled),
+OpenHands.
+
+#### Mutations for this pass
+
+| mutation | result |
+|---|---|
+| M9 hasEntries depth forced to 0 (the original defect) | HE1, OS15, OS16 red; `TestADirectoryOfDirectoriesIsNotEvidence` stays GREEN, which is the finding above |
+| M10 Oracle probe pointed at a directory that does not exist | OS15, OS16 red |
+| M11 Grok why reverted to the /responses wire claim | OS17 red |
+| M12 OPENCLAW_STATE_DIR override removed | OS18 red |
+
+New tests: `cmd/replay/terminalsurface_test.go` (OS15 to OS18). Written before
+the implementation, confirmed failing first.
+
+`gofmt`, `go vet`, `go build ./...` and `go test ./...` all clean. Drift re-run
+against the new binary: 141 surfaces, 38 OK, 4 EXPECTED REFUSAL, 48 NEEDS
+ARGUMENT, 51 NOT RUN, zero DRIFT/FLAKY/TIMEOUT, and no verdict changed.

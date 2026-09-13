@@ -17,9 +17,10 @@ this document is hard because of a design decision already taken, and most of
 them are decisions worth keeping.
 
 **The binding constraint is not support and it is not infrastructure. It is that
-the product does not exist.** `replay gate` is unbuilt, entitlement is a
-Proposed ADR, the allowlist narrowing it needs is unshipped, and there is no
-payment rail. At 500 repositories the operational load is real but survivable;
+the PAID product does not exist.** `replay gate` is unbuilt and there is no
+payment rail. The two things this file originally also listed as missing were
+not: `replay budget` ships, and the `crypto/ed25519` allowlist narrowing that
+entitlement needs landed on 2026-09-07. See gap 1. At 500 repositories the operational load is real but survivable;
 at zero repositories the operational load is irrelevant, and that is where the
 business is today.
 
@@ -30,15 +31,46 @@ known before the first customer rather than after the fiftieth.
 
 | | |
 |---|---|
-| **Gap** | `cmd/replay/gate*.go` does not exist. Neither does `replay budget`, the free artefact it compares against |
+| **Gap** | `cmd/replay/gate*.go` does not exist |
 | **Blocks** | Everything. There is nothing to sell, so there is nothing to operate |
-| **Size** | Steps 3, 4 and 5 of `MONEY-PATH.md` section 5, in that order |
+| **Size** | Step 5 of `MONEY-PATH.md` section 5. Steps 3 and 4 are done |
 
-The order matters and it is already argued there: named-server attribution in
-`advise` is free and ships free, `replay budget` writes the artefact, and
-`replay gate` compares it. The gate reads Replay's own artefact and never the
-repository's agent configuration, because `.mcp.json` can hold credentials and
-this tool reads no configuration it was not explicitly pointed at.
+**Corrected 2026-09-13, hours after this file was written.** The line above
+originally said "Neither does `replay budget`, the free artefact it compares
+against." That was wrong. `cmd/replay/budget.go` is 300 lines, dispatched at
+`main.go:191`, with `--json` and roughly 530 lines of tests across three files.
+Step 4 of the money path was already done when this document said it was not.
+
+**And the second correction matters more than the first.** A free,
+build-failing CI gate already ships: `replay cost --max-avoidable-usd`
+(`cmd/replay/costgate.go`) exits non-zero when measured avoidable spend crosses
+a ceiling. So the question is not whether a gate exists. It is what the PAID
+gate can be that the free one is not, and `SPONSORS.md` binds the answer:
+nothing free today ever becomes paid, so `replay gate` must be a demonstrably
+different capability, standing cost against a committed artefact, rather than a
+better version of something already given away. If that distinction cannot be
+stated in one sentence a customer would accept, the paid capability does not
+exist yet regardless of how much code is written.
+
+Both errors came from reading `MONEY-PATH.md` rather than the tree. The money
+path was written before those commands landed and was never re-read against the
+code.
+
+The boundary that survives all of this is the one worth keeping: the gate reads
+Replay's own artefact and never the repository's agent configuration, because
+`.mcp.json` can hold credentials and this tool reads no configuration it was not
+explicitly pointed at.
+
+**One thing the artefact is missing, and it is the same defect v0.6.0 just
+fixed.** `budgetFile` carries `{schema, generated, standing, servers, measured}`
+and no `binaryVersion`, `commit` or `pricingDigest`. Those three fields were
+added to corpus submissions this week because two builds priced one corpus at
+$4,088.49 and $11,969.37 under a single rules label. The budget artefact is that
+defect re-committed, in the file whose job will be to fail a stranger's build,
+and the gate has no other oracle: standing cost is computed by the same code
+that computed the budget, so if the cost model drifts they drift together and
+the gate silently never fires. The digest is what makes the gate refusable
+rather than quietly wrong, and it belongs in the artefact before the gate exists.
 
 ## Gap 2: entitlement issuance is a job nobody has costed
 
