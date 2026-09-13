@@ -60,17 +60,35 @@ provenance.
 
 ### 0.1 Gross compensation
 
-Priced on: Japan tax resident, director's remuneration from Red Robot K.K.,
-¥150 to the dollar. Above roughly ¥40M taxable the marginal rate is 45% national
-plus a 2.1% reconstruction surtax plus 10% inhabitant tax, and the employment
-income deduction is capped, so the effective marginal take is about **55.9%**.
+**Corrected 2026-09-13. The residency assumption was wrong and it was the
+headline.**
+
+This section was priced on Japan tax residency because Red Robot K.K. is a
+Japanese company. The company is; **the maintainer is currently in Los
+Angeles**, and which of those two facts sets the rate is the open question
+rather than a detail. The Japan row is kept because the K.K. is real and the
+arrangement may end there, but it is no longer the number the section leads
+with, and nothing downstream should quote $1.05M as though the question were
+settled.
+
+For reference, the Japan arrangement: director's remuneration from the K.K. at
+¥150 to the dollar, where above roughly ¥40M taxable the marginal rate is 45%
+national plus a 2.1% reconstruction surtax plus 10% inhabitant tax, with the
+employment income deduction capped, giving an effective marginal take of about
+**55.9%**. A US-person California resident lands materially lower, and a
+non-resident director fee out of Japan carries 20.42% withholding that is
+creditable but brings real double-tax friction.
+
+**This is a question for an accountant and not for this document.** What the
+document can say is the sensitivity, which is below and which is larger than any
+pricing decision in the rest of the file.
 
 | Scenario | Gross needed |
 |---|---|
-| Japan resident, salary, ¥150/USD | **≈ $1.05M** |
+| **US person, California resident** | **≈ $0.94M to $1.00M** |
+| Japan resident, salary, ¥150/USD | ≈ $1.05M |
 | Japan resident, ¥130/USD | ≈ $1.22M |
 | Japan resident, ¥170/USD | ≈ $0.93M |
-| US person, California resident | ≈ $0.94M to $1.00M |
 | Dividends rather than salary | ≈ $1.27M, so salary is the correct instrument |
 
 The assumption that moves the answer most is **residency and US-person status**,
