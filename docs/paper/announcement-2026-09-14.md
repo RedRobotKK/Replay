@@ -82,7 +82,7 @@ population and a title has no room for one.
 > curl -fsSL https://replay.doctor/replay.sh | sh
 > ```
 >
-> https://github.com/RedRobotKK/Replay
+> <https://github.com/RedRobotKK/Replay>
 
 ## The first comment, posted within two minutes
 

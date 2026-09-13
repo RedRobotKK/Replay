@@ -82,12 +82,12 @@ Cost per task from transcripts already on disk.
 | `-contribute` | string | build a corpus submission for this campaign from the figures below; writes a file, sends nothing. Unlike the probe submission, this one CARRIES SPEND |
 | `-contribute-dir` | string | where --contribute writes its file (default ".") |
 | `-json` | bool | emit the figures as JSON |
-| `-max-avoidable-usd` | float | fail the build when measured avoidable spend exceeds this many dollars (0 = off). Refuses to pass when nothing was priced |
+| `-max-rebilled-usd` | float | fail the build when measured re-billed spend exceeds this many dollars (0 = off). Refuses to pass when nothing was priced |
 | `-per-lane` | bool | report agent lanes instead of sessions: a session that spawned sub-agents wrote one transcript per lane, and this is the fan-out view of them |
 | `-per-task` | bool | list every priced session, most expensive first |
 | `-png` | string | with --share, also write the same figures as a 1200x630 social card at this path |
 | `-predicted` | float | with --compare, the fractional change you predicted (e.g. -0.2 for a 20% saving) |
-| `-share` | bool | print a paste-ready summary: the avoidable rate and the task spread, with no spend total, no paths and no project names |
+| `-share` | bool | print a paste-ready summary: the re-billed rate and the task spread, with no spend total, no paths and no project names |
 | `-tone` | string | the register the card is written in: measured (what was found, stated, the default) or rekt (the same figures, exact and deadpan) |
 | `-usage` | string | price a usage export instead of transcripts: token counts per request, no conversation content. Figures that cannot be sourced from token counts alone print NOT MEASURED rather than zero |
 
