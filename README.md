@@ -9,6 +9,7 @@
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)](#platform-support-macos-and-linux-only)
 [![License](https://img.shields.io/badge/licence-BUSL--1.1-blue)](LICENSE)
 [![Go Reference](https://pkg.go.dev/badge/github.com/RedRobotKK/Replay.svg)](https://pkg.go.dev/github.com/RedRobotKK/Replay)
+<a href="https://www.producthunt.com/products/replay-ai-agent-cache-audit?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-replay-for-gpt-6-astra" target="_blank" rel="noopener noreferrer"><img alt="Replay for GPT-6 Astra - Audit silent prompt cache leaks in OpenAI Astra agent logs | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1249887&amp;theme=light&amp;t=1789366398283"></a>
 
 GitHub labels this repository 'Other' because its licence detector does not know BUSL-1.1; the licence is the Business Source License 1.1, converting to the Apache License 2.0 on 2029-09-06, and the text is in LICENSE.
 
