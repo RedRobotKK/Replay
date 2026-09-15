@@ -349,11 +349,14 @@ func burnCodex(home, dir string) surfaceBurn {
 		// A session with no model stays unpriced rather than being priced
 		// against a default. A guessed model is a wrong figure with no way for
 		// a reader to see it is wrong.
-		if r.Model == "" {
-			s.unpricedReqs += r.Turns
-			continue
-		}
-		if p, ok := cachemodel.PriceFor(r.Model); ok {
+		//
+		// NOT a `continue`. The first version of this block skipped the rest
+		// of the loop body for a session with no model, and the rest of the
+		// loop body is where the quota reading, the break count and the
+		// rebase count are taken. A session that did not name a model still
+		// reported a live rate-limit window, and burn stopped showing it:
+		// TestBG3 caught it, after this had been committed.
+		if p, ok := cachemodel.PriceFor(r.Model); ok && r.Model != "" {
 			s.costUSD += cachemodel.CostUSD(r.Billed, p)
 			s.pricedReqs += r.Turns
 		} else {
