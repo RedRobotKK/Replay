@@ -51,6 +51,43 @@ func TestBurnPricesCodexOnceTheSessionNamesItsModel(t *testing.T) {
 	}
 }
 
+// The priced arm, actually taken.
+//
+// guard-reachability reported the pricing condition UNREACHED even with the
+// test above passing, and it was right: in an isolated HOME the compiled
+// fallback carries no OpenAI rows, so PriceFor always misses and only the
+// unpriced arm ever ran. Both outcomes looked identical from the assertion.
+//
+// The model here is a stand-in, and deliberately one the COMPILED table knows,
+// because what is under test is the wiring rather than OpenAI's prices: does
+// burnCodex consult the price table at all and accumulate a cost from a
+// session's own usage. A Codex rollout would not really name this model. The
+// alternative was asserting nothing about the arm that spends money.
+func TestBurnAccumulatesCostWhenThePriceTableKnowsTheModel(t *testing.T) {
+	dir := t.TempDir()
+	cx := filepath.Join(dir, "codex")
+	if err := os.MkdirAll(cx, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rollout := `{"type":"session_meta","payload":{"id":"s3"}}
+{"type":"turn_context","payload":{"model":"claude-opus-5"}}
+{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":1000000,"cached_input_tokens":0},"total_token_usage":{"input_tokens":1000000,"cached_input_tokens":0}}}}
+`
+	if err := os.WriteFile(filepath.Join(cx, "rollout-z.jsonl"), []byte(rollout), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	s := burnCodex("", dir)
+	if s.pricedReqs == 0 {
+		t.Fatalf("the price table knew this model and nothing was priced: priced=%d unpriced=%d",
+			s.pricedReqs, s.unpricedReqs)
+	}
+	if s.costUSD <= 0 {
+		t.Errorf("priced %d request(s) at $%v; a priced request that costs nothing is a free "+
+			"session, which is the figure this tool exists to stop printing", s.pricedReqs, s.costUSD)
+	}
+}
+
 // A rollout that never names a model must stay UNPRICED rather than be priced
 // against a default. A guessed model produces a wrong figure with nothing on
 // the reader's screen to show it was guessed, which is the failure this whole
