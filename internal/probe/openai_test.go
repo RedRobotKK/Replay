@@ -149,3 +149,66 @@ func TestOpenAIWrite_MismatchedPrefixSizesCannotBePaired(t *testing.T) {
 			"the two requests did not describe the same prefix", wrote)
 	}
 }
+
+// Both branches guard-reachability found unentered on 2026-09-15.
+//
+// They were written and never driven. The mutation sweep on this file missed
+// them because a sweep only tests the conditions its author already thought
+// about, and these two were the ones I had not: every fixture in this file was
+// valid JSON, and every pair was built from two real prefixes.
+//
+// Neither is decorative. A provider answering 200 with a truncated or
+// HTML-wrapped body is what a gateway, a captive portal or a proxy error page
+// produces, and that reply reaching the floor search as anything other than a
+// refusal is the "absence read as a measurement" failure this file exists to
+// stop.
+func TestOpenAIUsage_AReplyThatIsNotJSONIsRefusedAndSaysSo(t *testing.T) {
+	for name, body := range map[string]string{
+		"html error page": `<html><body>502 Bad Gateway</body></html>`,
+		"truncated json":  `{"model":"gpt-6-astra","usage":{"input_tokens":4096`,
+		"empty":           ``,
+	} {
+		u, err := parseOpenAIUsage([]byte(body))
+		if err == nil {
+			t.Errorf("%s: accepted as usage (%+v); a body that is not JSON says nothing about caching", name, u)
+			continue
+		}
+		// The refusal has to NAME this failure, not fall through to the one
+		// below it. Deleting the unmarshal check leaves parsed.Usage nil and
+		// the next branch refuses too, so a test asserting only err != nil
+		// passes either way: guard-reachability reported exactly that on
+		// 2026-09-15, "these branches run, and no test depends on whether
+		// they did".
+		//
+		// The distinction is the operator's, not the compiler's. A truncated
+		// or HTML-wrapped body is a gateway between them and the provider; a
+		// 200 carrying a reshaped usage object is the provider answering in a
+		// shape this build does not know. Those have different fixes, and a
+		// refusal that calls the first one "carried no usage" sends the reader
+		// to the wrong one.
+		if strings.Contains(err.Error(), "carried no usage") {
+			t.Errorf("%s: refused as though usage were missing, which points the reader at the "+
+				"provider when the body never parsed: %v", name, err)
+		}
+		if !strings.Contains(err.Error(), "could not be read") {
+			t.Errorf("%s: refusal does not say the body could not be read: %v", name, err)
+		}
+	}
+}
+
+// A pair needs two real requests. A zero Input is a request that was never
+// sent or never measured, and pairing it would let the caller believe a size
+// was settled by one request and a placeholder.
+func TestOpenAIWrite_APairNeedsTwoRealRequests(t *testing.T) {
+	measured := openAIUsage{Input: 4096, CachedTokens: 3072}
+
+	for name, pair := range map[string][2]openAIUsage{
+		"first never measured":  {{Input: 0}, measured},
+		"second never measured": {measured, {Input: 0}},
+		"neither measured":      {{Input: 0}, {Input: 0}},
+	} {
+		if wrote, ok := writeFromPair(pair[0], pair[1]); ok {
+			t.Errorf("%s: answered wrote=%v from a pair with no measured prefix", name, wrote)
+		}
+	}
+}
