@@ -56,9 +56,15 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	readable := messages || openai
 	if !readable && r.Method == http.MethodPost {
 		// A POST somewhere else is a client sending real work down a path
-		// this build cannot read. It is forwarded unchanged, and everything
-		// Replay offers is inert for it, so say so rather than let the
-		// operator infer protection from a running proxy.
+		// this build cannot read. Every guard and every figure is inert for
+		// it, so say so rather than let the operator infer protection from a
+		// running proxy.
+		//
+		// Not "everything Replay offers", which this said until masking
+		// stopped being gated on the family. The masker runs on maskable()
+		// paths whether or not they can be read, so on those the sentence had
+		// become an understatement about credentials, and noteUnparsed now
+		// splits the two claims rather than making one for both.
 		s.noteUnparsed(r.URL.Path)
 	}
 	if openai && r.Method == http.MethodPost {
@@ -120,7 +126,11 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		rec.BodyHashBefore = bodyHash(body)
 	}
 
-	if messages && len(body) > 0 && s.cfg.Masker != nil && !s.cfg.NoPolicy {
+	// maskable, not readable. The other rewrites below stay gated on the
+	// family because they edit a named field and need the shape; this one does
+	// not, and gating it the same way meant a credential on an unread path
+	// reached the provider as typed while a masker was configured and running.
+	if maskable(r.URL.Path) && len(body) > 0 && s.cfg.Masker != nil && !s.cfg.NoPolicy {
 		body = s.mask(&rec, body)
 		setBody(r, body)
 	}
@@ -369,6 +379,12 @@ func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Recor
 const (
 	messagesPath        = "/v1/messages"
 	chatCompletionsPath = "/v1/chat/completions"
+	// responsesPath is OpenAI's Responses API, which is what GPT-6 Astra
+	// speaks and what Grok's CLI posts to. This build does NOT read it: no
+	// usage comes off a reply on this path and no guard sees a request on it.
+	// It is named here only so the masker can be pointed at it, because
+	// masking is the one rewrite that does not need to understand the body.
+	responsesPath = "/v1/responses"
 )
 
 // MessagesPath and ChatCompletionsPath name the two request shapes this build
@@ -387,6 +403,30 @@ const (
 
 func isMessages(path string) bool {
 	return strings.HasSuffix(path, messagesPath)
+}
+
+// isResponses reports OpenAI's Responses endpoint.
+//
+// It is deliberately NOT folded into isChatCompletions. That family is
+// rewritten by withUsageReporting, which re-encodes the whole body with
+// json.Marshal to add stream_options: a field the Responses shape does not
+// have, applied by a re-encode to a shape nothing here has parsed. Widening an
+// existing predicate would have been the smaller diff and the wrong one.
+func isResponses(path string) bool {
+	return strings.HasSuffix(path, responsesPath)
+}
+
+// maskable reports whether the masker may run on a path.
+//
+// Every other rewrite in the handler is gated on the body being readable,
+// because changing the right field requires understanding the shape. Masking
+// is not like that. Masker.Mask walks the JSON string values and replaces
+// secrets inside the literals, returning every byte outside a match exactly as
+// it was, so it is correct on a shape this build has never parsed. Withholding
+// it from those paths bought no safety and cost the operator the one guarantee
+// they had asked for by name.
+func maskable(path string) bool {
+	return isMessages(path) || isResponses(path)
 }
 
 // isChatCompletions reports the OpenAI-compatible endpoint, which Cursor,
@@ -424,13 +464,23 @@ func isChatCompletions(path string) bool {
 //
 // It warns once per path rather than per request, because a line on every
 // request is noise an operator learns to scroll past.
+// The masking clause is split out because masking stopped sitting behind
+// isMessages. Leaving the original sentence in place would have made this line
+// overstate what is NOT happening, which is the same defect as overstating
+// what is: an operator reading "no secret masking applies" on a path where the
+// masker is running learns something false about where their credentials go,
+// and the direction of the error does not make it harmless.
 func (s *Server) noteUnparsed(path string) {
 	if !s.stats.noteUnparsed(path) || s.cfg.Logger == nil {
 		return
 	}
+	masking := "and no secret masking apply to it"
+	if maskable(path) {
+		masking = "apply to it; secrets ARE masked on this path when a masker is configured"
+	}
 	s.cfg.Logger.Printf("NOT PARSED %s: Replay forwards this path unchanged and cannot read it. "+
-		"No ledger record, no spend cap, no error budget, no loop detection and no secret masking apply to it. "+
-		"Only %s is understood by this build.", path, messagesPath)
+		"No ledger record, no spend cap, no error budget, no loop detection %s. "+
+		"Only %s is understood by this build.", path, masking, messagesPath)
 }
 
 // listCost prices one request's usage at list price, zero for a model
