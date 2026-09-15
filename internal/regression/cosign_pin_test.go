@@ -40,7 +40,7 @@ func TestFCCOSIGN_EveryPackageReachingTheSignatureCheckPinsIt(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
-			if n := d.Name(); n == ".git" || n == "node_modules" || n == "dist" {
+			if skipTreeDir(root, path, d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
