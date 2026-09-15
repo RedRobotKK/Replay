@@ -108,3 +108,35 @@ func TestCacheRules_ProvidersDoNotShareATTL(t *testing.T) {
 		t.Fatalf("Astra and Anthropic both report TTL %v; the per-provider seam is gone", AstraRules().TTL)
 	}
 }
+
+// The seam the mutation sweep found unguarded on 2026-09-15.
+//
+// Anthropic sells a five minute and a one hour entry, so the deadline a gap
+// must be measured against is a property of the request that WROTE the entry,
+// not of the vendor. CacheRules carries that as TTLFrom. Nothing tested it:
+// stubbing TTLFrom out reddened no test, and a build that ignored it would
+// have measured every Anthropic gap against five minutes, reporting a TTL
+// expiry at thirty minutes on a session that had bought an hour and was still
+// holding a live entry.
+//
+// Astra has one TTL and a nil TTLFrom, which is why the flat path also has to
+// keep working here.
+func TestAnthropic_HourEntryIsNotExpiredByAThirtyMinuteGap(t *testing.T) {
+	// Create1h alone is how the breakdown reports an hour entry.
+	prev := transcript.Usage{Input: 4000, CacheCreation: 4000, Create1h: 4000}
+	cur := transcript.Usage{Input: 100, CacheRead: 4000}
+
+	cause, ok := ClassifyBreak(prev, cur, "claude-opus-5", "claude-opus-5", 30*time.Minute)
+	if ok && cause == CauseTTLExpired {
+		t.Fatal("30m gap on a one hour entry reported as TTL expiry; the per-request TTL was ignored " +
+			"and every gap measured against the five minute default")
+	}
+
+	// Same gap, same model, a five minute entry: this one IS expired. Without
+	// this half the test above would pass on a build that never expires
+	// anything.
+	short := transcript.Usage{Input: 4000, CacheCreation: 4000, Create5m: 4000}
+	if c, ok := ClassifyBreak(short, cur, "claude-opus-5", "claude-opus-5", 30*time.Minute); !ok || c != CauseTTLExpired {
+		t.Fatalf("30m gap on a five minute entry = (%q, %v), want TTL expiry", c, ok)
+	}
+}

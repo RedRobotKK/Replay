@@ -428,17 +428,16 @@ const (
 
 // ClassifyBreak decides the causes that usage and timing alone can settle.
 // ok is false when only the message history can tell.
+// It is ClassifyBreakWith under this provider's rules, and stays a function
+// rather than becoming a call site so that the callers that only ever ask
+// about Anthropic do not each have to name the ruleset.
+//
+// prefixTokens is zero because Anthropic publishes no single prefix floor:
+// the floor moves by model tier and lives in the dated rules document rather
+// than in CacheRules. Zero means the floor test is skipped rather than
+// guessed, which is the same contract ClassifyBreakWith documents.
 func ClassifyBreak(prev, cur transcript.Usage, prevModel, model string, gap time.Duration) (BreakCause, bool) {
-	switch {
-	case gap > TTLOf(prev):
-		return CauseTTLExpired, true
-	case prevModel != model:
-		return CauseModelChanged, true
-	case cur.CacheRead == 0:
-		return CausePrefixChange, true
-	default:
-		return "", false
-	}
+	return ClassifyBreakWith(AnthropicRules(), prev, cur, prevModel, model, gap, 0)
 }
 
 // TTLOf returns the TTL the request's cache writes used, inferred from the
