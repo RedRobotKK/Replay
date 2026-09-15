@@ -73,6 +73,23 @@ method exists.
 `docs/guide/getting-started.md:14` says `go install` "does the same". For
 contribution it demonstrably does not.
 
+## Where this defect came from
+
+The `omitempty` tag is two days old and this workstream added it. `Commit`
+entered `internal/observation/corpus.go` in `f72e3f8` (#293, 2026-09-13), a
+change whose own subject was build identity: a corpus that could not say which
+build priced it. The `"unknown"` default was already in the tree, from
+`d3cc909` on 2026-09-02, so the interaction was present and checkable at the
+moment the tag was written.
+
+It was not checked. A field was added to carry provenance, declared optional,
+and never tested against the value it would actually hold. The defect was found
+on 2026-09-15 by running the path end to end, not by reading the code, which is
+the only reason it was found at all.
+
+This section exists because a document arguing that provenance claims must be
+verified would be a poor one if it omitted its own.
+
 ## Second finding, kept separate: a provenance field can be false while valid
 
 While generating the fixtures, the active rules document on this machine had
