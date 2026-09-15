@@ -81,8 +81,17 @@ func AnthropicRules() CacheRules {
 // Astra's published cache terms, read from OpenAI's prompt-caching guide on
 // 2026-09-15.
 const (
-	// TTLAstra is the documented lifetime of a cache entry. OpenAI also
-	// documents that retention is best effort and MAY exceed this, so a gap
+	// TTLAstra is the documented lifetime of a cache entry.
+	//
+	// It is set per request through prompt_cache_options.ttl rather than being
+	// a property of the vendor, which is why TTLFrom stays a real seam here
+	// rather than a quirk of Anthropic's. What makes the flat value correct
+	// today is narrower than it looks: "30m" is the ONLY supported value and
+	// is also the default, so every request has the same deadline until
+	// OpenAI ships a second one. Checked against the prompt-caching guide on
+	// 2026-09-15, not against a summary of it.
+	//
+	// Retention is documented as best effort and MAY exceed this, so a gap
 	// inside it is evidence of nothing and a gap beyond it is the provider's
 	// own stated deadline rather than a guarantee of eviction.
 	TTLAstra = 30 * time.Minute

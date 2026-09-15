@@ -336,6 +336,32 @@ func burnCodex(home, dir string) surfaceBurn {
 		s.hasSessions = true
 		s.requests += r.Turns
 		billed += r.Billed.Total()
+		// Price it, which nothing did until 2026-09-15.
+		//
+		// This surface reported "no price" on 610,551,532 tokens and the
+		// footer advised installing a rules document. A dated OpenAI document
+		// was installed and the column did not move, because the advice could
+		// not work: CodexSession carried no model, so there was nothing to
+		// look up and PriceForAt was never called at all. Telling an operator
+		// to do a thing that cannot help is worse than saying nothing, because
+		// they do it, see no change, and conclude the prices are broken.
+		//
+		// A session with no model stays unpriced rather than being priced
+		// against a default. A guessed model is a wrong figure with no way for
+		// a reader to see it is wrong.
+		//
+		// NOT a `continue`. The first version of this block skipped the rest
+		// of the loop body for a session with no model, and the rest of the
+		// loop body is where the quota reading, the break count and the
+		// rebase count are taken. A session that did not name a model still
+		// reported a live rate-limit window, and burn stopped showing it:
+		// TestBG3 caught it, after this had been committed.
+		if p, ok := cachemodel.PriceFor(r.Model); ok && r.Model != "" {
+			s.costUSD += cachemodel.CostUSD(r.Billed, p)
+			s.pricedReqs += r.Turns
+		} else {
+			s.unpricedReqs += r.Turns
+		}
 		breaks += len(r.Breaks)
 		if r.Quota != nil {
 			q = r.Quota

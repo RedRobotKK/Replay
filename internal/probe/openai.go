@@ -12,17 +12,21 @@ import (
 // cause the provider to create a cache entry. Anthropic answers that directly,
 // reporting cache_creation_input_tokens beside cache_read_input_tokens.
 //
-// OpenAI reports usage.input_tokens_details.cached_tokens and nothing else.
-// That is the READ. There is no write field on this API, so a single response
-// cannot answer the question the search asks, and the shape of the mistake is
-// specific: cached_tokens == 0 would be read as "this prefix did not cache",
-// which pushes the floor's lower bound UP. Every such error moves the answer
-// toward the vendor's published figure, so a run built on it can only ever
-// agree with the documentation it was meant to test.
+// CORRECTED 2026-09-15, same day, before any run: OpenAI DOES report the
+// write. usage.input_tokens_details.cache_write_tokens sits beside
+// cached_tokens and is documented in the prompt-caching guide. The first
+// version of this file said otherwise on the strength of a search summary
+// that was never checked against the guide it summarised.
 //
-// The evidence that does exist is the PAIR. Send the same prefix twice: if the
-// second request reads, the first one wrote. That costs one extra billable
-// request per size and it is the only honest signal on this API.
+// Where the field is present, one response answers the question and the pair
+// is not needed. Where it is absent, which is older models and the
+// OpenAI-compatible third parties that normalise it away, the old reasoning
+// still holds exactly: cached_tokens == 0 would be read as "this prefix did
+// not cache", which pushes the floor's lower bound UP, and every such error
+// moves the answer toward the vendor's published figure, so a run built on it
+// can only ever agree with the documentation it was meant to test. The PAIR is
+// the fallback for that case: send the same prefix twice, and if the second
+// reads, the first wrote.
 
 // openAIUsage is the part of a Responses reply that says anything about
 // caching. Deliberately not a mirror of Anthropic's struct: the fields that do
@@ -30,8 +34,22 @@ import (
 type openAIUsage struct {
 	Model string
 	Input int
-	// CachedTokens is the READ. There is no write counterpart on this API.
+	// CachedTokens is the READ.
 	CachedTokens int
+	// CacheWriteTokens is the WRITE, from
+	// usage.input_tokens_details.cache_write_tokens.
+	//
+	// This file first shipped saying no such field existed, which was taken
+	// from a search summary rather than from the guide. It exists, and the
+	// error was expensive in the only currency that matters here: without it
+	// a write had to be inferred from a second billable request at every
+	// prefix size, so a search capped at 16 probes covered half the sizes it
+	// could have, at cache-write rates.
+	CacheWriteTokens int
+	// WriteObserved distinguishes a write of zero from no write field at all.
+	// With the field present, a zero read is decided; without it, the zero is
+	// the ambiguity writeFromPair exists for.
+	WriteObserved bool
 }
 
 // errNoWriteSignal is returned when a caller asks a lone response whether a
@@ -53,7 +71,8 @@ func parseOpenAIUsage(raw []byte) (openAIUsage, error) {
 		Usage *struct {
 			Input   int `json:"input_tokens"`
 			Details *struct {
-				Cached int `json:"cached_tokens"`
+				Cached     int  `json:"cached_tokens"`
+				CacheWrite *int `json:"cache_write_tokens"`
 			} `json:"input_tokens_details"`
 		} `json:"usage"`
 	}
@@ -74,9 +93,16 @@ func parseOpenAIUsage(raw []byte) (openAIUsage, error) {
 		Input:        parsed.Usage.Input,
 		CachedTokens: parsed.Usage.Details.Cached,
 	}
-	// A read of zero is the case that cannot be interpreted alone. Returning
-	// it as a usable measurement is what lets a caller write Wrote=false and
-	// manufacture a floor.
+	// A pointer, so a reported zero is told from a field that is not there.
+	// That distinction is the whole of this function: one is the provider
+	// saying it wrote nothing, the other is the provider saying nothing.
+	if w := parsed.Usage.Details.CacheWrite; w != nil {
+		u.CacheWriteTokens, u.WriteObserved = *w, true
+		return u, nil
+	}
+	// No write field. A read of zero cannot be interpreted alone, and
+	// returning it as a usable measurement is what lets a caller write
+	// Wrote=false and manufacture a floor.
 	if u.CachedTokens == 0 {
 		return u, fmt.Errorf("prefix of %d tokens read nothing: %w", u.Input, errNoWriteSignal)
 	}

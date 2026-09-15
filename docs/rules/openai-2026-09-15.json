@@ -1,0 +1,51 @@
+{
+  "schema": "replay.rules.v1",
+  "version": "openai-2026-09-15",
+  "provider": "openai",
+  "source": "OpenAI published API pricing, read 2026-09-15",
+  "fetchedAt": "2026-09-15",
+  "models": [
+    {
+      "match": "gpt-6-astra",
+      "provider": "openai",
+      "minPrefix": 1024,
+      "inputPerMTok": 10.0,
+      "outputPerMTok": 50.0,
+      "readMult": 0.1,
+      "priced": true,
+      "minPrefixClaim": {
+        "documented": 1024
+      }
+    },
+    {
+      "match": "gpt-5.6-terra",
+      "provider": "openai",
+      "minPrefix": 1024,
+      "inputPerMTok": 2.0,
+      "outputPerMTok": 12.0,
+      "readMult": 0.1,
+      "priced": true,
+      "minPrefixClaim": {
+        "documented": 1024
+      }
+    },
+    {
+      "match": "gpt-5.4-mini",
+      "provider": "openai",
+      "minPrefix": 0,
+      "inputPerMTok": 0.75,
+      "outputPerMTok": 4.5,
+      "readMult": 0.1,
+      "priced": true
+    },
+    {
+      "match": "gpt-5.4",
+      "provider": "openai",
+      "minPrefix": 0,
+      "inputPerMTok": 2.5,
+      "outputPerMTok": 15.0,
+      "readMult": 0.1,
+      "priced": true
+    }
+  ]
+}
