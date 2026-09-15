@@ -179,6 +179,31 @@ func (e *CeilingEffect) AddTokens(u transcript.Usage) {
 
 // MeteredNote and AllowanceNote are the sentences each basis earns.
 
+// rateLimitClause is the sentence the ratio needs beside it.
+//
+// The ratio above is about MONEY. A cached read bills at roughly a tenth of an
+// uncached one, so counting it at the full rate overstates the bill and halts
+// an agent early. That is the whole defect this file names.
+//
+// It is not true of the other throttle, and the difference is the full factor.
+// OpenAI's prompt-caching guide, read 2026-09-15: "Cached input tokens still
+// count toward tokens-per-minute limits. Prompt caching does not change how
+// rate limits are calculated." Against a rate limit a cached read costs full
+// price, so cache-blind arithmetic is exactly RIGHT there.
+//
+// Same token, two throttles, opposite arithmetic. A reader who carries this
+// ratio into capacity planning gets figures an order of magnitude optimistic,
+// and until now nothing on the report told them which throttle it meant.
+//
+// It is deliberately a statement about the provider's published rule rather
+// than about this corpus. Nothing here measured a rate limit. That is also why
+// it does not appear on AllowanceNote below, where the sibling question, how a
+// cache read counts against a SUBSCRIPTION allowance, is documented by nobody
+// and this repository already retracted its own answer.
+const rateLimitClause = " That ratio is about money. Cached reads still count in " +
+	"full toward tokens-per-minute rate limits (OpenAI prompt-caching guide, read " +
+	"2026-09-15), so it does not apply to capacity planning."
+
 // MeteredNote states what the ratio costs a reader billed per token.
 func (e CeilingEffect) MeteredNote(ceilingUSD float64) string {
 	r, ok := e.Ratio()
@@ -188,10 +213,10 @@ func (e CeilingEffect) MeteredNote(ceilingUSD float64) string {
 	if stop, ok := e.StopsAt(ceilingUSD); ok {
 		return sprintf("A ceiling set at $%.2f under cache-blind arithmetic halts execution at "+
 			"$%.2f of real spend: %.2fx high, so agents stop at %.0f%% of the budget that was "+
-			"approved.", ceilingUSD, stop, r, 100/r)
+			"approved.", ceilingUSD, stop, r, 100/r) + rateLimitClause
 	}
 	return sprintf("Cache-blind arithmetic runs %.2fx high over these %d requests. No ceiling "+
-		"was given, so where it would halt is not computed.", r, e.Requests)
+		"was given, so where it would halt is not computed.", r, e.Requests) + rateLimitClause
 }
 
 // AllowanceNote states what is true for a subscription seat, and — more

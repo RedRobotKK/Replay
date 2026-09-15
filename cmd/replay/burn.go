@@ -326,6 +326,9 @@ func burnCodex(home, dir string) surfaceBurn {
 		files, _ = filepath.Glob(filepath.Join(dir, "codex", "*.jsonl"))
 	}
 	var billed, breaks, rebased int
+	// Cumulative cache counters, kept so the surface can be judged on whether
+	// its own numbers are possible. See cachemodel.ClassifyCounters.
+	var cacheRead, cacheWrite int64
 	var q *transcript.CodexQuota
 	for _, f := range files {
 		r, err := transcript.ParseCodexFile(f)
@@ -336,6 +339,8 @@ func burnCodex(home, dir string) surfaceBurn {
 		s.hasSessions = true
 		s.requests += r.Turns
 		billed += r.Billed.Total()
+		cacheRead += int64(r.Billed.CacheRead)
+		cacheWrite += int64(r.Billed.CacheCreation)
 		// Price it, which nothing did until 2026-09-15.
 		//
 		// This surface reported "no price" on 610,551,532 tokens and the
@@ -371,6 +376,21 @@ func burnCodex(home, dir string) surfaceBurn {
 		}
 	}
 	s.tokens = billed
+	// A read serves a prefix an earlier request wrote. Reads above zero beside
+	// writes of exactly zero cannot have happened, so the zero is a field the
+	// client does not send, rendered as a number.
+	//
+	// Said on the report rather than left to an evidence file, because the
+	// cost column above is computed from this same usage: short the write half
+	// and the figure is short by the expensive half. Measured on this machine
+	// 2026-09-15, Codex reported 571,720,960 cached reads and 0 writes across
+	// 158 rollouts, and exactly one of those files contains the field at all.
+	if v := cachemodel.ClassifyCounters(cacheRead, cacheWrite); v.Impossible() {
+		s.problems = append(s.problems, fmt.Sprintf(
+			"%s cached read(s) reported and no cache writes at all: %s. "+
+				"Something wrote the prefix being read, so any cost above is short by the write half",
+			comma(int(cacheRead)), v))
+	}
 	if q != nil {
 		s.quota = fmt.Sprintf("%.0f%% of %s", q.PrimaryUsedPercent, minutes(q.PrimaryWindowMinutes))
 	}
