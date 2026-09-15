@@ -215,6 +215,17 @@ func runBurn(args []string, stdout, stderr io.Writer) error {
 	if err := parseArgs(fs, args, stdout); err != nil {
 		return err
 	}
+	// burn reads whole surfaces off the machine, so it has no positional form
+	// the way `replay cost <dir>` does. The flag set used to discard extra
+	// arguments silently, which meant a path typed here was not read and not
+	// mentioned: the report still printed, scoped to the machine, under a
+	// heading the reader believed was scoped to their path. Refusing costs a
+	// retype. Ignoring costs the reader a figure about the wrong population.
+	if fs.NArg() > 0 {
+		return fmt.Errorf("burn reads this machine's surfaces and takes no path argument, "+
+			"so %q was not read: pass -dir %s to read a directory instead: %w",
+			strings.Join(fs.Args(), " "), fs.Arg(0), errUsage)
+	}
 
 	home, _ := os.UserHomeDir()
 	var surfaces []surfaceBurn
