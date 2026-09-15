@@ -62,7 +62,18 @@ type CodexSession struct {
 	ID            string
 	Path          string
 	ClientVersion string
-	Source        Source
+	// Model is the model id the session last ran under, taken from
+	// turn_context.
+	//
+	// It is one field for a thing that can change mid-session, and the last
+	// statement wins. That is lossy and deliberately so: a session that
+	// switched model was billed at two rates, and this field cannot say so.
+	// Pricing a whole session off it is right where the model held and wrong
+	// where it did not, which is the same trade the rest of this struct makes
+	// with Billed. Empty when no turn_context named one, because a model
+	// nobody stated is unknown rather than a default.
+	Model  string
+	Source Source
 	// Billed sums the per-turn deltas. This is what was paid for.
 	Billed Usage
 	// Reported is the client's own final running total. Codex rebases it on
@@ -110,6 +121,7 @@ type codexPayload struct {
 	Type       string           `json:"type"`
 	ID         string           `json:"id"`
 	CLIVersion string           `json:"cli_version"`
+	Model      string           `json:"model"`
 	Info       *codexTokenInfo  `json:"info"`
 	RateLimits *codexRateLimits `json:"rate_limits"`
 }
@@ -254,6 +266,14 @@ func ParseCodex(r io.Reader) (*CodexSession, error) {
 		switch l.Type {
 		case "session_meta":
 			s.ID, s.ClientVersion = p.ID, p.CLIVersion
+		case "turn_context":
+			// The line that carries the model. Unhandled until 2026-09-15,
+			// which is why every Codex figure this tool produced was
+			// unpriceable: burnCodex had no model to look up and never asked
+			// the price table at all.
+			if p.Model != "" {
+				s.Model = p.Model
+			}
 		case "event_msg":
 			s.event(p)
 		}
