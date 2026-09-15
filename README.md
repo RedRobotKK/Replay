@@ -10,13 +10,13 @@
 [![License](https://img.shields.io/badge/licence-BUSL--1.1-blue)](LICENSE)
 [![Go Reference](https://pkg.go.dev/badge/github.com/RedRobotKK/Replay.svg)](https://pkg.go.dev/github.com/RedRobotKK/Replay)
 
-GitHub labels this repository 'Other' because its licence detector does not know BUSL-1.1; the licence is the Business Source License 1.1, converting to the Apache License 2.0 on 2029-09-06, and the text is in LICENSE.
-
 **If the agent bill went up and nothing errored, a prompt cache broke.** Replay Doctor reads the
 transcripts already on your disk and names the turn it broke on, the cause, and the tokens
 re-billed at write prices.
 
 ![A triage session: pick a finding, open the evidence behind it, mark it applied](docs/demo/triage.gif)
+
+GitHub labels this repository 'Other' because its licence detector does not know BUSL-1.1; the licence is the Business Source License 1.1, converting to the Apache License 2.0 on 2029-09-06, and the text is in LICENSE.
 
 > **The refusals are the feature.** Anything this tool cannot measure, it declines to print — and
 > says why, in the place the number would have gone. `replay route` will not quote you dollars for a
