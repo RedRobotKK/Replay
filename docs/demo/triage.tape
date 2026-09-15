@@ -14,6 +14,25 @@
 # The corpus is this machine's own. Nothing here is a mock, which is why the
 # figures move between recordings — 1,691 transcripts to 1,738 in one day.
 
+# RENDER IN TWO STEPS, and the second one is not optional:
+#
+#   vhs docs/demo/triage.tape
+#   ffmpeg -i docs/demo/triage.gif -vf "select=gte(n\,55)" ... docs/demo/triage.gif
+#
+# GitHub does not autoplay a GIF for every visitor, so frame one is the poster
+# frame and is all a reader may ever see. Recorded straight through, frame one
+# is a black terminal reading "> export LI": the largest element on the README
+# was two words of shell housekeeping.
+#
+# VHS's Hide/Show does not fix it. Hiding the launch lets the TUI draw
+# off-camera, and a TUI repaints on events rather than on demand, so Show
+# captures a screen that nothing has redrawn and the first forty frames come
+# out blank. That was tried on 2026-09-15 and is why the trim exists instead.
+#
+# Trimming the lead-in is deterministic and checkable: the poster frame is a
+# populated advise screen, and `a reader who never sees it animate` still sees
+# findings.
+
 Output docs/demo/triage.gif
 
 Set Shell "bash"
