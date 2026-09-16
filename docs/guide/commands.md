@@ -748,7 +748,7 @@ writes none and prints only.
 #### `--max-rebilled-usd <n>` — fail the build on re-billed spend
 
 ```sh
-replay cost --max-rebilled-usd 5      # exit 1 when more than $5 was re-billed
+replay cost --max-rebilled-usd 5      # exit 3 when more than $5 was re-billed
 ```
 
 Compares the re-billed figure this command already measures against a ceiling you

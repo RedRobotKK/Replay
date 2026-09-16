@@ -27,7 +27,7 @@ reach for most.
 increase(replay_unmasked_requests_total[5m]) > 0
 ```
 
-**Severity: page.** This is the sharpest unguarded edge in v0.2.0. `--mask` understands the
+**Severity: page.** This is the sharpest unguarded edge. `--mask` understands the
 Messages body shape and not `/v1/chat/completions`, so any agent pointed at an
 OpenAI-compatible provider is sending secrets in clear while the operator believes masking is
 on. The proxy already prints `EXPERIMENTAL, UNMASKED` on stderr once per path, whether or not

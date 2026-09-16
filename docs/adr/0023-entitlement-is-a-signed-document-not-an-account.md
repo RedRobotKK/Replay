@@ -10,7 +10,7 @@ account bound to a user name, a sign-up with an opt-in, and a subscription the
 server checks before the tool works. It is the shape almost every developer tool
 has, so it is the shape people reach for, and asking for it is reasonable.
 
-[`../MONEY-PATH.md`](../MONEY-PATH.md) section 4 designs the alternative and then
+The commercial planning document, section 4, designs the alternative and then
 says, correctly, that the design should be recorded as a decision before anything
 is built on it rather than inferred from two adjacent ADRs. This is that record.
 
@@ -37,10 +37,11 @@ binary people install with `curl`.
 
 ## Decision
 
-**Entitlement is a signed document the user installs from a local file. It is
-verified offline against a public key compiled into the binary and expires on a
-date read from the local clock. There is no licence server, no account, no
-callback, and no identifier that leaves the machine.**
+**Entitlement would be a signed document the user installs from a local file,
+verified offline against a public key compiled into the binary and expiring on a
+date read from the local clock. There would be no licence server, no account, no
+callback, and no identifier that leaves the machine. None of it is built: this
+record is Proposed and describes a design, not a shipped mechanism.**
 
 Four consequences follow, and each answers one part of the usual proposal.
 
@@ -67,10 +68,8 @@ two MCP servers and the split is not an accident of implementation:
 Anything sellable as a service is on the left. That is a small surface on
 purpose, and it is the whole of the legitimate hosted product.
 
-**The subscription is a repository line item, not a seat.** `MONEY-PATH.md`
-carries the arithmetic: at the measured 2 to 3 percent realistic recovery, a seat
-needs roughly $1,000 a month of metered token spend before $25 a month closes,
-and for a flat-seat user the recoverable figure is zero dollars with a published
+**The subscription is a repository line item, not a seat.** The commercial
+planning document carries the arithmetic, and for a flat-seat user the recoverable figure is zero dollars with a published
 null result behind it. Per repository closes without asking anyone to believe a
 savings claim.
 
@@ -86,7 +85,7 @@ reads the tree for construction paths rather than trusting the import list.
 
 So this ADR opened by describing a blocker that was not there. It is worth
 saying plainly why that happened rather than quietly deleting it: the claim came
-from `MONEY-PATH.md` section 4, which was written before the change and never
+from that document, section 4, which was written before the change and never
 re-read against the code, and I repeated it because it was in a document rather
 than because I had looked. **A published document is not evidence about the
 tree, and this project spends most of its time finding exactly that mistake in
@@ -150,4 +149,4 @@ remote revocation would require the callback this decision exists to avoid.
 
 ---
 
-[ADR index](README.md) · [The money path](../MONEY-PATH.md) · [Roadmap](../ROADMAP.md)
+[ADR index](README.md) · [Roadmap](../ROADMAP.md)

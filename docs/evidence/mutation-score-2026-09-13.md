@@ -2,7 +2,7 @@
 
 **What this measures:** what fraction of the mutants this tree admits the test
 suite actually catches. Not how many seeded defects still die, which is what
-[`internal/mutation/`](../../internal/mutation/) already measures and says so
+[`internal/mutation/`](https://github.com/RedRobotKK/Replay/tree/main/internal/mutation) already measures and says so
 about itself, but killed over generated: a population of 8,150 mutants produced
 mechanically from the syntax of 45,556 lines of production Go, a uniform random
 sample of 400 of them drawn with a stated seed, and the suite run once per

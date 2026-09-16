@@ -1,6 +1,6 @@
 # Break causes, third reading, 2026-09-13
 
-**The launch reading.** Taken because `docs/paper/launch-draft.md` still carries
+**The launch reading.** Taken because the launch draft, which is not published, still carries
 the 2026-09-06 table, and that table's own file has carried a retraction since
 2026-09-11. Posting a cause ranking on Hacker News that this repository has
 already retracted two files away would be the single worst thing this project

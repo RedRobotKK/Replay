@@ -11,8 +11,10 @@ You do not need to change how your agent works, and nothing leaves your machine.
 curl -fsSL https://replay.doctor/replay.sh | sh
 ```
 
-If you already have Go, `go install github.com/RedRobotKK/Replay/cmd/replay@latest` does the same
-job. Either way, check it landed:
+If you already have Go, `go install github.com/RedRobotKK/Replay/cmd/replay@latest` builds the same
+code but not the same binary. `go install` cannot inject the build identity, so the binary reports
+its commit as `unknown` and the contribution endpoint refuses its corpus submissions. Use the
+installer above if you intend to contribute. Either way, check it landed:
 
 ```sh
 replay version
@@ -55,6 +57,10 @@ The re-billed line comes in two currencies, and the second one is probably yours
   re-billed      $150.27  (5% of the total)
                  31.4M tokens re-billed
 ```
+
+That block is older output. The 5% share was retracted on 2026-09-13: the same corpus reads 4.99%
+on v0.5.4 and **2.75% on the shipping build**, measured with `replay cost`. See
+[Two builds, one corpus](../evidence/two-builds-one-corpus-2026-09-13.md).
 
 **If you are on a subscription seat — Claude Pro or Max, Copilot, Cursor — the dollars are not your
 money.** You are not billed per token, so those are list prices for someone who is, and the report
@@ -105,7 +111,8 @@ because prices change and other platforms charge differently.
 
 ## Understand estimated and measured
 
-Every figure Replay prints carries one of two labels, and the difference is not cosmetic.
+Every figure Replay prints carries one of two labels, and where neither can be established it says
+NOT MEASURED instead. The difference is not cosmetic.
 
 **Estimated** means the number came from a transcript. Transcripts do not contain the system prompt,
 the tool definitions, or the cache markers, so some of the prompt has to be inferred. Useful, and

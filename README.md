@@ -599,15 +599,7 @@ If a paid capability is ever added it will be **something that does not exist
 today**, and it will not be gated on sponsorship either.
 
 There is one paid thing that does exist and it is not a tier: a week of the
-maintainer's attention over your own corpus, described and priced in
-[the deliverable](docs/design/forensics-week-deliverable.md), with
-[three commands you run yourself](docs/design/forensics-week-qualification.md)
-that tell you before any money is discussed whether it is worth either side's
-time. Nobody has bought one.
-
-[The money path](docs/MONEY-PATH.md) is the whole commercial argument, including
-the arithmetic that says a per-seat subscription does not survive this project's
-own numbers.
+maintainer's attention over your own corpus. Nobody has bought one.
 
 ## About the author
 
@@ -660,8 +652,10 @@ into a second file drifts from the first and nothing notices. Replay prints that
 same caveat every time it prints a dollar, and an appeal that quietly dropped it
 would be the one place the tool's own rule did not apply.
 
-The tool found **five percent of my own bill re-billed** by broken caches before
-it found anyone else's. If it found something on your machine that you had
+The tool found **2.75% of my own bill re-billed** by broken caches before it
+found anyone else's, read 2026-09-13 on the shipping build with `replay cost`.
+The same corpus read 4.99% on v0.5.4, and the 5% figure published before that is
+retracted. If it found something on your machine that you had
 already paid for once, a share of that back is what keeps this maintained.
 
 **[Support the work](https://buymeacoffee.com/saitodaniel)** ·

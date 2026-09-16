@@ -119,6 +119,7 @@ Each rung removes an assumption. Nothing above the first is claimed.
 ## Reproducing
 
 The pre-registration, the four scripts and the full twenty-row curve are kept
-with the measurement. The scripts are deliberately not part of the `replay`
+with the measurement and are **not published in this repository**, so the run is
+not reproducible from what is here. The scripts are deliberately not part of the `replay`
 binary: they need an embedder, which the zero-third-party-dependency rule does
 not permit.
