@@ -225,6 +225,8 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 		return runBudget(args[1:], stdout, stderr)
 	case "purge":
 		return runPurge(args[1:], stdout, stderr)
+	case "surfaces":
+		return runSurfaces(args[1:], stdout, stderr)
 	case "privacy":
 		return runPrivacy(args[1:], stdout, stderr)
 	case "serve":
@@ -657,6 +659,7 @@ Setup and maintenance:
   replay prefix --before F --after F  does this change void the cached prefix (exit 1 if so)
   replay budget <ledger-dir>       what this setup costs on every request, as a committable file
   replay redact <transcript>       strip content, keep structure and usage (for bug reports)
+  replay surfaces                  what each agent on this machine will tell you about its cache
   replay privacy                   everything Replay has written to this machine, and what it holds
   replay purge <ledger-dir>        remove records past a retention window, or one session's
   replay version                   print build information

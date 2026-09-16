@@ -69,6 +69,7 @@ to test whether `~/.replay` is writable.
 | [`upgrade`](#upgrade) | Replace this binary with the latest published release | outbound: github.com, to resolve the latest tag and download the release archive and its checksums | the running binary, in place, after its checksum is verified; --check and --dry-run write nothing |
 | [`purge`](#purge) | Remove ledger records past a retention window, or one session's | none | removes ledger records under the directory given; nothing unless --yes |
 | [`privacy`](#privacy) | Everything Replay has written to this machine, and what each store holds | none | nothing: it reports and never removes |
+| [`surfaces`](#surfaces) | What each agent store on this machine reports about its prompt cache, and what it does not | none | nothing: it reads the stores and writes nothing |
 | [`pool`](#pool) | Aggregate corpus submissions into one figure, with its roster | none | none |
 
 ### cost
@@ -378,6 +379,15 @@ Everything Replay has written to this machine, and what each store holds.
 |---|---|---|
 | `-json` | bool | emit the report as JSON |
 
+### surfaces
+
+What each agent store on this machine reports about its prompt cache, and what it does not.
+
+| Flag | Type | What it does |
+|---|---|---|
+| `-json` | bool | emit the readings as JSON |
+| `-max-files` | int | scan at most this many files per surface, newest first (default 40) |
+
 ### pool
 
 Aggregate corpus submissions into one figure, with its roster.
@@ -427,4 +437,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-30 commands, 111 flags, read from the binary.
+31 commands, 113 flags, read from the binary.

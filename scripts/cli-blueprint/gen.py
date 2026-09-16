@@ -32,7 +32,7 @@ COMMANDS = [
     "cost", "ceiling", "diff", "advise", "serve", "tui", "context", "blame", "replay",
     "route", "trim", "codex", "burn", "agents", "mcp", "corpus", "learn",
     "probe", "doctor", "rules", "statusline", "redact", "version", "prefix", "since", "budget",
-    "upgrade", "purge", "privacy", "pool",
+    "upgrade", "purge", "privacy", "surfaces", "pool",
 ]
 
 # What each command is for, and the two facts an agent needs before running one
@@ -70,6 +70,7 @@ META = {
     # the only one that removes it, and privacy the only one that discloses it;
     # both are answers to questions an auditor and a subject access request ask.
     "purge":      ("Remove ledger records past a retention window, or one session's", "none", "removes ledger records under the directory given; nothing unless --yes"),
+    "surfaces":   ("What each agent store on this machine reports about its prompt cache, and what it does not", "none", "nothing: it reads the stores and writes nothing"),
     "privacy":    ("Everything Replay has written to this machine, and what each store holds", "none", "nothing: it reports and never removes"),
     # The only command that reaches the network without being asked to proxy
     # anything, and the only one that writes to the binary the reader invoked.
