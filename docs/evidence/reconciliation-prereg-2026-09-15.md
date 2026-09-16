@@ -66,6 +66,7 @@ Rules are not adjusted after seeing a discrepancy. Ever.
 ## 6. Currency and tax treatment
 
 Declared before retrieval:
+
 - comparison is on NET, exclusive of tax, unless the provider reports only
   gross, in which case tax is subtracted explicitly and the subtraction shown
 - credits, promotional balances, free tiers and committed-spend discounts are
@@ -124,6 +125,7 @@ named in the report.
 ## 12. Stop conditions
 
 STOP and report the block, publishing no reconciliation figures, if:
+
 - the provider artifact cannot establish the same population boundary as the
   local snapshot, which is the single most likely outcome and is a VALID
   RESULT, not a failed experiment
