@@ -2,7 +2,7 @@
 
 What ships in each release, the gate for each, and what is deliberately deferred. The requirements behind every line are in [`requirements.md`](requirements.md); the decisions are in [`adr/`](adr/README.md).
 
-The sequence is chosen so the first release costs nothing to run, works for every user regardless of how they authenticate, and produces the output that gets the project noticed. Items are **proposed** until the owner approves PRD v5.
+The sequence is chosen so the first release costs nothing to run, works for every user regardless of how they authenticate, and produces the output that gets the project noticed. Items are **proposed** until the owner approves them.
 
 ## Gating spikes (before any public claim)
 
@@ -315,8 +315,6 @@ data this tool has ever held, and the binary sits in a credential path where a
 network dependency is a new failure mode. The two MCP servers already split along
 the line that matters, the hosted one answering questions about the world and the
 local one about this machine, and only the first can ever be sold.
-[`MONEY-PATH.md`](MONEY-PATH.md) carries the tiers, including what an enterprise
-buyer is told no about.
 
 ### What would justify a 2.0
 

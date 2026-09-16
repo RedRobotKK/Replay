@@ -37,7 +37,7 @@ recorded is indistinguishable from a regression nobody noticed.
 ## The number that must not be published without this file beside it
 
 The figure in circulation is **"about 5% of my own bill was re-billed"**. It is
-in `docs/MONEY-PATH.md`, in the PRD, and in a measurement post drafted for
+in the commercial planning document, in the PRD, and in a measurement post drafted for
 launch. On the build that is about to ship, **the same corpus reads 2.75%**.
 
 Both are honest readings. Neither is wrong. **A launch post that prints 5% next

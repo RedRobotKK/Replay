@@ -52,7 +52,7 @@ a terminal for it to open on, and that branch is the thing to know before you ru
 On a terminal, the screens take over when the script finishes:
 
 ```text
-✓ Installed replay v0.5.4
+✓ Installed replay v0.6.0
 
 Next:  replay tui      # opening now, on cost: what your agent already spent
        replay          # after you quit: the same figures, as one report
@@ -65,7 +65,7 @@ Off a terminal — CI, a `Dockerfile RUN`, cron, a provisioner, a container buil
 opens and the two commands are the next step:
 
 ```text
-✓ Installed replay v0.5.4
+✓ Installed replay v0.6.0
 
 Next:  replay          # what your agent already spent, and how much was billed twice
        replay doctor   # if that found nothing, this says why

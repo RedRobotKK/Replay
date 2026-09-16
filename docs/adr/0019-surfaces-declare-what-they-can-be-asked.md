@@ -81,7 +81,7 @@ Two further facts constrain the design.
 absence, zero and unknown are three values. Adding OpenAI under the current
 architecture would emit `rebilledUsd: 0` on every OpenAI report — a measured
 zero that was never measured. Since 2026-09 those figures flow into pooled
-corpus contributions across contributors, so the defect would not stay local to
+corpus contributions, which today have one contributor, so the defect would not stay local to
 one reader's terminal; it would bias a published population figure downward and
 look exactly like good news.
 

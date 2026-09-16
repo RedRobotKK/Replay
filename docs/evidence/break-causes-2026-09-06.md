@@ -1,5 +1,8 @@
 # What actually breaks the cache, and what a layout change could fix
 
+**Superseded twice.** The 50.8% below does not reproduce (see the 2026-09-11
+appendix in this file), and the 2026-09-13 reading supersedes it again.
+
 **Measured 2026-09-06 across 1,506 transcripts on one machine: 735 cache breaks,
 31,264,349 tokens re-billed. Method below; read the sampling note before the
 number.**

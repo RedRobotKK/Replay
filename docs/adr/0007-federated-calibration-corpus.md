@@ -134,7 +134,12 @@ harder to game.
 
 ## Implementation note 2026-09-05
 
-**Nothing in this record was built.** `replay corpus` takes one or more transcript directories and
+**Nothing in this record was built** when it was written.
+**Correction, 2026-09-15:** contribution shipped in 0.6.0. `replay cost --contribute`
+writes a corpus document and `replay.doctor/pool/` publishes the aggregate. The
+paragraph below describes the state on 2026-09-05 and is kept for the record.
+
+`replay corpus` takes one or more transcript directories and
 defines no flags at all, so `replay corpus --submit` does not print a payload and does not ask: it
 exits with `flag provided but not defined: -submit`. There is no corpus endpoint, no aggregate, and
 no k-anonymity threshold in force, because there is nothing yet to threshold.

@@ -21,7 +21,9 @@ own OIDC identity.
 `install.sh` **does** check it. If cosign is present on the machine and no
 signature is found, it refuses to install rather than proceeding.
 
-`internal/selfupdate` does **neither**. `fetch.go` fetches `checksums.txt` over
+`internal/selfupdate` did **neither**. Fixed in v0.6.0: `internal/selfupdate/verify.go`
+now shells out to cosign with both identity flags. The rest of this section describes
+the state on 2026-09-13. `fetch.go` fetches `checksums.txt` over
 HTTPS, looks the archive up in it, compares sha256, and refuses on a mismatch
 or on a checksums file it could not fetch. There is no `--no-verify` and that
 is deliberate. But nothing reads `checksums.txt.pem` or `checksums.txt.sig`,

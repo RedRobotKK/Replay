@@ -136,6 +136,11 @@ server to run or defend.
 
 **None of "what ships at v0.1" shipped.** `replay corpus <dir>` shipped exactly as described — a
 local Markdown report over transcript directories, no network — and that half of the argument holds.
+**Correction, 2026-09-15:** contribution shipped in 0.6.0. `replay cost --contribute`
+writes a corpus document and `replay.doctor/pool/` publishes the aggregate. The
+paragraph below describes the state when this record was written and is kept for
+the record.
+
 The rest did not: `corpus` defines no flags, so neither `--submit` nor `--show-aggregate` exists,
 and `replay corpus --submit` exits with `flag provided but not defined: -submit`. There is no
 endpoint to send to and no published aggregate to fetch.

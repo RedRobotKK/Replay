@@ -106,7 +106,7 @@ which is the money path's own conclusion that the constraint is distribution
 rather than the number on the page. The models predict 4 to 38.
 
 **Corpora: 3.** The minimum that can begin to test whether the measured
-concentration, 25 fan-out sessions holding 98.8% of avoidable spend, generalises
+concentration, 25 fan-out sessions holding 98.8% of re-billed spend, generalises
 past one machine. Models predict 0.
 
 ## What each outcome decides
@@ -121,10 +121,11 @@ past one machine. Models predict 0.
 
 ## The risk that is being pre-empted rather than predicted
 
-Both audience models independently name the same worst case: a reader finds
-`docs/MONEY-PATH.md`, pairs the provisional `$199 per repository per month` with
-the `$500,000 post-tax` target and the tax table in section 0.1, adds BUSL so the
-project cannot be forked, and posts all three together. The reading requires no
+Both audience models independently name the same worst case: a reader finds the
+commercial planning document, pairs its provisional tier pricing with its income
+target and tax table, adds BUSL so the project cannot be forked, and posts all
+three together. The current price is **$22,000 for a repository-week**; the tier
+figures in that document are legacy and it is not linked from here. The reading requires no
 bad faith and it reframes every honest thing in the README as setup.
 
 The response is to link that document first, in the maintainer's own opening
@@ -145,10 +146,11 @@ measured population is two IP addresses. Nothing here is a forecast in the sense
 that a weather forecast is a forecast; it is a set of commitments about what will
 be counted and what each count will be taken to mean.
 
-**The results get appended to this file, dated, including the rows where the
-prediction was wrong.** That is the only reason to write it down in advance.
+**The results were to be appended to this file, dated, including the rows where
+the prediction was wrong.** They were not. As of 2026-09-15 no outcome rows
+exist here, and the promise is retracted rather than filled in after the fact.
 
 ---
 
-[Evidence index](README.md) · [The money path](../MONEY-PATH.md) ·
+[Evidence index](README.md) ·
 [Release criteria](../../RELEASE-CRITERIA.md)
