@@ -357,11 +357,7 @@ What this configuration costs on every request, before any work.
 
 Replace this binary with the latest published release.
 
-| Flag | Type | What it does |
-|---|---|---|
-| `-check` | bool | report what is available and exit; change nothing |
-| `-dry-run` | bool | download and verify, but do not replace the binary |
-| `-version` | string | install a specific release tag instead of the latest |
+Takes no flags.
 
 ### purge
 
