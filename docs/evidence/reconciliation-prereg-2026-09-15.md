@@ -163,3 +163,14 @@ whether or not the result flatters the tool.
 
 2026-09-15. No provider artifact retrieved. No comparison run. No data
 inspected.
+
+Original freeze commit: `bada99185656ff5cde4ca3d6ad2ce91d776915ec`, committed
+and pushed 2026-09-15T17:35:13-07:00, before any retrieval.
+
+That commit is no longer the branch tip. The branch was rebased onto main to
+resolve an index conflict with #314, which rewrote the hash. The protocol text
+is byte-identical across the rebase, verified by diffing the file at both
+commits. The current hash is not named here because a file cannot contain the
+hash of the commit that contains it. The original hash above is the freeze, and
+it is recorded rather than replaced so the rewrite is visible instead of
+silent.
