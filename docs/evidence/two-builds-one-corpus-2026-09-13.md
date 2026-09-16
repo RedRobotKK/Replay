@@ -131,6 +131,50 @@ So the answer is corpus growth, and it is growth in lanes rather than in
 sessions. **None of it explains the build gap in the table above**, which is
 measured on one corpus state rather than across two days.
 
+## Appended: an independent measurement of the same phenomenon, and why it is not this number
+
+Added 2026-09-15. Everything above is one operator's corpus, which is the
+limitation this file closes on. A second operator has now measured the
+re-reading phenomenon independently, at a scale this project cannot reach
+alone, with no knowledge of Replay.
+
+`anthropics/claude-code` issue 83833, opened 2026-08-04 by `Socialpranker`,
+open with no comments when read 2026-09-15. Reported, verbatim:
+
+    re-read context   38,450,880,423   97.7%
+    cache writes         893,647,401    2.3%
+    new content           21,745,161    0.1%
+
+    1,768 tokens of re-read per token of new content
+    sessions peaking >200k: 364 of 608 (60%)
+    they account for 93% of all re-reading
+    median session peak: 227,712
+
+He states he checked a competing explanation before filing, finding sidechains
+were not leaking across 0 of 83,434 calls, and published his scripts. The
+per-record scan is described as 174,276 consecutive main-chain readings across
+607 sessions, one fewer than the 608 in the title.
+
+**His 97.7% is not this file's 2.75%, and the two must never be added, averaged
+or substituted.** He measures re-read context as a share of all tokens READ.
+This file measures the re-billed share of spend. Different numerator, different
+denominator, different question. Quoting his figure next to ours as if it
+confirmed ours would inflate our number by borrowing his denominator, which is
+the precise failure this whole file exists to document.
+
+**What it establishes:** that heavy context re-reading is not an artifact of
+this machine, this operator or this corpus. That was previously UNMEASURED
+here and is the standing limitation of every figure in this directory.
+
+**What it does not establish:** anything at all about 4.99%, 2.75% or the
+2.98x between them. Those remain one corpus under two builds.
+
+**Status of this citation:** OBSERVED that he reported these figures, read
+2026-09-15. His measurement itself is UNVERIFIED by us. His scripts were not
+run, his corpus was not seen, and no attempt was made to reproduce it. Treating
+his report as a measurement we made would be the same error in the opposite
+direction.
+
 ## What this does not establish
 
 One machine, one operator. The ratios are facts about this corpus under these
