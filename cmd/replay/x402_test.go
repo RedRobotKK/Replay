@@ -342,6 +342,13 @@ var allowedImports = map[string]bool{
 	// an image of a screen ends up carrying a broken tspan the day somebody
 	// puts an ampersand in a model name.
 	"html": true,
+	// runtime/debug, for internal/version's read of Go's embedded BuildInfo.
+	// The advertised `go install ...@latest` path builds from the module proxy
+	// and cannot pass -ldflags, so the binary reported "dev" while its own
+	// BuildInfo carried the module version. This reads that one field back.
+	// It inspects the running binary's own build metadata: it opens no file,
+	// makes no network call, holds no key and signs nothing.
+	"runtime/debug": true,
 	// archive/tar, for the release tarball in internal/selfupdate. It reads
 	// and never writes, which is the whole reason it is admissible here: the
 	// hazard with tar is an entry whose name escapes the destination
