@@ -237,8 +237,10 @@ func (e CeilingEffect) AllowanceNote() string {
 		"price for somebody who is billed per token. What is yours is the tokens: %d written to "+
 		"cache and %d read back, out of %d prompt tokens. A cache write that could have been a "+
 		"read spends allowance twice. How much: NOT MEASURED. Whether reads weigh against the "+
-		"allowance at the same 0.10x discount they get against a bill has never been measured "+
-		"here, and every percentage anyone quotes turns on it.",
+		"allowance at the same discount they get against a bill has never been measured "+
+		"here, and every percentage anyone quotes turns on it. The bill-side discount is "+
+		"itself per model: 0.025x on Fable 5.1 and Mythos 5.1, 0.10x elsewhere, so a single "+
+		"number here would be wrong for somebody.",
 		t.CacheWrite, t.CacheRead, t.Input+t.CacheWrite+t.CacheRead)
 }
 

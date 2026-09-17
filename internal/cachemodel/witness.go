@@ -36,7 +36,15 @@ const (
 
 	// CountersWriteMissing is the impossible one: reads happened and the
 	// write counter is zero. Something wrote the prefix being read.
-	CountersWriteMissing Counters = "reads reported with no write: the write field is absent rather than zero"
+	//
+	// It says that and no more. This verdict used to add "the write field is
+	// absent rather than zero", which is a claim about the wire made by a
+	// function that only ever sees two integers: an unsent field and a field
+	// sent as zero both arrive here as 0. It was true of Codex on 2026-09-15,
+	// when one rollout of 158 carried the field at all, and false by
+	// 2026-09-17, when the field was present in 6,883 of 6,883 records and
+	// zero in every one. The wire moved and the sentence did not.
+	CountersWriteMissing Counters = "reads reported with no write of any size"
 
 	// CountersColdOnly wrote and never read again. Ordinary, and the common
 	// shape of a session with a single turn.

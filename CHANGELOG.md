@@ -4,6 +4,59 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- **`replay burn` told every Codex user a field was missing that they were
+  sending.** The cache-counter verdict read "the write field is absent rather
+  than zero". `ClassifyCounters` takes two integers: a field the client never
+  sent and a field it sent as zero both arrive as 0, and nothing downstream can
+  separate them, so the verdict asserted a fact about the wire that the function
+  never saw. It was true of Codex on 2026-09-15, when one rollout of 158 carried
+  `cache_write_input_tokens` at all, and false by 2026-09-17, when the field was
+  present in 6,883 of 6,883 records and zero in every one. The impossibility
+  itself stands and is unchanged: reads above zero beside writes of exactly zero
+  cannot describe a real session, because something wrote the prefix being read.
+- **The subscription-allowance note quoted a cache-read discount that is wrong
+  by four times for two models.** It said reads might weigh against an allowance
+  "at the same 0.10x discount they get against a bill". The bill-side discount
+  is per model: 0.025x on Claude Fable 5.1 and Mythos 5.1 under a documented
+  Anthropic exception, 0.10x elsewhere. The note now says so rather than naming
+  one rate as though it were universal. The pricing itself was already correct
+  and has a test pinning it.
+
+### Changed
+
+- **`replay --help` names the two commands that read Codex rollouts.** `codex`
+  and `burn` are the only commands that parse them; `cost`, `diff`, `advise`,
+  `trim`, `route`, `ceiling` and the TUI read Claude Code transcripts only. The
+  opening block listed five commands, none of which work on a Codex-only
+  machine, and no route to the two that do.
+- **The unpriced-surface remedy names a document that exists.** `replay burn`
+  said "next: replay rules --update <file|https URL>" without naming either.
+  It now names `docs/rules/openai-2026-09-15.json` and states that installing a
+  document REPLACES the one in effect rather than merging, so a single-provider
+  document un-prices the others. That replacement behaviour was undocumented
+  anywhere.
+- **`serve -h` no longer denies that `/v1/responses` is masked.** It claimed
+  `/v1/messages` was "the only shape this build masks". `maskable()` is
+  `isMessages(path) || isResponses(path)`, with an end-to-end test proving a
+  credential on `/v1/responses` is masked before egress, and `/v1/responses` is
+  the path GPT-6 Astra speaks. The flag text now says so, and also says that the
+  path is forwarded unread: no ledger record, no spend cap, no usage.
+
+### Added
+
+- **Tests pinning the shipped OpenAI rows against the vendor page they came
+  from.** `gpt-6-astra` at $10.00 in, $50.00 out, $1.00 cached, and
+  `gpt-5.6-terra` at $2.00, $12.00, $0.20, both read at
+  developers.openai.com/api/docs/pricing on 2026-09-17. No row was added for
+  `gpt-5.1-codex-mini`, which is the most common model in one real 479-record
+  corpus by a wide margin: OpenAI does not publish a price for it, and a row
+  invented here would be a number nobody can check. A standing guard also
+  refuses any short row placed before a longer one that contains it, since
+  matching is by substring in order and a bare `astra` row ahead of
+  `gpt-6-astra` would silently mis-price the flagship.
+
 ## [0.6.0] - 2026-09-13
 
 ### Fixed

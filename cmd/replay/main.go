@@ -626,6 +626,8 @@ Start here:
   replay advise <dir...>           largest cache-traffic sources, ranked by write+read dollars
   replay serve  [flags]            local proxy: forwards to the provider, records a ledger
   replay tui                       the same answers as screens you can move between
+  replay codex  <dir...>           the same reading, for OpenAI Codex rollout logs
+  replay burn                      what each agent surface burned: Codex, Ollama, Claude Code
 
 Look closer:
   replay cost   <dir...>           cost per task, and --compare <date> for before/after
