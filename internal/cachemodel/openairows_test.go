@@ -3,6 +3,7 @@ package cachemodel
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -79,7 +80,7 @@ func TestNoOpenAIRowShadowsALongerOne(t *testing.T) {
 	for i, short := range doc.Models {
 		for j, long := range doc.Models {
 			if i < j && len(short.Match) < len(long.Match) &&
-				contains(long.Match, short.Match) {
+				strings.Contains(long.Match, short.Match) {
 				t.Errorf("row %q at index %d precedes %q at index %d and shadows it",
 					short.Match, i, long.Match, j)
 			}
@@ -112,13 +113,4 @@ func openAIDoc(t *testing.T) map[string]oaRow {
 		m[r.Match] = r
 	}
 	return m
-}
-
-func contains(s, sub string) bool {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }

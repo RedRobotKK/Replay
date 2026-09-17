@@ -160,7 +160,7 @@ Local proxy: forwards to the provider, records a ledger.
 | `-revert-after` | int | how many sessions must breach the guardrail before the policy is reverted (default 2) |
 | `-token` | string | require this value in the x-replay-token header (or set REPLAY_TOKEN) |
 | `-trial-share` | float | share of new sessions that get the policy from -policy-file; the rest run as controls (stable per session id) (default 1) |
-| `-upstream` | string | provider base URL. The default is Anthropic, whose /v1/messages is the only shape this build masks. Pointing this at an OpenAI-compatible provider routes /v1/chat/completions, which is EXPERIMENTAL, UNMASKED: -mask cannot read that body shape, so an API key in one of those requests reaches the provider in clear, and the path is verified against DeepSeek and a local Ollama only (default "`https://api.anthropic.com`") |
+| `-upstream` | string | provider base URL. The default is Anthropic. -mask reads /v1/messages and also masks /v1/responses, the path GPT-6 Astra speaks, though that path is forwarded unread: no ledger record, no spend cap, no usage. Pointing this at an OpenAI-compatible provider routes /v1/chat/completions, which is read and guarded but EXPERIMENTAL, UNMASKED: -mask cannot read that body shape, so an API key in one of those requests reaches the provider in clear, and the path is verified against DeepSeek and a local Ollama only (default "`https://api.anthropic.com`") |
 
 ### tui
 
