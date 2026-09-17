@@ -333,7 +333,7 @@ read the transcript root `replay doctor` already discovers, and say on stderr wh
 argument still wins when you give it. This is not a convenience — a first command that needs a path
 the reader does not know yet is a command they do not run.
 
-`replay --help` lists all thirty, grouped and ordered by what they are worth rather than
+`replay --help` lists all thirty-one, grouped and ordered by what they are worth rather than
 alphabetically, because the list is what a person reads before they know which of them matters. That
 number is compared against the binary's dispatch switch by `internal/regression` RC1, which is why it
 is allowed to be here and why the same figure is not written into the other documents. Full
