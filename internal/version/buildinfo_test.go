@@ -119,3 +119,54 @@ func TestAProxyInstallStillRecoversItsTag(t *testing.T) {
 		t.Errorf("the module-proxy tag was lost: got %q", got)
 	}
 }
+
+// KnownCommit is the answer to a question the sentinel cannot give.
+//
+// `Commit` defaults to the literal "unknown", which is not empty, so the
+// `omitempty` on observation.Corpus.Commit never elides it and the binary
+// submits a provenance claim it knows nothing about. Production refuses it:
+// functions/_lib/contribute.js validates `commit` against /^[0-9a-f]{7,40}$/
+// and lists it in OPTIONAL, so an absent field is accepted and "unknown" is not.
+// Read at source 2026-09-17.
+//
+// The transformation is one way and narrow. A value that is not the sentinel is
+// returned byte for byte, including one this binary could not have produced:
+// normalising here would invent provenance, and refusing here would move a
+// validation the server already owns into a place no submission passes through.
+
+func TestTheSentinelBecomesNothing(t *testing.T) {
+	for _, in := range []string{"unknown", ""} {
+		if got := KnownCommit(in); got != "" {
+			t.Errorf("KnownCommit(%q) = %q, want empty so omitempty elides it", in, got)
+		}
+	}
+}
+
+func TestARealCommitSurvivesByteForByte(t *testing.T) {
+	for _, in := range []string{
+		"b3667e3",
+		"28108676c2478980b7d22892b584ea630b8c6c9e",
+	} {
+		if got := KnownCommit(in); got != in {
+			t.Errorf("KnownCommit(%q) = %q, want it unchanged", in, got)
+		}
+	}
+}
+
+// No normalisation, no truncation, no padding, no manufacture. Each of these
+// is a value the server will refuse, and being refused for what you sent is
+// better than being accepted for something you did not.
+func TestNothingIsNormalisedOrManufactured(t *testing.T) {
+	for _, in := range []string{
+		"B3667E3", // uppercase
+		"B3667e3", // mixed
+		"b366",    // too short
+		"28108676c2478980b7d22892b584ea630b8c6c9eff", // too long
+		"not-hex",     // not hex
+		"  b3667e3  ", // padded
+	} {
+		if got := KnownCommit(in); got != in {
+			t.Errorf("KnownCommit(%q) = %q, want it returned unchanged", in, got)
+		}
+	}
+}

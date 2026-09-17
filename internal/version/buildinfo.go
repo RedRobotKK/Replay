@@ -58,3 +58,24 @@ func versionFrom(stamped string, info *debug.BuildInfo, ok bool) string {
 	}
 	return stamped
 }
+
+// KnownCommit returns the commit, or nothing when there is no commit to give.
+//
+// `Commit` defaults to the literal "unknown", which is not empty, so the
+// `omitempty` on observation.Corpus.Commit cannot elide it and the binary
+// submits a provenance claim it has never checked. Production refuses that
+// value and is right to: functions/_lib/contribute.js lists `commit` in
+// OPTIONAL and shapes it /^[0-9a-f]{7,40}$/, so a field that is absent is
+// accepted and one reading "unknown" is not.
+//
+// Only the sentinel and the empty string are translated. Anything else is
+// returned byte for byte, including a value this binary could not have
+// produced. Lower-casing, truncating or padding here would repair a claim into
+// one nobody verified, and refusing here would move a validation the server
+// already owns to a place no submission passes through.
+func KnownCommit(commit string) string {
+	if commit == "unknown" {
+		return ""
+	}
+	return commit
+}
