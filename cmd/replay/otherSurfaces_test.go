@@ -27,6 +27,15 @@ func withHome(t *testing.T) string {
 	// os.UserHomeDir reads USERPROFILE on Windows, so HOME alone leaves the
 	// lookup pointed at the developer's real home.
 	t.Setenv("USERPROFILE", home)
+	// And HOME alone is not enough for anything that reads a config directory.
+	// readCorpusConsent prefers XDG_CONFIG_HOME and only falls back to
+	// $HOME/.config, so an inherited XDG_CONFIG_HOME walks straight out of this
+	// sandbox and reads the caller's real one. That is invisible on a machine
+	// which does not set the variable, and every GitHub runner sets it: three
+	// contribution tests passed here and failed in CI on 2026-09-17 for exactly
+	// this reason. Pinned to the sandbox's own .config so the fallback and the
+	// override name the same directory.
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv(transcriptsEnv, "")
 	return home
 }
