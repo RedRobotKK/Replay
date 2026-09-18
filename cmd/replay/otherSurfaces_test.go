@@ -117,19 +117,31 @@ func TestOS4_AnEmptyDirectoryDoesNotCount(t *testing.T) {
 // data was seen. Offering a command would be OS4's defect wearing a different
 // hat: a second empty report, this time with the tool's word behind it.
 func TestOS5_AnUnreadableSurfaceIsNamedWithoutACommand(t *testing.T) {
+	// The subject was Grok until 2026-09-17, when `replay grok` shipped and
+	// made this surface readable. The PROPERTY is unchanged and still worth
+	// holding: a surface with no reader is named so the owner knows their data
+	// was seen, and is not sent to a command that would return nothing. Only
+	// the example moved, to a surface that is still genuinely unreadable.
+	// TestSI1 is what now catches a surface gaining a reader while some other
+	// registry goes on refusing it.
 	home := withHome(t)
-	mustWrite(t, filepath.Join(home, ".grok", "updates.jsonl"), "{}\n")
+	mustWrite(t, filepath.Join(home, ".oracle", "sessions", "s", "meta.json"), "{}\n")
 
 	var b strings.Builder
 	explainNoCorpus(home, &b)
 	out := b.String()
-	if !strings.Contains(strings.ToLower(out), "grok") {
-		t.Errorf("Grok data is on disk and the reader is not told it was seen:\n%s", out)
+	if !strings.Contains(strings.ToLower(out), "oracle") {
+		t.Errorf("Oracle data is on disk and the reader is not told it was seen:\n%s", out)
 	}
-	if strings.Contains(out, "replay grok") || strings.Contains(out, "replay burn") {
-		t.Errorf("the reader was sent to a command that cannot read Grok:\n%s", out)
+	if strings.Contains(out, "replay oracle") {
+		t.Errorf("the reader was sent to a command that cannot read Oracle:\n%s", out)
 	}
-	if !strings.Contains(strings.ToLower(out), "cannot read") {
+	// Either refusal satisfies this: "cannot read" and "cannot price" are
+	// different states and both are reasons. Pinning one verb would have made
+	// this test a spelling check, and it would have failed on Oracle, which
+	// can be read and not priced.
+	low := strings.ToLower(out)
+	if !strings.Contains(low, "cannot read") && !strings.Contains(low, "cannot price") {
 		t.Errorf("the reader is not told why no command is offered:\n%s", out)
 	}
 }

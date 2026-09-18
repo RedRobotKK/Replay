@@ -185,6 +185,8 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 		return runPool(args[1:], stdout, stderr)
 	case "codex":
 		return runCodex(args[1:], stdout, stderr)
+	case "grok":
+		return runGrok(args[1:], stdout, stderr)
 	case "mcp":
 		return runMCPCommand(args[1:], stdout, stderr)
 	case "agents":
@@ -626,8 +628,9 @@ Start here:
   replay advise <dir...>           largest cache-traffic sources, ranked by write+read dollars
   replay serve  [flags]            local proxy: forwards to the provider, records a ledger
   replay tui                       the same answers as screens you can move between
-  replay codex  <dir...>           the same reading, for OpenAI Codex rollout logs
-  replay burn                      what each agent surface burned: Codex, Ollama, Claude Code
+  replay codex  <dir...>           OpenAI Codex rollout logs: tokens, never dollars
+  replay grok   <dir...>           Grok sessions: tokens, and why it prints no money
+  replay burn                      what each surface burned: Codex, Grok, Ollama, Claude Code
 
 Look closer:
   replay cost   <dir...>           cost per task, and --compare <date> for before/after
@@ -640,8 +643,9 @@ Look closer:
   replay route  <dir> --to <model> what switching models would change, structurally
   replay trim   <dir> --cap <n>    what a byte cap on tool output would have saved, and cost
   replay advise <dir> --guards     spend caps from your own session spread, print-only
-  replay codex  <dir...>           the same reading, for OpenAI Codex rollout logs
-  replay burn                      what each agent surface burned: Codex, Ollama, Claude Code
+  replay codex  <dir...>           OpenAI Codex rollout logs: tokens, never dollars
+  replay grok   <dir...>           Grok sessions: tokens, and why it prints no money
+  replay burn                      what each surface burned: Codex, Grok, Ollama, Claude Code
   replay agents [dir] --write F    a boot block naming where this project keeps its records
   replay mcp                       answer an agent's questions mid-session, JSON-RPC on stdio
 

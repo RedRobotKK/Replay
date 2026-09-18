@@ -42,9 +42,14 @@ const (
 	MechanismRentedCache = "rented_cache"
 )
 
-// ProviderAnthropic is the only provider name so far, because one is what has
-// been observed.
-const ProviderAnthropic = "anthropic"
+// Provider names. Each one is here because records carrying it have been read
+// off a real machine, not because the vendor exists.
+const (
+	ProviderAnthropic = "anthropic"
+	// ProviderGrok is the x.ai CLI, which writes its own session records to
+	// ~/.grok and counts inclusively. See cmd/replay/grok.go.
+	ProviderGrok = "grok"
+)
 
 // Record is one request's cost in the engine's own vocabulary.
 //

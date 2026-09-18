@@ -30,7 +30,7 @@ import argparse, os, re, subprocess, sys, tempfile
 # does, so the list stays explicit and can no longer fall behind.
 COMMANDS = [
     "cost", "ceiling", "diff", "advise", "serve", "tui", "context", "blame", "replay",
-    "route", "trim", "codex", "burn", "agents", "mcp", "corpus", "learn",
+    "route", "trim", "codex", "grok", "burn", "agents", "mcp", "corpus", "learn",
     "probe", "doctor", "rules", "statusline", "redact", "version", "prefix", "since", "budget",
     "upgrade", "purge", "privacy", "pool",
 ]
@@ -58,7 +58,8 @@ META = {
     "replay":     ("Reproduce caching, then score alternative layouts", "none", "none"),
     "route":      ("What switching models would change, structurally", "none", "none"),
     "trim":       ("What a byte cap on tool output would have saved, and cost", "none", "none"),
-    "codex":      ("The same reading, for OpenAI Codex rollout logs", "none", "none"),
+    "codex":      ("OpenAI Codex rollout logs, in tokens. It has no pricing path: for money on a Codex corpus, use burn", "none", "none"),
+    "grok":       ("Grok sessions, in tokens. Reports the cached share, the reasoning tokens and the rollup divergence, and no money: the dollar scale is stated by the vendor and unchecked here", "none", "none"),
     "burn":       ("What each agent surface burned: Codex, Ollama, Claude Code", "loopback: Ollama's version endpoint", "none"),
     "agents":     ("A boot block naming where this project keeps its records", "none", "with --write, splices into the named file"),
     "mcp":        ("Answer an agent's questions mid-session, JSON-RPC on stdio", "none", "none"),

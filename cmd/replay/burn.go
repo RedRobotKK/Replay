@@ -215,6 +215,8 @@ func runBurn(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("burn", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	dir := fs.String("dir", "", "read surfaces from this directory instead of the machine's own")
+	contributeTo := fs.String("contribute", "", "build a corpus submission for this campaign from the Codex surface; writes a file, sends nothing")
+	contributeDir := fs.String("contribute-dir", "", "write the submission here instead of the working directory")
 	if err := parseArgs(fs, args, stdout); err != nil {
 		return err
 	}
@@ -231,8 +233,38 @@ func runBurn(args []string, stdout, stderr io.Writer) error {
 	}
 
 	home, _ := os.UserHomeDir()
+
+	// Contributing reads ONE surface, and says so rather than implying the
+	// report above it. The table compares surfaces that do not count the same
+	// thing, which is exactly why it prints no cross-surface total; a
+	// submission built from that table would be the total the table refuses to
+	// print, wearing a schema.
+	//
+	// Codex only, and not because the others are less interesting. Ollama has
+	// no bill to pool. Grok states a cost figure whose scale nobody here has
+	// checked against a statement of account, and a pooled dollar derived from
+	// an unchecked scale is worse than no row at all. Claude Code contributes
+	// through `replay cost --contribute`, which reads lanes rather than
+	// sessions and would otherwise pool two different units under one count.
+	if *contributeTo != "" {
+		f, err := codexContribution(home, *dir)
+		if err != nil {
+			return err
+		}
+		path, old, err := contributeCorpus(*contributeTo, *contributeDir, f, time.Now())
+		if err != nil {
+			return err
+		}
+		writeCodexContributionNote(stdout, path, old, f)
+		return nil
+	}
+
 	var surfaces []surfaceBurn
 	surfaces = append(surfaces, burnCodex(home, *dir))
+	// Grok sits beside Codex because it counts the way Codex does: the cached
+	// share is nested inside the prompt figure rather than partitioned out of
+	// it. Its cost column is empty and stays empty: see burnGrok.
+	surfaces = append(surfaces, burnGrok(home, *dir))
 	surfaces = append(surfaces, burnOllama(home, *dir))
 	surfaces = append(surfaces, burnClaudeCode(home, *dir))
 
@@ -253,9 +285,9 @@ func runBurn(args []string, stdout, stderr io.Writer) error {
 	}
 
 	_, _ = fmt.Fprintf(stdout, "\n  The token columns are not addable. Anthropic reports the prompt with the\n")
-	_, _ = fmt.Fprintf(stdout, "  cached share partitioned out of it, Codex reports it nested inside, and\n")
-	_, _ = fmt.Fprintf(stdout, "  Ollama reports the work it performed with the cached prefix excluded\n")
-	_, _ = fmt.Fprintf(stdout, "  entirely. Summing them would produce a figure with no unit.\n\n")
+	_, _ = fmt.Fprintf(stdout, "  cached share partitioned out of it, Codex and Grok report it nested\n")
+	_, _ = fmt.Fprintf(stdout, "  inside, and Ollama reports the work it performed with the cached prefix\n")
+	_, _ = fmt.Fprintf(stdout, "  excluded entirely. Summing them would produce a figure with no unit.\n\n")
 	_, _ = fmt.Fprintf(stdout, "  The cost column is addable, and that is what it is for. It is also the\n")
 	_, _ = fmt.Fprintf(stdout, "  column that is mostly empty.\n")
 	for _, l := range pricingNotes(surfaces) {

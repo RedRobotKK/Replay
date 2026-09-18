@@ -17,7 +17,7 @@ reach the network, and does it write. Both are answered per command below, and
 summarised here.
 
 **Opens no socket and writes nothing** — safe to run at will:
-`ceiling`, `diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `mcp`, `statusline`, `redact`, `version`, `prefix`, `budget`, `pool`.
+`ceiling`, `diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `grok`, `mcp`, `statusline`, `redact`, `version`, `prefix`, `budget`, `pool`.
 
 **Leaves the machine:** `serve` proxies every request to the provider.
 `probe --execute` sends billable requests, and without `--execute` it prints a
@@ -51,7 +51,8 @@ to test whether `~/.replay` is writable.
 | [`replay`](#replay) | Reproduce caching, then score alternative layouts | none | none |
 | [`route`](#route) | What switching models would change, structurally | none | none |
 | [`trim`](#trim) | What a byte cap on tool output would have saved, and cost | none | none |
-| [`codex`](#codex) | The same reading, for OpenAI Codex rollout logs | none | none |
+| [`codex`](#codex) | OpenAI Codex rollout logs, in tokens. It has no pricing path: for money on a Codex corpus, use burn | none | none |
+| [`grok`](#grok) | Grok sessions, in tokens. Reports the cached share, the reasoning tokens and the rollup divergence, and no money: the dollar scale is stated by the vendor and unchecked here | none | none |
 | [`burn`](#burn) | What each agent surface burned: Codex, Ollama, Claude Code | loopback: Ollama's version endpoint | none |
 | [`agents`](#agents) | A boot block naming where this project keeps its records | none | with --write, splices into the named file |
 | [`mcp`](#mcp) | Answer an agent's questions mid-session, JSON-RPC on stdio | none | none |
@@ -217,7 +218,13 @@ What a byte cap on tool output would have saved, and cost.
 
 ### codex
 
-The same reading, for OpenAI Codex rollout logs.
+OpenAI Codex rollout logs, in tokens. It has no pricing path: for money on a Codex corpus, use burn.
+
+Takes no flags.
+
+### grok
+
+Grok sessions, in tokens. Reports the cached share, the reasoning tokens and the rollup divergence, and no money: the dollar scale is stated by the vendor and unchecked here.
 
 Takes no flags.
 
@@ -427,4 +434,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-30 commands, 111 flags, read from the binary.
+31 commands, 111 flags, read from the binary.
