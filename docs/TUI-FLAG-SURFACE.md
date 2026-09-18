@@ -32,7 +32,7 @@ a flag is defined in `cmd/replay` and appears in no table here.
 | Plumbing, shown once | 20 | A header line, never interactive. Where it listens, where it writes, what it talks to |
 | Threshold that can fire | 21 | A meter with **four** states: unset, armed, approaching, fired |
 | Posture, on or not covered | 16 | A line saying what is on, and more importantly what it does **not** reach |
-| Scope of the question | 12 | The query line. What this screen is about, and what it excludes |
+| Scope of the question | 13 | The query line. What this screen is about, and what it excludes |
 | Action with a consequence | 16 | A confirmation, with the consequence named before the key |
 
 ## Why a threshold needs four screens, not one
@@ -206,12 +206,13 @@ elsewhere in this file. -->
 | `--share` | `cost` | bool |
 | `--trend` | `probe` | bool |
 
-### Scope of the question (12)
+### Scope of the question (13)
 
 | Flag | Command | Type |
 |---|---|---|
 | `--pooled-at` | `pool` | string |
 | `--candidates` | `probe` | string |
+| `--counterfactual` | `diff` | string |
 | `--dollars` | `main` | bool |
 | `--max` | `probe` | int |
 | `--min` | `probe` | int |

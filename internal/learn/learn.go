@@ -341,9 +341,7 @@ func selectFrom(candidates []Candidate, scores []SessionScore, found int, opts O
 	return res
 }
 
-// judge scores one candidate against the rules that do not depend on
-// other candidates.
-// minMeaningfulShare is the floor below which a simulated saving is treated as
+// MinMeaningfulShare is the floor below which a simulated saving is treated as
 // arithmetic noise rather than evidence, as a share of the session's own scale.
 //
 // Relative, not absolute: savings are in effective tokens, so the same figure
@@ -351,8 +349,14 @@ func selectFrom(candidates []Candidate, scores []SessionScore, found int, opts O
 // hundred million. One part per million is far below anything a person would
 // act on and far above the rounding that makes a policy identical to as-run
 // score a few billionths rather than exactly zero.
-const minMeaningfulShare = 1e-6
+//
+// Exported because the counterfactual claim gate in cmd/replay applies the
+// same floor to the same quantity. One definition, not two: a second copy
+// would drift and the drift would print residue as a saving.
+const MinMeaningfulShare = 1e-6
 
+// judge scores one candidate against the rules that do not depend on
+// other candidates.
 func judge(c Candidate, scores []SessionScore, opts Options) Verdict {
 	v := Verdict{Candidate: c}
 	var train, holdout []float64
@@ -368,7 +372,7 @@ func judge(c Candidate, scores []SessionScore, opts Options) Verdict {
 		if scale <= 0 {
 			scale = float64(s.AsRun.PromptTokens)
 		}
-		if !ok || math.Abs(saving) < minMeaningfulShare*scale {
+		if !ok || math.Abs(saving) < MinMeaningfulShare*scale {
 			continue
 		}
 		v.Estimated = v.Estimated || s.Estimated[c.Name]

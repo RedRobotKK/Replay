@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/learn"
 	"github.com/RedRobotKK/Replay/internal/ledger"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 	"github.com/RedRobotKK/Replay/internal/version"
@@ -329,8 +330,42 @@ func runReport(name string, args []string, stdout, stderr io.Writer, write func(
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	dollars := fs.Bool("dollars", false, "add a list-price cost column (first-party rates, dated price table)")
+	// Registered for diff alone. This flag set is shared by replay, blame and
+	// the default path, and only diff is authorized to make a counterfactual
+	// claim (ADR-0025). Leaving it unregistered elsewhere is what refuses it
+	// there: parseArgs turns any parse failure into errUsage, so
+	// `replay blame --counterfactual …` is a usage error with no code here.
+	var counterfactual *string
+	if name == "diff" {
+		counterfactual = fs.String("counterfactual", "",
+			"score one exact `learn.Catalog()` alternative against this session, session-level only")
+	}
 	if err := parseArgs(fs, args, stdout); err != nil {
 		return err
+	}
+	// The request is validated before a single transcript is opened. An
+	// alternative that is absent or not in the catalog is a defect in the
+	// request, and nothing is read, scored or printed on its account.
+	//
+	// Visit rather than the value: `--counterfactual ""` asked for a
+	// counterfactual and named none, which is the absent case and must be
+	// refused rather than silently ignored.
+	var alternative learn.Candidate
+	wantCounterfactual := false
+	if counterfactual != nil {
+		asked := false
+		fs.Visit(func(f *flag.Flag) {
+			if f.Name == "counterfactual" {
+				asked = true
+			}
+		})
+		if asked {
+			var err error
+			if alternative, err = counterfactualAlternative(*counterfactual); err != nil {
+				return err
+			}
+			wantCounterfactual = true
+		}
 	}
 	if fs.NArg() == 0 {
 		return fmt.Errorf("a transcript file or directory is required: %w", errUsage)
@@ -339,7 +374,40 @@ func runReport(name string, args []string, stdout, stderr io.Writer, write func(
 	if err != nil {
 		return err
 	}
+	// ST-1 drift is a property of a MODEL measured across lanes, so no single
+	// session can answer it and it has to be settled before the first session
+	// prints. `replay learn` settles it the same way at learn.go:62, from the
+	// same analysis.ModelCalibrations and analysis.StaleModels, and this reuses
+	// that rather than keeping a second copy of the staleness rule.
+	//
+	// The corpus is walked twice, and the first walk does hold every lane report
+	// at once, which is the cost forEachSession otherwise avoids. It is paid
+	// only when --counterfactual is asked for, and it is paid because the
+	// alternative is to score against a model the provider has already moved
+	// away from.
+	var drifted map[string]bool
+	if wantCounterfactual {
+		var reports []*analysis.LaneReport
+		if err := forEachSession(files, func(_ string, _ *transcript.Session, rep *analysis.LaneReport, err error) error {
+			if err == nil && rep != nil {
+				reports = append(reports, rep)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		drifted = analysis.StaleModels(analysis.ModelCalibrations(reports))
+	}
+
 	failures, printed := 0, 0
+	// The first counterfactual refusal, kept rather than returned. Returning it
+	// from inside the visitor stops forEachSession, and stopping the walk
+	// deletes the ordinary diff output of every session after it: one session
+	// the corpus cannot support silently took the evidence of the others with
+	// it. CF-1 requires those lanes keep reporting their breaks as they do
+	// today, so the refusal is printed beside its own session and the run's
+	// exit status is settled once every session has been read.
+	var firstRefusal error
 	err = forEachSession(files, func(f string, _ *transcript.Session, rep *analysis.LaneReport, err error) error {
 		if err != nil {
 			failures++
@@ -360,6 +428,24 @@ func runReport(name string, args []string, stdout, stderr io.Writer, write func(
 		if err := write(rep, stdout); err != nil {
 			return fmt.Errorf("write report: %w", err)
 		}
+		if wantCounterfactual {
+			// A session the corpus cannot support is NOT MEASURED for that
+			// session alone. The coverage state that refused it is printed here,
+			// beside the report it belongs to, because CF-4 does not permit
+			// silence and a refusal filed at the end of the run names no
+			// session. The walk continues; the exit code is decided afterwards.
+			if err := writeCounterfactual(rep, alternative, drifted[laneModel(rep)], stdout); err != nil {
+				if !errors.Is(err, errNotMeasured) {
+					return err
+				}
+				if _, werr := fmt.Fprintf(stdout, "%s\n", notMeasuredLine(err)); werr != nil {
+					return fmt.Errorf("write report: %w", werr)
+				}
+				if firstRefusal == nil {
+					firstRefusal = err
+				}
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -375,7 +461,19 @@ func runReport(name string, args []string, stdout, stderr io.Writer, write func(
 			return fmt.Errorf("write report: %w", err)
 		}
 	}
-	return nil
+	// Every session has been read and printed by now, so the status can say the
+	// counterfactual was not established without any of the report going
+	// missing to say it. The first refusal is returned as it stands: it already
+	// names its gate, and summarising several into one sentence would name none.
+	return firstRefusal
+}
+
+// notMeasuredLine renders a refusal for the report, without the sentinel the
+// error carries for the exit code. `%w` of errNotMeasured appends ": NOT
+// MEASURED" to every message, which is how exitCode recognises it and is noise
+// on a line that already opens with "NOT MEASURED:".
+func notMeasuredLine(err error) string {
+	return strings.TrimSuffix(err.Error(), ": "+errNotMeasured.Error())
 }
 
 // describeResult names, in the reader's terms, what the command just handed

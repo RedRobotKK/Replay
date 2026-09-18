@@ -632,6 +632,49 @@ responsible.
 Points at the exact turn where the cached prefix diverged, and classifies why. Use it when `replay`
 reports cache breaks and you want to know what broke them.
 
+Add `--counterfactual <alternative>` to ask what one layout alternative would have done to the same
+session. The alternative must be one of the six names this build scores, spelled exactly:
+`ttl-5m`, `ttl-1h`, and `context-edit(keep=6,trigger=N)` for N of 50000, 100000, 200000 or 400000.
+Nothing is aliased, nothing is case-folded, and there is no default: asking for a counterfactual
+without naming one is a usage error, because the tool does not choose the comparison for you.
+
+```sh
+replay diff --counterfactual ttl-1h ~/.claude/projects/your-project/
+```
+
+**The figure is for the session lane, not for any one break.** The breaks are still listed above it
+and none of them carries a saving, because nothing observable says how to divide a lane's figure
+between the events inside it. The line names the population it covers, the date it was read and the
+build that read it, and the report's `Assumption:` line states the condition the whole figure rests
+on: that the agent would have behaved identically under the alternative layout.
+
+**The dollar figure is prompt-side.** A layout alternative changes what is sent, not what the model
+writes back, so the money is the difference in prompt cost and the output leg is left out of it
+entirely. A figure scaled against the whole bill would charge the alternative for tokens it never
+touched; on the corpus this page was written against, output is 43.6% of the cost. It is a
+mechanical cost difference on a session already paid for, not a forecast and not observed spend: the
+comparison was never run, and the arithmetic holds only while the assumption above does.
+
+An alternative that would have cost more says so, in those words. Nothing is clamped to zero and an
+adverse result is not softened.
+
+When the session cannot support the comparison, the tool says so and exits 4 rather than printing a
+number. Calibration below the threshold, no lane to score, and a difference smaller than the
+replay's own arithmetic noise are each reported by name. That is a different outcome from a
+malformed request, which exits 1 without reading anything.
+
+A session that cannot be compared says so in its own place and takes nothing with it. The ordinary
+diff for every other session in the directory is printed exactly as it would have been without the
+flag, and the run still exits 4 to say the comparison was not established.
+
+Two things stop the comparison that are worth knowing about in advance. If the provider's behaviour
+changed for the model partway through the sessions you pointed at, alternatives are not scored for
+that model at all, even for the individual sessions that still calibrate, which is the same rule
+`replay learn` applies. And if any request in the lane ran on a model no rules document carries, the
+tokens are still reported and the dollars are not: the token share covers the whole lane while the
+price covers only part of it, so multiplying the two would charge a change to requests that were
+never priced.
+
 ### `replay corpus <dir>`
 
 Produces a calibration summary across every session in a directory, as Markdown, with no paths, no
