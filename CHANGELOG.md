@@ -4,6 +4,31 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- **A Codex session that re-emitted a turn was billed for it twice.** Codex
+  repeats an `event_msg/token_count` carrying a turn it has already reported:
+  `last_token_usage` byte-identical, `total_token_usage` standing still. The
+  session's own cumulative counter says no new spend happened, and the reader
+  added the delta anyway. Measured across 176 rollout files on 2026-09-17:
+  1,860 re-emissions concentrated in three long sessions, the worst summing
+  392,199,759 tokens against a final cumulative of 198,661,781, a 1.97x
+  over-report. Billing is now gated on the cumulative having advanced, and the
+  corpus went from three conservation failures to none, reconciling every
+  session to its own cumulative exactly.
+  The test is the cumulative, never the delta. Two genuine turns can carry
+  identical numbers and both are billed; what marks a re-emission is that
+  nothing moved. A refused re-emission increments `Skipped` rather than
+  vanishing, because a future Codex that stopped advancing its cumulative would
+  otherwise erase every turn in a session and report nothing unusual. Mutation
+  testing caught that one: deleting the counter left every other test green.
+  This does not touch `Rebased`, which still matches a `payload.type` of
+  `context_compacted` that appears nowhere in this corpus. Wiring it to the
+  top-level `compacted` record was considered and rejected on evidence: those
+  ten sessions do not rebase their cumulative and satisfy the conservation law
+  exactly once duplicates are removed, so connecting it would suspend the law
+  on sessions that currently pass it.
+
 ## [0.6.0] - 2026-09-13
 
 ### Fixed

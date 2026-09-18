@@ -96,6 +96,12 @@ type CodexSession struct {
 	// prevShare carries the previous turn's cached share so a collapse can be
 	// seen. Unexported: it is scaffolding for the walk, not a result.
 	prevShare float64
+	// prevTotal carries the previous record's raw cumulative so a re-emission
+	// of a turn already billed can be told from a new turn. Scaffolding, like
+	// prevShare. seenTotal distinguishes "no cumulative yet" from a cumulative
+	// of zero, which the opening quota-only event makes a real state.
+	prevTotal int
+	seenTotal bool
 	line      int
 	// Skipped counts records this reader refused. Non-zero is not an error,
 	// but it is reported, because a format change must not pass silently.
@@ -300,10 +306,36 @@ func (s *CodexSession) event(p codexPayload) {
 		if p.Info.ContextWindow > 0 {
 			s.ContextWindow = p.Info.ContextWindow
 		}
+		// A re-emission is not a turn.
+		//
+		// Codex repeats a token_count carrying a turn it has already reported:
+		// `last_token_usage` byte-identical, `total_token_usage` standing
+		// still. The session's own cumulative says no new spend happened, and
+		// billing the delta again doubles the turn. Measured across 176 rollout
+		// files on 2026-09-17: 1,860 re-emissions in three long sessions, the
+		// worst summing 392,199,759 against a cumulative of 198,661,781.
+		//
+		// The test is the cumulative, never the delta. Two genuine turns can
+		// carry identical numbers, and both are billed; what marks a
+		// re-emission is that nothing moved.
+		advanced := true
+		if p.Info.Total != nil && s.seenTotal {
+			advanced = p.Info.Total.Total != s.prevTotal
+		}
+		if p.Info.Total != nil {
+			s.prevTotal, s.seenTotal = p.Info.Total.Total, true
+		}
 		if u, ok := p.Info.Last.usage(); ok {
-			s.Billed.add(u)
-			s.Turns++
-			s.observeCache(u)
+			if advanced {
+				s.Billed.add(u)
+				s.Turns++
+				s.observeCache(u)
+			} else {
+				// Counted, not silent. A format change that stopped advancing
+				// the cumulative would otherwise erase every turn without a
+				// word, which is the failure this reader exists to avoid.
+				s.Skipped++
+			}
 		} else if p.Info.Last != nil {
 			s.Skipped++
 		}
