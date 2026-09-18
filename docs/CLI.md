@@ -234,6 +234,8 @@ What each agent surface burned: Codex, Ollama, Claude Code.
 
 | Flag | Type | What it does |
 |---|---|---|
+| `-contribute` | string | build a corpus submission for this campaign from the Codex surface; writes a file, sends nothing |
+| `-contribute-dir` | string | write the submission here instead of the working directory |
 | `-dir` | string | read surfaces from this directory instead of the machine's own |
 
 ### agents
@@ -434,4 +436,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-31 commands, 111 flags, read from the binary.
+31 commands, 113 flags, read from the binary.
