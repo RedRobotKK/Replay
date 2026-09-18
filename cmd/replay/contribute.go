@@ -275,7 +275,10 @@ func contributeCorpus(campaign, dir string, f corpusFigures, now time.Time) (str
 		// one day under one rules label, because the code changed and the
 		// label could not.
 		BinaryVersion: version.Version,
-		Commit:        version.Commit,
+		// Not version.Commit: its default is the literal "unknown", which
+		// omitempty cannot elide, so an unstamped build submitted a commit it
+		// did not have and production refused it with a 400.
+		Commit:        version.KnownCommit(version.Commit),
 		PricingDigest: cachemodel.PricingDigest(),
 	}.Digested()
 	// No `dir == ""` default here, and its absence is deliberate: filepath.Join

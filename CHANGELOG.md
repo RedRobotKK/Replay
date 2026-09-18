@@ -28,6 +28,43 @@ All notable changes to this project are documented here. The format follows [Kee
   ten sessions do not rebase their cumulative and satisfy the conservation law
   exactly once duplicates are removed, so connecting it would suspend the law
   on sessions that currently pass it.
+- **The advertised `go install` path produced a binary that reported `dev` and
+  could not contribute.** `go install github.com/RedRobotKK/Replay/cmd/replay@latest`
+  builds from the module proxy, where the user has no place to pass `-ldflags`,
+  so the Makefile's `-X .../version.Version=` never ran. Measured against
+  v0.6.0 on 2026-09-17: the installed binary printed
+  `replay dev (unknown, built unknown)` while its own BuildInfo carried
+  `mod github.com/RedRobotKK/Replay v0.6.0` the whole time. `internal/version`
+  now reads `debug.ReadBuildInfo()` when `Version` is still its literal default
+  and takes `Main.Version` from it. An `-ldflags` value is never second-guessed.
+  A source build is told apart by `vcs.revision`, not by the shape of its
+  version string: Go 1.27 gives a working-tree build a pseudo-version, so a
+  first attempt made `go build ./cmd/replay` report a release identity and
+  pushed `buildNotice` off its from-source branch. A module-proxy install
+  carries no vcs settings at all, and the test pins that fact rather than the
+  formatting.
+- **A build that did not know its commit submitted one anyway.**
+  `version.Commit` defaults to the literal `"unknown"`, which is not empty, so
+  the `omitempty` on `observation.Corpus.Commit` never elided it and an
+  unstamped build sent a provenance claim it had never checked. Production
+  refused it with a 400 on 2026-09-15
+  ([evidence](docs/evidence/contribution-path-2026-09-15.md)). The endpoint is
+  right and is unchanged: `commit` is optional there and shaped
+  `[0-9a-f]{7,40}`, so an absent field is accepted and `"unknown"` is not.
+  `version.KnownCommit` translates the sentinel and the empty string to `""`
+  and returns everything else byte for byte. It does not lower-case, truncate,
+  pad or otherwise repair a value, because normalising would invent provenance
+  and refusing would move a validation the server already owns. `Corpus.Digested`
+  marshals the struct, so `omitempty` governs the digest bytes and the wire
+  bytes identically, and a test pins that a commitless payload digests
+  differently from one carrying the sentinel.
+  This does not make `go install ...@latest` carry a commit. A module-proxy
+  build genuinely has none: no `vcs.revision`, no `vcs.time`, no
+  `vcs.modified`. No provenance field was added, no version is mapped to a SHA,
+  and no module checksum is treated as a commit. `cmd/replay/budget.go` still
+  passes `version.Commit` into its local build-gate artefact, which is a
+  different contract and is deliberately unchanged. Production acceptance
+  remains unproven: the only 201 on record was against a local database.
 
 ## [0.6.0] - 2026-09-13
 
