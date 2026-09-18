@@ -193,6 +193,28 @@ type corpusFigures struct {
 	CacheBreaks *int
 	ReReads     *int
 	ErrorShare  *float64
+
+	// Which surface these figures came from, and how many records named each
+	// model. Both optional, and absent rather than empty when nothing was
+	// measured: Digested marshals the struct, so an empty container present in
+	// the bytes would change the digest of every submission written before
+	// these existed.
+	//
+	// They exist because rulesVersion names the PRICE DOCUMENT in effect and
+	// not the run. Two corpora priced by the same document can be a Claude Code
+	// machine and a Codex machine, and a pool that cannot tell them apart
+	// cannot answer the question the pool is for.
+	Surfaces []string
+	Models   map[string]int
+
+	// Unreadable is the sessions that could not be parsed at all.
+	//
+	// Not part of the wire payload: it is reported to the contributor so they
+	// can see the corpus was not clean before they post it. A figure published
+	// from a corpus with unreadable members is a weaker measurement wearing a
+	// stronger one's confidence, and the person deciding whether to post it is
+	// the one who should know.
+	Unreadable int
 }
 
 // contributeCorpus builds a corpus submission from the figures the cost report
@@ -213,6 +235,35 @@ type corpusFigures struct {
 // that it supersedes — see EarlierSubmissions for why the contributor has to be
 // told about those before they attach anything anywhere.
 func contributeCorpus(campaign, dir string, f corpusFigures, now time.Time) (string, []string, error) {
+	// A share above 1 is not a fraction, and this refuses to pool one.
+	//
+	// RebilledShare is RebilledUSD over TotalUSD, and the two are not on the
+	// same price scale: the numerator prices a break's deficit at the full base
+	// input rate while the denominator is what was actually spent, which on a
+	// well-cached session is mostly cache reads at a tenth of that rate, or a
+	// fortieth on Fable 5.1 and Mythos 5.1. A long session that cached well and
+	// broke badly therefore exceeds 1. Measured at 1.504 on a real four-day
+	// session with 17 TTL expiries, 2026-09-17.
+	//
+	// Refusing rather than clamping, because clamping would publish 100% for a
+	// session whose real figure is unknown, and a wrong number that looks
+	// plausible is the failure this project exists to stop. Refusing rather
+	// than shipping it, because internal/card renders this field as a
+	// percentage onto a shareable image and `replay pool` sums it into a public
+	// roster, so one such value misstates the pooled figure for everybody.
+	//
+	// The fix is to decide which price scale the numerator should use, which
+	// changes published figures and is not a decision to take inside a guard.
+	if f.RebilledShare > 1 || f.RebilledShare < 0 {
+		return "", nil, fmt.Errorf(
+			"refusing to build a submission: rebilledShare is %.3f, and a share of spend is between 0 and 1.\n"+
+				"The re-billed total is priced at the full input rate while the spend it is divided by is\n"+
+				"mostly cache reads at a tenth of that rate, so the ratio is not a fraction on this corpus.\n"+
+				"Nothing was written. The figures on your screen are unaffected; it is the pooled share that\n"+
+				"cannot be defended, and a pool that took it would misstate the figure for everybody: %w",
+			f.RebilledShare, errUsage)
+	}
+
 	// Opt-in only, and every one of these three branches is a refusal.
 	//
 	// consent.readDecision returns Granted for exactly one thing: a file
@@ -269,13 +320,19 @@ func contributeCorpus(campaign, dir string, f corpusFigures, now time.Time) (str
 		SourceTag:    tag.Value,
 		TagBasis:     tag.Basis,
 
+		// Nil stays nil. A caller that measured nothing passes nothing, and the
+		// field is absent from the bytes rather than present and empty, which
+		// is what keeps every submission written before these existed poolable.
+		Surfaces: f.Surfaces,
+		Models:   f.Models,
+
 		// Which binary, and which numbers it priced with (#284). RulesVersion
 		// above names the provider's document and is not enough on its own:
 		// two builds reported $4,088.49 and $11,969.37 for one directory on
 		// one day under one rules label, because the code changed and the
 		// label could not.
 		BinaryVersion: version.Version,
-		Commit:        version.Commit,
+		Commit:        version.KnownCommit(version.Commit),
 		PricingDigest: cachemodel.PricingDigest(),
 	}.Digested()
 	// No `dir == ""` default here, and its absence is deliberate: filepath.Join

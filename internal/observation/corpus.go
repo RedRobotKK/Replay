@@ -169,6 +169,34 @@ type Corpus struct {
 	Commit        string `json:"commit,omitempty"`
 	PricingDigest string `json:"pricingDigest,omitempty"`
 
+	// Which surface was read, and which models ran on it.
+	//
+	// Without these a pool is one undifferentiated figure. Every row carried
+	// spend, cache counts and which build did the arithmetic, and nothing that
+	// said whether the corpus came from Claude Code or from Codex, so "what
+	// does Astra cost against what Fable costs" could not be asked of a
+	// hundred contributions any more than of one. That is the question this
+	// tool exists to answer across machines, and the payload could not carry
+	// it.
+	//
+	// Surfaces is sorted and Models is a map, both so that one corpus has one
+	// serialisation. encoding/json sorts map keys, so the histogram hashes the
+	// same whatever order it was built in, and the receiver sorts before
+	// hashing rather than trusting the order bytes arrived in.
+	//
+	// OPTIONAL, for the reason given above for the three provenance fields:
+	// Digested marshals this struct, so a field that serialised when absent
+	// would change the digest of every submission written before today and
+	// orphan every roster entry that names one. Absent means a build from
+	// before these existed, which is a fact a pool can act on. The schema
+	// string does not move, because this is additive.
+	//
+	// Models carries a count per model id and nothing else. A model id is a
+	// published product name, not a path, a prompt or a project, and the count
+	// is how many records named it. Neither says anything about the work.
+	Surfaces []string       `json:"surfaces,omitempty"`
+	Models   map[string]int `json:"models,omitempty"`
+
 	// Digest names this submission by its content, so a pooled figure can list
 	// what it is made of and a reader can check that the file they downloaded
 	// is the one that was counted.

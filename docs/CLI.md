@@ -17,7 +17,7 @@ reach the network, and does it write. Both are answered per command below, and
 summarised here.
 
 **Opens no socket and writes nothing** — safe to run at will:
-`ceiling`, `diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `mcp`, `statusline`, `redact`, `version`, `prefix`, `budget`, `pool`.
+`ceiling`, `diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `grok`, `mcp`, `statusline`, `redact`, `version`, `prefix`, `budget`, `pool`.
 
 **Leaves the machine:** `serve` proxies every request to the provider.
 `probe --execute` sends billable requests, and without `--execute` it prints a
@@ -51,7 +51,8 @@ to test whether `~/.replay` is writable.
 | [`replay`](#replay) | Reproduce caching, then score alternative layouts | none | none |
 | [`route`](#route) | What switching models would change, structurally | none | none |
 | [`trim`](#trim) | What a byte cap on tool output would have saved, and cost | none | none |
-| [`codex`](#codex) | The same reading, for OpenAI Codex rollout logs | none | none |
+| [`codex`](#codex) | OpenAI Codex rollout logs, in tokens. It has no pricing path: for money on a Codex corpus, use burn | none | none |
+| [`grok`](#grok) | Grok sessions, in tokens. Reports the cached share, the reasoning tokens and the rollup divergence, and no money: the dollar scale is stated by the vendor and unchecked here | none | none |
 | [`burn`](#burn) | What each agent surface burned: Codex, Ollama, Claude Code | loopback: Ollama's version endpoint | none |
 | [`agents`](#agents) | A boot block naming where this project keeps its records | none | with --write, splices into the named file |
 | [`mcp`](#mcp) | Answer an agent's questions mid-session, JSON-RPC on stdio | none | none |
@@ -160,7 +161,7 @@ Local proxy: forwards to the provider, records a ledger.
 | `-revert-after` | int | how many sessions must breach the guardrail before the policy is reverted (default 2) |
 | `-token` | string | require this value in the x-replay-token header (or set REPLAY_TOKEN) |
 | `-trial-share` | float | share of new sessions that get the policy from -policy-file; the rest run as controls (stable per session id) (default 1) |
-| `-upstream` | string | provider base URL. The default is Anthropic, whose /v1/messages is the only shape this build masks. Pointing this at an OpenAI-compatible provider routes /v1/chat/completions, which is EXPERIMENTAL, UNMASKED: -mask cannot read that body shape, so an API key in one of those requests reaches the provider in clear, and the path is verified against DeepSeek and a local Ollama only (default "`https://api.anthropic.com`") |
+| `-upstream` | string | provider base URL. The default is Anthropic. -mask reads /v1/messages and also masks /v1/responses, the path GPT-6 Astra speaks, though that path is forwarded unread: no ledger record, no spend cap, no usage. Pointing this at an OpenAI-compatible provider routes /v1/chat/completions, which is read and guarded but EXPERIMENTAL, UNMASKED: -mask cannot read that body shape, so an API key in one of those requests reaches the provider in clear, and the path is verified against DeepSeek and a local Ollama only (default "`https://api.anthropic.com`") |
 
 ### tui
 
@@ -217,7 +218,13 @@ What a byte cap on tool output would have saved, and cost.
 
 ### codex
 
-The same reading, for OpenAI Codex rollout logs.
+OpenAI Codex rollout logs, in tokens. It has no pricing path: for money on a Codex corpus, use burn.
+
+Takes no flags.
+
+### grok
+
+Grok sessions, in tokens. Reports the cached share, the reasoning tokens and the rollup divergence, and no money: the dollar scale is stated by the vendor and unchecked here.
 
 Takes no flags.
 
@@ -227,6 +234,8 @@ What each agent surface burned: Codex, Ollama, Claude Code.
 
 | Flag | Type | What it does |
 |---|---|---|
+| `-contribute` | string | build a corpus submission for this campaign from the Codex surface; writes a file, sends nothing |
+| `-contribute-dir` | string | write the submission here instead of the working directory |
 | `-dir` | string | read surfaces from this directory instead of the machine's own |
 
 ### agents
@@ -427,4 +436,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-30 commands, 111 flags, read from the binary.
+31 commands, 113 flags, read from the binary.

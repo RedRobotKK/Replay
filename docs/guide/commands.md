@@ -1247,8 +1247,10 @@ author.
 
 ### `replay codex`
 
-The same reading, for OpenAI Codex rollout logs rather than Claude Code transcripts. Takes
-directories; with no argument it looks where Codex writes by default.
+OpenAI Codex rollout logs rather than Claude Code transcripts, and not the same reading. The Claude
+Code path reports dollars; this one prints tokens and nothing else, because it has no pricing path.
+For money on a Codex corpus, run `replay burn`. Takes directories; with no argument it looks where
+Codex writes by default.
 
 Codex reports cache differently and the difference is not cosmetic. `cached_input_tokens` is a
 **subset** of `input_tokens`, where Anthropic's `input_tokens` counts only what follows the last
@@ -1259,9 +1261,65 @@ disagree by design after a compaction and only one of them is a bill.
 The reader keeps billed and reported figures apart for that reason, and refuses a total it was
 given without a breakdown rather than presenting a sum it cannot defend.
 
+## Every surface this build knows about
+
+Replay detects seven agent surfaces on a machine. Reading one is not the same as
+pricing it, and being unable to price one is not the same as ignoring it: a
+surface named here with no price has been looked at, and the reason is the row.
+
+| Surface | Where it keeps records | Read by | Priced |
+|---|---|---|---|
+| Claude Code | `~/.claude/projects` | `cost`, `diff`, `advise`, `context`, `blame`, `route`, `trim`, `ceiling`, the TUI | yes, compiled in |
+| OpenAI Codex | `~/.codex/sessions`, `~/.codex/archived_sessions` | `replay codex`, `replay burn` | after installing a rules document |
+| Grok | `~/.grok/sessions` | `replay grok`, `replay burn` | no: the vendor states a tick scale nothing here has checked |
+| Ollama | `~/.ollama/logs` | `replay burn` | no bill exists: it runs locally |
+| Cursor | `~/.cursor` | not read | no: every `tokenCount` in its state is zero, and its agent transcripts carry no usage field at all |
+| OpenClaw | `~/.openclaw/agents/*/sessions` | not read | no: every `cacheWrite` counter is zero beside `cacheRead` counters on the same rows that are not |
+| AnythingLLM | its workspace database | not read | no: its metrics object has no cache field, so a cached read cannot be told from a full-price one |
+| Oracle | `~/.oracle/sessions` | not read | no: no cache field of any kind, and on the one session here with usage the `totalTokens` is 6 against an `inputTokens` of 4256 |
+
+Two of those rows describe a surface whose own numbers disagree with themselves.
+They are listed rather than dropped because a reader whose data was seen and
+found unusable is owed the specific reason, and because a surface that starts
+reporting a cache field later becomes readable without anyone rediscovering it.
+
+`internal/regression` and `cmd/replay` hold this table to the binary: a surface
+the code detects and this list never names fails the suite, as does a surface
+whose two registries disagree about whether a reader exists.
+
+### `replay grok`
+
+Grok sessions rather than Claude Code transcripts, and like `replay codex` it prints tokens and
+never dollars. Takes directories; with no argument it looks where Grok writes by default, which is
+one directory per session under `~/.grok/sessions` named for the working directory the session ran
+in, two levels down rather than one.
+
+**Grok counts inclusively, the way OpenAI does and Anthropic does not.** `cachedReadTokens` is a
+subset of `inputTokens`, so `inputTokens + outputTokens` equals `totalTokens` and the cached share
+is already inside the prompt. On the corpus this was written against that held for every usage
+record carrying both figures. A reader that copied `inputTokens` into a fresh-token field would
+double-count every cached token, and the error would be largest on the sessions that cache best.
+The reader converts through the same path OpenAI uses and refuses a record whose parts do not add
+up to its prompt.
+
+Three things it reports that most readers discard:
+
+- **The cached share, as a share of the whole prompt.** Dividing by the fresh remainder instead
+  puts a well-cached turn above 100%.
+- **Reasoning tokens.** The record states them. They are replayed as input when the block is sent
+  back, so they are not free.
+- **The rollup divergence.** A parent session's `usage.json` absorbs sub-agent sessions that are
+  also on disk in their own right. The figures here sum the turns once per session; summing
+  `usage.json` instead would count that work twice.
+
+**It prints no money, and says why.** Grok states `costUsdTicks` on every record, and its own
+client documentation states the scale. Nothing here has checked that statement against a statement
+of account, so this build derives no dollar figure from it. Installing a rules document would not
+close the gap either: what is missing is the check, not a rate table.
+
 ### `replay burn`
 
-What each agent surface on this machine is consuming: Codex, Ollama and Claude Code, side by side.
+What each agent surface on this machine is consuming: Codex, Grok, Ollama and Claude Code, side by side.
 
 | Flag | What it does |
 |------|--------------|

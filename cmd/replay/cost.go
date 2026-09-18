@@ -813,6 +813,12 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			MedianTaskUSD: s.MedianUSD,
 			CacheBreaks:   &breaks,
 			ReReads:       &repeated,
+			// This command reads Claude Code transcripts and nothing else, so
+			// the surface is not a guess. A pool that knows only rulesVersion
+			// knows the price document and not the run, and two corpora priced
+			// by one document can be two different vendors.
+			Surfaces: []string{"claude-code"},
+			Models:   modelHistogram(units),
 		}
 		f.ErrorShare = errorShare(errored, requests)
 		p, old, err := contributeCorpus(*contributeTo, *contributeDir, f, time.Now())
@@ -1104,4 +1110,54 @@ func unpricedClause(n int) string {
 		return "1 was read but its model is not in the price table."
 	}
 	return fmt.Sprintf("%d were read but their models are not in the price table.", n)
+}
+
+// modelHistogram counts the units that ran on each model.
+//
+// The receiver takes at most 24 entries, so a corpus with a longer tail is
+// truncated to the busiest, and the tail is dropped rather than folded into an
+// "other" bucket: a bucket named "other" is a model id that is not one, and the
+// pool would have to special-case it forever.
+//
+// A unit with no model id is skipped rather than counted under "". An empty
+// model is a record whose model was not measured, and counting it as a model
+// would publish a count for a thing nobody ran.
+func modelHistogram(units []costUnit) map[string]int {
+	const maxModels = 24
+	counts := map[string]int{}
+	for _, u := range units {
+		if strings.TrimSpace(u.Model) == "" {
+			continue
+		}
+		counts[u.Model]++
+	}
+	if len(counts) == 0 {
+		// Absent, not empty. An empty map would serialise as {} and change the
+		// digest of every submission written before this field existed.
+		return nil
+	}
+	if len(counts) <= maxModels {
+		return counts
+	}
+	type row struct {
+		model string
+		n     int
+	}
+	rows := make([]row, 0, len(counts))
+	for m, n := range counts {
+		rows = append(rows, row{m, n})
+	}
+	// Count descending, then model ascending, so the truncation is the same on
+	// two machines with the same corpus rather than whatever the map yielded.
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].n != rows[j].n {
+			return rows[i].n > rows[j].n
+		}
+		return rows[i].model < rows[j].model
+	})
+	out := make(map[string]int, maxModels)
+	for _, r := range rows[:maxModels] {
+		out[r.model] = r.n
+	}
+	return out
 }

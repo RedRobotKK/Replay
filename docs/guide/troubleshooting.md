@@ -12,6 +12,27 @@ project rather than at the parent.
 If `doctor` reports no transcript directory at all, your agent may write them somewhere else, or may
 not write them. Replay reads what already exists; it does not ask the agent for anything.
 
+## I run OpenAI Codex and every command comes back empty
+
+That is the designed answer rather than a fault. `cost`, `diff`, `advise`, `trim`, `route`,
+`ceiling` and the TUI read Claude Code transcripts only, so on a Codex corpus they return empty
+instead of a wrong number. Two commands read OpenAI Codex rollouts:
+
+```sh
+replay codex                       # what the rollouts moved, in tokens
+replay burn                        # Codex, Ollama and Claude Code side by side, with the money
+```
+
+With no argument `replay codex` looks in `~/.codex/sessions` and `~/.codex/archived_sessions`. It
+prints tokens and never dollars, because it has no pricing path; for money on a Codex corpus the
+command is `replay burn`.
+
+If the figures come back unpriced, the price table compiled into the binary is Anthropic only.
+`replay rules --update docs/rules/openai-2026-09-15.json` prices `gpt-6-astra`, `gpt-5.6-terra`,
+`gpt-5.4` and `gpt-5.4-mini`, and replaces the table in effect rather than merging into it, so no
+Anthropic model is priced while it is installed. `gpt-5.1-codex-mini` has no published rate at all
+and cannot be priced by any document.
+
 ## `doctor` and `cost` report different transcript counts
 
 They are counting different things, and both are right. Claude Code writes one transcript per session

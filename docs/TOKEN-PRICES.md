@@ -23,15 +23,21 @@ reports dollars is hand-maintained or scraped, and every one of them goes stale 
 
 **Cross-checked against Replay's hand-maintained table, and every row agrees:**
 
-| Model | Replay, in/out per M | Live source | Agree |
-|---|---:|---:|:---:|
-| claude-fable-5.1 | 10 / 50 | 10 / 50 | yes |
-| claude-opus-5 | 5 / 25 | 5 / 25 | yes |
-| claude-sonnet-5 | 2 / 10 | 2 / 10 | yes |
-| claude-haiku-4.5 | 1 / 5 | 1 / 5 | yes |
+| Model | Replay, in/out per M | Replay, cache read | Live source, in/out | Agree |
+|---|---:|---:|---:|:---:|
+| claude-fable-5.1 | 10 / 50 | 0.025x | 10 / 50 | yes |
+| claude-opus-5 | 5 / 25 | 0.10x | 5 / 25 | yes |
+| claude-sonnet-5 | 2 / 10 | 0.10x | 2 / 10 | yes |
+| claude-haiku-4.5 | 1 / 5 | 0.10x | 1 / 5 | yes |
 
-So the table is currently correct. **It is dated `2026-06-24`, which is 72 days ago, and nothing in
-the tool notices when it stops being correct.**
+**Cache read is 0.10x of input for every model except two.** Anthropic's Fable 5.1 and Mythos 5.1
+read cache at 0.025x. A tool that applies one multiplier to every row overstates the cache read on
+those two by a factor of four, which is why the column is in the table rather than in a constant.
+
+So the table is currently correct. **It is dated `2026-06-24`, and nothing in the tool notices when
+it stops being correct.** Age is what rots, not the date: that table was 85 days old on 2026-09-17.
+Read the age off `replay doctor`, which computes it against today's date, rather than off a number
+written into this file.
 
 ## The bug this exposes, and it defeats exactly the feature you described
 
@@ -41,6 +47,13 @@ know**, and the flag help says so plainly: *"models not in the price table count
 So **"keep my budget under $20" silently stops working** for:
 
 - Any model released after 2026-06-24.
+- **Every OpenAI model.** The compiled table is Anthropic only, so on an OpenAI Codex corpus the cap
+  fails open across the board: `gpt-6-astra`, `gpt-5.6-terra`, `gpt-5.4` and `gpt-5.4-mini` all
+  count as free until you install `docs/rules/openai-2026-09-15.json` with `replay rules --update`.
+  Installing a rules document replaces the table in effect rather than merging into it, so while
+  that one is in effect the Anthropic rows are the unpriced ones.
+- **`gpt-5.1-codex-mini`, which cannot be priced at all.** It is the most common model on a real
+  Codex machine and OpenAI publishes no rate for it, so no rules document fixes this one.
 - `opus-4-5`, and bare `sonnet`, `opus-4` and `haiku`, all carried in the table with `priced: false`.
 
 **The failure direction is the worst available.** An unknown model is usually a *new* model, new
@@ -64,7 +77,8 @@ OpenRouter or LiteLLM, it belongs in **CI, as a pull request that bumps the tabl
 a human reading the diff. That also gives the staleness a visible owner.
 
 **4. Say the table is stale when it is.** `doctor` knows today's date and the table's date. **A price
-table 72 days old should say so** next to every dollar figure it produces.
+table this far past its date should say so** next to every dollar figure it produces, with the age
+computed at run time rather than written down.
 
 ## The honest framing for "keep my budget under $20"
 

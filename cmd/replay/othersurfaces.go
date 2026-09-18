@@ -106,7 +106,26 @@ func knownSurfaces(home string) []otherSurface {
 			// thing that fails. The zero cacheCreationTokens is what would fail
 			// second, and the sentence carries both so that nobody writes the
 			// reader expecting a bill at the end of it.
-			why: "Replay cannot read Grok yet: its per-turn usage sits in ~/.grok/sessions/*/*/updates.jsonl with cachedReadTokens and a per-model breakdown that this build has no reader for, and the cacheCreationTokens counter beside them is zero on every record",
+			// A reader shipped 2026-09-17. This carried a "cannot read Grok
+			// yet" refusal for a day after that, which is a false sentence in
+			// the tool's own voice printed to a user whose data it had just
+			// read. TestSI1 now fails when this registry and discover.go
+			// disagree about whether a surface has a reader.
+			//
+			// The cacheCreationTokens counter is still zero on every record,
+			// so the write half of the surface remains unmeasured. That is a
+			// gap in what the surface reports, not a reason the surface cannot
+			// be read, and `replay grok` says so where the number would go.
+			cmd: "replay grok",
+			// Readable, and still not priceable, which are two different
+			// sentences and this one is the second. `replay grok` reads the
+			// per-turn usage out of ~/.grok/sessions/*/*/updates.jsonl; what it
+			// cannot do is turn it into money. The cacheCreationTokens counter
+			// sits beside cachedReadTokens on every record and is zero on all
+			// of them, so the write half of the cache is unmeasured rather than
+			// absent, and the vendor's own tick scale has not been checked
+			// against a statement of account.
+			why: "Replay reads Grok with `replay grok` and cannot price it: per-turn usage is in ~/.grok/sessions/*/*/updates.jsonl with cachedReadTokens, and the cacheCreationTokens counter beside them is zero on every record, so the write half of the cache is unmeasured",
 		},
 		{
 			name: "Cursor",

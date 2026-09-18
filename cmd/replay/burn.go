@@ -112,6 +112,9 @@ func pricingNotes(surfaces []surfaceBurn) []string {
 		"  carry rows for any provider - each row names its own - and none are",
 		"  installed for these. Their spend is real and is not in any figure above.",
 		"    next: replay rules --update <file|https URL>",
+		"          OpenAI rows ship in the repository at docs/rules/openai-2026-09-15.json.",
+		"          Installing a document REPLACES the one in effect rather than merging,",
+		"          so a document naming only one provider un-prices the others.",
 	}
 	// Only worth saying when there is something to compare against. With one
 	// priced surface and one unpriced, the column is a ranking of one.
@@ -212,6 +215,8 @@ func runBurn(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("burn", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	dir := fs.String("dir", "", "read surfaces from this directory instead of the machine's own")
+	contributeTo := fs.String("contribute", "", "build a corpus submission for this campaign from the Codex surface; writes a file, sends nothing")
+	contributeDir := fs.String("contribute-dir", "", "write the submission here instead of the working directory")
 	if err := parseArgs(fs, args, stdout); err != nil {
 		return err
 	}
@@ -228,8 +233,38 @@ func runBurn(args []string, stdout, stderr io.Writer) error {
 	}
 
 	home, _ := os.UserHomeDir()
+
+	// Contributing reads ONE surface, and says so rather than implying the
+	// report above it. The table compares surfaces that do not count the same
+	// thing, which is exactly why it prints no cross-surface total; a
+	// submission built from that table would be the total the table refuses to
+	// print, wearing a schema.
+	//
+	// Codex only, and not because the others are less interesting. Ollama has
+	// no bill to pool. Grok states a cost figure whose scale nobody here has
+	// checked against a statement of account, and a pooled dollar derived from
+	// an unchecked scale is worse than no row at all. Claude Code contributes
+	// through `replay cost --contribute`, which reads lanes rather than
+	// sessions and would otherwise pool two different units under one count.
+	if *contributeTo != "" {
+		f, err := codexContribution(home, *dir)
+		if err != nil {
+			return err
+		}
+		path, old, err := contributeCorpus(*contributeTo, *contributeDir, f, time.Now())
+		if err != nil {
+			return err
+		}
+		writeCodexContributionNote(stdout, path, old, f)
+		return nil
+	}
+
 	var surfaces []surfaceBurn
 	surfaces = append(surfaces, burnCodex(home, *dir))
+	// Grok sits beside Codex because it counts the way Codex does: the cached
+	// share is nested inside the prompt figure rather than partitioned out of
+	// it. Its cost column is empty and stays empty: see burnGrok.
+	surfaces = append(surfaces, burnGrok(home, *dir))
 	surfaces = append(surfaces, burnOllama(home, *dir))
 	surfaces = append(surfaces, burnClaudeCode(home, *dir))
 
@@ -250,9 +285,9 @@ func runBurn(args []string, stdout, stderr io.Writer) error {
 	}
 
 	_, _ = fmt.Fprintf(stdout, "\n  The token columns are not addable. Anthropic reports the prompt with the\n")
-	_, _ = fmt.Fprintf(stdout, "  cached share partitioned out of it, Codex reports it nested inside, and\n")
-	_, _ = fmt.Fprintf(stdout, "  Ollama reports the work it performed with the cached prefix excluded\n")
-	_, _ = fmt.Fprintf(stdout, "  entirely. Summing them would produce a figure with no unit.\n\n")
+	_, _ = fmt.Fprintf(stdout, "  cached share partitioned out of it, Codex and Grok report it nested\n")
+	_, _ = fmt.Fprintf(stdout, "  inside, and Ollama reports the work it performed with the cached prefix\n")
+	_, _ = fmt.Fprintf(stdout, "  excluded entirely. Summing them would produce a figure with no unit.\n\n")
 	_, _ = fmt.Fprintf(stdout, "  The cost column is addable, and that is what it is for. It is also the\n")
 	_, _ = fmt.Fprintf(stdout, "  column that is mostly empty.\n")
 	for _, l := range pricingNotes(surfaces) {
@@ -377,14 +412,18 @@ func burnCodex(home, dir string) surfaceBurn {
 	}
 	s.tokens = billed
 	// A read serves a prefix an earlier request wrote. Reads above zero beside
-	// writes of exactly zero cannot have happened, so the zero is a field the
-	// client does not send, rendered as a number.
+	// writes of exactly zero cannot have happened.
+	//
+	// What that means about the wire is deliberately not said here. This used
+	// to report the zero as "a field the client does not send", which was true
+	// of Codex on 2026-09-15, when one rollout of 158 carried
+	// `cache_write_input_tokens` at all, and false by 2026-09-17, when it was
+	// present in 6,883 of 6,883 records and zero in every one. Neither this
+	// function nor ClassifyCounters can see which, so neither says.
 	//
 	// Said on the report rather than left to an evidence file, because the
 	// cost column above is computed from this same usage: short the write half
-	// and the figure is short by the expensive half. Measured on this machine
-	// 2026-09-15, Codex reported 571,720,960 cached reads and 0 writes across
-	// 158 rollouts, and exactly one of those files contains the field at all.
+	// and the figure is short by the expensive half.
 	if v := cachemodel.ClassifyCounters(cacheRead, cacheWrite); v.Impossible() {
 		s.problems = append(s.problems, fmt.Sprintf(
 			"%s cached read(s) reported and no cache writes at all: %s. "+

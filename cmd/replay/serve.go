@@ -50,8 +50,9 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	listen := fs.String("listen", defaultListen, "address to bind: a loopback host:port, or unix:///path/to/socket for an owner-only socket")
 	metricsListen := fs.String("metrics-listen", "", "bind a second, read-only listener for /replay/metrics, /replay/status and /replay/healthz. It never proxies. Use it when the proxy is on a socket and a scraper needs a port")
-	upstream := fs.String("upstream", envOr(envUpstream, defaultUpstream), "provider base URL. The default is Anthropic, whose "+proxy.MessagesPath+" is the only shape "+
-		"this build masks. Pointing this at an OpenAI-compatible provider routes "+proxy.ChatCompletionsPath+", which is EXPERIMENTAL, UNMASKED: -mask cannot read that "+
+	upstream := fs.String("upstream", envOr(envUpstream, defaultUpstream), "provider base URL. The default is Anthropic. -mask reads "+proxy.MessagesPath+" and also masks "+
+		"/v1/responses, the path GPT-6 Astra speaks, though that path is forwarded unread: no ledger record, no spend cap, no usage. "+
+		"Pointing this at an OpenAI-compatible provider routes "+proxy.ChatCompletionsPath+", which is read and guarded but EXPERIMENTAL, UNMASKED: -mask cannot read that "+
 		"body shape, so an API key in one of those requests reaches the provider in clear, and the path is verified against DeepSeek and a local Ollama only")
 	ledgerDir := fs.String("ledger", "", "ledger directory (default ~/.replay/ledger)")
 	token := fs.String("token", "", "require this value in the "+proxy.HeaderToken+" header (or set "+envToken+")")

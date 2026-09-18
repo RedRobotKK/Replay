@@ -270,6 +270,19 @@ func mcpCall(name string, args json.RawMessage) (string, error) {
 			fmt.Fprintf(&b, "claude desktop sandbox roots found but NOT in the default corpus: %d\n", len(d))
 			b.WriteString("  they are a second population; folding them into one total would change every figure without saying so\n")
 		}
+		// Codex is a second surface, not a second root. Reporting only the
+		// Claude count answered zero on a machine full of rollouts, and an
+		// agent that reads zero stops looking. Name the surface and say which
+		// commands reach it, because the answer goes to a machine that cannot
+		// ask a follow-up question.
+		cr := codexRoots(home)
+		rollouts := findCodexRollouts(cr)
+		fmt.Fprintf(&b, "codex rollout roots read by `replay codex` and `replay burn`: %d\n", len(cr))
+		fmt.Fprintf(&b, "codex rollout files found there: %d\n", len(rollouts))
+		b.WriteString("  read from ~/.codex/sessions and ~/.codex/archived_sessions, which are one corpus\n")
+		b.WriteString("  only `replay codex` and `replay burn` parse them; cost, diff, advise, trim,\n")
+		b.WriteString("  route, ceiling and the TUI read claude-code transcripts only and return empty here\n")
+		b.WriteString("  `replay codex` reports tokens and never dollars; `replay burn` is the one that prices\n")
 		return b.String(), nil
 	case "replay_price_check":
 		var a struct {
