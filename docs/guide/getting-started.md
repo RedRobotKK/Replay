@@ -72,6 +72,34 @@ rate-limit budget spent on nothing. That is why the same finding is stated both 
 names on stderr which root it read, so a report never leaves you guessing what it was over. Give it a
 path when you want a different one.
 
+## If you run OpenAI Codex
+
+`replay` with no arguments reads Claude Code transcripts. It does not read Codex rollouts, so on a
+Codex machine it finds nothing rather than printing a number for the wrong corpus. Two commands
+read Codex, and only those two:
+
+```sh
+replay codex                       # what the rollouts moved, in tokens
+replay burn                        # Codex, Ollama and Claude Code side by side, with the money
+```
+
+With no argument `replay codex` looks where Codex writes, `~/.codex/sessions` and
+`~/.codex/archived_sessions`. It prints tokens and never dollars, because it has no pricing path.
+For money on a Codex corpus, run `replay burn`. `cost`, `diff`, `advise`, `trim`, `route`,
+`ceiling` and the TUI read Claude Code only, and return empty on a Codex corpus rather than wrong.
+
+Pricing an OpenAI model takes a rules document, because the table compiled into the binary is
+Anthropic only:
+
+```sh
+replay rules --update docs/rules/openai-2026-09-15.json
+```
+
+That document carries `gpt-6-astra`, `gpt-5.6-terra`, `gpt-5.4` and `gpt-5.4-mini`. Installing it
+replaces the price table in effect rather than merging into it, so while it is installed no
+Anthropic model is priced. `gpt-5.1-codex-mini` is the most common model on a real Codex machine
+and OpenAI publishes no rate for it, so nothing prices that one.
+
 ## Find out what Replay can see
 
 ```sh

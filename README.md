@@ -12,18 +12,20 @@
 
 **If the agent bill went up and nothing errored, a prompt cache broke.** Replay Doctor reads the
 transcripts already on your disk and names the turn it broke on, the cause, and the tokens
-re-billed at write prices.
+re-billed at write prices. It reads Claude Code transcripts and OpenAI Codex rollouts, including
+the ones GPT-6 Astra writes, and the two providers do not count the same way:
+[here is the difference](#two-providers-two-ways-of-counting).
 
 ![A triage session: pick a finding, open the evidence behind it, mark it applied](docs/demo/triage.gif)
 
 GitHub labels this repository 'Other' because its licence detector does not know BUSL-1.1; the licence is the Business Source License 1.1, converting to the Apache License 2.0 on 2029-09-06, and the text is in LICENSE.
 
-> **The refusals are the feature.** Anything this tool cannot measure, it declines to print — and
+> **The refusals are the feature.** Anything this tool cannot measure, it declines to print, and
 > says why, in the place the number would have gone. `replay route` will not quote you dollars for a
 > model pair it has never seen on the wire. `replay context` tells you when its own answer is
 > incomplete because the session was compacted. Every figure carries the population it was measured
 > on and the date it was read. When a number here turns out to be wrong, the correction ships as a
-> new dated file and the old reading stays visible — including
+> new dated file and the old reading stays visible, including
 > [the time this README overstated its own sample size twentyfold](#how-far-to-trust-it).
 
 ## Start with the question you actually have
@@ -37,6 +39,14 @@ GitHub labels this repository 'Other' because its licence detector does not know
 | Would another model be cheaper? | `replay route <dir> --to <model>` |
 | Is anything on this machine broken? | `replay doctor` |
 | All of it, as screens | `replay tui` |
+| How many tokens did my OpenAI Codex or Astra sessions use? | `replay codex <dir>` |
+| What did those sessions cost? | `replay burn` |
+
+The last two rows read OpenAI Codex rollouts, Astra's included, and `replay codex` reports tokens
+rather than dollars. Every other row reads Claude Code transcripts, and on a Codex corpus returns
+empty rather than wrong. Which provider a command reads is not something you should have to
+discover at runtime, so the whole split, and the accounting difference underneath it, is in
+[Two providers, two ways of counting](#two-providers-two-ways-of-counting).
 
 If you already run ccusage, this is the next question rather than a replacement for it. ccusage
 tells you what you spent, and it is better at that than anything here. Replay answers something
@@ -47,6 +57,89 @@ When a prompt cache breaks, the provider re-bills the whole conversation history
 Nothing errors. Nothing warns. The only trace is a bill that looks like ordinary growth in usage.
 Replay replays your sessions against the provider's caching rules, turn by turn, and names the one
 that broke.
+
+## Two providers, two ways of counting
+
+Replay reads Claude Code transcripts and OpenAI Codex rollouts, including the rollouts GPT-6 Astra
+writes. Which commands read which, and where the files sit, is logistics and is in the table below.
+The difference that matters first is arithmetic.
+
+**Anthropic counts exclusively; OpenAI counts inclusively.** Anthropic's `input_tokens` is the
+uncached remainder, with the cache reported beside it. OpenAI's `prompt_tokens` already contains
+`cached_tokens`. An adapter that copies the provider's "input" number into its own fresh-token
+field is right for one provider and double-counts the cache for the other, and the error is largest
+on exactly the sessions that cache best. That is a bug class rather than a curiosity: it does not
+error, it does not warn, and it grows with how well your prefix is working. Replay converts rather
+than copies (`FromInclusive`, in `internal/usage/usage.go`), and `Record.Validate` refuses a record
+whose fresh, read and write parts do not add back up to the prompt total.
+
+| | Claude Code (Anthropic) | Codex and Astra (OpenAI) |
+|---|---|---|
+| Where the log lives | `~/.claude/projects` | `~/.codex/sessions` and `~/.codex/archived_sessions` |
+| How the provider counts | exclusive: `input_tokens` is the uncached remainder | inclusive: `prompt_tokens` contains `cached_tokens` |
+| The cached share of a turn | inferred from the request prefix | stated by the provider on every turn |
+| Commands that read it | `cost`, `diff`, `advise`, `context`, `blame`, `route`, `trim`, `ceiling`, `doctor`, the TUI, `burn` | `codex`, `burn` |
+| Pricing | compiled into the binary: 19 entries, 17 priced | a rules document you install: `replay rules --update docs/rules/openai-2026-09-15.json` |
+| Installing that document | not needed | it **replaces** the table in effect rather than merging into it, so a document covering one provider leaves every other provider unpriced |
+| Cache read | 0.10x, except Fable 5.1 and Mythos 5.1 at 0.025x | 0.10x, per that document |
+| Cache write | 1.25x for the 5 minute TTL, 2x for the hour | that document carries no cache-write multiple |
+
+The last row is a difference in what each vendor publishes, and it is written here as that and
+nothing more. This page does not claim OpenAI charges nothing to write a cache. It claims the rules
+document in this repository carries no multiple for it, which is a statement about the document.
+
+**Codex states the cached share every turn, so a break is read off the log rather than inferred.**
+On Claude Code the cached prefix has to be reconstructed from the request shape and compared turn
+to turn, and the match rate under [How far to trust it](#how-far-to-trust-it) is what that
+inference is worth. On a Codex rollout the number is already in the record, so the break count is
+the more direct of the two readings, and `replay codex` can report it without a price table at all.
+
+**A third surface counts the OpenAI way: Grok.** `replay grok` reads the sessions x.ai's client
+writes under `~/.grok/sessions`, one directory per session named for the working directory it ran
+in. Its `cachedReadTokens` sits inside `inputTokens`, so it goes through the same conversion Codex
+does, and the exclusive/inclusive split above is an axis rather than an Anthropic quirk. The record
+is richer than either of the other two: it states reasoning tokens, which are replayed as input
+when the block is sent back, and a parent session's `usage.json` rollup absorbs sub-agent sessions
+that are also on disk in their own right, so summing rollups would count that work twice. The
+reader sums turns once per session and reports the divergence.
+
+It prints no money. Grok states `costUsdTicks` on every record and its own client documentation
+states the scale, but nothing here has checked that statement against a statement of account, so
+this build derives no dollar figure from it. A rules document would not close that gap: what is
+missing is the check, not a rate table.
+
+**The proxy does not read all three paths, and the one Astra uses is the gap.** `replay serve
+--mask` reads, guards and masks `/v1/messages`. It reads and guards `/v1/chat/completions` but does
+not mask it. `/v1/responses`, which is the path Astra runs on, is masked and then forwarded
+**unread**: no ledger record, no spend cap, no usage, no cache classification. So the proxy is not
+a measurement path for an Astra session today. The rollout files on disk are, which means `replay
+codex` and `replay burn`.
+
+## Every surface this build knows about
+
+Replay detects seven agent surfaces on a machine. Reading one is not the same as
+pricing it, and being unable to price one is not the same as ignoring it: a
+surface named here with no price has been looked at, and the reason is the row.
+
+| Surface | Where it keeps records | Read by | Priced |
+|---|---|---|---|
+| Claude Code | `~/.claude/projects` | `cost`, `diff`, `advise`, `context`, `blame`, `route`, `trim`, `ceiling`, the TUI | yes, compiled in |
+| OpenAI Codex | `~/.codex/sessions`, `~/.codex/archived_sessions` | `replay codex`, `replay burn` | after installing a rules document |
+| Grok | `~/.grok/sessions` | `replay grok`, `replay burn` | no: the vendor states a tick scale nothing here has checked |
+| Ollama | `~/.ollama/logs` | `replay burn` | no bill exists: it runs locally |
+| Cursor | `~/.cursor` | not read | no: every `tokenCount` in its state is zero, and its agent transcripts carry no usage field at all |
+| OpenClaw | `~/.openclaw/agents/*/sessions` | not read | no: every `cacheWrite` counter is zero beside `cacheRead` counters on the same rows that are not |
+| AnythingLLM | its workspace database | not read | no: its metrics object has no cache field, so a cached read cannot be told from a full-price one |
+| Oracle | `~/.oracle/sessions` | not read | no: no cache field of any kind, and on the one session here with usage the `totalTokens` is 6 against an `inputTokens` of 4256 |
+
+Two of those rows describe a surface whose own numbers disagree with themselves.
+They are listed rather than dropped because a reader whose data was seen and
+found unusable is owed the specific reason, and because a surface that starts
+reporting a cache field later becomes readable without anyone rediscovering it.
+
+`internal/regression` and `cmd/replay` hold this table to the binary: a surface
+the code detects and this list never names fails the suite, as does a surface
+whose two registries disagree about whether a reader exists.
 
 <!-- install-matrix:begin -->
 <!-- Generated by `go run ./scripts/readme-install` from distribution/channels.json. Edit the manifest, not this block. -->
@@ -185,7 +278,7 @@ price ([two builds, one corpus](docs/evidence/two-builds-one-corpus-2026-09-13.m
 at yours, or give it a directory of your own.
 
 **The re-billed figure is stated twice on purpose.** Most of the people who run this hold a flat seat,
-and a dollar figure addressed to someone else reads as a number that does not apply — which is how a
+and a dollar figure addressed to someone else reads as a number that does not apply, which is how a
 real finding gets dismissed. The tokens apply to everyone: a re-billed token is context the work did
 not get, on a window you are rate-limited against either way. Whether a break also burns a
 subscription quota the way it burns a bill is measured, unresolved, and
@@ -195,8 +288,51 @@ direction.
 `transcripts` counts files, not sessions: a session writes one transcript per agent lane, so a
 session that spawned sub-agents contributes several. `replay doctor` reports both figures side by
 side. The same fan-out means a sub-agent lane re-renders its parent's requests, so a few requests are
-read from more than one file; the report says how many rather than implying the total is exact — 430
+read from more than one file; the report says how many rather than implying the total is exact: 430
 of 30,977 requests, 1.4%, on the run above.
+
+## What a Codex corpus reads like
+
+Read **2026-09-17** with `replay codex`, on the maintainer's own machine and nobody else's:
+
+- **615,715,271 tokens billed across 176 Codex sessions**, summed from per-turn deltas rather than
+  from a session total.
+- **80 cache breaks, re-reading 10,635,679 tokens cold** that the turn before had warm.
+- **15 records refused.** In each, either a share exceeded the total it belongs to, or a total
+  arrived with no breakdown. Neither can be priced and neither is zero, so they are reported as
+  refused rather than counted as nothing. That is 15 records this reading does not cover.
+- **Quota: 166 of those sessions recorded one.** Free plan, 0% used on both the primary and the
+  secondary window, window length not recorded.
+
+The 80 breaks are read off the log rather than inferred, because Codex states the cached share on
+every turn.
+
+The models actually present in that corpus, by record count, against what
+`docs/rules/openai-2026-09-15.json` prices:
+
+| Model id | Records | Priced |
+|---|---|---|
+| `gpt-5.1-codex-mini` | 594 | no: OpenAI publishes no rate for it |
+| `gpt-5.4` | 298 | yes, $2.50 and $15 per MTok |
+| `gpt-5.6-terra` | 150 | yes, $2 and $12 per MTok |
+| `gpt-6-astra` | 22 | yes, $10 and $50 per MTok, cache read 0.10x, minimum prefix 1024 |
+| `gpt-5.4-mini` | 12 | yes, $0.75 and $4.50 per MTok |
+| `gpt-6-astra-medium` | 6 | yes: the id contains `gpt-6-astra` and takes that row |
+| `astra` | 6 | no: matches no row |
+| `astra-medium` | 6 | no: matches no row |
+
+**What is unpriced, and why.** Model ids are matched by containment
+(`internal/cachemodel/match.go`), so `gpt-6-astra-medium` prices correctly off the `gpt-6-astra`
+row, while a bare `astra` or `astra-medium` matches nothing at all and stays unpriced: 12 records
+on this corpus. The larger gap is `gpt-5.1-codex-mini`. It is the most common model on that machine
+at 594 records, OpenAI publishes no rate for it, so no rules document can price it and Replay
+declines to rather than inventing one.
+
+**What has not been measured here, said as plainly as the rest.** No Astra turn carrying token
+counts has ever been measured. The local astra-model rollouts carry zero `token_count` records, so
+the 22 `gpt-6-astra` records above are ids the reader found and not a token measurement of Astra.
+Production has never accepted a real corpus submission. Nothing on this page should be read as
+saying otherwise.
 
 ## What actually broke the cache
 
@@ -207,20 +343,20 @@ was.
 
 Two causes dominate, and they have opposite shapes:
 
-- **A client re-render** — the history is rebuilt after the system prefix — is **frequent and
+- **A client re-render** (the history is rebuilt after the system prefix) is **frequent and
   small**. It happens constantly and re-bills a little each time.
-- **A TTL expiry** — the gap between two requests outlives the cache — is **rare and enormous**.
+- **A TTL expiry** (the gap between two requests outlives the cache) is **rare and enormous**.
   One developer going to lunch costs more than a great many re-renders.
 
 That is a statement about mechanism, and mechanism does not rot. The shares did. This README carried
 a five-row table of percentages measured on 2026-09-06. By 2026-09-11 the two leading causes had
 converged to within half a point of each other, and a second reading taken hours later the same day
-put them in the **opposite order** — the corpus is this machine's own transcripts, so it grows while
+put them in the **opposite order**: the corpus is this machine's own transcripts, so it grows while
 you work. That first move was the corpus alone: re-running the *same* classifier over the larger set
 reproduces it. Later readings also crossed a change in the classifier, and those two effects cannot
 be separated after the fact.
 
-So the sentence this section used to end on — that the shapes matter more than the ranking — was
+So the sentence this section used to end on (that the shapes matter more than the ranking) was
 right in a way that flattered it. The shapes held across every reading. The ranking it waved away is
 precisely the part that flipped.
 
@@ -247,13 +383,13 @@ This is the part that matters, and it is enforced in code rather than promised i
 | **structural** | A property of the request shape, not a measurement |
 
 Nothing prints without one. `replay route --to <model>` **refuses to give a dollar figure** for a
-model pair it has not measured, rather than guessing — which is the behaviour a tool that wants to
+model pair it has not measured, rather than guessing, which is the behaviour a tool that wants to
 be trusted has to have, and the behaviour that makes it less impressive on first run.
 
 The same instinct applies to the answer as well as the input. `replay route --to` now prices **the
 move itself**: the destination model starts cold and has to write the shared prefix again before it
 reads any of it, so a cheaper model is not automatically cheaper. It reports the switch cost, the
-saving per turn, and the turn on which those cross — and says plainly when that turn lies beyond the
+saving per turn, and the turn on which those cross. It says plainly when that turn lies beyond the
 number of turns actually measured, which is the case a comparison of two price-per-token figures
 cannot see at all. Dollar figures also carry the age of the table they came from, because a date
 tells a reader what was used and only a subtraction tells them it is stale.
@@ -281,7 +417,7 @@ Two 2026 papers supply a population without anyone contributing anything.
 The population travels with the figure on the same line, every time. That is the whole design:
 "8.0% here, 14.0% across 13.5M sessions" is a sentence you can weigh, and "8.0%, well under average"
 is not. Copilot's 13.5M sessions are Copilot users on Copilot's harness, so a difference is in the
-first instance a difference in what the two are doing — not evidence that anyone is doing it wrong.
+first instance a difference in what the two are doing, not evidence that anyone is doing it wrong.
 There is no "high", no "typical" and no "should" anywhere in the vocabulary, and a test asserts
 there never will be.
 
@@ -297,13 +433,13 @@ papers were read.
 **Tool results dominate the prompt.** *Don't Break the Cache* ([arXiv:2601.06007](https://arxiv.org/abs/2601.06007))
 reports 78.5% cost savings on Sonnet 4.5 from excluding dynamic tool results from the cached prefix.
 `replay blame` puts tool results and tool calls at ranks 1, 3 and 4 on the largest session in this
-repository's own corpus — theirs by A/B-ing three providers, this by attributing carried prompt
+repository's own corpus: theirs by A/B-ing three providers, this by attributing carried prompt
 tokens in transcripts nobody wrote for the purpose.
 
 **Caches die of prefix churn, not idleness.** *Keeping the Cache Warm Pays*
 ([arXiv:2607.19214](https://arxiv.org/abs/2607.19214)) derives a break-even horizon for holding a
 cache open with periodic pings. Measured against this corpus, 87% of cache-creation spend happens on
-gaps under five minutes, where the cache had not expired at all — $509 against $77 in the bands any
+gaps under five minutes, where the cache had not expired at all: $509 against $77 in the bands any
 ping could bridge. The published Copilot decay curve says the same thing from the other side: a
 plateau above 95% under two minutes, a cliff between two and ten. The conclusion is *do not build keepalive*: it is the wrong lever here by roughly seven times, and
 the measurement behind that is filed under `docs/evidence/`.
@@ -321,7 +457,15 @@ replay context   <session>         # what is filling your context, ranked
 replay blame     <session>         # which content cost the most, carried across turns
 replay route     <dir> --to <model>   # what a switch changes, including what the switch costs
 replay doctor                      # what is on this machine, and what to run next
+
+replay codex     <dir>             # OpenAI Codex rollouts, in tokens; it prints no dollars
+replay burn                        # Codex, Ollama and Claude Code side by side, with the money
 ```
+
+`replay codex` and `replay burn` are the two commands that read OpenAI Codex rollouts, from
+`~/.codex/sessions` and `~/.codex/archived_sessions`. Everything else in that list reads Claude
+Code transcripts only, and returns empty on a Codex corpus rather than a wrong number. For money on
+a Codex corpus the command is `replay burn`, because `replay codex` has no pricing path at all.
 
 Every command and every flag is in the [CLI reference](docs/CLI.md), which is generated from the
 binary rather than written by hand, so it cannot drift from what the tool accepts. It marks which
@@ -330,10 +474,10 @@ letting an agent run one unattended.
 
 `replay cost` and `replay corpus` take a directory, but no longer require one: with no argument they
 read the transcript root `replay doctor` already discovers, and say on stderr which root that was. The
-argument still wins when you give it. This is not a convenience — a first command that needs a path
+argument still wins when you give it. This is not a convenience: a first command that needs a path
 the reader does not know yet is a command they do not run.
 
-`replay --help` lists all thirty, grouped and ordered by what they are worth rather than
+`replay --help` lists all thirty-one, grouped and ordered by what they are worth rather than
 alphabetically, because the list is what a person reads before they know which of them matters. That
 number is compared against the binary's dispatch switch by `internal/regression` RC1, which is why it
 is allowed to be here and why the same figure is not written into the other documents. Full
@@ -345,7 +489,7 @@ prompt size before and after it, and nothing here was reading that field, so a s
 was attributed as though everything it ever loaded were still present. It is not: the attribution
 describes what remains, and the report now names how many compactions fired, how many tokens the
 client says they dropped, and therefore by how much the ranking above it overstates. Where the
-compaction recorded no size, it says that instead of guessing — an unmeasured overstatement is still
+compaction recorded no size, it says that instead of guessing: an unmeasured overstatement is still
 worth declaring.
 
 ## Footprint
@@ -361,9 +505,11 @@ worth declaring.
   fetches a public price table; `probe --execute` sends billable measurement requests to your own
   provider on your own key, after printing the plan and asking; `upgrade` fetches the release index
   and an archive from `github.com` and then executes the binary it just wrote; and
-  `rules --update <url>` fetches from whatever host you name. The proxy forwards your own traffic
-  and nothing else. One request is *not* typed: `replay burn` probes `127.0.0.1:11434` for a local
-  Ollama on every run, which never leaves the machine. **Earlier versions of this file said "two
+  `rules --update <url>` fetches from whatever host you name. **Installing a rules document
+  replaces the price table in effect rather than merging into it**, so a document covering one
+  provider leaves every other provider unpriced. The proxy forwards your own traffic and nothing
+  else. One request is *not* typed: `replay burn` probes `127.0.0.1:11434` for a local Ollama on
+  every run, which never leaves the machine. **Earlier versions of this file said "two
   network requests"**, omitting `upgrade` and `rules --update`; `docs/SURFACES.md` documented
   `upgrade` while this file denied it. Every outbound and on-disk surface is enumerated in
   [`docs/SURFACES.md`](docs/SURFACES.md), including the ones that were wrong in earlier versions
@@ -375,7 +521,7 @@ worth declaring.
   be a plain SHA-256 of the tool input, which meant anyone holding a ledger file could test a
   guessed shell command or file path against it offline and get a yes or no.
 - **What the local listener refuses, and what it does not.** It binds loopback only. It refuses any
-  request carrying `Origin` or `Sec-Fetch-Mode`, and — since 2026-09-10 — any request whose `Host`
+  request carrying `Origin` or `Sec-Fetch-Mode`, and (since 2026-09-10) any request whose `Host`
   header names somewhere other than this machine, which is what a page at a name pointed at
   `127.0.0.1` necessarily sends. `/replay/healthz` carries both checks and **not** the token, so
   `replay doctor` can still tell you why your agent is failing; what it discloses to a local
@@ -409,17 +555,17 @@ worth declaring.
 ## How far to trust it
 
 The engine reproduces the provider's own cache reads on **97.79%** of compared turns across 1751
-transcripts — but those transcripts come from **116 distinct sessions on one machine, one account
+transcripts, but those transcripts come from **116 distinct sessions on one machine, one account
 and one operator**. A session writes one transcript per lane, so subagents multiply the file count
 without adding an independent draw. Read the sample as 116, not 1751. Figures as of **2026-09-10**:
 [`docs/evidence/calibration-corpus-2026-09-10.md`](docs/evidence/calibration-corpus-2026-09-10.md).
 
 That 97.79% counts two things: turns the engine reproduced **exactly**, and turns where the
-provider served **more** cached prefix than the engine predicted — usually because a concurrent
+provider served **more** cached prefix than the engine predicted, usually because a concurrent
 sibling lane extended it. The second kind is a prediction that was wrong in the generous
 direction, and until 2026-09-11 no report broke the two apart. On a re-reading of the same corpus
 root on **2026-09-11** (1816 transcripts, 118 sessions, 38111 compared turns) the split is
-**94.10% reproduced exactly, 3.78% read more than predicted, 2.12% broken** — a 97.89% match rate
+**94.10% reproduced exactly, 3.78% read more than predicted, 2.12% broken**, a 97.89% match rate
 of which 3.86% is a read the engine did not predict. Both rates are now printed side by side
 wherever a match rate appears. The addendum in the evidence file above has the working.
 
@@ -458,7 +604,7 @@ The second open gap is the one the flat-seat framing above rests on. A metered u
 a broken cache; whether a subscriber's rate-limit window is charged the same way is undocumented, so
 it was measured: matched cold-write and warm-read arms, 3.09M tokens, and the utilisation counter
 moved **zero** steps. That is a null result and it is published as one. It also voided an earlier
-figure in this repository — a counter step attributed to four probe requests, on an account-wide
+figure in this repository: a counter step attributed to four probe requests, on an account-wide
 counter that an interactive session was moving at the same time. The instrument now refuses rather
 than reports: it names which arm is short instead of dividing anyway, after simulation showed the
 first estimator returning exactly 1.00 whether the true ratio was 12.5 or 1.0.
@@ -466,6 +612,13 @@ first estimator returning exactly 1.00 whether the true ratio was 12.5 or 1.0.
 ## Who should not use this yet
 
 - You do not use a coding agent that keeps transcripts. There is nothing to read.
+- **You are on OpenAI Codex and expect the whole tool to read it.** Only `replay codex` and
+  `replay burn` read Codex rollouts. `cost`, `diff`, `advise`, `trim`, `route`, `ceiling` and the
+  TUI read Claude Code transcripts only, and on a Codex corpus they return empty rather than wrong.
+  No OpenAI model is priced by the compiled table either: that takes
+  `replay rules --update docs/rules/openai-2026-09-15.json`, and `gpt-5.1-codex-mini`, the most
+  common model on a real Codex machine, has no published rate at all. What Replay does read on a
+  Codex corpus is [measured here](#what-a-codex-corpus-reads-like), refusals included.
 - You want a savings forecast. Replay reports what was already spent, not what you will save.
 - You want a number without a caveat. Most figures here carry one, because most of them earn one.
 - **You are on Windows.** See below.
@@ -505,7 +658,7 @@ shipping.
 
 The project's governing rule is [ADR-0014](docs/adr/0014-checks-must-be-able-to-fail.md): **a check
 is not evidence until it has been observed to fail.** Roughly twenty defects in a single day shared
-one shape — a verification that could not fail — so the rule is now mechanical.
+one shape (a verification that could not fail), so the rule is now mechanical.
 
 `internal/mutation` keeps **76 real past defects frozen as re-runnable mutants** (numbered M1 to
 M77; M71 was retired), each with the named test that must catch it.
@@ -532,7 +685,7 @@ tests where the branch sits. The full reading, including the worst packages and 
 equivalent, is in [the evidence file](docs/evidence/mutation-score-2026-09-13.md).
 
 Until 2026-09-09 that catalogue had **never run**. It sits behind a build tag, no CI job passed the
-tag, and the run needs 659 seconds against Go's 10-minute default — so the obvious invocation dies
+tag, and the run needs 659 seconds against Go's 10-minute default. So the obvious invocation dies
 around mutant 66 of 72 and looks like a broken harness. Both had to be wrong for it to stay hidden.
 It now runs on every push with a 45-minute ceiling, and three cheap tests in the normal suite assert
 that it is still wired up, because the expensive job proves the mutants die and something has to
@@ -542,26 +695,26 @@ prove the expensive job still exists.
 rewrote this machine's own `~/.replay/advice.json`, replacing 141 findings from 1,744 transcripts
 with three from a two-session fixture, and taking the applied markers with them. A later test then
 read that file back, which is why two screens passed alone and failed together on CI.
-`internal/regression` now computes which packages can reach a home directory — by walking imports,
-not by assuming — and fails if any of them runs tests without replacing `HOME` and `USERPROFILE`
+`internal/regression` now computes which packages can reach a home directory (by walking imports,
+not by assuming) and fails if any of them runs tests without replacing `HOME` and `USERPROFILE`
 first. A new package that starts resolving a home directory is caught the day it does.
 
 [ADR-0018](docs/adr/0018-this-is-an-instrument-not-an-app.md) is the companion rule for the output
 rather than the tests: **provenance is a field, not a comment**, and absence, zero and unknown are
 three different values. Nine defects in one day shared that shape, and none of them was a
-miscalculation — the arithmetic was right every time, and nothing on the screen said what the
+miscalculation: the arithmetic was right every time, and nothing on the screen said what the
 numbers were.
 
 ## Documentation
 
 Start at [`docs/`](docs/README.md), indexed by why you came. Highlights:
 
-- [Commands](docs/guide/commands.md) — every flag, and what it refuses to do
-- [What you get](docs/WHAT-YOU-GET.md) — and the three levers worth more than this one
-- [Surfaces](docs/SURFACES.md) — every file and endpoint touched
-- [Evidence](docs/evidence/) — dated measurements, including the corrections
-- [Open design questions](docs/design/README.md) — written up before a decision, not after
-- [ADRs](docs/adr/) — the decisions, including the ones that were reversed
+- [Commands](docs/guide/commands.md) (every flag, and what it refuses to do)
+- [What you get](docs/WHAT-YOU-GET.md) (and the three levers worth more than this one)
+- [Surfaces](docs/SURFACES.md) (every file and endpoint touched)
+- [Evidence](docs/evidence/) (dated measurements, including the corrections)
+- [Open design questions](docs/design/README.md) (written up before a decision, not after)
+- [ADRs](docs/adr/) (the decisions, including the ones that were reversed)
 
 ## Contributing
 
@@ -575,7 +728,13 @@ measurements behind it are real API spend.
 
 **Nothing, and nothing is for sale today.**
 
-Every command works, on every model, with no account and no key.
+No paywall, no account, no key. That is not a claim that every command reads every model. `replay
+codex` and `replay burn` read OpenAI Codex rollouts; `cost`, `diff`, `advise`, `trim`, `route`,
+`ceiling` and the TUI read Claude Code transcripts only. The price table compiled into the binary
+is Anthropic only, 17 priced models, so pricing an OpenAI model takes a rules document you install
+yourself: `replay rules --update docs/rules/openai-2026-09-15.json` carries `gpt-6-astra`,
+`gpt-5.6-terra`, `gpt-5.4` and `gpt-5.4-mini`, and replaces the table in effect rather than merging
+into it.
 
 **It is not a binary that never touches the network, and this page is not going
 to say it is.** The promise, as `cmd/replay/upgrade.go` states it, is that
@@ -633,16 +792,23 @@ its wins is one whose numbers you cannot check.
 
 ## A note from Daniel, who maintains this
 
-Replay is free to run and stays that way: every command, every model, no account
-and no key. It originates no request you did not type, which is a narrower claim
-than "no network call" and is the true one. Nothing that works in a release you
+Replay is free to run and stays that way: no paywall, no account and no key.
+What it is not is universal. `replay codex` and `replay burn` read OpenAI Codex
+rollouts, the rest of the commands read Claude Code transcripts, and the
+compiled price table is Anthropic only, so an OpenAI model is priced only after
+you install a rules document yourself. It originates no request you did not
+type, which is a narrower claim than "no network call" and is the true one. Nothing that works in a release you
 already have will ever move behind a payment.
 
 What is not free is the measurement behind it. Replay's cache figures are
 measured rather than estimated because they were calibrated against **32,188 real
 requests across 115 sessions** of my own agent work, read on 2026-09-07. Adding
 each provider costs the same again: the Codex support came out of **148 sessions
-and 610 million tokens** of my own logs.
+and 610 million tokens** of my own logs, which is what that corpus held while I
+was writing it. Read again on 2026-09-17 the same directories held 176 sessions
+and 615,715,271 tokens. Both numbers are right for the day they were taken, and
+the corpus grows while I work in it, which is the whole reason a figure here
+carries its date.
 
 I am not going to pretend that corpus was money out of my pocket. I was on a
 subscription, so what I actually paid was the monthly fee and the time. At list
