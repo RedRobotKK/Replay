@@ -49,3 +49,25 @@ func TestCodexViewSurfacesTheQuotaSignal(t *testing.T) {
 			"signal this project has found in any client:\n%s", got)
 	}
 }
+
+// A session with no established billing basis is named, not dropped quietly.
+//
+// codexdata carries one: the impossible-subset fixture, whose only usage record
+// the acceptance rules refuse. It contributed nothing to the billed total
+// before this gate existed and contributes nothing now, but the reason it
+// contributes nothing is a fact the reader is entitled to.
+func TestCodexViewNamesSessionsWithNoBillingBasis(t *testing.T) {
+	var out, errOut bytes.Buffer
+	if err := run([]string{"codex", "codexdata"}, &out, &errOut); err != nil {
+		t.Fatalf("%v\n%s", err, errOut.String())
+	}
+	got := out.String()
+	if !strings.Contains(got, "NOT MEASURED") {
+		t.Errorf("a session was left out of every figure without the view saying so:\n%s", got)
+	}
+	// The billed total is unchanged: the refused session was never in it.
+	if !strings.Contains(got, "26,050") {
+		t.Errorf("the billed total moved; refusing a session that contributed nothing "+
+			"must not change the figure:\n%s", got)
+	}
+}

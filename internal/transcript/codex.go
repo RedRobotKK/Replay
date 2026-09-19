@@ -74,7 +74,14 @@ type CodexSession struct {
 	// nobody stated is unknown rather than a default.
 	Model  string
 	Source Source
-	// Billed sums the per-turn deltas. This is what was paid for.
+	// Billed sums the usage this reader could reconstruct, and it is a bill
+	// only where BasisEstablished says so.
+	//
+	// It is NOT a sum of per-turn deltas, and the comment that said so was
+	// wrong about the format. last_token_usage is session state holding the
+	// most recent append, re-emitted verbatim by any TokenCountEvent that
+	// follows no new response, so this sum counts such a response twice.
+	// BasisEstablished is where that is caught.
 	Billed Usage
 	// Reported is the client's own final running total. Codex rebases it on
 	// compaction, so on a compacted session it is smaller than Billed and is
@@ -93,10 +100,49 @@ type CodexSession struct {
 	// a session is many turns, so the two are not interchangeable and the
 	// count of files is not a count of anything a provider was asked to do.
 	Turns int
+	// BasisEstablished is whether Billed rests on evidence this reader can
+	// defend, and it is the gate every consumer of Billed must pass.
+	//
+	// It is false where the session carries a re-emitted usage snapshot, where
+	// a usage record the reconstruction needed could not be read, or where an
+	// ordinary session's reconstruction does not reconcile with the provider's
+	// own cumulative. A compacted session is exempt from the last of those and
+	// only that one: Codex rebases the cumulative on compaction, so requiring
+	// agreement there would refuse every compacted session for behaving as the
+	// format specifies.
+	//
+	// False is not a small number. It is the absence of a figure, and a caller
+	// that prices Billed without reading this field prices a quantity nobody
+	// can stand behind.
+	BasisEstablished bool
 	// prevShare carries the previous turn's cached share so a collapse can be
 	// seen. Unexported: it is scaffolding for the walk, not a result.
 	prevShare float64
 	line      int
+	// prevLast and prevTotal are the previous ACCEPTED event's usage pair, and
+	// havePrev says whether there is one to compare against.
+	//
+	// Both halves are compared. A repeat of the delta alone could be two
+	// genuinely identical responses, which would advance the cumulative; a
+	// repeat of both is the session state going out twice.
+	prevLast  codexUsage
+	prevTotal codexUsage
+	havePrev  bool
+	// reEmitted counts events that carried the previous snapshot again.
+	//
+	// They are COUNTED, never dropped. Dropping them would be deduplication,
+	// and in the pre-TokenUsageRecord format a re-emission cannot be told from
+	// an identical consecutive response by anything in the file. So the
+	// session refuses rather than being quietly repaired.
+	reEmitted int
+	// unreadableUsage counts last_token_usage records the acceptance rules
+	// refused, which is the narrow half of Skipped that bears on billing.
+	//
+	// Kept apart from Skipped on purpose. Skipped also counts an unparsable
+	// line and an unparsable payload, and refusing a defensible figure because
+	// something unrelated in the file did not parse would be a different claim
+	// than the evidence supports.
+	unreadableUsage int
 	// Skipped counts records this reader refused. Non-zero is not an error,
 	// but it is reported, because a format change must not pass silently.
 	Skipped int
@@ -278,7 +324,31 @@ func ParseCodex(r io.Reader) (*CodexSession, error) {
 			s.event(p)
 		}
 	}
+	s.BasisEstablished = s.basisEstablished()
 	return s, sc.Err()
+}
+
+// basisEstablished resolves the billing-basis predicate over the whole walk.
+//
+// Reconciliation is load-bearing here rather than diagnostic: Codex maintains
+// total_token_usage itself, adding each response exactly once, so agreement
+// between that and this reader's reconstruction is two independently kept
+// figures corroborating each other. Disagreement on an ordinary session means
+// the reconstruction counted something the provider did not, and there is no
+// reading of that which produces a bill.
+//
+// The compaction exemption is narrow and is taken from an OBSERVED
+// context_compacted event, never inferred from the mismatch itself. A session
+// whose cumulative was rebased by some other path carries no such event, fails
+// reconciliation, and is refused — which is the safe direction.
+func (s *CodexSession) basisEstablished() bool {
+	if s.reEmitted > 0 || s.unreadableUsage > 0 {
+		return false
+	}
+	if s.Rebased {
+		return true
+	}
+	return s.Billed.Total() == s.Reported.Total()
 }
 
 func (s *CodexSession) event(p codexPayload) {
@@ -301,11 +371,22 @@ func (s *CodexSession) event(p codexPayload) {
 			s.ContextWindow = p.Info.ContextWindow
 		}
 		if u, ok := p.Info.Last.usage(); ok {
+			// The pair is compared BEFORE the add, because the add is what a
+			// re-emission makes wrong and the comparison is what sees it.
+			if s.havePrev && *p.Info.Last == s.prevLast && p.Info.Total != nil &&
+				*p.Info.Total == s.prevTotal {
+				s.reEmitted++
+			}
+			s.prevLast, s.havePrev = *p.Info.Last, true
+			if p.Info.Total != nil {
+				s.prevTotal = *p.Info.Total
+			}
 			s.Billed.add(u)
 			s.Turns++
 			s.observeCache(u)
 		} else if p.Info.Last != nil {
 			s.Skipped++
+			s.unreadableUsage++
 		}
 		if u, ok := p.Info.Total.usage(); ok {
 			s.Reported = u

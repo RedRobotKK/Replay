@@ -215,6 +215,24 @@ type corpusFigures struct {
 	// stronger one's confidence, and the person deciding whether to post it is
 	// the one who should know.
 	Unreadable int
+	// UnmeasuredSessions is how many sessions were left out because this
+	// reader could not establish their billing basis.
+	//
+	// Not part of the wire payload either, and for the same reason as
+	// Unreadable: it exists so the contributor sees what the corpus does not
+	// cover before deciding to post it.
+	//
+	// It is DISTINCT FROM Unpriced and must stay that way. Unpriced means the
+	// rules document does not carry the model, and installing one fixes it.
+	// This means the token counts themselves could not be reconstructed from
+	// evidence the reader can defend, and no price table touches that. Folding
+	// the two together would send a contributor after a file that cannot help,
+	// which is a failure this repository has already shipped once.
+	//
+	// It carries no dollars and no tokens. A session counted here is absent
+	// from every figure above rather than present at zero: zero spend and
+	// unestablished spend are different facts, and ADR-0018 keeps them apart.
+	UnmeasuredSessions int
 }
 
 // contributeCorpus builds a corpus submission from the figures the cost report

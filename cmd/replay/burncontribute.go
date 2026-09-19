@@ -100,6 +100,16 @@ func codexContribution(home, dir string) (corpusFigures, error) {
 		// a per-task cost lower than anything that happened, and the error
 		// grows with how much of the corpus cannot be priced. On a real Codex
 		// machine that is most of it.
+		// A session whose billing basis is not established is excluded for the
+		// same reason an unpriced one is, and the paragraph above gives it:
+		// counting it in Tasks while contributing nothing to TotalUSD hands the
+		// pool a per-task cost lower than anything that happened. Here the
+		// figure is not merely absent, it is one nobody can defend, and a pool
+		// is the last place to put one.
+		if !r.BasisEstablished {
+			f.UnmeasuredSessions++
+			continue
+		}
 		f.Tasks++
 		cost := cachemodel.CostUSD(r.Billed, price)
 		f.TotalUSD += cost
@@ -114,6 +124,20 @@ func codexContribution(home, dir string) (corpusFigures, error) {
 		}
 	}
 
+	// An all-refused corpus is NOT an unpriced one, and must not be sent to the
+	// rules document. Installing one cannot establish a billing basis: the gap
+	// is the token counts, not the rates. Collapsing the two would print the
+	// one piece of advice guaranteed not to work.
+	if f.TotalUSD <= 0 && f.UnmeasuredSessions > 0 && unpricedSessions == 0 {
+		return corpusFigures{}, fmt.Errorf(
+			"no session in this Codex corpus has an establishable billing basis, so there is "+
+				"nothing to pool. %d session(s) read, %d of them NOT MEASURED. Codex broadcasts "+
+				"its usage state, and a broadcast following no response repeats the previous one, "+
+				"so a reader summing that field counts the response twice; where this build cannot "+
+				"tell a repeat from a second identical response it declines the session rather than "+
+				"guessing. A rules document does not change this: %w",
+			sessionsRead, f.UnmeasuredSessions, errUsage)
+	}
 	if f.TotalUSD <= 0 {
 		return corpusFigures{}, fmt.Errorf(
 			"nothing in this Codex corpus can be priced, so there is no total to pool. "+
@@ -188,6 +212,14 @@ func writeCodexContributionNote(w io.Writer, path string, supersedes []string, f
 	}
 	if f.Unreadable > 0 {
 		_, _ = fmt.Fprintf(w, "    UNREAD    %d record(s) refused or unparseable, in no figure above\n", f.Unreadable)
+	}
+	if f.UnmeasuredSessions > 0 {
+		// Its own line, beside UNREAD rather than folded into the priced or
+		// unpriced counts. A session here is not cheap and not free; its token
+		// basis could not be established, so it carries no figure at all.
+		_, _ = fmt.Fprintf(w, "    UNMEASURED %d session(s) left out: their billing basis could not be\n"+
+			"               established, so they are in no figure above and no price table\n"+
+			"               changes that\n", f.UnmeasuredSessions)
 	}
 	for _, old := range supersedes {
 		_, _ = fmt.Fprintf(w, "    supersedes %s\n", old)

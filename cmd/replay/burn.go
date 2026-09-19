@@ -364,6 +364,7 @@ func burnCodex(home, dir string) surfaceBurn {
 	// Cumulative cache counters, kept so the surface can be judged on whether
 	// its own numbers are possible. See cachemodel.ClassifyCounters.
 	var cacheRead, cacheWrite int64
+	var refused, refusedTurns int
 	var q *transcript.CodexQuota
 	for _, f := range files {
 		r, err := transcript.ParseCodexFile(f)
@@ -373,9 +374,19 @@ func burnCodex(home, dir string) surfaceBurn {
 		s.sessions++
 		s.hasSessions = true
 		s.requests += r.Turns
-		billed += r.Billed.Total()
-		cacheRead += int64(r.Billed.CacheRead)
-		cacheWrite += int64(r.Billed.CacheCreation)
+		// The billing basis gates the money and the tokens it is computed
+		// from, and nothing else. A refused session still ran its turns, still
+		// reported its quota window and still broke its cache, and those are
+		// separate claims on separate evidence. What it does not have is a
+		// figure anyone can stand behind, so it contributes none.
+		if !r.BasisEstablished {
+			refused++
+			refusedTurns += r.Turns
+		} else {
+			billed += r.Billed.Total()
+			cacheRead += int64(r.Billed.CacheRead)
+			cacheWrite += int64(r.Billed.CacheCreation)
+		}
 		// Price it, which nothing did until 2026-09-15.
 		//
 		// This surface reported "no price" on 610,551,532 tokens and the
@@ -396,11 +407,21 @@ func burnCodex(home, dir string) surfaceBurn {
 		// rebase count are taken. A session that did not name a model still
 		// reported a live rate-limit window, and burn stopped showing it:
 		// TestBG3 caught it, after this had been committed.
-		if p, ok := cachemodel.PriceFor(r.Model); ok && r.Model != "" {
-			s.costUSD += cachemodel.CostUSD(r.Billed, p)
-			s.pricedReqs += r.Turns
-		} else {
-			s.unpricedReqs += r.Turns
+		//
+		// A session with no established billing basis is NOT counted as
+		// unpriced. Those are different cells, the way localOnly is a different
+		// cell from "no price installed": unpriced means the rules document
+		// does not carry the model, and the fix is to install one. Here the
+		// price is available and the token basis is not, so the same advice
+		// would send an operator after a file that cannot help, which is the
+		// failure the paragraph above already records shipping once.
+		if r.BasisEstablished {
+			if p, ok := cachemodel.PriceFor(r.Model); ok && r.Model != "" {
+				s.costUSD += cachemodel.CostUSD(r.Billed, p)
+				s.pricedReqs += r.Turns
+			} else {
+				s.unpricedReqs += r.Turns
+			}
 		}
 		breaks += len(r.Breaks)
 		if r.Quota != nil {
@@ -436,6 +457,13 @@ func burnCodex(home, dir string) surfaceBurn {
 	if rebased > 0 {
 		s.problems = append(s.problems, fmt.Sprintf(
 			"%d session(s) compacted; Codex rebases its own counter there, so its total is not the bill", rebased))
+	}
+	if refused > 0 {
+		s.problems = append(s.problems, fmt.Sprintf(
+			"%d session(s) covering %s turn(s) are NOT MEASURED and contribute no tokens and no "+
+				"cost: their usage could not be reconstructed from evidence this reader can "+
+				"defend. A price table does not fix this; the basis is the token counts, not the rates",
+			refused, comma(refusedTurns)))
 	}
 	if breaks > 0 {
 		s.problems = append(s.problems, fmt.Sprintf("%d cache break(s)", breaks))

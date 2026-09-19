@@ -33,13 +33,26 @@ func codexRollout(id, model string, turns []struct{ input, cached, output int })
 	var b strings.Builder
 	fmt.Fprintf(&b, `{"type":"session_meta","payload":{"id":%q,"cli_version":"0.9.0"}}`+"\n", id)
 	fmt.Fprintf(&b, `{"type":"turn_context","payload":{"model":%q}}`+"\n", model)
+	// The cumulative ACCUMULATES, because Codex's does: append_last_usage is
+	// `total += last; last = last`, so total_token_usage after turn n is the
+	// sum of every delta up to n.
+	//
+	// This generator used to write the per-turn figure into the cumulative
+	// field on every turn, which no client could produce: a two-turn session
+	// came out claiming a running total smaller than its own first two deltas.
+	// Nothing noticed until the billing basis started reading the cumulative,
+	// because until then the field was only ever compared against itself.
+	var run struct{ input, cached, output int }
 	for _, t := range turns {
+		run.input += t.input
+		run.cached += t.cached
+		run.output += t.output
 		fmt.Fprintf(&b, `{"type":"event_msg","payload":{"type":"token_count","info":{`+
 			`"total_token_usage":{"input_tokens":%d,"cached_input_tokens":%d,"cache_write_input_tokens":0,`+
 			`"output_tokens":%d,"reasoning_output_tokens":0,"total_tokens":%d},`+
 			`"last_token_usage":{"input_tokens":%d,"cached_input_tokens":%d,"cache_write_input_tokens":0,`+
 			`"output_tokens":%d,"reasoning_output_tokens":0,"total_tokens":%d}}}}`+"\n",
-			t.input, t.cached, t.output, t.input+t.output,
+			run.input, run.cached, run.output, run.input+run.output,
 			t.input, t.cached, t.output, t.input+t.output)
 	}
 	return b.String()
@@ -220,5 +233,151 @@ func TestBurnContributionCountsWhatItCouldNotRead(t *testing.T) {
 	if f.Unreadable == 0 {
 		t.Errorf("an unreadable rollout was skipped without being counted; " +
 			"the submission would report a clean corpus that was not clean")
+	}
+}
+
+// codexRolloutRaw writes a rollout from explicit (last, cumulative) pairs, so a
+// test can state a sequence the accumulating generator above cannot: a repeated
+// broadcast, or a cumulative that does not match the deltas.
+func codexRolloutRaw(id, model string, events [][4]int) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, `{"type":"session_meta","payload":{"id":%q,"cli_version":"0.155.0-alpha.2.6"}}`+"\n", id)
+	fmt.Fprintf(&b, `{"type":"turn_context","payload":{"model":%q}}`+"\n", model)
+	for _, e := range events {
+		lastIn, lastOut, totIn, totOut := e[0], e[1], e[2], e[3]
+		fmt.Fprintf(&b, `{"type":"event_msg","payload":{"type":"token_count","info":{`+
+			`"total_token_usage":{"input_tokens":%d,"cached_input_tokens":0,"cache_write_input_tokens":0,`+
+			`"output_tokens":%d,"reasoning_output_tokens":0,"total_tokens":%d},`+
+			`"last_token_usage":{"input_tokens":%d,"cached_input_tokens":0,"cache_write_input_tokens":0,`+
+			`"output_tokens":%d,"reasoning_output_tokens":0,"total_tokens":%d}}}}`+"\n",
+			totIn, totOut, totIn+totOut, lastIn, lastOut, lastIn+lastOut)
+	}
+	return b.String()
+}
+
+// A session whose billing basis is not established contributes nothing, and is
+// not counted as unpriced.
+//
+// Those are different cells. Unpriced means the rules document does not carry
+// the model and installing one fixes it; this means the token counts could not
+// be reconstructed, and no price table touches that.
+func TestContributionExcludesAnUnestablishedBasisWithoutCallingItUnpriced(t *testing.T) {
+	withOpenAIRules(t)
+	repeat := [4]int{60000, 300, 100200, 500}
+	home := writeCodexCorpus(t, map[string]string{
+		"good": codexRollout("good", "gpt-6-astra", []turn{{40000, 16000, 200}, {60000, 50000, 300}}),
+		"dup": codexRolloutRaw("dup", "gpt-6-astra", [][4]int{
+			{40000, 200, 40000, 200},
+			repeat,
+			repeat,
+		}),
+	})
+
+	f, err := codexContribution(home, "")
+	if err != nil {
+		t.Fatalf("codexContribution: %v", err)
+	}
+	if f.Tasks != 1 {
+		t.Errorf("Tasks = %d, want 1: only the reconciling session may be pooled", f.Tasks)
+	}
+	if f.UnmeasuredSessions != 1 {
+		t.Errorf("UnmeasuredSessions = %d, want 1: the excluded session must be represented, "+
+			"not silently dropped", f.UnmeasuredSessions)
+	}
+	if f.Unpriced != 0 {
+		t.Errorf("Unpriced = %d, want 0: a session with no billing basis is not an unpriced "+
+			"one, and saying so sends a contributor after a rules document that cannot help",
+			f.Unpriced)
+	}
+	// The contributed money is the good session's alone.
+	if f.TotalUSD <= 0 {
+		t.Fatal("the reconciling session was not priced")
+	}
+	one := writeCodexCorpus(t, map[string]string{
+		"good": codexRollout("good", "gpt-6-astra", []turn{{40000, 16000, 200}, {60000, 50000, 300}}),
+	})
+	alone, err := codexContribution(one, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.TotalUSD != alone.TotalUSD {
+		t.Errorf("TotalUSD = %v with the refused session present, %v without it: a refused "+
+			"session must contribute no money at all", f.TotalUSD, alone.TotalUSD)
+	}
+}
+
+// The contribution note states the exclusion.
+func TestTheContributionNoteReportsTheUnmeasuredSessions(t *testing.T) {
+	var b strings.Builder
+	writeCodexContributionNote(&b, "/tmp/x.json", nil, corpusFigures{
+		Tasks: 1, TotalUSD: 1.5, UnmeasuredSessions: 2,
+	})
+	got := b.String()
+	if !strings.Contains(got, "UNMEASURED") {
+		t.Errorf("the note does not report the excluded sessions:\n%s", got)
+	}
+	if !strings.Contains(got, "2 session(s)") {
+		t.Errorf("the note does not say how many were excluded:\n%s", got)
+	}
+}
+
+// An all-refused corpus is not reported as an unpriced one.
+func TestAnAllRefusedCorpusIsNotSentToTheRulesDocument(t *testing.T) {
+	withOpenAIRules(t)
+	repeat := [4]int{60000, 300, 100200, 500}
+	home := writeCodexCorpus(t, map[string]string{
+		"dup": codexRolloutRaw("dup", "gpt-6-astra", [][4]int{
+			{40000, 200, 40000, 200}, repeat, repeat,
+		}),
+	})
+	_, err := codexContribution(home, "")
+	if err == nil {
+		t.Fatal("a corpus with no establishable basis produced a contribution")
+	}
+	if !strings.Contains(err.Error(), "NOT MEASURED") {
+		t.Errorf("the refusal does not name what happened:\n%v", err)
+	}
+	if strings.Contains(err.Error(), "replay rules --update") {
+		t.Errorf("the refusal advises installing a rules document, which cannot establish a "+
+			"billing basis:\n%v", err)
+	}
+}
+
+// burn excludes an unestablished session from the priced totals, and does not
+// count it as unpriced.
+func TestBurnExcludesAnUnestablishedBasisFromThePricedTotals(t *testing.T) {
+	withOpenAIRules(t)
+	good := codexRollout("good", "gpt-6-astra", []turn{{40000, 16000, 200}, {60000, 50000, 300}})
+	repeat := [4]int{60000, 300, 100200, 500}
+	dup := codexRolloutRaw("dup", "gpt-6-astra", [][4]int{
+		{40000, 200, 40000, 200}, repeat, repeat,
+	})
+
+	clean := burnCodex(writeCodexCorpus(t, map[string]string{"good": good}), "")
+	both := burnCodex(writeCodexCorpus(t, map[string]string{"good": good, "dup": dup}), "")
+
+	if both.tokens != clean.tokens {
+		t.Errorf("tokens = %d with the refused session present, %d without: a session with no "+
+			"billing basis must contribute no tokens", both.tokens, clean.tokens)
+	}
+	if both.costUSD != clean.costUSD {
+		t.Errorf("costUSD = %v with the refused session, %v without: it must contribute no money",
+			both.costUSD, clean.costUSD)
+	}
+	if both.unpricedReqs != clean.unpricedReqs {
+		t.Errorf("unpricedReqs went %d -> %d: a refused session is not an unpriced one",
+			clean.unpricedReqs, both.unpricedReqs)
+	}
+	if both.sessions != 2 {
+		t.Errorf("sessions = %d, want 2: the session was read, it just cannot be billed", both.sessions)
+	}
+	var said bool
+	for _, p := range both.problems {
+		if strings.Contains(p, "NOT MEASURED") {
+			said = true
+		}
+	}
+	if !said {
+		t.Errorf("burn dropped a session from its totals without saying so:\n%v", both.problems)
 	}
 }

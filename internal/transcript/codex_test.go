@@ -1,18 +1,33 @@
 package transcript
 
-import "testing"
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
-// The billed total is the sum of the per-turn deltas, never the cumulative.
+// The billed total is the reconstruction, never the rebased cumulative.
 //
-// Codex writes both: last_token_usage is the delta and total_token_usage is a
-// running total. The running total is REBASED when the context is compacted,
-// so on a compacted session it is smaller than what was actually paid for.
-// Measured across 148 local rollouts, the deltas and the final cumulative
-// agree on 146 and disagree on exactly the 2 that compacted — on the larger,
-// 392,301,269 billed against 198,661,781 reported, a 49% under-count.
+// Codex writes both. total_token_usage is a running total the client keeps,
+// and it is REBASED when the context is compacted, so on a compacted session
+// it is smaller than what was actually paid for.
 //
-// The fixture reproduces that in miniature: deltas of 1100 + 2200 + 550 = 3850
-// against a final cumulative of 550.
+// CORRECTION, 2026-09-18. The paragraph here used to read: "Measured across
+// 148 local rollouts, the deltas and the final cumulative agree on 146 and
+// disagree on exactly the 2 that compacted." The measurement was real and the
+// attribution was wrong. Re-measured across 204 rollouts, the two that
+// disagreed carry ZERO context_compacted events, and so does the third that
+// has since appeared. They disagree because TokenCountEvent broadcasts session
+// state and repeats the previous last_token_usage when no response preceded
+// it, which this reader summed again. Nothing compacted. The sentence that
+// explained the gap away is the reason the over-count survived, and it is left
+// here corrected rather than deleted, because the wrong explanation is the
+// part worth remembering.
+//
+// The fixture reproduces a real compaction in miniature: deltas of
+// 1100 + 2200 + 550 = 3850 against a final cumulative of 550.
 func TestCodexBillsTheDeltasNotTheRebasedCumulative(t *testing.T) {
 	s, err := ParseCodexFile("codexdata/compacted.jsonl")
 	if err != nil {
@@ -139,5 +154,189 @@ func TestCodexDoesNotInventBreaksWhereTheCacheNeverHeld(t *testing.T) {
 			t.Errorf("reported a break from a %.0f%% cached turn; that is not a break, "+
 				"it is a session that was never warm", 100*b.BeforeShare)
 		}
+	}
+}
+
+// The billing-basis predicate.
+//
+// `last_token_usage` is not a per-turn delta. It is session state: Codex holds
+// a TokenUsageInfo and `append_last_usage` does `total += last; last = last`,
+// so `last` is a SNAPSHOT of the most recent append. TokenCountEvent carries
+// that state and takes no usage argument, and three of its four emission sites
+// involve no append at all — a rate-limit update, a context estimate, and a
+// context-exhaustion rebase. A broadcast with no append therefore repeats the
+// previous snapshot verbatim, and summing the field counts that response twice.
+//
+// Replay does not deduplicate, because in the older format a re-emission and a
+// genuinely identical consecutive response are indistinguishable from the
+// fields present. It refuses the session instead: where the billing basis is
+// not established, there is no billed figure rather than a guessed one.
+
+// writeRollout puts a rollout in a temp dir and parses it. The fixtures on
+// disk cover the shapes that existed before this predicate; these cover the
+// ones it turns on, and they are built here rather than added to codexdata so
+// that the corpus of checked-in fixtures still describes the reader's inputs
+// rather than its gates.
+func writeRollout(t *testing.T, lines ...string) *CodexSession {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "rollout-2026-09-18T00-00-00-test.jsonl")
+	body := strings.Join(lines, "\n") + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := ParseCodexFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// tokenCount renders one token_count event with the given delta and cumulative.
+func tokenCount(lastIn, lastOut, totIn, totOut int) string {
+	return fmt.Sprintf(`{"timestamp":"2026-09-18T00:00:00.000Z","type":"event_msg","payload":`+
+		`{"type":"token_count","info":{`+
+		`"total_token_usage":{"input_tokens":%d,"cached_input_tokens":0,"output_tokens":%d,`+
+		`"reasoning_output_tokens":0,"total_tokens":%d},`+
+		`"last_token_usage":{"input_tokens":%d,"cached_input_tokens":0,"output_tokens":%d,`+
+		`"reasoning_output_tokens":0,"total_tokens":%d},"model_context_window":258400}}}`,
+		totIn, totOut, totIn+totOut, lastIn, lastOut, lastIn+lastOut)
+}
+
+const rolloutMeta = `{"timestamp":"2026-09-18T00:00:00.000Z","type":"session_meta",` +
+	`"payload":{"id":"019d0f52-8ca6-7f00-0000-00000000000a","cli_version":"0.155.0-alpha.2.6"}}`
+
+// An ordinary session whose reconstruction reconciles has a billing basis.
+func TestAReconcilingSessionEstablishesTheBillingBasis(t *testing.T) {
+	s := writeRollout(t, rolloutMeta,
+		tokenCount(1000, 100, 1000, 100),
+		tokenCount(2000, 200, 3000, 300),
+	)
+	if !s.BasisEstablished {
+		t.Errorf("a session with no re-emission, no unreadable usage and a reconciling "+
+			"total has no billing basis; billed %d, reported %d",
+			s.Billed.Total(), s.Reported.Total())
+	}
+	if got, want := s.Billed.Total(), 3300; got != want {
+		t.Errorf("billed = %d, want %d", got, want)
+	}
+}
+
+// A re-emitted snapshot refuses the basis, and the figure is NOT repaired by
+// dropping the repeat. Deduplication is not authorized: the older format
+// cannot tell a re-emission from an identical consecutive response.
+func TestAReEmittedSnapshotRefusesTheBillingBasis(t *testing.T) {
+	repeat := tokenCount(2000, 200, 3000, 300)
+	s := writeRollout(t, rolloutMeta,
+		tokenCount(1000, 100, 1000, 100),
+		repeat,
+		repeat,
+	)
+	if s.BasisEstablished {
+		t.Error("a session carrying a re-emitted usage snapshot reported a billing basis")
+	}
+	if got, want := s.Billed.Total(), 5500; got != want {
+		t.Errorf("billed = %d, want %d: the repeat must not be silently dropped, "+
+			"because dropping it is the deduplication this contract refuses", got, want)
+	}
+	if s.Rebased {
+		t.Error("a re-emission was recorded as a compaction; nothing compacted here")
+	}
+}
+
+// A compacted session keeps its basis without reconciling.
+//
+// Codex rebases the cumulative on compaction, so the reconstruction is SUPPOSED
+// to exceed it. Requiring reconciliation there would refuse every compacted
+// session for doing exactly what the format says it does.
+func TestACompactedSessionKeepsItsBasisWithoutReconciling(t *testing.T) {
+	s, err := ParseCodexFile("codexdata/compacted.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.Rebased {
+		t.Fatal("the fixture no longer compacts, so this test proves nothing")
+	}
+	if s.Billed.Total() == s.Reported.Total() {
+		t.Fatal("the fixture reconciles, so the exception it exists to test is not exercised")
+	}
+	if !s.BasisEstablished {
+		t.Errorf("a compacted session lost its billing basis for failing a reconciliation "+
+			"the rebase makes impossible; billed %d, reported %d",
+			s.Billed.Total(), s.Reported.Total())
+	}
+}
+
+// A failed reconciliation is never read as a compaction.
+func TestReconciliationFailureIsNotReadAsCompaction(t *testing.T) {
+	s := writeRollout(t, rolloutMeta,
+		tokenCount(1000, 100, 1000, 100),
+		tokenCount(2000, 200, 2500, 250),
+	)
+	if s.Rebased {
+		t.Error("a mismatch was inferred to be a rebase; only an observed " +
+			"context_compacted event may set that")
+	}
+	if s.BasisEstablished {
+		t.Error("an ordinary session whose reconstruction does not reconcile reported a basis")
+	}
+}
+
+// Unreadable usage evidence refuses the basis.
+func TestUnreadableUsageEvidenceRefusesTheBillingBasis(t *testing.T) {
+	s, err := ParseCodexFile("codexdata/absent-breakdown.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.BasisEstablished {
+		t.Error("a session whose only usage record could not be read reported a billing basis")
+	}
+}
+
+// A malformed line alone does not refuse the basis.
+//
+// Skipped counts three different refusals: an unparsable line, an unparsable
+// payload, and an unreadable usage record. Only the third is evidence the
+// billing reconstruction needed. Reusing the aggregate would refuse a
+// defensible figure because something unrelated in the file did not parse.
+func TestAMalformedLineAloneDoesNotRefuseTheBillingBasis(t *testing.T) {
+	s := writeRollout(t, rolloutMeta,
+		tokenCount(1000, 100, 1000, 100),
+		`{"timestamp":"2026-09-18T00:00:00.000Z","type":"event_msg","payload":`,
+		tokenCount(2000, 200, 3000, 300),
+	)
+	if s.Skipped != 1 {
+		t.Fatalf("Skipped = %d, want 1: the malformed line must still be counted", s.Skipped)
+	}
+	if !s.BasisEstablished {
+		t.Error("an unparsable line unrelated to usage took the billing basis down with it")
+	}
+	if got, want := s.Billed.Total(), 3300; got != want {
+		t.Errorf("billed = %d, want %d", got, want)
+	}
+}
+
+// A compacted session carrying a re-emission still refuses.
+//
+// This is the case where clause (a) is the only thing standing. Compaction
+// exempts a session from reconciliation, because Codex rebases the cumulative
+// and the reconstruction is supposed to exceed it — so on a compacted session
+// the mismatch that catches a re-emission everywhere else says nothing. Drop
+// the re-emission check and this session bills a doubled figure with no test
+// objecting, which is exactly what a mutant removing it proved.
+func TestACompactedSessionCarryingAReEmissionStillRefuses(t *testing.T) {
+	repeat := tokenCount(2000, 200, 3000, 300)
+	s := writeRollout(t, rolloutMeta,
+		tokenCount(1000, 100, 1000, 100),
+		`{"timestamp":"2026-09-18T00:00:00.000Z","type":"event_msg",`+
+			`"payload":{"type":"context_compacted"}}`,
+		repeat,
+		repeat,
+	)
+	if !s.Rebased {
+		t.Fatal("the fixture did not compact, so the exemption is not exercised")
+	}
+	if s.BasisEstablished {
+		t.Error("a compacted session repeated a usage snapshot and still claimed a billing " +
+			"basis; the compaction exemption covers reconciliation only, never re-emission")
 	}
 }

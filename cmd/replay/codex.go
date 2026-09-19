@@ -90,13 +90,18 @@ func runCodex(args []string, stdout, stderr io.Writer) error {
 
 	var billed, reported int
 	var refused, compacted, quotas int
-	var breaks, coldTokens int
+	var breaks, coldTokens, unestablished int
 	var latest *transcript.CodexQuota
 	type row struct {
 		name             string
 		billed, reported int
 		rebased          bool
 		refused          int
+		// basis is whether the billed figure rests on evidence this reader
+		// can defend. A row without one is listed and not summed, which is
+		// the same treatment a pool gives a superseded submission: named, so
+		// a reader adding the column up knows why it does not reach the total.
+		basis bool
 	}
 	var rows []row
 
@@ -106,8 +111,12 @@ func runCodex(args []string, stdout, stderr io.Writer) error {
 			_, _ = fmt.Fprintf(stderr, "replay: %s: %v\n", filepath.Base(f), err)
 			continue
 		}
-		billed += s.Billed.Total()
-		reported += s.Reported.Total()
+		if s.BasisEstablished {
+			billed += s.Billed.Total()
+			reported += s.Reported.Total()
+		} else {
+			unestablished++
+		}
 		refused += s.Skipped
 		if s.Rebased {
 			compacted++
@@ -120,7 +129,8 @@ func runCodex(args []string, stdout, stderr io.Writer) error {
 		for _, b := range s.Breaks {
 			coldTokens += b.ColdTokens
 		}
-		rows = append(rows, row{filepath.Base(f), s.Billed.Total(), s.Reported.Total(), s.Rebased, s.Skipped})
+		rows = append(rows, row{filepath.Base(f), s.Billed.Total(), s.Reported.Total(),
+			s.Rebased, s.Skipped, s.BasisEstablished})
 	}
 
 	_, _ = fmt.Fprintf(stdout, "\n  %s tokens billed across %d Codex session(s)\n",
@@ -143,6 +153,14 @@ func runCodex(args []string, stdout, stderr io.Writer) error {
 		_, _ = fmt.Fprintf(stdout, "  [NOTE] %d record(s) refused, either because a share exceeded the\n"+
 			"         total it is part of, or because a total arrived with no breakdown\n"+
 			"         at all. Neither can be priced, and neither is zero.\n\n", refused)
+	}
+	if unestablished > 0 {
+		_, _ = fmt.Fprintf(stdout, "  [NOTE] %d session(s) are NOT MEASURED and are in no figure above.\n"+
+			"         Codex broadcasts its usage state, and a broadcast that follows no\n"+
+			"         response repeats the previous one, so summing the field counts that\n"+
+			"         response twice. Where this reader cannot tell a repeat from a second\n"+
+			"         identical response, it refuses the session rather than guessing which.\n\n",
+			unestablished)
 	}
 
 	if breaks > 0 {
