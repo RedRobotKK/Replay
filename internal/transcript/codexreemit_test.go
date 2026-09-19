@@ -69,23 +69,75 @@ func TestCodexBillsTwoIdenticalTurnsWhenTheCumulativeAdvanced(t *testing.T) {
 	}
 }
 
-// A refused record is counted, never dropped in silence.
+// A re-emission is counted, never dropped in silence, and it has its own
+// counter.
 //
-// `Skipped` exists so a format change cannot pass without a word: its own
-// comment says "Non-zero is not an error, but it is reported, because a format
-// change must not pass silently." A re-emission is refused, so it must be
-// counted. Mutation testing caught this: deleting the Skipped++ from the
-// re-emission branch left every other test green, which meant a future Codex
-// that stopped advancing its cumulative could erase every turn in a session and
-// report nothing unusual.
-func TestCodexCountsARefusedReEmission(t *testing.T) {
+// The counting rule is unchanged and its reason is unchanged: a format change
+// cannot pass without a word. Mutation testing caught the original gap, where
+// deleting the increment from the re-emission branch left every other test
+// green, which meant a future Codex that stopped advancing its cumulative could
+// erase every turn in a session and report nothing unusual.
+//
+// What changed is WHERE it is counted. This used to increment Skipped, whose
+// own comment scopes it to "records this reader refused" and whose consumers
+// describe it as unreadable or unparsable. A re-emission is neither: the record
+// parsed, the usage was readable, and it was left out because it had already
+// been billed. Three distinct facts in one counter made all three
+// indistinguishable, and the surfaces reporting it said things that were not
+// true of a re-emission.
+func TestCodexCountsAReEmissionSeparatelyFromSkipped(t *testing.T) {
 	s, err := ParseCodexFile("codexdata/reemitted.jsonl")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := s.Skipped, 2; got != want {
-		t.Errorf("skipped = %d, want %d: a refused re-emission must be counted, "+
-			"because a reader that drops records in silence cannot tell a quiet "+
-			"format change from a quiet session", got, want)
+	if got, want := s.ReEmitted, 2; got != want {
+		t.Errorf("re-emitted = %d, want %d: a re-emission must be counted, because a "+
+			"reader that drops records in silence cannot tell a quiet format change "+
+			"from a quiet session", got, want)
+	}
+	if got, want := s.Skipped, 0; got != want {
+		t.Errorf("skipped = %d, want %d: a re-emission is not a refused record. The "+
+			"record parsed and its usage was readable; it was not billed again because "+
+			"the cumulative had not moved", got, want)
+	}
+}
+
+// Skipped keeps its own meaning, and an unreadable usage record still lands
+// there rather than in the re-emission count.
+//
+// The two are checked from opposite sides on purpose. One test showing a
+// re-emission leaves Skipped alone would still pass if every unreadable record
+// had quietly moved to ReEmitted.
+func TestAnUnreadableUsageRecordIsSkippedAndNotAReEmission(t *testing.T) {
+	s, err := ParseCodexFile("codexdata/absent-breakdown.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := s.Skipped, 1; got != want {
+		t.Errorf("skipped = %d, want %d: a total with no breakdown is unreadable, "+
+			"which is what Skipped counts", got, want)
+	}
+	if got, want := s.ReEmitted, 0; got != want {
+		t.Errorf("re-emitted = %d, want %d: an unreadable record is not a repeat of "+
+			"anything", got, want)
+	}
+}
+
+// Two genuine turns carrying equal numbers touch neither counter.
+//
+// The cumulative advanced on both, so both are turns and neither is a repeat.
+// This is the case the discriminator exists to protect: keying on the delta
+// would call the second one a duplicate and drop a turn that was really billed.
+func TestTwoIdenticalTurnsAreNeitherSkippedNorReEmitted(t *testing.T) {
+	s, err := ParseCodexFile("codexdata/twinturns.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.ReEmitted != 0 || s.Skipped != 0 {
+		t.Errorf("re-emitted = %d and skipped = %d, want 0 and 0: both turns advanced "+
+			"the cumulative, so both are turns", s.ReEmitted, s.Skipped)
+	}
+	if got, want := s.Turns, 2; got != want {
+		t.Errorf("turns = %d, want %d", got, want)
 	}
 }
