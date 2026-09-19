@@ -4,6 +4,29 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+
+- **A re-emitted Codex turn is no longer counted as a refused record.** 0.6.1
+  stopped billing the repeat and counted it in `Skipped`, which already meant
+  three other things: an unparsable line, an unparsable payload, and a usage
+  record whose own subsets contradict it. A re-emission is none of those. The
+  record parsed, its usage was readable, and it stayed out of the bill only
+  because the same turn was already in it. One counter holding four facts made
+  all four indistinguishable, and the surfaces reading it then said things that
+  were not true of a re-emission: `replay codex` reports refused records as
+  ones whose share exceeded their total or whose breakdown was missing, and a
+  reader was sent looking for a malformed record that does not exist.
+  `CodexSession.ReEmitted` is now its own count, beside `Skipped` rather than
+  inside it, and `replay codex` gives it its own note saying what happened: a
+  token-count record repeated usage already reported, the cumulative stood
+  still across the repeat, and the turn is counted once on the record that
+  moved it. The billing arithmetic does not move. The cumulative advancing is
+  still what marks a new contribution, two genuine turns carrying equal numbers
+  are still both billed, and a repeat is still counted rather than dropped in
+  silence.
+
+## [0.6.1] - 2026-09-17
+
 ### Fixed
 
 - **A Codex session that re-emitted a turn was billed for it twice.** Codex

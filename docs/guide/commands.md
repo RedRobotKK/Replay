@@ -1259,6 +1259,17 @@ disagree by design after a compaction and only one of them is a bill.
 The reader keeps billed and reported figures apart for that reason, and refuses a total it was
 given without a breakdown rather than presenting a sum it cannot defend.
 
+A token-count record is a broadcast of Codex's usage state, not a receipt for a turn. Codex emits
+one when a turn finishes, and also when nothing was spent at all, and a record that follows no new
+response repeats the previous one unchanged. What separates the two is the running total: Replay
+bills a usage contribution when Codex's own cumulative has advanced, and treats an unchanged
+cumulative as the same usage reported again, which is not billed a second time.
+
+The test is the running total rather than the numbers in the record, because two consecutive turns
+can genuinely cost the same. Both of those are billed, because the cumulative moved for each of
+them. Summing every record instead would double the turns that were only reported twice, and
+comparing the records to each other would drop the ones that were really identical.
+
 ### `replay burn`
 
 What each agent surface on this machine is consuming: Codex, Ollama and Claude Code, side by side.
