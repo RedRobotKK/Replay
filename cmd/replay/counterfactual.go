@@ -9,6 +9,7 @@ import (
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/coverage"
 	"github.com/RedRobotKK/Replay/internal/learn"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 	"github.com/RedRobotKK/Replay/internal/version"
@@ -296,17 +297,27 @@ func lanePricing(lane *transcript.Lane) (priced, unpriced int) {
 // not be able to mistake it for either. No new vocabulary is introduced. Where
 // a coverage state IS the reason, the note names that state, and where it is
 // not, the note does not borrow one.
+//
+// The two coverage answers are read from the vector rather than re-derived
+// here. §4.6 requires the union of the 4.3 and 4.5 gates, so the dollar half of
+// this note IS 4.3, and 4.3 is implemented once in internal/coverage. Two
+// spellings of one gate is how the two come to disagree; the wording below is
+// unchanged and only the decision behind it moved.
 func dollarNote(priced, unpriced int, promptSideUSD float64) (note string, dollars bool) {
+	v := coverage.Of(coverage.Evidence{Priced: priced, Unpriced: unpriced})
 	switch {
 	case priced == 0 && unpriced == 0:
 		// Nothing was read, so nothing was priced and nothing was unpriced.
+		// The vector reads this as pricing_basis absent, which is true of the
+		// basis and misleading as a note: no lookup ever happened. Absence
+		// keeps its own answer ahead of the gate.
 		return " (no contributing request was read, so there is nothing to price)", false
-	case priced == 0:
+	case v.PricingBasis == coverage.PricingAbsent:
 		// Requests exist and no rules document resolved for any of them. This
 		// is the coverage state, and here it is true.
 		return fmt.Sprintf(" (pricing_basis absent: no rules document carries the model on any of "+
 			"the %d contributing requests, so no dollar figure)", unpriced), false
-	case unpriced > 0:
+	case v.Has(coverage.PartialPricing):
 		// §4.5: not partial-pricing where dollars are claimed. The token share
 		// covers every request; the price covers only some of them.
 		return fmt.Sprintf(" (completeness partial-pricing: %d of %d contributing requests are on a "+
