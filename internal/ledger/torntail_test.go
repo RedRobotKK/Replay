@@ -63,7 +63,7 @@ func TestTL1_ATrailingPartialLineIsNotASkippedRecord(t *testing.T) {
 	half := whole[:len(whole)/2] // no newline: the write is still in flight
 	p := writeLines(t, whole, half)
 
-	recs, skipped, incomplete, err := ReadRecords(p)
+	recs, skipped, _, incomplete, err := ReadRecords(p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestTL2_ACorruptLineMidFileIsStillSkipped(t *testing.T) {
 	a, b := goodLine(t, "a"), goodLine(t, "b")
 	p := writeLines(t, a, "{\"schema\":1,\"broken\":\n", b)
 
-	recs, skipped, incomplete, err := ReadRecords(p)
+	recs, skipped, _, incomplete, err := ReadRecords(p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestTL2_ACorruptLineMidFileIsStillSkipped(t *testing.T) {
 // TL3: a clean file reports neither.
 func TestTL3_ACompleteFileIsNeitherSkippedNorIncomplete(t *testing.T) {
 	p := writeLines(t, goodLine(t, "a"), goodLine(t, "b"))
-	recs, skipped, incomplete, err := ReadRecords(p)
+	recs, skipped, _, incomplete, err := ReadRecords(p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestTL4_AValidLastRecordWithoutItsNewlineIsComplete(t *testing.T) {
 	whole := goodLine(t, "a")
 	p := writeLines(t, strings.TrimSuffix(whole, "\n"))
 
-	recs, skipped, incomplete, err := ReadRecords(p)
+	recs, skipped, _, incomplete, err := ReadRecords(p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestTL5_AnEmptyLedgerFileIsNotTorn(t *testing.T) {
 		t.Error("an empty ledger file reads as torn; it has no last line to tear")
 	}
 
-	recs, skipped, incomplete, err := ReadRecords(p)
+	recs, skipped, _, incomplete, err := ReadRecords(p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +245,7 @@ func TestTL6_AnUnreadableLedgerErrorsRatherThanReadingEmpty(t *testing.T) {
 	})
 
 	t.Run("ReadRecords surfaces it instead of returning no records", func(t *testing.T) {
-		recs, skipped, incomplete, err := ReadRecords(t.TempDir())
+		recs, skipped, _, incomplete, err := ReadRecords(t.TempDir())
 		if err == nil {
 			t.Fatalf("reading a directory as a ledger succeeded: %d records, skipped=%d, "+
 				"incomplete=%v. An unreadable ledger must not read as an empty one",
@@ -283,7 +283,7 @@ func TestTL7_ALineTooLongToScanIsReported(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	recs, _, _, err := ReadRecords(p)
+	recs, _, _, _, err := ReadRecords(p)
 	if err == nil {
 		t.Fatalf("a %d-byte line with no newline read cleanly and returned %d records; "+
 			"the scanner's cap is being reported as the end of the data", past64MiB, len(recs))

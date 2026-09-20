@@ -333,6 +333,27 @@ type Session struct {
 	// record is not counted here. Separating those would need a persisted
 	// record of whether the request was forwarded, which does not exist.
 	ProviderFailures ProviderFailures
+	// SchemaMismatch counts records that parsed but were written under a
+	// different ledger schema version than this build reads.
+	//
+	// The fifth state, and the opposite fact from Skipped. An unreadable line
+	// says bytes are gone; this says the file is intact and this build is not
+	// the one that wrote it. Both were counted in Skipped, whose own
+	// documentation named the ambiguity without resolving it: "data loss, or an
+	// upgrade". The report then rendered the total as transcript lines that
+	// were not conversation content, which is false of such a record in all
+	// three of its claims.
+	//
+	// It says only that the version differs. The record's usage was never
+	// read, so no token, dollar or request is implied for it: not zero, which
+	// would be a measurement, and not unknown in the sense a failed read is
+	// unknown. The bytes are there and this build declined to interpret them.
+	//
+	// Nothing migrates. The gate stays exact equality on SchemaVersion, so a
+	// record at any other version, older or newer, is still not read. This
+	// changes which counter holds it and what the reader is told, and changes
+	// no accounting at all.
+	SchemaMismatch int
 	// Policy names the request-parameter policy the proxy applied to this
 	// session's requests, and Trial the arm of the live trial it was in:
 	// "treated", "control", or empty. Only the ledger knows either.

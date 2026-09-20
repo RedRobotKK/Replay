@@ -236,7 +236,7 @@ func readLedger(t *testing.T, dir string) []ledger.Record {
 		//
 		// A COMPLETE line that is not a record still fails here. That one is
 		// data loss and no amount of polling explains it.
-		recs, skipped, _, err := ledger.ReadRecords(m)
+		recs, skipped, _, _, err := ledger.ReadRecords(m)
 		if err != nil {
 			t.Fatal(err)
 		}

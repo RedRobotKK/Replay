@@ -186,9 +186,42 @@ func (r *LaneReport) header(p *Printer) {
 	if r.Session.Skipped > 0 {
 		p.Printf("Note: %d transcript lines were not conversation content and were skipped\n", r.Session.Skipped)
 	}
+	r.schemaMismatch(p)
 	r.providerFailures(p)
 	r.laneScope(p)
 	p.Printf("\n")
+}
+
+// schemaMismatch says a record was written under a schema this build does not
+// read.
+//
+// Its own sentence rather than a share of the skipped line, because the two
+// are opposite facts. Skipped means the reader could not interpret the line at
+// all; this means it parsed and was declined. Counted together, the report told
+// a reader upgrading Replay that their ledger had lost records.
+//
+// It claims only the version. The record's contents were never read, so
+// nothing here names a token, a dollar or a request for it: absence is not
+// zero (ADR-0018), and a figure of any kind would be one this reader never
+// established. It does not say the record is unreadable either, because the
+// bytes are intact and a later build that reads that schema would find them.
+//
+// The version this build does read is deliberately not named here. Only the
+// ledger reader sets this count, but naming its constant would make the
+// generic report package import that one source, which is the coupling every
+// other source in this repository is kept out of: nothing in this package
+// branches on where a session came from.
+func (r *LaneReport) schemaMismatch(p *Printer) {
+	n := r.Session.SchemaMismatch
+	if n == 0 {
+		return
+	}
+	noun, were, they := "records", "were", "They"
+	if n == 1 {
+		noun, were, they = "record", "was", "It"
+	}
+	p.Printf("Note: %d ledger %s %s written under a different schema version and %s not read. "+
+		"%s parsed, so nothing is missing from the file.\n", n, noun, were, were, they)
 }
 
 // providerFailures says what the provider answered when it did not answer

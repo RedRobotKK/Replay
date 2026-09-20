@@ -357,13 +357,17 @@ func measureRules(dir string, stdout io.Writer) error {
 	machine := machineTag()
 
 	var evidence []cachemodel.PrefixEvidence
-	var files, skipped int
+	// superseded is counted apart from skipped for the reason the ledger
+	// reader now separates them: a record written under another schema is
+	// intact, and calling it skipped tells an operator measuring their own
+	// ledgers that evidence was lost when it was only unread.
+	var files, skipped, superseded int
 	for _, e := range entries {
 		path := filepath.Join(dir, e.Name())
 		if e.IsDir() || !ledger.IsLedgerFile(path) {
 			continue
 		}
-		records, dropped, _, rerr := ledger.ReadRecords(path)
+		records, dropped, otherSchema, _, rerr := ledger.ReadRecords(path)
 		if rerr != nil {
 			// One unreadable file must not lose the rest of the evidence.
 			skipped++
@@ -371,6 +375,7 @@ func measureRules(dir string, stdout io.Writer) error {
 		}
 		files++
 		skipped += dropped
+		superseded += otherSchema
 		evidence = append(evidence, ledger.EvidenceFrom(records, machine)...)
 	}
 
@@ -411,6 +416,10 @@ func measureRules(dir string, stdout io.Writer) error {
 	// valid JSON.
 	fmt.Fprintf(os.Stderr, "measured %d model(s) from %d ledger file(s); %d record(s) skipped\n",
 		len(claims), files, skipped)
+	if superseded > 0 {
+		fmt.Fprintf(os.Stderr, "%d record(s) were written under a different ledger schema and were not read\n",
+			superseded)
+	}
 	return nil
 }
 
