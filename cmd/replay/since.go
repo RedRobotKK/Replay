@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
 )
 
 // What happened while you were away.
@@ -208,6 +210,28 @@ func runSince(args []string, stdout, stderr io.Writer) error {
 		_, _ = fmt.Fprintf(stdout, "\n    %d transcript(s) excluded: their model is not in the price table.\n"+
 			"    They are left out rather than counted as free.\n", rep.Unpriced)
 	}
+	// A dollar figure does not say what kind of dollar it is.
+	//
+	// These are the cost command's numbers, and that command states their
+	// basis: list prices from a dated table, under a dated set of caching
+	// rules. The digest printed the same figures and stated none of it, so
+	// "$32.25" under "Since you last looked" read as an amount somebody had
+	// charged rather than as a valuation of the tokens Replay counted. Both
+	// dated documents are named, because they move independently and only one
+	// of them sets the money.
+	//
+	// The basis is read here rather than written down, for the same reason the
+	// cost command reads it: a loaded rules document overrides the compiled
+	// version, and a basis naming the version that did not price these figures
+	// would be worse than no basis at all.
+	//
+	// It is its own statement rather than a suffix on the figure lines. The
+	// digest is scanned, and a qualifier spliced into the line carrying the
+	// number changes the shape of the thing being scanned.
+	_, _ = fmt.Fprintf(stdout, "\n    Dollar figures are list-price valuations of the tokens Replay counted,\n"+
+		"    at list prices dated %s (caching rules %s).%s\n",
+		cachemodel.PriceTableVersion, cachemodel.RulesVersionInEffect(),
+		cachemodel.PriceTableAgeNote(time.Now()))
 	_, _ = fmt.Fprintln(stdout)
 
 	if !*peek {
