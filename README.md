@@ -84,6 +84,62 @@ replay upgrade
 
 Check: `replay version`
 
+### .deb on the release page
+
+```sh
+curl -fsSLO https://github.com/RedRobotKK/Replay/releases/latest/download/replay_VERSION_linux_amd64.deb && sudo dpkg -i replay_VERSION_linux_amd64.deb
+```
+
+Check: `replay version`
+
+### .rpm on the release page
+
+```sh
+sudo rpm -i https://github.com/RedRobotKK/Replay/releases/latest/download/replay_VERSION_linux_amd64.rpm
+```
+
+Check: `replay version`
+
+### .apk on the release page
+
+```sh
+sudo apk add --allow-untrusted ./replay_VERSION_linux_amd64.apk
+```
+
+Check: `replay version`
+
+### .pkg.tar.zst on the release page
+
+```sh
+sudo pacman -U replay_<version>_linux_<arch>.pkg.tar.zst
+```
+
+Check: `replay version`
+
+### npm (npx)
+
+```sh
+npx replay-doctor diff ~/.claude/projects/
+```
+
+Check: `npx replay-doctor version`
+
+### PyPI (uvx / pipx)
+
+```sh
+uvx replay-doctor diff ~/.claude/projects/
+```
+
+Check: `uvx replay-doctor version`
+
+### bunx / deno (via npm)
+
+```sh
+bunx replay-doctor version
+```
+
+Check: `bunx replay-doctor version`
+
 ### mise via ubi
 
 ```sh
@@ -99,8 +155,6 @@ eget RedRobotKK/Replay
 ```
 
 Check: `./replay version`
-
-Coming: .deb on the release page, .rpm on the release page, .apk on the release page, npm (npx), PyPI (uvx / pipx), bunx / deno (via npm).
 
 Not offered: homebrew-core (OSI; notability thresholds)
 
