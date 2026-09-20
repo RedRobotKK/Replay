@@ -114,6 +114,21 @@ type CodexSession struct {
 	// Skipped counts records this reader refused. Non-zero is not an error,
 	// but it is reported, because a format change must not pass silently.
 	Skipped int
+	// Unparsable counts the subset of Skipped the reader could not read at
+	// all: a line that is not JSON, or a payload that is not.
+	//
+	// A SUBSET, not a sibling. Skipped keeps its meaning, every record this
+	// reader could not use, and this says how many of them it never got far
+	// enough to judge. The distinction exists at the reporting boundary
+	// because that is where it became untrue: the refusal note names a share
+	// exceeding its total and a total with no breakdown, and both describe a
+	// record the reader understood. A line of non-JSON is neither, and was
+	// counted in the same number and given the same reason.
+	//
+	// ReEmitted above was split from Skipped for this exact reason, and the
+	// comment recording it quotes the same sentence. This is that argument
+	// applied to the two cases it did not reach.
+	Unparsable int
 	// ReEmitted counts records that repeated usage this session had already
 	// billed, recognised by the cumulative standing still.
 	//
@@ -287,13 +302,18 @@ func ParseCodex(r io.Reader) (*CodexSession, error) {
 		s.line++
 		var l codexLine
 		if err := json.Unmarshal([]byte(line), &l); err != nil {
+			// Counted twice on purpose. Skipped keeps its meaning, every
+			// record this reader could not use, and Unparsable says this one
+			// was never read far enough to be judged.
 			s.Skipped++
+			s.Unparsable++
 			continue
 		}
 		var p codexPayload
 		if len(l.Payload) > 0 {
 			if err := json.Unmarshal(l.Payload, &p); err != nil {
 				s.Skipped++
+				s.Unparsable++
 				continue
 			}
 		}
