@@ -110,7 +110,7 @@ Locate and classify every cache break, with its cause.
 
 | Flag | Type | What it does |
 |---|---|---|
-| `-dollars` | bool | add a list-price cost column (first-party rates, dated price table) |
+| `-dollars` | bool | add a list-price cost column to the policy table (first-party rates, dated price table); not available on blame or diff, which print no policy table |
 
 ### advise
 
@@ -189,7 +189,7 @@ Rank what is eating prompt tokens.
 
 | Flag | Type | What it does |
 |---|---|---|
-| `-dollars` | bool | add a list-price cost column (first-party rates, dated price table) |
+| `-dollars` | bool | add a list-price cost column to the policy table (first-party rates, dated price table); not available on blame or diff, which print no policy table |
 
 ### replay
 
@@ -197,7 +197,7 @@ Reproduce caching, then score alternative layouts.
 
 | Flag | Type | What it does |
 |---|---|---|
-| `-dollars` | bool | add a list-price cost column (first-party rates, dated price table) |
+| `-dollars` | bool | add a list-price cost column to the policy table (first-party rates, dated price table); not available on blame or diff, which print no policy table |
 
 ### route
 
