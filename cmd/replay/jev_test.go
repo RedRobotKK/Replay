@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -298,5 +299,94 @@ func TestJevMalformedInputIsAtomicAcrossPaths(t *testing.T) {
 func TestJevWithNoArgumentsIsAUsageError(t *testing.T) {
 	if _, _, err := jevRun(t); err == nil {
 		t.Fatal("replay jev with no path succeeded; want a usage error")
+	}
+}
+
+// An empty map is a map the provider sent, and it is not a row.
+//
+// writeJevFloatMap and writeJevStringMap each return early on len(m) == 0.
+// guard-reachability reported both UNREACHED on 2026-09-20: every fixture here
+// carried a populated legend and a populated probabilities map, so nothing ever
+// asked what the command does with an empty one. The contract permits it.
+// jevOnly lists `probabilities` and `legend` as members of their answers and
+// nothing requires them non-empty, and jevFloatMap builds its result with
+// make(), so `{}` decodes to an empty map rather than to absence.
+//
+// What the early return buys is the difference between printing nothing and
+// printing a label with no values after it. A bare "probabilities" line would
+// read as a distribution the provider sent and this build failed to render.
+
+// A choice answer whose probabilities object is present and empty.
+const jevEmptyProbabilities = `{"contract_version":1,"evaluation_id":"replay_eval_00000000000000000000000000000159","requested_model":"jev-latest","attempts":[{"ordinal":0,"http_status":200,"response":{"model":"jev-1.13.0","answers":{"owning_team":{"type":"choice","choice":"facilities","confidence":1.0,"probabilities":{}}},"usage":{"input_tokens":10,"output_tokens":2}}}]}`
+
+// A score answer whose legend object is present and empty, with a populated
+// probabilities map beside it so the two are told apart.
+const jevEmptyLegend = `{"contract_version":1,"evaluation_id":"replay_eval_00000000000000000000000000000178","requested_model":"jev-latest","attempts":[{"ordinal":0,"http_status":200,"response":{"model":"jev-1.13.0","answers":{"urgency":{"type":"score","score":0.14,"confidence":0.79,"legend":{},"probabilities":{"0":0.86,"1":0.14}}},"usage":{"input_tokens":10,"output_tokens":2}}}]}`
+
+// An empty probabilities map prints no probabilities row.
+func TestJevEmptyProbabilitiesPrintsNoRow(t *testing.T) {
+	out, errOut, err := jevRun(t, jevWrite(t, "empty-prob.jsonl", jevEmptyProbabilities+"\n"))
+	if err != nil {
+		t.Fatalf("a capture with an empty probabilities object was refused: %v\n%s", err, errOut)
+	}
+	// The answer itself is still reported. Only the empty map is absent.
+	if !strings.Contains(out, "choice facilities") {
+		t.Errorf("the answer carrying the empty map was not printed at all:\n%s", out)
+	}
+	if strings.Contains(out, "probabilities") {
+		t.Errorf("an empty probabilities map produced a label with no values after it, "+
+			"which reads as a distribution the provider sent and this build did not "+
+			"render:\n%s", out)
+	}
+}
+
+// An empty legend prints no legend row, and does not suppress the
+// probabilities row that follows it.
+func TestJevEmptyLegendPrintsNoRow(t *testing.T) {
+	out, errOut, err := jevRun(t, jevWrite(t, "empty-legend.jsonl", jevEmptyLegend+"\n"))
+	if err != nil {
+		t.Fatalf("a capture with an empty legend object was refused: %v\n%s", err, errOut)
+	}
+	if !strings.Contains(out, "score 0.14") {
+		t.Errorf("the score answer was not printed at all:\n%s", out)
+	}
+	if strings.Contains(out, "legend") {
+		t.Errorf("an empty legend produced a label with no levels after it:\n%s", out)
+	}
+	// The guard is per map. An early return that swallowed the rest of the
+	// answer would take this row with it.
+	if !strings.Contains(out, "probabilities  0 0.86") {
+		t.Errorf("the populated probabilities row went missing beside the empty "+
+			"legend, so the empty-map return is skipping more than its own row:\n%s", out)
+	}
+}
+
+// The parse/help return is the command's, not the flag package's.
+//
+// runJev's first statement returns whatever parseArgs gives it. That branch ran
+// under the repository-wide --help sweep but nothing asserted on it, so
+// guard-reachability reported it INERT: neutralising the return left every test
+// green. The two outcomes it carries are different and both are contractual.
+func TestJevParseArgsOutcomesAreReturned(t *testing.T) {
+	// runJev directly, not through run(): main.go:112 turns errHelpShown into a
+	// nil exit at the dispatcher, which is correct there and hides the very
+	// distinction this branch carries.
+	var out, errb bytes.Buffer
+	if err := runJev([]string{"--help"}, &out, &errb); !errors.Is(err, errHelpShown) {
+		t.Errorf("`replay jev --help` returned %v, want errHelpShown", err)
+	}
+	if !strings.Contains(out.String(), "jev") {
+		t.Errorf("--help printed no usage for the command:\n%s", out.String())
+	}
+
+	// An unparseable flag is a usage error, and it must not fall through into
+	// the reader and report on a capture nobody named.
+	var out2, errb2 bytes.Buffer
+	if err := runJev([]string{"--no-such-flag", jevValidFixture}, &out2, &errb2); !errors.Is(err, errUsage) {
+		t.Errorf("an unknown flag returned %v, want errUsage", err)
+	}
+	if strings.Contains(out2.String(), "Jev capture") {
+		t.Errorf("the command kept going after a flag it could not parse and printed "+
+			"a report:\n%s", out2.String())
 	}
 }

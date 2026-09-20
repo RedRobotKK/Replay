@@ -1,16 +1,17 @@
-//go:build jevcontract
-
 // Contract tests for the Jev capture reader.
 //
-// These are written before the reader exists, and they are behind a build tag
-// for one reason: a test file naming symbols that have not been declared makes
-// the whole package's test binary fail to build, and every unrelated transcript
-// test then reports as a build failure rather than as a pass. The mutation
-// harness already uses this pattern (`//go:build mutation`). Run these with:
+// These were written before the reader existed, and sat behind a `jevcontract`
+// build tag for one reason: a test file naming symbols that have not been
+// declared makes the whole package's test binary fail to build, and every
+// unrelated transcript test then reports as a build failure rather than as a
+// pass. The tag said so itself, and said it lasted only "until the reader
+// lands".
 //
-//	go test -tags jevcontract ./internal/transcript
-//
-// and the default suite stays readable until the reader lands.
+// The reader landed in c0450a9 and the tag outlived its reason. It was also
+// costing something: guard-reachability runs `go test` with no tags, so all 82
+// conditionals in jev.go were reported as reached by no test at all, when in
+// fact these seventeen cover them. A gate cannot observe a test it does not
+// compile. They run in the ordinary suite now.
 //
 // Two of these tests exist because their defects pass silently. JC3 guards a
 // score of 0.14 against becoming 0, which under the observed legend reads

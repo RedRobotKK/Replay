@@ -92,7 +92,7 @@ func runRules(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("--update, --export, --measure and --check-prices each do a different thing; pick one: %w", errUsage)
 	}
 	if *measure != "" {
-		return measureRules(*measure, stdout)
+		return measureRules(*measure, stdout, stderr)
 	}
 	if *export {
 		if *dryRun {
@@ -343,7 +343,7 @@ func exportRules(stdout io.Writer) error {
 // The document it writes is installable by `--update` like any other, and its
 // claims are derived rather than declared: the loader refuses a file that
 // tries to state a verdict, so a `status` field written by hand is rejected.
-func measureRules(dir string, stdout io.Writer) error {
+func measureRules(dir string, stdout, stderr io.Writer) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("read ledger directory: %w", err)
@@ -414,10 +414,10 @@ func measureRules(dir string, stdout io.Writer) error {
 	// the document is the whole point of stdout, so the count is a comment the
 	// caller can ignore. Written to stderr so `--measure > rules.json` stays
 	// valid JSON.
-	fmt.Fprintf(os.Stderr, "measured %d model(s) from %d ledger file(s); %d record(s) skipped\n",
+	_, _ = fmt.Fprintf(stderr, "measured %d model(s) from %d ledger file(s); %d record(s) skipped\n",
 		len(claims), files, skipped)
 	if superseded > 0 {
-		fmt.Fprintf(os.Stderr, "%d record(s) were written under a different ledger schema and were not read\n",
+		_, _ = fmt.Fprintf(stderr, "%d record(s) were written under a different ledger schema and were not read\n",
 			superseded)
 	}
 	return nil

@@ -145,3 +145,51 @@ func TestSM6c_ACleanLedgerReportsNeitherNote(t *testing.T) {
 		t.Errorf("a skipped note appeared for a clean ledger:\n%s", notes)
 	}
 }
+
+// SM6d: one record reads as one record, and two read as two.
+//
+// The note agrees with its own count: "1 ledger record was ... It parsed"
+// against "2 ledger records were ... They parsed". Every fixture above carries
+// exactly one superseded record, so the singular branch always ran and no
+// assertion depended on it. guard-reachability reported it INERT on 2026-09-20:
+// forcing the condition false produced plural wording for a count of one and
+// the suite stayed green.
+//
+// A note that says "1 ledger records were written" is not a rounding error in
+// prose. This file exists because a report told a reader something untrue about
+// their data, and number agreement is the most visible form of the tool not
+// having read what it is describing.
+func TestSM6d_TheNoteAgreesWithItsOwnCount(t *testing.T) {
+	one := smNoteLines(smHeader(t,
+		smReportRecord(ledger.SchemaVersion),
+		smReportRecord(ledger.SchemaVersion-1),
+	))
+	for _, want := range []string{"1 ledger record was", "It parsed"} {
+		if !strings.Contains(one, want) {
+			t.Errorf("a single superseded record is not reported in the singular "+
+				"(want %q):\n%s", want, one)
+		}
+	}
+	for _, banned := range []string{"1 ledger records", "records were", "They parsed"} {
+		if strings.Contains(one, banned) {
+			t.Errorf("a single superseded record is reported as plural (%q):\n%s", banned, one)
+		}
+	}
+
+	two := smNoteLines(smHeader(t,
+		smReportRecord(ledger.SchemaVersion),
+		smReportRecord(ledger.SchemaVersion-1),
+		smReportRecord(ledger.SchemaVersion-2),
+	))
+	for _, want := range []string{"2 ledger records were", "They parsed"} {
+		if !strings.Contains(two, want) {
+			t.Errorf("two superseded records are not reported in the plural "+
+				"(want %q):\n%s", want, two)
+		}
+	}
+	for _, banned := range []string{"2 ledger record was", "It parsed"} {
+		if strings.Contains(two, banned) {
+			t.Errorf("two superseded records are reported as singular (%q):\n%s", banned, two)
+		}
+	}
+}
