@@ -1270,6 +1270,34 @@ can genuinely cost the same. Both of those are billed, because the cumulative mo
 them. Summing every record instead would double the turns that were only reported twice, and
 comparing the records to each other would drop the ones that were really identical.
 
+### `replay jev <capture...>`
+
+Prints what a Jev capture holds. Takes one or more capture files and reads them all before it
+prints anything, so a malformed record fails the whole invocation rather than producing a report
+that covers whichever files happened to parse.
+
+A Jev capture is Replay's own artifact rather than something a vendor leaves on disk, which is why
+there is no default location to search and a path is required. The capture arrives on a stream and
+this command does not make it durable: it reads a file you name and writes nothing.
+
+For each evaluation it shows the Replay-minted evaluation id, the model that was requested, the
+model that answered, and every attempt with its ordinal and HTTP status. The provider's own request
+id appears only on attempts whose response actually carried one, because the header is optional and
+a blank column would read as an observation rather than an absence. An evaluation whose every
+attempt failed is a valid record and is shown as `no response`, never as a response with zero
+tokens.
+
+Answers are printed in the three forms Jev returns them: `noul`, `choice` and `score`. Provider
+probabilities are shown one by one exactly as they arrived. Nothing here sums, renormalises or
+rounds them, and a score is not read as an index into its legend.
+
+What this command deliberately does not do is as much the point as what it does. It builds no
+session, so no truth tier is printed and no figure from a capture enters the analysis, corpus or
+contribution paths. It prints no cost, no savings and no cache figures, because a Jev capture
+reports input and output tokens and no cache fields at all. A surface that cannot distinguish a
+cache write from a cache read cannot answer the question the rest of Replay exists to answer, and
+printing a zero there would be a measurement nobody made.
+
 ### `replay burn`
 
 What each agent surface on this machine is consuming: Codex, Ollama and Claude Code, side by side.

@@ -17,7 +17,7 @@ reach the network, and does it write. Both are answered per command below, and
 summarised here.
 
 **Opens no socket and writes nothing** — safe to run at will:
-`ceiling`, `diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `mcp`, `statusline`, `redact`, `version`, `prefix`, `budget`, `pool`.
+`ceiling`, `diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `mcp`, `statusline`, `redact`, `version`, `prefix`, `budget`, `jev`, `pool`.
 
 **Leaves the machine:** `serve` proxies every request to the provider.
 `probe --execute` sends billable requests, and without `--execute` it prints a
@@ -66,6 +66,7 @@ to test whether `~/.replay` is writable.
 | [`prefix`](#prefix) | Whether a change to a tool-server document voids the cached prefix | none | none |
 | [`since`](#since) | What ran, and what it cost, since you last looked | none | ~/.replay/seen.json, one timestamp; --peek writes nothing |
 | [`budget`](#budget) | What this configuration costs on every request, before any work | none | none |
+| [`jev`](#jev) | What a Jev capture holds: attempts, answers, observed tokens | none | none |
 | [`upgrade`](#upgrade) | Replace this binary with the latest published release | outbound: github.com, to resolve the latest tag and download the release archive and its checksums | the running binary, in place, after its checksum is verified; --check and --dry-run write nothing |
 | [`purge`](#purge) | Remove ledger records past a retention window, or one session's | none | removes ledger records under the directory given; nothing unless --yes |
 | [`privacy`](#privacy) | Everything Replay has written to this machine, and what each store holds | none | nothing: it reports and never removes |
@@ -353,6 +354,12 @@ What this configuration costs on every request, before any work.
 |---|---|---|
 | `-json` | bool | emit the artefact as JSON, for committing and for the gate to read |
 
+### jev
+
+What a Jev capture holds: attempts, answers, observed tokens.
+
+Takes no flags.
+
 ### upgrade
 
 Replace this binary with the latest published release.
@@ -427,4 +434,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-30 commands, 111 flags, read from the binary.
+31 commands, 111 flags, read from the binary.
