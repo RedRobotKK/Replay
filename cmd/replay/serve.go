@@ -60,6 +60,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 	maxSessionUSD := fs.Float64("max-session-usd", 0, "refuse a session's next request once its list-price cost reaches this many dollars (0 = off; models not in the price table count as free)")
 	maxDayUSD := fs.Float64("max-day-usd", 0, "refuse requests once today's list-price cost reaches this many dollars, UTC (0 = off)")
 	errorBudget := fs.Float64("error-budget", 0, "refuse a session's next request once this share of its prompt tokens carried error content, e.g. 0.3 (0 = off)")
+	preflight := fs.Int("preflight", 0, "refuse a request whose changed system prompt or tool definitions would re-lay more than this many tokens, estimated from the prefix bytes (0 = off). The number is the ceiling and supplying it is what turns the guard on")
 	loopWarn := fs.Int("loop-warn", 0, "add a warning header when one identical tool call repeats this many times (0 = off)")
 	loopBlock := fs.Int("loop-block", 0, "refuse the request when one identical tool call repeats this many times (0 = off)")
 	breakerFailures := fs.Int("breaker-failures", 0, "open the circuit after this many consecutive provider failures (0 = off)")
@@ -96,6 +97,10 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		*freezePrefix = false
 	}
 	contextEdit, err := contextEditFromFlags(*editTrigger, *editKeep, noPolicy)
+	if err != nil {
+		return err
+	}
+	preFlight, err := preFlightFromFlag(*preflight)
 	if err != nil {
 		return err
 	}
@@ -162,6 +167,7 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 		Siblings:      proxy.SiblingSettings{MaxWait: *holdSiblings},
 		Retries:       proxy.RetrySettings{Attempts: *retries, BaseDelay: *retryBase, MaxDelay: *retryMax},
 		ErrorBudget:   proxy.ErrorBudget{Share: *errorBudget},
+		PreFlight:     preFlight,
 	})
 	if err != nil {
 		return err
@@ -272,6 +278,34 @@ func maskingFromFlags(on bool, patternsFile string, rehydrate bool, project stri
 
 // contextEditFromFlags builds the live policy, or nil when it is off or
 // the environment forbids policies.
+// preFlightFromFlag turns the operator's ceiling into the pre-flight policy.
+//
+// The number is the consent. There is no separate switch, because a ceiling
+// and a decision to refuse are the same statement: the largest re-lay the
+// operator accepts is what "on" means here, and it is how every other guard in
+// this command is spelled, down to 0 meaning off.
+//
+// Keeping them apart would not be safer, it would be the opposite. The policy
+// compares a deficit against CeilingTokens, so consent without a ceiling is
+// consent to refuse every changed prefix: a diverged request of any size is
+// greater than zero, and the estimate band that would otherwise warn instead
+// of refusing can never contain zero either. A guard that refuses everything
+// is not a conservative default, it is an outage the operator did not ask for.
+func preFlightFromFlag(ceiling int) (analysis.PolicyState, error) {
+	switch {
+	case ceiling == 0:
+		// Off, and identical to what every shipped build has done so far.
+		return analysis.PolicyState{}, nil
+	case ceiling < 0:
+		// Refused rather than read as off. A negative ceiling is a mistake,
+		// and treating it as off would answer an operator who asked for the
+		// guard by silently not running it.
+		return analysis.PolicyState{}, fmt.Errorf("-preflight must be a positive token ceiling, or 0 to leave it off; got %d", ceiling)
+	default:
+		return analysis.PolicyState{CeilingTokens: int64(ceiling), OptInActive: true}, nil
+	}
+}
+
 func contextEditFromFlags(trigger, keep int, forbidden bool) (*policy.ContextEdit, error) {
 	if trigger == 0 || forbidden {
 		return nil, nil

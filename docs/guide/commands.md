@@ -1415,6 +1415,7 @@ accounting that eviction cannot widen — are specified and not built, and
 | `--loop-warn`, `--loop-block` | Count how many times in a row the agent has made the same tool call with the same input, then warn or refuse |
 | `--breaker-failures`, `--breaker-cooldown` | Open a circuit after consecutive provider failures and answer locally with `Retry-After` until the cooldown passes (default 30s) |
 | `--retries`, `--retry-base`, `--retry-max` | Resend on rate limit, overload, server error or connection failure, with doubling jittered backoff |
+| `--preflight N` | Refuse a request whose changed system prompt or tool definitions would re-lay more than `N` tokens, estimated from the prefix bytes. `N` is the ceiling you accept, and supplying it is what turns the guard on: with no `--preflight` it never refuses. A deficit whose estimate band straddles the ceiling is passed with a warning header instead, because the estimate cannot say which side it falls on, and a single request can be let through with the override header and a reason |
 
 The error budget is designed to catch a stuck agent long before a spend cap would, because an agent
 looping on failures wastes money before it has spent much. Note that when both would refuse the same

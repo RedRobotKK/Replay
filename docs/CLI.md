@@ -152,6 +152,7 @@ Local proxy: forwards to the provider, records a ledger.
 | `-max-session-usd` | float | refuse a session's next request once its list-price cost reaches this many dollars (0 = off; models not in the price table count as free) |
 | `-metrics-listen` | string | bind a second, read-only listener for /replay/metrics, /replay/status and /replay/healthz. It never proxies. Use it when the proxy is on a socket and a scraper needs a port |
 | `-policy-file` | string | EXPERIMENTAL: apply the context-edit candidate selected by replay learn (usually ~/.replay/policy.json), read at each session's first request; an explicit -context-edit-trigger wins; a session keeps its first decision whatever the file does later |
+| `-preflight` | int | refuse a request whose changed system prompt or tool definitions would re-lay more than this many tokens, estimated from the prefix bytes (0 = off). The number is the ceiling and supplying it is what turns the guard on |
 | `-project` | string | with -mask, the directory under which file-edit tool inputs may receive secrets (default: the current directory) |
 | `-rehydrate` | bool | with -mask, restore placeholders in responses; false leaves them in place to evaluate coverage (default true) |
 | `-rehydrate-scope` | value | with -mask, where a pattern's secrets may be restored, as name=dest[,dest] with dest text, edit, tool:NAME, or none; name * sets the default (text,edit); repeatable |
@@ -434,4 +435,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-31 commands, 111 flags, read from the binary.
+31 commands, 112 flags, read from the binary.
