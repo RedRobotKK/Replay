@@ -293,6 +293,44 @@ func (b *SessionBuilder) Add(rec Record) {
 			b.session.Refusals++
 			return
 		}
+		// The provider was reached and did not answer usefully. Checked after
+		// the refusal branch and not before it: every guard Replay fires writes
+		// a status of its own, 400 for the spend cap, the loop guard, the error
+		// budget and the pre-flight ceiling, 503 for the circuit breaker, so
+		// deciding on status first would count every one of them as the
+		// provider's doing.
+		//
+		// At or above 400, which is where the proxy's own stats already put a
+		// failure. A 3xx is not claimed: it is not a failure, and the category
+		// says only what was observed.
+		//
+		// And only where the provider reported no usage. ParseOpenAIResponse
+		// (openai.go:118-133) has no type gate, so a failing request on the
+		// OpenAI-compatible path can still carry real token counts. Those were
+		// observed, and this category is a classification rather than an
+		// accounting mechanism: counting such a record here would take its
+		// measured tokens out of the session totals and its dollars out of the
+		// priced figures, which is deleting a measurement because the HTTP
+		// request failed. It stays a usage-bearing record instead.
+		if rec.Status >= 400 && rec.Response.Usage == nil {
+			if b.session.ProviderFailures.ByStatus == nil {
+				b.session.ProviderFailures.ByStatus = map[int]int{}
+			}
+			b.session.ProviderFailures.ByStatus[rec.Status]++
+			return
+		}
+		// No status at all: the connection failed before the provider answered.
+		// Kept apart from the status counts because 0 is not one.
+		//
+		// A zero status does not identify itself — an empty record has one too
+		// — so the prompt is what separates them. handle summarizes before it
+		// forwards (passthrough.go:20-21), so a request that reached the
+		// provider carries its messages whatever came back, and a record with
+		// neither a status nor a prompt is the one that still explains nothing.
+		if rec.Status == 0 && len(rec.Prompt.Messages) > 0 {
+			b.session.ProviderFailures.NoStatus++
+			return
+		}
 		b.session.Skipped++
 		return
 	}

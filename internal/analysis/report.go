@@ -3,6 +3,7 @@ package analysis
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -185,8 +186,44 @@ func (r *LaneReport) header(p *Printer) {
 	if r.Session.Skipped > 0 {
 		p.Printf("Note: %d transcript lines were not conversation content and were skipped\n", r.Session.Skipped)
 	}
+	r.providerFailures(p)
 	r.laneScope(p)
 	p.Printf("\n")
+}
+
+// providerFailures says what the provider answered when it did not answer
+// usefully.
+//
+// Counting without reporting would leave the defect standing. Session.Refusals
+// is the precedent: local refusals were moved out of Skipped and nothing ever
+// read the new field, so the misleading line stopped counting them and no line
+// replaced it.
+//
+// Two statements, not one. A status the provider sent and the absence of any
+// status are different observations, and a single total would answer neither
+// reader. Nothing here names a cause: a status is evidence of what came back,
+// not of why, so 401 is not called an authentication failure and 429 is not
+// called an exhausted quota. Nothing here says anything about tokens or money
+// either, because the record carries no usage and absence is not zero.
+func (r *LaneReport) providerFailures(p *Printer) {
+	pf := r.Session.ProviderFailures
+	if byStatus := pf.Total() - pf.NoStatus; byStatus > 0 {
+		codes := make([]int, 0, len(pf.ByStatus))
+		for code := range pf.ByStatus {
+			codes = append(codes, code)
+		}
+		sort.Ints(codes)
+		parts := make([]string, 0, len(codes))
+		for _, code := range codes {
+			parts = append(parts, fmt.Sprintf("%d x%d", code, pf.ByStatus[code]))
+		}
+		p.Printf("Note: %s carried an HTTP status of 400 or above: %s\n",
+			plural(byStatus, "recorded request"), strings.Join(parts, ", "))
+	}
+	if pf.NoStatus > 0 {
+		// Never printed as a status. There was not one.
+		p.Printf("Note: %s obtained no HTTP status\n", plural(pf.NoStatus, "recorded request"))
+	}
 }
 
 // laneScope says how much of the session these figures cover.
