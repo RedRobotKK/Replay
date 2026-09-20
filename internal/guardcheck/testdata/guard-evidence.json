@@ -1,0 +1,227 @@
+[
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevEvaluation",
+    "cond": "err != nil",
+    "producer": "obj, err := jevObject(raw, \"record\")",
+    "category": "dominated",
+    "justification": "Dropping this error leaves obj as a nil map. Reading a missing key from a nil map is defined in Go and returns the zero value, so the very next field read misses and the record is refused as \"missing contract_version\" instead of naming the record shape. The record is still refused and no partial result is returned; what changes is which field the reader blames.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 and re-run over a 77-input jev corpus (75 contract violations, 2 valid records). 4 inputs changed diagnostic (record_is_string, record_is_null, trailing_garbage, array_toplevel); all 4 were REJECTED with 0 evaluations before and after. No input became accepted, and no input newly returned a partial result."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevEvaluation",
+    "cond": "err != nil",
+    "producer": "ev.ContractVersion, err = jevInt(obj, \"contract_version\")",
+    "category": "dominated",
+    "justification": "Dropping this error leaves ContractVersion at 0, and the version check three lines below refuses 0 against the one version this build reads. The refusal is unconditional because 0 is not a version any producer writes, so the record cannot survive past it.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 3 inputs changed diagnostic (missing_version, version_null, version_frac), each moving from a field-specific message to \"unknown contract_version 0, this build reads 1\". All REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevEvaluation",
+    "cond": "err != nil",
+    "producer": "ev.EvaluationID, err = jevString(obj, \"evaluation_id\")",
+    "category": "dominated",
+    "justification": "Dropping this error leaves EvaluationID as the empty string, which jevIdentity refuses on the very next line because \"\" does not carry the replay_eval_ namespace. The namespace check is itself load-bearing and tested (JR12), so the refusal downstream is not itself an unexamined guard.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 3 inputs changed diagnostic (missing_id, id_null, id_number), each moving to `evaluation_id \"\" does not carry the replay_eval_ namespace`. All REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevEvaluation",
+    "cond": "err != nil",
+    "producer": "err := jevUnmarshal(obj, \"attempts\", &items)",
+    "category": "dominated",
+    "justification": "Dropping this error leaves items nil, and the emptiness check immediately below refuses a record with no attempts. A record that failed to decode its attempts and a record that carried none are both refused; only the message differs.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 3 inputs changed diagnostic (missing_attempts, attempts_null, attempts_object), each moving to \"attempts is empty\". All REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevAttempt",
+    "cond": "err != nil",
+    "producer": "obj, err := jevObject(raw, \"attempt\")",
+    "category": "dominated",
+    "justification": "Dropping this error leaves obj as a nil map, and the first field the attempt reads is a required one, so the attempt is refused as \"missing ordinal\" rather than for its shape. Reading from a nil map is defined behaviour in Go, so there is no unguarded operation behind this guard.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 2 inputs changed diagnostic (attempt_string, attempt_null), each moving to \"attempt 0: missing ordinal\". All REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevAttempt",
+    "cond": "err != nil",
+    "producer": "id, err := jevRawString(v, \"provider_request_id\")",
+    "category": "dominated",
+    "justification": "Dropping this error leaves id as the empty string, which the emptiness check on the next line refuses with the contract's own instruction to omit the field when the header was absent. A provider_request_id that would not decode and one that decoded to \"\" are the same refusal.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 2 inputs changed diagnostic (prid_number, prid_null), each moving to \"provider_request_id is empty; omit it when the header was absent\". All REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevAttempt",
+    "cond": "err != nil",
+    "producer": "ro, err := jevObject(v, \"response\")",
+    "category": "dominated",
+    "justification": "Dropping this error leaves ro as a nil map and hands it to jevResponse, whose first read is the required model field. The response is refused as \"missing model\" instead of for its shape, and nothing partial is built because jevResponse returns before assigning anything.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 2 inputs changed diagnostic (response_string, response_null), each moving to \"attempt 0: response: missing model\". All REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevResponse",
+    "cond": "err != nil",
+    "producer": "err := jevUnmarshal(obj, \"answers\", &answers)",
+    "category": "dominated",
+    "justification": "Dropping this error leaves answers nil, and the emptiness check below refuses a response with no answers. A response whose answers would not decode and one that carried none are both refused before any answer is read.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 3 inputs changed diagnostic (missing_answers, answers_null, answers_array), each moving to \"answers is empty\". All REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevResponse",
+    "cond": "err != nil",
+    "producer": "usage, err := jevObject(obj[\"usage\"], \"usage\")",
+    "category": "dominated",
+    "justification": "Dropping this error leaves usage as a nil map, and both usage fields the contract requires are then read out of it and miss. The response is refused as \"missing input_tokens\" rather than for the shape of the usage object, and no token count is ever assigned.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 3 inputs changed diagnostic (missing_usage_key, usage_null, usage_number), each moving to \"missing input_tokens\". All REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevAnswerOf",
+    "cond": "err != nil",
+    "producer": "obj, err := jevObject(raw, \"answer\")",
+    "category": "dominated",
+    "justification": "Dropping this error leaves obj as a nil map, and the answer's discriminating field is read out of it on the next line and misses. The answer is refused as \"missing type\" and no answer value is constructed.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 2 inputs changed diagnostic (answer_string, answer_null), each moving to `answer \"q\": missing type`. All REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevAnswerOf",
+    "cond": "err != nil",
+    "producer": "kind, err := jevString(obj, \"type\")",
+    "category": "dominated",
+    "justification": "Dropping this error leaves kind as the empty string, which matches no case in the type switch, so the function falls through to its own unknown-type refusal. The empty string is not a type any producer writes, so the fall-through is unconditional.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 3 inputs changed diagnostic (missing_type, type_number, type_null), each moving to `unknown answer type \"\"`. All REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevWalk",
+    "cond": "err != nil",
+    "producer": "kt, err := dec.Token()",
+    "category": "dominated",
+    "justification": "Dropping this error leaves kt nil, and the type assertion to string on the next line does not hold, so the walk refuses at the key-is-not-a-string branch instead. This is the one place in the reader where a dominated guard is dominated by another guard in this same manifest, and the pairing is deliberate rather than accidental: the assertion below cannot be reached by input, and it is reached here only because this error was dropped.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 1 input changed diagnostic (unclosed_object), moving from \"malformed JSON: unexpected end of JSON input\" to \"malformed JSON: object key is not a string\". REJECTED with 0 evaluations before and after; nothing became accepted. Separately, TestJR11 asserts the invariant this guard carries at the jevRejectDuplicateKeys boundary, where a nil token must not be reported as a well-formed document."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevWalk",
+    "cond": "!ok",
+    "producer": "key, ok := kt.(string)",
+    "category": "structurally-unreachable",
+    "justification": "This branch is entered only when the token returned for an object key is not a string. The token comes from encoding/json's Decoder, positioned inside an object with More() true, and the decoder's own grammar admits nothing but a string in key position: a non-string key is rejected as malformed before any token is produced. The condition therefore has no input that makes it true, and it is retained rather than deleted because it is a claim about a dependency's contract, which a future decoder could in principle change.",
+    "evidence": "Neutralised as `false && (!ok)` on 2026-09-20 over the same 77-input corpus. This is the only survivor in this manifest with zero observable difference: all 77 outcomes were byte-identical to the unmutated reader, including the two valid records. The corpus contains no input that reaches this branch, and JSON provides no syntax for one. This entry claims unreachability through encoding/json's documented token stream, not mathematical impossibility for all conceivable decoders."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevWalk",
+    "cond": "err != nil",
+    "producer": "_, err := dec.Token()",
+    "category": "dominated",
+    "justification": "This reads the closing delimiter of a composite that was already walked. Dropping its error makes the duplicate-key pre-pass return nil on a document it did not finish reading, and the main decode immediately behind it refuses the same input. The pre-pass exists to catch duplicate keys, not to be the only reader that sees malformed trailing input.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 1 input changed diagnostic (response_unclosed), where the refusal moved from the pre-pass (\"malformed JSON: invalid character ']' after object key:value pair\") to the main decode (\"record: invalid character ']' after object key:value pair\"). REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevObject",
+    "cond": "len(raw) == 0",
+    "producer": "",
+    "category": "dominated",
+    "justification": "An absent key yields a zero-length value here. Dropping this check lets that zero-length value reach json.Unmarshal, which refuses it as an empty document, so the caller still gets an error and still builds nothing. The check exists so the reader names the absent field rather than reporting a decode failure over nothing.",
+    "evidence": "Neutralised as `false && (len(raw) == 0)` on 2026-09-20 over the same 77-input corpus. 1 input changed diagnostic (missing_usage_key), moving from \"missing usage\" to \"usage: unexpected end of JSON input\". REJECTED with 0 evaluations before and after; nothing became accepted. An earlier corpus reported this guard as having no observable difference; that was a corpus defect, not a property of the guard. The case meant to omit the usage key was itself malformed JSON and was refused before reaching here. It is recorded because the first reading was wrong and the correction is the evidence."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevObject",
+    "cond": "string(raw) == \"null\"",
+    "producer": "if len(raw) == 0 { return nil, fmt.Errorf(\"missing %s\", what) }",
+    "category": "dominated",
+    "justification": "Dropping this check lets a literal null reach json.Unmarshal, which decodes it into a nil map without error, so jevObject returns a nil map and no error. Every caller then reads a required field out of that nil map and misses. The record is still refused; what is lost is the contract's instruction to omit a field rather than write null.",
+    "evidence": "Neutralised as `false && (string(raw) == \"null\")` on 2026-09-20 over the same 77-input corpus. 5 inputs changed diagnostic (record_is_null, attempt_null, response_null, answer_null, usage_null), each moving from an \"is null; omit it when absent\" message to a missing-field message one level deeper. All REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevObject",
+    "cond": "err != nil",
+    "producer": "err := json.Unmarshal(raw, &obj)",
+    "category": "dominated",
+    "justification": "Dropping this error returns whatever the failed decode left in obj, which for a value that is not a JSON object is a nil map. Every caller reads a required field out of it and misses, so the record is refused one level deeper than it should be. This guard is the general case of the three specific shapes at 153, 211, 243 and 299, which is why its diagnostic footprint is the union of theirs.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 7 inputs changed diagnostic (record_is_string, attempt_string, response_string, answer_string, usage_number, trailing_garbage, array_toplevel), each moving to a missing-field message. All REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevField",
+    "cond": "!ok",
+    "producer": "v, ok := obj[key]",
+    "category": "dominated",
+    "justification": "This is the reader's single absent-field check, and it is the most widely dominated guard in the file. Dropping it returns a nil value with no error, and every one of the five accessors built on jevField then fails on that nil: the three that unmarshal report an empty document, and jevRawFloat reports a value that is not a float. Every absent required field is still refused; the reader stops being able to say which field is missing.",
+    "evidence": "Neutralised as `false && (!ok)` on 2026-09-20 over the same 77-input corpus. 15 inputs changed diagnostic, covering every required field at every nesting level (contract_version, evaluation_id, requested_model, attempts, ordinal, http_status, model, answers, type, noul, probabilities, legend, input_tokens, output_tokens), each moving from \"missing X\" to a decode failure on X. All REJECTED with 0 evaluations before and after; nothing became accepted, and nothing panicked."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevString",
+    "cond": "err != nil",
+    "producer": "v, err := jevField(obj, key)",
+    "category": "dominated",
+    "justification": "Dropping this error hands jevRawString a nil value. That is not the literal null, so the null check does not fire, and json.Unmarshal refuses the empty document. The field is still refused and no string is ever returned alongside a nil error.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 7 inputs changed diagnostic (missing_id, id_null, missing_requested_model, missing_model, model_null, missing_type, type_null), each moving to \"unexpected end of JSON input\" named for the field. All REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevRawString",
+    "cond": "string(raw) == \"null\"",
+    "producer": "",
+    "category": "dominated",
+    "justification": "Dropping this check lets a literal null decode into the empty string without error. The only caller that reaches jevRawString with a raw null is the provider_request_id path, which is optional and therefore does not go through jevField, and the emptiness check at that call site refuses the empty result. Callers that arrive via jevString never see a null, because jevField has already refused it.",
+    "evidence": "Neutralised as `false && (string(raw) == \"null\")` on 2026-09-20 over the same 77-input corpus. 1 input changed diagnostic (prid_null), moving from \"provider_request_id is null; omit it when absent\" to \"provider_request_id is empty; omit it when the header was absent\". REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevInt",
+    "cond": "err != nil",
+    "producer": "v, err := jevField(obj, key)",
+    "category": "dominated",
+    "justification": "Dropping this error carries a nil value past the fractional-literal check, which finds none of \".eE\" in an empty value, and into json.Unmarshal, which refuses the empty document. No integer is returned alongside a nil error.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 8 inputs changed diagnostic (missing_version, version_null, missing_ordinal, missing_http_status, missing_input_tokens, input_tokens_null, missing_output_tokens and the record-level version read), each moving to \"unexpected end of JSON input\" named for the field. All REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevInt",
+    "cond": "strings.ContainsAny(string(v), \".eE\")",
+    "producer": "if err != nil { return 0, err }",
+    "category": "dominated",
+    "justification": "This refuses a fractional literal where the contract declares an integer, and it does so to name the defect. Dropping it hands the literal to json.Unmarshal into an int, which refuses it as well. The distinction the check buys is a message a producer can act on, not the difference between accepting and refusing.",
+    "evidence": "Neutralised as `false && (strings.ContainsAny(string(v), \".eE\"))` on 2026-09-20 over the same 77-input corpus. 4 inputs changed diagnostic (version_frac, ordinal_frac, http_status_frac, input_tokens_frac), each moving from \"want an integer\" to \"cannot unmarshal number N into Go value of type int\". All REJECTED with 0 evaluations before and after; nothing became accepted. This guard does not cover the 1e2 form, which json refuses on its own; the check and the decoder overlap rather than one strictly containing the other."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevFloat",
+    "cond": "err != nil",
+    "producer": "v, err := jevField(obj, key)",
+    "category": "dominated",
+    "justification": "Dropping this error hands jevRawFloat a nil value, which contains none of \".eE\" and is refused as a value that is not a float. No float is returned alongside a nil error.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 2 inputs changed diagnostic (noul_missing, noul_null), each moving from a missing-or-null message to \"noul = null, want a float\". All REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevFloatMap",
+    "cond": "err != nil",
+    "producer": "v, err := jevField(obj, key)",
+    "category": "dominated",
+    "justification": "Dropping this error hands a nil value to json.Unmarshal, which refuses the empty document, so the probabilities map is never built. The refusal moves from naming the absent field to reporting a decode failure on it.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 1 input changed diagnostic (choice_missing_probs), moving from \"missing probabilities\" to \"probabilities: unexpected end of JSON input\". REJECTED with 0 evaluations before and after; nothing became accepted."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "jevUnmarshal",
+    "cond": "err != nil",
+    "producer": "v, err := jevField(obj, key)",
+    "category": "dominated",
+    "justification": "Dropping this error hands a nil value to json.Unmarshal, which refuses the empty document and leaves the destination at its zero value. Every caller of jevUnmarshal checks the error it returns, so nothing is built from the untouched destination.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-09-20 over the same 77-input corpus. 5 inputs changed diagnostic (missing_attempts, attempts_null, missing_answers, answers_null, score_missing_legend), each moving to \"unexpected end of JSON input\" named for the field. All REJECTED with 0 evaluations before and after; nothing became accepted."
+  }
+]

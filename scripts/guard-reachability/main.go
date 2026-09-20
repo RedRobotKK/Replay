@@ -236,6 +236,46 @@ import (
 	"github.com/RedRobotKK/Replay/internal/guardcheck"
 )
 
+// evidencePath is where Policy B evidence lives.
+//
+// One file, at a fixed path, because an evidence mechanism a caller can point
+// somewhere else is an evidence mechanism a caller can point at an empty file.
+const evidencePath = "internal/guardcheck/testdata/guard-evidence.json"
+
+// reportEvidenced prints what the manifest accounted for.
+//
+// Evidenced guards do not disappear. The reviewer's value is that a reader can
+// see what was permitted and why, and a category that vanished from the output
+// once it stopped failing would be a waiver wearing a report's clothes.
+func reportEvidenced(evidenced []guardcheck.Evidenced) {
+	if len(evidenced) == 0 {
+		return
+	}
+	fmt.Printf("\nThese survived and carry per-guard evidence. They do not fail the run.\n" +
+		"Read them: each one is a claim somebody made about why a test cannot\n" +
+		"distinguish the guard, and a refactor can make it untrue:\n")
+	for _, e := range evidenced {
+		fmt.Printf("  %s  %s:%d  %s\n", strings.ToUpper(string(e.Evidence.Category)),
+			e.Guard.File, e.Guard.Line, e.Guard.Src)
+		fmt.Printf("      why: %s\n", e.Evidence.Justification)
+		fmt.Printf("      evidence: %s\n", e.Evidence.Evidence)
+	}
+}
+
+// reportStale prints entries that matched no surviving introduced guard.
+func reportStale(stale []guardcheck.Evidence) {
+	if len(stale) == 0 {
+		return
+	}
+	fmt.Printf("\nThese evidence entries matched no surviving introduced guard. An entry\n" +
+		"nobody can tie to a guard has stopped describing the tree, so it fails\n" +
+		"rather than sitting there: either the guard is now covered and the entry\n" +
+		"should go, or it moved and the entry should be re-reviewed:\n")
+	for _, e := range stale {
+		fmt.Printf("  %s  %s  %s  producer %q\n", e.Pkg, e.Func, e.Cond, e.Producer)
+	}
+}
+
 func main() {
 	base := "origin/main"
 	if len(os.Args) > 1 {
@@ -398,18 +438,36 @@ func main() {
 	// it. Fail-closed is the reviewer's one load-bearing property and it may
 	// not live where a suite cannot watch it — see FC1..FC5 in that package.
 	preExisting, introduced := guardcheck.ClassifySurvivors(survivors, baseSurvivors, baseErr)
-	unreached := withVerdict(introduced, verdicts, unreachedVerdict)
-	inert := withVerdict(introduced, verdicts, inertVerdict)
-	unobserved := withVerdict(introduced, verdicts, unobservedVerdict)
+
+	// Policy B, and the order matters: the manifest is consulted only after
+	// the base tree has had its say, so an evidenced entry can never stand in
+	// for grandfathering the base could have granted on its own.
+	//
+	// Loading fails the run rather than falling back to an empty manifest. A
+	// file that will not parse and a file that does not exist mean different
+	// things, and reading the first as the second is the fail-open this whole
+	// reviewer exists to refuse.
+	manifest, mErr := guardcheck.LoadManifest(evidencePath)
+	if mErr != nil {
+		fail("%v", mErr)
+	}
+	evidenced, unexplained, stale := guardcheck.ClassifyEvidenced(introduced, manifest)
+
+	unreached := withVerdict(unexplained, verdicts, unreachedVerdict)
+	inert := withVerdict(unexplained, verdicts, inertVerdict)
+	unobserved := withVerdict(unexplained, verdicts, unobservedVerdict)
 
 	fmt.Printf("\nguard-reachability: %d guard(s), %d survived (%d pre-existing, %d introduced), "+
-		"%d unchecked, %d not built here\n",
-		len(guards), len(survivors), len(preExisting), len(introduced), len(unchecked), len(unbuilt))
+		"%d evidenced, %d unexplained, %d unchecked, %d not built here\n",
+		len(guards), len(survivors), len(preExisting), len(introduced),
+		len(evidenced), len(unexplained), len(unchecked), len(unbuilt))
 	reportPreExisting(preExisting, verdicts, base)
+	reportEvidenced(evidenced)
+	reportStale(stale)
 	// Likewise the exit rule: classifying every survivor as introduced and then
 	// exiting 0 would be the same silent fail-open by another route, so the
 	// rule is decided where FC2, FC4 and FC5 can watch it.
-	code := guardcheck.ExitCode(introduced, unchecked, unbuilt)
+	code := guardcheck.ExitCodeWithEvidence(unexplained, unchecked, unbuilt, stale)
 	if code == 0 {
 		return
 	}
