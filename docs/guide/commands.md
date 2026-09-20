@@ -1545,6 +1545,33 @@ been dropped and could fall between two scrapes; a falling counter reads to Prom
 a reset, which makes every `rate()` over it wrong on a busy machine and right on an idle
 one. Fixed 2026-09-05.
 
+### `replay surfaces [--json] [--max-files N]`
+
+What each coding agent on this machine reports about its prompt cache, and what it does not.
+
+Every agent store measured on 2026-09-15 reports a cache **read**. One reports the **write** that had
+to have happened for that read to exist. The others fail to in three distinct ways, and the verb
+keeps them apart because the difference decides what a reader may conclude.
+
+| state | meaning |
+|---|---|
+| `instrumented` | reads and writes both reported |
+| `write field absent` | no write key exists in the shape. Honest absence: nothing is claimed |
+| `write reported zero` | the key exists and is zero on every record, beside live reads |
+| `silent` | no counters at all |
+| `unreadable` | the counts are incoherent, so the scan is what is broken |
+
+`write field absent` and `write reported zero` arrive at a naive reader as the same thing, `read > 0`
+and `write == 0`. They are not the same thing. An absent field claims nothing. A zero looks like a
+measurement and will be summed, averaged and charted by every layer downstream. `cachemodel`'s
+`ClassifyCounters` cannot separate them, which is why this verb exists.
+
+A store that is not installed is omitted rather than reported empty: not installed and installed but
+silent are different facts.
+
+Reads the stores and writes nothing. `--max-files` bounds the scan at the newest N files per surface,
+default 40, because two of these stores run to gigabytes.
+
 ### `replay budget <ledger-dir...> [--json]`
 
 What this configuration costs on **every** request before anybody types anything: the
