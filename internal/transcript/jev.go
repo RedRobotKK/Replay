@@ -108,7 +108,7 @@ func ParseJevCaptureFile(path string) ([]JevEvaluation, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open jev capture: %w", err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // read-only file; a close error carries no information we can act on
 	evs, err := ParseJevCapture(f)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", filepath.Base(path), err)

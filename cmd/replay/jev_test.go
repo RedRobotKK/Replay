@@ -148,7 +148,7 @@ func TestJevAcceptsAResponseOnANonFinalAttempt(t *testing.T) {
 	if i0 < 0 || i1 < 0 || usage < 0 {
 		t.Fatalf("attempts or usage missing:\n%s", out)
 	}
-	if !(i0 < usage && usage < i1) {
+	if i0 >= usage || usage >= i1 {
 		t.Errorf("the response was not attached to attempt 0:\n%s", out)
 	}
 }

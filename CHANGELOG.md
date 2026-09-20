@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-09-20
+
 ### Changed
 
 - **A re-emitted Codex turn is no longer counted as a refused record.** 0.6.1
