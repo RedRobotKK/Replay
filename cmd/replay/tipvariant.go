@@ -63,14 +63,34 @@ func tipBody(arm string, rebilledUSD float64, coffees int, unit, link string) st
 	if arm == "B" {
 		rival = "Daniel"
 	}
-	lead := fmt.Sprintf("Replay just found $%.2f you had already paid for once.", rebilledUSD)
+	// What the ask may assert about the figure.
+	//
+	// This said "Replay just found $N you had already paid for once", and
+	// nobody established that. RebilledUSD is a token count from provider
+	// usage multiplied by the price table in force (cost.go:718), so it is a
+	// list-price valuation and not a charge anyone observed against this
+	// reader. On a subscription seat there is no per-token charge at all, and
+	// `replay cost` says exactly that eight lines above this ask: "you are not
+	// billed per token, so the dollars above are list price for someone who
+	// is". The two sentences printed together in one render.
+	//
+	// So the finding is stated as what was measured, and the money as what it
+	// is. "Tokens billed twice" is the cost report's own vocabulary for this
+	// population, reused here rather than invented, and no new claim about
+	// billing arrives with it.
+	lead := fmt.Sprintf("Replay just found tokens billed twice. At list price that is $%.2f.", rebilledUSD)
 	if c := wastedCoffees(rebilledUSD, coffees); c > 0 {
 		// The same number in a unit a person can picture, and cheeky on
 		// purpose. It is not a rhetorical trick: at $5 a coffee this is
 		// arithmetic, and the contrast is what makes the ask below look as
 		// small as it actually is.
-		lead = fmt.Sprintf("Replay just found $%.2f you had already paid for once.\n"+
-			"That is %d coffees you bought your provider instead of %s.", rebilledUSD, c, rival)
+		//
+		// The transfer is named in tokens, which is the part that happened.
+		// "Coffees you bought your provider" put the same unobserved payment
+		// one line further down, where correcting only the lead would have
+		// left it.
+		lead = fmt.Sprintf("Replay just found tokens billed twice. At list price that is $%.2f.\n"+
+			"That is %d coffees. The tokens went to your provider instead of %s.", rebilledUSD, c, rival)
 	}
 	if arm == "B" {
 		return fmt.Sprintf(
