@@ -51,6 +51,30 @@ type Guard struct {
 	// Identity, which is the only thing that reads them.
 	Func string
 	Cond string
+
+	// Producer is the statement that produced the value the condition tests,
+	// normalised the way Cond is: the `if`'s own init statement when it has
+	// one, otherwise the statement immediately before it in the same block.
+	// Empty when there is neither.
+	//
+	// It exists because Identity cannot address one guard. Identity is
+	// {Pkg, Func, Cond} and is deliberately a grouping key -- base-tree
+	// pairing spends it by count, and withholding an exemption it cannot
+	// justify is the safe direction. Policy B runs the other way: granting
+	// evidence to one guard must never grant it to another that shares the
+	// grouping. Measured on internal/transcript/jev.go, 26 guards collapse
+	// into 18 identities; jevEvaluation alone holds four `err != nil`
+	// conditions propagating four different calls.
+	//
+	// The producing statement is what tells those four apart, and it is what
+	// a reviewer reads to know which guard an entry is about. An ordinal
+	// would not do: inserting an identical guard ahead of an evidenced one
+	// renumbers it, and the reviewed entry then silently matches a guard
+	// nobody looked at. Measured before choosing this.
+	//
+	// Nothing in the existing identity model reads it. Identity() is
+	// unchanged, and so are PairSurvivors and the base-tree counterpart rule.
+	Producer string
 }
 
 // ParseDiff maps a changed non-test .go file to the lines a diff touched.
@@ -196,6 +220,44 @@ func Conditionals(file string, lines map[int]bool) ([]Guard, error) {
 		return "", text
 	}
 
+	// producerOf reads the statement feeding a conditional.
+	//
+	// The init statement first, because `if err := f(); err != nil` carries
+	// its own producer. Otherwise the previous statement in the enclosing
+	// block, found by walking the blocks rather than by scanning lines: a
+	// statement is not a line, and the block list is the only place the order
+	// is stated by the parser rather than inferred.
+	prev := map[token.Pos]ast.Stmt{}
+	ast.Inspect(f, func(n ast.Node) bool {
+		var list []ast.Stmt
+		switch b := n.(type) {
+		case *ast.BlockStmt:
+			list = b.List
+		case *ast.CaseClause:
+			list = b.Body
+		default:
+			return true
+		}
+		for i := 1; i < len(list); i++ {
+			prev[list[i].Pos()] = list[i-1]
+		}
+		return true
+	})
+	norm := func(n ast.Node) string {
+		if n == nil {
+			return ""
+		}
+		start := fset.Position(n.Pos()).Offset
+		end := fset.Position(n.End()).Offset
+		return strings.Join(strings.Fields(string(src[start:end])), " ")
+	}
+	producerOf := func(is *ast.IfStmt) string {
+		if is.Init != nil {
+			return norm(is.Init)
+		}
+		return norm(prev[is.Pos()])
+	}
+
 	var out []Guard
 	// A conditional is an `if`, and it is also a tagless switch's case.
 	//
@@ -259,6 +321,7 @@ func Conditionals(file string, lines map[int]bool) ([]Guard, error) {
 			BodyEnd:   fset.Position(is.Body.Rbrace),
 			Func:      fn,
 			Cond:      text,
+			Producer:  producerOf(is),
 		})
 		return true
 	})

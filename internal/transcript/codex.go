@@ -74,7 +74,15 @@ type CodexSession struct {
 	// nobody stated is unknown rather than a default.
 	Model  string
 	Source Source
-	// Billed sums the per-turn deltas. This is what was paid for.
+	// Billed sums the usage contributions whose cumulative advanced. This is
+	// what was paid for.
+	//
+	// NOT a sum of every last_token_usage the file carries, and the comment
+	// that said "the per-turn deltas" was wrong about the format.
+	// last_token_usage is session state holding the most recent append, and
+	// Codex re-emits it unchanged on any token_count that follows no new
+	// response, so summing the field counts that response twice. The
+	// cumulative is what says whether a record is a new contribution.
 	Billed Usage
 	// Reported is the client's own final running total. Codex rebases it on
 	// compaction, so on a compacted session it is smaller than Billed and is
@@ -106,6 +114,41 @@ type CodexSession struct {
 	// Skipped counts records this reader refused. Non-zero is not an error,
 	// but it is reported, because a format change must not pass silently.
 	Skipped int
+	// Unparsable counts the subset of Skipped the reader could not read at
+	// all: a line that is not JSON, or a payload that is not.
+	//
+	// A SUBSET, not a sibling. Skipped keeps its meaning, every record this
+	// reader could not use, and this says how many of them it never got far
+	// enough to judge. The distinction exists at the reporting boundary
+	// because that is where it became untrue: the refusal note names a share
+	// exceeding its total and a total with no breakdown, and both describe a
+	// record the reader understood. A line of non-JSON is neither, and was
+	// counted in the same number and given the same reason.
+	//
+	// ReEmitted above was split from Skipped for this exact reason, and the
+	// comment recording it quotes the same sentence. This is that argument
+	// applied to the two cases it did not reach.
+	Unparsable int
+	// ReEmitted counts records that repeated usage this session had already
+	// billed, recognised by the cumulative standing still.
+	//
+	// SEPARATE FROM Skipped, and the separation is the point. Skipped counts
+	// records this reader could not use: an unparsable line, an unparsable
+	// payload, a usage record whose own subsets contradict it. A re-emission
+	// is none of those. It parsed, its usage was readable, and it was left out
+	// of the bill only because the same turn was already in it.
+	//
+	// Folding the two together made three distinct facts one number, and every
+	// surface reporting that number then said something untrue of a
+	// re-emission: `replay codex` calls it a refused record whose share
+	// exceeded its total or whose breakdown was missing, and a contribution
+	// calls it unreadable. Neither describes a turn the provider reported
+	// twice.
+	//
+	// Counted rather than ignored, for the reason Skipped is: a Codex that
+	// stopped advancing its cumulative would otherwise erase every turn in a
+	// session without a word.
+	ReEmitted int
 }
 
 // Total is every token in the snapshot that the provider counted.
@@ -259,13 +302,18 @@ func ParseCodex(r io.Reader) (*CodexSession, error) {
 		s.line++
 		var l codexLine
 		if err := json.Unmarshal([]byte(line), &l); err != nil {
+			// Counted twice on purpose. Skipped keeps its meaning, every
+			// record this reader could not use, and Unparsable says this one
+			// was never read far enough to be judged.
 			s.Skipped++
+			s.Unparsable++
 			continue
 		}
 		var p codexPayload
 		if len(l.Payload) > 0 {
 			if err := json.Unmarshal(l.Payload, &p); err != nil {
 				s.Skipped++
+				s.Unparsable++
 				continue
 			}
 		}
@@ -334,7 +382,11 @@ func (s *CodexSession) event(p codexPayload) {
 				// Counted, not silent. A format change that stopped advancing
 				// the cumulative would otherwise erase every turn without a
 				// word, which is the failure this reader exists to avoid.
-				s.Skipped++
+				//
+				// Its own counter rather than Skipped: this record was read
+				// and understood, and leaving it out of the bill is what the
+				// cumulative asked for, not a refusal.
+				s.ReEmitted++
 			}
 		} else if p.Info.Last != nil {
 			s.Skipped++

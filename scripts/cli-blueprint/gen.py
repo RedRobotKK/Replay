@@ -32,6 +32,7 @@ COMMANDS = [
     "cost", "ceiling", "diff", "advise", "serve", "tui", "context", "blame", "replay",
     "route", "trim", "codex", "burn", "agents", "mcp", "corpus", "learn",
     "probe", "doctor", "rules", "statusline", "redact", "version", "prefix", "since", "budget",
+    "jev",
     "upgrade", "purge", "privacy", "pool",
 ]
 
@@ -59,6 +60,7 @@ META = {
     "route":      ("What switching models would change, structurally", "none", "none"),
     "trim":       ("What a byte cap on tool output would have saved, and cost", "none", "none"),
     "codex":      ("The same reading, for OpenAI Codex rollout logs", "none", "none"),
+    "jev":        ("What a Jev capture holds: attempts, answers, observed tokens", "none", "none"),
     "burn":       ("What each agent surface burned: Codex, Ollama, Claude Code", "loopback: Ollama's version endpoint", "none"),
     "agents":     ("A boot block naming where this project keeps its records", "none", "with --write, splices into the named file"),
     "mcp":        ("Answer an agent's questions mid-session, JSON-RPC on stdio", "none", "none"),

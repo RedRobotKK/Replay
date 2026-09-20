@@ -176,7 +176,9 @@ func TestStoreRoundTripToSession(t *testing.T) {
 	if !IsLedgerFile(path) {
 		t.Fatal("ledger file not recognized")
 	}
-	// A record from an earlier schema is skipped rather than misread.
+	// A record from an earlier schema is not misread. It is counted apart from
+	// Skipped: the count_tokens record above is the skipped one, because the
+	// reader could not use it, and this one parsed and was declined.
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -191,8 +193,11 @@ func TestStoreRoundTripToSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Source != transcript.SourceLedger || !s.Source.PrefixVisible() || s.RequestCount() != 3 || s.Skipped != 2 {
+	if s.Source != transcript.SourceLedger || !s.Source.PrefixVisible() || s.RequestCount() != 3 || s.Skipped != 1 {
 		t.Fatalf("session shape wrong: source=%s visible=%v requests=%d skipped=%d", s.Source, s.Source.PrefixVisible(), s.RequestCount(), s.Skipped)
+	}
+	if s.SchemaMismatch != 1 {
+		t.Fatalf("SchemaMismatch = %d, want 1: the schema-1 line parsed, so it is not a line the reader lost", s.SchemaMismatch)
 	}
 	req := s.Lanes[0].Requests[0]
 	if req.Context[0].Role != transcript.RoleSystem || req.Context[0].Blocks[0].Bytes != len("You are terse.") {
@@ -382,9 +387,13 @@ func TestLedgerSessionsCarryTheirTrialArm(t *testing.T) {
 // SchemaVersion's comment used to say "bump it on any incompatible change",
 // which is what such a field usually means and is the opposite of what this
 // reader does. A record whose schema is anything other than the current
-// constant is counted as SKIPPED — which ReadRecords' own documentation
-// defines as data loss — so raising the constant makes every ledger already on
+// constant is NOT READ, so raising the constant makes every ledger already on
 // a user's disk unreadable rather than migrating it.
+//
+// Such a record is counted in schemaMismatch rather than skipped. That split
+// changed which counter holds it and what the report says about it. It did not
+// soften this gate: equality is still equality, and the destructiveness of a
+// bump is still what this test exists to pin.
 //
 // This pins the behaviour so the comment and the reader cannot drift apart
 // again: whoever changes one finds this test asking about the other.
@@ -404,17 +413,21 @@ func TestLedgerSchemaGateIsExactAndABumpIsDestructive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	recs, skipped, _, err := ReadRecords(path)
+	recs, skipped, schemaMismatch, _, err := ReadRecords(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(recs) != 1 {
 		t.Fatalf("read %d records, want 1: only the exact current schema is accepted", len(recs))
 	}
-	if skipped != 2 {
-		t.Fatalf("skipped %d, want 2. Both neighbouring schemas must be skipped — the gate is "+
-			"equality, not a floor. If this now reads the older one, the constant has become a "+
-			"real evolution mechanism and SchemaVersion's comment should say so.", skipped)
+	if schemaMismatch != 2 {
+		t.Fatalf("schemaMismatch %d, want 2. Both neighbouring schemas must be rejected: the gate "+
+			"is equality, not a floor. If this now reads the older one, the constant has become a "+
+			"real evolution mechanism and SchemaVersion's comment should say so.", schemaMismatch)
+	}
+	if skipped != 0 {
+		t.Fatalf("skipped %d, want 0. Both lines are well-formed JSON, so neither is a line the "+
+			"reader failed to read.", skipped)
 	}
 }
 

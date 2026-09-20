@@ -3,6 +3,7 @@ package analysis
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -185,8 +186,77 @@ func (r *LaneReport) header(p *Printer) {
 	if r.Session.Skipped > 0 {
 		p.Printf("Note: %d transcript lines were not conversation content and were skipped\n", r.Session.Skipped)
 	}
+	r.schemaMismatch(p)
+	r.providerFailures(p)
 	r.laneScope(p)
 	p.Printf("\n")
+}
+
+// schemaMismatch says a record was written under a schema this build does not
+// read.
+//
+// Its own sentence rather than a share of the skipped line, because the two
+// are opposite facts. Skipped means the reader could not interpret the line at
+// all; this means it parsed and was declined. Counted together, the report told
+// a reader upgrading Replay that their ledger had lost records.
+//
+// It claims only the version. The record's contents were never read, so
+// nothing here names a token, a dollar or a request for it: absence is not
+// zero (ADR-0018), and a figure of any kind would be one this reader never
+// established. It does not say the record is unreadable either, because the
+// bytes are intact and a later build that reads that schema would find them.
+//
+// The version this build does read is deliberately not named here. Only the
+// ledger reader sets this count, but naming its constant would make the
+// generic report package import that one source, which is the coupling every
+// other source in this repository is kept out of: nothing in this package
+// branches on where a session came from.
+func (r *LaneReport) schemaMismatch(p *Printer) {
+	n := r.Session.SchemaMismatch
+	if n == 0 {
+		return
+	}
+	noun, were, they := "records", "were", "They"
+	if n == 1 {
+		noun, were, they = "record", "was", "It"
+	}
+	p.Printf("Note: %d ledger %s %s written under a different schema version and %s not read. "+
+		"%s parsed, so nothing is missing from the file.\n", n, noun, were, were, they)
+}
+
+// providerFailures says what the provider answered when it did not answer
+// usefully.
+//
+// Counting without reporting would leave the defect standing. Session.Refusals
+// is the precedent: local refusals were moved out of Skipped and nothing ever
+// read the new field, so the misleading line stopped counting them and no line
+// replaced it.
+//
+// Two statements, not one. A status the provider sent and the absence of any
+// status are different observations, and a single total would answer neither
+// reader. Nothing here names a cause: a status is evidence of what came back,
+// not of why, so 401 is not called an authentication failure and 429 is not
+// called an exhausted quota. Nothing here says anything about tokens or money
+// either, because the record carries no usage and absence is not zero.
+func (r *LaneReport) providerFailures(p *Printer) {
+	pf := r.Session.ProviderFailures
+	if byStatus := pf.Total() - pf.NoStatus; byStatus > 0 {
+		codes := make([]int, 0, len(pf.ByStatus))
+		for code := range pf.ByStatus {
+			codes = append(codes, code)
+		}
+		sort.Ints(codes)
+		parts := make([]string, 0, len(codes))
+		for _, code := range codes {
+			parts = append(parts, fmt.Sprintf("%d x%d", code, pf.ByStatus[code]))
+		}
+		p.Printf("Note: %s carried an HTTP status of 400 or above: %s\n",
+			plural(byStatus, "recorded request"), strings.Join(parts, ", "))
+	}
+	if pf.NoStatus > 0 {
+		// Never printed as a status. There was not one.
+		p.Printf("Note: %s obtained no HTTP status\n", plural(pf.NoStatus, "recorded request"))
+	}
 }
 
 // laneScope says how much of the session these figures cover.

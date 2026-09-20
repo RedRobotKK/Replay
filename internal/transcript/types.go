@@ -251,6 +251,30 @@ func (s Source) Tier() string {
 	return "estimated (transcripts only)"
 }
 
+// ProviderFailures is how a session's provider failures divide.
+//
+// Two fields rather than one count, because the two cases are different
+// observations. ByStatus holds what the provider actually answered. NoStatus
+// holds the ones where the connection failed before any status arrived, and it
+// is deliberately not a key in ByStatus: 0 is not an HTTP status, and filing it
+// as one would print a response the provider never sent.
+type ProviderFailures struct {
+	// ByStatus counts observed HTTP statuses at or above 400, under the status
+	// itself. The status is evidence and is carried verbatim.
+	ByStatus map[int]int
+	// NoStatus counts records where no HTTP status was obtained at all.
+	NoStatus int
+}
+
+// Total is every provider failure, however it failed.
+func (p ProviderFailures) Total() int {
+	n := p.NoStatus
+	for _, c := range p.ByStatus {
+		n += c
+	}
+	return n
+}
+
 // Session is a parsed transcript or ledger.
 type Session struct {
 	ID            string
@@ -274,6 +298,62 @@ type Session struct {
 	// Record.Refusal. Absence, zero and unknown are three values (ADR-0018),
 	// and so are read, refused and unreadable.
 	Refusals int
+	// ProviderFailures counts records where the provider was reached and did
+	// not return a usable response.
+	//
+	// The fourth state. A refusal is Replay answering locally and an unreadable
+	// record is one the parser could not interpret; this is neither. The
+	// request was forwarded, the provider replied or the connection failed, and
+	// the record is complete: it carries the status, the retry count and
+	// whatever headers came back. Counting it as Skipped told a reader that a
+	// rate limit they hit was a ledger they could not read.
+	//
+	// A record qualifies when its status is at or above 400 AND the provider
+	// reported no usage, or when no status was obtained at all and the request
+	// had been summarized. Both halves matter.
+	//
+	// The usage clause is the one that is not obvious. A failing request can
+	// still carry real token counts on the OpenAI-compatible path, because
+	// ParseOpenAIResponse reads usage from any JSON body whatever the status
+	// was. Those counts were observed. This category classifies evidence and
+	// does not account for it, so such a record stays a usage-bearing request
+	// and keeps its tokens in the totals and its dollars in the priced
+	// figures. Moving it here would delete a measurement because the HTTP
+	// request failed.
+	//
+	// It says only what was observed. A status is not a cause, so nothing here
+	// reads 401 as an authentication problem or 429 as an exhausted quota, and
+	// no usage is implied for the records it does hold: they have none, and
+	// none is absence rather than zero.
+	//
+	// KNOWN LIMIT, and it is a floor rather than a total. A transport failure
+	// is recognised by a zero status and a summarized prompt, because a zero
+	// status does not identify itself. A request whose body could not be
+	// summarized is still forwarded and can still fail the same way, and that
+	// record is not counted here. Separating those would need a persisted
+	// record of whether the request was forwarded, which does not exist.
+	ProviderFailures ProviderFailures
+	// SchemaMismatch counts records that parsed but were written under a
+	// different ledger schema version than this build reads.
+	//
+	// The fifth state, and the opposite fact from Skipped. An unreadable line
+	// says bytes are gone; this says the file is intact and this build is not
+	// the one that wrote it. Both were counted in Skipped, whose own
+	// documentation named the ambiguity without resolving it: "data loss, or an
+	// upgrade". The report then rendered the total as transcript lines that
+	// were not conversation content, which is false of such a record in all
+	// three of its claims.
+	//
+	// It says only that the version differs. The record's usage was never
+	// read, so no token, dollar or request is implied for it: not zero, which
+	// would be a measurement, and not unknown in the sense a failed read is
+	// unknown. The bytes are there and this build declined to interpret them.
+	//
+	// Nothing migrates. The gate stays exact equality on SchemaVersion, so a
+	// record at any other version, older or newer, is still not read. This
+	// changes which counter holds it and what the reader is told, and changes
+	// no accounting at all.
+	SchemaMismatch int
 	// Policy names the request-parameter policy the proxy applied to this
 	// session's requests, and Trial the arm of the live trial it was in:
 	// "treated", "control", or empty. Only the ledger knows either.

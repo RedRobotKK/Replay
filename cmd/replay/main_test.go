@@ -185,7 +185,6 @@ func TestPathWithoutASubcommandRunsReplay(t *testing.T) {
 		{fixture, "--dollars"},
 		{fixture, "-dollars"},
 		{"replay", fixture, "--dollars"},
-		{"blame", fixture, "--dollars"},
 	} {
 		var trailing bytes.Buffer
 		if err := run(args, &trailing, &errOut); err != nil {
@@ -194,6 +193,20 @@ func TestPathWithoutASubcommandRunsReplay(t *testing.T) {
 		if trailing.Len() == 0 {
 			t.Fatalf("replay %v printed nothing", args)
 		}
+	}
+
+	// Hoisting is separate from whether the command accepts the flag. `blame`
+	// does not take --dollars, because it prints no policy table to put a
+	// column in, so this form is refused — but it must be refused by the flag
+	// parser rather than by os.Stat, which is what this whole section is about.
+	// A stat error here would mean the trailing flag was read as a path again.
+	var hoisted bytes.Buffer
+	err := run([]string{"blame", fixture, "--dollars"}, &hoisted, &errOut)
+	if err == nil {
+		t.Fatal("blame --dollars was accepted; it has no policy table to price")
+	}
+	if !errors.Is(err, errUsage) || strings.Contains(err.Error(), "no such file") {
+		t.Fatalf("the trailing flag was not hoisted into the flag set: %v", err)
 	}
 
 	// The flag has to actually change the report, not merely be tolerated.

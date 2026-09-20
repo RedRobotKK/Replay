@@ -1259,6 +1259,45 @@ disagree by design after a compaction and only one of them is a bill.
 The reader keeps billed and reported figures apart for that reason, and refuses a total it was
 given without a breakdown rather than presenting a sum it cannot defend.
 
+A token-count record is a broadcast of Codex's usage state, not a receipt for a turn. Codex emits
+one when a turn finishes, and also when nothing was spent at all, and a record that follows no new
+response repeats the previous one unchanged. What separates the two is the running total: Replay
+bills a usage contribution when Codex's own cumulative has advanced, and treats an unchanged
+cumulative as the same usage reported again, which is not billed a second time.
+
+The test is the running total rather than the numbers in the record, because two consecutive turns
+can genuinely cost the same. Both of those are billed, because the cumulative moved for each of
+them. Summing every record instead would double the turns that were only reported twice, and
+comparing the records to each other would drop the ones that were really identical.
+
+### `replay jev <capture...>`
+
+Prints what a Jev capture holds. Takes one or more capture files and reads them all before it
+prints anything, so a malformed record fails the whole invocation rather than producing a report
+that covers whichever files happened to parse.
+
+A Jev capture is Replay's own artifact rather than something a vendor leaves on disk, which is why
+there is no default location to search and a path is required. The capture arrives on a stream and
+this command does not make it durable: it reads a file you name and writes nothing.
+
+For each evaluation it shows the Replay-minted evaluation id, the model that was requested, the
+model that answered, and every attempt with its ordinal and HTTP status. The provider's own request
+id appears only on attempts whose response actually carried one, because the header is optional and
+a blank column would read as an observation rather than an absence. An evaluation whose every
+attempt failed is a valid record and is shown as `no response`, never as a response with zero
+tokens.
+
+Answers are printed in the three forms Jev returns them: `noul`, `choice` and `score`. Provider
+probabilities are shown one by one exactly as they arrived. Nothing here sums, renormalises or
+rounds them, and a score is not read as an index into its legend.
+
+What this command deliberately does not do is as much the point as what it does. It builds no
+session, so no truth tier is printed and no figure from a capture enters the analysis, corpus or
+contribution paths. It prints no cost, no savings and no cache figures, because a Jev capture
+reports input and output tokens and no cache fields at all. A surface that cannot distinguish a
+cache write from a cache read cannot answer the question the rest of Replay exists to answer, and
+printing a zero there would be a measurement nobody made.
+
 ### `replay burn`
 
 What each agent surface on this machine is consuming: Codex, Ollama and Claude Code, side by side.
@@ -1376,6 +1415,7 @@ accounting that eviction cannot widen — are specified and not built, and
 | `--loop-warn`, `--loop-block` | Count how many times in a row the agent has made the same tool call with the same input, then warn or refuse |
 | `--breaker-failures`, `--breaker-cooldown` | Open a circuit after consecutive provider failures and answer locally with `Retry-After` until the cooldown passes (default 30s) |
 | `--retries`, `--retry-base`, `--retry-max` | Resend on rate limit, overload, server error or connection failure, with doubling jittered backoff |
+| `--preflight N` | Refuse a request whose changed system prompt or tool definitions would re-lay more than `N` tokens, estimated from the prefix bytes. `N` is the ceiling you accept, and supplying it is what turns the guard on: with no `--preflight` it never refuses. A deficit whose estimate band straddles the ceiling is passed with a warning header instead, because the estimate cannot say which side it falls on, and a single request can be let through with the override header and a reason |
 
 The error budget is designed to catch a stuck agent long before a spend cap would, because an agent
 looping on failures wastes money before it has spent much. Note that when both would refuse the same

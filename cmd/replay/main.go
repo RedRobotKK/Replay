@@ -185,6 +185,8 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 		return runPool(args[1:], stdout, stderr)
 	case "codex":
 		return runCodex(args[1:], stdout, stderr)
+	case "jev":
+		return runJev(args[1:], stdout, stderr)
 	case "mcp":
 		return runMCPCommand(args[1:], stdout, stderr)
 	case "agents":
@@ -326,9 +328,24 @@ func hoistFlagsFor(fs *flag.FlagSet, args []string) []string {
 func runReport(name string, args []string, stdout, stderr io.Writer, write func(*analysis.LaneReport, io.Writer) error) error {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	dollars := fs.Bool("dollars", false, "add a list-price cost column (first-party rates, dated price table)")
+	dollars := fs.Bool("dollars", false, "add a list-price cost column to the policy table (first-party rates, dated price table); not available on blame or diff, which print no policy table")
 	if err := parseArgs(fs, args, stdout); err != nil {
 		return err
+	}
+	// One flag set backs four entry points, and this flag belongs to one of
+	// them. It adds a column to the policy table, which only WriteReplay
+	// prints: blame attributes tokens to sources and diff lists break events,
+	// and neither carries a dollar figure to put in a column.
+	//
+	// Refused rather than ignored. Accepting it here printed exactly the same
+	// report as omitting it, with nothing to tell the reader their flag did
+	// nothing — the failure mode the flag was least likely to be noticed in.
+	// Pricing a blame row or a break deficit would mean apportioning a priced
+	// usage record across labels, or costing a single event, and neither
+	// calculation exists.
+	if *dollars && name != "replay" {
+		return fmt.Errorf("--dollars adds a list-price column to the policy table, and %s does not "+
+			"print one; `replay <path> --dollars` is the report that does: %w", name, errUsage)
 	}
 	if fs.NArg() == 0 {
 		return fmt.Errorf("a transcript file or directory is required: %w", errUsage)
@@ -639,6 +656,7 @@ Look closer:
   replay trim   <dir> --cap <n>    what a byte cap on tool output would have saved, and cost
   replay advise <dir> --guards     spend caps from your own session spread, print-only
   replay codex  <dir...>           the same reading, for OpenAI Codex rollout logs
+  replay jev    <capture...>       what a Jev capture holds: attempts, answers, tokens
   replay burn                      what each agent surface burned: Codex, Ollama, Claude Code
   replay agents [dir] --write F    a boot block naming where this project keeps its records
   replay mcp                       answer an agent's questions mid-session, JSON-RPC on stdio

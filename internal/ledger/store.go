@@ -158,11 +158,20 @@ func IsLedgerFile(path string) bool {
 // not decode.
 // ReadRecords reads a ledger file.
 //
-// Three return values because there are three different facts, and they used
-// to be two. `skipped` counts complete lines that are not records of the
-// current schema — data loss, or an upgrade. `incomplete` says the file does
+// Four return values because there are four different facts, and they used to
+// be two. `skipped` counts complete lines the reader could not interpret as
+// records at all. `schemaMismatch` counts lines that parsed cleanly but carry
+// a schema version this build does not read. `incomplete` says the file does
 // not end in a newline, which means the last record had not finished being
 // written when it was read.
+//
+// The third was split out of the first for the reason the sentence above used
+// to admit and not resolve: it said `skipped` meant "data loss, or an
+// upgrade". Those are opposite facts. One says bytes are gone; the other says
+// the file is intact and this build is newer than the one that wrote it.
+// Session.Skipped carried the total to a report that calls it transcript lines
+// which were not conversation content, and a readable ledger record is none of
+// those things.
 //
 // Collapsing the second into the first told a reader of a LIVE ledger that
 // records had been skipped. Store.Append writes one record per os.File.Write,
@@ -170,10 +179,10 @@ func IsLedgerFile(path string) bool {
 // `replay serve` is still writing can land inside that loop. Nothing is lost
 // there; the record arrives a moment later. Reporting it as skipped is the
 // difference between "your data is fine" and "your data is gone".
-func ReadRecords(path string) (records []Record, skipped int, incomplete bool, err error) {
+func ReadRecords(path string) (records []Record, skipped, schemaMismatch int, incomplete bool, err error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, 0, false, fmt.Errorf("open ledger: %w", err)
+		return nil, 0, 0, false, fmt.Errorf("open ledger: %w", err)
 	}
 	defer f.Close() //nolint:errcheck // read-only file; a close error carries no information we can act on
 	// Whether the file ends on a newline is what separates a torn write from a
@@ -187,21 +196,39 @@ func ReadRecords(path string) (records []Record, skipped int, incomplete bool, e
 	// the other is the same collapse this change exists to undo one level up.
 	endsClean, tailKnown := endsWithNewline(f)
 	scanner := transcript.NewLineScanner(f)
-	var lastWasSkip bool
+	// Which population the last rejected line joined, so the torn-tail
+	// correction below takes the record back out of the counter that actually
+	// holds it. A bool could only say "some counter went up", and decrementing
+	// the wrong one would invent a lost line and hide a superseded one.
+	const (
+		rejectedNone = iota
+		rejectedUnreadable
+		rejectedSchema
+	)
+	lastRejected := rejectedNone
 	for scanner.Scan() {
-		lastWasSkip = false
+		lastRejected = rejectedNone
 		line := bytes.TrimSpace(scanner.Bytes())
 		if len(line) == 0 {
 			// A file exists before its first record is flushed.
 			continue
 		}
 		var rec Record
-		if err := json.Unmarshal(line, &rec); err != nil || rec.Schema != SchemaVersion {
-			// An older schema names fields differently; reading it as the
-			// current one would produce figures that look measured and
-			// are not.
+		if err := json.Unmarshal(line, &rec); err != nil {
+			// Not a record at all. What it held is unknown, which is not the
+			// same as nothing.
 			skipped++
-			lastWasSkip = true
+			lastRejected = rejectedUnreadable
+			continue
+		}
+		if rec.Schema != SchemaVersion {
+			// It parsed. An older schema names fields differently, so reading
+			// it as the current one would produce figures that look measured
+			// and are not, and this reader declines rather than guesses. The
+			// bytes are intact, so this is not data loss and must not be
+			// counted as any.
+			schemaMismatch++
+			lastRejected = rejectedSchema
 			continue
 		}
 		records = append(records, rec)
@@ -223,14 +250,22 @@ func ReadRecords(path string) (records []Record, skipped int, incomplete bool, e
 	// make the line read "an unknown tail is a torn tail", which is the
 	// collapse this change exists to undo, and it would be correct only for as
 	// long as the two failure sets keep coinciding.
-	if lastWasSkip && tailKnown && !endsClean {
-		skipped--
+	if lastRejected != rejectedNone && tailKnown && !endsClean {
+		// Out of whichever counter took it. A half-written line is usually not
+		// valid JSON and so lands in skipped, but a truncation that happens to
+		// leave a parseable object would land in schemaMismatch instead, and
+		// the correction has to follow the record rather than assume.
+		if lastRejected == rejectedSchema {
+			schemaMismatch--
+		} else {
+			skipped--
+		}
 		incomplete = true
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, skipped, incomplete, fmt.Errorf("read ledger: %w", err)
+		return nil, skipped, schemaMismatch, incomplete, fmt.Errorf("read ledger: %w", err)
 	}
-	return records, skipped, incomplete, nil
+	return records, skipped, schemaMismatch, incomplete, nil
 }
 
 // ReadFile turns one ledger file into a Session at the measured tier.
@@ -238,21 +273,26 @@ func ReadFile(path string) (*transcript.Session, error) {
 	// The incomplete flag is deliberately not folded into Session.Skipped.
 	// A record still in flight is not a record the reader lost, and the count
 	// they see must mean only the second thing.
-	records, skipped, _, err := ReadRecords(path)
+	records, skipped, schemaMismatch, _, err := ReadRecords(path)
 	if err != nil {
 		return nil, err
 	}
+	// Unchanged, and deliberately so: a file holding no current-schema record
+	// produces no session, whatever the reason. Reporting a superseded record
+	// needs a session to report it on, and inventing one from records this
+	// build did not read would be the migration this change does not make.
 	if len(records) == 0 {
 		return nil, fmt.Errorf("no records in %s", filepath.Base(path))
 	}
-	return sessionFromRecords(records, path, skipped), nil
+	return sessionFromRecords(records, path, skipped, schemaMismatch), nil
 }
 
 // sessionFromRecords builds a session from a whole file.
-func sessionFromRecords(records []Record, path string, skipped int) *transcript.Session {
+func sessionFromRecords(records []Record, path string, skipped, schemaMismatch int) *transcript.Session {
 	sort.SliceStable(records, func(i, j int) bool { return records[i].Timestamp.Before(records[j].Timestamp) })
 	b := NewSessionBuilder(records[0].SessionID, path)
 	b.session.Skipped = skipped
+	b.session.SchemaMismatch = schemaMismatch
 	for _, rec := range records {
 		b.Add(rec)
 	}
@@ -291,6 +331,44 @@ func (b *SessionBuilder) Add(rec Record) {
 		// ledger the reader could not read.
 		if rec.Refusal != "" {
 			b.session.Refusals++
+			return
+		}
+		// The provider was reached and did not answer usefully. Checked after
+		// the refusal branch and not before it: every guard Replay fires writes
+		// a status of its own, 400 for the spend cap, the loop guard, the error
+		// budget and the pre-flight ceiling, 503 for the circuit breaker, so
+		// deciding on status first would count every one of them as the
+		// provider's doing.
+		//
+		// At or above 400, which is where the proxy's own stats already put a
+		// failure. A 3xx is not claimed: it is not a failure, and the category
+		// says only what was observed.
+		//
+		// And only where the provider reported no usage. ParseOpenAIResponse
+		// (openai.go:118-133) has no type gate, so a failing request on the
+		// OpenAI-compatible path can still carry real token counts. Those were
+		// observed, and this category is a classification rather than an
+		// accounting mechanism: counting such a record here would take its
+		// measured tokens out of the session totals and its dollars out of the
+		// priced figures, which is deleting a measurement because the HTTP
+		// request failed. It stays a usage-bearing record instead.
+		if rec.Status >= 400 && rec.Response.Usage == nil {
+			if b.session.ProviderFailures.ByStatus == nil {
+				b.session.ProviderFailures.ByStatus = map[int]int{}
+			}
+			b.session.ProviderFailures.ByStatus[rec.Status]++
+			return
+		}
+		// No status at all: the connection failed before the provider answered.
+		// Kept apart from the status counts because 0 is not one.
+		//
+		// A zero status does not identify itself — an empty record has one too
+		// — so the prompt is what separates them. handle summarizes before it
+		// forwards (passthrough.go:20-21), so a request that reached the
+		// provider carries its messages whatever came back, and a record with
+		// neither a status nor a prompt is the one that still explains nothing.
+		if rec.Status == 0 && len(rec.Prompt.Messages) > 0 {
+			b.session.ProviderFailures.NoStatus++
 			return
 		}
 		b.session.Skipped++

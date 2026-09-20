@@ -17,7 +17,7 @@ reach the network, and does it write. Both are answered per command below, and
 summarised here.
 
 **Opens no socket and writes nothing** — safe to run at will:
-`ceiling`, `diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `mcp`, `statusline`, `redact`, `version`, `prefix`, `budget`, `pool`.
+`ceiling`, `diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `mcp`, `statusline`, `redact`, `version`, `prefix`, `budget`, `jev`, `pool`.
 
 **Leaves the machine:** `serve` proxies every request to the provider.
 `probe --execute` sends billable requests, and without `--execute` it prints a
@@ -66,6 +66,7 @@ to test whether `~/.replay` is writable.
 | [`prefix`](#prefix) | Whether a change to a tool-server document voids the cached prefix | none | none |
 | [`since`](#since) | What ran, and what it cost, since you last looked | none | ~/.replay/seen.json, one timestamp; --peek writes nothing |
 | [`budget`](#budget) | What this configuration costs on every request, before any work | none | none |
+| [`jev`](#jev) | What a Jev capture holds: attempts, answers, observed tokens | none | none |
 | [`upgrade`](#upgrade) | Replace this binary with the latest published release | outbound: github.com, to resolve the latest tag and download the release archive and its checksums | the running binary, in place, after its checksum is verified; --check and --dry-run write nothing |
 | [`purge`](#purge) | Remove ledger records past a retention window, or one session's | none | removes ledger records under the directory given; nothing unless --yes |
 | [`privacy`](#privacy) | Everything Replay has written to this machine, and what each store holds | none | nothing: it reports and never removes |
@@ -109,7 +110,7 @@ Locate and classify every cache break, with its cause.
 
 | Flag | Type | What it does |
 |---|---|---|
-| `-dollars` | bool | add a list-price cost column (first-party rates, dated price table) |
+| `-dollars` | bool | add a list-price cost column to the policy table (first-party rates, dated price table); not available on blame or diff, which print no policy table |
 
 ### advise
 
@@ -151,6 +152,7 @@ Local proxy: forwards to the provider, records a ledger.
 | `-max-session-usd` | float | refuse a session's next request once its list-price cost reaches this many dollars (0 = off; models not in the price table count as free) |
 | `-metrics-listen` | string | bind a second, read-only listener for /replay/metrics, /replay/status and /replay/healthz. It never proxies. Use it when the proxy is on a socket and a scraper needs a port |
 | `-policy-file` | string | EXPERIMENTAL: apply the context-edit candidate selected by replay learn (usually ~/.replay/policy.json), read at each session's first request; an explicit -context-edit-trigger wins; a session keeps its first decision whatever the file does later |
+| `-preflight` | int | refuse a request whose changed system prompt or tool definitions would re-lay more than this many tokens, estimated from the prefix bytes (0 = off). The number is the ceiling and supplying it is what turns the guard on |
 | `-project` | string | with -mask, the directory under which file-edit tool inputs may receive secrets (default: the current directory) |
 | `-rehydrate` | bool | with -mask, restore placeholders in responses; false leaves them in place to evaluate coverage (default true) |
 | `-rehydrate-scope` | value | with -mask, where a pattern's secrets may be restored, as name=dest[,dest] with dest text, edit, tool:NAME, or none; name * sets the default (text,edit); repeatable |
@@ -187,7 +189,7 @@ Rank what is eating prompt tokens.
 
 | Flag | Type | What it does |
 |---|---|---|
-| `-dollars` | bool | add a list-price cost column (first-party rates, dated price table) |
+| `-dollars` | bool | add a list-price cost column to the policy table (first-party rates, dated price table); not available on blame or diff, which print no policy table |
 
 ### replay
 
@@ -195,7 +197,7 @@ Reproduce caching, then score alternative layouts.
 
 | Flag | Type | What it does |
 |---|---|---|
-| `-dollars` | bool | add a list-price cost column (first-party rates, dated price table) |
+| `-dollars` | bool | add a list-price cost column to the policy table (first-party rates, dated price table); not available on blame or diff, which print no policy table |
 
 ### route
 
@@ -353,6 +355,12 @@ What this configuration costs on every request, before any work.
 |---|---|---|
 | `-json` | bool | emit the artefact as JSON, for committing and for the gate to read |
 
+### jev
+
+What a Jev capture holds: attempts, answers, observed tokens.
+
+Takes no flags.
+
 ### upgrade
 
 Replace this binary with the latest published release.
@@ -427,4 +435,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-30 commands, 111 flags, read from the binary.
+31 commands, 112 flags, read from the binary.

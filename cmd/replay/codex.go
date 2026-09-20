@@ -89,7 +89,7 @@ func runCodex(args []string, stdout, stderr io.Writer) error {
 	}
 
 	var billed, reported int
-	var refused, compacted, quotas int
+	var refused, unparsable, reEmitted, compacted, quotas int
 	var breaks, coldTokens int
 	var latest *transcript.CodexQuota
 	type row struct {
@@ -108,7 +108,13 @@ func runCodex(args []string, stdout, stderr io.Writer) error {
 		}
 		billed += s.Billed.Total()
 		reported += s.Reported.Total()
-		refused += s.Skipped
+		// Skipped is every record the reader could not use; Unparsable is the
+		// subset it never read far enough to judge. The refusal note below
+		// names why a record was refused, and that reason is only true of the
+		// ones it did read, so the two are counted apart here.
+		refused += s.Skipped - s.Unparsable
+		unparsable += s.Unparsable
+		reEmitted += s.ReEmitted
 		if s.Rebased {
 			compacted++
 		}
@@ -143,6 +149,30 @@ func runCodex(args []string, stdout, stderr io.Writer) error {
 		_, _ = fmt.Fprintf(stdout, "  [NOTE] %d record(s) refused, either because a share exceeded the\n"+
 			"         total it is part of, or because a total arrived with no breakdown\n"+
 			"         at all. Neither can be priced, and neither is zero.\n\n", refused)
+	}
+	// Its own note, for the reason the re-emission one has its own: the
+	// sentence above names two causes, and a line that is not JSON is neither.
+	// Counting these there told a reader to go looking for a malformed subset
+	// in a record that never parsed.
+	//
+	// It says only what happened. The reader could not read the record, so it
+	// does not know what the record held, whether anything was spent, or
+	// whether the provider was involved at all.
+	if unparsable > 0 {
+		_, _ = fmt.Fprintf(stdout, "  [NOTE] %d record(s) could not be parsed: the line or its payload was not\n"+
+			"         readable JSON. What they held is unknown, which is not the same as\n"+
+			"         nothing.\n\n", unparsable)
+	}
+	// Its own note, beside the refused one rather than inside it.
+	//
+	// The sentence above names two causes and a re-emission is neither of
+	// them. Counting these records there would have been a reader told to go
+	// looking for a malformed subset in a record that parsed perfectly.
+	if reEmitted > 0 {
+		_, _ = fmt.Fprintf(stdout, "  [NOTE] %d token-count record(s) repeated usage this session had already\n"+
+			"         reported, with Codex's own cumulative standing still across the\n"+
+			"         repeat. Each of those turns is counted once, on the record that\n"+
+			"         moved the cumulative, and is not counted again here.\n\n", reEmitted)
 	}
 
 	if breaks > 0 {

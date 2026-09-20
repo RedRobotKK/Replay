@@ -4,6 +4,111 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-09-20
+
+### Changed
+
+- **A re-emitted Codex turn is no longer counted as a refused record.** 0.6.1
+  stopped billing the repeat and counted it in `Skipped`, which already meant
+  three other things: an unparsable line, an unparsable payload, and a usage
+  record whose own subsets contradict it. A re-emission is none of those. The
+  record parsed, its usage was readable, and it stayed out of the bill only
+  because the same turn was already in it. One counter holding four facts made
+  all four indistinguishable, and the surfaces reading it then said things that
+  were not true of a re-emission: `replay codex` reports refused records as
+  ones whose share exceeded their total or whose breakdown was missing, and a
+  reader was sent looking for a malformed record that does not exist.
+  `CodexSession.ReEmitted` is now its own count, beside `Skipped` rather than
+  inside it, and `replay codex` gives it its own note saying what happened: a
+  token-count record repeated usage already reported, the cumulative stood
+  still across the repeat, and the turn is counted once on the record that
+  moved it. The billing arithmetic does not move. The cumulative advancing is
+  still what marks a new contribution, two genuine turns carrying equal numbers
+  are still both billed, and a repeat is still counted rather than dropped in
+  silence.
+
+### Added
+
+- **`replay jev` reads a Jev capture.** The reader shipped with nothing calling
+  it, so an approved artifact format was unreadable by the tool that defines
+  it. The command prints what a capture holds: the Replay-minted evaluation id,
+  the model requested against the model that answered, every attempt with its
+  ordinal and HTTP status, and the provider's request id only on attempts whose
+  response carried one. An evaluation whose every attempt failed is shown as
+  `no response` rather than as a response with zero tokens.
+  It is a standalone command and builds no `transcript.Session`. `Source.Tier()`
+  is a two-valued provenance label and admitting a server-side capture to it
+  would be a provenance claim no decision has made. It prints no cost, savings
+  or cache figure either: a Jev capture carries input and output tokens and no
+  cache fields at all, so a zero there would be a figure nobody measured.
+  The reader rejects duplicate JSON keys rather than taking the last, because
+  which of two usage objects the provider meant is not a thing a parser default
+  should settle.
+- **`replay serve --preflight N` turns the pre-flight guard on.** The guard has
+  been in `internal/proxy` since it was written, with its policy, its estimate
+  band and its own refusal kind. Nothing set `proxy.Config.PreFlight`, so
+  `analysis.PolicyState` arrived zero-valued, `OptInActive` was false, and the
+  guard could not fire in any shipped run. N is the largest re-lay the operator
+  accepts, and supplying it is what turns the guard on: one flag carries both
+  facts because they are one statement, and 0 still means off. A negative value
+  is refused rather than read as off. The policy arithmetic is unchanged.
+
+### Fixed
+
+- **`--dollars` was accepted by two commands that print no policy table.**
+  `runReport` backs four entry points and declares one flag set, so the flag
+  was accepted by `replay`, `blame`, `diff` and the bare-path form. It adds a
+  list-price column to the policy table and only the replay report prints one,
+  so `replay blame --dollars` parsed the flag, stored it, and printed the same
+  report as omitting it. No error and no way for the reader to learn the flag
+  did nothing, at exactly the moment someone is asking about money. It is now
+  refused, naming the flag, the command, and the report that does take it.
+  Giving `blame` or `diff` a real figure is a different change and is not this
+  one: neither calculation exists.
+- **A recorded provider failure was counted as a line the reader could not
+  parse.** A request the provider answered with 401, 429 or 500, or one where
+  the connection failed before any status arrived, carries no usage and no
+  prompt, which is the same shape as an unreadable record. It was counted as
+  one, so a rate limit read as a broken ledger. `Session.ProviderFailures` is
+  now its own count and the report gives it two statements: the observed
+  statuses with their counts, and separately the records that obtained no HTTP
+  status at all, because zero is not a status and printing it as one would
+  invent a response nobody received. A failing request that still carried
+  usage stays a usage-bearing request and keeps its tokens in the totals, since
+  moving it would delete a measurement because the HTTP request failed. Nothing
+  names a cause: 401 is not called an authentication problem.
+- **A Codex line that never parsed was reported as refused for a reason nobody
+  established.** `replay codex` describes refused records as ones whose share
+  exceeded the total it is part of or whose total arrived with no breakdown.
+  Both describe a record the reader understood and judged. Neither describes a
+  line that is not JSON, and the reader counted those in the same number.
+  `CodexSession.Unparsable` is now a documented subset of `Skipped`, reported
+  in its own note that claims only what was established: the line or its
+  payload was not readable JSON, and what it held is unknown, which is not the
+  same as nothing. The billed total does not move.
+- **`replay since` printed dollar figures with no basis.** The digest is a
+  filter over `replay.cost.v2`, so its figures are the cost command's figures
+  exactly, and the cost command states their basis while the digest stated none
+  of it. A figure under "Since you last looked" read as an amount somebody had
+  charged rather than as list price applied to the tokens Replay counted. The
+  digest now closes with its own statement naming both dated documents, read at
+  print time from the same constants the cost command uses, so a loaded rules
+  document names itself rather than the compiled default. No figure changed.
+- **A ledger record from an older schema was reported as data the reader
+  lost.** `ReadRecords` counted an unreadable line and a line that parsed
+  cleanly under a different schema in one number, and its own documentation
+  admitted the ambiguity without resolving it, saying the count meant "data
+  loss, or an upgrade". The report renders that count as transcript lines that
+  were not conversation content, which is false of a readable ledger record in
+  all three claims. `Session.SchemaMismatch` is now its own count with its own
+  note saying the record was written under a different schema version, was not
+  read, and parsed, so nothing is missing from the file. The schema gate is
+  still exact equality, so a record at any other version is still not read, and
+  a file holding no current-schema record still produces no session. No
+  accounting moved and nothing migrates.
+
+## [0.6.1] - 2026-09-17
+
 ### Fixed
 
 - **A Codex session that re-emitted a turn was billed for it twice.** Codex
