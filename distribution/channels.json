@@ -1,7 +1,7 @@
 {
   "$schema": "https://replay.doctor/schemas/channels.v1.json",
   "schema": "replay.channels.v1",
-  "writtenAt": "2026-09-12",
+  "writtenAt": "2026-09-20",
   "notes": [
     "One row per place a person or a machine can get Replay from. This file is data, not prose: replay.doctor generates its install page from it (scripts/gen-install.mjs), a weekly job checks every row marked live still serves the latest release (scripts/check-channels.mjs), and the tests refuse a row marked live that has no verify step.",
     "status: live = a clean machine installs from it today; building = code exists, not yet published; planned = nothing yet; blocked = a gate we cannot pass; skipped = ruled out on purpose (the reason is in gate).",
@@ -110,7 +110,7 @@
       "name": ".deb on the release page",
       "command": "curl -fsSLO https://github.com/RedRobotKK/Replay/releases/latest/download/replay_VERSION_linux_amd64.deb && sudo dpkg -i replay_VERSION_linux_amd64.deb",
       "verify": "replay version",
-      "status": "building",
+      "status": "live",
       "automation": "goreleaser",
       "gate": "none",
       "check": {
@@ -126,7 +126,7 @@
       "name": ".rpm on the release page",
       "command": "sudo rpm -i https://github.com/RedRobotKK/Replay/releases/latest/download/replay_VERSION_linux_amd64.rpm",
       "verify": "replay version",
-      "status": "building",
+      "status": "live",
       "automation": "goreleaser",
       "gate": "none",
       "check": {
@@ -142,7 +142,7 @@
       "name": ".apk on the release page",
       "command": "sudo apk add --allow-untrusted ./replay_VERSION_linux_amd64.apk",
       "verify": "replay version",
-      "status": "building",
+      "status": "live",
       "automation": "goreleaser",
       "gate": "none",
       "check": {
@@ -151,6 +151,22 @@
         "pattern": "_linux_amd64\\.apk$"
       },
       "cta": "Same tag."
+    },
+    {
+      "id": "archlinux-release",
+      "group": "package-managers",
+      "name": ".pkg.tar.zst on the release page",
+      "command": "sudo pacman -U replay_<version>_linux_<arch>.pkg.tar.zst",
+      "verify": "replay version",
+      "status": "live",
+      "automation": "goreleaser",
+      "gate": "none",
+      "check": {
+        "kind": "github-asset",
+        "repo": "RedRobotKK/Replay",
+        "pattern": "_linux_amd64\\.pkg\\.tar\\.zst$"
+      },
+      "cta": "Built by the same nfpms block as deb/rpm/apk; it shipped with no row until 2026-09-20."
     },
     {
       "id": "apt-repo",
@@ -349,7 +365,7 @@
       "name": "npm (npx)",
       "command": "npx replay-doctor diff ~/.claude/projects/",
       "verify": "npx replay-doctor version",
-      "status": "building",
+      "status": "live",
       "automation": "workflow",
       "gate": "NPM_TOKEN must be a granular access token, read and write, bypass 2FA",
       "check": {
@@ -364,7 +380,7 @@
       "name": "PyPI (uvx / pipx)",
       "command": "uvx replay-doctor diff ~/.claude/projects/",
       "verify": "uvx replay-doctor version",
-      "status": "building",
+      "status": "live",
       "automation": "workflow",
       "gate": "none remaining",
       "check": {
@@ -378,11 +394,11 @@
       "group": "shims",
       "name": "bunx / deno (via npm)",
       "command": "bunx replay-doctor version",
-      "verify": "",
-      "status": "building",
+      "verify": "bunx replay-doctor version",
+      "status": "live",
       "automation": "workflow",
       "gate": "follows npm",
-      "cta": "Nothing extra; document once npm is live."
+      "cta": "Rides the npm package; no separate artifact and nothing extra to publish."
     },
     {
       "id": "cargo",
