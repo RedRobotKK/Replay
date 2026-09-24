@@ -94,6 +94,13 @@ func homeStores() []store {
 			Holds: "one timestamp: when `replay since` last reported. Nothing else.",
 		},
 		{
+			Name: "surfaces.json", Purgeable: true,
+			Holds: "counts of which Replay subcommands you ran and how many findings each " +
+				"put in front of you. No paths, no targets, no content, no identifier. " +
+				"It exists because nothing recorded whether a finding was ever read, and " +
+				"the tool was about to build more of them. It never leaves this machine.",
+		},
+		{
 			Name: "tip.json", Purgeable: true,
 			Holds: "when the funding line was last shown, so it is not shown again for a month. " +
 				"A date and a figure, no identifier.",
