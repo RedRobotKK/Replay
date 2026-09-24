@@ -701,7 +701,8 @@ func adviceState() ([]tui.AdviceRow, int) {
 		return nil
 	})
 
-	return adviceRows(advisor.Suggest(obs, appliedIDs())), sessions
+	rows, _ := suggestForReader(obs)
+	return adviceRows(rows), sessions
 }
 
 func machineState() tui.Machine {

@@ -296,22 +296,40 @@ applied. The mark is written to `~/.replay/advice.json` immediately:
 }
 ```
 
+The status is not the record. Beside the suggestions the file carries a `decisions` object, and that
+is what outlives the next run:
+
+```json
+"decisions": {
+  "5c4774fea9f7": "applied"
+}
+```
+
+Every status in this file is recomputed from your corpus on every `replay advise`, so a decision
+kept in the status field would be destroyed by the first run after you made it. `decisions` is the
+only part of the file a person wrote. See
+[ADR-0027](../adr/0027-a-reader-decision-is-persisted-apart-from-the-computed-status.md).
+
 This step exists because the alternative was worse. Until 8f32a31 on 2026-09-09 the verifier inferred
 that you had applied a suggestion from the very drop it then measured to decide whether the
 suggestion had worked, which is circular, and it was wrong in both directions: corpus drift returned
 `verified` for changes nobody made, and noise returned `not verified` for the same. A keystroke is a
 recorded fact. Nothing else here is.
 
-The second place the route stops is right here. Run `replay advise` again after marking it and the
-finding still prints `[pending]`:
+Run `replay advise` again after marking it and the finding prints `[applied]`:
 
 ```text
-1. [pending] Bash inputs are 28% of prompt tokens
+1. [applied] Bash inputs are 28% of prompt tokens
 ```
 
-The status file says `applied` and the report says `pending`, and neither one tells you why. The
-reason is in step 7 and it is a real reason, but from the reader's chair the keystroke did nothing
-visible, which is exactly how a keystroke gets pressed twice.
+Corrected 2026-09-23. Until then this paragraph documented a stop: the report printed `[pending]`
+after the mark, the status file said `applied`, and neither one told you why. That was two defects
+in one line. The report recomputed the status and had nowhere to read the decision from, and
+`appliedIDs` was meanwhile reading `verified` and `not verified` straight back as though a person
+had set them. Both are fixed: the decision is stored apart from the status and is put back on the
+status wherever the verifier has nothing to say. Where it does have something to say the
+measurement stands, so a finding that has reached `verified`, `not verified` or `advice only` keeps
+that word and does not fall back to `applied`.
 
 ## Step 7: verify
 
