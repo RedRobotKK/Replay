@@ -33,6 +33,17 @@ All notable changes to this project are documented here. The format follows [Kee
   `x` keys refuse rather than writing into a file this build does not
   understand.
 
+- **`replay advise` refuses to replace an advice file newer than itself.**
+  Measured on 2026-09-24: a schema-2 file carrying a reader's `applied` decision
+  was overwritten by `replay 0.5.4`, whose `adviceFile` struct has no
+  `decisions` field, and the decision was simply absent from the result. The
+  next read then discarded the file as schema 1, so the mark was gone for good.
+  A writer now reads the existing schema first and refuses a strictly newer one,
+  naming both schemas and `--out` so a reader whose only binary is the old one is
+  not stranded. **This cannot repair a downgrade that already happened**: the
+  check runs only in builds that carry it, and every binary already installed
+  predates it. It bounds the next schema bump, not the last one.
+
 ## [0.6.2] - 2026-09-20
 
 ### Changed
