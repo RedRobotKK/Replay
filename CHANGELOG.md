@@ -44,6 +44,21 @@ All notable changes to this project are documented here. The format follows [Kee
   check runs only in builds that carry it, and every binary already installed
   predates it. It bounds the next schema bump, not the last one.
 
+### Added
+
+- **`replay advise` records, on this machine only, how many findings it showed.**
+  A new store, `~/.replay/surfaces.json`, holds a count of runs and of findings
+  shown, per subcommand. No paths, no targets, no content, no identifier. **It is
+  never transmitted**, and that is enforced by a test reading the counter's own
+  imports rather than by intention. `replay privacy` discloses it and it carries
+  the same retention flag as every other store under `~/.replay`.
+  It exists because nothing recorded whether a finding had ever been read, and
+  more findings were about to be built. **Whether a finding was opened is not
+  observable from the command line**, because `advise` prints every finding in
+  one pass, and this build records that as unobservable rather than leaving it
+  out: a later reader finding no open counts must not conclude nobody opened
+  anything.
+
 ## [0.6.2] - 2026-09-20
 
 ### Changed
