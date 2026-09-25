@@ -188,6 +188,17 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create advice directory: %w", err)
 	}
+	// Refuse to replace a file this build could not have written.
+	//
+	// ADR-0027 closes the read side: a file at another schema contributes no
+	// decisions. This is the same rule facing the other way. Measured on
+	// 2026-09-24, an older binary overwrote a schema-2 file and its
+	// `decisions` object was simply absent from the result, because that
+	// build's adviceFile struct has no such field. The reader's mark went
+	// from applied back to pending with nothing printed.
+	if err := refuseNewerAdviceFile(path); err != nil {
+		return err
+	}
 	// decisions is carried forward, not recomputed. Every run rewrites this
 	// file wholesale, so dropping it here would delete the reader's record on
 	// the next advise and make the mark they were told was saved last exactly
@@ -333,4 +344,39 @@ func countAdviceOnly(ss []advisor.Suggestion) int {
 		}
 	}
 	return n
+}
+
+// refuseNewerAdviceFile reports an error when the advice file already on disk
+// was written at a schema this build does not know.
+//
+// Only strictly newer. Equal is every ordinary run, and older is the upgrade
+// path, where discarding the old statuses is the documented intent rather than
+// a loss.
+//
+// A missing or unparseable file is not this guard's business and returns nil. A
+// first run has no file, and a truncated one carries no schema to compare;
+// refusing either would break the common case to defend the rare one.
+//
+// This cannot undo a downgrade that has already happened. The check lives in
+// the writer, so it runs only in builds that carry it, and every binary already
+// installed predates it. It bounds the next schema bump, not the last one.
+func refuseNewerAdviceFile(path string) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var probe struct {
+		Schema int `json:"schema"`
+	}
+	if json.Unmarshal(b, &probe) != nil {
+		return nil
+	}
+	if probe.Schema <= advisor.AdviceFileSchema {
+		return nil
+	}
+	return fmt.Errorf("%s is schema %d and this build writes %d: refusing to replace it, "+
+		"because a newer file holds decisions this build cannot carry forward and "+
+		"rewriting it would delete them. Upgrade replay, or send this run somewhere "+
+		"else with --out",
+		path, probe.Schema, advisor.AdviceFileSchema)
 }
