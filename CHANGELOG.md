@@ -4,6 +4,35 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- **A status the verifier wrote is no longer read back as a decision the reader
+  made.** [8f32a31](https://github.com/RedRobotKK/Replay/commit/8f32a31) stopped
+  `advisor.track` inferring that advice had been applied from the very drop it
+  then measured, and left the loop open one level up: `appliedIDs` counted
+  `verified` and `not verified` as applied, and both are produced by `track` and
+  by nothing else. Every status the old verifier had already written to disk
+  therefore stood in for a human decision forever after. Measured on one real
+  `~/.replay/advice.json`: 147 records, 20 not verified and 1 verified, with
+  zero reader dispositions ever recorded; regenerating the same corpus promoted
+  one of them from `not verified` to `verified` with nobody having marked
+  anything. What the reader decided is now persisted apart from what the
+  verifier computed, in a `decisions` object keyed by suggestion id, and the
+  per-suggestion `status` is output only. A dismissal is recorded as a
+  dismissal and is never handed to the verifier as an application.
+  See [ADR-0027](docs/adr/0027-a-reader-decision-is-persisted-apart-from-the-computed-status.md).
+
+### Changed
+
+- **Advice file schema 2.** A file written at schema 1 carries statuses of
+  unknown provenance, and nothing in it distinguishes one the old verifier
+  inferred from one a reader caused. Those files are skipped by the reader
+  rather than misread, as the ledger's own schema 2 already is: every
+  suggestion returns to `pending` on the next `replay advise` and the reader
+  marks again what they actually did. Until that run, `replay tui`'s `a` and
+  `x` keys refuse rather than writing into a file this build does not
+  understand.
+
 ## [0.6.2] - 2026-09-20
 
 ### Changed

@@ -31,6 +31,7 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | [0023](0023-entitlement-is-a-signed-document-not-an-account.md) | Entitlement is a signed document, not an account | Proposed |
 | [0024](0024-deprecation-is-a-promise-made-before-1-0.md) | Deprecation is a promise that has to be made before 1.0 | Proposed |
 | [0026](0026-a-surviving-guard-is-permitted-only-with-evidence.md) | A surviving guard is permitted only with evidence, addressed one guard at a time | Proposed |
+| [0027](0027-a-reader-decision-is-persisted-apart-from-the-computed-status.md) | A reader decision is persisted apart from the computed status | Proposed |
 
 ---
 

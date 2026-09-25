@@ -59,7 +59,12 @@ const (
 	// realized for a suggestion to count as verified.
 	verifyShare = 0.5
 	// AdviceFileSchema is bumped on any incompatible change to the file.
-	AdviceFileSchema = 1
+	//
+	// 2 (2026-09-23) adds the decisions object: what the reader said, kept
+	// apart from what the verifier computed. A file at schema 1 carries
+	// statuses of unknown provenance and contributes no decisions at all.
+	// See ADR-0027.
+	AdviceFileSchema = 2
 )
 
 // Status is where a tracked suggestion stands.
@@ -81,6 +86,60 @@ const (
 	// who has already answered.
 	Dismissed Status = "dismissed"
 )
+
+// Decision is what the reader said about a suggestion, and the only thing on
+// disk that a person authored.
+//
+// A separate type from Status because the two have different authors and
+// cannot share a slot. Status is recomputed on every run by track; Decision is
+// written by a keystroke and outlives every run. They were one field until
+// 2026-09-23, and that is precisely how a status the verifier had inferred came
+// back as a human decision and let a suggestion promote itself. The type makes
+// the mistake unwritable: there is no Decision spelling of "verified".
+type Decision string
+
+// Decisions a reader can record. Applied is the only one that lets track judge
+// a suggestion. Dismissed is a decision and NOT an application: nothing about
+// the corpus moved, so there is nothing to verify, and counting it as applied
+// would rebuild the same defect out of a different constant.
+const (
+	DecisionApplied   Decision = "applied"
+	DecisionDismissed Decision = "dismissed"
+)
+
+// ApplyDecisions overlays what the reader said onto the computed statuses.
+//
+// Only where track returned Pending, which is exactly where the verifier has
+// nothing to say. A measurement is never overwritten: Verified and NotVerified
+// are outcomes the reader's own mark produced, and AdviceOnly is a statement
+// about what this tool can observe at all, true whatever anybody did.
+//
+// Without this the reader's keystroke is invisible from the next run onward.
+// track cannot return Applied, so a suggestion marked applied and not yet
+// judged reads back as pending, and the screen tells the reader their decision
+// was not recorded. It was: it is in the decisions object, and it is still
+// gating the verifier.
+//
+// Edits sgs in place and returns it. The only caller passes the freshly built
+// slice Suggest just returned.
+func ApplyDecisions(sgs []Suggestion, decisions map[string]Decision) []Suggestion {
+	// No early return on an empty map. A lookup in a nil map yields the zero
+	// Decision, which matches neither case, so the loop already does nothing:
+	// a guard there would be one no test could ever fail, which ADR-0026
+	// permits only with evidence and there is none to give.
+	for i := range sgs {
+		if sgs[i].Status != Pending {
+			continue
+		}
+		switch decisions[sgs[i].ID] {
+		case DecisionApplied:
+			sgs[i].Status = Applied
+		case DecisionDismissed:
+			sgs[i].Status = Dismissed
+		}
+	}
+	return sgs
+}
 
 // Suggestion is one piece of advice with its evidence.
 type Suggestion struct {

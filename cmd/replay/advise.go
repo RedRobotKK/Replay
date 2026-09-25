@@ -41,6 +41,16 @@ type adviceFile struct {
 	// coverage test, so an old cache is recomputed rather than trusted.
 	Transcripts int                  `json:"transcripts,omitempty"`
 	Suggestions []advisor.Suggestion `json:"suggestions"`
+	// Decisions is what the reader said, keyed by suggestion id, and it is
+	// the only part of this file a person authored.
+	//
+	// Kept here rather than on the suggestion because this array is rebuilt
+	// from the corpus on every run: four of 21 tracked suggestions vanished
+	// between two runs over the same corpus on 2026-09-23, and a decision
+	// stored on a record that a run may not regenerate is a decision that
+	// disappears with it. Statuses go the other way and are pure output. See
+	// ADR-0027 for why the two cannot share a field.
+	Decisions map[string]advisor.Decision `json:"decisions,omitempty"`
 }
 
 // runAdvise turns the largest token sources across all sessions into
@@ -102,7 +112,7 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 	// The reader's own decisions, carried across runs. Without them nothing can
 	// be verified, which is the point: a status inferred from the corpus moving
 	// is not a status.
-	suggestions := advisor.Suggest(obs, appliedIDs())
+	suggestions, decisions := suggestForReader(obs)
 
 	// With --json, stdout belongs to the machine. The human report still gets
 	// written — it is useful beside the JSON — but on stderr, so that
@@ -178,7 +188,11 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create advice directory: %w", err)
 	}
-	data, err := json.MarshalIndent(adviceFile{Schema: advisor.AdviceFileSchema, Generated: time.Now().UTC(), Sessions: len(obs), Transcripts: len(files), Suggestions: suggestions}, "", "  ")
+	// decisions is carried forward, not recomputed. Every run rewrites this
+	// file wholesale, so dropping it here would delete the reader's record on
+	// the next advise and make the mark they were told was saved last exactly
+	// until they used the tool again.
+	data, err := json.MarshalIndent(adviceFile{Schema: advisor.AdviceFileSchema, Generated: time.Now().UTC(), Sessions: len(obs), Transcripts: len(files), Suggestions: suggestions, Decisions: decisions}, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode advice file: %w", err)
 	}
