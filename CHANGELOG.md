@@ -22,6 +22,19 @@ All notable changes to this project are documented here. The format follows [Kee
   dismissal and is never handed to the verifier as an application.
   See [ADR-0027](docs/adr/0027-a-reader-decision-is-persisted-apart-from-the-computed-status.md).
 
+- **`replay context` stated an inferred compaction as a recorded one.** The note
+  read "The history was compacted N times" from a single counter that both a
+  compaction the client wrote down and a merely shrinking prompt incremented.
+  The shrinking-prompt heuristic also fires on a rewind and on a resume, which
+  the code comment at the increment site already said, so the sentence a reader
+  is most likely to act on claimed more than the evidence carried. **61 sessions
+  on the measured corpus were affected.** Where nothing was recorded the note
+  now reads "The prompt shrank N times, so the history may have been compacted,
+  rewound or resumed; the client recorded none of it, so neither the cause nor
+  the size is established." A compaction the client did record still reads
+  plainly, with its size, because hedging that would be the same defect pointing
+  the other way.
+
 ### Changed
 
 - **Advice file schema 2.** A file written at schema 1 carries statuses of

@@ -140,8 +140,21 @@ type ContextGap struct {
 	ClearedTokens int
 	// ContextEdits is how many times it did so.
 	ContextEdits int
-	// Compactions counts history rewrites.
+	// Compactions counts history rewrites. Unchanged in meaning: the total,
+	// whatever produced it, so no existing consumer moves.
 	Compactions int
+	// InferredCompactions is how many of that total came from the fallback
+	// heuristic rather than from something the client recorded.
+	//
+	// The heuristic is a prompt that shrank between turns, and it also fires on
+	// a rewind or a resume, which is why the increment site calls it weak. Both
+	// kinds incremented Compactions and nothing downstream could tell them
+	// apart, so Note() stated an inference as an observation in the one
+	// sentence a reader is most likely to act on.
+	//
+	// They never both fire: a recorded compaction suppresses the heuristic
+	// entirely, which is the existing rule and is unchanged.
+	InferredCompactions int
 	// CompactedTokens is how much those rewrites removed, where the client
 	// recorded it. Zero means unrecorded, never "removed nothing" - the two
 	// are different claims and Compactions above keeps them apart.
@@ -231,6 +244,19 @@ func (g ContextGap) Note() string {
 		b.WriteString(" without reporting a size.")
 	}
 	if g.Compactions > 0 {
+		// An inferred compaction is not a compaction the client recorded, and
+		// the sentence must not say it was. The heuristic behind it fires on a
+		// rewind and on a resume too, so the strongest honest wording is that
+		// the prompt shrank and something left the context by a route the
+		// client did not report.
+		if g.InferredCompactions == g.Compactions {
+			b.WriteString(" The prompt shrank ")
+			b.WriteString(plural(g.Compactions, "time"))
+			b.WriteString(", so the history may have been compacted, rewound or resumed; " +
+				"the client recorded none of it, so neither the cause nor the size " +
+				"is established.")
+			return b.String()
+		}
 		b.WriteString(" The history was compacted ")
 		b.WriteString(plural(g.Compactions, "time"))
 		if g.CompactedTokens > 0 {
@@ -327,6 +353,7 @@ func MeasureGap(session *transcript.Session, lane *transcript.Lane, attributed i
 		// fallback rather than a second count added to the recorded one.
 		if cur := r.Usage.PromptTotal(); recorded == 0 && i > 0 && prev > 0 && cur < prev {
 			g.Compactions++
+			g.InferredCompactions++
 		}
 		prev = r.Usage.PromptTotal()
 	}
