@@ -44,6 +44,7 @@ is the only place that says what will actually ship.
 
 | Document | The question it settles |
 |---|---|
+| [Product direction, 2026-09-24](DIRECTION-2026-09-24.md) | What the shipping product can honestly support after the research closeout, with every proposed capability classified build-now, build-next, validate-first, future or do-not-build |
 | [Product direction](PRODUCT-DIRECTION.md) | The eight diagnostics already implemented are one waste taxonomy reported as eight unrelated numbers |
 | [What counts as waste](WASTE-DEFINITION.md) | A definition Replay can actually compute, and the two of five categories that survive it |
 | [What you actually get](WHAT-YOU-GET.md) | What pointing Replay at your sessions gives you today, and what it cannot recommend without reading your config |
