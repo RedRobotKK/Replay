@@ -114,6 +114,15 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 	// is not a status.
 	suggestions, decisions := suggestForReader(obs)
 
+	// How many findings this run put in front of somebody.
+	//
+	// Nothing recorded this before, so nobody could say whether a finding had
+	// ever been read, and the roadmap proposed building more of them. Local
+	// only, never transmitted, disclosed by `replay privacy` and removable by
+	// `replay purge`. A failure here is ignored: a counter that can break the
+	// command the reader actually asked for is worse than no counter.
+	_ = recordSurfaceRun("advise", len(suggestions))
+
 	// With --json, stdout belongs to the machine. The human report still gets
 	// written — it is useful beside the JSON — but on stderr, so that
 	// `advise --apply --json --out - | jq` works. Emitting 43KB of prose ahead

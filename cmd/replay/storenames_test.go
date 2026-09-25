@@ -38,6 +38,7 @@ func TestSN1_DisclosedNamesEqualHomeStoreNames(t *testing.T) {
 		"cost-index.json",
 		"measurements.jsonl",
 		"seen.json",
+		"surfaces.json",
 		"tip.json",
 		"serve.log",
 		"contributor-secret",

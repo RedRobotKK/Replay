@@ -11,7 +11,7 @@ import (
 // Everything this tool writes to the reader's machine, in one list.
 //
 // The purge command was built against ~/.replay/ledger because that is where
-// the retention gap was found. Looking properly, the tool writes twelve things:
+// the retention gap was found. Looking properly, the tool writes thirteen things:
 //
 //	ledger/            per-request records, counts and timings, no content
 //	                   — and ledger-<name>/, one directory per named upstream
@@ -23,6 +23,7 @@ import (
 //	measurements.jsonl probe readings
 //	seen.json          the `since` marker, one timestamp
 //	tip.json           when the funding ask was last shown
+//	surfaces.json      which subcommands ran and how many findings each showed
 //	serve.log          proxy logs — and serve-<name>.log per named upstream
 //	contributor-secret the machine-local secret the contributor tag derives from
 //	rules.json         the price-rules cache `replay rules --update` writes
@@ -69,6 +70,7 @@ func TestST1_EveryStoreTheToolWritesIsRegistered(t *testing.T) {
 	mustBeRegistered := []string{
 		"ledger", "vault", "archive", "advice.json", "policy.json",
 		"cost-index.json", "measurements.jsonl", "seen.json", "tip.json",
+		"surfaces.json",
 	}
 	if len(known) < len(mustBeRegistered) {
 		t.Fatalf("the registry names %d stores and this test alone requires %d of them by "+

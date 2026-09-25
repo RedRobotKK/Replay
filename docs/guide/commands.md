@@ -812,7 +812,7 @@ The question a subject access request asks, and one this tool could not answer u
 local-first tool is unusually well placed to: nothing has to be requested from anyone, because the
 whole answer is a directory on your own disk.
 
-Twelve stores sit under `~/.replay`, and the report says what each holds in plain terms — including
+Thirteen stores sit under `~/.replay`, and the report says what each holds in plain terms — including
 what it does **not** hold. The ledger carries timings, token counts, cache outcomes, a request path
 and a session id, and never message content.
 
