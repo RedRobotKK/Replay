@@ -1,0 +1,2 @@
+{"params":{"update":{"usage":{"inputTokens":4210,"outputTokens":180,"cachedReadTokens":3980,"cacheCreationTokens":0,"modelUsage":{"grok-4.6-build":{"inputTokens":4210,"outputTokens":180,"cachedReadTokens":3980,"cacheCreationTokens":0}}}}}}
+{"params":{"update":{"usage":{"inputTokens":5120,"outputTokens":210,"cachedReadTokens":4890,"cacheCreationTokens":0,"modelUsage":{"grok-4.6-build":{"inputTokens":5120,"outputTokens":210,"cachedReadTokens":4890,"cacheCreationTokens":0}}}}}}

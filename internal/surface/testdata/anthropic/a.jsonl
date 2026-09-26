@@ -1,0 +1,3 @@
+{"type":"assistant","message":{"usage":{"input_tokens":12,"cache_creation_input_tokens":5005,"cache_read_input_tokens":40123},"diagnostics":{"cache_miss_reason":{"type":"tools_changed","cache_missed_input_tokens":13482}}}}
+{"type":"assistant","message":{"usage":{"input_tokens":9,"cache_creation_input_tokens":0,"cache_read_input_tokens":45128},"diagnostics":{"cache_miss_reason":{"type":"messages_changed","cache_missed_input_tokens":54125}}}}
+{"type":"assistant","message":{"usage":{"input_tokens":4,"cache_creation_input_tokens":812,"cache_read_input_tokens":44980}}}

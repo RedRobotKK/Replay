@@ -75,6 +75,56 @@ Not unwired, but the same family — a thing that looks connected and is not.
    an eleventh row there deletes the rules warning silently, which is the defect
    #169 had just finished fixing.
 
+## 10. internal/surface, the cross-surface identification harness
+
+Added 2026-09-26. Not reachable from `cmd/replay`, and that is the current
+intent rather than an oversight.
+
+It exists because the cross-surface observability audit
+(`docs/evidence/cross-surface-observability-2026-09-26.md`) was produced by
+throwaway scripts that no longer exist. Nobody could re-run them, and nothing
+failed if a number in them was wrong. The package turns that audit into a probe
+plus a contract registry, so a reviewer can re-derive the readings instead of
+trusting them, and a wrong claim about a surface fails a test.
+
+Its central invariant is that a corpus probe must never infer a provider's
+economic class from transcript bytes alone. A corpus of populated cache reads
+beside a cache-write counter that is zero on every record is observationally
+identical under a provider that never writes and a client that drops the
+counter. Codex is the instance. So `Classify` takes corpus evidence and an
+independently sourced contract fact, and returns undetermined when the contract
+is absent. Seven mutations that would upgrade a class on weaker evidence are
+killed by the suite.
+
+**What would wire it:** a command that reports what this machine's agent
+surfaces can and cannot measure, which `replay doctor` is the natural home for.
+That has not been proposed or authorised, so the package stays out of the binary
+rather than growing a user-facing surface nobody asked for. The opt-in
+real-machine probe (`REPLAY_PROBE_REAL=1`) is deliberately outside the hermetic
+CI path, because its subject is the machine rather than the code.
+
+## 11. internal/e005, the recovered scorer
+
+Added 2026-09-26. Not reachable from `cmd/replay`, and correctly so: it
+re-computes one dated experiment, and a user's install has no use for it.
+
+It exists because E005's blinder and scorer were run as inline shell heredocs
+and were never written to disk, while its corpus sat in a job directory that is
+deleted with the job. The result was published and could not be re-derived by
+anyone, including its author. The nine executed steps were recovered verbatim
+from the session transcript, and this package is their analysis arm made
+durable.
+
+Its tests re-derive every figure in
+`docs/evidence/detector-observables-2026-09-26.md` from two content-free
+artifacts in `testdata/`, and fail if any of them moves. Seven mutations that
+would silently alter a score are killed, including one that only fires on a
+synthetic input because the real corpus never reaches that branch.
+
+**What would wire it:** nothing should. If a second operator's corpus is ever
+scored, it runs through this package in a test or a developer command, not
+through the shipped binary.
+
 ## Audit in flight
 
 Three agents, launched 2026-09-09, each using a different detection method because

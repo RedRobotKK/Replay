@@ -1,0 +1,2 @@
+{"timestamp":"2026-09-26T10:00:01.000Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":12963,"cached_input_tokens":9600,"cache_write_input_tokens":0,"output_tokens":302,"total_tokens":13265}}}}
+{"timestamp":"2026-09-26T10:00:09.000Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":15039,"cached_input_tokens":11264,"cache_write_input_tokens":0,"output_tokens":248,"total_tokens":15287}}}}

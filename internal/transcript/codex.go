@@ -187,9 +187,29 @@ type codexUsage struct {
 	// CacheWrite is what the provider says it wrote to cache on this turn.
 	//
 	// Codex states it; Anthropic's surface does not, and a write there has to
-	// be inferred by hashing the prefix and noticing it changed. This reader
-	// carried every other counter in TokenUsage and not this one, so every
-	// Codex session reported a write of zero.
+	// be inferred by hashing the prefix and noticing it changed.
+	//
+	// This reader once omitted the field, and reported a write of zero for
+	// that reason. That defect is fixed and pinned by
+	// TestCodexReadsTheCacheWriteItIsGiven. It is recorded here because the
+	// zero did not go away when the reader was fixed, and the two causes must
+	// not be confused: every Codex rollout on this machine carries the field
+	// and carries it at zero: 0 of 11,776 occurrences across 5,830 records are
+	// non-zero, measured on the raw files rather than through this reader and
+	// reproducible with internal/surface.
+	//
+	// A zero here is NOT evidence that the provider charged nothing. OpenAI
+	// bills cache writes on GPT-5.6 and later at 1.25x the uncached input
+	// rate, and 117 of 117 local gpt-5.6-terra turns carry uncached input,
+	// 79 of them above the 1,024-token cache minimum, while recording a write
+	// of zero. The loss is in what Codex persists, not in what OpenAI billed
+	// or in what this struct does with it.
+	//
+	// So a zero read out of a rollout file is carried through as a zero. It is
+	// never reconstructed from the uncached remainder, which would turn an
+	// unobserved quantity into a number someone is billed against.
+	// TestCodexZeroWriteIsCarriedNotReconstructed pins that.
+	// docs/evidence/cross-surface-observability-2026-09-26.md has the corpus.
 	CacheWrite int `json:"cache_write_input_tokens"`
 	Output     int `json:"output_tokens"`
 	Reasoning  int `json:"reasoning_output_tokens"`

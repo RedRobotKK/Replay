@@ -52,6 +52,8 @@ func TestNoNewlyUnwiredPackages(t *testing.T) {
 		"internal/mergeguard":          "the analysis behind scripts/merge-guard, split out for the reason internal/guardcheck was: the script carries //go:build ignore, so nothing could reach a line of it, and a tool that judges whether a merge compiles should be able to say so about itself. Correctly absent, and the split keeps os/exec out of an importable package.",
 		"internal/quota":               "OPEN. The only consumer of ledger Record.Quota, with forecast.go inside it. docs/design/UNWIRED-LOG.md #5.",
 		"internal/otlp":                "OPEN, may be by design — it writes spans to a file and nothing yet asks it to. UNWIRED-LOG.md #9.",
+		"internal/e005":                "OPEN, and correctly absent. The recovered E005 scorer, preserved so a frozen research result can be re-derived rather than trusted. It re-computes a 2026-09-26 experiment from archived artifacts and ships no behaviour to a user of the binary; wiring it would put a one-off analysis in everyone's install. UNWIRED-LOG.md #11.",
+		"internal/surface":             "OPEN, and deliberately so for now. A reproducibility harness for the cross-surface observability audit: it probes a corpus for cache counters and classifies a (surface, boundary) pair against E005's identification conditions. It ships no behaviour because nothing asks it to yet, and whether it should become a user-facing command is a product decision that has not been made. UNWIRED-LOG.md #10.",
 		"internal/feed":                "OPEN, may be by design — the rules feed is served from the site, not the binary. UNWIRED-LOG.md #9.",
 	}
 
