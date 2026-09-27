@@ -1,0 +1,200 @@
+[
+ {
+  "run": "bench/bounded_1.json",
+  "model": "haiku",
+  "arm": "bounded",
+  "i": 18,
+  "r": 53744,
+  "w": 18545,
+  "cost": 0.046702400000000005,
+  "turns": 2,
+  "result": "60"
+ },
+ {
+  "run": "bench/bounded_2.json",
+  "model": "haiku",
+  "arm": "bounded",
+  "i": 18,
+  "r": 53646,
+  "w": 18497,
+  "cost": 0.0444166,
+  "turns": 2,
+  "result": "60"
+ },
+ {
+  "run": "bench/bounded_3.json",
+  "model": "haiku",
+  "arm": "bounded",
+  "i": 34,
+  "r": 127792,
+  "w": 18820,
+  "cost": 0.053388200000000004,
+  "turns": 4,
+  "result": "60"
+ },
+ {
+  "run": "bench/fable_bounded_1.json",
+  "model": "fable",
+  "arm": "bounded",
+  "i": 34,
+  "r": 59694,
+  "w": 32608,
+  "cost": 0.6886734999999999,
+  "turns": 2,
+  "result": "60"
+ },
+ {
+  "run": "bench/fable_bounded_2.json",
+  "model": "fable",
+  "arm": "bounded",
+  "i": 34,
+  "r": 61513,
+  "w": 31488,
+  "cost": 0.66092825,
+  "turns": 2,
+  "result": "60"
+ },
+ {
+  "run": "bench/fable_verbose_1.json",
+  "model": "fable",
+  "arm": "verbose",
+  "i": 66,
+  "r": 105483,
+  "w": 80875,
+  "cost": 1.7616307500000001,
+  "turns": 17,
+  "result": "60"
+ },
+ {
+  "run": "bench/fable_verbose_2.json",
+  "model": "fable",
+  "arm": "verbose",
+  "i": 66,
+  "r": 107390,
+  "w": 77404,
+  "cost": 1.6773875,
+  "turns": 17,
+  "result": "60"
+ },
+ {
+  "run": "bench/opus_bounded_1.json",
+  "model": "opus",
+  "arm": "bounded",
+  "i": 6,
+  "r": 108360,
+  "w": 35984,
+  "cost": 0.4315,
+  "turns": 4,
+  "result": "60"
+ },
+ {
+  "run": "bench/opus_bounded_2.json",
+  "model": "opus",
+  "arm": "bounded",
+  "i": 6,
+  "r": 108554,
+  "w": 34595,
+  "cost": 0.41663199999999995,
+  "turns": 4,
+  "result": "60"
+ },
+ {
+  "run": "bench/opus_verbose_1.json",
+  "model": "opus",
+  "arm": "verbose",
+  "i": 14,
+  "r": 395181,
+  "w": 84943,
+  "cost": 1.1421904999999999,
+  "turns": 19,
+  "result": "60\n\n(Note: the startup agmsg inbox watcher couldn't start \u2014 the Monitor command required approval and this session is non-interactive.)"
+ },
+ {
+  "run": "bench/opus_verbose_2.json",
+  "model": "opus",
+  "arm": "verbose",
+  "i": 12,
+  "r": 305440,
+  "w": 81660,
+  "cost": 1.046305,
+  "turns": 19,
+  "result": "60"
+ },
+ {
+  "run": "bench/sonnet_bounded_1.json",
+  "model": "sonnet",
+  "arm": "bounded",
+  "i": 6,
+  "r": 140926,
+  "w": 34022,
+  "cost": 0.1697552,
+  "turns": 4,
+  "result": "60"
+ },
+ {
+  "run": "bench/sonnet_bounded_2.json",
+  "model": "sonnet",
+  "arm": "bounded",
+  "i": 4,
+  "r": 79698,
+  "w": 31614,
+  "cost": 0.1442736,
+  "turns": 2,
+  "result": "60"
+ },
+ {
+  "run": "bench/sonnet_verbose_1.json",
+  "model": "sonnet",
+  "arm": "verbose",
+  "i": 6,
+  "r": 132001,
+  "w": 82315,
+  "cost": 0.3935522,
+  "turns": 17,
+  "result": "60"
+ },
+ {
+  "run": "bench/sonnet_verbose_2.json",
+  "model": "sonnet",
+  "arm": "verbose",
+  "i": 6,
+  "r": 142220,
+  "w": 80250,
+  "cost": 0.38557600000000003,
+  "turns": 19,
+  "result": "60"
+ },
+ {
+  "run": "bench/verbose_1.json",
+  "model": "haiku",
+  "arm": "verbose",
+  "i": 26,
+  "r": 83223,
+  "w": 58251,
+  "cost": 0.14298529999999998,
+  "turns": 17,
+  "result": "61"
+ },
+ {
+  "run": "bench/verbose_2.json",
+  "model": "haiku",
+  "arm": "verbose",
+  "i": 26,
+  "r": 91299,
+  "w": 53644,
+  "cost": 0.1351639,
+  "turns": 17,
+  "result": "61"
+ },
+ {
+  "run": "bench/verbose_3.json",
+  "model": "haiku",
+  "arm": "verbose",
+  "i": 26,
+  "r": 90530,
+  "w": 53700,
+  "cost": 0.131744,
+  "turns": 17,
+  "result": "61"
+ }
+]

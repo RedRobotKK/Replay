@@ -125,6 +125,25 @@ synthetic input because the real corpus never reaches that branch.
 scored, it runs through this package in a test or a developer command, not
 through the shipped binary.
 
+## 12. internal/outputdiscipline, the re-derivation harness
+
+Added 2026-09-26. Not reachable from `cmd/replay`, and correctly so: it
+re-computes one dated benchmark and a user's install has no use for it.
+
+It exists because `docs/evidence/output-discipline-2026-09-25.md` published two
+tables without naming the run sets behind them, and the corpus holding those
+runs holds nine experiment directories. A reader who swept the corpus got 54,418
+cache-write for haiku verbose where the table says 53,700. The evidence was
+correct and undefendable at the same time.
+
+The harness names `bench/` (18 runs, first table) and `n10/` (40 runs, n=10
+table), pins both fixtures by hash, and re-derives every column. Six mutations
+that would silently move a figure are killed. It also surfaces what the tables
+did not: six of 58 results are not bare numbers, and none is excluded, because
+the published figures included them.
+
+**What would wire it:** nothing should.
+
 ## Audit in flight
 
 Three agents, launched 2026-09-09, each using a different detection method because
