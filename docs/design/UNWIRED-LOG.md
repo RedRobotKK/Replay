@@ -144,6 +144,29 @@ the published figures included them.
 
 **What would wire it:** nothing should.
 
+## 13. internal/dogfoodbaseline, what survives an unreproducible measurement
+
+Added 2026-09-26. Not reachable from `cmd/replay`, and it must stay that way.
+
+`docs/evidence/dogfood-baseline-2026-09-25.md` is `replay cost
+~/.claude/projects` run on one day. Its input is the operator's live transcript
+tree, which grows continuously: the same command on 2026-09-26 returned 482
+sessions and $18,105.79 against the frozen 127 and $17,738.82. The measurement
+is a dated observation of a population that no longer exists.
+
+So this package builds no reproduction harness. It pins the two things that
+survive without the tree: the four components sum to the published total, and
+the three rate metrics the document permits a forward comparison to use are
+arithmetically entailed by that block. It also records that the document prints
+two totals seventeen cents apart, without editing either.
+
+A test enforces the no-harness rule through the package's imports rather than
+its prose, after a first version that scanned for banned strings failed on the
+package comment, which names the path legitimately.
+
+**What would wire it:** nothing should. A harness pointed at today's tree would
+measure a different corpus and call it the 2026-09-25 baseline.
+
 ## Audit in flight
 
 Three agents, launched 2026-09-09, each using a different detection method because
