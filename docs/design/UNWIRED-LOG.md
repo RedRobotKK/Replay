@@ -167,6 +167,30 @@ package comment, which names the path legitimately.
 **What would wire it:** nothing should. A harness pointed at today's tree would
 measure a different corpus and call it the 2026-09-25 baseline.
 
+## 14. internal/evidencepin, identity without history
+
+Added 2026-09-27. Not reachable from `cmd/replay`, and should not be.
+
+Two documents in `docs/evidence/` describe themselves as preregistrations, and
+neither can be shown to have been one. Filesystem times are meaningless (both
+share a minute with fourteen files from another session, when the worktree was
+materialised), neither file has ever been tracked by git, and session
+transcripts show repeated whole-file rewrites across three days. For the gtm
+document the earliest write found anywhere postdates the date in its own
+heading.
+
+The documents are preserved with their original claims intact and their
+evidentiary status annotated. This package pins what is left: the bytes, going
+forward. It asserts nothing about any date before the pin, and a test fails if
+a pin ever claims otherwise.
+
+It builds no reproduction harness, because there is no computation in dispute.
+
+A mutation caught the obvious hole: emptying the pin set made every test pass,
+since they all iterate it. The census is now asserted.
+
+**What would wire it:** nothing should.
+
 ## Audit in flight
 
 Three agents, launched 2026-09-09, each using a different detection method because
