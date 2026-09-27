@@ -199,3 +199,15 @@ A memory or work-state subsystem. Printing dollars from the guide's scale. A cac
 The smallest Grok implementation I would approve is a command that, per session directory, prints the `usage.json` session total when the log sum equals it, prints both numbers when they do not, labels a log-only directory as log-only, refuses records that break input-plus-output, does not add cache on top of input, and prints no dollars. I would not approve a command that prints one number for `01a09207`.
 
 The single missing piece of evidence that would make me refuse even that is a second on-disk copy of those 29,519,212 tokens. This review looked for one in every other `updates.jsonl` and did not find it. If a later pass finds it, matching `grok usage` by printing the `usage.json` total would double-count, and the command should not ship until that copy is in the fixture.
+
+## Later the same day
+
+[What usage.json and updates.jsonl are](grok-usage-vs-updates-2026-09-27.md)
+found the copy. It is not another `updates.jsonl`. The parent's
+`usage.json` turns are larger than its `turn_completed` lines by exactly the
+child sessions' own `inputTokens`, and those children have their own
+`usage.json`. Summing every `usage.json` counts that 29,519,212 twice.
+Summing `turn_completed` records does not. `grok usage` of the parent is
+still the parent's `usage.json`, not the log sum. The "print both when they
+disagree" rule is unchanged. The sentence above that the explanation was
+missing is superseded by that file.
