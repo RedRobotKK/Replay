@@ -85,3 +85,25 @@ command. On Claude that increased cache writes and lost correct answers. Do
 not lower reasoning effort, and do not aim a Grok feature at cache writes,
 until a `grok -p` pair shows those counters move. The unrun protocol is
 [What is left to measure on Grok, 2026-09-27](grok-next-measurements-2026-09-27.md).
+
+## Correction, same day
+
+[Grok release review, 2026-09-27](grok-release-review-2026-09-27.md) leaves
+the "do not ship the max" conclusion in place and narrows two sentences
+above.
+
+The 78,413,855 / 828,573,565 / 276,210,235 figures are a snapshot. A later
+pass on the same machine read 839 records and got 78,809,418 / 840,417,238 /
+288,053,908. The three quantities still disagree. Cite the snapshot as a
+snapshot.
+
+The instruction to port the `6074075` rule that drops a larger `usage.json`
+is not yet justified. The 29,519,212 excess on `01a09207` was not found in
+any other session's `updates.jsonl`, and the sub-agent explanation in that
+commit's comment was not confirmed. Dropping the excess disagrees with
+`grok usage`. The release review's rule is to print both numbers when the
+files disagree, not to pick one.
+
+The sentence that `docs/guide/commands.md` already publishes "no documented
+scale" is true only of the dirty working tree. `origin/main` has no `replay
+grok` section. Do not commit that draft section as written.
