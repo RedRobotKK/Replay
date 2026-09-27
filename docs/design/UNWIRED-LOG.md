@@ -75,6 +75,29 @@ Not unwired, but the same family — a thing that looks connected and is not.
    an eleventh row there deletes the rules warning silently, which is the defect
    #169 had just finished fixing.
 
+## 15. internal/stateledger, beliefs rather than spans
+
+Added 2026-09-27. Not reachable from `cmd/replay`, and deliberately so: nothing
+yet builds a ledger from a transcript, and that reader is a product decision
+rather than a missing function.
+
+A trace records what calls were made. This records what was believed, what
+check moved it, and what stayed open. The unit is a claim whose standing
+changes, each change naming the check that caused it.
+
+Its one load-bearing rule is that contradicting a claim does not establish its
+replacement. `Replacement` is a pointer, nil means genuinely unknown, and a
+contradiction with no replacement leaves an open question the renderer prints.
+Checks are graded `locates` / `executable` / `dispositive`, and only a
+dispositive check may settle a claim, because running a check is not answering
+the question.
+
+The package knows nothing about Grok. The Grok investigation is a golden
+fixture, not a special case.
+
+**What would wire it:** a reader that constructs a ledger from a transcript.
+Not built, not designed, and not implied by this package.
+
 ## Audit in flight
 
 Three agents, launched 2026-09-09, each using a different detection method because

@@ -1,0 +1,29 @@
+Session grok usage-source investigation, 2026-09-27
+----------------------------------------------------------------
+CLAIM        updates.jsonl may be the authoritative record of Grok usage
+  origin     inherited: the historical reader at 6074075 sums updates.jsonl
+      |
+  LOCATES CHECK count sessions carrying each artifact
+  RESULT     48 sessions: 35 have both, 13 have updates.jsonl and no usage.json  (inconclusive)
+      |
+  EXECUTABLE CHECK sum inputTokens across updates.jsonl in the usage.json-less sessions
+  RESULT     581,144,282 in the largest session alone; 581,882,542 across the 13  (inconclusive)
+      |
+  DISPOSITIVE CHECK grok usage <session-with-no-usage.json>
+  RESULT     Error: No usage recorded  (contradicts)
+      |
+  STANDING   CONTRADICTED
+  REPLACED BY usage.json is the record grok usage reads; grok usage succeeded on 35 of 35 sessions carrying one and failed on all 13 without
+
+CLAIM        where both artifacts exist they agree, so either may be read
+  origin     inferred from 34 of 35 sessions agreeing
+      |
+  DISPOSITIVE CHECK compare usage.json turns against updates.jsonl records in session 01a09207
+  RESULT     131 records on both sides, 18 turns differ, from turn 124 the updates value is the previous turn's usage value  (contradicts)
+      |
+  STANDING   CONTRADICTED
+  REPLACED BY UNRESOLVED
+  UNRESOLVED replacement unresolved
+  UNRESOLVED what causes the one-turn lag is NOT_MEASURED: compaction, a partial write and a different quantity are all consistent with what is on disk
+  UNRESOLVED whether usage.json can itself truncate or reset is not observed and not proven absent
+
