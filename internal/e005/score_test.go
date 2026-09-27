@@ -86,7 +86,7 @@ func TestFrozenMedianMissed(t *testing.T) {
 		"system_changed": "82484", "model_changed": "243095",
 	}
 	for c, want := range rendered {
-		if got := strconvFormat(r.PerClass[c].MedianMissed); got != want {
+		if got := RenderMedian(r.PerClass[c].MedianMissed); got != want {
 			t.Errorf("%s median missed renders as %s, want %s (the frozen table's figure)", c, got, want)
 		}
 	}

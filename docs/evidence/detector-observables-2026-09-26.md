@@ -185,8 +185,42 @@ preserved, and the numbers above are reproducible rather than merely recorded.
 - **Procedure**: nine steps recovered verbatim from the session transcript and
   archived beside the corpus, unmodified.
 - **Scorer**: `internal/e005/`, which re-derives every figure in this file from
-  two content-free artifacts committed as test data. Its tests fail if any of
-  them moves.
+  two sanitized artifacts committed as test data.
+
+### Reproducing this file
+
+From a clean checkout, with no setup and no local artifacts:
+
+```sh
+go test ./internal/e005/
+```
+
+`TestEndToEndReproducesFrozenE005` runs the whole chain, committed fixtures
+through the real parser and the real scorer, and asserts every number in this
+document. It is part of `make ci`, so the frozen result is checked on every
+build rather than on request.
+
+| committed input | sha256 | what it is |
+|---|---|---|
+| `internal/e005/testdata/events.json` | `2de9f6206ea004a3c86350db786a8cb885a98dc8ad9c3ace16b514a7164b81f9` | 2,064 oracle events, eight fields each |
+| `internal/e005/testdata/breaks.json` | `a713793541bc489a5b720d52c45aed0e6b142a7643253612b4eb2445694e0f76` | 866 boundaries, break counts only |
+
+Both hashes are asserted by `TestFixtureProvenanceIsPinned`, so an input cannot
+be edited to move a published number without the suite saying so.
+`testdata/README.md` records what was stripped from the originals and why.
+
+**Deliberately NOT committed**, and where they live instead
+(`~/Development/replay-e005-corpus-2026-09-26/`, fingerprint `1a5ce6f1`):
+
+| artifact | why it is out |
+|---|---|
+| `blind/`, 1.8GB | real session transcripts; blinding removed the provider diagnostic, not message content, and this repository is public |
+| `replay_out.txt` | its `where:` lines quote message and tool-result content |
+| `oracle2.json` | no message text, but ten session-derived identifiers the scorer never reads |
+
+`TestFrozenNumbersDependOnTheFixture` is the negative control: it perturbs the
+parsed input and requires the result to move, so the assertions cannot pass on
+constants while the pipeline is dead.
 
 Two things this file's numbers depend on are **not** recoverable and are
 recorded as gaps rather than closed: the `replay` build that produced the

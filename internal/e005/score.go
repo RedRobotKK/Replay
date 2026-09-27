@@ -26,7 +26,6 @@ package e005
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -261,19 +260,3 @@ func ClassOrder() []string { return append([]string(nil), Structural...) }
 
 // Name normalises a class label for display without changing it.
 func Name(c string) string { return strings.TrimSpace(c) }
-
-// Pct renders a proportion the way the frozen table renders it.
-//
-// The frozen percentages came from Python's "%.0f", which rounds half to even.
-// Go's %.0f uses the same rule, so the rendering matches, but integer
-// truncation does NOT: 100*587/1006 is 58.35 and truncates to 58 either way,
-// while 100*932/1006 is 92.64 and truncates to 92 where the frozen table shows
-// 93. Truncating would silently move four of the eight published bounds.
-func Pct(part, whole int) string {
-	if whole == 0 {
-		return "0%"
-	}
-	return strconvFormat(100*float64(part)/float64(whole)) + "%"
-}
-
-func strconvFormat(f float64) string { return fmt.Sprintf("%.0f", f) }
