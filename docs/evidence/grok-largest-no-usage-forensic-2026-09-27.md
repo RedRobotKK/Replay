@@ -121,34 +121,36 @@ It **completely explains the refusal** and no deeper primitive is needed for it.
 It does not explain the number. In the only session where both surfaces exist,
 131 usage records stand against 131 `usage.json` turns, and the turns sum
 exactly to the recorded session total of 222,856,819 (the ledger is internally
-consistent). The records sum to 193,337,607. Comparing them position by
-position:
+consistent). The records sum to 193,337,607.
 
-| turns | relation | n |
-|---|---|---:|
-| 0–101 | record equals the turn exactly | 102 |
-| **102–109** | **record far below the turn** | **8** |
-| 110–120 | record equals the turn exactly | 11 |
-| 121–122, 126 | neither | 3 |
-| 123–125, 127–130 | **record equals the *previous* turn** | 7 |
+> **CORRECTED 2026-09-27, after the events.jsonl experiment.** The table and
+> the "one-turn lag" originally printed here were produced by comparing the two
+> files *positionally*. `usage.json` skips `turnNumber` 122 and 123, so every
+> position after the gap was compared against the wrong turn. Under a timestamp
+> join there is no lag, and the agreement count is **120 of 131**, not 113. The
+> corrected decomposition is in
+> `grok-events-jsonl-gap-experiment-2026-09-27.md`; the summary stands below.
 
-Two distinct defects, not one drift:
+Joining turns to records on timestamp rather than position, 120 of 131 agree and
+10 differ. The 29,519,212 gap decomposes exactly:
 
-- **A tail lag.** From turn 123 the stream trails the ledger by exactly one
-  turn. The last record carries turn 129's value and the ledger's final turn is
-  0, so the closing turn's usage never reaches the stream at all.
-- **An 8-turn hole.** Turns 102–109 account for **29,290,876 of the 29,519,212
-  total gap: 99.2%**. It is a localized contiguous anomaly, not a systematic
-  per-turn accounting difference.
+| component | tokens | status |
+|---|---:|---|
+| band, `turnNumber` 103-110 | 29,290,876 | **unexplained** |
+| `turnNumber` 124, a turn merging two records | +965,575 | explained |
+| `turnNumber` 128, flagged `usageIsIncomplete` | +228,336 | explained |
+| the orphan record belonging to turn 124 | -965,575 | explained |
 
-Two candidate causes were tested and **both fail**:
+Removing the explained components leaves the residual **exactly equal to the
+8-turn band**. Two candidate causes for that band were tested and **both fail**:
+model-call volume as a threshold (one *matching* turn has 85 calls) and subagent
+presence (subagents also start on turns that agree exactly).
 
-- *Model-call volume.* Mismatching turns have median 9 `modelCalls` against 4
-  for matching ones, but only 34% of turns with 17 or more calls mismatch, and
-  one matching turn has 85. Not a discriminator.
-- *Subagents.* 14 subagents start at turns 99–100, immediately before the band,
-  which is suggestive. But subagents also start at turns 1, 19, 29, 30, 51 and
-  124, and every one of those turns matches exactly. Not a discriminator.
+One co-occurrence is solid, tested as a 2x2 across all 131 turns: the stream
+under-reports tokens only when it also under-reports `modelCalls`, with **zero
+off-diagonal** (10 / 120 / 0 / 0). Session-wide the stream is short by 333 model
+calls. That localises the defect to omitted calls rather than token arithmetic,
+and is a co-occurrence, not a demonstrated mechanism.
 
 The direction is consistent where it can be checked: in the 8-turn band the
 ledger always exceeds the stream. That makes a bare `updates.jsonl` sum a
@@ -164,7 +166,7 @@ hidden structure.
 
 ## 10. NOT_MEASURED
 
-The true usage of this session. The cause of the 8-turn hole. The semantics of
+The true usage of this session. The cause of the 8-turn hole, now the sole residual. Why 333 model calls are absent from the stream. The semantics of
 `numTurns` and of `usageIsIncomplete`. Where subagent tokens are accounted.
 Whether the 09-06/09-11 boundary matches a specific Grok release; the installed
 CLI is 1.0.41 and no changelog was consulted. Whether `events.jsonl` carries an
@@ -172,12 +174,10 @@ independent account; its 22MB were not parsed.
 
 ## 11. One next experiment
 
-Parse `events.jsonl` for turns 102–109 of the comparison session and test
-whether it accounts for the missing 29,290,876. It is the only unexamined
-artifact large enough to hold a second account, and the band gives it a sharp,
-falsifiable target rather than a whole-session comparison.
+**Run, and answered: UNEXPLAINED.** `events.jsonl` contains no token-bearing
+field at any depth, so it cannot account for the band or any part of it. The
+full result, including the corrections above, is in
+`grok-events-jsonl-gap-experiment-2026-09-27.md`.
 
-If it closes that band, `events.jsonl` becomes the reconstruction path and this
-session's figure becomes estimable with a stated error. If it carries no usage,
-581,144,282 stays NOT_MEASURED permanently and the source contract is the whole
-story.
+This closes the `events.jsonl` reconstruction path permanently. 581,144,282
+stays NOT_MEASURED and the source contract is the whole story for the refusal.
