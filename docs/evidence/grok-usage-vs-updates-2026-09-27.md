@@ -200,6 +200,16 @@ the tree.
 | Compaction | The one auto-compact in `01a09207` | Not treated as deleting the earlier `turn_completed` lines | A total that starts over at the compact |
 | Resume | Not observed on this parent (`parent_session_id` absent) | No inherited-history claim | A test that invents a parent id |
 
+## Correction, later the same day
+
+The child-session addition above is the net of the 29,519,212. It is not the
+whole positional disagreement. Eighteen of 131 positions differ. Seven in the
+tail are a one-step lag: the log's value is the previous `usage.json` turn.
+That lag does not account for the sum. The sum is the eight early positions
+plus one later position of 228,336, which are the child totals.
+[The methodology audit](grok-claude-methodology-audit-2026-09-27.md) separates
+those two facts. This page had folded them together.
+
 ## Correction to the release review
 
 [Grok release review, 2026-09-27](grok-release-review-2026-09-27.md) left the
