@@ -435,6 +435,14 @@ func burnOllama(home, dir string) surfaceBurn {
 	// reported is not a rate.
 	var genTokens int
 	var genMS float64
+	// genBlocks counts the blocks that entered the rate, incremented in the
+	// same branch that accumulates it. It used to be reported as
+	// measured+unmeasured, which partitions every emitted request by n_past
+	// presence: a different property, and one that only coincides with this
+	// count because the parser drops a block whose eval line is missing.
+	// Deriving a denominator from a property the numerator does not use is
+	// the coupling grok's review named (F4).
+	var genBlocks int
 	for _, p := range logs {
 		rs, err := transcript.ParseOllamaLogFile(p)
 		if err != nil {
@@ -458,6 +466,7 @@ func burnOllama(home, dir string) surfaceBurn {
 			if p := r.Perf(); p.GenerateMS.Provenance == transcript.Observed {
 				genTokens += r.Generated
 				genMS += p.GenerateMS.Value
+				genBlocks++
 			}
 		}
 	}
@@ -491,7 +500,7 @@ func burnOllama(home, dir string) surfaceBurn {
 	// read as something being wrong.
 	if genTokens > 0 && genMS > 0 {
 		s.tokensPerSec = float64(genTokens) / (genMS / 1000)
-		s.tokensPerSecBlocks = measured + unmeasured
+		s.tokensPerSecBlocks = genBlocks
 	}
 	if s.requests > 0 {
 		s.problems = append(s.problems, fmt.Sprintf(

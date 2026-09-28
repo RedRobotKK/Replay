@@ -1,6 +1,10 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -54,9 +58,74 @@ func TestOllamaThroughputMatchesTheServersOwnFigure(t *testing.T) {
 	if got.Provenance != "derived" {
 		t.Fatalf("throughput provenance = %q, want derived", got.Provenance)
 	}
-	// Ollama printed 19.79 for this block.
-	if got.Value < 19.7 || got.Value > 19.9 {
+	// Read the server's own printed rate from the same log rather than
+	// comparing against a band typed into this test. grok's review (F3)
+	// observed that the first version checked arithmetic against a hardcoded
+	// 19.7-19.9 and so was not an independent control: if the fixture changed,
+	// the band would silently go stale.
+	body, err := os.ReadFile("burndata/ollama/server-1.log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// "prompt eval time" also ends in "eval time", and \b matches after the
+	// space, so the first version of this regex captured the PROMPT rate
+	// (182.12) and reported the derivation as wrong. ParseOllamaLog guards the
+	// same collision with !strings.Contains(line, "prompt eval").
+	m := regexp.MustCompile(`(?m)^.*[^t] eval time =.*?,\s*([\d.]+) tokens per second`).FindSubmatch(body)
+	if m == nil {
+		t.Fatal("the fixture no longer prints a tokens-per-second figure; this test would assert nothing")
+	}
+	printed, err := strconv.ParseFloat(string(m[1]), 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := got.Value - printed; diff > 0.05 || diff < -0.05 {
 		t.Errorf("derived throughput %.2f tok/s disagrees with the server's own "+
-			"19.79 tok/s for the same block; the derivation is wrong", got.Value)
+			"%.2f tok/s for the same block; the derivation is wrong", got.Value, printed)
+	}
+}
+
+// The printed block count must describe the population the rate averages.
+//
+// Found in review by grok (research/agents/grok/2026-09-28-perf-contract-review.md,
+// F4): the first implementation set tokensPerSecBlocks from measured+unmeasured,
+// which partitions every emitted request by n_past presence. The rate is
+// accumulated only over blocks whose generation time the server printed.
+//
+// The two counts coincide today, because ParseOllamaLog drops a block whose
+// eval line is missing ("a total with no eval line is a truncated record"), so
+// every emitted request carries one. Measured on this repository's fixtures:
+// 2 emitted, 2 with an observed generation time, 2 with n_past. The defect was
+// therefore latent rather than active, and the count was right by accident of
+// the parser rather than by construction.
+//
+// This test pins the count to the rate's own population, so the two cannot
+// drift apart if the parser's drop rule ever changes.
+func TestThroughputBlockCountMatchesTheRatesPopulation(t *testing.T) {
+	s := burnOllama("", "burndata")
+	if s.tokensPerSec <= 0 {
+		t.Fatal("no rate was derived; this test would assert nothing")
+	}
+	// Recount independently, from the same parser, using the rate's criterion.
+	want := 0
+	ms, _ := filepath.Glob("burndata/ollama/*.log")
+	for _, p := range ms {
+		rs, err := transcript.ParseOllamaLogFile(p)
+		if err != nil {
+			continue
+		}
+		for _, r := range rs {
+			if r.Perf().GenerateMS.Provenance == transcript.Observed {
+				want++
+			}
+		}
+	}
+	if want == 0 {
+		t.Fatal("no fixture block reports a generation time; this test would assert nothing")
+	}
+	if s.tokensPerSecBlocks != want {
+		t.Errorf("the rate is labelled as covering %d block(s); %d block(s) "+
+			"reported a generation time and therefore entered it",
+			s.tokensPerSecBlocks, want)
 	}
 }
