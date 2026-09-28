@@ -15,6 +15,9 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
 | DS-F4a | 2026-09-28 | Controlled batch, cent-quantization 3.8% | 300 | observed $0.13 vs derived $0.1378, ratio 0.943 | INCONCLUSIVE, residual outside quantization | same |
 | DS-F4b | 2026-09-28 | Controlled batch, quantization 1.19% | 200 | observed $0.43 vs derived $0.4219, ratio 1.0193, diff 1.93% | **RESOLVED A — reconciled within declared 3%** | same |
 
+| WP-01 | 2026-09-28 | Can DeepSeek find evidence/claim-boundary risks in the repo? | 30 calls | 5 findings: 4 verified, 1 partial, 0 false positives | USEFUL | `deepseek/wp01/` |
+| WP-02 | 2026-09-28 | Does the repo contract establish F1 as a defect? | 7 calls | **CONTRACT GAP**; test-only, 0 production files | USEFUL | commit `1d14036` |
+
 ## Killed or corrected
 
 - **"Derived cost over-states observed spend by 2.9x"**: withdrawn. The original

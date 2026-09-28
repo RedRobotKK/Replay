@@ -1,16 +1,23 @@
 # Experiment status
 
-**Updated** 2026-09-28 · **Branch** `feat/perf-contract` · **Phase** DeepSeek measurement campaign
+**Updated** 2026-09-28 · **Branch** `feat/perf-contract`
+
+## Status: PAUSED — awaiting credential rotation and human decision
+
+No further DeepSeek credits are to be spent, no further DeepSeek task run, and no
+WP-03 created, until the credential is rotated and a human decision is taken.
 
 ## Current state
 
 | | |
 |---|---|
-| active experiment | none running |
-| last completed | **F4 billing reconciliation: RESOLVED (A)** |
-| live calls to date | ~1,074 |
-| observed spend | **$0.74** (balance $46.89 -> $46.15) |
-| billing reconciliation | **1.93% at n=200, within the 3% declared before the run** |
+| campaign status | **PAUSED** |
+| active experiment | none |
+| last completed | **WP-02: F1 classified CONTRACT GAP, test-only** |
+| balance | **~$46.03** (from $46.89 at campaign start) |
+| observed spend, campaign total | **~$0.86** |
+| billing reconciliation | resolved A: 1.93% at n=200, inside the 3% declared before the run |
+| credential | **NOT ROTATED** — see operational follow-up below |
 
 ## Current hypothesis
 
@@ -31,14 +38,20 @@ the prefix recurs, exactly no effect when it does not.
    `cache_read` of exactly 0, so the cheapest rate in the table is the one
    entirely untested. Any saving claimed from caching rests on an unverified rate.
 
-## Next actions, in order
+## Operational follow-up: credential rotation
 
-**Awaiting explicit instruction before starting D1.**
+- The DeepSeek credential used by WP-01 and WP-02 **has not been rotated**.
+- Key-management endpoints were probed and returned 404: `/user/api_keys`,
+  `/api_keys`, `/v1/api_keys`, `/user/keys`.
+- Rotation therefore requires the DeepSeek Platform web console. There is no API
+  path available to this project.
+- This is a human action. The credential is not printed, stored in this
+  repository, or reproduced in any artifact.
 
-1. D1 cache mechanics: minimum cacheable prefix, TTL, what invalidates.
-2. Validate cache-hit pricing, which F4 could not: a reconciliation batch with a
-   large shared prefix so `cache_read` dominates.
-3. D7 model transfer: does `thinking:{type:disabled}` help on `deepseek-v4-pro`.
+## Next actions
+
+**None authorised.** The campaign is paused. D1, cache-hit price validation and
+model-transfer work remain unstarted and unauthorised.
 
 ## Agents
 
