@@ -79,6 +79,12 @@ type surfaceBurn struct {
 	first    time.Time
 	last     time.Time
 	problems []string
+	// tokensPerSec is output throughput, derived from generated tokens over
+	// the generation time the source printed, and zero when it printed none.
+	// Blocks records how many blocks it averages, because a rate without its
+	// denominator is the kind of figure this file exists to stop reporting.
+	tokensPerSec       float64
+	tokensPerSecBlocks int
 }
 
 // pricingNotes says what the cost column is not covering.
@@ -279,6 +285,10 @@ func runBurn(args []string, stdout, stderr io.Writer) error {
 				_, _ = fmt.Fprintf(stdout, "    %s\n", line)
 			}
 		}
+		if s.tokensPerSec > 0 {
+			_, _ = fmt.Fprintf(stdout, "    %.1f tokens per second generated, over %d block(s) the server timed\n",
+				s.tokensPerSec, s.tokensPerSecBlocks)
+		}
 		for _, p := range s.problems {
 			_, _ = fmt.Fprintf(stdout, "    [NOTE] %s\n", p)
 		}
@@ -419,6 +429,12 @@ func burnOllama(home, dir string) surfaceBurn {
 	}
 	logs, _ := filepath.Glob(pat)
 	var measured, unmeasured int
+	// Throughput, aggregated only over blocks whose generation time Ollama
+	// actually printed. A block without one contributes neither a numerator
+	// nor a denominator, because a token count over a duration nobody
+	// reported is not a rate.
+	var genTokens int
+	var genMS float64
 	for _, p := range logs {
 		rs, err := transcript.ParseOllamaLogFile(p)
 		if err != nil {
@@ -438,6 +454,10 @@ func burnOllama(home, dir string) surfaceBurn {
 				measured++
 			} else {
 				unmeasured++
+			}
+			if p := r.Perf(); p.GenerateMS.Provenance == transcript.Observed {
+				genTokens += r.Generated
+				genMS += p.GenerateMS.Value
 			}
 		}
 	}
@@ -465,6 +485,14 @@ func burnOllama(home, dir string) surfaceBurn {
 	//
 	// So the share is never reported on this surface, and s.hasCached is never
 	// set. What is reported is the two counts, which is what the log supports.
+	// Throughput is a measurement, not a problem, so it gets its own field
+	// rather than a [NOTE]. BO1 pins that this surface reports exactly one
+	// note, and it is right to: a rate printed in the problems channel would
+	// read as something being wrong.
+	if genTokens > 0 && genMS > 0 {
+		s.tokensPerSec = float64(genTokens) / (genMS / 1000)
+		s.tokensPerSecBlocks = measured + unmeasured
+	}
 	if s.requests > 0 {
 		s.problems = append(s.problems, fmt.Sprintf(
 			"%d of %d requests were served entirely from cache apart from the one token the server re-evaluates by rule; the other %d log no reuse figure. No cache hit rate is reported: a share over the first group measures a population selected for having been cached",
