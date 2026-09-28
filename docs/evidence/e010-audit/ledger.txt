@@ -1,0 +1,112 @@
+E010 start 2026-09-28T01:16:40Z
+N_1 sid=b9830d1a-d7a2-4d6d-94d4-257b092a44c6 turns=8 err=False contam=0
+0 integrity=ok
+Pfact_1 sid=cc364bbf-e666-49d0-a1f2-8e718b3cedb2 turns=5 err=False contam=0
+0 integrity=ok
+Pinert_1 sid=d7dd5f2f-4481-4c00-bcbb-6986c8869d02 turns=7 err=False contam=0
+0 integrity=ok
+Prose_1 sid=55ad9e2a-bd89-450a-8b95-efa14fd8621c turns=12 err=False contam=0
+0 integrity=ok
+M_1 sid=c1ea5d5f-8dfa-42e4-8539-56fc2e7c6fef turns=6 err=False contam=0
+0 integrity=ok
+--- round 1 complete 2026-09-28T01:20:05Z
+N_2 sid=7a2cb6aa-e125-44e0-a1d8-cabe14990d26 turns=7 err=False contam=0
+0 integrity=ok
+Pfact_2 sid=e88771b8-d620-4b2f-b111-f52da2aeaf2b turns=7 err=False contam=0
+0 integrity=ok
+Pinert_2 sid=c3f4def3-1dc5-4401-acdb-126cb0adc7aa turns=8 err=False contam=0
+0 integrity=ok
+Prose_2 sid=e89e055f-c9bb-4aca-a3ba-41158544d56a turns=8 err=False contam=0
+0 integrity=ok
+M_2 sid=63b23433-2f04-41c4-a24f-53b93bbeaa38 turns=7 err=False contam=0
+0 integrity=ok
+--- round 2 complete 2026-09-28T01:23:02Z
+N_3 sid=bdecea12-844f-4562-8812-81a930f3002a turns=6 err=False contam=0
+0 integrity=ok
+Pfact_3 sid=806c9c27-3c5e-43b3-b9e1-3eefaeb5e762 turns=7 err=False contam=0
+0 integrity=ok
+Pinert_3 sid=a1afdadc-c1b5-475d-b575-89305c15903d turns=6 err=False contam=0
+0 integrity=ok
+Prose_3 sid=704bf614-a48d-4376-ad4f-0bb4a35ea05c turns=9 err=False contam=0
+0 integrity=ok
+M_3 sid=aa729645-4ef9-4b2b-b9bf-ebe8651c75dc turns=7 err=False contam=0
+0 integrity=ok
+--- round 3 complete 2026-09-28T01:25:56Z
+N_4 sid=10fde7d6-664c-4ddf-89da-a49b58edfb25 turns=6 err=False contam=0
+0 integrity=ok
+Pfact_4 sid=144db69f-c0a1-4ef0-a37b-311c10c23597 turns=6 err=False contam=0
+0 integrity=ok
+Pinert_4 sid=e82401b3-5676-4863-bbcf-01b8b3564829 turns=7 err=False contam=0
+0 integrity=ok
+Prose_4 sid=be85ed98-cf46-4cc7-b2d9-ab8d3f48ccbf turns=5 err=False contam=0
+0 integrity=ok
+M_4 sid=eac9928c-89e3-4f15-8eb8-5fd906286b6d turns=6 err=False contam=0
+0 integrity=ok
+--- round 4 complete 2026-09-28T01:28:50Z
+N_5 sid=536b5b99-12d1-4e54-87ce-7d1c61c98d35 turns=7 err=False contam=0
+0 integrity=ok
+Pfact_5 sid=cc18fc97-3c25-4e08-82d3-9ca0b67e373a turns=5 err=False contam=0
+0 integrity=ok
+Pinert_5 sid=8f793b8a-b572-486a-8a32-5b88de31d0b1 turns=8 err=False contam=0
+0 integrity=ok
+Prose_5 sid=dcffc0fb-4e65-4112-833b-fe7a2936fe6e turns=8 err=False contam=0
+0 integrity=ok
+M_5 sid=d7c5db72-5d26-4982-b4d8-0650a908fd21 turns=6 err=False contam=0
+0 integrity=ok
+--- round 5 complete 2026-09-28T01:31:40Z
+N_6 sid=0328dbfb-189d-4c98-99f4-037882f222e7 turns=7 err=False contam=0
+0 integrity=ok
+Pfact_6 sid=0d77656e-b635-4bd2-a551-e1d7373134d5 turns=7 err=False contam=0
+0 integrity=ok
+Pinert_6 sid=26478df0-7076-4919-96b0-01afc6eeb84a turns=5 err=False contam=0
+0 integrity=ok
+Prose_6 sid=9c30076d-7c8b-46f9-9429-8f61a70478fc turns=7 err=False contam=0
+0 integrity=ok
+M_6 sid=bda1ffae-8ef7-4dfa-b35d-833f05fd13b9 turns=5 err=False contam=0
+0 integrity=ok
+--- round 6 complete 2026-09-28T01:34:31Z
+N_7 sid=fcf5cb8f-c27c-4372-9c0b-f4b1e7c7154e turns=7 err=False contam=0
+0 integrity=ok
+Pfact_7 sid=144dc8cb-c48f-4b80-a1f8-825e1cea5e92 turns=6 err=False contam=0
+0 integrity=ok
+Pinert_7 sid=2061dc62-c93b-4733-ab4b-a402f110b127 turns=7 err=False contam=0
+0 integrity=ok
+Prose_7 sid=dca951bd-cd0d-42db-b40e-71e6c477bed0 turns=7 err=False contam=0
+0 integrity=ok
+M_7 sid=98890a9a-ca96-4882-bae0-ce3ee98fc5d0 turns=5 err=False contam=0
+0 integrity=ok
+--- round 7 complete 2026-09-28T01:37:03Z
+N_8 sid=85ebf0dd-4b9b-472c-9d5d-388ce996af6c turns=10 err=False contam=0
+0 integrity=ok
+Pfact_8 sid=a1767849-b679-4ab0-a3ea-b0e99c860cd8 turns=5 err=False contam=0
+0 integrity=ok
+Pinert_8 sid=b5a62173-e816-42cf-bc0b-3ec74726790c turns=6 err=False contam=0
+0 integrity=ok
+Prose_8 sid=1a9fe6de-7e0e-4b76-b704-f8ed433f7527 turns=11 err=False contam=0
+0 integrity=ok
+M_8 sid=a97c89a0-5af7-411a-9613-43adaaafd15a turns=3 err=False contam=0
+0 integrity=ok
+--- round 8 complete 2026-09-28T01:40:18Z
+N_9 sid=eb44d74f-bb0a-417e-84d7-e91cec993bc2 turns=16 err=False contam=0
+0 integrity=ok
+Pfact_9 sid=2be74267-6f2f-4a24-8444-65979f4ce480 turns=4 err=False contam=0
+0 integrity=ok
+Pinert_9 sid=83de474e-2340-4a4f-9c20-b47519fd83f3 turns=10 err=False contam=0
+0 integrity=ok
+Prose_9 sid=57f655ff-af35-40c0-b437-b4e5cf0bdf38 turns=5 err=False contam=0
+0 integrity=ok
+M_9 sid=5d6b8dac-097d-436a-a746-1219924e8ee9 turns=7 err=False contam=0
+0 integrity=ok
+--- round 9 complete 2026-09-28T01:43:36Z
+N_10 sid=12f266f5-acf1-48d6-a817-772d80cea9de turns=8 err=False contam=0
+0 integrity=ok
+Pfact_10 sid=3aaee8f3-ff00-4202-b2f2-16a64943d3a4 turns=6 err=False contam=0
+0 integrity=ok
+Pinert_10 sid=d85ff786-124c-47d2-9f0d-72d75777f287 turns=11 err=False contam=0
+0 integrity=ok
+Prose_10 sid=daa14f02-4698-4eb7-bc2a-635af4db6ca0 turns=5 err=False contam=0
+0 integrity=ok
+M_10 sid=dd864c73-4f35-4210-89dc-6a143f50af07 turns=6 err=False contam=0
+0 integrity=ok
+--- round 10 complete 2026-09-28T01:46:23Z
+E010 done 2026-09-28T01:46:23Z

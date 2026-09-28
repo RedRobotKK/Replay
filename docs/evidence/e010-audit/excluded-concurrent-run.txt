@@ -1,0 +1,23 @@
+INVALID RUN. Not the E010 result. Preserved, not deleted.
+
+Two instances of runall.sh executed concurrently against the same output
+filenames. The first was launched with `nohup ... &`, appeared dead because it
+was blocked in the 3s stdin wait of `claude -p`, and was never reaped; the
+second was launched after the stdin bug was fixed. Both proceeded.
+
+Evidence: ledger.txt carries 98 trial lines, 50 distinct tags and 98 distinct
+session ids, two "E010 done" lines, two "round 1 complete" lines, and rounds
+completing out of order.
+
+Every surviving json/transcript pair is internally consistent (50 of 50, 0
+mismatched), and the substrate was never mutated (HEAD f183aa63 unchanged,
+porcelain empty throughout, integrity=ok on all 98 lines).
+
+It is still invalid as the preregistered experiment. The 50 files on disk are
+race survivors: for each tag whichever run finished last overwrote the other.
+Keeping them would be selecting 50 of 98 by wall-clock timing, and a trial that
+runs longer is more likely to finish later and survive, so the selection is
+correlated with trial duration. The preregistration fixes n at 50 and forbids
+post-hoc exclusion outside its validity rules.
+
+No result was scored or read from this run before it was set aside.
