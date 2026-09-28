@@ -12,6 +12,7 @@ on its date plus whatever was appended, and `git log -p docs/evidence/` as the o
 
 | Document | What it measures | Headline |
 |---|---|---|
+| [E010 preregistration, 2026-09-27](e010-prereg-2026-09-27.md) | Whether a durable work-state field changes the first evidence surface a fresh agent executes. Written before any trial | **Preregistered, not run.** Five arms, n=10. DoorKik byte preflight passed for `7489056b`. Zero trials |
 | [Calibration corpus, 2026-09-03](calibration-corpus-2026-09-03.md) | How well the replay engine reproduces the provider's own cache reads | 398 of 402 turns across 11 sessions, all from this repository's own development on one machine |
 | [Calibration corpus, 2026-09-05](calibration-corpus-2026-09-05.md) | How well the engine reproduces the provider's own numbers, across 1363 transcripts from many unrelated projects rather than this repository's own development work. **It called those transcripts "sessions"; see the 2026-09-06 correction** | Supersedes the 2026-09-03 corpus, which covered 11 self-referential sessions |
 | [Calibration corpus, 2026-09-06](calibration-corpus-2026-09-06.md) | The same engine, re-read, and a correction: the previous file counted transcript files and called them sessions | **1450 transcripts from 78 sessions**, 97.46%. The 1363 published as "sessions" was a file count; one session supplied 1020 of them |
