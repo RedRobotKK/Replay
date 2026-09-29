@@ -25,6 +25,7 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
 | DS-F2b | 2026-09-29 | Does a reasoning control exist? | 5 | **YES**, `reasoning_effort:"none"` and `thinking:{type:disabled}`. Control produced 40 reasoning tokens and ZERO content | OBSERVED | `deepseek/optimization-arms-2026-09-29.md` |
 | DS-OPT | 2026-09-29 | Baseline plus 5 one-variable arms | 72 | Best arm 6.5x cheaper and 6.9x faster at 12/12; parallel-alone is 0.99x cost at 0% hit | OBSERVED | same |
 | DS-F5 | 2026-09-29 | Do cache reads bill at the hit rate? | 200 | **YES**. Observed $0.04 vs $0.03909 derived-at-hit (1.023) vs $1.13994 derived-at-miss (0.035) | **RESOLVED**, blocker 3 closed | same |
+| DS-RS | 2026-09-29 | Where does `reasoning_effort:"none"` apply? | 84 | **CLASS-CONDITIONAL**: lookup 100%->94% at 19.5x less output; aggregation 100%->**29%**, confidently wrong | OBSERVED, n=18/24 per cell | `deepseek/reasoning-scope-2026-09-29.md` |
 
 ## Killed or corrected
 
@@ -60,3 +61,13 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
   derived, a factor of 1.9. Settling lag and per-request cent truncation both
   explain it and make opposite predictions. Not inferred either way, because the
   first F4 comparison died of exactly that. DS-F5.
+
+- **"Disable reasoning" as a general recommendation**: killed before it shipped.
+  DS-OPT measured 12/12 at `reasoning_effort:"none"` on a lookup task, which is
+  the class where reasoning is unnecessary by construction. On aggregation the
+  same setting scores 29% and answers 39 as 67, 14 as 1. The lever is real and
+  it is conditional. DS-RS.
+- **First DS-RS run**: VOID. The "mechanical" class asked which function sat on a
+  given line number of a 48,000-char document, which is positional counting, not
+  lookup, and `max_tokens=1024` truncated every reasoning-on call. The cell
+  measured the question design. Rebuilt and re-run.
