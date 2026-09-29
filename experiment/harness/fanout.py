@@ -28,12 +28,32 @@ import threading
 import adapter
 
 
-# DeepSeek documents exact-prefix matching and bills cache hits per token. It
-# does not document a minimum cacheable length, so this threshold is a
-# deliberate, conservative guess rather than a measured boundary: below roughly
-# this many characters the prefix is not worth a serial round trip even if it
-# does cache. Treat it as a tuning knob, not a provider fact.
-MIN_WARM_PREFIX_CHARS = 2000
+# MEASURED 2026-09-29, 17 rungs, 17 exact. DeepSeek's prefix cache is quantised
+# to 128-token blocks and the FINAL block is never served from cache:
+#
+#     cached_tokens = 128 * max(0, floor(shared_prefix_tokens / 128) - 1)
+#
+# So a shared prefix must span at least two blocks -- 256 tokens -- before any
+# hit occurs at all. Below that, warming buys nothing.
+BLOCK_TOKENS = 128
+MIN_WARM_PREFIX_TOKENS = 2 * BLOCK_TOKENS
+
+# The harness has no tokenizer, so the dispatch decision uses a character proxy.
+# It is deliberately biased toward warming: 3 chars per token is the dense case
+# (code, minified JSON), and assuming density means warming on prefixes that
+# might not qualify rather than skipping ones that do. The asymmetry justifies
+# it -- a needless warm costs one call of latency, a missed warm costs full
+# input price on the shared prefix for every question in the fan-out.
+#
+# The earlier value here was 2000, a guess. It happened to sit near the real
+# boundary for English prose and would have been wrong by 2.6x on code.
+CHARS_PER_TOKEN_DENSE = 3
+MIN_WARM_PREFIX_CHARS = MIN_WARM_PREFIX_TOKENS * CHARS_PER_TOKEN_DENSE
+
+
+def cached_tokens_for(shared_prefix_tokens):
+    """What the provider will serve from cache for a prefix of this length."""
+    return BLOCK_TOKENS * max(0, shared_prefix_tokens // BLOCK_TOKENS - 1)
 
 
 def common_prefix_len(texts):
