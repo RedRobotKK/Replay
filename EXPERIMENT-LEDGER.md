@@ -19,6 +19,7 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
 | WP-02 | 2026-09-28 | Does the repo contract establish F1 as a defect? | 7 calls | **CONTRACT GAP**; test-only, 0 production files | USEFUL | commit `1d14036` |
 
 | HH-01 | 2026-09-28 | Harden the harness at zero cost | 0 calls | O1 and O2 implemented and mutation-checked; O3 not implemented | n/a | `experiment/harness/test_adapter.py` |
+| HH-02 | 2026-09-28 | Rebuild the fan-out to production shape | 0 calls | Four defects fixed, a fifth found while testing (float money); 10 mutations all killed | Saving is DERIVED, not OBSERVED | `experiment/deepseek/fanout-audit-2026-09-28.md` |
 
 ## Killed or corrected
 
@@ -38,3 +39,9 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
   prefix and hid the ordering effect. Fixed.
 - **`max_tokens=24`** was consumed entirely by reasoning, scoring every arm
   0/20. An instrument failure, not a model result.
+
+- **First fan-out mutation sweep**: VOID. `cp` restored files with an mtime in
+  the same whole second as the mutant's `__pycache__` entry, so CPython reused
+  mutant bytecode and three mutations read as SURVIVED against code that was no
+  longer there. Redone with `PYTHONDONTWRITEBYTECODE=1`. Same class as counting
+  cached `go test` invocations as one clean run. HH-02.
