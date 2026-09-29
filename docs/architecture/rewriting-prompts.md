@@ -4,6 +4,16 @@
 a strong version of this and a version that dismantles the tool. They are separated by one question:
 **can the change be proven not to alter what the model sees?**
 
+**Update 2026-09-29.** The position below is unchanged and is now supported by
+measurement. A bounded prompt-optimization campaign, 396 trials over seven
+conditions with model and reasoning configuration held constant, returned a
+**NULL**: two candidate effects both reversed sign on independent replication,
+and output-token variance exceeded anything the conditions produced. Semantics
+were held constant by construction throughout, so this is evidence about the
+semantics-preserving half of the line, which is the half Replay is allowed to
+act on. No prompt optimizer is implemented and none should be. See
+`experiment/prompt-opt/FINAL-REPORT.md` and `docs/DEEPSEEK-OPERATING-CONTRACT.md`.
+
 ## The line
 
 **Semantics-preserving.** The model receives the same content, arranged so the provider's caching

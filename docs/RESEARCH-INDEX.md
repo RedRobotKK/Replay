@@ -304,10 +304,10 @@ drops what it got wrong is a catalogue nobody can check.
 
 ## DeepSeek optimisation
 
-- [DeepSeek optimisation](DEEPSEEK-OPTIMIZATION.md) -- four measured
-  levers (6.5x cheaper and 6.9x faster at an unchanged pass rate), what the
-  vendor does not promise, and the runtime guard for the undocumented
-  reasoning parameter.
+- [DeepSeek measured controls and optimization history](DEEPSEEK-OPTIMIZATION.md)
+  -- what the harness enforces today, what the experiments observed and at what
+  scope, and the claims withdrawn after later evidence. The campaign is closed
+  and the headline that stood here is superseded.
 
 ## DeepSeek operating contract
 

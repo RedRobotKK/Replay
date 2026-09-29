@@ -262,5 +262,78 @@ class TestFanPropagatesExtraKwargs(unittest.TestCase):
             self.assertEqual(c["kw"].get("top_p"), 0.25)
 
 
+class TestMalformedConfiguration(unittest.TestCase):
+    """A misconfigured run must fail at construction, not mid-flight.
+
+    A run that discovers its own misconfiguration after dispatching has already
+    spent money on the requests that failed.
+    """
+
+    def test_an_unknown_dialect_is_refused(self):
+        with self.assertRaises(KeyError):
+            session.Run(curlrc=None, tmp="/tmp", ceiling_usd=1.0, label="t",
+                        dialect="not-a-dialect", quiet=True)
+
+    def test_an_unknown_model_gets_no_concurrency_cap_and_says_so(self):
+        """An unpriced, unknown model has no published limit to check against.
+
+        It must not silently inherit another model's cap. The run is allowed,
+        because refusing every unknown model would block legitimate probing,
+        but nothing pretends a bound was verified.
+        """
+        r = session.Run(curlrc=None, tmp="/tmp", ceiling_usd=1.0, label="t",
+                        model="deepseek-does-not-exist", workers=9999,
+                        ad=FakeAdapter(), quiet=True)
+        self.assertIsNone(policy.PUBLISHED_CONCURRENCY.get("deepseek-does-not-exist"))
+        self.assertEqual(r.workers, 9999)
+
+    def test_an_unpriced_model_yields_no_derived_cost(self):
+        """pricing.cost_usd returns None for a model it has no row for, and the
+        meter must not turn that into a zero. A zero would read as a free call."""
+        import pricing
+        self.assertIsNone(pricing.cost_usd("deepseek-does-not-exist", 100, 0, 10))
+
+
+class TestMissingTelemetry(unittest.TestCase):
+    """Absent provider fields are NOT_OBSERVED, never zero and never false."""
+
+    def test_a_response_without_reasoning_does_not_trip_the_invariant(self):
+        """`reasoning` is absent on the Anthropic dialect. Treating absence as
+        a violation would fail every such call; treating it as zero would claim
+        the parameter was honoured when nothing was reported."""
+        m = adapter.Measurement(status=200, fresh_in=10, out=5)
+        self.assertIsNone(m.get("reasoning"))
+        policy.check_reasoning_honoured(m, {"reasoning_effort": "none"})
+
+    def test_absent_identity_fields_stay_absent_in_the_row(self):
+        ad = FakeAdapter()
+        ad.call = lambda *a, **k: (adapter.Measurement(status=200, fresh_in=1, out=1),
+                                   "x", "/dev/null")
+        row = run(ad).ask(TaskClass.AGGREGATE, "q")
+        for f in ("model_returned", "cache_read", "reasoning"):
+            self.assertIsNone(row[f], f"{f} was invented where none was reported")
+
+    def test_a_missing_usage_block_is_unaccounted_and_holds_its_reservation(self):
+        """A 200 reporting no usage is a billed call that cannot be priced.
+
+        It must NOT bank as a free ANSWERED call, and its reservation must be
+        HELD rather than released: the provider answered, so the money is gone.
+        Holding can under-run the ceiling; releasing can overspend it. For
+        scarce capital under-running is the safe error.
+        """
+        ad = FakeAdapter()
+        ad.call = lambda *a, **k: (adapter.Measurement(status=200), "x", "/dev/null")
+        r = run(ad)
+        row = r.ask(TaskClass.AGGREGATE, "q")
+        self.assertEqual(row["outcome"], Outcome.ERROR)
+        self.assertIn("UNACCOUNTED", row["error"])
+        self.assertIsNone(row["fresh_in"], "no usage may be invented")
+        snap = r.budget.snapshot()
+        self.assertGreater(snap["outstanding_usd"], 0.0,
+                           "the reservation must be held, not released")
+        self.assertEqual(snap["settled_usd"], 0.0,
+                         "an unpriceable call must not settle as $0.00")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

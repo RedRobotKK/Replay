@@ -20,12 +20,12 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
 
 | HH-01 | 2026-09-28 | Harden the harness at zero cost | 0 calls | O1 and O2 implemented and mutation-checked; O3 not implemented | n/a | `experiment/harness/test_adapter.py` |
 | HH-02 | 2026-09-28 | Rebuild the fan-out to production shape | 0 calls | Four defects fixed, a fifth found while testing (float money); 10 mutations all killed | Saving is DERIVED, not OBSERVED | `experiment/deepseek/fanout-audit-2026-09-28.md` |
-| DS-C1 | 2026-09-29 | How is the prefix cache shaped? | 49 | 128-token blocks, final block never cached; 17/17 rungs exact | OBSERVED | `deepseek/cache-characterisation-2026-09-29.md` |
+| DS-C1 | 2026-09-29 | How is the prefix cache shaped? | 49 | 128-token blocks, final block never cached; 17/17 rungs exact. **SCOPED**: all rungs sequential; a non-multiple (13,563) later appeared once under concurrency | OBSERVED, sequential regime only | `deepseek/cache-characterisation-2026-09-29.md` |
 | DS-C2 | 2026-09-29 | What busts the cache? | in C1 | A single leading space does; temperature and max_tokens do not; hits serve at +0.0s; cache is shared across dialects | OBSERVED | same |
 | DS-F2b | 2026-09-29 | Does a reasoning control exist? | 5 | **YES**, `reasoning_effort:"none"` and `thinking:{type:disabled}`. Control produced 40 reasoning tokens and ZERO content | OBSERVED | `deepseek/optimization-arms-2026-09-29.md` |
-| DS-OPT | 2026-09-29 | Baseline plus 5 one-variable arms | 72 | Best arm 6.5x cheaper and 6.9x faster at 12/12; parallel-alone is 0.99x cost at 0% hit | OBSERVED | same |
+| DS-OPT | 2026-09-29 | Baseline plus 5 one-variable arms | 72 | Best arm 6.5x cheaper and 6.9x faster at 12/12; parallel-alone is 0.99x cost at 0% hit. **HEADLINE SUPERSEDED**: measured against a naive baseline on one benchmark and bundling three interventions; ordering plus warming is 4.4x of it and reasoning-off adds 1.48x | OBSERVED for that workload, NOT a general result | same |
 | DS-F5 | 2026-09-29 | Do cache reads bill at the hit rate? | 200 | **YES**. Observed $0.04 vs $0.03909 derived-at-hit (1.023) vs $1.13994 derived-at-miss (0.035) | **RESOLVED**, blocker 3 closed | same |
-| DS-RS | 2026-09-29 | Where does `reasoning_effort:"none"` apply? | 84 | **CLASS-CONDITIONAL**: lookup 100%->94% at 19.5x less output; aggregation 100%->**29%**, confidently wrong | OBSERVED, n=18/24 per cell | `deepseek/reasoning-scope-2026-09-29.md` |
+| DS-RS | 2026-09-29 | Where does `reasoning_effort:"none"` apply? | 84 | **CLASS-CONDITIONAL**: lookup 100%->94% at 19.5x less output; aggregation 100%->**29%**, confidently wrong. The 19.5x is OUTPUT tokens; total cost on a cached prefix was 1.48x | OBSERVED, n=18/24 per cell, 3 further classes NOT_OBSERVED | `deepseek/reasoning-scope-2026-09-29.md` |
 | DS-DOC | 2026-09-29 | What did the documentation already say? | 0 | Pricing confirmed exact; 128-token block is genuinely undocumented; `reasoning_effort:"none"` is **undocumented** and fragile; concurrency limit is published | n/a, zero cost | `deepseek/docs-reconciliation-2026-09-29.md` |
 | DS-WF | 2026-09-29 | Put the levers in the development workflow | 0 calls | `policy.py` + 18 tests, 8 mutations all killed; 43 harness tests wired into `make ci` and CI; `make ci` green end to end | n/a, zero cost | `docs/DEEPSEEK-OPTIMIZATION.md` |
 | DS-RW | 2026-09-29 | Route every spending experiment through one enforced path | 0 calls | `session.Run`; 19 tests, 10 mutations all killed; architecture guard verified to catch a bypassing script | n/a, zero cost | `docs/DEEPSEEK-OPTIMIZATION.md` |
@@ -166,3 +166,9 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
   damaged 70 sites in an uncommitted file. It was exactly invertible and was
   reversed, then the single genuine case was fixed surgically. Sweeping regexes
   over prose are not safe edits; the file had no commit to fall back to.
+
+- **CAMPAIGN CLOSED 2026-09-29.** `docs/DEEPSEEK-OPERATING-CONTRACT.md` is
+  authoritative. Every row above is a dated record of a closed campaign and
+  authorises nothing now. Prompt optimization returned a NULL over 396 trials.
+  No new DeepSeek spend is authorised, and the v4-pro experiment is not
+  authorised merely for having appeared in a next-steps list.

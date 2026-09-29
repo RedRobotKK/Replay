@@ -28,6 +28,18 @@ hold, and rotation is hygiene debt rather than a known compromise, so the work
 proceeded. The gate was set in this repository and is recorded as consciously
 crossed rather than quietly dropped. Rotation remains outstanding.
 
+| | |
+| --- | --- |
+| DeepSeek research campaign | **CLOSED** |
+| Active experiment | **NONE** |
+| New API spend | **NOT AUTHORIZED** |
+| Prompt optimization | **CLOSED / NULL** |
+| v4-pro experiment | **NOT AUTHORIZED** |
+
+**Everything below the "Historical record" heading is a dated record of a closed
+campaign.** Its hypotheses, blockers and next-actions describe the state at the
+time they were written. None of it authorises work now.
+
 **Operating contract:** `docs/DEEPSEEK-OPERATING-CONTRACT.md`. Read it before
 spending another credit. The campaign is closed at `3c2ef9a`. Prompt
 optimization returned a NULL result over 396 trials: two candidate effects both
@@ -42,7 +54,9 @@ question.
 Next research priority is not DeepSeek: it is whether an addressable evidence
 anchor changes a fresh agent's retrieval behaviour after context discontinuity.
 
-## Current state
+## Historical record
+
+### Campaign state at close
 
 | | |
 |---|---|
@@ -54,14 +68,14 @@ anchor changes a fresh agent's retrieval behaviour after context discontinuity.
 | billing reconciliation | resolved A: 1.93% at n=200, inside the 3% declared before the run |
 | credential | **NOT ROTATED** -- see operational follow-up below |
 
-## Current hypothesis
+### Hypothesis as it stood during the campaign (HISTORICAL)
 
 Replay can identify provider-specific interventions that reduce cost with
 outcome preserved, but a recommendation is only useful with its applicability
 condition attached. Prefix ordering is the worked example: 90.4% cheaper when
 the prefix recurs, exactly no effect when it does not.
 
-## Blockers
+### Blockers as recorded during the campaign (HISTORICAL)
 
 1. ~~Derived cost over-states observed spend ~3x.~~ **CLEARED.** The gap was an
    analysis failure: a balance read before billing settled, compared against a
@@ -78,7 +92,7 @@ the prefix recurs, exactly no effect when it does not.
    Settling lag and per-request cent truncation both fit and make opposite
    predictions about a batch of sub-cent calls left to settle for an hour.
 
-## Harness hardening, 2026-09-28 (zero cost, no API calls)
+### Harness hardening, 2026-09-28 (zero cost, no API calls)
 
 | item | status |
 |---|---|
@@ -100,7 +114,7 @@ twice: deleting the guard fails 2 tests; narrowing it to chat's `length`
 vocabulary alone fails the Anthropic `max_tokens` case. Go suite unaffected at
 30 ok / 0 FAIL, `go vet` and `gofmt` clean.
 
-## Fan-out infrastructure, 2026-09-28 (zero cost, no API calls)
+### Fan-out infrastructure, 2026-09-28 (zero cost, no API calls)
 
 `experiment/harness/fanout.py`. Built because it is the shape the measurements
 reward and the one we had never used: DeepSeek sustained 64 concurrent requests
@@ -134,7 +148,7 @@ and refused calls into the pass rate fails 3.
 
 **Not yet run against the live API.** Requires spend authorisation.
 
-## Operational follow-up: credential rotation
+### Operational follow-up: credential rotation (STILL OUTSTANDING)
 
 - The DeepSeek credential used by WP-01 and WP-02 **has not been rotated**.
 - Key-management endpoints were probed and returned 404: `/user/api_keys`,
@@ -144,7 +158,7 @@ and refused calls into the pass rate fails 3.
 - This is a human action. The credential is not printed, stored in this
   repository, or reproduced in any artifact.
 
-## Next action, ready and NOT run
+### Next action as written mid-campaign (HISTORICAL, superseded: settle_test was made unnecessary by a zero-cost refutation)
 
 `experiment/harness/settle_test.py` resolves the open cost-reconciliation
 question. It refuses to run without `--confirm`.
@@ -156,17 +170,17 @@ It runs **two batches with the same derived total and opposite call sizes**: BIG
 lag predicts both converge on their derived totals. Cent truncation predicts BIG
 converges and SMALL never does. Estimated $0.25 derived, then an hour of polling.
 
-## Next actions
+### Next actions as written mid-campaign (HISTORICAL)
 
 **None authorised.** The campaign is paused. D1, cache-hit price validation and
 model-transfer work remain unstarted and unauthorised.
 
-## Agents
+### Agents
 
 None active. No sub-agents were launched this phase; all work ran in the parent
 session, so there are no child runs to account for.
 
-## Latest commits
+### Latest commits at the time of writing (HISTORICAL)
 
 `fbff0e1` F4 reconciliation · `4909c53` findings · `ae09b9a` campaign prereg · `dc64275` gap analysis ·
 `d67d16b` surface map · `efc6bc2` cold/warm baseline
