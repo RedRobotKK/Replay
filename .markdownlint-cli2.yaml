@@ -15,3 +15,14 @@ ignores:
   # linted. Reformatting a model's output to satisfy a style rule would destroy
   # the one property that makes it evidence, which is that nobody edited it.
   - experiment/deepseek/wp01/deepseek-report-2026-09-28.md
+  # Agent-generated reconnaissance dumps, not documentation.
+  #
+  # experiment/anthropic-recon/ holds four raw research inventories written by
+  # delegated agents: tables of provider facts with their evidence classes and
+  # source URLs. They are working evidence, read for their rows rather than as
+  # prose, and the same reasoning applies as to AGENTS_STATE.md above. Holding
+  # them to a published page's style produced findings about bare URLs inside
+  # citation tables, which is where a bare URL belongs.
+  #
+  # The documents that READ them, docs/ANTHROPIC-EFFICIENCY-*.md, are linted.
+  - experiment/anthropic-recon/**

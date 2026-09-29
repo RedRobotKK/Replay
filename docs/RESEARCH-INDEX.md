@@ -314,3 +314,21 @@ drops what it got wrong is a catalogue nobody can check.
 - [DeepSeek closeout and operating contract](DEEPSEEK-OPERATING-CONTRACT.md)
   -- the campaign is closed. DeepSeek is an experimental instrument, not a
   product claim generator. Read this before spending another credit.
+
+## Anthropic efficiency reconnaissance
+
+Opened 2026-09-29. **Reconnaissance only.** No optimization is authorised and
+nothing is classified safe to automate.
+
+- [Surface map](ANTHROPIC-EFFICIENCY-SURFACE.md) -- the canonical inventory of
+  eight surfaces, what each one's control point is, and what Replay can and
+  cannot observe. Start here.
+- [Contract](ANTHROPIC-EFFICIENCY-CONTRACT.md) -- 15 invariants binding any
+  efficiency claim. Most were earned by the closed DeepSeek campaign rather than
+  reasoned out in advance.
+- [Test matrix](ANTHROPIC-EFFICIENCY-TEST-MATRIX.md) -- 13 hypotheses with their
+  observables and controls, plus five negative controls.
+- [Findings](ANTHROPIC-EFFICIENCY-FINDINGS.md) -- what is observed, what was
+  refuted, and a register of eight unknowns.
+- `../experiment/../experiment/anthropic-recon/` -- the four raw inventories, excluded from prose lint as
+  working evidence.
