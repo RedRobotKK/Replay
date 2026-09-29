@@ -87,6 +87,31 @@ roughly 20x, nothing errors.
 reasoning tokens anyway. `reasoning_tokens` is already on every chat-dialect
 response, so the check is free. **Call it on every such response.**
 
+## How a spending experiment is written
+
+Every experiment goes through `session.Run`, which applies the levers by
+construction rather than by the author remembering them:
+
+```text
+run = session.Run(curlrc=..., tmp=..., ceiling_usd=0.50, label="my-experiment")
+rows = run.fan(TaskClass.LOOKUP, shared_document, questions)
+```
+
+`task_class` is a **required** argument with no default, so the reasoning
+setting is never chosen by accident. The shared block always leads, the worker
+count is validated against the published limit at construction rather than
+discovered as HTTP 429 mid-run, spend is reserved before dispatch, and every
+response whose request disabled reasoning is checked.
+
+`TestNoScriptBypassesTheRunner` enforces this against the source: a new script
+either uses the runner or has to declare itself frozen in its own docstring.
+`runner.py` is superseded and raises if imported; it had no ceiling and used
+`ThreadPoolExecutor.map`, which discards paid-for results when any call raises.
+
+The one-shot probes that produced the findings above are **frozen**. They
+predate the runner and hand-roll their own budget, and rewriting them would
+change what produced the numbers in the ledger.
+
 ## Running it
 
 ```text

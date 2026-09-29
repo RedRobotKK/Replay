@@ -110,7 +110,8 @@ class TestCredentialContainment(unittest.TestCase):
             if not name.endswith(".py"):
                 continue
             checked += 1
-            text = open(os.path.join(here, name)).read()
+            with open(os.path.join(here, name)) as fh:
+                text = fh.read()
             for i, line in enumerate(text.splitlines(), 1):
                 if "sk-" in line and "NOT-A-REAL-KEY" not in line:
                     self.fail(f"{name}:{i} contains what looks like a key literal")

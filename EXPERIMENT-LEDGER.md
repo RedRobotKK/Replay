@@ -28,6 +28,7 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
 | DS-RS | 2026-09-29 | Where does `reasoning_effort:"none"` apply? | 84 | **CLASS-CONDITIONAL**: lookup 100%->94% at 19.5x less output; aggregation 100%->**29%**, confidently wrong | OBSERVED, n=18/24 per cell | `deepseek/reasoning-scope-2026-09-29.md` |
 | DS-DOC | 2026-09-29 | What did the documentation already say? | 0 | Pricing confirmed exact; 128-token block is genuinely undocumented; `reasoning_effort:"none"` is **undocumented** and fragile; concurrency limit is published | n/a, zero cost | `deepseek/docs-reconciliation-2026-09-29.md` |
 | DS-WF | 2026-09-29 | Put the levers in the development workflow | 0 calls | `policy.py` + 18 tests, 8 mutations all killed; 43 harness tests wired into `make ci` and CI; `make ci` green end to end | n/a, zero cost | `docs/DEEPSEEK-OPTIMIZATION.md` |
+| DS-RW | 2026-09-29 | Route every spending experiment through one enforced path | 0 calls | `session.Run`; 19 tests, 10 mutations all killed; architecture guard verified to catch a bypassing script | n/a, zero cost | `docs/DEEPSEEK-OPTIMIZATION.md` |
 
 ## Killed or corrected
 
@@ -89,3 +90,13 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
   files. Four were prose and are fixed. The fifth is DeepSeek's verbatim WP-01
   report, now excluded with a stated reason: reformatting a model's output to
   satisfy a style rule destroys the one property that makes it evidence. DS-WF.
+
+- **policy.py was imported by nothing that spends.** It encoded the levers and
+  six probe scripts each hand-rolled their own budget and call wrapper around
+  it, so the levers were enforced by discipline. `session.Run` now enforces them
+  by construction, and `TestNoScriptBypassesTheRunner` enforces that against the
+  source rather than against a comment. DS-RW.
+- **`runner.py` was dead and dangerous.** Imported by nobody, no spending
+  ceiling, `ThreadPoolExecutor.map`. It now raises with a pointer instead of
+  being deleted, because the failure mode is a future session finding a
+  plausible-looking runner and using it. DS-RW.

@@ -9,6 +9,14 @@ This removes the estimate. The warm prompt is a strict EXTENSION of the cold
 prompt, so the shared prefix is exactly the cold call's own prompt, whose token
 count the provider reported. The prediction is then made and printed BEFORE the
 warm call is issued.
+
+FROZEN 2026-09-29. This script produced published findings and is kept as the
+method that generated them. It predates session.py and hand-rolls its own budget
+and call wrapper; do not copy that shape into anything new, and do not "fix" it,
+because rewriting it changes what produced the numbers in the ledger.
+
+New spending experiments go through session.Run, which enforces the measured
+levers by construction.
 """
 import argparse, json, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

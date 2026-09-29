@@ -116,6 +116,18 @@ and refused calls into the pass rate fails 3.
 - This is a human action. The credential is not printed, stored in this
   repository, or reproduced in any artifact.
 
+## Next action, ready and NOT run
+
+`experiment/harness/settle_test.py` resolves the open cost-reconciliation
+question. It refuses to run without `--confirm`.
+
+It does not poll harder; polling cannot separate the two hypotheses, because lag
+and truncation both look like "the money is not there yet" at any single moment.
+It runs **two batches with the same derived total and opposite call sizes**: BIG
+(12 calls each well over a cent) and SMALL (400 calls each well under). Settling
+lag predicts both converge on their derived totals. Cent truncation predicts BIG
+converges and SMALL never does. Estimated $0.25 derived, then an hour of polling.
+
 ## Next actions
 
 **None authorised.** The campaign is paused. D1, cache-hit price validation and

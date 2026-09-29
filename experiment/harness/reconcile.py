@@ -11,6 +11,14 @@ the balance endpoint's $0.01 resolution and outside any plausible settling lag,
 which is what killed the first F4 comparison.
 
 Balance is read before, then after a settling wait, and both are recorded.
+
+FROZEN 2026-09-29. This script produced published findings and is kept as the
+method that generated them. It predates session.py and hand-rolls its own budget
+and call wrapper; do not copy that shape into anything new, and do not "fix" it,
+because rewriting it changes what produced the numbers in the ledger.
+
+New spending experiments go through session.Run, which enforces the measured
+levers by construction.
 """
 import argparse, json, os, subprocess, sys, time
 import concurrent.futures as cf

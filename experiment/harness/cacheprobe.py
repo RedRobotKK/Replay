@@ -9,6 +9,14 @@ how quickly it becomes available after the populating call returns.
 
 Every probe uses a tiny output cap. The subject is the usage record, not the
 answer, so `allow_truncated=True` is correct here and nowhere else.
+
+FROZEN 2026-09-29. This script produced published findings and is kept as the
+method that generated them. It predates session.py and hand-rolls its own budget
+and call wrapper; do not copy that shape into anything new, and do not "fix" it,
+because rewriting it changes what produced the numbers in the ledger.
+
+New spending experiments go through session.Run, which enforces the measured
+levers by construction.
 """
 import argparse
 import json
