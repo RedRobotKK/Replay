@@ -1,0 +1,258 @@
+{
+ "head": "d1810a7",
+ "claims": [
+  {
+   "id": "DS-C-01",
+   "claim": "Cached-token counts on deepseek-flash follow cached = 128 * max(0, floor(n/128) - 1), where n is the provider-reported shared-prefix token count.",
+   "evidence_class": "OBSERVED (counts) + SUPPORTED_HYPOTHESIS (relation)",
+   "track": "A2",
+   "source": "deepseek-suite/raw/track-a.json",
+   "raw": "usage-extract.json, prompt_cache_hit_tokens",
+   "reproduced": "yes: 17 retrospective rungs, then 18 prospective discriminating rungs",
+   "limits": "deepseek-flash only. Establishes a COUNT RELATION, not the implementation.",
+   "safe": true
+  },
+  {
+   "id": "DS-C-02",
+   "claim": "At discriminating rungs the relation fits H-B 18/18, H-A 0/18, H-D1 0/18, H-D2 4/22.",
+   "evidence_class": "OBSERVED",
+   "track": "A2",
+   "source": "raw/track-a.json",
+   "raw": "per-rung predicted-vs-observed printed before each warm call",
+   "reproduced": "single prospective run, rungs chosen to separate the four",
+   "limits": "Rival formulas were fitted by us, not published as formulas.",
+   "safe": true
+  },
+  {
+   "id": "DS-C-03",
+   "claim": "The DeepSeek 2024-08-02 announcement states a 64-token storage unit. That statement does not predict measured deepseek-flash behaviour in 2026-09.",
+   "evidence_class": "OBSERVED (the document) + REFUTED (as a predictor of flash)",
+   "track": "A2/prior-art",
+   "source": "results/prior-art.md, docs-reconciliation-2026-09-29.md",
+   "raw": "api-docs.deepseek.com/news/news0802/",
+   "reproduced": "two independent rung sets",
+   "limits": "The document describes V2/MLA at $0.014/M. It is NOT asserted to be wrong for its own subject.",
+   "safe": true
+  },
+  {
+   "id": "DS-C-04",
+   "claim": "Prefix matching is block-granular and prefix-wise, not whole-string equality.",
+   "evidence_class": "OBSERVED",
+   "track": "A1",
+   "source": "raw/track-a.json",
+   "raw": "trailing space 2048; leading space 0; mid-prefix change 896 = 7x128; control 2048",
+   "reproduced": "single run, 6 arms + positive control",
+   "limits": "One prefix length, one corpus.",
+   "safe": true
+  },
+  {
+   "id": "DS-C-05",
+   "claim": "A request issued before the populating request returned did not reuse its prefix.",
+   "evidence_class": "OBSERVED",
+   "track": "A4",
+   "source": "raw/track-a2.json",
+   "raw": "sequential B hit 3200; concurrent A and B hit 0; wall-clock timeline recorded",
+   "reproduced": "A4 plus the independent all-parallel arm of the arms run",
+   "limits": "Ordering established from wall-clock, not from code dispatch order.",
+   "safe": true
+  },
+  {
+   "id": "DS-C-06",
+   "claim": "The exact cache-population commit point is not established.",
+   "evidence_class": "NOT_OBSERVED",
+   "track": "A4",
+   "source": "mechanisms.md M2",
+   "raw": "n/a",
+   "reproduced": "n/a",
+   "limits": "Completion and first-token are indistinguishable at the observed latencies.",
+   "safe": true
+  },
+  {
+   "id": "DS-C-07",
+   "claim": "temperature, max_tokens, top_p, frequency_penalty, presence_penalty and stop did not affect cache identity.",
+   "evidence_class": "OBSERVED",
+   "track": "A6",
+   "source": "raw/track-a2.json",
+   "raw": "all six arms hit 3200 against a 3200 control",
+   "reproduced": "single run",
+   "limits": "reasoning_effort was held CONSTANT across all A6 arms, so A6 does not cover it.",
+   "safe": true
+  },
+  {
+   "id": "DS-C-08",
+   "claim": "An unrecognised request-body key did not affect cache identity.",
+   "evidence_class": "OBSERVED",
+   "track": "A10",
+   "source": "raw/a10-cachekey.json",
+   "raw": "junk key arm hit 3200",
+   "reproduced": "single arm",
+   "limits": "One key, one endpoint. Does not establish that NO other key matters.",
+   "safe": true
+  },
+  {
+   "id": "DS-C-09",
+   "claim": "reasoning_effort participates in cache identity: toggling it in either direction dropped reuse to 0 against 3200 controls.",
+   "evidence_class": "OBSERVED",
+   "track": "A10",
+   "source": "raw/a10-cachekey.json",
+   "raw": "arm A add -> 0; arm B remove -> 0; controls 3200",
+   "reproduced": "two directions, one run",
+   "limits": "Whether via cache-key construction or another request-path transformation is NOT_OBSERVED.",
+   "safe": true
+  },
+  {
+   "id": "DS-C-10",
+   "claim": "Cross-dialect prefix reuse was observed when reasoning_effort was absent from both bodies, and absent when present in both.",
+   "evidence_class": "OBSERVED",
+   "track": "A9",
+   "source": "raw/a9-crossdialect.json",
+   "raw": "absent arm: anth hit 3200 on a chat-populated prefix; present arm: 0",
+   "reproduced": "A9 two arms; reconciles the original observation with A7's refutation",
+   "limits": "Byte-identity of the serialised prompt across dialects is ASSUMED, not established.",
+   "safe": true
+  },
+  {
+   "id": "DS-C-11",
+   "claim": "The prefix cache did not cross between deepseek-flash and deepseek-v4-pro in either direction.",
+   "evidence_class": "OBSERVED",
+   "track": "A8",
+   "source": "raw/track-a-scope.json",
+   "raw": "flash->pro 0, pro->flash 0, with warm controls 3200 and 3328",
+   "reproduced": "both directions",
+   "limits": "Two models, one endpoint, one prefix length.",
+   "safe": true
+  },
+  {
+   "id": "DS-B-01",
+   "claim": "575 saved responses carry a usage block; four conservation identities hold with zero violations.",
+   "evidence_class": "OBSERVED",
+   "track": "B1",
+   "source": "raw/usage-extract.json",
+   "raw": "hit+miss == prompt_tokens; prompt+completion == total; cached_tokens == hit; reasoning <= completion",
+   "reproduced": "two independent reconstruction paths agreed to 9 decimals; mutation test detects an injected +7 tokens",
+   "limits": "None material.",
+   "safe": true
+  },
+  {
+   "id": "DS-B-02",
+   "claim": "Reconstructed provider cost for the campaign is $0.248764126.",
+   "evidence_class": "DERIVED",
+   "track": "B1",
+   "source": "derived/final-reconstruction.json",
+   "raw": "usage-extract.json x pricing.md, each call at its own timestamp",
+   "reproduced": "full corpus and committed extract reconstruct identically",
+   "limits": "LOWER BOUND: 5 calls are NOT_OBSERVED (raw-curl probes, no response saved).",
+   "safe": true
+  },
+  {
+   "id": "DS-B-03",
+   "claim": "Observed balance moved $46.01 -> $45.77; the difference is bounded by the open interval ($0.230, $0.250).",
+   "evidence_class": "OBSERVED (readings) + DERIVED (interval)",
+   "track": "B3",
+   "source": "raw/balance-post-trackA.json",
+   "raw": "total_balance, a 2-decimal JSON string",
+   "reproduced": "interval width pinned by a mutation-checked test",
+   "limits": "The $46.01 anchor has NO persisted raw body. Later readings do.",
+   "safe": true
+  },
+  {
+   "id": "DS-B-04",
+   "claim": "The reconstructed figure lies inside the interval the balance can distinguish.",
+   "evidence_class": "SUPPORTED_HYPOTHESIS",
+   "track": "B3",
+   "source": "derived/final-reconstruction.json",
+   "raw": "0.248764 in (0.230, 0.250)",
+   "reproduced": "one full-campaign test",
+   "limits": "CONSISTENCY, not proof that the provider computes cost by this path. A systematic error under ~8% would be invisible at this scale.",
+   "safe": true
+  },
+  {
+   "id": "DS-B-05",
+   "claim": "Per-request cent truncation cannot explain the observed balance movement.",
+   "evidence_class": "REFUTED (the truncation hypothesis)",
+   "track": "B6",
+   "source": "results/track-b.md",
+   "raw": "max per-request cost $0.0056997; 0 of 479 reach $0.01",
+   "reproduced": "arithmetic over the whole corpus, no spend",
+   "limits": "Refutes truncation as the explanation; says nothing about the provider's rounding rule, which is NOT_OBSERVED.",
+   "safe": true
+  },
+  {
+   "id": "DS-B-06",
+   "claim": "The account balance changed during a window containing no billable call.",
+   "evidence_class": "OBSERVED",
+   "track": "B4",
+   "source": "session log + corpus mtimes",
+   "raw": "$45.83 -> $45.78; zero response files written in the window",
+   "reproduced": "one window",
+   "limits": "Bounds lag from below only. Exact lag duration NOT_OBSERVED.",
+   "safe": true
+  },
+  {
+   "id": "DS-B-07",
+   "claim": "After settlement the balance stopped moving: 13 polls over 24.1 minutes, all $45.78.",
+   "evidence_class": "OBSERVED",
+   "track": "B4",
+   "source": "tmp/probe/balance_poll.jsonl",
+   "raw": "13 timestamped readings, zero changes, zero inference",
+   "reproduced": "one window",
+   "limits": "Convergence observed once; no general lag model.",
+   "safe": true
+  },
+  {
+   "id": "DS-O-01",
+   "claim": "With a warm shared prefix, disabling reasoning reduced output tokens ~39x and total cost ~1.48x.",
+   "evidence_class": "OBSERVED (tokens, cost) + DERIVED (ratios)",
+   "track": "C/arms",
+   "source": "deepseek/optimization-arms-2026-09-29.md",
+   "raw": "A3 936 tok $0.00313; A4 24 tok $0.00211",
+   "reproduced": "single run",
+   "limits": "Ratio is a function of prefix size and output length. Not general.",
+   "safe": true
+  },
+  {
+   "id": "DS-O-02",
+   "claim": "Accuracy under reasoning-off, for the registered task set: LOOKUP 93%, AGGREGATION 44%, TRANSFORMATION 33%, COUNTING 29%, MULTI_STEP 11%, against 100% with reasoning on.",
+   "evidence_class": "OBSERVED",
+   "track": "C3",
+   "source": "results/track-c-prereg.md, reasoning-scope-2026-09-29.md",
+   "raw": "per-cell pass counts, ground truth computed from the corpus",
+   "reproduced": "LOOKUP and AGGREGATION measured live; the other three are registered predictions",
+   "limits": "NOT universal model accuracy. Measured on one registered task set, one corpus, n=18 and n=24 for the two live cells.",
+   "safe": false
+  },
+  {
+   "id": "DS-O-03",
+   "claim": "For counting and deterministic transformation, a programmatic verifier recomputes the answer and can replace the model call.",
+   "evidence_class": "DERIVED",
+   "track": "C5",
+   "source": "results/track-c-prereg.md",
+   "raw": "break-even checker cost $5.5e-5 / $9.3e-5 against a cheapest LLM-checker floor of $1.64e-4",
+   "reproduced": "analytic, no spend",
+   "limits": "Applies where deterministic verification exists. Not all task classes.",
+   "safe": true
+  },
+  {
+   "id": "DS-I-01",
+   "claim": "A cp-based restore can leave CPython executing a mutant's cached bytecode, silently voiding a mutation sweep.",
+   "evidence_class": "OBSERVED",
+   "track": "D1",
+   "source": "results/track-d.md",
+   "raw": "20 of 20 trials, both directions, reproduced in an isolated scratch tree",
+   "reproduced": "20/20",
+   "limits": "CPython-specific.",
+   "safe": true
+  },
+  {
+   "id": "DS-P-01",
+   "claim": "Patent prior-art search was not performed.",
+   "evidence_class": "NOT_VERIFIED",
+   "track": "prior-art",
+   "source": "results/prior-art.md",
+   "raw": "no patent database queried",
+   "reproduced": "n/a",
+   "limits": "No novelty, patentability or freedom-to-operate conclusion is available or implied.",
+   "safe": true
+  }
+ ]
+}

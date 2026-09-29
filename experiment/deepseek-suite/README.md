@@ -12,6 +12,8 @@ Nothing is promoted between classes silently. NOT_OBSERVED is never FALSE.
 
 | path | holds |
 | --- | --- |
+| `FINAL-REPORT.md` | **the consolidated final report. Start here.** |
+| `ledger.json` | machine-readable claim ledger, every claim with its evidence class |
 | `PLAN.md` | preregistration, written before execution |
 | `LEDGER.md` / `ledger.json` | every experiment, human and machine readable |
 | `claims.md` | the claims matrix; evidence-bound statements only |
@@ -39,3 +41,17 @@ Nothing is promoted between classes silently. NOT_OBSERVED is never FALSE.
 
 Ceiling $3.00 for the campaign, set by the operator and enforced by
 `fanout.Budget` in integer nano-USD. Spent before this suite: **$0.23 OBSERVED**.
+
+## Where the primary evidence lives
+
+`raw/usage-extract.json` is the primary evidence for every derived cost figure.
+It holds the provider-reported `usage` block, model and `created` timestamp of
+all 575 saved responses, copied field for field.
+
+The full 43 MB corpus of request/response pairs sits outside this repository in
+an ephemeral job directory and will not survive it. The extract carries a sha256
+over the concatenated source responses, and reconstructing from the extract
+reproduces the full-corpus figure to nine decimal places.
+
+Run it: `python3 experiment/harness/reconstruct.py --dir <corpus>`. It makes no
+API call.
