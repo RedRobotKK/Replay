@@ -1,0 +1,530 @@
+{
+ "track": "B",
+ "date": "2026-09-29",
+ "spend_incurred_by_this_track_usd": 0.0,
+ "inference_calls_made_by_this_track": 0,
+ "scope": {
+  "session": "2026-09-29 probe session",
+  "provider_created_window_utc": [
+   "2026-09-29 03:26:36+00:00",
+   "2026-09-29 03:42:45+00:00"
+  ],
+  "excluded": "the 2026-09-28 experiments, whose raw bodies are in a separate directory"
+ },
+ "evidence_classes": {
+  "OBSERVED": "value literally present in a saved provider response body or balance response",
+  "DERIVED": "arithmetic over OBSERVED values and the published rate table",
+  "ASSUMED": "premise not established by this campaign",
+  "NOT_OBSERVED": "evidence never captured; never read as zero or false"
+ },
+ "B1": {
+  "result": "CONFIRMED",
+  "claim_tested": "corpus derived cost equals $0.22995",
+  "OBSERVED": {
+   "res_files": 479,
+   "req_files": 479,
+   "responses_with_usage": 479,
+   "responses_with_error": 0,
+   "orphan_stems": 0,
+   "by_dialect": {
+    "chat": 477,
+    "anthropic": 2
+   },
+   "by_model_calls": {
+    "deepseek-flash": 467,
+    "deepseek-v4-pro": 12
+   },
+   "window_first_created_utc": "2026-09-29 03:26:36+00:00",
+   "window_last_created_utc": "2026-09-29 03:42:45+00:00",
+   "tokens_corpus": {
+    "hit": 5892224,
+    "miss": 402878,
+    "out": 56509,
+    "reasoning": 53385,
+    "cache_write": 0
+   },
+   "tokens_chat_dialect": {
+    "prompt_tokens": 6288253,
+    "prompt_cache_hit_tokens": 5885824,
+    "prompt_cache_miss_tokens": 402429,
+    "completion_tokens": 56477,
+    "total_tokens": 6344730,
+    "reasoning_tokens": 53385
+   },
+   "tokens_anthropic_dialect": {
+    "input_tokens": 449,
+    "cache_read_input_tokens": 6400,
+    "cache_creation_input_tokens": 0,
+    "output_tokens": 32
+   },
+   "pricing_regimes": {
+    "peak": 479
+   }
+  },
+  "conservation": {
+   "hit_plus_miss_equals_prompt_tokens": {
+    "checked": 477,
+    "violations": 0,
+    "files": []
+   },
+   "prompt_plus_completion_equals_total": {
+    "checked": 477,
+    "violations": 0,
+    "files": []
+   },
+   "cached_tokens_equals_hit": {
+    "checked": 477,
+    "violations": 0,
+    "files": []
+   },
+   "reasoning_not_greater_than_completion": {
+    "checked": 173,
+    "violations": 0,
+    "files": []
+   },
+   "aggregate_identity": "5885824 + 402429 == 6288253"
+  },
+  "runs": [
+   {
+    "run": "cacheprobe",
+    "ledger": "DS-C1",
+    "calls": 29,
+    "start_utc": "03:26:36",
+    "end_utc": "03:27:09",
+    "derived_usd": 0.006636516
+   },
+   {
+    "run": "falsify",
+    "ledger": "DS-C1",
+    "calls": 10,
+    "start_utc": "03:28:20",
+    "end_utc": "03:28:29",
+    "derived_usd": 0.002803872
+   },
+   {
+    "run": "clean",
+    "ledger": "DS-C1",
+    "calls": 10,
+    "start_utc": "03:29:23",
+    "end_utc": "03:29:32",
+    "derived_usd": 0.00414558
+   },
+   {
+    "run": "arms",
+    "ledger": "DS-OPT",
+    "calls": 72,
+    "start_utc": "03:32:04",
+    "end_utc": "03:32:43",
+    "derived_usd": 0.043330728
+   },
+   {
+    "run": "reconcile",
+    "ledger": "DS-F5",
+    "calls": 200,
+    "start_utc": "03:34:10",
+    "end_utc": "03:34:17",
+    "derived_usd": 0.039091104
+   },
+   {
+    "run": "rscope",
+    "ledger": "DS-RS (VOID)",
+    "calls": 73,
+    "start_utc": "03:41:37",
+    "end_utc": "03:41:43",
+    "derived_usd": 0.0921174
+   },
+   {
+    "run": "rscope2",
+    "ledger": "DS-RS",
+    "calls": 85,
+    "start_utc": "03:42:40",
+    "end_utc": "03:42:45",
+    "derived_usd": 0.041821632
+   }
+  ],
+  "DERIVED": {
+   "formula": "fresh/1e6*miss_rate + cache_read/1e6*hit_rate + out/1e6*out_rate, rates chosen by model and by the call's own timestamp",
+   "corpus_usd_per_file_path": 0.229946832,
+   "corpus_usd_per_run_artifact_path": 0.229946832,
+   "two_paths_agree": true,
+   "per_model_usd": {
+    "deepseek-flash": 0.22247404799999998,
+    "deepseek-v4-pro": 0.007472784000000003
+   },
+   "per_request_min_usd": 3.0299999999999998e-05,
+   "per_request_median_usd": 0.000167796,
+   "per_request_max_usd": 0.0056997,
+   "requests_at_or_above_one_cent": 0,
+   "unpriced_requests": 0,
+   "rounds_to": 0.22995
+  },
+  "evidence_gaps": [
+   {
+    "id": "B1-G1",
+    "class": "NOT_OBSERVED",
+    "gap": "reasoning_tokens absent on 306 of 479 responses; only 173 carry completion_tokens_details",
+    "impact": "reconstruct.py adds zero for the other 306, promoting NOT_OBSERVED to zero in the reasoning total; cost unaffected because reasoning is a subset of completion_tokens"
+   },
+   {
+    "id": "B1-G2",
+    "class": "OBSERVED_ZERO_vs_NOT_OBSERVED",
+    "gap": "cache_creation_input_tokens present and 0 on both anthropic responses; field absent entirely on the 477 chat responses",
+    "impact": "pricing.cost_usd has no cache-creation argument, so a non-zero cache write would be silently unpriced; it is zero here"
+   },
+   {
+    "id": "B1-G3",
+    "class": "NOT_OBSERVED",
+    "gap": "the 2 anthropic-dialect responses carry no created field",
+    "files": [
+     "res-8fc0063c.json",
+     "res-05abd72c.json"
+    ],
+    "impact": "reconstruct.py substitutes the corpus's latest timestamp; both calls are peak either way so cost is unchanged, but the substitution would misprice a run crossing 04:00 UTC"
+   },
+   {
+    "id": "B1-G4",
+    "class": "ASSUMED",
+    "gap": "pricing.is_peak does not model Chinese public holidays",
+    "impact": "if 2026-09-29 were a holiday every call is off-peak and the total halves to about $0.1150, which falls far outside the B3 observed interval"
+   }
+  ]
+ },
+ "B2": {
+  "result": "PARTIALLY_SUPPORTED",
+  "procedure": "structural check on req/res pairing, census against EXPERIMENT-LEDGER.md, and a repository search",
+  "OBSERVED": {
+   "req_stems": 479,
+   "res_stems": 479,
+   "stem_sets_identical": true,
+   "orphans": 0,
+   "responses_failing_to_parse": 0,
+   "transport_max_retries": 0,
+   "artifact_error_counts_all_zero": true,
+   "artifact_refused_counts_all_zero": true
+  },
+  "structural_argument": "adapter.Adapter._post writes req-<id>.json before dispatch and passes curl -o res-<id>.json, so a dispatched call that lost its response leaves an orphan request stem; zero orphans exist, so the harness path is complete",
+  "ledger_census": {
+   "DS-C1": {
+    "ledger_n": 49,
+    "saved": 49
+   },
+   "DS-F2b": {
+    "ledger_n": 5,
+    "saved": 0,
+    "class": "NOT_OBSERVED"
+   },
+   "DS-OPT": {
+    "ledger_n": 72,
+    "saved": 72
+   },
+   "DS-F5": {
+    "ledger_n": 200,
+    "saved": 200
+   },
+   "DS-RS": {
+    "ledger_n": 84,
+    "saved": 85
+   },
+   "DS-RS_void_first_run": {
+    "ledger_n": null,
+    "saved": 73,
+    "note": "real spend, deliberately absent from the ledger n column"
+   },
+   "total_saved": 479,
+   "total_unsaved": 5,
+   "total_known_calls": 484
+  },
+  "unsaved_calls": {
+   "count": 5,
+   "experiment": "DS-F2b",
+   "reason_unsaved": "issued by raw curl without -o, so no file was written",
+   "recoverable": false,
+   "transcribed_source": "experiment/deepseek/optimization-arms-2026-09-29.md",
+   "transcribed_output_tokens": [
+    {
+     "body": "control, no parameter",
+     "out": 40,
+     "reasoning": 40
+    },
+    {
+     "body": "reasoning_effort: none",
+     "out": 1,
+     "reasoning": null
+    },
+    {
+     "body": "thinking: {type: disabled}",
+     "out": 1,
+     "reasoning": null
+    },
+    {
+     "body": "reasoning_effort: minimal",
+     "out": 32,
+     "reasoning": 30
+    },
+    {
+     "body": "enable_thinking: false",
+     "out": 15,
+     "reasoning": 13
+    }
+   ],
+   "input_tokens": "NOT_OBSERVED",
+   "output_tokens_total": 89,
+   "output_side_floor_usd": 0.0001068,
+   "output_side_floor_formula": "89 / 1e6 * 1.20"
+  },
+  "lower_bounds": {
+   "rate_table_path_usd": 0.23005363199999998,
+   "rate_table_path_formula": "0.229946832 + 0.0001068",
+   "balance_path_usd_strictly_greater_than": 0.22,
+   "balance_path_note": "needs no rate table; from the B3 resolution interval"
+  },
+  "upper_bound": {
+   "derivable_from_saved_evidence": false,
+   "would_require": [
+    "the raw response bodies of the 5 DS-F2b calls, which were never written and cannot be recovered by reading",
+    "a provider-side per-request usage or billing record; the surface map enumerated eight endpoints and found none, and /user/balance returns an account total with no line items",
+    "acceptance of stated premises: if the rate table is exact and no non-campaign spend touched the account, the B3 interval puts the 5 unsaved calls strictly below 0.2400 - 0.229947 = 0.010053 USD"
+   ],
+   "conditional_bound_on_unsaved_usd": 0.010053168
+  }
+ },
+ "B3": {
+  "result": "CONFIRMED_AS_INTERVAL",
+  "field_format": {
+   "endpoint": "/user/balance",
+   "field": "balance_infos[0].total_balance",
+   "json_type": "string",
+   "decimal_places": 2,
+   "class": "OBSERVED",
+   "raw_bodies_on_disk": 7,
+   "raw_body_paths": [
+    "ds/bal.json",
+    "ds/bal0.json",
+    "ds/bal2.json",
+    "ds/bal3.json",
+    "ds/b.json",
+    "ds/b2.json",
+    "ds/audit.json"
+   ],
+   "granted_balance_all_zero": true,
+   "topped_up_equals_total_in_all_seven": true,
+   "note": "reconcile.py casts through float(), so numeric artifacts are not evidence of the wire format"
+  },
+  "display_semantics": {
+   "rounding_or_truncation": "NOT_OBSERVED",
+   "why_it_does_not_matter": "for a difference of two readings each error spans a half-open interval of width q in either semantics, so the difference interval is (D-q, D+q) either way"
+  },
+  "OBSERVED_balances": [
+   {
+    "usd": 46.01,
+    "when": "session start",
+    "provenance": "task brief",
+    "raw_body_on_disk": false
+   },
+   {
+    "usd": 46.0,
+    "when": "~2026-09-29T03:34:08Z, before DS-F5",
+    "provenance": "probe/reconcile.json",
+    "raw_body_on_disk": false
+   },
+   {
+    "usd": 45.96,
+    "when": "90s after DS-F5",
+    "provenance": "probe/reconcile.json",
+    "raw_body_on_disk": false
+   },
+   {
+    "usd": 45.83,
+    "when": "untimed",
+    "provenance": "task brief",
+    "raw_body_on_disk": false
+   },
+   {
+    "usd": 45.78,
+    "when": "2026-09-29T05:13:53Z",
+    "provenance": "task brief",
+    "raw_body_on_disk": false
+   }
+  ],
+  "balance_poll": {
+   "path": "probe/balance_poll.jsonl",
+   "rows_present": 5,
+   "rows": [
+    {
+     "t_utc": "2026-09-29T05:15:35+00:00",
+     "balance": 45.78,
+     "poll": 0
+    },
+    {
+     "t_utc": "2026-09-29T05:17:35+00:00",
+     "balance": 45.78,
+     "poll": 1
+    },
+    {
+     "t_utc": "2026-09-29T05:19:36+00:00",
+     "balance": 45.78,
+     "poll": 2
+    },
+    {
+     "t_utc": "2026-09-29T05:21:36+00:00",
+     "balance": 45.78,
+     "poll": 3
+    },
+    {
+     "t_utc": "2026-09-29T05:23:37+00:00",
+     "balance": 45.78,
+     "poll": 4
+    }
+   ],
+   "cadence_s": 120,
+   "span_utc": [
+    "2026-09-29T05:15:35+00:00",
+    "2026-09-29T05:23:37+00:00"
+   ],
+   "all_rows_equal": true,
+   "incomplete": true,
+   "incompleteness_note": "5 rows over 8 minutes; the poller was still running when this track read the file; the file records a parsed float and not the raw body"
+  },
+  "DERIVED": {
+   "quantum_usd": 0.01,
+   "observed_difference_usd": 0.23,
+   "resolution_interval_usd": [
+    0.22,
+    0.24
+   ],
+   "interval_is_open": true,
+   "interval_width_usd": 0.02,
+   "derivation": "T0 in [B0-e, B0-e+q), T1 in [B1-e, B1-e+q) for the same offset e under either semantics, so T0-T1 in (D-q, D+q)",
+   "corpus_derived_usd": 0.229946832,
+   "lower_bound_including_unsaved_usd": 0.23005363199999998,
+   "lower_bound_inside_interval": true,
+   "point_ratio_observed_over_derived": 1.00023,
+   "point_ratio_is_not_the_claim": true,
+   "headroom_usd": 0.010053168
+  },
+  "correction_to_reconstruct_py": {
+   "function": "reconstruct.within_resolution",
+   "constant": "HALF_CENT_NANO = 5_000_000",
+   "current": "[obs - 0.005, obs + 0.005)",
+   "correct": "(obs - 0.01, obs + 0.01), open at both ends",
+   "correct_constant": "10_000_000 nano-USD",
+   "defect": "applies a single reading's resolution to a difference of two readings, understating the interval by a factor of two, in the direction that flatters the reconciliation",
+   "unrelated_fix_noted": "another track rewrote this function during this run to compare in integer nano-USD, fixing a float boundary defect; that fix is correct and does not address the width"
+  },
+  "settlement": {
+   "prior_ledger_status": "OPEN at a factor of 1.9",
+   "prior_comparison": {
+    "observed_usd": 0.05,
+    "derived_usd": 0.096008,
+    "ratio": 1.92,
+    "note": "reproduced exactly: cumulative derived at the $45.96 reading is 0.096008 and 46.01-45.96 = 0.05"
+   },
+   "outstanding_at_46_00_reading_usd": 0.046917,
+   "now": "closed; 99 minutes after the last call the balance gives 0.23 observed against 0.229947 derived",
+   "mechanism": "settlement lag, not per-request cent truncation",
+   "effect_on_DS_F5": "strengthened at session level and weakened in isolation; the $0.04 fall across the DS-F5 window cannot be attributed cleanly to that batch given ~$0.047 outstanding, but pricing the 3,744,384 cache reads at the miss rate would push the corpus to about $1.33, two orders of magnitude outside the observed interval"
+  },
+  "evidence_gaps": [
+   {
+    "id": "B3-G1",
+    "class": "NOT_OBSERVED",
+    "gap": "the $46.01 session-start reading has no raw body on disk",
+    "impact": "anchoring on the artifact-backed $46.00 instead gives (0.2100, 0.2300) and the lower bound 0.230054 falls just outside; $46.00 is not a valid anchor because it postdates $0.056917 of spend, but the margin is thin enough that the missing body matters"
+   },
+   {
+    "id": "B3-G2",
+    "class": "NOT_OBSERVED",
+    "gap": "the $45.83 reading is untimed"
+   },
+   {
+    "id": "B3-G3",
+    "class": "ASSUMED",
+    "gap": "sole occupancy of the account in the window"
+   },
+   {
+    "id": "B3-G4",
+    "class": "ASSUMED",
+    "gap": "settlement completeness; evidenced by 5 identical reads over 8 minutes 91 minutes after the last call, not proven"
+   }
+  ]
+ },
+ "B6": {
+  "result": "REFUTED",
+  "additional_spend_required": false,
+  "hypothesis": "billed(request) = floor(100 * true_cost) / 100, so sub-cent calls bill as zero",
+  "OBSERVED": {
+   "requests": 479,
+   "dearest_request_derived_usd": 0.0056997,
+   "requests_at_or_above_one_cent": 0,
+   "balance_start_usd": 46.01,
+   "balance_end_usd": 45.78,
+   "balance_stable_across_polls": true
+  },
+  "arithmetic": {
+   "hardest_case": "floor(100 * 0.0056997) / 100 = floor(0.56997) / 100 = 0",
+   "predicted_session_total_under_hypothesis_usd": 0.0,
+   "observed_fall_usd": 0.23,
+   "observed_fall_strictly_greater_than_usd": 0.22,
+   "comparison": "0.22 > 0.00, so the prediction fails by the entire session"
+  },
+  "unsaved_calls_cannot_rescue": {
+   "tokens_needed_for_one_flash_call_to_reach_one_cent": 33333,
+   "actual_output_tokens_of_those_calls": [
+    40,
+    1,
+    1,
+    32,
+    15
+   ],
+   "residual_if_one_call_billed_a_cent_usd": 0.22
+  },
+  "not_tested_by_this_evidence": "truncation or rounding at a coarser granularity, for example per settlement batch or per billing period; distinguishing those needs a session whose derived total sits near a half-cent boundary with bracketing balance reads and confirmed settlement, repeated",
+  "robustness": {
+   "per_request_costs_are": "DERIVED, not billed amounts",
+   "no_per_request_charge_endpoint_exists": true,
+   "dearest_request_understatement_factor_to_reach_a_cent": 1.75,
+   "median_request_understatement_factor_to_reach_a_cent": 59.6
+  }
+ },
+ "summary": {
+  "B1": "CONFIRMED",
+  "B2": "PARTIALLY_SUPPORTED",
+  "B3": "CONFIRMED_AS_INTERVAL",
+  "B6": "REFUTED",
+  "corpus_derived_usd": 0.229946832,
+  "lower_bound_total_spend_usd": 0.23005363199999998,
+  "reconciliation_interval_usd": [
+   0.22,
+   0.24
+  ],
+  "upper_bound": "NOT_OBSERVED"
+ },
+ "proposed_corrections": [
+  {
+   "target": "experiment/harness/reconstruct.py",
+   "function": "within_resolution",
+   "defect": "HALF_CENT_NANO = 5_000_000 gives [obs-0.005, obs+0.005) for a difference of two cent-resolution readings; correct is the open (obs-0.01, obs+0.01) from a full-cent constant"
+  },
+  {
+   "target": "experiment/harness/reconstruct.py",
+   "defect": "sums reasoning tokens as zero for the 306 responses that do not report them, promoting NOT_OBSERVED to zero"
+  },
+  {
+   "target": "experiment/harness/reconstruct.py",
+   "defect": "substitutes the corpus's latest timestamp for responses with no created field, a silent promotion that would misprice a run crossing a regime boundary"
+  },
+  {
+   "target": "experiment/harness/pricing.py",
+   "defect": "cost_usd has no cache-creation argument, so that priced quantity cannot be expressed; it is zero in this corpus"
+  },
+  {
+   "target": "EXPERIMENT-LEDGER.md",
+   "defect": "records the session-level reconciliation as OPEN at a factor of 1.9; it is closed at the B3 interval and the mechanism was settlement lag"
+  },
+  {
+   "target": "balance read path",
+   "defect": "balance reads do not persist the raw response body; the session-start $46.01 reading survives only as a transcribed number"
+  }
+ ],
+ "concurrency_note": "this worktree was shared with other tracks during the run; experiment/harness/{adapter,meter,reconstruct,session}.py were modified by another track while Track B was reading them, and experiment/harness/track_b_audit.py was committed by another track's git add"
+}

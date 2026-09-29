@@ -91,6 +91,19 @@ class Run:
             return self._row(qid, task_class, Outcome.ERROR, m=m, note=note,
                              error=f"HTTP {m.get('status')}")
 
+        # A 200 whose usage block never arrived is a billed call with no
+        # accounting. Before this guard it was banked as ANSWERED, priced at
+        # $0.00 by pricing.cost_usd (which returns None on a NOT_MEASURED input,
+        # which the meter coerces to zero), and settled against the ceiling as
+        # nothing. The run then reported a total missing a call it had paid for.
+        # The reservation is HELD, not released: the provider answered, so the
+        # money is gone, and under-running is the safe error for scarce capital.
+        if m.get("out") is None:
+            return self._row(qid, task_class, Outcome.ERROR, m=m, note=note,
+                             error="UNACCOUNTED: HTTP 200 with no usage block. "
+                                   "The call was billed and cannot be priced; "
+                                   "its cost is NOT_OBSERVED, never zero.")
+
         # The undocumented parameter did what it did when we measured it, or
         # every cost figure downstream of here is wrong.
         policy.check_reasoning_honoured(m, kw)

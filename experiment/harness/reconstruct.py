@@ -99,6 +99,31 @@ def reconstruct(paths):
             "by_dialect": dict(collections.Counter(r["dialect"] for r in recs))}
 
 
+# The balance endpoint reports cents, so an observed delta of $X means true
+# spend lies in [X - 0.005, X + 0.005). NANO is integer nano-USD: the interval
+# is a THRESHOLD COMPARISON on money, and money is not float arithmetic.
+#
+# Built with floats it was wrong on its own boundary. At an observed $0.05,
+# `0.05 - 0.005` evaluates to 0.045000000000000005, which is ABOVE the bound it
+# represents, so a derived total landing exactly on the inclusive lower bound
+# was reported OUTSIDE its own interval -- a reconciliation reading as failed
+# when it passed.
+NANO = 1_000_000_000
+HALF_CENT_NANO = 5_000_000
+
+
+def within_resolution(observed_usd, derived_usd):
+    """Is the DERIVED total inside what the OBSERVED balance can distinguish?
+
+    Returns (inside, lo_usd, hi_usd). The comparison is exact; the two bounds
+    are floats because they are only ever printed.
+    """
+    obs = int(round(observed_usd * NANO))
+    der = int(round(derived_usd * NANO))
+    lo, hi = obs - HALF_CENT_NANO, obs + HALF_CENT_NANO
+    return lo <= der < hi, lo / NANO, hi / NANO
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", required=True, help="directory of saved res-*.json")
@@ -141,12 +166,10 @@ def main():
         print("== RECONCILIATION ==")
         print(f"   OBSERVED balance delta         ${obs:.2f}")
         print(f"   DERIVED from responses         ${r['derived_usd']:.5f}")
-        # The balance endpoint reports cents, so an observed delta of $X means
-        # true spend lies in [X-0.005, X+0.005). Quoting a ratio without that
-        # interval implies a precision the instrument does not have.
-        lo, hi = obs - 0.005, obs + 0.005
+        # Quoting a ratio without this interval implies a precision the
+        # instrument does not have. See within_resolution above.
+        inside, lo, hi = within_resolution(obs, r["derived_usd"])
         print(f"   OBSERVED resolution interval   [${lo:.3f}, ${hi:.3f})")
-        inside = lo <= r["derived_usd"] < hi
         print(f"   DERIVED lies inside it         {inside}")
         if r["derived_usd"]:
             print(f"   ratio observed/derived         {obs / r['derived_usd']:.4f}"

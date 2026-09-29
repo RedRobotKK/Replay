@@ -29,6 +29,9 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
 | DS-DOC | 2026-09-29 | What did the documentation already say? | 0 | Pricing confirmed exact; 128-token block is genuinely undocumented; `reasoning_effort:"none"` is **undocumented** and fragile; concurrency limit is published | n/a, zero cost | `deepseek/docs-reconciliation-2026-09-29.md` |
 | DS-WF | 2026-09-29 | Put the levers in the development workflow | 0 calls | `policy.py` + 18 tests, 8 mutations all killed; 43 harness tests wired into `make ci` and CI; `make ci` green end to end | n/a, zero cost | `docs/DEEPSEEK-OPTIMIZATION.md` |
 | DS-RW | 2026-09-29 | Route every spending experiment through one enforced path | 0 calls | `session.Run`; 19 tests, 10 mutations all killed; architecture guard verified to catch a bypassing script | n/a, zero cost | `docs/DEEPSEEK-OPTIMIZATION.md` |
+| DS-B1 | 2026-09-29 | Reconstruct the corpus from saved responses alone | 0 calls | 479/479 responses, 4 conservation identities, 0 violations; $0.229946832 by two independent paths agreeing to 9 decimals | **CONFIRMED** | `deepseek-suite/results/track-b.md` |
+| DS-B2 | 2026-09-29 | Account for calls whose response was not saved | 0 calls | 5 raw-curl probe calls NOT_OBSERVED; lower bound $0.23005 | PARTIALLY SUPPORTED | same |
+| DS-B6 | 2026-09-29 | Does per-request cent truncation explain the gap? | 0 calls | **REFUTED.** Max per-request cost $0.0056997, 0 of 479 reach $0.01; truncation predicts a $0.00 session total against an observed $0.23 fall | **REFUTED, no spend required** | same |
 
 ## Killed or corrected
 
@@ -100,3 +103,20 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
   ceiling, `ThreadPoolExecutor.map`. It now raises with a pointer instead of
   being deleted, because the failure mode is a future session finding a
   plausible-looking runner and using it. DS-RW.
+
+- **Session-level cost reconciliation: CLOSED, was OPEN at a factor of 1.9.**
+  The mechanism is settlement lag, not cent truncation. The 1.9 was reproduced
+  exactly (cumulative derived $0.096008 against $0.05 observed at the $45.96
+  read) and collapses to 1.0002 once settlement completes. Roughly $0.047 was
+  outstanding at the $46.00 read, which is lag directly observed rather than
+  inferred. DS-B1, DS-B6.
+- **DS-F5 is WEAKENED, not withdrawn.** Given a settlement lag of that size, the
+  $0.04 fall across the DS-F5 window cannot be cleanly attributed to that batch,
+  so its 1.023 ratio reads tighter than the evidence supports. The session-level
+  reconstruction supersedes it and is stronger: 479 responses against a single
+  balance delta, rather than one batch against a contaminated window.
+- **My reconciliation interval was half its true width.** A difference of two
+  cent-resolution readings carries two independent errors, so the band is
+  $0.02 and not $0.01. Recorded in
+  `deepseek-suite/results/DEFECT-interval-width.md`; the fix is deferred only to
+  avoid clobbering a concurrently running agent.

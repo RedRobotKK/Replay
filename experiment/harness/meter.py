@@ -90,7 +90,11 @@ class Meter:
                 f"  output             {self.out:,}"
                 + (f"  of which reasoning {self.reasoning:,}" if self.reasoning else ""),
                 f"  DERIVED cost       {_fmt_usd(self.derived_usd)}  "
-                f"({100 * self.derived_usd / self.ceiling:.1f}% of ${self.ceiling:.2f} ceiling)",
+                # record() already guards this division; summary() did not, and a
+                # run constructed with a zero ceiling is exactly the run whose
+                # summary matters most -- it refused every call.
+                f"({100 * self.derived_usd / self.ceiling if self.ceiling else 0:.1f}% "
+                f"of ${self.ceiling:.2f} ceiling)",
                 f"  pricing regime     {'PEAK' if pricing.is_peak(dt.datetime.now(dt.timezone.utc)) else 'OFF-PEAK'}"
                 f"  (table {pricing.TABLE_DATE})",
                 f"  wall               {el:.1f}s",

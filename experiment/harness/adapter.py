@@ -58,6 +58,29 @@ class Truncated(Exception):
             f"out={measurement.get('out')} tokens. Not a deliverable. Raw: {raw_path}")
 
 
+class ArtifactMissing(Exception):
+    """The provider was called and no response artifact reached the disk.
+
+    Raised instead of proceeding with an empty document. Proceeding is what the
+    code did before, and it is silent in the worst possible way: every usage
+    field stays None, pricing returns None, the meter records $0.00 and the
+    budget settles a real billed call at nothing. The run then reports a spend
+    that is missing a call nobody can audit, because its evidence was never
+    written.
+
+    A response body that IS on disk but does not parse is NOT this error. That
+    is evidence -- kept, classifiable, and re-readable later.
+    """
+
+    def __init__(self, path, status):
+        self.path, self.status = path, status
+        super().__init__(
+            f"no response artifact at {path} (HTTP {status}). The provider may "
+            f"have billed this call and there is nothing on disk to reconstruct "
+            f"it from. A billed call without an artifact is NOT_OBSERVED, and a "
+            f"run must not bank it as zero.")
+
+
 class Adapter:
     """One endpoint of one provider."""
     name = "abstract"
@@ -77,11 +100,16 @@ class Adapter:
              "-o", o, "-w", "%{http_code}"],
             capture_output=True, text=True)
         wall = (time.time() - t0) * 1000
+        status = int(r.stdout.strip() or 0)
+        # Persistence is checked, not assumed. The request artifact was written
+        # above; this is the other half, and without it the call is unauditable.
+        if not os.path.exists(o) or os.path.getsize(o) == 0:
+            raise ArtifactMissing(o, status)
         try:
             doc = json.load(open(o))
         except Exception:
-            doc = {}
-        return doc, int(r.stdout.strip() or 0), wall, o
+            doc = {}          # on disk but unparseable: still evidence, kept
+        return doc, status, wall, o
 
 
 class DeepSeekAnthropic(Adapter):
