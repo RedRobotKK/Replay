@@ -131,6 +131,9 @@ func (c Calibration) Validate() error {
 		return fmt.Errorf("NOT MEASURED: the report has no model rows, so there is nothing " +
 			"in it to pool")
 	}
+	if err := ValidBasis(c.TagBasis); err != nil {
+		return err
+	}
 	compared := 0
 	for _, m := range c.Models {
 		if m.Model == "" {

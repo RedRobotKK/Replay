@@ -37,7 +37,7 @@ func base() Corpus {
 		PricedAt:      "2026-09-07",
 		RulesVersion:  "anthropic-2026-09-01",
 		SourceTag:     "launch-2026-09",
-		TagBasis:      "operator",
+		TagBasis:      BasisLocal,
 	}
 }
 

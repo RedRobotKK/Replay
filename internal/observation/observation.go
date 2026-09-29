@@ -54,6 +54,36 @@ const (
 	BasisLocal = "local"
 )
 
+// ValidBasis reports whether a tag basis is one of the two the aggregator
+// knows how to weight.
+//
+// THE ENUMERATION IS CLOSED AND THE REASON IS NOT TIDINESS. pool.go:344 reads
+// this field to choose between two published sentences: a tag derived from a
+// provider account supports "N submissions from N distinct provider accounts",
+// and a machine-local one supports only "a count of MACHINES AT MOST ...
+// anyone can mint unlimited ones". So an unvalidated basis does not merely sit
+// in a roster row looking untidy, it selects what the public document claims
+// its own numbers mean.
+//
+// This check lived inline in Build and covered the observation payload only.
+// Corpus and Calibration carry the same field, are published the same way, and
+// checked only that it was non-empty, so a submission whose basis read
+// "not-a-basis-at-all" validated and reached the roster verbatim. Three
+// artifacts carry the field; now one rule covers all three.
+//
+// WHAT THIS DOES NOT ESTABLISH. "account" is a legitimate value, so a
+// contributor who edits "local" to "account" passes this check and still
+// upgrades the published claim. Nothing in the payload records how a tag was
+// derived, so the pool is trusting a self-declaration. TestTB4 pins that
+// residual defect so a later fix has to come and change it deliberately.
+func ValidBasis(basis string) error {
+	if basis == BasisAccount || basis == BasisLocal {
+		return nil
+	}
+	return fmt.Errorf("unrecognised tag basis %q; the aggregator weights %q and %q differently and must not guess",
+		basis, BasisAccount, BasisLocal)
+}
+
 // Observation is the complete set of fields that may leave this machine.
 //
 // Everything here is a number, an enumerated string, or a keyed digest.
@@ -154,9 +184,8 @@ func Build(campaign string, d consent.Decision, tag Tag, r probe.Reading) (Obser
 	if tag.Value == "" {
 		return Observation{}, errors.New("a contributor tag is required; an empty one merges every contributor into a single row")
 	}
-	if tag.Basis != BasisAccount && tag.Basis != BasisLocal {
-		return Observation{}, fmt.Errorf("unrecognised tag basis %q; the aggregator weights %q and %q differently and must not guess",
-			tag.Basis, BasisAccount, BasisLocal)
+	if err := ValidBasis(tag.Basis); err != nil {
+		return Observation{}, err
 	}
 	taken, err := truncateToHour(r.TakenAt)
 	if err != nil {

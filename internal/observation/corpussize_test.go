@@ -48,7 +48,7 @@ func full() Corpus {
 		ReReads:       &rereads,
 		ErrorShare:    &errShare,
 		SourceTag:     "c98cd7ce9c61ba2e",
-		TagBasis:      "operator",
+		TagBasis:      BasisLocal,
 		BinaryVersion: "v0.6.0-rc.1",
 		Commit:        "87a9b2ad",
 		PricingDigest: "p02eb9163145c",
@@ -111,7 +111,7 @@ func TestCS3_TheSmallestSubmissionIsStillValid(t *testing.T) {
 		Schema: CorpusSchema, TakenAt: "2026-09-12T00:00:00Z",
 		Tasks: 1, TotalUSD: 1, MedianTaskUSD: 1,
 		PricedAt: "2026-09-07", RulesVersion: "anthropic-2026-09-01",
-		SourceTag: "a", TagBasis: "operator",
+		SourceTag: "a", TagBasis: BasisLocal,
 	}.Digested()
 	if err := smallest.Validate(); err != nil {
 		t.Fatalf("the minimum submission does not validate: %v", err)

@@ -177,7 +177,7 @@ func TestCS5_ContributionRefusesMoreExactThanMatched(t *testing.T) {
 		Schema:       observation.CalibrationSchema,
 		RulesVersion: "test",
 		SourceTag:    "tag",
-		TagBasis:     "basis",
+		TagBasis:     observation.BasisLocal,
 		Models: []observation.ModelCalibrationRow{
 			{Model: "m", Sessions: 1, Compared: 10, Matched: 8, Exact: 9},
 		},
@@ -201,7 +201,7 @@ func TestCS6_AWellFormedContributionStillPools(t *testing.T) {
 		Schema:       observation.CalibrationSchema,
 		RulesVersion: "test",
 		SourceTag:    "tag",
-		TagBasis:     "basis",
+		TagBasis:     observation.BasisLocal,
 		Models: []observation.ModelCalibrationRow{
 			{Model: "m", Sessions: 1, Compared: 10, Matched: 9, Exact: 8},
 		},

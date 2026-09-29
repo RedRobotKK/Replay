@@ -60,7 +60,7 @@ func TestCC1_TheFiveFiguresTravelWithTheirBasis(t *testing.T) {
 		Tasks: 115, TotalUSD: 3382.13, RebilledUSD: 161.66,
 		RebilledShare: 0.0478, MedianTaskUSD: 0.77,
 		PricedAt: "2026-09-07", RulesVersion: "anthropic-2026-09-01",
-		Unpriced: 6, SourceTag: "abc", TagBasis: "random",
+		Unpriced: 6, SourceTag: "abc", TagBasis: BasisLocal,
 	}
 	b, err := json.Marshal(c)
 	if err != nil {
@@ -120,7 +120,7 @@ func TestCC3_AnEmptyCorpusIsNotAContribution(t *testing.T) {
 	// Valid in everything but the field each case names.
 	base := Corpus{
 		Schema: CorpusSchema, Tasks: 115, TotalUSD: 3382.13,
-		PricedAt: "2026-09-07", RulesVersion: "anthropic-2026-09-01", SourceTag: "a", TagBasis: "b",
+		PricedAt: "2026-09-07", RulesVersion: "anthropic-2026-09-01", SourceTag: "a", TagBasis: BasisLocal,
 	}
 
 	noTasks := base
@@ -214,7 +214,7 @@ func TestCROLD_APreRenameSubmissionIsRefusedRatherThanReadAsZero(t *testing.T) {
 		Schema: CorpusSchema, TakenAt: "2026-09-13T00:00:00Z", Tasks: 121,
 		TotalUSD: 12630.61, RebilledUSD: 347.53, RebilledShare: 0.0275,
 		MedianTaskUSD: 1.2, PricedAt: "2026-09-13", RulesVersion: "anthropic-2026-09-01",
-		SourceTag: "abc", TagBasis: "machine",
+		SourceTag: "abc", TagBasis: BasisLocal,
 	}.Digested())
 	if err != nil {
 		t.Fatal(err)
@@ -293,7 +293,7 @@ func TestCRV2_TheSchemaStringMovedAndIsChecked(t *testing.T) {
 		Schema: CorpusSchema, TakenAt: "2026-09-13T00:00:00Z", Tasks: 121,
 		TotalUSD: 12630.61, RebilledUSD: 347.53, RebilledShare: 0.0275,
 		MedianTaskUSD: 1.2, PricedAt: "2026-09-13", RulesVersion: "anthropic-2026-09-01",
-		SourceTag: "abc", TagBasis: "machine",
+		SourceTag: "abc", TagBasis: BasisLocal,
 	}.Digested()
 	if err := base.Validate(); err != nil {
 		t.Fatalf("a current submission was refused: %v", err)
@@ -353,7 +353,7 @@ func TestCRABSENT_AMissingFigureIsNotAMeasuredZero(t *testing.T) {
 		Schema: CorpusSchema, TakenAt: "2026-09-13T00:00:00Z", Tasks: 121,
 		TotalUSD: 12630.61, RebilledUSD: 0, RebilledShare: 0,
 		MedianTaskUSD: 1.2, PricedAt: "2026-09-13", RulesVersion: "anthropic-2026-09-01",
-		SourceTag: "abc", TagBasis: "machine",
+		SourceTag: "abc", TagBasis: BasisLocal,
 	}.Digested()
 	b, err := json.Marshal(zero)
 	if err != nil {

@@ -362,6 +362,11 @@ func (c Corpus) Validate() error {
 	case c.SourceTag == "" || c.TagBasis == "":
 		return fmt.Errorf("a contribution needs its source tag and the basis of that tag")
 	}
+	// The basis is an enumeration, not free text, because a pooled document
+	// reads it to decide which claim to publish about its own numbers.
+	if err := ValidBasis(c.TagBasis); err != nil {
+		return err
+	}
 	return nil
 }
 
