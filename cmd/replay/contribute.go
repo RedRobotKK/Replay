@@ -298,9 +298,44 @@ func contributeCorpus(campaign, dir string, f corpusFigures, now time.Time) (str
 
 // corpusContributionNote is what the contributor is told, and the first
 // sentence is the whole reason this path is separate from the probe's.
-func corpusContributionNote(path string, supersedes []string) string {
+// corpusContributionNoteFor reads back what was just written and renders the
+// note around it.
+//
+// It reads the FILE rather than re-rendering the struct, so that what the
+// contributor approves is the artifact on disk. A preview built by formatting
+// the value a second time would be a second implementation of the payload,
+// free to disagree with the one that gets published, and the contributor would
+// be approving one thing and publishing another.
+//
+// An unreadable file falls back to the note without the body. The file was
+// written successfully a moment ago, so this is close to unreachable, and the
+// fallback exists because failing the whole command over a preview would turn
+// a courtesy into an outage.
+func corpusContributionNoteFor(path string, supersedes []string) string {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		body = nil
+	}
+	return corpusContributionNote(path, supersedes, body)
+}
+
+func corpusContributionNote(path string, supersedes []string, body []byte) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "\nwrote %s\n", path)
+	// The artifact itself, before the sentence describing it. A promise about
+	// a file is not the file, and this is the one artifact the project asks a
+	// person to publish: the only version of that ask which respects them is
+	// one where it is on the screen when they decide. It is also the cheapest
+	// privacy control available. "No prompts" is a claim a reader has to trust.
+	// Twenty lines of JSON with no prompts in them is one they can check.
+	if len(body) > 0 {
+		b.WriteString("\n")
+		b.Write(body)
+		if !strings.HasSuffix(string(body), "\n") {
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+	}
 	b.WriteString("This one carries SPEND: the total, the re-billed total and share, the median\n" +
 		"task, the task count, and which price table produced them. No prompts, no\n" +
 		"paths, no project or session names, and no per-task rows: the five figures\n" +

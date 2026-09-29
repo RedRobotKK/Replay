@@ -848,7 +848,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		// exactly what is safe to paste, and a path under the contributor's
 		// home is the one thing on this branch that is not.
 		if contribution != "" {
-			if _, err := io.WriteString(stderr, corpusContributionNote(contribution, supersedes)); err != nil {
+			if _, err := io.WriteString(stderr, corpusContributionNoteFor(contribution, supersedes)); err != nil {
 				return err
 			}
 		}
@@ -882,7 +882,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			if len(supersedes) > 0 {
 				out["supersedes"] = supersedes
 			}
-			_, _ = io.WriteString(stderr, corpusContributionNote(contribution, supersedes))
+			_, _ = io.WriteString(stderr, corpusContributionNoteFor(contribution, supersedes))
 		}
 		if *perTask {
 			// Lanes never appear under `tasks`. A separate key, with rows whose
@@ -944,7 +944,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		}
 	}
 	if contribution != "" {
-		if _, err := io.WriteString(stdout, corpusContributionNote(contribution, supersedes)); err != nil {
+		if _, err := io.WriteString(stdout, corpusContributionNoteFor(contribution, supersedes)); err != nil {
 			return err
 		}
 	}

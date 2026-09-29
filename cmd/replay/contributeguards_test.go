@@ -176,7 +176,7 @@ func TestCGD_AnEarlierSubmissionIsNamedAndKept(t *testing.T) {
 			"contributor's files: %v", err)
 	}
 
-	note := corpusContributionNote(second, supersedes)
+	note := corpusContributionNoteFor(second, supersedes)
 	if !strings.Contains(note, "SUPERSEDES 1 earlier") || !strings.Contains(note, filepath.Base(first)) {
 		t.Errorf("the note does not name what it supersedes:\n%s", note)
 	}
@@ -184,7 +184,7 @@ func TestCGD_AnEarlierSubmissionIsNamedAndKept(t *testing.T) {
 		t.Errorf("the note does not say why sending both is wrong:\n%s", note)
 	}
 	// And with nothing superseded the section is absent, not empty.
-	if plain := corpusContributionNote(first, nil); strings.Contains(plain, "SUPERSEDES") {
+	if plain := corpusContributionNoteFor(first, nil); strings.Contains(plain, "SUPERSEDES") {
 		t.Errorf("a first submission claims to supersede something:\n%s", plain)
 	}
 }
