@@ -468,7 +468,17 @@ bounded by the regime it was measured in, and it fails safe when the evidence it
 depends on is unavailable.
 
 DeepSeek is the worked example, because it is the provider this repository has
-characterised end to end. The harness can:
+characterised end to end.
+
+**In the shipped binary**, a response's serving identity is kept rather than
+discarded: which model actually answered, the serving fingerprint, and why the
+response stopped. A response that ran out of room is recorded as truncated
+rather than counted as an answer, and a response that reported no usage at all
+is recorded as unmeasured rather than as a cache miss. A fingerprint identifies
+a serving configuration, not model weights.
+
+**In the experiment harness**, which constructs its own requests, the controls
+go further. It can:
 
 - **construct a stable shared prefix**, with the variable part last, and refuse a
   prefix whose leading bytes vary

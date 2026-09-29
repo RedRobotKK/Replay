@@ -93,9 +93,11 @@ func blockIdentity(b transcript.Block) json.RawMessage {
 
 // openAIResponse is the reply, decoded only as far as the ledger needs.
 type openAIResponse struct {
-	Model   string `json:"model"`
-	Choices []struct {
-		Message struct {
+	Model             string `json:"model"`
+	SystemFingerprint string `json:"system_fingerprint"`
+	Choices           []struct {
+		FinishReason string `json:"finish_reason"`
+		Message      struct {
 			Content string `json:"content"`
 			// Reasoning models return their thinking alongside the answer.
 			Reasoning string `json:"reasoning_content"`
@@ -121,6 +123,13 @@ func ParseOpenAIResponse(body []byte) Response {
 		return Response{}
 	}
 	var out Response
+	// Identity travels with the record or it is lost: these fields are outside
+	// the usage object that RawUsage preserves verbatim.
+	out.ModelReturned = raw.Model
+	out.ServingFingerprint = raw.SystemFingerprint
+	if len(raw.Choices) > 0 {
+		out.FinishReason = raw.Choices[0].FinishReason
+	}
 	// An empty or all-zero usage object is not a measurement of nothing, it is
 	// the absence of a measurement. Gateways emit `"usage": {}` on refusal and
 	// content-filter paths, and a zeroed record would enter every average as a

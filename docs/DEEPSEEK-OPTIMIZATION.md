@@ -26,6 +26,24 @@ scope of the experiments that exist is stated under each finding.
 
 ## Enforced controls
 
+Two layers, and they are not the same thing.
+
+### In the shipped binary (`internal/ledger`)
+
+The binary observes requests; it does not construct them. Only controls that
+survive that distinction are wired in.
+
+| control | what it enforces | test |
+| --- | --- | --- |
+| serving identity is kept | `model_returned`, `serving_fingerprint` and `finish_reason` reach the record. All three were parsed and discarded before 2026-09-29; `RawUsage` does not rescue them because they sit outside the usage object | `identity_test.go` |
+| truncation is not a wrong answer | `Response.Truncated()` reads both dialect spellings, `length` and `max_tokens`. An absent reason is NOT_OBSERVED, not truncation | `identity_test.go` |
+| absent is not zero | `Response.CacheState()` returns `unknown`, `cold` or `warm`. A response with no usage was never measured, and calling it cold asserts a measurement nobody made | `identity_test.go` |
+
+`serving_fingerprint` identifies a **serving configuration, not model weights**.
+It supports no claim about routing or which weights ran.
+
+### In the experiment harness (`experiment/harness`)
+
 What `make harness-test` guarantees, inside `make ci`.
 
 | control | what it enforces | where |

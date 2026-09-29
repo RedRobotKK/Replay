@@ -217,6 +217,13 @@ type Message struct {
 	Blocks []Block `json:"blocks"`
 }
 
+// truncatedFinishReasons are the provider vocabularies for "ran out of room".
+//
+// Two spellings because two dialects: the OpenAI-compatible family says
+// "length" and the Anthropic-compatible one says "max_tokens". An absent reason
+// is NOT_OBSERVED and is not truncation.
+var truncatedFinishReasons = map[string]bool{"length": true, "max_tokens": true}
+
 // Response is the reply reduced to structure and usage.
 type Response struct {
 	Blocks []Block `json:"blocks,omitempty"`
@@ -228,6 +235,22 @@ type Response struct {
 	// what a later calibration needs, and it can only come from a payload
 	// stored before anyone knew to ask. See internal/usage.
 	RawUsage json.RawMessage `json:"raw_usage,omitempty"`
+	// ModelReturned, ServingFingerprint and FinishReason are the provider's own
+	// account of what answered and how it stopped.
+	//
+	// They are identity and completeness, not usage, so RawUsage does not carry
+	// them: one sits at the top level of the body and one inside each choice.
+	// Both were parsed and discarded until 2026-09-29.
+	//
+	// ModelReturned is what the provider says served the request, which is not
+	// always what was asked for. ServingFingerprint identifies a SERVING
+	// CONFIGURATION, not model weights, and supports no claim about routing or
+	// which weights ran. FinishReason separates a response that finished from
+	// one that ran out of room, and those are different evidence: a truncated
+	// answer did not answer wrongly, it did not answer.
+	ModelReturned      string `json:"model_returned,omitempty"`
+	ServingFingerprint string `json:"serving_fingerprint,omitempty"`
+	FinishReason       string `json:"finish_reason,omitempty"`
 	// AppliedEdits and ClearedInputTokens report the provider's own
 	// context edits on this response: how many it applied and how many
 	// prompt tokens they removed. They are the applied policy's measured
@@ -235,6 +258,41 @@ type Response struct {
 	AppliedEdits       int `json:"applied_edits,omitempty"`
 	ClearedInputTokens int `json:"cleared_input_tokens,omitempty"`
 }
+
+// CacheState is what the provider reported about cache reuse, in three states.
+//
+// UNKNOWN is not COLD. A response carrying no usage was never measured, and
+// reporting it as a cold read asserts a measurement nobody made. The DeepSeek
+// campaign needed this distinction: a cache relation measured under one
+// dispatch regime did not hold under another, and a run that had collapsed
+// absent into zero could not tell the two apart afterwards.
+type CacheState string
+
+// The three states a cache read can be in. UNKNOWN means no usage was
+// reported, which is the absence of a measurement rather than a measurement of
+// zero.
+const (
+	CacheUnknown CacheState = "unknown"
+	CacheCold    CacheState = "cold"
+	CacheWarm    CacheState = "warm"
+)
+
+// CacheState reports the observed cache state, never an assumed one.
+func (r Response) CacheState() CacheState {
+	if r.Usage == nil {
+		return CacheUnknown
+	}
+	if r.Usage.CacheRead > 0 {
+		return CacheWarm
+	}
+	return CacheCold
+}
+
+// Truncated reports whether the provider stopped because it ran out of room.
+//
+// A truncated response is UNDECIDED evidence, not a wrong answer. Scoring one
+// as a failure attributes to the model what the output cap caused.
+func (r Response) Truncated() bool { return truncatedFinishReasons[r.FinishReason] }
 
 // CacheOutcome is the live classification of one response's cache read.
 type CacheOutcome struct {
