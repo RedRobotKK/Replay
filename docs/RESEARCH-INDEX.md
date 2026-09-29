@@ -35,7 +35,7 @@ normalises that typo. It did not.
 **What was NOT checked.** No full text was read. Peer-review status was not
 established, and a large share of these are 2026 preprints, several apparently
 single-author. Existence is not soundness. **Any number from this index that
-reaches a user-facing surface must be read in full text first** — that is the
+reaches a user-facing surface must be read in full text first** -- that is the
 FD-9 record-lag rule applied to somebody else's numbers instead of our own.
 
 ---
@@ -45,18 +45,18 @@ FD-9 record-lag rule applied to somebody else's numbers instead of our own.
 Papers are indexed by **what the finding lets this project do**, not by topic.
 Five facets, each of which can disqualify a finding on its own.
 
-### Facet A — locus of control
+### Facet A -- locus of control
 
 The first question, because it decides whether advice is honest at all.
 
 | Value | Meaning |
 |---|---|
 | `CLIENT` | The user holds the lever. Advice is actionable. |
-| `HARNESS` | The agent's author holds it — the user can see the problem and not fix it. |
+| `HARNESS` | The agent's author holds it -- the user can see the problem and not fix it. |
 | `SERVER` | The provider holds it. Naming a client-side fix here is dishonest. |
 | `NONE` | An evaluation result. Nobody holds a lever; it constrains what we may claim. |
 
-### Facet B — action class
+### Facet B -- action class
 
 Inherited from the interceptor spec, where it governs what a proxy may touch.
 
@@ -67,7 +67,7 @@ Inherited from the interceptor spec, where it governs what a proxy may touch.
 | `ADVISE` | Changes what the model sees. Report to a human; never do it silently. |
 | `INERT` | The lever exists but does nothing on this surface. |
 
-### Facet C — billing basis dependence
+### Facet C -- billing basis dependence
 
 The constraint that has killed more candidate features here than any other.
 
@@ -80,17 +80,17 @@ The constraint that has killed more candidate features here than any other.
 `BASIS-FREE` is the single most useful column in this document. Every idea that
 survived all five sweeps is denominated in something other than money.
 
-### Facet D — detectability from a transcript
+### Facet D -- detectability from a transcript
 
 | Value | Meaning |
 |---|---|
 | `TRANSCRIPT` | Computable from what Replay already reads. |
-| `PROXY` | Needs the request/response stream — a local proxy, which is a serious install. |
+| `PROXY` | Needs the request/response stream -- a local proxy, which is a serious install. |
 | `SECOND-STREAM` | Needs a source outside the transcript (a server log, a coverage profile). |
 | `LABEL` | Needs an outcome signal the transcript does not carry. |
 | `NOT-DETECTABLE` | Cannot be observed from our position at all. |
 
-### Facet E — evidence grade
+### Facet E -- evidence grade
 
 | Value | Meaning |
 |---|---|
@@ -135,38 +135,38 @@ Sorted by facet A, then by how load-bearing the finding is. `K` is the stable
 citation key; cite these, not the arXiv id, so a superseded paper can be
 swapped without breaking every reference.
 
-### 3.1 CLIENT — the lever is the user's
+### 3.1 CLIENT -- the lever is the user's
 
 | K | arXiv | Finding in one line | B | C | D | E | Tier |
 |---|---|---|---|---|---|---|---|
-| `CACHE-KEEPALIVE` | 2607.19214 | Replaying the prefix on a ~4-minute timer (not the 30s convention) cuts post-pause cost up to 12.5x; break-even ~46 min idle on Anthropic. **REFUTED FOR THIS WORKLOAD** — see §6a | ADVISE | METERED-ONLY | TRANSCRIPT | BENCHMARK | CLAIM |
+| `CACHE-KEEPALIVE` | 2607.19214 | Replaying the prefix on a ~4-minute timer (not the 30s convention) cuts post-pause cost up to 12.5x; break-even ~46 min idle on Anthropic. **REFUTED FOR THIS WORKLOAD** -- see §6a | ADVISE | METERED-ONLY | TRANSCRIPT | BENCHMARK | CLAIM |
 | `CACHE-DEADPOINT` | 2607.15516 | A breakpoint downstream of a per-request mutation can never hit; two-tier cache with a ~3,500-token threshold, hit rate plateauing ~0.83 not 1.0 | MUTATE-SAFE | BASIS-FREE | PROXY | BENCHMARK | ID |
 | `COST-NOT-TOKENS` | 2607.12161 | Compression cut tool-output tokens 38.4% and RAISED billed cost 6.8%; token/cost correlation r=0.15; cache traffic dominates input spend | MEASURE | BASIS-FREE | TRANSCRIPT | BENCHMARK | CLAIM |
-| `COMPACT-INVOICE` | 2608.16370 | Compression left completion unchanged (p=1.0) while retrieval calls went 21.0 → 63.9 (p=.002) — the agent silently reacquires | MEASURE | BASIS-FREE | TRANSCRIPT | SYNTHETIC | CLAIM |
+| `COMPACT-INVOICE` | 2608.16370 | Compression left completion unchanged (p=1.0) while retrieval calls went 21.0 → 63.9 (p=.002) -- the agent silently reacquires | MEASURE | BASIS-FREE | TRANSCRIPT | SYNTHETIC | CLAIM |
 | `WASTE-TRAJECTORY` | 2509.23586 | Trajectory reduction cut input tokens 39.9–59.7% and cost 21.1–35.9% at equal performance, on a real coding agent | MEASURE | BASIS-FREE | TRANSCRIPT | BENCHMARK | ID |
-| `SEARCH-TAX` | 2608.05886 | Agents spend the budget finding the file, not patching it — 23 rounds and 631K tokens per resolved issue | MEASURE | BASIS-FREE | TRANSCRIPT | BENCHMARK | REPORTED |
+| `SEARCH-TAX` | 2608.05886 | Agents spend the budget finding the file, not patching it -- 23 rounds and 631K tokens per resolved issue | MEASURE | BASIS-FREE | TRANSCRIPT | BENCHMARK | REPORTED |
 | `THINK-TAX` | 2608.26235 | Reasoning share often dominates spend; diminishing returns, including cases where more thinking REDUCES accuracy | MEASURE | BASIS-FREE | TRANSCRIPT | BENCHMARK | REPORTED |
 | `THINK-CONTRACT` | 2608.16956 | Explicit high effort cost +$0.0103/call with no detected accuracy gain; effort-omission semantics are model-specific and undocumented | ADVISE | METERED-ONLY | TRANSCRIPT | BENCHMARK | REPORTED |
 | `THINK-LATE` | 2604.22266 | ~760 reasoning tokens generated AFTER the answer stabilised; early stop saves ~500 for a 2% accuracy drop | ADVISE | BASIS-FREE | NOT-DETECTABLE | SYNTHETIC | REPORTED |
-| `HANDOFF-TAX` | 2608.24358 | Escalating to a stronger model mid-session recovers <half the quality gap at a cost premium — kills naive routing advice | ADVISE | METERED-ONLY | TRANSCRIPT | BENCHMARK | REPORTED |
+| `HANDOFF-TAX` | 2608.24358 | Escalating to a stronger model mid-session recovers <half the quality gap at a cost premium -- kills naive routing advice | ADVISE | METERED-ONLY | TRANSCRIPT | BENCHMARK | REPORTED |
 | `TOOLS-VS-CACHE` | 2608.22708 | Progressive tool disclosure and prompt caching are structurally opposed; every tool-list change invalidates the prefix | ADVISE | BASIS-FREE | TRANSCRIPT | SYNTHETIC | REPORTED |
 | `SELECTIVE-CACHE` | 2601.06007 | Naive full-context caching can be WORSE than selective; dynamic content belongs at the END of the system prompt | MUTATE-SAFE | BASIS-FREE | PROXY | BENCHMARK | REPORTED |
-| `SCAFFOLD-COST` | 2608.08654 | Scaffolding dominates interface; the stable finding is failure spend — 12.9% of MCP spend bought no completed work vs 2.2% CLI | MEASURE | BASIS-FREE | TRANSCRIPT | BENCHMARK | REPORTED |
+| `SCAFFOLD-COST` | 2608.08654 | Scaffolding dominates interface; the stable finding is failure spend -- 12.9% of MCP spend bought no completed work vs 2.2% CLI | MEASURE | BASIS-FREE | TRANSCRIPT | BENCHMARK | REPORTED |
 | `RESEND-DOMINATES` | 2608.24188 | Re-sent file reads and tool outputs dominate the bill; using a frontier model as compressor is net-negative | MEASURE | BASIS-FREE | TRANSCRIPT | BENCHMARK | REPORTED |
 
-### 3.2 HARNESS / SERVER — the user can see it and not fix it
+### 3.2 HARNESS / SERVER -- the user can see it and not fix it
 
 | K | arXiv | Finding | B | C | D | E | Tier |
 |---|---|---|---|---|---|---|---|
 | `TRACE-COPILOT` | 2608.00101 | Production traces, 3.2M users: cache hit 90% within a turn, **55% across turn boundaries**, "drastically invalidated" by model switches and compaction | MEASURE | BASIS-FREE | TRANSCRIPT | PRODUCTION | CLAIM |
 | `TRACE-LAB` | 2606.30560 | ~4,300 real Claude Code and Codex sessions, ~350k steps, publicly released; "high but imperfect prefix cache hit rates" | MEASURE | BASIS-FREE | TRANSCRIPT | PRODUCTION | ID |
-| `SERVER-OWNS` | 2605.27744 | Formal argument that cache and context policy belong to a runtime layer between harness and engine — the Grok case, generalised | INERT | BASIS-FREE | NOT-DETECTABLE | BENCHMARK | REPORTED |
+| `SERVER-OWNS` | 2605.27744 | Formal argument that cache and context policy belong to a runtime layer between harness and engine -- the Grok case, generalised | INERT | BASIS-FREE | NOT-DETECTABLE | BENCHMARK | REPORTED |
 | `TOKENIZE-TTFT` | 2607.29678 | Agents resubmit a long transcript after a ~1.4K-char append; as hit rate nears 0.99, tokenization grows to 64% of TTFT | MEASURE | LOCAL | TRANSCRIPT | PRODUCTION | REPORTED |
 | `LOOPS-REAL` | 2607.01641 | 6,549 agent repositories scanned; 68 confirmed infinite-loop failures across 47 projects at 91.9% precision | MEASURE | BASIS-FREE | TRANSCRIPT | FIELD | REPORTED |
 | `RATIONED` | 2608.23986 | Under congestion providers route down and truncate; a degraded answer returns as a retry. **The flat seat is the class rationed first.** | INERT | BASIS-FREE | NOT-DETECTABLE | ANALYTIC | REPORTED |
 | `CACHE-DIVERGE` | 2609.04748 | With everything else fixed, enabling prefix caching changed agent trajectory on 36.2% of episodes at 16-bit, 75.0% at 4-bit; 0/800 with cache off | MEASURE | LOCAL | SECOND-STREAM | BENCHMARK | REPORTED |
 
-### 3.3 NONE — constrains what we may claim
+### 3.3 NONE -- constrains what we may claim
 
 | K | arXiv | Finding | Why it is here |
 |---|---|---|---|
@@ -174,17 +174,17 @@ swapped without breaking every reference.
 | `AGENTS-MATTER` | 2407.01502 | Accuracy-only leaderboards produce needlessly costly agents; cost-accuracy is a joint frontier | The canonical citation for why a cost tool matters. Cite, don't build. |
 | `MAST` | 2503.13657 | 14 failure modes, 1600+ annotated real traces, κ=0.88 | A taxonomy label is not a dollar. Nobody pays for one. |
 
-### 3.4 TEST ADEQUACY — the second product line
+### 3.4 TEST ADEQUACY -- the second product line
 
 | K | arXiv | Finding | D | E | Tier |
 |---|---|---|---|---|---|
-| `ORACLE-SMOKE` | 2606.18168 | **80.2% of agent-authored test patches carry weak or no oracle signal** — 86,156 patches, 33,596 PRs, 2,807 repos, five agents | TRANSCRIPT | FIELD | CLAIM |
+| `ORACLE-SMOKE` | 2606.18168 | **80.2% of agent-authored test patches carry weak or no oracle signal** -- 86,156 patches, 33,596 PRs, 2,807 repos, five agents | TRANSCRIPT | FIELD | CLAIM |
 | `MUTATE-META` | 2010.13464 | Mutation plus instrumentation measuring which tests visited the mutated code. **>half of 15,000 mutants survived a rigorous suite.** | SECOND-STREAM | PRODUCTION | ID |
 | `MUTATE-GOOGLE` | 2102.11378 | Surviving 24,000 developers needed arid-node suppression, per-line caps, and operator selection by historical action | SECOND-STREAM | PRODUCTION | REPORTED |
-| `CRITIC-LOOP` | 2607.23002 | Tester writes, mutation names survivors, Critic kills them — every verdict mechanical, no model judges another's output | SECOND-STREAM | BENCHMARK | REPORTED |
-| `COVERAGE-LIES` | 2607.22880 | Coverage and mutation score carry signal in a regression setting and stop being reliable when the code under test may already be buggy | — | BENCHMARK | REPORTED |
+| `CRITIC-LOOP` | 2607.23002 | Tester writes, mutation names survivors, Critic kills them -- every verdict mechanical, no model judges another's output | SECOND-STREAM | BENCHMARK | REPORTED |
+| `COVERAGE-LIES` | 2607.22880 | Coverage and mutation score carry signal in a regression setting and stop being reliable when the code under test may already be buggy | -- | BENCHMARK | REPORTED |
 | `ORACLE-FIELDS` | 2510.03071 | Proportion of an object's fields an oracle can reach, computed statically; 249,027 assertions | SECOND-STREAM | BENCHMARK | REPORTED |
-| `CRITERIA-WEAK` | 2609.09315 | Mutation only marginally beats coverage at finding LLM-code bugs, because the oracles fail | — | BENCHMARK | REPORTED |
+| `CRITERIA-WEAK` | 2609.09315 | Mutation only marginally beats coverage at finding LLM-code bugs, because the oracles fail | -- | BENCHMARK | REPORTED |
 
 ---
 
@@ -201,12 +201,12 @@ Look up a field, get everything the literature says you can do with it.
 | `reasoning_output_tokens` | `THINK-TAX`, `THINK-CONTRACT`, `THINK-LATE` |
 | repeated tool-call arg hash | `WASTE-TRAJECTORY`, `LOOPS-REAL` |
 | first Edit/Write index | `SEARCH-TAX` |
-| provider request id | (none — this is a correctness prerequisite, not a finding) |
-| `n_past` | (none — no paper in this sweep addresses llama.cpp cache accounting) |
+| provider request id | (none -- this is a correctness prerequisite, not a finding) |
+| `n_past` | (none -- no paper in this sweep addresses llama.cpp cache accounting) |
 
 **That last row is an asset.** The `n_past` log-only exposure and the (n−1)/n
 ceiling appear in no paper found by any of five sweeps. It is original to this
-project — and the local-inference user is also the one least likely to pay.
+project -- and the local-inference user is also the one least likely to pay.
 
 ## 5. Cross-reference: our artefact → findings
 
@@ -221,7 +221,7 @@ project — and the local-inference user is also the one least likely to pay.
 | FD-11 empty state | `TRACE-LAB` (Codex and Claude Code sessions, the surfaces it now names) |
 | `internal/guardcheck` | `MUTATE-META` (prior art for UNREACHED/INERT), `MUTATE-GOOGLE`, `ORACLE-SMOKE` |
 | `internal/cachemodel` | `COST-NOT-TOKENS`, `CACHE-DEADPOINT` |
-| task #11 keep-alive experiment | `CACHE-KEEPALIVE` — answered it, and the answer was no; see §6a |
+| task #11 keep-alive experiment | `CACHE-KEEPALIVE` -- answered it, and the answer was no; see §6a |
 | task #19 request id | `TELEMETRY-GAP` below |
 
 `TELEMETRY-GAP` = 2608.07899, TelemetrySuffBench: OTel-shaped agent telemetry
@@ -253,7 +253,7 @@ Six statements the catalogue supports that no single paper does.
    and every waste paper converge on cost per successful task. Transcripts carry
    no outcome label, and inferring one from the agent's own closing message
    would be an Estimated figure wearing a Measured badge. `SCAFFOLD-COST`
-   offers the nearest honest proxy — failure spend — and warns in the same
+   offers the nearest honest proxy -- failure spend -- and warns in the same
    breath that agents' self-reports do not match their behaviour.
 
 5. **Do not ship routing advice.** `HANDOFF-TAX` measured mid-session
@@ -262,20 +262,20 @@ Six statements the catalogue supports that no single paper does.
 
 6. **The UNREACHED/INERT split is not novel.** `MUTATE-META` shipped mutation
    plus visit-instrumentation at Meta in 2020. That is a stronger commercial
-   position than novelty, not a weaker one — it is validated and unshipped —
+   position than novelty, not a weaker one -- it is validated and unshipped --
    but it forecloses a patent claim and must not be described as new.
 
 ---
 
 ## 6a. The first ranking this index made, and its refutation
 
-**`CACHE-KEEPALIVE` was ranked the strongest idea in the whole catalogue** —
+**`CACHE-KEEPALIVE` was ranked the strongest idea in the whole catalogue** --
 "the only paper here that is a product", the one thing Replay could *do* rather
 than report. That ranking is now wrong, and it was decided by this
 repository's own corpus rather than by another paper.
 
 `docs/evidence/keepalive-2026-09-10.md` applied the paper's own break-even
-horizon, `I_max ≈ τ(w/r − 1)`, to 60 main-lane transcripts — 26,675
+horizon, `I_max ≈ τ(w/r − 1)`, to 60 main-lane transcripts -- 26,675
 consecutive assistant-turn pairs carrying a prefix, 120.7M observed
 `cache_creation_input_tokens`. For a coding-agent workload the gaps are mostly
 too short for a keepalive to pay, and the lever that does pay is prefix
@@ -298,13 +298,19 @@ drops what it got wrong is a catalogue nobody can check.
 | Item | Why |
 |---|---|
 | Read `COST-NOT-TOKENS`, `CACHE-DEADPOINT`, `TOKENIZE-TTFT` in full | The three papers under the strongest idea. Nothing from them ships until someone has read past the abstract. |
-| Run our parser over `TRACE-LAB` | The 7.94x rests on one private corpus from one machine. A public corpus makes it independently checkable — or refutes it, which is worth knowing before a launch. |
+| Run our parser over `TRACE-LAB` | The 7.94x rests on one private corpus from one machine. A public corpus makes it independently checkable -- or refutes it, which is worth knowing before a launch. |
 | Re-verify `REPORTED` tier ids | Two thirds of this catalogue has not been re-fetched. |
 | Record `n_past` as original | No paper in five sweeps covers it. |
 
 ## DeepSeek optimisation
 
-- [DeepSeek optimisation](DEEPSEEK-OPTIMIZATION.md) — four measured
+- [DeepSeek optimisation](DEEPSEEK-OPTIMIZATION.md) -- four measured
   levers (6.5x cheaper and 6.9x faster at an unchanged pass rate), what the
   vendor does not promise, and the runtime guard for the undocumented
   reasoning parameter.
+
+## DeepSeek operating contract
+
+- [DeepSeek closeout and operating contract](DEEPSEEK-OPERATING-CONTRACT.md)
+  -- the campaign is closed. DeepSeek is an experimental instrument, not a
+  product claim generator. Read this before spending another credit.

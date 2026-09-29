@@ -2,7 +2,7 @@
 
 **Updated** 2026-09-28 · **Branch** `feat/perf-contract`
 
-## Status: ACTIVE — optimisation sweep run 2026-09-29
+## Status: CLOSED. DeepSeek is an experimental instrument, not a claim generator
 
 Spend authorised by the user on 2026-09-29 ("test various theory on performance
 optimization ... try everything in the book, support it with a baseline
@@ -14,6 +14,20 @@ hold, and rotation is hygiene debt rather than a known compromise, so the work
 proceeded. The gate was set in this repository and is recorded as consciously
 crossed rather than quietly dropped. Rotation remains outstanding.
 
+**Operating contract:** `docs/DEEPSEEK-OPERATING-CONTRACT.md`. Read it before
+spending another credit. The campaign is closed at `3c2ef9a`. Prompt
+optimization returned a NULL result over 396 trials: two candidate effects both
+reversed sign on independent replication. Cache findings are scoped to the
+regimes they were measured in. No universal claim is established. Patent prior
+art is NOT_VERIFIED.
+
+The v4-pro cache experiment is **not** authorised merely because it appeared in a
+next-steps list. Every future experiment earns its budget with a discriminating
+question.
+
+Next research priority is not DeepSeek: it is whether an addressable evidence
+anchor changes a fresh agent's retrieval behaviour after context discontinuity.
+
 ## Current state
 
 | | |
@@ -24,7 +38,7 @@ crossed rather than quietly dropped. Rotation remains outstanding.
 | balance | **~$46.03** (from $46.89 at campaign start) |
 | observed spend, campaign total | **~$0.86** |
 | billing reconciliation | resolved A: 1.93% at n=200, inside the 3% declared before the run |
-| credential | **NOT ROTATED** — see operational follow-up below |
+| credential | **NOT ROTATED** -- see operational follow-up below |
 
 ## Current hypothesis
 
@@ -57,7 +71,7 @@ the prefix recurs, exactly no effect when it does not.
 | **F2** | **RECLASSIFIED NOT_MEASURED.** Tested parameter shape was not the documented control |
 | **O1** truncation guard | **IMPLEMENTED.** `finish_reason` in `length`/`max_tokens` raises `Truncated` instead of returning a deliverable. No automatic retry; recovery needs `allow_truncated=True` |
 | **O2** identity telemetry | **IMPLEMENTED.** `requested_model`, `model_returned`, `system_fingerprint`, `finish_reason` recorded per call. A fingerprint identifies a serving configuration, **not** model weights |
-| **O3** explore/synthesize split | **NOT IMPLEMENTED — NEEDS DESIGN.** See below |
+| **O3** explore/synthesize split | **NOT IMPLEMENTED -- NEEDS DESIGN.** See below |
 | cache | **untouched**, by decision. Already 93.4% / 77.3% |
 
 **Why O3 was not implemented.** The harness has no agent loop to split.
@@ -67,7 +81,7 @@ ad-hoc scripts. Implementing O3 means adding an agent-loop module to the harness
 which is an architectural change, so it was left for a design pass rather than
 improvised.
 
-Tests: `python3 experiment/harness/test_adapter.py` — 6 pass. Mutation-checked
+Tests: `python3 experiment/harness/test_adapter.py` -- 6 pass. Mutation-checked
 twice: deleting the guard fails 2 tests; narrowing it to chat's `length`
 vocabulary alone fails the Anthropic `max_tokens` case. Go suite unaffected at
 30 ok / 0 FAIL, `go vet` and `gofmt` clean.
