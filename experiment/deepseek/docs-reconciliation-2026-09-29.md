@@ -42,12 +42,28 @@ mechanism for isolating a runaway experiment from everything else on the key.
 ## Measured because the docs leave it open
 
 **The 128-token block.** The KV cache guide says the system "will carve out cache
-prefix units at fixed token intervals" and **gives no interval**. The mechanism
-is documented; the number is not. Our 17-rung result quantifies exactly the
-parameter the documentation declines to state, including the "final block is
-never served" behaviour, which is not described at all.
+prefix units at fixed token intervals" and gives no interval.
 
-This is the one finding that would have been impossible to obtain by reading.
+**CORRECTED 2026-09-29, after a prior-art sweep.** Saying the vendor gives no
+number was wrong. It gives one elsewhere: the context-caching announcement of
+2 August 2024 states "The cache system uses 64 tokens as a storage unit; content
+less than 64 tokens will not be cached". I had read the KV cache guide and not
+that page.
+
+The figure does not describe what we measured. Fitted against the 17 OBSERVED
+rungs, a 64-token unit scores 1/17 or 3/17 depending on whether the final unit
+is served, while 128 with the final block withheld scores 17/17.
+
+That page describes DeepSeek V2 and MLA and quotes a cache-hit price of $0.014
+per million against today's $0.006 peak on flash, so the most economical reading
+is a figure that was accurate for an earlier model generation and has not been
+restated for this one. **Whether the change is generational, a stale document, or
+a different meaning of "storage unit" is NOT_OBSERVED.**
+
+The finding is therefore stronger than "undocumented parameter measured". It is
+a published figure that does not predict current behaviour, which is exactly the
+case where reading the documentation instead of measuring would have produced a
+wrong answer.
 
 **Cache-hit pricing against money.** The rate is published; whether the biller
 applies it is not something a document can establish. DS-F5 remains worth its
