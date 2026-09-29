@@ -460,6 +460,53 @@ worth declaring.
   production; converts to Apache 2.0 on 2029-09-06. Selling Replay itself as a
   service is the one thing it does not permit.
 
+## Provider-specific controls, and what bounds them
+
+Replay treats a provider-specific optimisation as an **evidence-scoped control**,
+not an assumption. A control is implemented when a measurement supports it, it is
+bounded by the regime it was measured in, and it fails safe when the evidence it
+depends on is unavailable.
+
+DeepSeek is the worked example, because it is the provider this repository has
+characterised end to end. The harness can:
+
+- **construct a stable shared prefix**, with the variable part last, and refuse a
+  prefix whose leading bytes vary
+- **warm a shared prefix before fanning out**, where the workload has one large
+  enough to matter
+- **record the cache regime rather than assume one**, keeping how a request was
+  dispatched separate from the cache state the provider reported
+- **apply a conditional reasoning policy by task class**, never a blanket setting
+- **fall back to the conservative path** when the task class is unknown, the
+  configuration is malformed, or the telemetry is missing
+- **capture request and model identity**: requested model, returned model,
+  serving fingerprint, finish reason, usage
+- **gate spend before dispatch**, in integer arithmetic, with refusals recorded
+  rather than dropped
+
+These are **tested controls, not provider guarantees**. The tests establish what
+the code does. Whether a control pays on your workload is a separate question,
+and the experiments that exist are narrow.
+
+What the same work explicitly does **not** claim:
+
+- The DeepSeek optimisation campaign is **closed**. A bounded prompt-optimisation
+  study of 396 trials produced **no reproducible effect**, so no prompt
+  optimiser, rewriter or compressor is implemented, and none should be.
+- **Disabling reasoning is not treated as a universal saving.** It was measured
+  as class-conditional and it degraded accuracy badly outside the class it
+  suited, so the policy fails toward the expensive, correct setting.
+- **Cache observations are regime-specific.** A block-aligned relation measured
+  under sequential cold and warm pairs is not a provider cache guarantee, and a
+  later concurrent observation did not fit it.
+- **Reconstructed cost is derived, not a claim about provider internals.**
+  Agreement between a reconstruction and an account balance is consistency
+  evidence. It does not establish how the provider bills.
+- No model is encoded as generally better than another.
+
+`docs/DEEPSEEK-OPTIMIZATION.md` carries the controls and their evidence scope;
+`docs/DEEPSEEK-OPERATING-CONTRACT.md` carries the rules that bind further work.
+
 ## How far to trust it
 
 The engine reproduces the provider's own cache reads on **97.79%** of compared turns across 1751

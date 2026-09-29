@@ -335,5 +335,55 @@ class TestMissingTelemetry(unittest.TestCase):
                          "an unpriceable call must not settle as $0.00")
 
 
+class TestCacheRegimeIsRecordedNotInferred(unittest.TestCase):
+    """Dispatch and observed cache state are two facts, kept apart.
+
+    The campaign measured the block relation entirely under sequential
+    dispatch, then saw a count that did not fit it under concurrency. A run
+    that collapses the two cannot tell them apart afterwards, so the runtime
+    records both and never derives one from the other.
+    """
+
+    def test_a_warm_then_fan_run_labels_its_dispatch(self):
+        ad = FakeAdapter(cached=500)
+        r = run(ad)
+        rows = r.fan(TaskClass.AGGREGATE, "S" * 9000, [f"q{i}" for i in range(4)])
+        self.assertEqual(rows[0]["dispatch"], session.DISPATCH_WARM)
+        for x in rows[1:]:
+            self.assertEqual(x["dispatch"], session.DISPATCH_CONCURRENT_FAN)
+        s = r.summary()
+        self.assertEqual(s["dispatch"][session.DISPATCH_WARM], 1)
+        self.assertEqual(s["dispatch"][session.DISPATCH_CONCURRENT_FAN], 3)
+
+    def test_a_lone_call_is_sequential_by_default(self):
+        row = run(FakeAdapter()).ask(TaskClass.AGGREGATE, "q")
+        self.assertEqual(row["dispatch"], session.DISPATCH_SEQUENTIAL)
+
+    def test_observed_cache_state_comes_from_the_provider(self):
+        cold = run(FakeAdapter(cached=0)).ask(TaskClass.AGGREGATE, "q")
+        warm = run(FakeAdapter(cached=4096)).ask(TaskClass.AGGREGATE, "q")
+        self.assertEqual(cold["cache_state"], session.CACHE_COLD)
+        self.assertEqual(warm["cache_state"], session.CACHE_WARM)
+
+    def test_a_missing_usage_block_is_unknown_not_cold(self):
+        """The load-bearing distinction. Calling an unmeasured call 'cold'
+        asserts a measurement nobody made, and would let a run report a cache
+        regime it never observed."""
+        self.assertEqual(session.observed_cache_state(adapter.Measurement(status=200)),
+                         session.CACHE_UNKNOWN)
+        self.assertEqual(session.observed_cache_state({}), session.CACHE_UNKNOWN)
+        self.assertNotEqual(session.observed_cache_state(adapter.Measurement()),
+                            session.CACHE_COLD)
+
+    def test_the_summary_reports_regimes_separately(self):
+        """Never one averaged cache figure across regimes."""
+        r = run(FakeAdapter(cached=500))
+        r.fan(TaskClass.AGGREGATE, "S" * 9000, ["a", "b"])
+        s = r.summary()
+        self.assertIn("dispatch", s)
+        self.assertIn("cache_state", s)
+        self.assertIsInstance(s["dispatch"], dict)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

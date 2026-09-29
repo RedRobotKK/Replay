@@ -30,6 +30,32 @@ import pricing
 from fanout import Outcome
 
 
+# How a request was DISPATCHED, and separately what cache state was OBSERVED.
+# These are two different facts and collapsing them is the error the campaign
+# ran into: the block relation was measured entirely in the sequential regime,
+# and a cached count that did not fit it later appeared under concurrency. A run
+# that averages across regimes cannot tell those apart afterwards.
+DISPATCH_SEQUENTIAL = "sequential"      # issued alone, nothing else in flight
+DISPATCH_WARM = "warm"                  # the deliberate prefix-establishing call
+DISPATCH_CONCURRENT_FAN = "concurrent_fan"   # issued with siblings in flight
+
+CACHE_COLD = "cold"                     # provider reported zero cache read
+CACHE_WARM = "warm"                     # provider reported a cache read
+CACHE_UNKNOWN = "unknown"               # no usage block; NOT the same as cold
+
+
+def observed_cache_state(measurement):
+    """What the provider reported, never what we assumed.
+
+    A missing usage block is UNKNOWN, not cold. Calling it cold would assert a
+    measurement that was never made.
+    """
+    cr = (measurement or {}).get("cache_read")
+    if cr is None:
+        return CACHE_UNKNOWN
+    return CACHE_WARM if cr > 0 else CACHE_COLD
+
+
 class Result(dict):
     """One call. Always has an outcome; never silently absent."""
 
@@ -61,15 +87,21 @@ class Run:
 
     # -- one call ---------------------------------------------------------
     def ask(self, task_class, variable, shared="", max_tokens=512, check=None,
-            qid=None, note="", extra_kwargs=None):
-        """Send one question. `task_class` is required and decides reasoning."""
+            qid=None, note="", extra_kwargs=None, dispatch=DISPATCH_SEQUENTIAL):
+        """Send one question. `task_class` is required and decides reasoning.
+
+        `dispatch` records HOW the call was issued. It is not inferred from the
+        result, because the cache state observed and the way the request was
+        dispatched are independent facts and the campaign needed both.
+        """
         prompt = policy.assemble(shared, variable)
         kw = policy.config_for(task_class)
         if extra_kwargs:
             kw.update(extra_kwargs)
 
         if not self.budget.reserve():
-            return self._row(qid, task_class, Outcome.REFUSED_BUDGET, note=note)
+            return self._row(qid, task_class, Outcome.REFUSED_BUDGET, note=note,
+                             dispatch=dispatch)
         try:
             m, text, raw = self.ad.call(self.model, prompt, max_tokens, self.tmp, **kw)
         except adapter.Truncated as t:
@@ -78,18 +110,18 @@ class Run:
             usd = self.meter.record(t.measurement, self.model, note or "truncated")
             self.budget.settle(usd)
             return self._row(qid, task_class, Outcome.TRUNCATED, m=t.measurement,
-                             usd=usd, note=note)
+                             usd=usd, note=note, dispatch=dispatch)
         except Exception as e:
             # Unknown whether the provider billed it. Holding the reservation
             # can under-run; releasing it can overspend. Under-running is the
             # safe error for scarce capital.
             return self._row(qid, task_class, Outcome.ERROR, note=note,
-                             error=f"{type(e).__name__}: {e}")
+                             dispatch=dispatch, error=f"{type(e).__name__}: {e}")
 
         if m.get("status") != 200:
             self.budget.release()
             return self._row(qid, task_class, Outcome.ERROR, m=m, note=note,
-                             error=f"HTTP {m.get('status')}")
+                             dispatch=dispatch, error=f"HTTP {m.get('status')}")
 
         # A 200 whose usage block never arrived is a billed call with no
         # accounting. Before this guard it was banked as ANSWERED, priced at
@@ -100,7 +132,7 @@ class Run:
         # money is gone, and under-running is the safe error for scarce capital.
         if m.get("out") is None:
             return self._row(qid, task_class, Outcome.ERROR, m=m, note=note,
-                             error="UNACCOUNTED: HTTP 200 with no usage block. "
+                             dispatch=dispatch, error="UNACCOUNTED: HTTP 200 with no usage block. "
                                    "The call was billed and cannot be priced; "
                                    "its cost is NOT_OBSERVED, never zero.")
 
@@ -111,7 +143,7 @@ class Run:
         usd = self.meter.record(m, self.model, note)
         self.budget.settle(usd)
         row = self._row(qid, task_class, Outcome.ANSWERED, m=m, usd=usd,
-                        note=note, raw=raw)
+                        note=note, raw=raw, dispatch=dispatch)
         if check is not None:
             # A checker that raises decides nothing. It must not turn a paid,
             # answered call into a failure or score it False.
@@ -155,7 +187,8 @@ class Run:
         if do_warm:
             out.append(self.ask(task_class, variables[0], shared, max_tokens,
                                 checks[0], qid=0, note="warm",
-                                extra_kwargs=extra_kwargs))
+                                extra_kwargs=extra_kwargs,
+                                dispatch=DISPATCH_WARM))
             start = 1
             if out[0]["outcome"] == Outcome.REFUSED_BUDGET:
                 # The ceiling is already reached. Fanning out would produce a
@@ -168,7 +201,7 @@ class Run:
             with cf.ThreadPoolExecutor(max_workers=self.workers) as ex:
                 futs = {ex.submit(self.ask, task_class, variables[i], shared,
                                   max_tokens, checks[i], i, "fan",
-                                  extra_kwargs): i
+                                  extra_kwargs, DISPATCH_CONCURRENT_FAN): i
                         for i in range(start, len(variables))}
                 for f in cf.as_completed(futs):
                     i = futs[f]
@@ -178,13 +211,14 @@ class Run:
                         # ask() should never raise. If it does, one question
                         # loses its row, not every call already paid for.
                         out.append(self._row(i, task_class, Outcome.ERROR,
+                                             dispatch=DISPATCH_CONCURRENT_FAN,
                                              error=f"escaped ask(): {type(e).__name__}: {e}"))
         out.sort(key=lambda r: (r["id"] is None, r["id"]))
         return out
 
     # -- bookkeeping ------------------------------------------------------
     def _row(self, qid, task_class, outcome, m=None, usd=None, note="",
-             error=None, raw=None):
+             error=None, raw=None, dispatch=DISPATCH_SEQUENTIAL):
         m = m or {}
         r = Result(id=qid, task_class=task_class, outcome=outcome, usd=usd,
                    note=note, error=error, passed=None, raw=raw,
@@ -194,7 +228,8 @@ class Run:
                    status=m.get("status"), model_returned=m.get("model_returned"),
                    fresh_in=m.get("fresh_in"), cache_read=m.get("cache_read"),
                    cache_write=m.get("cache_write"), out=m.get("out"),
-                   reasoning=m.get("reasoning"), wall_ms=m.get("wall_ms"))
+                   reasoning=m.get("reasoning"), wall_ms=m.get("wall_ms"),
+                   dispatch=dispatch, cache_state=observed_cache_state(m))
         self.rows.append(r)
         return r
 
@@ -219,6 +254,11 @@ class Run:
     def summary(self):
         s = self.meter.summary()
         rate, p, n = self.pass_rate()
+        import collections
         s.update({"tally": self.tally(), "budget": self.budget.snapshot(),
-                  "pass_rate": rate, "passed": p, "decided": n})
+                  "pass_rate": rate, "passed": p, "decided": n,
+                  # Regimes are reported SEPARATELY, never averaged into one
+                  # cache figure. See the module header.
+                  "dispatch": dict(collections.Counter(r["dispatch"] for r in self.rows)),
+                  "cache_state": dict(collections.Counter(r["cache_state"] for r in self.rows))})
         return s
