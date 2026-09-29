@@ -164,7 +164,7 @@ class TestEveryCheckerAcceptsTruthAndRejectsAPlausibleWrong(unittest.TestCase):
     def test_no_checker_raises_on_anything(self):
         """session.Run records passed=None when a checker raises, which is a paid
         call that measured nothing. Garbage is wrong, not undecided."""
-        junk = ["", "   ", "\n\n", None, 0, [], "```\n```", "——",
+        junk = ["", "   ", "\n\n", None, 0, [], "```\n```", chr(0x2014) * 2,
                 "x" * 20000, "9" * 400, "NaN", "Infinity", "-", "1.2.3"]
         for t in TASKS:
             for j in junk:

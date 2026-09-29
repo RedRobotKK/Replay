@@ -1,0 +1,11 @@
+{
+ "populate, no reasoning_effort": 0,
+ "same prefix, no reasoning_effort (control)": 3200,
+ "same prefix, reasoning_effort ADDED": 0,
+ "populate, reasoning_effort present": 0,
+ "same prefix, reasoning_effort present (control)": 3200,
+ "same prefix, reasoning_effort REMOVED": 0,
+ "populate, plain body": 0,
+ "same prefix, plain body (control)": 3200,
+ "same prefix, junk key added": 3200
+}

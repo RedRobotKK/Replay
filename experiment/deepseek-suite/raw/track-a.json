@@ -1,0 +1,769 @@
+{
+ "records": [
+  {
+   "label": "A1 cold (defines prefix)",
+   "outcome": "ANSWERED",
+   "hit": 0,
+   "miss": 2257,
+   "out": 1,
+   "wall_ms": 1058,
+   "usd": 0.00033915,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A1 exact identical (positive control)",
+   "outcome": "ANSWERED",
+   "hit": 2048,
+   "miss": 209,
+   "out": 1,
+   "wall_ms": 1149,
+   "usd": 3.8094000000000005e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A1 one LEADING space",
+   "outcome": "ANSWERED",
+   "hit": 0,
+   "miss": 2256,
+   "out": 1,
+   "wall_ms": 962,
+   "usd": 0.00033900000000000005,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A1 one TRAILING space added",
+   "outcome": "ANSWERED",
+   "hit": 2048,
+   "miss": 210,
+   "out": 1,
+   "wall_ms": 1012,
+   "usd": 3.8244e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A1 one char changed MID-prefix",
+   "outcome": "ANSWERED",
+   "hit": 896,
+   "miss": 1363,
+   "out": 1,
+   "wall_ms": 1000,
+   "usd": 0.000207738,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A1 capitalization changed at start",
+   "outcome": "ANSWERED",
+   "hit": 0,
+   "miss": 2257,
+   "out": 1,
+   "wall_ms": 1001,
+   "usd": 0.00033915,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A1 punctuation inserted at start",
+   "outcome": "ANSWERED",
+   "hit": 0,
+   "miss": 2257,
+   "out": 1,
+   "wall_ms": 922,
+   "usd": 0.00033915,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 80w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 91,
+   "out": 8,
+   "wall_ms": 998,
+   "usd": 1.845e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 80w warm",
+   "outcome": "ANSWERED",
+   "hit": 0,
+   "miss": 98,
+   "out": 1,
+   "wall_ms": 1159,
+   "usd": 1.53e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 95w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 108,
+   "out": 8,
+   "wall_ms": 993,
+   "usd": 2.0999999999999995e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 95w warm",
+   "outcome": "ANSWERED",
+   "hit": 0,
+   "miss": 115,
+   "out": 1,
+   "wall_ms": 772,
+   "usd": 1.785e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 100w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 115,
+   "out": 8,
+   "wall_ms": 958,
+   "usd": 2.205e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 100w warm",
+   "outcome": "ANSWERED",
+   "hit": 0,
+   "miss": 122,
+   "out": 1,
+   "wall_ms": 876,
+   "usd": 1.89e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 105w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 123,
+   "out": 8,
+   "wall_ms": 830,
+   "usd": 2.3250000000000003e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 105w warm",
+   "outcome": "ANSWERED",
+   "hit": 0,
+   "miss": 130,
+   "out": 1,
+   "wall_ms": 766,
+   "usd": 2.0099999999999997e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 110w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 128,
+   "out": 8,
+   "wall_ms": 1105,
+   "usd": 2.4e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 110w warm",
+   "outcome": "ANSWERED",
+   "hit": 0,
+   "miss": 135,
+   "out": 1,
+   "wall_ms": 1000,
+   "usd": 2.0850000000000002e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 120w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 140,
+   "out": 8,
+   "wall_ms": 1000,
+   "usd": 2.5799999999999997e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 120w warm",
+   "outcome": "ANSWERED",
+   "hit": 0,
+   "miss": 147,
+   "out": 1,
+   "wall_ms": 785,
+   "usd": 2.2649999999999998e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 130w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 145,
+   "out": 8,
+   "wall_ms": 860,
+   "usd": 2.655e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 130w warm",
+   "outcome": "ANSWERED",
+   "hit": 0,
+   "miss": 152,
+   "out": 1,
+   "wall_ms": 709,
+   "usd": 2.3400000000000003e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 145w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 164,
+   "out": 8,
+   "wall_ms": 1014,
+   "usd": 2.9399999999999996e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 145w warm",
+   "outcome": "ANSWERED",
+   "hit": 0,
+   "miss": 171,
+   "out": 1,
+   "wall_ms": 866,
+   "usd": 2.625e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 160w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 187,
+   "out": 8,
+   "wall_ms": 946,
+   "usd": 3.285e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 160w warm",
+   "outcome": "ANSWERED",
+   "hit": 0,
+   "miss": 194,
+   "out": 1,
+   "wall_ms": 611,
+   "usd": 2.97e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 190w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 201,
+   "out": 8,
+   "wall_ms": 857,
+   "usd": 3.495e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 190w warm",
+   "outcome": "ANSWERED",
+   "hit": 0,
+   "miss": 208,
+   "out": 1,
+   "wall_ms": 791,
+   "usd": 3.18e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 200w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 229,
+   "out": 8,
+   "wall_ms": 711,
+   "usd": 3.915e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 200w warm",
+   "outcome": "ANSWERED",
+   "hit": 0,
+   "miss": 236,
+   "out": 1,
+   "wall_ms": 973,
+   "usd": 3.6e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 215w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 238,
+   "out": 8,
+   "wall_ms": 679,
+   "usd": 4.05e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 215w warm",
+   "outcome": "ANSWERED",
+   "hit": 0,
+   "miss": 245,
+   "out": 1,
+   "wall_ms": 1030,
+   "usd": 3.735e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 230w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 262,
+   "out": 8,
+   "wall_ms": 788,
+   "usd": 4.41e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 230w warm",
+   "outcome": "ANSWERED",
+   "hit": 128,
+   "miss": 141,
+   "out": 1,
+   "wall_ms": 827,
+   "usd": 2.2134000000000002e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 250w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 287,
+   "out": 8,
+   "wall_ms": 562,
+   "usd": 4.785e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 250w warm",
+   "outcome": "ANSWERED",
+   "hit": 128,
+   "miss": 166,
+   "out": 1,
+   "wall_ms": 914,
+   "usd": 2.5883999999999998e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 280w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 315,
+   "out": 8,
+   "wall_ms": 1055,
+   "usd": 5.2050000000000005e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 280w warm",
+   "outcome": "ANSWERED",
+   "hit": 128,
+   "miss": 194,
+   "out": 1,
+   "wall_ms": 915,
+   "usd": 3.0084e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 300w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 338,
+   "out": 8,
+   "wall_ms": 1046,
+   "usd": 5.5499999999999994e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 300w warm",
+   "outcome": "ANSWERED",
+   "hit": 128,
+   "miss": 217,
+   "out": 1,
+   "wall_ms": 890,
+   "usd": 3.3534e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 330w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 370,
+   "out": 8,
+   "wall_ms": 1011,
+   "usd": 6.0299999999999995e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 330w warm",
+   "outcome": "ANSWERED",
+   "hit": 128,
+   "miss": 249,
+   "out": 1,
+   "wall_ms": 847,
+   "usd": 3.8333999999999996e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 380w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 433,
+   "out": 8,
+   "wall_ms": 902,
+   "usd": 6.974999999999999e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 380w warm",
+   "outcome": "ANSWERED",
+   "hit": 256,
+   "miss": 184,
+   "out": 1,
+   "wall_ms": 913,
+   "usd": 2.8968e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 420w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 472,
+   "out": 8,
+   "wall_ms": 655,
+   "usd": 7.56e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 420w warm",
+   "outcome": "ANSWERED",
+   "hit": 256,
+   "miss": 223,
+   "out": 1,
+   "wall_ms": 1007,
+   "usd": 3.4818e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 460w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 516,
+   "out": 8,
+   "wall_ms": 819,
+   "usd": 8.219999999999999e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 460w warm",
+   "outcome": "ANSWERED",
+   "hit": 384,
+   "miss": 139,
+   "out": 1,
+   "wall_ms": 710,
+   "usd": 2.2601999999999998e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 500w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 553,
+   "out": 8,
+   "wall_ms": 813,
+   "usd": 8.774999999999999e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 500w warm",
+   "outcome": "ANSWERED",
+   "hit": 384,
+   "miss": 176,
+   "out": 1,
+   "wall_ms": 1009,
+   "usd": 2.8151999999999997e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 540w cold",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 616,
+   "out": 8,
+   "wall_ms": 839,
+   "usd": 9.719999999999999e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A2 540w warm",
+   "outcome": "ANSWERED",
+   "hit": 384,
+   "miss": 239,
+   "out": 1,
+   "wall_ms": 885,
+   "usd": 3.7602e-05,
+   "status": 200,
+   "extra": {}
+  }
+ ],
+ "summary": {
+  "calls": 51,
+  "fresh_in": 20721,
+  "cache_read": 7296,
+  "out": 205,
+  "reasoning": 0,
+  "derived_usd": 0.0032530379999999998,
+  "errors": 0,
+  "wall_s": 45.88542199134827,
+  "tally": {
+   "ANSWERED": 29,
+   "TRUNCATED": 22,
+   "REFUSED_BUDGET": 0,
+   "ERROR": 0
+  },
+  "budget": {
+   "ceiling_usd": 0.4,
+   "settled_usd": 0.003253038,
+   "outstanding_usd": 0.0,
+   "refused": 0
+  },
+  "pass_rate": null,
+  "passed": 0,
+  "decided": 0
+ },
+ "a2_verdicts": [
+  {
+   "n": 91,
+   "h_a": 0,
+   "h_b": 0,
+   "observed": 0,
+   "verdict": "both",
+   "multiple_of_128": true
+  },
+  {
+   "n": 108,
+   "h_a": 0,
+   "h_b": 0,
+   "observed": 0,
+   "verdict": "both",
+   "multiple_of_128": true
+  },
+  {
+   "n": 115,
+   "h_a": 0,
+   "h_b": 0,
+   "observed": 0,
+   "verdict": "both",
+   "multiple_of_128": true
+  },
+  {
+   "n": 123,
+   "h_a": 0,
+   "h_b": 0,
+   "observed": 0,
+   "verdict": "both",
+   "multiple_of_128": true
+  },
+  {
+   "n": 128,
+   "h_a": 128,
+   "h_b": 0,
+   "observed": 0,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  },
+  {
+   "n": 140,
+   "h_a": 128,
+   "h_b": 0,
+   "observed": 0,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  },
+  {
+   "n": 145,
+   "h_a": 128,
+   "h_b": 0,
+   "observed": 0,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  },
+  {
+   "n": 164,
+   "h_a": 128,
+   "h_b": 0,
+   "observed": 0,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  },
+  {
+   "n": 187,
+   "h_a": 128,
+   "h_b": 0,
+   "observed": 0,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  },
+  {
+   "n": 201,
+   "h_a": 128,
+   "h_b": 0,
+   "observed": 0,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  },
+  {
+   "n": 229,
+   "h_a": 128,
+   "h_b": 0,
+   "observed": 0,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  },
+  {
+   "n": 238,
+   "h_a": 128,
+   "h_b": 0,
+   "observed": 0,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  },
+  {
+   "n": 262,
+   "h_a": 256,
+   "h_b": 128,
+   "observed": 128,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  },
+  {
+   "n": 287,
+   "h_a": 256,
+   "h_b": 128,
+   "observed": 128,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  },
+  {
+   "n": 315,
+   "h_a": 256,
+   "h_b": 128,
+   "observed": 128,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  },
+  {
+   "n": 338,
+   "h_a": 256,
+   "h_b": 128,
+   "observed": 128,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  },
+  {
+   "n": 370,
+   "h_a": 256,
+   "h_b": 128,
+   "observed": 128,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  },
+  {
+   "n": 433,
+   "h_a": 384,
+   "h_b": 256,
+   "observed": 256,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  },
+  {
+   "n": 472,
+   "h_a": 384,
+   "h_b": 256,
+   "observed": 256,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  },
+  {
+   "n": 516,
+   "h_a": 512,
+   "h_b": 384,
+   "observed": 384,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  },
+  {
+   "n": 553,
+   "h_a": 512,
+   "h_b": 384,
+   "observed": 384,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  },
+  {
+   "n": 616,
+   "h_a": 512,
+   "h_b": 384,
+   "observed": 384,
+   "verdict": "H-B",
+   "multiple_of_128": true
+  }
+ ],
+ "a4": "<bound method Track.a4 of <__main__.Track object at 0x10a57cec0>>"
+}

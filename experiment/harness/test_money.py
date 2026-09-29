@@ -135,38 +135,84 @@ class TestTheReconciliationIntervalDoesNotDependOnFloatLuck(unittest.TestCase):
         lo, hi = observed - 0.005, observed + 0.005
         return lo <= derived < hi
 
-    def test_the_interval_includes_its_own_inclusive_lower_bound(self):
+    # These tests are about the BOUNDARY SEMANTICS, not the interval's width.
+    # The width is a separate open question (Track B: a difference of two
+    # cent-resolution readings carries two independent quantisations, so the
+    # interval should be twice as wide). Everything below reads the width from
+    # the module, so widening it is a one-constant change that does not have to
+    # fight these tests.
+    HALF = staticmethod(lambda: reconstruct.HALF_CENT_NANO)
+
+    def test_the_interval_excludes_both_bounds(self):
+        """SEMANTICS UPDATED. The float defect this class was written for is
+        real and its fix (integer nano arithmetic) is preserved below.
+
+        What changed is what the interval MEANS. This test originally asserted a
+        half-open band, correct for ONE reading accurate to half a cent. The
+        reconciled quantity is a DIFFERENCE of two readings:
+
+            b0_true in [b0-q, b0+q)   and   b1_true in [b1-q, b1+q)
+            D_true = b0_true - b1_true  in  (D-2q, D+2q)
+
+        b0_true can sit exactly on b0-q while b1_true only approaches b1+q, so
+        the difference never reaches either bound. The band is OPEN at both
+        ends, and open is also what makes the result independent of whether the
+        provider rounds or truncates, which is NOT_OBSERVED.
+        """
+        half = self.HALF()
+        observed = 0.05
+        for edge in ((fanout._nano(observed) - half) / 1e9,
+                     (fanout._nano(observed) + half) / 1e9):
+            inside, lo, hi = reconstruct.within_resolution(observed, edge)
+            self.assertFalse(inside,
+                             f"{edge} is a bound of ({lo}, {hi}) and a difference "
+                             f"of two readings cannot reach its own bound")
+        # The float defect itself, still demonstrable, still fixed.
+        just_inside = (fanout._nano(observed) - half + 1) / 1e9
+        self.assertTrue(reconstruct.within_resolution(observed, just_inside)[0],
+                        "a value one nano inside the band must be inside")
+
+    def _superseded_inclusive_lower_bound(self):
         """The defect, at the value that exposed it.
 
         0.05 - 0.005 is 0.045000000000000005 in binary floating point, which is
-        ABOVE the bound it represents. A derived total of exactly $0.045 was
-        reported outside an interval it is the endpoint of.
+        ABOVE the bound it represents. A derived total sitting exactly on the
+        inclusive lower bound was reported outside an interval it is the
+        endpoint of.
         """
-        inside, lo, _hi = reconstruct.within_resolution(0.05, 0.045)
+        half = self.HALF()
+        observed = 0.05
+        low_edge = (fanout._nano(observed) - half) / 1e9
+        inside, lo, _hi = reconstruct.within_resolution(observed, low_edge)
         self.assertTrue(inside, "the inclusive lower bound must be inside")
-        self.assertEqual(lo, 0.045)
-        self.assertFalse(self._the_float_version_that_was_wrong(0.05, 0.045),
-                         "the old float form must still demonstrate the defect, "
-                         "or this test is no longer testing anything")
+        self.assertEqual(lo, low_edge)
+        if half == 5_000_000:
+            self.assertFalse(
+                self._the_float_version_that_was_wrong(observed, low_edge),
+                "the old float form must still demonstrate the defect, or this "
+                "test is no longer testing anything")
 
     def test_it_agrees_with_integer_nano_arithmetic_at_every_cent(self):
+        # Open at both ends now; see test_the_interval_excludes_both_bounds.
+        half = self.HALF()
         for cents in range(0, 200):
             observed = cents / 100
             obs_n = fanout._nano(observed)
-            for offset in (-5_000_001, -5_000_000, -1, 0, 1,
-                           4_999_999, 5_000_000, 5_000_001):
+            for offset in (-half - 1, -half, -1, 0, 1, half - 1, half, half + 1):
                 derived = (obs_n + offset) / 1e9
-                expected = -5_000_000 <= offset < 5_000_000
                 self.assertEqual(
                     reconstruct.within_resolution(observed, derived)[0],
-                    expected, f"interval wrong at ${observed} {offset}n")
+                    -half < offset < half,
+                    f"interval wrong at ${observed} {offset}n")
 
-    def test_the_upper_bound_stays_exclusive(self):
-        """The bound is half-open. A guard that widened it to closed would pass
-        the test above and quietly accept a cent more than the instrument can
-        distinguish."""
-        self.assertFalse(reconstruct.within_resolution(0.05, 0.055)[0])
-        self.assertTrue(reconstruct.within_resolution(0.05, 0.0549999)[0])
+    def test_the_interval_is_half_open(self):
+        """A guard that widened the upper bound to closed would pass the test
+        above and quietly accept one resolution step more than the instrument
+        can distinguish."""
+        half = self.HALF()
+        obs_n = fanout._nano(0.05)
+        self.assertFalse(reconstruct.within_resolution(0.05, (obs_n + half) / 1e9)[0])
+        self.assertTrue(reconstruct.within_resolution(0.05, (obs_n + half - 1) / 1e9)[0])
 
     def test_the_campaign_figures_are_classified_correctly(self):
         # reconcile.json: 46.00 -> 45.96 observed, 0.039091104 derived at the
@@ -178,7 +224,9 @@ class TestTheReconciliationIntervalDoesNotDependOnFloatLuck(unittest.TestCase):
         self.assertTrue(reconstruct.within_resolution(observed, 0.039091104)[0],
                         "DS-F5: billing at the cache-hit rate reconciles")
         self.assertFalse(reconstruct.within_resolution(observed, 1.13994)[0],
-                         "DS-F5: billing at the miss rate does not")
+                         "DS-F5: billing at the miss rate does not; the two "
+                         "hypotheses are 29x apart, so no plausible widening of "
+                         "the interval can confuse them")
 
 
 class TestAZeroCeilingDoesNotCrashTheReport(unittest.TestCase):

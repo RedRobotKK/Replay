@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import adapter
 import policy
+import reconstruct
 from policy import TaskClass
 
 
@@ -145,6 +146,37 @@ class TestPublishedFactsAreNotMeasurements(unittest.TestCase):
         numbers it was nowhere near."""
         self.assertEqual(policy.PUBLISHED_CONCURRENCY["deepseek-flash"], 2500)
         self.assertEqual(policy.PUBLISHED_CONCURRENCY["deepseek-v4-pro"], 500)
+
+
+class TestReconciliationInterval(unittest.TestCase):
+    """The band a balance DIFFERENCE can distinguish.
+
+    Two cent-resolution readings carry two independent errors, so the interval
+    is 4q wide. An earlier version used 2q and flattered every reconciliation.
+    """
+
+    def test_the_interval_is_four_half_resolutions_wide(self):
+        import reconstruct
+        _, lo, hi = reconstruct.within_resolution(0.23, 0.23)
+        self.assertAlmostEqual(hi - lo, 0.02, places=9,
+                               msg="a difference of two cent-resolution readings "
+                                   "spans $0.02, not $0.01")
+        self.assertAlmostEqual(lo, 0.22, places=9)
+        self.assertAlmostEqual(hi, 0.24, places=9)
+
+    def test_the_campaign_figure_reconciles_inside_the_correct_band(self):
+        import reconstruct
+        inside, lo, hi = reconstruct.within_resolution(0.23, 0.229946832)
+        self.assertTrue(inside, f"$0.229946832 must lie in ({lo}, {hi})")
+
+    def test_the_interval_is_open_at_both_ends(self):
+        """Open, so the result does not depend on whether the provider rounds
+        or truncates, which is NOT_OBSERVED."""
+        import reconstruct
+        inside_lo, lo, hi = reconstruct.within_resolution(0.23, 0.22)
+        inside_hi, _, _ = reconstruct.within_resolution(0.23, 0.24)
+        self.assertFalse(inside_lo, "the lower bound must be excluded")
+        self.assertFalse(inside_hi, "the upper bound must be excluded")
 
 
 if __name__ == "__main__":

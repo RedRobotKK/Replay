@@ -1,0 +1,27 @@
+{
+ "n_responses": 575,
+ "tokens": {
+  "hit": 5973248,
+  "miss": 501722,
+  "out": 57079,
+  "reasoning": 53513,
+  "cache_write": 0
+ },
+ "derived_usd": 0.24876412599999997,
+ "per_model": {
+  "deepseek-flash": 0.23675388599999994,
+  "deepseek-v4-pro": 0.012010239999999998
+ },
+ "regimes": {
+  "peak": 477,
+  "off_peak": 98
+ },
+ "conservation_violations": 0,
+ "errors": 0,
+ "first": "2026-09-29 03:26:36+00:00",
+ "last": "2026-09-29 05:45:06+00:00",
+ "by_dialect": {
+  "chat": 564,
+  "anthropic": 11
+ }
+}

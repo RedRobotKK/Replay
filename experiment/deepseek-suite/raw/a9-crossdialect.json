@@ -1,0 +1,14 @@
+{
+ "no_reasoning": {
+  "chat Q1 cold": 0,
+  "chat Q2 warm": 3200,
+  "anth Q1 (chat already sent this)": 3200,
+  "anth Q2": 3200
+ },
+ "with_reasoning": {
+  "chat Q1 cold": 0,
+  "chat Q2 warm": 3200,
+  "anth Q1 (chat already sent this)": 0,
+  "anth Q2": 3200
+ }
+}

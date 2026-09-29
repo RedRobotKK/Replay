@@ -32,6 +32,15 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
 | DS-B1 | 2026-09-29 | Reconstruct the corpus from saved responses alone | 0 calls | 479/479 responses, 4 conservation identities, 0 violations; $0.229946832 by two independent paths agreeing to 9 decimals | **CONFIRMED** | `deepseek-suite/results/track-b.md` |
 | DS-B2 | 2026-09-29 | Account for calls whose response was not saved | 0 calls | 5 raw-curl probe calls NOT_OBSERVED; lower bound $0.23005 | PARTIALLY SUPPORTED | same |
 | DS-B6 | 2026-09-29 | Does per-request cent truncation explain the gap? | 0 calls | **REFUTED.** Max per-request cost $0.0056997, 0 of 479 reach $0.01; truncation predicts a $0.00 session total against an observed $0.23 fall | **REFUTED, no spend required** | same |
+| DS-A1 | 2026-09-29 | Is cache identity byte-exact? | 7 | Leading space, capitalisation, punctuation at start all 0. Trailing space added still 2048. Mid-prefix change 896 = 7x128 | **SUPPORTED**: prefix-wise, block-granular | `deepseek-suite/claims.md` C3, C4 |
+| DS-A2 | 2026-09-29 | H-A, H-B, H-D or none? | 44 | **H-B 18/18 discriminating rungs, H-A 0/18, H-D1 0/18, H-D2 4/22.** Every count a multiple of 128 | **H-B SUPPORTED, rivals REFUTED** | same C1, C2 |
+| DS-A4 | 2026-09-29 | Is population completion-dependent? | 4 | Sequential B 3200, concurrent B 0, with `B dispatched before A returned` from wall-clock | **SUPPORTED** | same C5 |
+| DS-A6 | 2026-09-29 | Are sampling parameters part of cache identity? | 8 | temperature, max_tokens, top_p, frequency_penalty, presence_penalty, stop: all 3200 against a 3200 control | **SUPPORTED**, but `reasoning_effort` held constant so NOT covered | same C6 |
+| DS-A7 | 2026-09-29 | Does the cache cross endpoints? | 6 | 0 in both directions with working controls. **Contradicted a prior n=1 observation** | superseded by DS-A9 | same C10 |
+| DS-A8 | 2026-09-29 | Is the cache account-global or model-scoped? | 6 | flash->v4-pro 0, v4-pro->flash 0, both controls working | **model-scoped** | same C9 |
+| DS-A9 | 2026-09-29 | Why did A7 contradict the original? | 8 | **The request body's key set.** Cross-dialect reuse 3200 without `reasoning_effort`, 0 with it. Both earlier readings were correct | **RESOLVED** | same C10 |
+| DS-A10 | 2026-09-29 | Is the cache key the raw request body? | 9 | **No.** An ignored junk key still hit 3200; toggling `reasoning_effort` either way hit 0 | `reasoning_effort` participates in cache identity; mechanism NOT_OBSERVED | same C7, C8 |
+| DS-B4 | 2026-09-29 | Does settlement converge? | 0 | 13 polls over 24.1 min, all $45.78, zero changes, zero inference in window | **CONFIRMED** | same C14 |
 
 ## Killed or corrected
 
@@ -120,3 +129,40 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
   $0.02 and not $0.01. Recorded in
   `deepseek-suite/results/DEFECT-interval-width.md`; the fix is deferred only to
   avoid clobbering a concurrently running agent.
+
+- **The reasoning-off lever is ~1.5x, not ~20x, once the prefix is cached.**
+  Track C modelled it and the measured arms confirm it: A3 to A4 cuts output
+  tokens 39x and total cost only 1.48x, because a warm 16k prefix makes input
+  the dominant term. The "6.5x cheaper" headline is against the naive baseline
+  and bundles three levers; ordering plus warming is 4.4x of it. Recorded
+  because the small size of the lever, set against a 29% to 11% accuracy cliff
+  on non-lookup classes, is what decides whether to use it. DS-C5.
+- **`session.Run.fan` does not pass `extra_kwargs` through**, although `ask`
+  does. Track C could only force its reasoning arms by handing `fan` a
+  `task_class` it knew to be wrong, which couples the semantic classification to
+  the mechanical setting and makes the arm unfaithful. Fix deferred while Track
+  D is still writing to that module. OPEN.
+- **`git add -A` swept up another agent's in-flight files.** Commit `bcf2e2c`
+  captured Track C's work mid-edit, and two later edits of its own remained
+  uncommitted. Four agents sharing one worktree needs per-path staging, not a
+  blanket add. Relates to the standing "stop two sessions editing the same
+  worktree" item.
+
+- **The cross-dialect cache claim was wrong, then right, then explained.** The
+  original n=1 observation said the cache crossed dialects. A7, better
+  controlled, said it did not. Rather than prefer the newer run, the original
+  sequence was replayed byte-for-byte and the raw request artifacts compared:
+  the original bodies carried no `reasoning_effort` and the replay did. A9
+  tested that directly and both observations are correct. The lesson is that
+  preferring the better-controlled experiment would have produced a true
+  conclusion by luck and lost the actual mechanism. DS-A9.
+- **A6's parameter-invariance result does not cover `reasoning_effort`.** All six
+  A6 arms were the same task class, so the parameter was constant across them.
+  A10 tested it and it is the one request field found to participate in cache
+  identity. An ignored junk key does not, which rules out the cache key being
+  the raw request body. DS-A10.
+- **I corrupted another agent's report with a careless regex.** A substitution
+  intended to fix one Markdown code span matched across adjacent spans and
+  damaged 70 sites in an uncommitted file. It was exactly invertible and was
+  reversed, then the single genuine case was fixed surgically. Sweeping regexes
+  over prose are not safe edits; the file had no commit to fall back to.

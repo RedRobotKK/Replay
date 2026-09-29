@@ -1,0 +1,179 @@
+{
+ "records": [
+  {
+   "label": "A4 seq A",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 3340,
+   "out": 8,
+   "wall_ms": 1150,
+   "usd": 0.0005058,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A4 seq B (after A completed)",
+   "outcome": "ANSWERED",
+   "hit": 3200,
+   "miss": 147,
+   "out": 1,
+   "wall_ms": 1118,
+   "usd": 3.225e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A4 conc A",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 3369,
+   "out": 8,
+   "wall_ms": 1052,
+   "usd": 0.00051015,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A4 conc B",
+   "outcome": "ANSWERED",
+   "hit": 0,
+   "miss": 3376,
+   "out": 1,
+   "wall_ms": 1196,
+   "usd": 0.000507,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A6 populate",
+   "outcome": "TRUNCATED",
+   "hit": 0,
+   "miss": 3343,
+   "out": 8,
+   "wall_ms": 983,
+   "usd": 0.00050625,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A6 control (no change)",
+   "outcome": "ANSWERED",
+   "hit": 3200,
+   "miss": 150,
+   "out": 1,
+   "wall_ms": 771,
+   "usd": 3.27e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A6 temperature=0.9",
+   "outcome": "ANSWERED",
+   "hit": 3200,
+   "miss": 150,
+   "out": 1,
+   "wall_ms": 773,
+   "usd": 3.27e-05,
+   "status": 200,
+   "extra": {
+    "temperature": 0.9
+   }
+  },
+  {
+   "label": "A6 max_tokens=64",
+   "outcome": "ANSWERED",
+   "hit": 3200,
+   "miss": 150,
+   "out": 1,
+   "wall_ms": 794,
+   "usd": 3.27e-05,
+   "status": 200,
+   "extra": {}
+  },
+  {
+   "label": "A6 top_p=0.5",
+   "outcome": "ANSWERED",
+   "hit": 3200,
+   "miss": 150,
+   "out": 1,
+   "wall_ms": 723,
+   "usd": 3.27e-05,
+   "status": 200,
+   "extra": {
+    "top_p": 0.5
+   }
+  },
+  {
+   "label": "A6 frequency_penalty=1.0",
+   "outcome": "ANSWERED",
+   "hit": 3200,
+   "miss": 150,
+   "out": 1,
+   "wall_ms": 1029,
+   "usd": 3.27e-05,
+   "status": 200,
+   "extra": {
+    "frequency_penalty": 1.0
+   }
+  },
+  {
+   "label": "A6 presence_penalty=1.0",
+   "outcome": "ANSWERED",
+   "hit": 3200,
+   "miss": 150,
+   "out": 1,
+   "wall_ms": 995,
+   "usd": 3.27e-05,
+   "status": 200,
+   "extra": {
+    "presence_penalty": 1.0
+   }
+  },
+  {
+   "label": "A6 stop=['zzz']",
+   "outcome": "ANSWERED",
+   "hit": 3200,
+   "miss": 150,
+   "out": 1,
+   "wall_ms": 715,
+   "usd": 3.27e-05,
+   "status": 200,
+   "extra": {
+    "stop": [
+     "zzz"
+    ]
+   }
+  }
+ ],
+ "summary": {
+  "calls": 12,
+  "fresh_in": 14625,
+  "cache_read": 25600,
+  "out": 33,
+  "reasoning": 0,
+  "derived_usd": 0.002290350000000001,
+  "errors": 0,
+  "wall_s": 10.29371690750122,
+  "tally": {
+   "ANSWERED": 9,
+   "TRUNCATED": 3,
+   "REFUSED_BUDGET": 0,
+   "ERROR": 0
+  },
+  "budget": {
+   "ceiling_usd": 0.3,
+   "settled_usd": 0.00229035,
+   "outstanding_usd": 0.0,
+   "refused": 0
+  },
+  "pass_rate": null,
+  "passed": 0,
+  "decided": 0
+ },
+ "a2_verdicts": null,
+ "a4": {
+  "seq_b_hit": 3200,
+  "conc_b_hit": 0,
+  "b_before_a_returned": true
+ }
+}

@@ -75,7 +75,7 @@ One example per class, quoted from the harness:
 Real Replay source: `internal/advisor/advisor.go` then
 `internal/transcript/wire.go`, each behind a `===== FILE: ... =====` marker,
 48,166 characters. It is the same corpus as the prior run, which makes that
-run's counting truths (39 lines beginning `func `, 14 beginning `type `) a
+run's counting truths (39 lines beginning with `func` plus a space, 14 beginning with `type` plus a space) a
 cross-check on this harness and not only on the model. A fixture test asserts
 both.
 
@@ -90,7 +90,7 @@ function in `taskclasses.py`. A hand-typed expected answer is an unversioned
 second copy of the corpus that goes stale without failing anything.
 
 This is not a claim, it is a test. `test_taskclasses.py` perturbs the corpus and
-requires the answers to move: adding a function increments the `func ` count,
+requires the answers to move: adding a function increments the `func` plus space count,
 changing `HashedLabelBytes` from 12 to 77 moves the lookup answer, the
 three-constant sum and the digit-reversal together, and renaming a struct field
 moves the multi-step answer. A hardcoded truth cannot pass those tests, and the

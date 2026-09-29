@@ -109,19 +109,44 @@ def reconstruct(paths):
 # was reported OUTSIDE its own interval -- a reconciliation reading as failed
 # when it passed.
 NANO = 1_000_000_000
-HALF_CENT_NANO = 5_000_000
+
+# Half the balance endpoint's display resolution. `total_balance` is a JSON
+# string carrying two decimals, verified in raw bodies, so one reading is
+# accurate to within half a cent.
+HALF_RESOLUTION_NANO = 5_000_000
+
+# The half-width of the band a DIFFERENCE of two readings can distinguish.
+# Two readings, two independent quantisations, so twice one reading's error.
+DIFFERENCE_SPAN_NANO = 2 * HALF_RESOLUTION_NANO
+
+# Kept as the name Track D's money tests read the width from, so widening the
+# band stayed a one-constant change for them, as they designed for.
+HALF_CENT_NANO = DIFFERENCE_SPAN_NANO
 
 
-def within_resolution(observed_usd, derived_usd):
-    """Is the DERIVED total inside what the OBSERVED balance can distinguish?
+def within_resolution(observed_delta_usd, derived_usd,
+                      span_nano=DIFFERENCE_SPAN_NANO):
+    """Is DERIVED inside what a balance DIFFERENCE can distinguish?
 
-    Returns (inside, lo_usd, hi_usd). The comparison is exact; the two bounds
-    are floats because they are only ever printed.
+    Returns (inside, lo_usd, hi_usd).
+
+    The quantity reconciled is a difference of TWO cent-resolution readings, and
+    each carries its own independent quantisation error. The band is therefore
+    4 * half_resolution wide, not 2. An earlier version used a single reading's
+    error and so tested every reconciliation against a band half as wide as the
+    evidence supports, which flattered the result rather than breaking it.
+
+        before observed b0 -> true in [b0-q, b0+q)
+        after  observed b1 -> true in [b1-q, b1+q)
+        difference         -> true in (D-2q, D+2q)
+
+    The interval is OPEN at both ends and is identical whether the provider
+    rounds or truncates, which matters because its rounding rule is NOT_OBSERVED.
     """
-    obs = int(round(observed_usd * NANO))
+    obs = int(round(observed_delta_usd * NANO))
     der = int(round(derived_usd * NANO))
-    lo, hi = obs - HALF_CENT_NANO, obs + HALF_CENT_NANO
-    return lo <= der < hi, lo / NANO, hi / NANO
+    lo, hi = obs - span_nano, obs + span_nano
+    return lo < der < hi, lo / NANO, hi / NANO
 
 
 def main():
@@ -169,7 +194,8 @@ def main():
         # Quoting a ratio without this interval implies a precision the
         # instrument does not have. See within_resolution above.
         inside, lo, hi = within_resolution(obs, r["derived_usd"])
-        print(f"   OBSERVED resolution interval   [${lo:.3f}, ${hi:.3f})")
+        print(f"   OBSERVED resolution interval   (${lo:.3f}, ${hi:.3f})"
+              f"   open at both ends: a difference of two readings")
         print(f"   DERIVED lies inside it         {inside}")
         if r["derived_usd"]:
             print(f"   ratio observed/derived         {obs / r['derived_usd']:.4f}"

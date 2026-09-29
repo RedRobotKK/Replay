@@ -312,6 +312,7 @@ measurement note, not a mechanism.
 
 **What additional experiment would establish a stronger mechanism.** Three things, in order of
 value:
+
 1. Re-run the rung sweep on a second DeepSeek model to test whether 128 is model-specific or
    whether the published 64 is stale. This directly tests the discrepancy.
 2. Register the falsifier before running: state what result would mean the 128 figure is an

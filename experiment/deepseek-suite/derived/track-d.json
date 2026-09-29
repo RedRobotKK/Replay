@@ -1,0 +1,393 @@
+{
+ "track": "D",
+ "title": "instrumentation validity",
+ "date": "2026-09-28",
+ "api_calls_made": 0,
+ "spend_usd": 0.0,
+ "harness_suite": {
+  "files": 9,
+  "tests": 128,
+  "failing": 0,
+  "command": "make harness-test"
+ },
+ "mutation_check": {
+  "applied": 8,
+  "killed": 8,
+  "survived": 0,
+  "clean_state": "PYTHONDONTWRITEBYTECODE=1 plus rm -rf __pycache__ before and after every trial",
+  "restore_and_run_control": "PASS"
+ },
+ "D1": {
+  "question": "is the stale-bytecode mechanism what was claimed",
+  "result": "CONFIRMED",
+  "evidence_class": "OBSERVED",
+  "mechanism": "a timestamp .pyc records source mtime truncated to a whole second plus source size; CPython reuses the cached bytecode while both match, so a mutate-test-restore cycle completing inside one second executes the previous step's bytecode",
+  "reproduced_directions": [
+   "mutant on disk runs original bytecode: mutation falsely SURVIVED",
+   "original restored runs mutant bytecode: control falsely FAILING"
+  ],
+  "natural_race_trials": {
+   "n": 20,
+   "stale": 20,
+   "method": "plain cp, no clock manipulation"
+  },
+  "refinements_not_in_the_original_account": [
+   "source_size is a partial guard: a mutation that changes byte length is rejected",
+   "the restore direction has no such protection because the restored file is always the original's length, so a falsely failing control can follow any mutation"
+  ],
+  "detected_by": "the restore-and-run control; direction A alone is silent",
+  "permanent_guard": "PYTHONDONTWRITEBYTECODE=1 and rm -rf __pycache__, already in scripts/harness-test",
+  "implemented": {
+   "module": "experiment/harness/cleanstate.py",
+   "tests": "experiment/harness/test_cleanstate.py",
+   "test_count": 11,
+   "verdicts": [
+    "ACCEPTED_AND_STALE",
+    "ACCEPTED_AND_FRESH",
+    "REJECTED",
+    "NO_SOURCE",
+    "UNREADABLE"
+   ]
+  },
+  "incidental": "a stale experiment/harness/__pycache__/pricing.cpython-314.pyc was present at track start, gitignored and untracked, removed",
+  "gaps": [
+   "assert_clean is not yet called by any checked-in sweep driver",
+   "the digest comparison excludes co_filename and co_firstlineno",
+   "hash-based pyc handling was not exercised against a real one"
+  ]
+ },
+ "D2": {
+  "question": "do float-accumulation hazards remain on the monetary paths",
+  "result": "PARTIALLY SUPPORTED",
+  "premise_holds": "fanout.Budget integer nano-USD conversion is correct and now pinned at the 10 x 0.002 against 0.02 ceiling",
+  "new_defects_found": 3,
+  "decision_changing": 2,
+  "findings": [
+   {
+    "id": "D2-1",
+    "site": "reconstruct.py reconciliation interval",
+    "kind": "comparison against a threshold",
+    "severity": "decision-changing",
+    "defect": "lo, hi = obs - 0.005, obs + 0.005 with lo <= derived < hi; at observed 0.05 the lower bound evaluates to 0.045000000000000005, above the bound it represents, so a derived total of exactly 0.045 was reported outside an interval it is the endpoint of",
+    "status": "FIXED",
+    "fix": "within_resolution() builds the interval in integer nano-USD",
+    "regression_test": "test_money.py TestTheReconciliationIntervalDoesNotDependOnFloatLuck",
+    "mutations_killed": 2,
+    "orthogonal_open_defect_from_track_b": {
+     "defect": "the interval is half its true width; a difference of two cent-resolution balance readings carries two independent quantisations, so the bound should be plus or minus 0.01 not 0.005",
+     "recorded_at": "experiment/deepseek-suite/results/DEFECT-interval-width.md",
+     "status": "OPEN, deferred by Track B to avoid a concurrent-edit clobber",
+     "independence": "Track D fixed where the boundary lies; Track B will fix how wide the interval is",
+     "handoff": "within_resolution is the single place the width fix lands; test_money.py reads the width from reconstruct.HALF_CENT_NANO and was verified to pass unchanged at both 0.005 and 0.01",
+     "ds_f5_unaffected": "its two hypotheses are 29x apart"
+    }
+   },
+   {
+    "id": "D2-2",
+    "site": "meter.Meter.summary",
+    "kind": "display",
+    "severity": "crash on a reachable path",
+    "defect": "100 * derived_usd / ceiling is guarded in record() and unguarded in summary(); a run built with a zero ceiling refuses every call and then raises ZeroDivisionError when summarised",
+    "status": "FIXED",
+    "regression_test": "test_money.py TestAZeroCeilingDoesNotCrashTheReport",
+    "mutations_killed": 1
+   },
+   {
+    "id": "D2-3",
+    "site": "arms.py per-arm cost",
+    "kind": "published headline ratio",
+    "severity": "hazard",
+    "defect": "round(meter.derived_usd - before, 6) differences two float running totals and then publishes base/arm as a ratio; the subtraction inherits the meter's drift and the rounding zeroes an arm below 5e-7, at which point the ratio becomes float('inf')",
+    "status": "REPORTED NOT FIXED",
+    "reason": "fixing it means re-deriving each arm's cost from saved artifacts, which is a re-analysis of another track's headline"
+   }
+  ],
+  "observed_drift_in_campaign_artifacts": [
+   {
+    "file": "tmp/probe/arms.json",
+    "settled_usd_exact": 0.043330728,
+    "derived_usd_float": 0.043330728000000006,
+    "calls": 72
+   },
+   {
+    "file": "tmp/probe/rscope.json",
+    "settled_usd_exact": 0.0921174,
+    "derived_usd_float": 0.09211739999999996
+   },
+   {
+    "file": "tmp/probe/rscope2.json",
+    "settled_usd_exact": 0.041821632,
+    "derived_usd_float": 0.04182163200000001
+   }
+  ],
+  "proven_safe": [
+   {
+    "site": "pricing.is_peak",
+    "kind": "comparison against a threshold deciding a 2x rate",
+    "why": "minute/60 is exactly 0.0 at minute 0 and strictly between 0 and 1 otherwise, and every boundary falls on a whole hour",
+    "pinned_by": "all 1440 minutes of a weekday against an exact integer rule, both edges of all four boundaries, and the weekend at every hour"
+   },
+   {
+    "site": "fanout.Budget.reserve",
+    "kind": "comparison against a threshold",
+    "why": "all integer nano-USD"
+   },
+   {
+    "site": "fanout._nano",
+    "why": "exact for every published rate and every ceiling the campaign used"
+   },
+   {
+    "site": "reconstruct conservation check",
+    "why": "integer token comparison"
+   }
+  ],
+  "tolerable_display_only": [
+   "pricing.cost_usd",
+   "meter.derived_usd accumulation",
+   "meter._fmt_usd",
+   "Budget.snapshot"
+  ],
+  "tests_added": {
+   "file": "experiment/harness/test_money.py",
+   "count": 13
+  },
+  "gaps": [
+   "DS-OPT arm ratios not recomputed from saved artifacts",
+   "pricing.cost_usd takes no cache_write argument so Anthropic-dialect creation tokens price at zero; ASSUMED correct, 2 of 479 responses use that dialect and both report 0 creation tokens",
+   "is_peak does not model Chinese public holidays, documented, over-states cost, not a float issue"
+  ]
+ },
+ "D3": {
+  "question": "does every billable request carry complete evidence",
+  "result": "PARTIALLY SUPPORTED",
+  "corpus": "/Users/daniel/.claude/jobs/581b6292/tmp/probe/",
+  "counts": {
+   "request_artifacts": 479,
+   "response_artifacts": 479,
+   "unmatched_requests": 0,
+   "unmatched_responses": 0,
+   "with_usage_block": 479,
+   "with_model": 479,
+   "with_timestamp": 477,
+   "priceable_model": 479,
+   "conservation_violations": 0,
+   "responses_carrying_an_error": 0,
+   "models": {
+    "deepseek-flash": 467,
+    "deepseek-v4-pro": 12
+   },
+   "dialects": {
+    "chat": 477,
+    "anthropic": 2
+   }
+  },
+  "gap_count": 2,
+  "gaps_detail": [
+   {
+    "files": [
+     "res-05abd72c.json",
+     "res-8fc0063c.json"
+    ],
+    "missing": [
+     "created timestamp",
+     "derivable pricing regime"
+    ],
+    "cause": "/anthropic/v1/messages returns no created field",
+    "consequence": "reconstruct.py substitutes the corpus-wide latest timestamp, which is an ASSUMED regime presented alongside 477 derived ones",
+    "harmless_here": "all 479 calls fall inside one 16-minute window that is entirely peak"
+   }
+  ],
+  "ledger_reconciles_to_artifacts": {
+   "summary_blocks": 279,
+   "reconcile_rows": 200,
+   "total": 479,
+   "artifacts": 479,
+   "billable_calls_with_no_artifact": 0
+  },
+  "window_utc": {
+   "first": "2026-09-29T03:26:36Z",
+   "last": "2026-09-29T03:42:52Z"
+  },
+  "balance_residual": {
+   "evidence_class": "NOT_OBSERVED",
+   "usd": 0.046,
+   "derivation": "reconcile.json after-read 45.96; rscope and rscope2 ran after it deriving 0.134; first settle poll at 05:15 UTC reads 45.78, a fall of 0.18",
+   "instrument_resolution_usd": 0.01,
+   "candidates": [
+    "settlement lag on earlier calls",
+    "cent quantisation",
+    "billable calls whose responses were never saved"
+   ],
+   "note": "the artifacts cannot distinguish them; no balance read exists from before the first call, so a corpus-wide reconciliation is impossible from these files"
+  },
+  "harness_hole_found": {
+   "runtime": {
+    "site": "adapter._post",
+    "defect": "curl reported HTTP 200 and wrote no output file; json.load threw, the exception was swallowed to doc = {}, every usage field stayed None, pricing returned None, meter coerced it to 0.00 and Budget.settle banked a real billed call as free with outcome ANSWERED",
+    "reproduced": true,
+    "status": "FIXED",
+    "fix": "adapter.ArtifactMissing raised when the response file is absent or empty; a body that is on disk but unparseable deliberately does not raise, because it is still evidence",
+    "second_fix": "session.ask returns Outcome.ERROR with an UNACCOUNTED reason for a 200 whose usage block never arrived, and HOLDS the reservation because the provider answered"
+   },
+   "static": {
+    "site": "transport.py and its byte-identical copy t.py",
+    "defect": "a pooled requests.Session that posts to the provider and writes no artifact; documented as the replacement for the curl subprocess, tested, and nothing stopped a future script importing it",
+    "imported_by_anything_today": false,
+    "status": "GUARDED",
+    "fix": "TestNoModuleReachesTheProviderWithoutPersisting, in the same shape as TestNoScriptBypassesTheRunner: every module with a POST marker is either declared persisting and checked to write both artifacts and carry the raise, or quarantined and checked to persist nothing, and no non-test module may import a quarantined one"
+   }
+  },
+  "enforce_persistence_like_session": "YES, and implemented",
+  "tests_added": {
+   "file": "experiment/harness/test_persistence.py",
+   "count": 12
+  },
+  "gaps": [
+   "the two Anthropic-dialect responses have no timestamp at the source; recording a client-side send time in the request artifact would fix it but changes the schema",
+   "reconstruct.py imputes a regime for a timestamp-less response without marking it ASSUMED in its output",
+   "the 0.046 residual stays NOT_OBSERVED; closing it needs a balance read before the first call of a run",
+   "t.py and f.py are near-duplicates of transport.py and fanout.py, so a sweep against fanout.py leaves f.py unmutated"
+  ]
+ },
+ "D4": {
+  "question": "are the prior experiments valid",
+  "result": "CLASSIFICATION DELIVERED; the known line-number case is CONFIRMED",
+  "experiments_found": 24,
+  "tally": {
+   "VALID": 8,
+   "LIMITED": 12,
+   "INVALID": 3,
+   "NOT_RUN": 1
+  },
+  "VALID": [
+   "DS-BASE",
+   "DS-SURF",
+   "DS-F3",
+   "DS-F4b",
+   "DS-F5",
+   "DS-DOC",
+   "DS-WF",
+   "DS-RW"
+  ],
+  "LIMITED": [
+   "DS-GAP",
+   "DS-CONC",
+   "DS-F1",
+   "DS-F4a",
+   "DS-C1",
+   "DS-C2",
+   "DS-F2b",
+   "DS-OPT",
+   "DS-RS",
+   "WP-01",
+   "WP-02",
+   "HH-02"
+  ],
+  "INVALID": [
+   "DS-SURF-PO",
+   "DS-F2",
+   "DS-F4"
+  ],
+  "NOT_RUN": [
+   "settle_test BIG/SMALL"
+  ],
+  "nothing_discarded": true,
+  "register": "experiment/deepseek-suite/invalid/register.md",
+  "known_case": {
+   "status": "CONFIRMED",
+   "defect": "a task class labelled mechanical lookup asked which function was declared on a given LINE NUMBER of a 48,167-character document, which is positional counting",
+   "surviving_descriptions": [
+    "experiment/deepseek/reasoning-scope-prereg-2026-09-29.md:20-21",
+    "experiment/deepseek/reasoning-scope-2026-09-29.md:81-85",
+    "experiment/harness/reasoning_scope.py:38-41"
+   ],
+   "void_run": "reasoning-on truncated 12 of 12 at max_tokens 1024; reasoning-off scored 0 of 12; neither cell was a model result",
+   "finding_not_previously_recorded": "the void run was correctly discarded but the M class was then redesigned from line-number to string-constant lookup and the prereg was never amended, so the published DS-RS did not execute its registered protocol"
+  },
+  "recurring_threats": [
+   {
+    "threat": "n = 1 run per configuration",
+    "experiments": [
+     "DS-OPT",
+     "DS-C1",
+     "DS-C2",
+     "DS-F2b",
+     "DS-F5"
+    ]
+   },
+   {
+    "threat": "permissive checker",
+    "detail": "arms.py scores a bare substring for a six-digit value against a document holding twelve; reasoning_scope.py passes any answer containing the digit anywhere",
+    "direction_bounded_for": "DS-RS, where it inflates the reasoning-off cell and makes the reported effect conservative",
+    "direction_unbounded_for": "DS-OPT"
+   },
+   {
+    "threat": "DERIVED presented as a headline",
+    "detail": "DS-C1, DS-RS and every DS-OPT arm cost less than the balance endpoint's 0.01 resolution and were never reconciled against money"
+   },
+   {
+    "threat": "regime attribution unrecorded",
+    "detail": "meter.record prices at now() per call and meter.summary labels the run at summary time; no artifact carries a per-call UTC timestamp, so the campaign prereg's peak/off-peak control is unenforceable retrospectively"
+   },
+   {
+    "threat": "post-hoc rescue",
+    "experiments": [
+     "DS-C1 refit its block model after a 4 of 5 preregistered falsification round",
+     "DS-RS redesigned its task class after a void run"
+    ]
+   }
+  ],
+  "live_sibling_of_the_known_defect": {
+   "site": "experiment/harness/tasks.py:32-33",
+   "defect": "a counting task labelled A: mechanical; DS-F1 reports it mechanical and finds reasoning-off better 18/20 against 9/20, while DS-RS classifies counting as aggregative and finds reasoning-off catastrophic at 29%, and policy.py ships the DS-RS rule; nothing reconciles the two",
+   "recommendation": "highest-value single re-run in the campaign"
+  },
+  "ground_truth_defect": {
+   "site": "experiment/harness/reasoning_scope.py:69-74",
+   "defect": "the question asks for every line beginning with the exact five characters 'type ' but the truth regex requires ^type \\w+, excluding a Go grouped declaration 'type (' that the question counts, and counting occurrences rather than lines; the published truth of 14 is the regex's answer, not the question's"
+  },
+  "ledger_numbers_unsupported_by_their_sources": [
+   {
+    "claim": "17/17 rungs exact",
+    "cited_at": [
+     "EXPERIMENT-LEDGER.md:23",
+     "experiment/harness/policy.py:19",
+     "docs/DEEPSEEK-OPTIMIZATION.md:56"
+    ],
+    "source_says": "4 of 5 preregistered and 5 of 5 fully observed; 12 of 12 is reached only by refitting against observed prompt tokens after the fact"
+   },
+   {
+    "claim": "campaign spend total",
+    "conflicting": [
+     "$0.18 observed at docs-reconciliation-2026-09-29.md:85",
+     "~$0.86 at EXPERIMENT-STATUS.md:25",
+     "$0.23 OBSERVED at deepseek-suite/README.md:41"
+    ],
+    "note": "only the $0.23 figure is defensible and it is worded as if cumulative"
+   },
+   {
+    "claim": "EXPERIMENT-STATUS.md:3 dated 2026-09-28 on a body reporting the 2026-09-29 sweep"
+   }
+  ],
+  "gaps": [
+   "all three INVALID experiments were already withdrawn by the project, so no undisclosed invalidity was found; the classification rests largely on the project's own confessions",
+   "the DS-F1 counting cell is LIMITED rather than INVALID because its extraction and ordering cells are separable; deciding it needs a re-run",
+   "no experiment was re-scored"
+  ]
+ },
+ "files_written": [
+  "experiment/deepseek-suite/results/track-d.md",
+  "experiment/deepseek-suite/invalid/register.md",
+  "experiment/deepseek-suite/derived/track-d.json",
+  "experiment/harness/cleanstate.py",
+  "experiment/harness/test_cleanstate.py",
+  "experiment/harness/test_money.py",
+  "experiment/harness/test_persistence.py"
+ ],
+ "files_modified": [
+  "experiment/harness/adapter.py",
+  "experiment/harness/meter.py",
+  "experiment/harness/session.py",
+  "experiment/harness/reconstruct.py"
+ ]
+}

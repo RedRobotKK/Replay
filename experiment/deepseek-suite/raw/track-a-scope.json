@@ -1,0 +1,15 @@
+{
+ "a7": {
+  "chat_warm": 3200,
+  "anth_on_chat_prefix": 0,
+  "anth_warm": 3200,
+  "chat_on_anth_prefix": 0
+ },
+ "a8": {
+  "flash_warm": 3200,
+  "pro_on_flash_prefix": 0,
+  "pro_warm": 3328,
+  "flash_on_pro_prefix": 0
+ },
+ "derived_usd": 0.007702006000000001
+}

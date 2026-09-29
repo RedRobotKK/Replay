@@ -24,6 +24,26 @@ begins with whitespace.
 
 ### 2. Disable reasoning on lookups, never on aggregation
 
+**Read the size of this lever before reaching for it.** The 19.5x output-token
+reduction is real and it is mostly not a cost reduction. On a workload with a
+cached shared prefix, input dominates and the output saving is diluted:
+
+| comparison | output tokens | total cost |
+| --- | ---: | ---: |
+| warm-then-fan, reasoning ON (A3) | 936 | $0.00313 |
+| same, reasoning OFF (A4) | 24 | $0.00211 |
+| ratio | **39x** | **1.48x** |
+
+The headline "6.5x cheaper" is measured against the NAIVE baseline and bundles
+three interventions. Decomposed: **ordering plus warming is 4.4x of it, and
+reasoning-off adds 1.48x on top.**
+
+That changes the risk calculus rather than the direction. A 1.48x saving does
+not justify the accuracy cliff below on anything but genuine lookups, because
+the failures are confident wrong answers with no runtime signal. Where the
+prefix is NOT cached the lever is larger; measure it for the workload rather
+than assuming either figure.
+
 This lever is **class-conditional** and reversing it is costly:
 
 | task class | reasoning on | reasoning off |
