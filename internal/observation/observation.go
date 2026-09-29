@@ -57,13 +57,13 @@ const (
 // ValidBasis reports whether a tag basis is one of the two the aggregator
 // knows how to weight.
 //
-// THE ENUMERATION IS CLOSED AND THE REASON IS NOT TIDINESS. pool.go:344 reads
-// this field to choose between two published sentences: a tag derived from a
-// provider account supports "N submissions from N distinct provider accounts",
-// and a machine-local one supports only "a count of MACHINES AT MOST ...
-// anyone can mint unlimited ones". So an unvalidated basis does not merely sit
-// in a roster row looking untidy, it selects what the public document claims
-// its own numbers mean.
+// THE ENUMERATION IS CLOSED AND THE REASON IS NOT TIDINESS. The basis travels
+// in the published roster, so an unvalidated one reaches a public document
+// verbatim. It used to do more than that: the pool read it to choose between
+// two published sentences, one of which asserted provider identity. That
+// sentence was removed on 2026-09-29 because nothing could support it, and
+// TagNote now says why. The enumeration stays closed because a value that
+// reaches a public artifact should be one of the values that mean something.
 //
 // This check lived inline in Build and covered the observation payload only.
 // Corpus and Calibration carry the same field, are published the same way, and

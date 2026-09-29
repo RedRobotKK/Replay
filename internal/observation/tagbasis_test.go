@@ -134,25 +134,17 @@ func TestTB3_TheCalibrationArtifactEnforcesTheSameEnumeration(t *testing.T) {
 	}
 }
 
-// TB4: the RESIDUAL defect, recorded rather than implied.
+// TB4: the declared basis cannot change the strength of the published claim.
 //
-// Closing the enumeration does not close claim integrity. "account" is a
-// legitimate value, so a contributor who hand-edits "local" to "account" still
-// upgrades the published sentence from
+// THIS TEST REPLACES ONE THAT PINNED THE DEFECT. Until 2026-09-29 it recorded
+// that a self-declared "account" basis upgraded the published sentence, and
+// said in its own comment to delete it with the fix. That is what happened.
 //
-//	"...a count of MACHINES AT MOST ... anyone can mint unlimited ones"
-//
-// to
-//
-//	"N submissions from N distinct provider accounts"
-//
-// and nothing in the payload can verify how the tag was actually derived. The
-// pool trusts a self-declaration and TagsAreIdentities defaults to TRUE, so the
-// stronger claim is the fail-open direction.
-//
-// This test asserts the CURRENT behaviour so that a later fix has to come here
-// and change it deliberately. It is not an approval of that behaviour.
-func TestTB4_ASelfDeclaredAccountBasisIsStillTrusted(t *testing.T) {
+// The invariant now is the one that matters: changing tagBasis from "local" to
+// "account", which is the entire attack, cannot increase what the document
+// asserts. The basis is still a validated enumeration and still travels in the
+// roster; it simply no longer selects a claim.
+func TestTB4_TheDeclaredBasisCannotStrengthenTheClaim(t *testing.T) {
 	note := func(basis, tag string) string {
 		p := NewPool("2026-09-29")
 		if err := p.Add(tbCorpus(basis, tag), "replay-corpus-"+tag+".json"); err != nil {
@@ -166,16 +158,16 @@ func TestTB4_ASelfDeclaredAccountBasisIsStillTrusted(t *testing.T) {
 	}
 
 	local := note(BasisLocal, "aaaaaaaaaaaaaaaa")
-	account := note(BasisAccount, "bbbbbbbbbbbbbbbb")
+	account := note(BasisAccount, "aaaaaaaaaaaaaaaa")
 
+	if local != account {
+		t.Errorf("the declared basis still changes the published claim:\n  local:   %q\n  account: %q",
+			local, account)
+	}
 	if !strings.Contains(local, "MACHINES AT MOST") {
-		t.Errorf("the local-basis note is no longer the hedged sentence: %q", local)
+		t.Errorf("the conservative wording was lost: %q", local)
 	}
-	if !strings.Contains(account, "distinct provider accounts") {
-		t.Errorf("the account-basis note is no longer the stronger sentence: %q", account)
-	}
-	if local == account {
-		t.Log("the two notes no longer differ; if the self-declaration was made " +
-			"unverifiable-and-therefore-hedged, delete this test with the change")
+	if strings.Contains(account, "distinct provider accounts") {
+		t.Errorf("the provider-account claim survives: %q", account)
 	}
 }

@@ -234,19 +234,14 @@ type PoolTotals struct {
 	Submissions int `json:"submissions"`
 	// DistinctTags is how many distinct source tags those submissions carry.
 	//
-	// It is NOT a count of people, and TagsAreIdentities says so. A local tag
-	// is derived from a secret the machine minted, so one person with three
-	// machines is three tags, and anyone can mint unlimited ones. It is here
+	// It is NOT a count of people, and TagNote says so in the published
+	// document. A tag is derived from a secret the machine minted, so one
+	// person with three machines is three tags, and anyone can mint unlimited
+	// ones. It is here
 	// because it is strictly more informative than Submissions alone — it says
 	// whether a pool is 41 machines or one machine 41 times — and for nothing
 	// else.
 	DistinctTags int `json:"distinctTags"`
-	// TagsAreIdentities is false whenever any submission's tag came from a
-	// machine-local secret, which is the only basis the CLI currently emits.
-	//
-	// It travels so a consumer of this JSON cannot read DistinctTags as a
-	// population without also reading the field that says it is not one.
-	TagsAreIdentities bool `json:"tagsAreIdentities"`
 	// SupersededSubmissions is how many contributed files are named in this
 	// document but not counted in it, because a later submission from the same
 	// machine replaced them.
@@ -329,7 +324,6 @@ func (p Pool) Totals() (PoolTotals, error) {
 	t := PoolTotals{
 		Submissions:           len(p.Roster),
 		SupersededSubmissions: len(p.Superseded),
-		TagsAreIdentities:     true,
 		RulesVersion:          first.RulesVersion,
 		MedianTaskUSDLow:      first.MedianTaskUSD,
 		MedianTaskUSDHigh:     first.MedianTaskUSD,
@@ -341,9 +335,6 @@ func (p Pool) Totals() (PoolTotals, error) {
 	for _, e := range p.Roster {
 		tags[e.SourceTag] = true
 		dates[e.PricedAt] = true
-		if e.TagBasis != BasisAccount {
-			t.TagsAreIdentities = false
-		}
 		t.Tasks += e.Tasks
 		t.TotalUSD += e.TotalUSD
 		t.RebilledUSD += e.RebilledUSD
@@ -409,11 +400,36 @@ func MedianSpan(t PoolTotals) string {
 }
 
 // TagNote states what DistinctTags is, and what it is not.
+//
+// ONE SENTENCE, AND THE SECOND ONE WAS REMOVED ON EVIDENCE.
+//
+// This used to branch on TagsAreIdentities and publish "N submissions from N
+// distinct provider accounts" whenever every submission declared an account
+// basis. Nothing could support that. A tag is HMAC(campaign, identity)
+// truncated, so verifying one requires the identity, and the identity is
+// exactly what this payload refuses to carry: the pool holds no artifact that
+// could contradict the declaration. The basis was a self-declaration and the
+// boolean turned it into a published claim.
+//
+// Worse, the stronger claim was not reachable honestly at all. AccountTag has
+// no production caller; every shipped contribution path calls LocalTag, and
+// there is no account-identifier input anywhere in the CLI. So the only way to
+// reach that sentence was to hand-edit one word of a written file, and
+// TagsAreIdentities defaulted to TRUE, which pointed the fail-open direction at
+// the claim the binary cannot produce.
+//
+// The boolean went with the sentence rather than being left to report a
+// declaration nobody should act on. Keeping it would have published the same
+// assertion as `"tagsAreIdentities": true`, which is the identical claim in the
+// form a consumer parses rather than reads. Nothing external consumed it and no
+// pool document exists in this repository's history, so there was nothing to
+// keep compatible with.
+//
+// tagBasis itself is untouched. It remains a validated enumeration and travels
+// in the roster, because a reader deciding how to weight a submission should
+// see what was declared. What no longer happens is Replay restating that
+// declaration as a finding of its own.
 func TagNote(t PoolTotals) string {
-	if t.TagsAreIdentities {
-		return fmt.Sprintf("%d submissions from %d distinct provider accounts",
-			t.Submissions, t.DistinctTags)
-	}
 	return fmt.Sprintf("%d submissions carrying %d distinct tags. A tag is derived from a "+
 		"secret the contributing machine generated, so this is a count of MACHINES AT MOST "+
 		"and not of people: one person with several machines contributes several tags, and "+

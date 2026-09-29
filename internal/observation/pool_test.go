@@ -316,9 +316,6 @@ func TestPL11_SubmissionsAreNotPeople(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.TagsAreIdentities {
-		t.Error("local tags are reported as identities")
-	}
 	note := TagNote(got)
 	if !strings.Contains(note, "MACHINES AT MOST") || !strings.Contains(note, "not of people") {
 		t.Errorf("the tag note does not say what the count is not: %q", note)

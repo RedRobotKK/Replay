@@ -80,7 +80,25 @@ func TestGD3_AnEarlierPriceTableMovesTheLowBound(t *testing.T) {
 // Every other fixture uses BasisLocal, so the branch of TagNote that speaks
 // about real accounts had never run. It is the branch that would matter most if
 // it were wrong: it is the one that says a count IS a count of accounts.
-func TestGD4_AccountTagsAreDescribedAsAccounts(t *testing.T) {
+// GD4: a declared account basis does NOT upgrade the published claim.
+//
+// THIS TEST ASSERTED THE OPPOSITE UNTIL 2026-09-29, and it was wrong in the way
+// a test can be: it encoded the defect as the specification. It required that
+// two submissions declaring BasisAccount be published as "distinct provider
+// accounts", which is a claim about provider identity that nothing in the
+// payload establishes.
+//
+// A tag is HMAC(campaign, identity) truncated. Verifying one needs the
+// identity, and the identity is precisely what a contribution refuses to carry.
+// So the basis is a self-declaration. AccountTag also has no production caller:
+// every shipped path calls LocalTag and there is no account-identifier input in
+// the CLI, so the sentence this test used to require could only be reached by
+// hand-editing a file.
+//
+// The declaration still travels in the roster, because a reader weighting a
+// submission should see what was claimed. What Replay no longer does is restate
+// that claim as a finding of its own.
+func TestGD4_ADeclaredAccountBasisDoesNotUpgradeTheClaim(t *testing.T) {
 	p := NewPool("x")
 	for _, tag := range []string{"aaa", "bbb"} {
 		c := corpusFor(tag, "2026-09-01T00:00Z", 10, 100, 5, 1.0)
@@ -91,15 +109,17 @@ func TestGD4_AccountTagsAreDescribedAsAccounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !got.TagsAreIdentities {
-		t.Fatal("account-derived tags are reported as non-identities")
-	}
 	note := TagNote(got)
-	if !strings.Contains(note, "distinct provider accounts") {
-		t.Errorf("account tags get the machine-local caveat: %q", note)
+	if strings.Contains(note, "distinct provider accounts") {
+		t.Errorf("a self-declared account basis produced a provider-identity claim: %q", note)
 	}
-	if strings.Contains(note, "MACHINES AT MOST") {
-		t.Errorf("account tags are described as machines: %q", note)
+	if !strings.Contains(note, "MACHINES AT MOST") {
+		t.Errorf("the conservative wording is not used for a declared account basis: %q", note)
+	}
+	// The declaration itself is not erased; it is simply not promoted.
+	if p.Roster[0].TagBasis != BasisAccount {
+		t.Errorf("the declared basis was rewritten to %q; it should travel as declared",
+			p.Roster[0].TagBasis)
 	}
 }
 
