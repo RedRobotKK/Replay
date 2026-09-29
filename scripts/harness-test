@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Run every fixture test in the DeepSeek measurement harness.
+#
+# These tests need no credential, no network and no spend. They existed for a
+# day running in nothing: not in `make ci`, not in any workflow. A test suite
+# nobody runs is documentation with a confusing file extension.
+#
+# PYTHONDONTWRITEBYTECODE is not a preference. A mutation sweep that rewrites a
+# module, tests, then restores it with cp can leave the restored file with an
+# mtime inside the same whole second as the mutant's __pycache__ entry, and
+# CPython then reuses the mutant's bytecode. Three mutations once read as
+# SURVIVED against code that was no longer on disk.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+export PYTHONDONTWRITEBYTECODE=1
+rm -rf experiment/harness/__pycache__
+
+fail=0
+found=0
+for t in experiment/harness/test_*.py; do
+  [ -e "$t" ] || continue
+  found=$((found + 1))
+  printf '%-44s' "$(basename "$t")"
+  if out=$(python3 "$t" 2>&1); then
+    printf 'ok   %s\n' "$(printf '%s' "$out" | grep -oE 'Ran [0-9]+ tests?' || true)"
+  else
+    fail=$((fail + 1))
+    printf 'FAIL\n'
+    printf '%s\n' "$out" | tail -25 | sed 's/^/    /'
+  fi
+done
+
+# A loop over a glob that matches nothing exits 0 and reports success. That is
+# the failure mode this guard exists for: a rename or a moved directory would
+# otherwise turn the whole suite green by deleting it.
+if [ "$found" -eq 0 ]; then
+  echo "no test files matched experiment/harness/test_*.py" >&2
+  exit 1
+fi
+echo "$found harness test files, $fail failing"
+exit $((fail > 0))

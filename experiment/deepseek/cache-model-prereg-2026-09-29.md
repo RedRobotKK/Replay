@@ -10,6 +10,7 @@ Fitted to five rungs in the P2 probe:
     cached_tokens = 128 * max(0, floor(shared_prefix_tokens / 128) - 1)
 
 Two claims:
+
 1. The cache is quantised to **128-token blocks**.
 2. The **final block is never served from cache**, so a prefix must span at
    least two blocks before any hit occurs.

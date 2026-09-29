@@ -69,7 +69,7 @@ here. That is the same point the 2026-09-05 spike reached from the pricing side.
 
 `internal/otlp` emits, to a file and never to a network:
 
-```
+```text
 gen_ai.operation.name   gen_ai.request.model   gen_ai.system
 gen_ai.usage.input_tokens        gen_ai.usage.output_tokens
 gen_ai.usage.cache_read.input_tokens   gen_ai.usage.cache_write.input_tokens

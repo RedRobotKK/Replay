@@ -27,6 +27,7 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
 | DS-F5 | 2026-09-29 | Do cache reads bill at the hit rate? | 200 | **YES**. Observed $0.04 vs $0.03909 derived-at-hit (1.023) vs $1.13994 derived-at-miss (0.035) | **RESOLVED**, blocker 3 closed | same |
 | DS-RS | 2026-09-29 | Where does `reasoning_effort:"none"` apply? | 84 | **CLASS-CONDITIONAL**: lookup 100%->94% at 19.5x less output; aggregation 100%->**29%**, confidently wrong | OBSERVED, n=18/24 per cell | `deepseek/reasoning-scope-2026-09-29.md` |
 | DS-DOC | 2026-09-29 | What did the documentation already say? | 0 | Pricing confirmed exact; 128-token block is genuinely undocumented; `reasoning_effort:"none"` is **undocumented** and fragile; concurrency limit is published | n/a, zero cost | `deepseek/docs-reconciliation-2026-09-29.md` |
+| DS-WF | 2026-09-29 | Put the levers in the development workflow | 0 calls | `policy.py` + 18 tests, 8 mutations all killed; 43 harness tests wired into `make ci` and CI; `make ci` green end to end | n/a, zero cost | `docs/DEEPSEEK-OPTIMIZATION.md` |
 
 ## Killed or corrected
 
@@ -78,3 +79,13 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
   shapes and the billing behaviour are all things the docs do not settle. It
   would have caught the concurrency framing and flagged the reasoning parameters
   as undocumented before they were written into a recommendation. DS-DOC.
+
+- **The harness test suite ran nowhere.** 25 fixture tests existed for a day in
+  neither `make ci` nor any workflow. A suite nobody runs is documentation with a
+  confusing file extension. Now `make harness-test`, inside `make ci` and its own
+  CI job, with the runner verified to go red on a failing test and on a glob that
+  matches nothing. DS-WF.
+- **`make ci` was already red before this session**, on markdownlint, across five
+  files. Four were prose and are fixed. The fifth is DeepSeek's verbatim WP-01
+  report, now excluded with a stated reason: reformatting a model's output to
+  satisfy a style rule destroys the one property that makes it evidence. DS-WF.

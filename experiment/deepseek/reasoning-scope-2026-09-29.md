@@ -33,9 +33,9 @@ wrong numbers:
 
 | question | truth | answered |
 | --- | ---: | ---: |
-| count lines beginning `func ` | 39 | **67** |
+| count lines beginning with `func` plus a space | 39 | **67** |
 | count exported functions | 17 | **22** |
-| count lines beginning `type ` | 14 | **1** |
+| count lines beginning with `type` plus a space | 14 | **1** |
 | count `===== FILE:` markers | 2 | **6** |
 
 The single mechanical failure is the same shape: asked for the value of

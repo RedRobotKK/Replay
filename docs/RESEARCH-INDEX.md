@@ -301,3 +301,10 @@ drops what it got wrong is a catalogue nobody can check.
 | Run our parser over `TRACE-LAB` | The 7.94x rests on one private corpus from one machine. A public corpus makes it independently checkable — or refutes it, which is worth knowing before a launch. |
 | Re-verify `REPORTED` tier ids | Two thirds of this catalogue has not been re-fetched. |
 | Record `n_past` as original | No paper in five sweeps covers it. |
+
+## DeepSeek optimisation
+
+- [DeepSeek optimisation](DEEPSEEK-OPTIMIZATION.md) — four measured
+  levers (6.5x cheaper and 6.9x faster at an unchanged pass rate), what the
+  vendor does not promise, and the runtime guard for the undocumented
+  reasoning parameter.

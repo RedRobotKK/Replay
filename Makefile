@@ -40,7 +40,10 @@ docs-lint: ## Lint Markdown files
 	npx --yes markdownlint-cli2
 
 .PHONY: ci
-ci: lint test build docs-lint ## Everything CI runs, locally
+harness-test: ## Run the measurement harness fixture tests (no credential, no spend)
+	@scripts/harness-test
+
+ci: lint test harness-test build docs-lint ## Everything CI runs, locally
 
 .PHONY: clean
 clean: ## Remove build output

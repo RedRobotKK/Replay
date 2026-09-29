@@ -102,6 +102,7 @@ The isolated batch reconciles at 1.023. The **session total does not**: $0.05
 observed against $0.0959 derived, a factor of 1.9.
 
 Two candidate causes, neither tested:
+
 1. Settling lag. The reconciliation batch posted within 90s; the earlier $0.057
    may not have posted when its balance was read.
 2. Per-request cent truncation. Many probe calls cost $0.0001 or less, and a

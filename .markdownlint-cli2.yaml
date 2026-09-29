@@ -10,3 +10,8 @@ ignores:
   # the same rules as a published page produced 104 of the 106 findings in this
   # repository without improving anything a reader sees.
   - AGENTS_STATE.md
+  # DeepSeek's own report, preserved byte-for-byte as the evidence for WP-01.
+  # Claude's independent check of it lives beside it in verification-*.md and IS
+  # linted. Reformatting a model's output to satisfy a style rule would destroy
+  # the one property that makes it evidence, which is that nobody edited it.
+  - experiment/deepseek/wp01/deepseek-report-2026-09-28.md

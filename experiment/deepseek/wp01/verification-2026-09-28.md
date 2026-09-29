@@ -21,7 +21,7 @@ Repo pinned at `a9f48a0`, clean tree. No file was modified by the investigation.
 
 `PriceFor` was run directly against the pinned tree:
 
-```
+```text
 claude-opus-5            priced=true  input=5  output=25
 claude-opus-5-preview    priced=true  input=5  output=25
 claude-opus-5-risk       priced=true  input=5  output=25

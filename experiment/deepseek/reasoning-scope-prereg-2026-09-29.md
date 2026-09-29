@@ -21,7 +21,7 @@ Two task classes, crossed with reasoning on and off, 3 repetitions each:
   function declared on a given line; give a constant's literal value.
 - **R, aggregative.** The answer exists nowhere in the text and must be built by
   applying a rule across the whole document. Count the lines beginning with
-  `func `; count exported functions; name the function defined immediately after
+  `func` plus a space; count exported functions; name the function defined immediately after
   a named one.
 
 ## Prediction

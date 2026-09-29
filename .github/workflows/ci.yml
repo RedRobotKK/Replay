@@ -162,6 +162,21 @@ jobs:
   # a standard-library change that breaks Replay is worth knowing about
   # before a release rather than after; make it continue-on-error if a Go
   # release ever holds up unrelated work.
+  harness:
+    name: measurement harness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.x'
+      # No credential and no network: every test here runs against fixtures.
+      # The suite guards the DeepSeek optimisation policy, whose central rule
+      # depends on an UNDOCUMENTED provider parameter. If that parameter ever
+      # stops disabling reasoning, the runtime guard turns a silent 20x cost
+      # regression into a stop, and these tests are what keep the guard honest.
+      - run: make harness-test
+
   go-latest:
     name: Go (latest release)
     runs-on: ubuntu-latest
