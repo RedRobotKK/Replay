@@ -279,12 +279,8 @@ func (c *Corpus) UnmarshalJSON(b []byte) error {
 	// allowlist is derived from the struct at run time, so the two cannot
 	// drift: a field added to Corpus is accepted the moment it exists, and
 	// nothing else ever is.
-	if unknown := unknownCorpusKeys(probe); len(unknown) > 0 {
-		return fmt.Errorf("this submission carries %s, which a corpus does not have. "+
-			"A contribution is the aggregate figures and their basis, and nothing else; "+
-			"remove the key rather than leaving it for a reader to find in the published "+
-			"file. If the field is a genuine addition, add it to Corpus first",
-			strings.Join(unknown, ", "))
+	if err := refuseUnknown("submission", probe, corpusKeys); err != nil {
+		return err
 	}
 
 	// A distinct type, so this does not call itself.
@@ -295,43 +291,6 @@ func (c *Corpus) UnmarshalJSON(b []byte) error {
 	}
 	*c = Corpus(out)
 	return nil
-}
-
-// corpusKeys is every JSON key a Corpus may carry.
-//
-// WRITTEN OUT RATHER THAN REFLECTED, and that is not a style choice. Deriving
-// it with reflect would be shorter and would make this list impossible to
-// forget, but this package may not import reflect: TestO7 holds an import
-// allowlist whose job is that nothing here can send a file, and the way that
-// guard keeps working is that nobody widens it for a convenience. So the list
-// is explicit here and TestSB5 proves it equals the struct's own tags, which
-// puts the anti-drift mechanism in a test where reflect is free.
-//
-// A field added to Corpus and not added here is refused on read, loudly, by
-// the round-trip test. That is the right direction to fail: a new field that
-// nobody allowlisted should stop a submission, not travel in one.
-var corpusKeys = map[string]bool{
-	"schema": true, "takenAt": true,
-	"tasks": true, "totalUsd": true, "rebilledUsd": true,
-	"rebilledShare": true, "medianTaskUsd": true,
-	"pricedAt": true, "rulesVersion": true, "unpriced": true,
-	"cacheBreaks": true, "reReads": true, "errorShare": true,
-	"sourceTag": true, "tagBasis": true,
-	"binaryVersion": true, "commit": true, "pricingDigest": true,
-	"digest": true,
-}
-
-// unknownCorpusKeys returns the keys of a decoded document that Corpus does not
-// declare, sorted so a refusal reads the same on every run.
-func unknownCorpusKeys(probe map[string]json.RawMessage) []string {
-	var out []string
-	for k := range probe {
-		if !corpusKeys[k] {
-			out = append(out, fmt.Sprintf("%q", k))
-		}
-	}
-	sort.Strings(out)
-	return out
 }
 
 // sortedKeys returns m's keys in a stable order, so a message built from them

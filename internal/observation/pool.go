@@ -460,6 +460,9 @@ func (e *PoolEntry) UnmarshalJSON(b []byte) error {
 	// in Corpus.UnmarshalJSON and for the same reason: two spellings of one
 	// refusal, one of them untestable.
 	_ = json.Unmarshal(b, &probe)
+	if err := refuseUnknown("roster row", probe, poolEntryKeys); err != nil {
+		return err
+	}
 
 	var found []string
 	for _, old := range sortedKeys(renamedCorpusFields) {

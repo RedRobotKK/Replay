@@ -27,17 +27,7 @@ import (
 
 // corpusAllowedKeys is every JSON key a corpus submission may carry, derived
 // from the struct rather than typed, so the two cannot drift.
-func corpusAllowedKeys() map[string]bool {
-	out := map[string]bool{}
-	rt := reflect.TypeOf(Corpus{})
-	for i := 0; i < rt.NumField(); i++ {
-		name := strings.Split(rt.Field(i).Tag.Get("json"), ",")[0]
-		if name != "" && name != "-" {
-			out[name] = true
-		}
-	}
-	return out
-}
+func corpusAllowedKeys() map[string]bool { return jsonTagsOf(Corpus{}) }
 
 // valid returns a submission that passes every existing guard, so a test below
 // fails for the reason it names and not because the fixture was thin.
@@ -164,20 +154,126 @@ func TestSB4_EverythingReplayWritesIsAccepted(t *testing.T) {
 // from a newer build. A key left in corpusKeys after its field was removed
 // would silently re-admit something the type no longer carries.
 func TestSB5_TheAllowlistEqualsTheStruct(t *testing.T) {
-	fromStruct := corpusAllowedKeys()
-	if len(fromStruct) == 0 {
-		t.Fatal("no keys were derived from the struct; this guard proves nothing")
+	for _, tc := range []struct {
+		name    string
+		typ     any
+		allowed map[string]bool
+	}{
+		{"Corpus", Corpus{}, corpusKeys},
+		{"Calibration", Calibration{}, calibrationKeys},
+		{"ModelCalibrationRow", ModelCalibrationRow{}, calibrationRowKeys},
+		{"PoolEntry", PoolEntry{}, poolEntryKeys},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fromStruct := jsonTagsOf(tc.typ)
+			if len(fromStruct) == 0 {
+				t.Fatalf("no keys were derived from %s; this guard proves nothing", tc.name)
+			}
+			for k := range fromStruct {
+				if !tc.allowed[k] {
+					t.Errorf("%s declares %q and its allowlist does not. A submission from "+
+						"a build carrying this field would be refused on read", tc.name, k)
+				}
+			}
+			for k := range tc.allowed {
+				if !fromStruct[k] {
+					t.Errorf("the %s allowlist carries %q and the type no longer declares "+
+						"it, so a key the type dropped is still being admitted", tc.name, k)
+				}
+			}
+		})
 	}
-	for k := range fromStruct {
-		if !corpusKeys[k] {
-			t.Errorf("Corpus declares %q and corpusKeys does not. A submission from a "+
-				"build carrying this field would be refused on read", k)
+}
+
+// jsonTagsOf returns every JSON key a struct declares.
+func jsonTagsOf(v any) map[string]bool {
+	out := map[string]bool{}
+	rt := reflect.TypeOf(v)
+	for i := 0; i < rt.NumField(); i++ {
+		name := strings.Split(rt.Field(i).Tag.Get("json"), ",")[0]
+		if name != "" && name != "-" {
+			out[name] = true
 		}
 	}
-	for k := range corpusKeys {
-		if !fromStruct[k] {
-			t.Errorf("corpusKeys carries %q and Corpus no longer declares it, so a key "+
-				"the type dropped is still being admitted", k)
+	return out
+}
+
+// SB6: the SECOND contribution artifact has the same boundary, nested included.
+//
+// `replay cost --contribute` writes two files, not one: a corpus and a
+// calibration. The calibration is published the same way, by attachment to a
+// pull request, and it had no UnmarshalJSON at all, so every unknown key at
+// both levels was accepted and silently dropped.
+//
+// The nested level is the one that matters more here. A calibration carries a
+// `models` array, and a row in it is where a per-model figure lives, so it is
+// the natural place for somebody to paste something that does not belong. A
+// guard on the outer object only would leave exactly that hole open.
+func TestSB6_TheCalibrationArtifactRefusesUnknownKeysAtBothLevels(t *testing.T) {
+	base := func(extraTop, extraRow string) []byte {
+		row := `{"model":"claude-opus-5","sessions":2,"compared":4,"matched":4,` +
+			`"exact":4,"ruleMinPrefix":1024,"largestUncached":900,"smallestCached":2048` + extraRow + `}`
+		return []byte(`{"schema":"` + CalibrationSchema + `","takenAt":"2026-09-29T18:00:00Z",` +
+			`"rulesVersion":"anthropic-2026-09-01","models":[` + row + `],` +
+			`"sourceTag":"abcdef0123456789","tagBasis":"local","digest":"x"` + extraTop + `}`)
+	}
+
+	// The fixture itself must be accepted, or nothing below is attributable.
+	var ok Calibration
+	if err := json.Unmarshal(base("", ""), &ok); err != nil {
+		t.Fatalf("the base calibration fixture was refused: %v", err)
+	}
+	if len(ok.Models) != 1 || ok.Models[0].Model != "claude-opus-5" {
+		t.Fatalf("the base fixture did not decode its model row: %+v", ok.Models)
+	}
+
+	t.Run("top level", func(t *testing.T) {
+		var c Calibration
+		err := json.Unmarshal(base(`,"transcript":"the whole session"`, ""), &c)
+		if err == nil {
+			t.Fatal("a calibration carrying \"transcript\" was accepted")
 		}
+		if !strings.Contains(err.Error(), "transcript") {
+			t.Errorf("the refusal does not name the key: %v", err)
+		}
+	})
+
+	t.Run("nested model row", func(t *testing.T) {
+		var c Calibration
+		err := json.Unmarshal(base("", `,"prompt":"our internal system prompt"`), &c)
+		if err == nil {
+			t.Fatal("a model row carrying \"prompt\" was accepted. A guard on the outer " +
+				"object only leaves the nested array open, which is where a per-model " +
+				"figure lives and so where something that does not belong gets pasted")
+		}
+		if !strings.Contains(err.Error(), "prompt") {
+			t.Errorf("the refusal does not name the key: %v", err)
+		}
+	})
+}
+
+// SB7: the roster row inside a PUBLISHED pool document has the boundary too.
+//
+// A pool document is the most public artifact this project produces, and a
+// pooler appending to an existing one reads it back. An unknown key in a roster
+// row would survive that round trip into the republished document.
+func TestSB7_APublishedRosterRowRefusesUnknownKeys(t *testing.T) {
+	base := func(extra string) []byte {
+		return []byte(`{"file":"replay-corpus-x.json","takenAt":"2026-09-29T18:00:00Z",` +
+			`"tasks":3,"totalUsd":1.5,"rebilledUsd":0.1,"rebilledShare":6.67,` +
+			`"medianTaskUsd":0.5,"pricedAt":"2026-09-07","rulesVersion":"anthropic-2026-09-01",` +
+			`"sourceTag":"abcdef0123456789","digest":"deadbeef"` + extra + `}`)
+	}
+	var ok PoolEntry
+	if err := json.Unmarshal(base(""), &ok); err != nil {
+		t.Fatalf("the base roster fixture was refused: %v", err)
+	}
+	var e PoolEntry
+	err := json.Unmarshal(base(`,"messages":[{"role":"user"}]`), &e)
+	if err == nil {
+		t.Fatal("a roster row carrying \"messages\" was accepted")
+	}
+	if !strings.Contains(err.Error(), "messages") {
+		t.Errorf("the refusal does not name the key: %v", err)
 	}
 }
