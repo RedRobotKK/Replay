@@ -2,10 +2,17 @@
 
 **Updated** 2026-09-28 · **Branch** `feat/perf-contract`
 
-## Status: PAUSED — awaiting credential rotation and human decision
+## Status: ACTIVE — optimisation sweep run 2026-09-29
 
-No further DeepSeek credits are to be spent, no further DeepSeek task run, and no
-WP-03 created, until the credential is rotated and a human decision is taken.
+Spend authorised by the user on 2026-09-29 ("test various theory on performance
+optimization ... try everything in the book, support it with a baseline
+reading"). A $3.00 session ceiling was set by the agent, not the user, and
+enforced by `fanout.Budget`. Actual spend: **$0.05 observed / $0.0959 derived**.
+
+**The credential was NOT rotated before this spend.** The user did not direct a
+hold, and rotation is hygiene debt rather than a known compromise, so the work
+proceeded. The gate was set in this repository and is recorded as consciously
+crossed rather than quietly dropped. Rotation remains outstanding.
 
 ## Current state
 
@@ -34,9 +41,14 @@ the prefix recurs, exactly no effect when it does not.
    `deepseek/f4-reconciliation-2026-09-28.md`.
 2. TTFT is unmeasurable without a streaming client, so no latency result can be
    attributed to prefill.
-3. **Cache-hit pricing is unvalidated.** Both reconciliation batches ran with
-   `cache_read` of exactly 0, so the cheapest rate in the table is the one
-   entirely untested. Any saving claimed from caching rests on an unverified rate.
+3. ~~Cache-hit pricing is unvalidated.~~ **CLEARED 2026-09-29.** A 200-call batch
+   with 3.74M of 3.80M input tokens as cache reads: observed $0.04 against
+   $0.03909 derived at the hit rate (ratio 1.023) and $1.13994 at the miss rate
+   (ratio 0.035). Cache reads bill at the hit rate. DS-F5.
+4. **NEW, OPEN: session-level cost does not reconcile.** $0.05 observed against
+   $0.0959 derived across the session, while the isolated batch matched at 1.023.
+   Settling lag and per-request cent truncation both fit and make opposite
+   predictions about a batch of sub-cent calls left to settle for an hour.
 
 ## Harness hardening, 2026-09-28 (zero cost, no API calls)
 

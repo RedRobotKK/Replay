@@ -20,6 +20,11 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
 
 | HH-01 | 2026-09-28 | Harden the harness at zero cost | 0 calls | O1 and O2 implemented and mutation-checked; O3 not implemented | n/a | `experiment/harness/test_adapter.py` |
 | HH-02 | 2026-09-28 | Rebuild the fan-out to production shape | 0 calls | Four defects fixed, a fifth found while testing (float money); 10 mutations all killed | Saving is DERIVED, not OBSERVED | `experiment/deepseek/fanout-audit-2026-09-28.md` |
+| DS-C1 | 2026-09-29 | How is the prefix cache shaped? | 49 | 128-token blocks, final block never cached; 17/17 rungs exact | OBSERVED | `deepseek/cache-characterisation-2026-09-29.md` |
+| DS-C2 | 2026-09-29 | What busts the cache? | in C1 | A single leading space does; temperature and max_tokens do not; hits serve at +0.0s; cache is shared across dialects | OBSERVED | same |
+| DS-F2b | 2026-09-29 | Does a reasoning control exist? | 5 | **YES**, `reasoning_effort:"none"` and `thinking:{type:disabled}`. Control produced 40 reasoning tokens and ZERO content | OBSERVED | `deepseek/optimization-arms-2026-09-29.md` |
+| DS-OPT | 2026-09-29 | Baseline plus 5 one-variable arms | 72 | Best arm 6.5x cheaper and 6.9x faster at 12/12; parallel-alone is 0.99x cost at 0% hit | OBSERVED | same |
+| DS-F5 | 2026-09-29 | Do cache reads bill at the hit rate? | 200 | **YES**. Observed $0.04 vs $0.03909 derived-at-hit (1.023) vs $1.13994 derived-at-miss (0.035) | **RESOLVED**, blocker 3 closed | same |
 
 ## Killed or corrected
 
@@ -45,3 +50,13 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
   mutant bytecode and three mutations read as SURVIVED against code that was no
   longer there. Redone with `PYTHONDONTWRITEBYTECODE=1`. Same class as counting
   cached `go test` invocations as one clean run. HH-02.
+
+- **19-28x warm-then-fan projection**: corrected downward at small shapes. The
+  arms run measured 4.4x at a 3,400-token prefix over 12 questions, where output
+  cost dilutes the ratio. The projected figure holds at the shape it was
+  projected for: 29.2x OBSERVED at 19,000 tokens over 200 questions. DS-OPT.
+- **Session-level cost reconciliation**: OPEN, not resolved. The isolated 200-call
+  batch reconciles at 1.023; the session total is $0.05 observed against $0.0959
+  derived, a factor of 1.9. Settling lag and per-request cent truncation both
+  explain it and make opposite predictions. Not inferred either way, because the
+  first F4 comparison died of exactly that. DS-F5.
