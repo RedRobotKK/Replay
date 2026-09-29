@@ -60,6 +60,40 @@ twice: deleting the guard fails 2 tests; narrowing it to chat's `length`
 vocabulary alone fails the Anthropic `max_tokens` case. Go suite unaffected at
 30 ok / 0 FAIL, `go vet` and `gofmt` clean.
 
+## Fan-out infrastructure, 2026-09-28 (zero cost, no API calls)
+
+`experiment/harness/fanout.py`. Built because it is the shape the measurements
+reward and the one we had never used: DeepSeek sustained 64 concurrent requests
+with no throttling and median latency that FELL from 662 ms to 575 ms, and a
+cached read costs 50x less than a miss on flash. Every DeepSeek call so far has
+been sequential, which wasted that.
+
+It also sidesteps both measured failure modes rather than mitigating them. Each
+question is a single call with its own checker, so there is no loop to run away
+in (WP-01 burned 28 rounds) and no synthesis turn for reasoning to starve
+(three occurrences).
+
+Controls, each mutation-checked:
+
+- **Budget gates dispatch, not reporting.** Spend commits when a request is
+  sent, so a ceiling checked afterwards is a report. Workers reserve before
+  sending; refused questions are recorded, never dropped, because a silently
+  shortened fan-out looks identical to one nobody answered.
+- **Outcomes stay separate.** `ANSWERED`, `TRUNCATED`, `REFUSED_BUDGET`, and an
+  undecided checker are four different facts. The pass-rate denominator is
+  decided answers only: a call that ran out of room did not answer wrongly, it
+  did not answer.
+- **A checker that raises decides nothing.** It is recorded undecided rather
+  than scored as the model being wrong.
+- **Identity is carried.** `model_returned` and `system_fingerprint` are
+  collected per run so a routing question is answerable from the record.
+
+Tests: `python3 experiment/harness/test_fanout.py`, 6 pass, no credential
+needed. Mutations killed: removing the dispatch gate fails 2, folding truncated
+and refused calls into the pass rate fails 3.
+
+**Not yet run against the live API.** Requires spend authorisation.
+
 ## Operational follow-up: credential rotation
 
 - The DeepSeek credential used by WP-01 and WP-02 **has not been rotated**.
