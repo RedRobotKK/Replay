@@ -69,4 +69,4 @@ such.** No post-hoc power claim.
 Harness failure above 10%, arm leakage, answer appearing in any prompt, or
 cross-trial contamination. Otherwise all 75 run.
 
-## No implementation follows this experiment regardless of outcome.
+## No implementation follows this experiment regardless of outcome

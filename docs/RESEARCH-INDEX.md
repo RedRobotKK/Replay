@@ -332,3 +332,27 @@ nothing is classified safe to automate.
   refuted, and a register of eight unknowns.
 - `../experiment/../experiment/anthropic-recon/` -- the four raw inventories, excluded from prose lint as
   working evidence.
+
+## Evidence-anchor and compaction research: CLOSED
+
+**STATUS = CLOSED.** 150 agent trials across four experiments, two refutations,
+one prior-art investigation, **no implementation**. Do not reopen without new
+evidence.
+
+Read the record before forming any view on this subject:
+
+- [Closeout](../experiment/anchor-c1/CLOSEOUT.md) -- the final ledger, the
+  results, the historical correction, the prior-art conclusion and the
+  implementation decision.
+
+Three things this is **not**, and a future reader must not conflate them:
+
+| | |
+| --- | --- |
+| **behavioural finding** | a resolvable evidence destination changed evidence-supported resolution in one tested setup. Scoped to that setup |
+| **product feature** | none. `DO NOT IMPLEMENT` was the decision, on six stated grounds |
+| **IP hypothesis** | none. The representation has substantial prior art. `PATENT PRIOR ART SEARCH = NOT_VERIFIED`, and no novelty is claimed |
+
+Refuted here and not to be re-proposed: compaction-induced sustained work loss,
+post-compaction rediscovery, addressability as a sufficient mechanism, and the
+`[dispositive]` label as a cause of verification.
