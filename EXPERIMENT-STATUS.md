@@ -6,8 +6,22 @@
 
 Spend authorised by the user on 2026-09-29 ("test various theory on performance
 optimization ... try everything in the book, support it with a baseline
-reading"). A $3.00 session ceiling was set by the agent, not the user, and
-enforced by `fanout.Budget`. Actual spend: **$0.05 observed / $0.0959 derived**.
+reading"). A $3.00 ceiling was set by the agent, not the user, and
+enforced by `fanout.Budget`.
+
+**CAMPAIGN TOTAL, corrected at closeout.** The figure that stood here was from an
+early phase and was stale by an order of magnitude.
+
+| | |
+| --- | --- |
+| balance | $46.01 to $45.49 |
+| **OBSERVED** | **$0.52** |
+| DERIVED, cache and billing suite | $0.248764 |
+| DERIVED, prompt-optimization campaign | $0.350810 |
+| **DERIVED total** | **$0.599574** |
+
+Derived exceeds observed, which is consistent with the settlement lag this
+campaign established. The reading is provisional until the balance stops moving.
 
 **The credential was NOT rotated before this spend.** The user did not direct a
 hold, and rotation is hygiene debt rather than a known compromise, so the work
