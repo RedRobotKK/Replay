@@ -111,26 +111,52 @@ func TestOS4_AnEmptyDirectoryDoesNotCount(t *testing.T) {
 
 // OS5: a surface Replay cannot read yet is named, and no command is offered.
 //
-// `~/.grok` and `~/.cursor` are known to `replay discover`, but Replay does
-// not parse Grok's /responses wire (FD-5) and Cursor's local history carries
-// structure with no usage. Naming them is honest — the reader learns their
-// data was seen. Offering a command would be OS4's defect wearing a different
-// hat: a second empty report, this time with the tool's word behind it.
+// `~/.cursor` is known to `replay discover`, and its local history carries
+// structure with no usage (Grok moved out of this example when `replay grok`
+// shipped a reader for it; see OS9). Naming an unreadable surface is honest
+// — the reader learns their data was seen. Offering a command would be OS4's
+// defect wearing a different hat: a second empty report, this time with the
+// tool's word behind it.
 func TestOS5_AnUnreadableSurfaceIsNamedWithoutACommand(t *testing.T) {
+	home := withHome(t)
+	mustWrite(t, filepath.Join(home, ".cursor", "x.db"), "x")
+
+	var b strings.Builder
+	explainNoCorpus(home, &b)
+	out := b.String()
+	if !strings.Contains(strings.ToLower(out), "cursor") {
+		t.Errorf("Cursor data is on disk and the reader is not told it was seen:\n%s", out)
+	}
+	if strings.Contains(out, "replay cursor") {
+		t.Errorf("the reader was sent to a command that cannot read Cursor:\n%s", out)
+	}
+	if !strings.Contains(strings.ToLower(out), "cannot read") {
+		t.Errorf("the reader is not told why no command is offered:\n%s", out)
+	}
+}
+
+// OS9: Grok has a reader now, and the report offers it rather than repeating
+// the withdrawn "cannot read" claim.
+//
+// `replay grok` was added to read ~/.grok/sessions/*/*/updates.jsonl. Before
+// it shipped, this surface was OS5's example of an unreadable one. Leaving
+// that claim in place after the reader shipped would tell a reader with real
+// Grok data on disk that Replay cannot read it — false, and disprovable by
+// running the very command withheld from them.
+func TestOS9_GrokIsReadableAndOffersItsCommand(t *testing.T) {
 	home := withHome(t)
 	mustWrite(t, filepath.Join(home, ".grok", "updates.jsonl"), "{}\n")
 
 	var b strings.Builder
 	explainNoCorpus(home, &b)
 	out := b.String()
-	if !strings.Contains(strings.ToLower(out), "grok") {
-		t.Errorf("Grok data is on disk and the reader is not told it was seen:\n%s", out)
+	if !strings.Contains(out, "replay grok") {
+		t.Errorf("Grok data is on disk and replay grok now reads it, but the "+
+			"report does not offer it:\n%s", out)
 	}
-	if strings.Contains(out, "replay grok") || strings.Contains(out, "replay burn") {
-		t.Errorf("the reader was sent to a command that cannot read Grok:\n%s", out)
-	}
-	if !strings.Contains(strings.ToLower(out), "cannot read") {
-		t.Errorf("the reader is not told why no command is offered:\n%s", out)
+	if strings.Contains(strings.ToLower(out), "cannot read grok") {
+		t.Errorf("the report still claims Grok cannot be read, after replay "+
+			"grok shipped:\n%s", out)
 	}
 }
 

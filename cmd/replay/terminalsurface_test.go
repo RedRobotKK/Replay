@@ -75,29 +75,16 @@ func TestOS16_TheOracleReasonNamesTheInconsistency(t *testing.T) {
 	}
 }
 
-// OS17: the Grok reason names the file that holds the usage, not the wire.
+// OS17: Grok is found with the command that reads it, and carries no `why`.
 //
-// THE SHIPPED STRING BLAMED THE WRONG THING. It read "Replay cannot read
-// Grok's wire yet: it posts to /responses, which this build does not parse".
-// The wire is not the blocker, and a reader acting on that sentence would go
-// and write a /responses parser for nothing.
-//
-// MEASURED here: ~/.grok/sessions/<urlencoded-cwd>/<uuid>/updates.jsonl, 105
-// files, 33,929 JSON-RPC records of shape {timestamp, method, params}. 1,131
-// of them carry `params.update.usage` with inputTokens, outputTokens,
-// totalTokens, cachedReadTokens, cacheCreationTokens, reasoningTokens,
-// costUsdTicks, modelCalls, apiDurationMs, numTurns, plus a per-model
-// `modelUsage` breakdown keyed by model id (grok-4.6-build here). A complete
-// usage object is sitting in a file on disk. cachedReadTokens is non-zero on
-// 1,120 of the 1,131 records and totals 762,715,904 tokens.
-//
-// And one thing the handover did not say, which changes the verdict: the
-// cacheCreationTokens counter is present on all 1,131 records and is ZERO on
-// every one of them. So Grok is the same shape as OpenClaw, not a surface that
-// merely needs a reader written for it. Both facts belong in the sentence: the
-// file exists (which retires the wire claim) and the write side of the cache
-// is not in it (which is what actually stops a bill).
-func TestOS17_TheGrokReasonNamesTheFileNotTheWire(t *testing.T) {
+// This test used to pin two retracted claims in sequence: first that Replay
+// could not read Grok's wire (it never posted to a wire this build parses;
+// the data was on disk all along), then that it had no reader for the file
+// that held it. `replay grok` (grok.go) is that reader now. A surface with a
+// command carries no `why` — `why` is only for the ones offering none — so
+// this checks `cmd` directly rather than re-deriving the old prose assertion
+// against a field that no longer holds anything.
+func TestOS17_GrokIsFoundWithItsCommand(t *testing.T) {
 	home := withHome(t)
 	mustWrite(t, filepath.Join(home, ".grok", "updates.jsonl"), "{}\n")
 
@@ -106,19 +93,11 @@ func TestOS17_TheGrokReasonNamesTheFileNotTheWire(t *testing.T) {
 		t.Fatalf("Grok data is on disk and the surface was not found: %+v",
 			findOtherSurfaces(home))
 	}
-	low := strings.ToLower(got.why)
-	// The artefact that actually holds the numbers.
-	for _, want := range []string{"updates.jsonl", "cachedreadtokens", "cachecreationtokens", "zero"} {
-		if !strings.Contains(low, want) {
-			t.Errorf("the Grok reason does not name %q, so it does not say where "+
-				"the usage is or why it still cannot be priced: %q", want, got.why)
-		}
+	if got.cmd != "replay grok" {
+		t.Errorf("Grok's command = %q, want %q", got.cmd, "replay grok")
 	}
-	// The retired claim. /responses is not why Replay cannot price Grok, and
-	// leaving it in sends a reader to write a parser that changes nothing.
-	if strings.Contains(low, "/responses") {
-		t.Errorf("the Grok reason still blames the wire, which the session files "+
-			"falsify: a complete usage object is on disk. %q", got.why)
+	if got.why != "" {
+		t.Errorf("Grok has a command and should carry no why, got %q", got.why)
 	}
 }
 

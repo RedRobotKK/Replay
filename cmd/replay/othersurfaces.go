@@ -71,42 +71,31 @@ func knownSurfaces(home string) []otherSurface {
 		{
 			name: "Grok",
 			dir:  firstWithEntries(filepath.Join(home, ".grok")),
-			// THE SHIPPED STRING BLAMED THE WRONG THING, and this replaces it.
-			// It read "Replay cannot read Grok's wire yet: it posts to
-			// /responses, which this build does not parse". The wire is not the
-			// blocker. A reader who acted on that sentence would go and write a
-			// /responses parser and gain nothing, because the numbers are
-			// already on disk.
-			//
-			// MEASURED here, 2026-09-12:
-			// ~/.grok/sessions/<urlencoded-cwd>/<uuid>/updates.jsonl, 105 files,
-			// 33,929 JSON-RPC records shaped {timestamp, method, params}. 1,131
-			// of them carry `params.update.usage` holding inputTokens,
-			// outputTokens, totalTokens, cachedReadTokens, cacheCreationTokens,
+			cmd:  "replay grok",
+			// MEASURED here, 2026-09-12: ~/.grok/sessions/<urlencoded-cwd>/<uuid>/
+			// updates.jsonl, 105 files, 33,929 JSON-RPC records shaped
+			// {timestamp, method, params}. 1,131 of them carry
+			// `params.update.usage` holding inputTokens, outputTokens,
+			// totalTokens, cachedReadTokens, cacheCreationTokens,
 			// reasoningTokens, costUsdTicks, modelCalls, apiDurationMs and
 			// numTurns, plus a per-model `modelUsage` breakdown keyed by model
-			// id. That per-model key is the backend attribution most surfaces in
-			// this file are missing, and Grok has it.
+			// id.
 			//
-			// So why is this still not priceable. cachedReadTokens is non-zero
-			// on 1,120 of the 1,131 records and totals 762,715,904 tokens, while
-			// cacheCreationTokens is present on all 1,131 and ZERO on every one.
-			// Grok is the same shape as OpenClaw below: the read side counted in
-			// the hundreds of millions, the write side never counted at all.
+			// `replay grok` (grok.go) is that reader, added since the measurement
+			// above. It sums the per-turn records rather than taking the largest,
+			// because a later measurement over 48 sessions (2026-09-27) showed the
+			// records are per turn and not a running total: on the vendor's own
+			// capture of session 01a0e417 the six turns sum to 7,142,396 while the
+			// largest is 3,716,413, and on a 131-turn session the last turn is 0.
 			//
-			// Both halves are in the sentence deliberately. Naming the file
-			// retires the wire claim and tells a reader where to look. Naming
-			// the zero stops the next person concluding that a reader is all
-			// that stands between this file and a bill.
+			// It also reports Grok's own usage.json beside the reconstruction
+			// rather than in place of it. The two are compared and never added:
+			// 35 of 48 sessions carry both, 13 carry no usage.json at all, and
+			// `grok usage` reports no usage for those 13.
 			//
-			// The verb is "cannot read", not "cannot price", and OS5 in
-			// otherSurfaces_test.go holds it there. That is the right word for
-			// this row rather than a concession to a test: there is genuinely no
-			// reader for updates.jsonl in this build, so reading is the first
-			// thing that fails. The zero cacheCreationTokens is what would fail
-			// second, and the sentence carries both so that nobody writes the
-			// reader expecting a bill at the end of it.
-			why: "Replay cannot read Grok yet: its per-turn usage sits in ~/.grok/sessions/*/*/updates.jsonl with cachedReadTokens and a per-model breakdown that this build has no reader for, and the cacheCreationTokens counter beside them is zero on every record",
+			// No dollar figure. The Grok 1.0.41 user guide states the scale as
+			// 10^10 ticks per USD, and nobody has reconciled it against a
+			// statement of account. Documented and checked are different words.
 		},
 		{
 			name: "Cursor",

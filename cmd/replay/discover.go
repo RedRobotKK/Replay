@@ -107,15 +107,13 @@ func knownStores(home string) []agentStore {
 		{
 			name:  "Grok",
 			roots: []string{filepath.Join(home, ".grok")}, patterns: []string{"updates.jsonl"},
-			// No reader exists yet, and the next step says so rather than
-			// naming a command. An earlier draft pointed at
-			// `replay doctor --agents`, a flag that does not exist — the
-			// overpromise docs/design/unwired-3-branches-and-docs.md
-			// catalogues, written into the tool while cataloguing it.
-			// TestDS7 now fails if any next step names a command that is not
-			// dispatched, so that cannot recur silently.
-			reads:     "usage fields are present: inputTokens, cachedReadTokens, costUsdTicks",
-			next:      "no reader built yet. The data is there; the dollar scale is unverified",
+			// `replay grok` reads this surface (grok.go). It reconstructs the
+			// per-turn stream in updates.jsonl and reports it against Grok's own
+			// usage.json, which is the ledger `grok usage` reads. It prints no
+			// dollar figure: the guide states 10^10 ticks per USD and nobody has
+			// reconciled that scale against a statement of account.
+			reads:     "session usage in tokens: prompt, cached reads, output, reconciled against Grok's own usage.json. No dollar figure: the tick scale is unchecked against an invoice",
+			next:      "replay grok",
 			priceable: true,
 		},
 		{

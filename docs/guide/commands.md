@@ -1667,3 +1667,60 @@ esac
 ---
 
 [Guide](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)
+
+### `replay grok [dir]`
+
+Grok's own usage ledger, against Replay's reading of the turns beside it.
+
+```sh
+replay grok
+replay grok ~/.grok/sessions
+```
+
+A Grok session directory under `~/.grok/sessions/<project>/<session>/` holds up
+to two records of the same work, and `replay grok` keeps them apart.
+
+| artifact | what it is |
+|---|---|
+| `updates.jsonl` | the per-turn stream Replay reconstructs from |
+| `usage.json` | Grok's own ledger, which `grok usage` reads |
+
+**The records are per turn, and they are summed.** They are not a running
+total. The Grok CLI's own output settles it: on session `01a0e417` the six turns
+sum to 7,142,396 while the largest turn is 3,716,413 and the last is 2,363,388,
+and the file states the session total as the sum. On a 131-turn session the sum
+is 222,856,819, the largest turn is 21,452,883 and the last turn is 0. Those
+captures are committed under `cmd/replay/testdata/grok/vendor-usage` so a reader
+that regressed to the maximum or the last turn would have to disagree with the
+provider about the provider's own totals.
+
+**The two records are compared, never added.** Measured over 48 local sessions
+on 2026-09-27, 35 carry both artifacts and 13 carry `updates.jsonl` with no
+`usage.json`. `grok usage` succeeds on all 35 and reports no usage at all for
+the 13. So each session reconciles to one of three standings:
+
+| standing | meaning |
+|---|---|
+| `MATCH` | the reconstruction equals the ledger |
+| `DIFFERS` | they disagree, and the report states by how much |
+| `UNAVAILABLE` | there is no ledger for this session |
+
+`UNAVAILABLE` is a third value, not a vendor total of zero. The reconstruction
+for those sessions is still shown, because the records are on disk, and it is
+reported as reconstructed rather than confirmed. It is never folded into the
+vendor column.
+
+**The cache sits inside the prompt.** `cachedReadTokens` is a share of
+`inputTokens`, not a figure beside it, so the fresh count is the prompt less the
+cache. Conversion goes through the same inclusive normaliser the Codex reader
+uses, and a turn whose parts do not add back to its prompt is excluded and
+counted rather than quietly included.
+
+**No dollar figure is printed.** The Grok 1.0.41 user guide states the scale of
+`costUsdTicks` as 10^10 ticks per USD. Nobody has reconciled that scale against
+a statement of account. Documented and checked are different claims, and the
+second one is what a dollar figure on the screen would be asserting.
+
+A cache write of zero and an absent cache-write field are reported as different
+facts, per ADR-0018. Lines that parse but carry no usage are ordinary message
+and tool records, and are not counted as unreadable.

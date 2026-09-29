@@ -17,7 +17,7 @@ reach the network, and does it write. Both are answered per command below, and
 summarised here.
 
 **Opens no socket and writes nothing** — safe to run at will:
-`ceiling`, `diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `mcp`, `statusline`, `redact`, `version`, `prefix`, `budget`, `jev`, `pool`.
+`ceiling`, `diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `grok`, `mcp`, `statusline`, `redact`, `version`, `prefix`, `budget`, `jev`, `pool`.
 
 **Leaves the machine:** `serve` proxies every request to the provider.
 `probe --execute` sends billable requests, and without `--execute` it prints a
@@ -52,6 +52,7 @@ to test whether `~/.replay` is writable.
 | [`route`](#route) | What switching models would change, structurally | none | none |
 | [`trim`](#trim) | What a byte cap on tool output would have saved, and cost | none | none |
 | [`codex`](#codex) | The same reading, for OpenAI Codex rollout logs | none | none |
+| [`grok`](#grok) | Grok's own usage.json against Replay's reading of its turns, in tokens; no dollars | none | none |
 | [`burn`](#burn) | What each agent surface burned: Codex, Ollama, Claude Code | loopback: Ollama's version endpoint | none |
 | [`agents`](#agents) | A boot block naming where this project keeps its records | none | with --write, splices into the named file |
 | [`mcp`](#mcp) | Answer an agent's questions mid-session, JSON-RPC on stdio | none | none |
@@ -220,6 +221,12 @@ What a byte cap on tool output would have saved, and cost.
 ### codex
 
 The same reading, for OpenAI Codex rollout logs.
+
+Takes no flags.
+
+### grok
+
+Grok's own usage.json against Replay's reading of its turns, in tokens; no dollars.
 
 Takes no flags.
 
@@ -435,4 +442,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-31 commands, 112 flags, read from the binary.
+32 commands, 112 flags, read from the binary.
