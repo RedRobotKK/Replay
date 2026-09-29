@@ -232,5 +232,35 @@ class TestNoScriptBypassesTheRunner(unittest.TestCase):
             runner.summarise()
 
 
+class TestFanPropagatesExtraKwargs(unittest.TestCase):
+    """Every call in a fan-out must carry the caller's request parameters.
+
+    `ask` propagated them and `fan` silently dropped them. A caller could then
+    only vary a request parameter per arm by lying about the task class, which
+    changes the reasoning setting as a side effect and makes the arm measure two
+    things at once.
+    """
+
+    def test_every_call_warm_and_fanned_receives_them(self):
+        ad = FakeAdapter()
+        r = run(ad)
+        r.fan(TaskClass.AGGREGATE, "S" * 9000, [f"q{i}" for i in range(4)],
+              extra_kwargs={"top_p": 0.25})
+        self.assertEqual(len(ad.calls), 4)
+        for i, c in enumerate(ad.calls):
+            self.assertEqual(c["kw"].get("top_p"), 0.25,
+                             f"call {i} lost the caller's request parameter")
+
+    def test_they_do_not_override_the_task_class_reasoning_setting(self):
+        """The policy decision stays with the task class; extra_kwargs adds to
+        it rather than replacing it."""
+        ad = FakeAdapter()
+        run(ad).fan(TaskClass.LOOKUP, "S" * 9000, ["q0", "q1"],
+                    extra_kwargs={"top_p": 0.25})
+        for c in ad.calls:
+            self.assertTrue(policy.disables_reasoning(c["kw"]))
+            self.assertEqual(c["kw"].get("top_p"), 0.25)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

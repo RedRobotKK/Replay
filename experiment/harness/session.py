@@ -125,8 +125,14 @@ class Run:
 
     # -- many calls, warmed -----------------------------------------------
     def fan(self, task_class, shared, variables, max_tokens=512, checks=None,
-            warm=None):
+            warm=None, extra_kwargs=None):
         """Ask every variable against one shared block, warming it first.
+
+        `extra_kwargs` reaches every call, warm and fanned alike. Without it a
+        caller wanting a per-arm request parameter had to pass a `task_class` it
+        knew to be false, which couples the semantic classification to the
+        mechanical setting and makes the arm unfaithful. That is exactly how
+        three cells of the previous campaign ended NOT_OBSERVED.
 
         Warming is decided by the measured 256-token floor unless the caller
         overrides it. Fanning out cold pays full input price on the shared block
@@ -148,7 +154,8 @@ class Run:
         out, start = [], 0
         if do_warm:
             out.append(self.ask(task_class, variables[0], shared, max_tokens,
-                                checks[0], qid=0, note="warm"))
+                                checks[0], qid=0, note="warm",
+                                extra_kwargs=extra_kwargs))
             start = 1
             if out[0]["outcome"] == Outcome.REFUSED_BUDGET:
                 # The ceiling is already reached. Fanning out would produce a
@@ -160,7 +167,8 @@ class Run:
         if start < len(variables):
             with cf.ThreadPoolExecutor(max_workers=self.workers) as ex:
                 futs = {ex.submit(self.ask, task_class, variables[i], shared,
-                                  max_tokens, checks[i], i, "fan"): i
+                                  max_tokens, checks[i], i, "fan",
+                                  extra_kwargs): i
                         for i in range(start, len(variables))}
                 for f in cf.as_completed(futs):
                     i = futs[f]

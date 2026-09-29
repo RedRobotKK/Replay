@@ -94,6 +94,14 @@ At rungs chosen to discriminate:
 | H-D1 `64*floor(n/64)` | 0/18 |
 | H-D2 `64*(floor(n/64)-1)` | 4/22 |
 
+**BOUND ADDED 2026-09-29 by the prompt-optimization campaign.** All 35 rungs
+above were sequential cold/warm pairs. Under **concurrent** load a cached count
+of **13,563** was observed once in 251 trials, which is not a multiple of 128.
+Its sibling trial, same condition and task, read 13,440 with an identical total
+input of 13,697. The quantization claim is therefore scoped to the sequential
+regime it was measured in; under concurrency a non-multiple occurs rarely. See
+`experiment/prompt-opt/derived/ledger.json` PO-06.
+
 **This establishes a COUNT RELATION, not an implementation.** A server that
 commits only complete blocks and a server that holds a deliberate one-block
 margin produce identical counts. Distinguishing them needs control over

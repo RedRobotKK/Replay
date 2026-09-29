@@ -1,0 +1,10 @@
+{
+ "p0_run1_mean": 672.6111111111111,
+ "p0_run2_mean": 585.1666666666666,
+ "control_drift_pct": -13.000743371603207,
+ "within_task_spread_median": 0.4363276044691974,
+ "within_task_spread_mean": 0.5277403328616876,
+ "within_task_spread_max": 1.7142857142857142,
+ "cv_unpaired": 1.7253861553024261,
+ "n_per_arm_for_20pct": 1169
+}

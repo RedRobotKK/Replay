@@ -1,0 +1,127 @@
+{
+ "head": "2be96b2",
+ "campaign": "prompt-opt",
+ "claims": [
+  {
+   "id": "PO-01",
+   "claim": "No prompt condition produced a replicable reduction in output tokens or cost against the baseline.",
+   "ec": "OBSERVED",
+   "src": "raw/run1.json, run2-replication.json, run3-p4.json",
+   "n": 396,
+   "val": "P6 -26.9% then +3.4%; P4 paired 0.851 then 1.104. Both reversed.",
+   "alt": "An effect smaller than the noise floor could exist and be undetectable here.",
+   "lim": "18 tasks, one corpus, one model, reasoning enabled, 3 runs.",
+   "status": "NULL RESULT"
+  },
+  {
+   "id": "PO-02",
+   "claim": "Output-token variability under reasoning-enabled deepseek-flash is large: median within-task relative spread 44% for an identical condition and task.",
+   "ec": "OBSERVED",
+   "src": "derived/noise.json",
+   "n": 72,
+   "val": "median 44%, mean 53%, max 171%; coefficient of variation 1.73 unpaired",
+   "alt": "Some spread may come from cache-boundary effects rather than decoding.",
+   "lim": "P0 only, 4 observations per task.",
+   "status": "OBSERVED"
+  },
+  {
+   "id": "PO-03",
+   "claim": "The control differed from itself by 13% in mean output tokens across two independent runs with no treatment applied.",
+   "ec": "OBSERVED",
+   "src": "run1 vs run2",
+   "n": 72,
+   "val": "672.6 then 585.2",
+   "alt": "none material",
+   "lim": "two runs",
+   "status": "OBSERVED"
+  },
+  {
+   "id": "PO-04",
+   "claim": "Detecting a 20% effect on unpaired means in this design would need about 1,169 trials per arm.",
+   "ec": "DERIVED",
+   "src": "derived/noise.json",
+   "n": 72,
+   "val": "15.7*(cv/effect)^2 with cv=1.73",
+   "alt": "A paired design needs far fewer.",
+   "lim": "normal-approximation power formula, not exact.",
+   "status": "DERIVED"
+  },
+  {
+   "id": "PO-05",
+   "claim": "Unpaired condition means are dominated by task mix: P6 read -26.9% unpaired and 1.020 paired on the same data.",
+   "ec": "DERIVED",
+   "src": "run1",
+   "n": 252,
+   "val": "output tokens span 60 to 22,000+ across task classes",
+   "alt": "none material",
+   "lim": "one run",
+   "status": "DERIVED"
+  },
+  {
+   "id": "PO-06",
+   "claim": "A cached-token count of 13,563 was observed, which is not a multiple of 128.",
+   "ec": "OBSERVED",
+   "src": "run1.json idx 181",
+   "n": 1,
+   "val": "P3/aggregation.const.mixed rep0: 13,563 cached + 134 fresh; its sibling rep 13,440 + 257, identical total input 13,697",
+   "alt": "Concurrency-specific behaviour; the 35 earlier rungs were sequential cold/warm pairs.",
+   "lim": "1 of 251 trials that returned usage.",
+   "status": "BOUNDS a prior claim"
+  },
+  {
+   "id": "PO-07",
+   "claim": "Conditions sharing leading suffix scaffolding cache one extra 128-token block (P6: 13,568 versus 13,440).",
+   "ec": "OBSERVED",
+   "src": "run1, run2, run3",
+   "n": 396,
+   "val": "P6 13,568 uniformly; P0-P5 13,440 uniformly",
+   "alt": "none material",
+   "lim": "one corpus",
+   "status": "OBSERVED"
+  },
+  {
+   "id": "PO-08",
+   "claim": "The cache confound is bounded at 128 tokens, about 4.3% of a mean trial's cost, and output is 82-85% of trial cost.",
+   "ec": "DERIVED",
+   "src": "derived/run1-agg.json",
+   "n": 252,
+   "val": "$0.0000376 per trial against a mean trial of $0.0008721",
+   "alt": "none material",
+   "lim": "derived from published rates",
+   "status": "DERIVED"
+  },
+  {
+   "id": "PO-09",
+   "claim": "Accuracy differences between conditions are not distinguishable from noise: only three of 18 tasks ever failed, scattered across prose and structured conditions.",
+   "ec": "OBSERVED",
+   "src": "run1",
+   "n": 252,
+   "val": "transform.reverse.funcname failed under P0, P1, P4, P5; counting.func.lines under P0, P3; counting.rawmessage under P1, P6",
+   "alt": "A real accuracy effect smaller than this noise could exist.",
+   "lim": "2 reps per cell.",
+   "status": "NOT_OBSERVED (no accuracy effect)"
+  },
+  {
+   "id": "PO-10",
+   "claim": "Whether any output reduction would come from less narration, less hidden reasoning, or a shorter answer.",
+   "ec": "NOT_OBSERVED",
+   "src": "n/a",
+   "n": 0,
+   "val": "no effect survived to attribute",
+   "alt": "n/a",
+   "lim": "n/a",
+   "status": "NOT_OBSERVED"
+  },
+  {
+   "id": "PO-11",
+   "claim": "Patent prior-art search for prompt optimization.",
+   "ec": "NOT_VERIFIED",
+   "src": "n/a",
+   "n": 0,
+   "val": "no patent database queried",
+   "alt": "n/a",
+   "lim": "No novelty or freedom-to-operate conclusion available.",
+   "status": "NOT_VERIFIED"
+  }
+ ]
+}
