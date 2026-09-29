@@ -7,7 +7,7 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
 | DS-BASE | 2026-09-28 | Does DeepSeek run through an existing Replay path? | 2 | Yes, no adapter needed; inclusive counting normalised correctly | OBSERVED | `deepseek/baseline/2026-09-28-cold-warm.md` |
 | DS-SURF | 2026-09-28 | What surfaces exist? | ~20 | 6 endpoints, 2 models, 3 usage dialects, no rate-limit headers | OBSERVED | `deepseek/surface-map-2026-09-28.md` |
 | DS-GAP | 2026-09-28 | What pricing and telemetry is missing? | n/a | No DeepSeek price row; time-of-day pricing inexpressible; 5 telemetry gaps | DERIVED | `deepseek/gap-analysis-2026-09-28.md` |
-| DS-CONC | 2026-09-28 | Where is the concurrency ceiling? | 112 | None found at 64; latency fell as concurrency rose | OBSERVED | `deepseek/campaign-prereg-2026-09-28.md` |
+| DS-CONC | 2026-09-28 | Where is the concurrency ceiling? | 112 | **FRAMING CORRECTED 2026-09-29**: docs publish 2,500 concurrent for flash / 500 for v4-pro with HTTP 429 beyond. We tested 64, ~39x below the limit, and reported no wall we were never near. Latency falling as concurrency rose stands | OBSERVED, bounded by published limit | `deepseek/docs-reconciliation-2026-09-29.md` |
 | DS-F1 | 2026-09-28 | Does disabling reasoning preserve outcome? | 120 | Yes on 2 of 3 tasks: cost and latency down, 20/20 held | MEASURED IMPROVEMENT | `deepseek/findings-2026-09-28.md` |
 | DS-F2 | 2026-09-28 | Does `reasoning.effort` work? | 3 | **RECLASSIFIED NOT_MEASURED**: the tested shape is not the documented control (`reasoning_effort` is flat) | **NOT_MEASURED** | same |
 | DS-F3 | 2026-09-28 | Does prefix ordering generalise? | 80 | Only under prefix recurrence: 90.4% cheaper shared, 0% unique | MEASURED IMPROVEMENT, CONDITIONAL | same |
@@ -26,6 +26,7 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
 | DS-OPT | 2026-09-29 | Baseline plus 5 one-variable arms | 72 | Best arm 6.5x cheaper and 6.9x faster at 12/12; parallel-alone is 0.99x cost at 0% hit | OBSERVED | same |
 | DS-F5 | 2026-09-29 | Do cache reads bill at the hit rate? | 200 | **YES**. Observed $0.04 vs $0.03909 derived-at-hit (1.023) vs $1.13994 derived-at-miss (0.035) | **RESOLVED**, blocker 3 closed | same |
 | DS-RS | 2026-09-29 | Where does `reasoning_effort:"none"` apply? | 84 | **CLASS-CONDITIONAL**: lookup 100%->94% at 19.5x less output; aggregation 100%->**29%**, confidently wrong | OBSERVED, n=18/24 per cell | `deepseek/reasoning-scope-2026-09-29.md` |
+| DS-DOC | 2026-09-29 | What did the documentation already say? | 0 | Pricing confirmed exact; 128-token block is genuinely undocumented; `reasoning_effort:"none"` is **undocumented** and fragile; concurrency limit is published | n/a, zero cost | `deepseek/docs-reconciliation-2026-09-29.md` |
 
 ## Killed or corrected
 
@@ -71,3 +72,9 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
   given line number of a 48,000-char document, which is positional counting, not
   lookup, and `max_tokens=1024` truncated every reasoning-on call. The cell
   measured the question design. Rebuilt and re-run.
+
+- **Reading the vendor documentation came after the campaign, not before.** It
+  would not have saved most of the spend, since the block size, the disable
+  shapes and the billing behaviour are all things the docs do not settle. It
+  would have caught the concurrency framing and flagged the reasoning parameters
+  as undocumented before they were written into a recommendation. DS-DOC.
