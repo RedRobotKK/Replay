@@ -13,13 +13,49 @@ import json, os, subprocess, time, uuid
 # is NOT_MEASURED. It is never coerced to 0: "reported nothing" and "reported
 # zero" are different facts and the whole project depends on keeping them apart.
 FIELDS = ("fresh_in", "cache_read", "cache_write", "out", "reasoning",
-          "total_in_reported", "wall_ms", "status", "model_returned")
+          "total_in_reported", "wall_ms", "status", "model_returned",
+          # O2 telemetry. Recorded so a later question about which model served a
+          # request, or how a call ended, is answerable from the record rather
+          # than re-derived. A fingerprint identifies a serving configuration;
+          # it is NOT evidence of model weights and must not be read as such.
+          "requested_model", "system_fingerprint", "finish_reason",
+          # O1. A response that ran out of room is not a short answer, and the
+          # difference is not cosmetic: WP-01 paid for 6,000 output tokens that
+          # returned empty visible content at finish_reason "length", 14.6% of
+          # that work package, and the controller banked it as a result.
+          "truncated")
 
 
 class Measurement(dict):
     def __init__(self, **kw):
         super().__init__({f: None for f in FIELDS})
         self.update(kw)
+
+    def is_truncated(self):
+        """True when the provider stopped because it ran out of output room.
+
+        Both dialects are checked by their own vocabulary: chat/completions says
+        "length", the Anthropic-compatible shape says "max_tokens". A caller that
+        knows only one of them would silently accept a truncated call on the
+        other endpoint.
+        """
+        return self.get("finish_reason") in ("length", "max_tokens")
+
+
+class Truncated(Exception):
+    """Raised instead of returning a truncated response as a deliverable.
+
+    Deliberately NOT a retry. A retry spends money on the same prompt that just
+    overran, and doing it automatically is how a bounded work package quietly
+    becomes an unbounded one. The default is TRUNCATED -> STOP; a work package
+    that wants a recovery call must ask for it explicitly.
+    """
+
+    def __init__(self, measurement, raw_path):
+        self.measurement, self.raw_path = measurement, raw_path
+        super().__init__(
+            f"response truncated at finish_reason={measurement.get('finish_reason')!r}; "
+            f"out={measurement.get('out')} tokens. Not a deliverable. Raw: {raw_path}")
 
 
 class Adapter:
@@ -55,7 +91,7 @@ class DeepSeekAnthropic(Adapter):
     name = "deepseek:anthropic"
     inclusive = False
 
-    def call(self, model, prompt, max_tokens, tmp, **kw):
+    def call(self, model, prompt, max_tokens, tmp, allow_truncated=False, **kw):
         body = {"model": model, "max_tokens": max_tokens,
                 "messages": [{"role": "user", "content": prompt}]}
         body.update(kw)
@@ -63,14 +99,21 @@ class DeepSeekAnthropic(Adapter):
         u = doc.get("usage") or {}
         txt = "".join(b.get("text", "") for b in (doc.get("content") or [])
                       if isinstance(b, dict))
-        return Measurement(
+        m = Measurement(
+            requested_model=model,
+            system_fingerprint=doc.get("system_fingerprint"),
+            finish_reason=doc.get("stop_reason"),
             fresh_in=u.get("input_tokens"),
             cache_read=u.get("cache_read_input_tokens"),
             cache_write=u.get("cache_creation_input_tokens"),
             out=u.get("output_tokens"),
             total_in_reported=None,     # this dialect reports no combined figure
             wall_ms=round(wall), status=code,
-            model_returned=doc.get("model")), txt, path
+            model_returned=doc.get("model"))
+        m["truncated"] = m.is_truncated()
+        if m["truncated"] and not allow_truncated:
+            raise Truncated(m, path)
+        return m, txt, path
 
 
 class DeepSeekChat(Adapter):
@@ -79,14 +122,18 @@ class DeepSeekChat(Adapter):
     name = "deepseek:chat"
     inclusive = True
 
-    def call(self, model, prompt, max_tokens, tmp, **kw):
+    def call(self, model, prompt, max_tokens, tmp, allow_truncated=False, **kw):
         body = {"model": model, "max_tokens": max_tokens, "stream": False,
                 "messages": [{"role": "user", "content": prompt}]}
         body.update(kw)
         doc, code, wall, path = self._post("/v1/chat/completions", body, tmp)
         u = doc.get("usage") or {}
-        ch = (doc.get("choices") or [{}])[0].get("message", {})
-        return Measurement(
+        choice = (doc.get("choices") or [{}])[0]
+        ch = choice.get("message", {})
+        m = Measurement(
+            requested_model=model,
+            system_fingerprint=doc.get("system_fingerprint"),
+            finish_reason=choice.get("finish_reason"),
             fresh_in=u.get("prompt_cache_miss_tokens"),
             cache_read=u.get("prompt_cache_hit_tokens"),
             cache_write=None,           # this provider publishes no write charge
@@ -94,4 +141,8 @@ class DeepSeekChat(Adapter):
             reasoning=(u.get("completion_tokens_details") or {}).get("reasoning_tokens"),
             total_in_reported=u.get("prompt_tokens"),
             wall_ms=round(wall), status=code,
-            model_returned=doc.get("model")), ch.get("content", ""), path
+            model_returned=doc.get("model"))
+        m["truncated"] = m.is_truncated()
+        if m["truncated"] and not allow_truncated:
+            raise Truncated(m, path)
+        return m, ch.get("content", ""), path

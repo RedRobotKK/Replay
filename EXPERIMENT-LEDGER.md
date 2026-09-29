@@ -9,7 +9,7 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
 | DS-GAP | 2026-09-28 | What pricing and telemetry is missing? | n/a | No DeepSeek price row; time-of-day pricing inexpressible; 5 telemetry gaps | DERIVED | `deepseek/gap-analysis-2026-09-28.md` |
 | DS-CONC | 2026-09-28 | Where is the concurrency ceiling? | 112 | None found at 64; latency fell as concurrency rose | OBSERVED | `deepseek/campaign-prereg-2026-09-28.md` |
 | DS-F1 | 2026-09-28 | Does disabling reasoning preserve outcome? | 120 | Yes on 2 of 3 tasks: cost and latency down, 20/20 held | MEASURED IMPROVEMENT | `deepseek/findings-2026-09-28.md` |
-| DS-F2 | 2026-09-28 | Does `reasoning.effort` work? | 3 | Accepted and silently ignored | OBSERVED | same |
+| DS-F2 | 2026-09-28 | Does `reasoning.effort` work? | 3 | **RECLASSIFIED NOT_MEASURED**: the tested shape is not the documented control (`reasoning_effort` is flat) | **NOT_MEASURED** | same |
 | DS-F3 | 2026-09-28 | Does prefix ordering generalise? | 80 | Only under prefix recurrence: 90.4% cheaper shared, 0% unique | MEASURED IMPROVEMENT, CONDITIONAL | same |
 | DS-F4 | 2026-09-28 | Does derived cost match observed? | 440 | Comparison invalid: lagged balance against a partial subtotal | **WITHDRAWN, see DS-F4b** | `deepseek/f4-reconciliation-2026-09-28.md` |
 | DS-F4a | 2026-09-28 | Controlled batch, cent-quantization 3.8% | 300 | observed $0.13 vs derived $0.1378, ratio 0.943 | INCONCLUSIVE, residual outside quantization | same |
@@ -18,7 +18,14 @@ One row per experiment. Dated artifacts are authoritative; this is the index.
 | WP-01 | 2026-09-28 | Can DeepSeek find evidence/claim-boundary risks in the repo? | 30 calls | 5 findings: 4 verified, 1 partial, 0 false positives | USEFUL | `deepseek/wp01/` |
 | WP-02 | 2026-09-28 | Does the repo contract establish F1 as a defect? | 7 calls | **CONTRACT GAP**; test-only, 0 production files | USEFUL | commit `1d14036` |
 
+| HH-01 | 2026-09-28 | Harden the harness at zero cost | 0 calls | O1 and O2 implemented and mutation-checked; O3 not implemented | n/a | `experiment/harness/test_adapter.py` |
+
 ## Killed or corrected
+
+- **F2 "reasoning control is silently ignored"**: withdrawn. The tested body used
+  `reasoning: {effort: ...}`; the documented control is the flat
+  `reasoning_effort`. An API ignoring an unrecognised key is not a defect. The
+  original observation is preserved; the interpretation is not.
 
 - **"Derived cost over-states observed spend by 2.9x"**: withdrawn. The original
   comparison read the balance before billing settled and compared it against a

@@ -38,6 +38,28 @@ the prefix recurs, exactly no effect when it does not.
    `cache_read` of exactly 0, so the cheapest rate in the table is the one
    entirely untested. Any saving claimed from caching rests on an unverified rate.
 
+## Harness hardening, 2026-09-28 (zero cost, no API calls)
+
+| item | status |
+|---|---|
+| **F2** | **RECLASSIFIED NOT_MEASURED.** Tested parameter shape was not the documented control |
+| **O1** truncation guard | **IMPLEMENTED.** `finish_reason` in `length`/`max_tokens` raises `Truncated` instead of returning a deliverable. No automatic retry; recovery needs `allow_truncated=True` |
+| **O2** identity telemetry | **IMPLEMENTED.** `requested_model`, `model_returned`, `system_fingerprint`, `finish_reason` recorded per call. A fingerprint identifies a serving configuration, **not** model weights |
+| **O3** explore/synthesize split | **NOT IMPLEMENTED — NEEDS DESIGN.** See below |
+| cache | **untouched**, by decision. Already 93.4% / 77.3% |
+
+**Why O3 was not implemented.** The harness has no agent loop to split.
+`runner.py` exposes `run_arm`, which is single-shot: zero `tool_calls` handling
+and zero round control. The loop that ran WP-01 and WP-02 lived in untracked
+ad-hoc scripts. Implementing O3 means adding an agent-loop module to the harness,
+which is an architectural change, so it was left for a design pass rather than
+improvised.
+
+Tests: `python3 experiment/harness/test_adapter.py` — 6 pass. Mutation-checked
+twice: deleting the guard fails 2 tests; narrowing it to chat's `length`
+vocabulary alone fails the Anthropic `max_tokens` case. Go suite unaffected at
+30 ok / 0 FAIL, `go vet` and `gofmt` clean.
+
 ## Operational follow-up: credential rotation
 
 - The DeepSeek credential used by WP-01 and WP-02 **has not been rotated**.
