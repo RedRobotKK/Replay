@@ -263,7 +263,7 @@ lifetime install fetches from 2 distinct IP addresses.
 |---|---|
 | **Offer** | A fixed-scope **AI spend and cache forensic**. One codebase or one month of agent traffic. Deliverable in five working days |
 | **Buyer** | A team running metered agent traffic at $2,000/month or above, reached through category 1 or 2 above |
-| **Deliverable** | A written report naming: what the traffic actually cost, reconciled against the provider's own record and reported as an interval; every cache break with its cause and position; where a budget ceiling halts execution against real spend; and an explicit list of what could not be determined and why. Plus the tooling, which is free and stays free |
+| **Deliverable** | A written report leading with **where their budget ceiling actually halts execution against real spend**, since that is the largest measured effect; then what the traffic cost, reconciled against the provider's own record and reported as an interval; then every cache break with its cause and position; and an explicit list of what could not be determined and why. Plus the tooling, which is free and stays free |
 | **Price hypothesis** | **$2,500 to $5,000.** Deliberately an order of magnitude below the $22,000 week that has already failed to sell. The question being tested is not what the capability is worth, it is **whether anyone will pay anything for it** |
 | **Proof artifact** | WS-2 for the reconciliation, WS-1 for the cache work, and the retraction record for why the number can be trusted |
 | **Outreach target** | Three to five named maintainers or engineering leads in categories 1 and 2. The opening is the filed dialect defect and the fixtures, not a service pitch |
@@ -280,22 +280,75 @@ contributing to open source is generally advisable.
 
 ---
 
+## 7a. Recoverable optimizations, by measured magnitude
+
+Added after the question was put directly: is 2.75% really the whole prize? It
+is not. But only one lever is large, and that one has an undetermined sign.
+
+| Lever | Measured magnitude | Recoverable? | Status |
+|---|---|---|---|
+| **Cache-blind budget ceiling** | **7.94x** over 57,958 requests. A $500/day ceiling halts at **$62.94** of real spend, leaving ~$13,000/month of approved capacity unreachable | **Sign undetermined.** See below | the only lever large enough to price against |
+| Re-billed waste from cache breaks | 2.75% shipping build, 4.99% on v0.5.4, 4.2% on a fan-out session. Realistic recovery 2-3%, so **$60-90/month** on a $3,019 bill | yes, but small | one-time per cause |
+| Reasoning-off by task class | **19.5x** fewer output tokens on lookup, but only **1.41-1.48x** total cost once a warm corpus is in the prompt, because input dominates at 70-98% | partly | class-conditional; 29% accuracy on aggregation, failing as confident wrong numbers |
+| Configuration fixes (MCP bind order, warm-then-fan) | traced every break in one session to one connector binding mid-session | yes | **one afternoon, free, does not recur** |
+| Prompt and prefix structure | **REFUTED.** Two replications, both reversing sign. The 98.8% that would have justified it was an instrument artifact, corrected to 4.2% the same morning | **no** | do not resurrect |
+
+**The finding that matters, and why it is not yet a claim.** The throttling
+figure is roughly 150x larger than the waste figure, and MONEY-PATH 0.7 already
+states the problem with it:
+
+> Nobody has asked whether that is value to the buyer or a bill they were
+> deliberately avoiding. If the cap was a guardrail against runaway agents, then
+> correcting the arithmetic unlocks capacity they already paid for and the value
+> is real. If the cap was a budget, correcting the arithmetic hands them a
+> $13,000 a month increase, sold to the person who set the limit. **Those are
+> opposite products and no measurement in this repository distinguishes them.**
+
+No measurement on this machine can distinguish them, because the question is
+about the buyer's intent rather than about the traffic. It is settled by asking,
+not by measuring.
+
+**What this changes in the offer, and what it does not.**
+
+It does **not** license a savings claim. Prompt-structure optimization stays
+refuted, the recoverable waste stays at 2.75%, and nothing here says an
+intervention improves an outcome.
+
+It **does** change what the engagement leads with. An offer that opens on "I
+will find your waste" is selling $60-90 a month and correctly loses. An offer
+that opens on "your budget ceiling is halting your agents at an eighth of what
+you approved, and I will show you where" is selling something an order of
+magnitude larger, and it is the same work on the same artifacts.
+
+**And the engagement is the instrument.** Five conversations settle the sign
+question, and MONEY-PATH says so. A paid forensic that reports the ceiling
+finding to five buyers answers it as delivered work rather than as unfunded
+research. That is the cheapest available route to the one figure that is both
+load-bearing and untested, and it is the reason the experiment in section 7 is
+worth running even if it converts poorly.
+
+---
+
 ## 8. Offer hypothesis, stated so it can be wrong
 
 > A team running metered agent traffic will pay $2,500 to $5,000 for a
-> five-day investigation that tells them what their traffic actually cost,
-> checked against the provider's own record rather than computed forward, and
-> names every cache break with its cause.
+> five-day investigation that shows them where their budget ceiling is halting
+> their agents short of the capacity they approved, tells them what the traffic
+> actually cost checked against the provider's own record rather than computed
+> forward, and names every cache break with its cause.
 
 **What makes it plausible:** the reconciliation practice was not found in 21
 products examined; the cache-break attribution was not found either; and the
 7.94x ceiling finding is a large, concrete, measured number.
 
-**What makes it doubtful, recorded honestly:** the recoverable waste is 2.75%,
+**What makes it doubtful, recorded honestly:** the recoverable *waste* is 2.75%,
 so on a $2,000/month bill the engagement costs more than a year of the waste it
-finds. **The offer therefore cannot be sold on savings.** It sells on knowing
-the number, which is a weaker motive and may not be a purchase motive at all.
-That is the thing the experiment tests.
+finds. **The offer therefore cannot be sold on savings.** The throttling finding
+is 150x larger and is the reason the offer is worth making at all, but its sign
+is undetermined: it is either capacity a buyer already paid for, or a budget
+increase sold to the person who set the budget. If it turns out to be the
+second, this offer has no buyer and the experiment will show that quickly, which
+is the point of running it small.
 
 ---
 
