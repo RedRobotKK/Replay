@@ -74,6 +74,76 @@ after:
    should name both and state the relationship, so the two signatures reconcile
    on the face of the document.
 
+### DECIDED 2026-09-30: the register consolidates under Daniel Saito
+
+**`Daniel Saito` is the single legal identity of record.** It holds the
+consolidated RedRobot K.K. shares, it holds the founder shares in Uncanny
+Valley Inc., and it is the name in every corporate document from here. It is
+already the name in `CITATION.cff`, in the public bio and on the professional
+profile, so the consolidated record agrees with the public one rather than
+introducing a second version of it.
+
+**Nothing in this changeset's diffs changes as a result.** Sections 1 to 6 were
+written against the entity names, not the shareholder names, and the decision
+above touches neither.
+
+#### How consolidation actually works in Japan
+
+A K.K.'s shareholder register (`kabunushi meibo`) is a company-maintained
+internal record. **It is not part of the commercial register and is not filed
+publicly.** Consolidating it is therefore an internal record change plus its
+authorizing paper, not a filing, which makes this far cheaper than the
+equivalent step would be on a Delaware cap table.
+
+Two framings are available, and the choice is not cosmetic:
+
+**Framing A, correction.** The register was inaccurate. Both entries always
+denoted the same natural person, so the record is corrected to show one holder
+of the combined shares. No transfer occurs, no consideration passes, and there
+is no disposition to tax. This is the accurate framing, because it describes
+what is true.
+
+**Framing B, transfer.** Treat the entries as two holders and paper a share
+transfer from one to the other, with a transfer approval under the articles'
+restriction clause. Heavier, and it manufactures a disposition where none
+happened.
+
+**Framing A is correct and should be the one taken, but it has a precondition
+that has to be checked rather than assumed:** the original subscription
+documents, the incorporation paperwork and any subsequent share issuances must
+be consistent with both entries denoting one person. If the founding documents
+were executed under two different personal seals or two different residence
+records, the paper says two subscribers even though the fact is one human, and
+counsel decides whether that is corrected or transferred. **Check the founding
+documents before instructing anyone, because this is the question that picks
+the framing.**
+
+#### The two live risks, stated so they are not discovered later
+
+1. **The tax authority may hold two taxpayer records.** Separate nationalities
+   with separate registrations can mean the National Tax Agency sees two
+   persons, whatever the underlying fact is. Under framing A there is nothing
+   to report, which is exactly why the framing has to be defensible in advance
+   rather than explained afterwards. This is the first question for the
+   cross-border adviser, and it comes before the assignment, not after.
+2. **The representative director is a separate record and does not move with
+   this.** The Japanese commercial register names the representative director,
+   and that name signs for the K.K. on the assignment regardless of what the
+   shareholder register now says. **If the register names the other identity,
+   the assignment must name both and state the relationship**, so the assignor's
+   signature reconciles with the assignor's own public registration on the face
+   of the document. Point 3 above stands unchanged.
+
+#### What is now closed, and what is not
+
+Closed: which identity holds the founder shares. Closed: consolidate rather
+than disclose-and-keep-both.
+
+Open, and unchanged by this decision: the framing precondition in the founding
+documents, the tax-record question, and the representative director check. None
+of the three is resolved by choosing a name, and each is a question of fact
+that can be answered by reading a document rather than by deciding anything.
+
 ### The item that needs a specialist, not counsel-in-general
 
 Two nationalities across a Japanese company and a Delaware company is a
@@ -245,12 +315,17 @@ cosmetic gain.
 
 **Blocking, from section 0:**
 
-- Which single legal identity holds the founder shares in Uncanny Valley Inc.
-  Everything else in the corporate file keys off it.
-- Consolidate the K.K. register, or disclose the identity in diligence. Pick
-  one before the $300k instrument is signed.
-- Cross-border tax adviser engaged, and the US-person question answered, before
-  the assignment executes.
+- ~~Which single legal identity holds the founder shares.~~ **DECIDED
+  2026-09-30: `Daniel Saito`.**
+- ~~Consolidate the register, or disclose and keep both.~~ **DECIDED
+  2026-09-30: consolidate.**
+- Read the K.K.'s founding and subscription documents. They decide whether
+  consolidation is a correction or a transfer, and that choice cannot be made
+  before they are read.
+- Confirm the name on the commercial register as representative director. If it
+  is not `Daniel Saito`, the assignment names both identities.
+- Cross-border tax adviser engaged, the US-person question answered, and the
+  two-taxpayer-record question answered, before the assignment executes.
 
 **Non-blocking, from the sections above:**
 
