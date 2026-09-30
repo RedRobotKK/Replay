@@ -6,11 +6,10 @@ row, and the question is not "does Replay support this vendor".
 > **The unit of support is vendor to product to surface to version or protocol
 > where observable.** A vendor is never wired. A surface is.
 
-Three vendors appear here with **six** distinct surfaces between them. Two of
-the six are production-wired against every gate, two are wired against the
-reporting path but not the ledger, and two are below the line with the reason
-stated. Claiming any of the three vendors as "supported" would be false for at
-least one of its own surfaces.
+**Twelve surfaces across eight vendors, plus one first-party artifact. Six are
+production-wired.** Claiming a vendor as "supported" would be false for xAI,
+which is wired on its local store and not on its wire, and misleading for the
+OpenAI-compatible family, where the wire is proven and the client half is not.
 
 ## The gate
 
@@ -38,21 +37,33 @@ gate and no surface here claims it.
 
 ## The matrix
 
-| Vendor | Product | Surface | Discovery | Maturity | Evidence | Canonical state | Unknowns | Tests | Status |
-|---|---|---|---|---|---|---|---|---|---|
-| Anthropic | Claude Code | `~/.claude/projects/**/*.jsonl` transcripts (`$CLAUDE_CONFIG_DIR` honoured) | **automatic** | PRODUCTION-WIRED | prompt, cache read, cache write with 5m/1h TTL split, output, thinking, tools, model, timestamps | `transcript.Session` via `usage.FromAnthropic`, exclusive counting | none material on this surface | `claudecode_test.go`, `burn*_test.go`, conservation and reconcile suites | **PRODUCTION-WIRED** |
-| Anthropic | any client on the proxy | `anthropic:/v1/messages` via `replay serve` | **explicit** (configure the proxy) | PRODUCTION-WIRED | same fields, off the wire | `ledger.Record` to `~/.replay/ledger/<session>.jsonl` | none material | `testdata/anthropic` live fixtures, `provider_conformance_test.go`, `openaistream_e2e_test.go` | **PRODUCTION-WIRED** |
-| DeepSeek | DeepSeek CLI and any OpenAI-compatible client | `openai:/v1/chat/completions` via `replay serve` | **explicit** (configure the proxy) | PRODUCTION-WIRED | `prompt_tokens` (inclusive), `prompt_tokens_details.cached_tokens`, `prompt_cache_hit_tokens`, `prompt_cache_miss_tokens`, `completion_tokens_details.reasoning_tokens`, raw usage verbatim | `ledger.Record` via `usage.FromInclusive`, converted not copied | cache **write** is `NOT_APPLICABLE`: `DeepSeekContract` records a miss billing as ordinary input, sourced | `testdata/deepseek` live fixtures captured 2026-09-05, `provider_conformance_test.go`, `model_matrix_test.go`, `rawusage_test.go` | **PRODUCTION-WIRED** |
-| xAI | Grok CLI | `~/.grok/sessions/*/updates.jsonl` + `usage.json` local store | **automatic** | PRODUCTION-WIRED | `inputTokens` (inclusive), `cachedReadTokens`, `cacheCreationTokens`, `outputTokens`, `reasoningTokens`, `modelCalls`, `turnCount`, per-model breakdown, vendor ledger | `usage.Record` via `usage.FromInclusive`; reconciled against the vendor ledger and never merged with it | cache **write** is `UNKNOWN`: `XAIContract` is deliberately `ContractUnknown`. Cost is `UNKNOWN`: the tick scale is unreconciled and no xAI rate table exists | `grok_test.go` (GK1 to GK14), `burngrok_test.go` (GW1 to GW6), `burnroster_test.go` | **PRODUCTION-WIRED** |
-| xAI | Grok CLI | `openai:/responses` at `cli-chat-proxy.grok.com` via `replay serve` | explicit | **DISCOVERED** | none read. The proxy forwards and warns once per path | none | everything | `wire-families-2026-09-06.md` capture only | **NOT PRODUCTION-WIRED** |
-| Anysphere | Cursor | `cursor:sqlite` transcript store | n/a | **REFUSED** | 29,665 message rows and **zero** cache fields | none possible | all cache forensics | `spike-cursor-2026-09-05.md` | **NOT PRODUCTION-WIRED** |
+Twelve surfaces across eight vendors, plus one first-party artifact. **Six are
+production-wired. Six are not**, each with the gate that blocks it and the
+evidence that would unblock it.
 
-**Not a vendor claim.** Anthropic is wired on two surfaces of its own products
-and says nothing about other Anthropic clients. xAI is wired on one surface and
-**not** on the other. DeepSeek is wired on the one surface it has here, and the
-generic OpenAI-compatible **client** half remains unproven: the DeepSeek
-capture proves the parser against real provider bytes and proves nothing about
-what an unseen client sends.
+| Vendor | Product | Surface | Discovery | Maturity | Evidence | Canonical state | Unknowns | Tests | Production status | Blocking gate |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Anthropic | Claude Code | `~/.claude/projects/**/*.jsonl` transcripts (`$CLAUDE_CONFIG_DIR` honoured). Burn name `claude-code` | **automatic** | PRODUCTION-WIRED | prompt, cache read, cache write with 5m/1h TTL split, output, thinking, tools, model, timestamps | `transcript.Session` via `usage.FromAnthropic`, exclusive counting | none material | parser, burn, conservation, reconcile, schema-mismatch suites | **PRODUCTION-WIRED** | none |
+| Anthropic | any client on the proxy | `anthropic:/v1/messages` via `replay serve` | explicit | PRODUCTION-WIRED | same fields, off the wire | `ledger.Record` to `~/.replay/ledger/<session>.jsonl` | none material | `testdata/anthropic` live fixtures, `provider_conformance_test.go` | **PRODUCTION-WIRED** | none |
+| OpenAI | Codex CLI | `~/.codex/sessions` and `archived_sessions` rollout JSONL. Burn name `codex` | **automatic** | PRODUCTION-WIRED | per-turn usage, cached reads, rate-limit events, compaction rebases | `transcript.CodexSession`, inclusive counting | cache **write** is `UNKNOWN` where reads are reported and the write counter is absent: `cachemodel.CountersWriteMissing` names that state rather than reading it as zero | `codex_test.go` x2, `codexdata` fixtures incl. `absent-breakdown`, `break`, `compacted`, `impossible`, `burncodexprice_test.go` | **PRODUCTION-WIRED** | none |
+| Ollama | Ollama server | `~/.ollama/logs/server*.log`. Burn name `ollama` | **automatic** | PRODUCTION-WIRED | prompt sizes, eval durations, `n_past` context reuse | request counts and token totals; local, so no billing record | cached **share** is deliberately never reported: `n_past` appears only when the whole prompt was cached, so a share over those requests measures a population selected for having been cached | `ollama_test.go`, `ollamadata/server.log`, `burnollamashare_test.go`, `adviseollama_test.go` | **PRODUCTION-WIRED** | none |
+| DeepSeek | DeepSeek CLI | `openai:/v1/chat/completions` via `replay serve` | explicit | PRODUCTION-WIRED | `prompt_tokens` (inclusive), `prompt_tokens_details.cached_tokens`, `prompt_cache_hit_tokens`, `prompt_cache_miss_tokens`, `completion_tokens_details.reasoning_tokens`, raw usage verbatim | `ledger.Record` via `usage.FromInclusive`, converted not copied | cache **write** is `NOT_APPLICABLE` on a sourced contract | `testdata/deepseek` live fixtures captured 2026-09-05, conformance, model matrix, raw-usage, stream e2e | **PRODUCTION-WIRED** | none |
+| xAI | Grok CLI | `~/.grok/sessions/*/updates.jsonl` + `usage.json`. Burn name `grok` | **automatic** | PRODUCTION-WIRED | `inputTokens` (inclusive), `cachedReadTokens`, `cacheCreationTokens`, `outputTokens`, `reasoningTokens`, `modelCalls`, `turnCount`, per-model breakdown, vendor ledger | `usage.Record` via `usage.FromInclusive`; reconciled against the vendor ledger and never merged | cache **write** `UNKNOWN` (`XAIContract` is `ContractUnknown`); **cost** `UNKNOWN` | GK1-GK14, GW1-GW6, PW1-PW2 | **PRODUCTION-WIRED** | none |
+| xAI | Grok CLI | `openai:/responses` at `cli-chat-proxy.grok.com` via `replay serve` | explicit | **DISCOVERED** | request-body **key names only**. No response body, no usage values | none | everything | capture notes only, no fixture | **NOT PRODUCTION-WIRED** | **INGESTION** |
+| Anysphere | Cursor | `state.vscdb` + `~/.cursor/projects/*/agent-transcripts/*.jsonl` | automatic (detected, not read) | **REFUSED** | `tokenCount` present and **zero on every row**; transcripts carry no usage key at all | none possible | all of it | refusal re-verified 2026-09-29 | **NOT PRODUCTION-WIRED** | **INGESTION** |
+| Mintplex | AnythingLLM | `anythingllm.db` (SQLite), `workspace_chats.metrics` | automatic (detected, not read) | **DISCOVERED** | `prompt_tokens`, `completion_tokens`, `total_tokens`, `provider`, `model` on every row. **No cache field of any kind** | none | cache read and write entirely | `anythingllmsurface_test.go` | **NOT PRODUCTION-WIRED** | **INGESTION** (no adapter) |
+| OpenClaw | OpenClaw | session log | automatic (detected, not read) | **DISCOVERED** | `cacheRead` populated beside a `cacheWrite` that is zero on every row | none | whether the zero write is real or dropped | `openclawsurface_test.go` | **NOT PRODUCTION-WIRED** | **INGESTION** (no adapter) |
+| Oracle | Oracle agent | `meta.json` | automatic (detected, not read) | **DISCOVERED** | `inputTokens`, `outputTokens`, no cache field; one session reports `totalTokens` 6 against `inputTokens` 4256 | none | cache entirely, and the totals contradict themselves | registry entry with the measurement | **NOT PRODUCTION-WIRED** | **INGESTION**, and the source contradicts itself |
+| (any) | any OpenAI-compatible CLI | `openai:/v1/chat/completions`, **client half** | explicit | **STUB** | the wire is proven by the DeepSeek row. **No non-DeepSeek client has ever been captured** | n/a, the wire row carries it | what an unseen client sends | none for the client half | **NOT A SURFACE CLAIM** | see note |
+| Replay | Replay itself | Jev capture stream (`replay jev <file>`) | **manual** (path argument) | PRODUCTION-WIRED for its own purpose | Replay's own evaluation records, contract-versioned | Jev evaluations | n/a | `jev_test.go`, `jev_contract_test.go`, `jevrefusal_test.go`, `jevdata/valid.jsonl` | **not a vendor surface** | n/a |
+
+**The generic OpenAI-compatible row is not a surface, it is a generalisation.**
+The wire is production-wired and the DeepSeek row holds the live bytes that
+prove it. What is unproven is that an arbitrary unseen client sends a
+conforming body. Replay reads the wire, not the client, so a new conforming
+client needs no code; a non-conforming one would be forwarded and warned about
+like any other unknown shape. The row exists so nobody reads the DeepSeek
+capture as a claim about Cursor.
 
 ---
 
@@ -155,6 +166,42 @@ SECURITY/PRIVACY        PASS   read-only; no message text enters Replay state
 FINAL: PRODUCTION-WIRED
 ```
 
+### OpenAI / Codex CLI / `~/.codex/sessions` and `archived_sessions`
+
+```
+IDENTITY                PASS   vendor, product, both roots. `codex archive` moves a session between them without changing its format, and both are scanned
+PRODUCTION REACHABILITY PASS   `replay codex`, `replay burn`, `replay doctor`
+INGESTION               PASS   real rollout JSONL; fixtures cover break, compaction, absent breakdown and impossible counters
+CANONICALIZATION        PASS   transcript.CodexSession, inclusive counting
+PROVENANCE              PASS   per-turn records trace to file and turn index
+SEMANTICS               PASS   cachemodel.ClassifyCounters names CountersWriteMissing when reads are reported beside an absent write, rather than reading the absence as zero
+PERSISTENCE             PASS   the rollout is the durable artifact and is never modified
+REPORTING               PASS   burnCodex, and a live quota reading, the only surface that has one
+FAILURE HANDLING        PASS   an unparsable rollout is counted nowhere; a compaction rebase is reported rather than summed through
+SCHEMA/DRIFT            PASS   an impossible counter combination is classified, not coerced
+AUTOMATED TESTS         PASS   12 tests across transcript and cmd, plus burn pricing
+SECURITY/PRIVACY        PASS   read-only, no message text copied
+FINAL: PRODUCTION-WIRED
+```
+
+### Ollama / Ollama server / `~/.ollama/logs/server*.log`
+
+```
+IDENTITY                PASS   product and log glob; `server*.log` matches the reader, `app*.log` carries no usage and is excluded
+PRODUCTION REACHABILITY PASS   `replay burn`, `replay advise`, `replay doctor`
+INGESTION               PASS   real server logs; ollamadata/server.log fixture
+CANONICALIZATION        PASS   per-request counts with the reused prefix excluded, which is this surface's own counting convention
+PROVENANCE              PASS   each request traces to its log and block
+SEMANTICS               PASS   a block without an n_past line has an UNKNOWN prefix, not a zero one, and the cached share is never reported at all because the population that carries n_past is selected for having been cached
+PERSISTENCE             PASS   the log is the durable artifact and is never modified
+REPORTING               PASS   burnOllama, marked localOnly because nobody invoices for a local model
+FAILURE HANDLING        PASS   an unreadable log is skipped; a non-Ollama file parses to nothing and is counted nowhere
+SCHEMA/DRIFT            PASS   counted by parsing rather than by filename, so a renamed or foreign file cannot inflate the count
+AUTOMATED TESTS         PASS   parser, burn share suppression, advise
+SECURITY/PRIVACY        PASS   read-only, local only, no network
+FINAL: PRODUCTION-WIRED
+```
+
 ### xAI / Grok CLI / `openai:/responses` via the proxy
 
 ```
@@ -173,24 +220,106 @@ SECURITY/PRIVACY        PASS   forwarded, not stored; masking does not cover thi
 FINAL: NOT PRODUCTION-WIRED. Maturity DISCOVERED.
 ```
 
-Reason: **the surface is not parsed at all.** To promote it, capture a
-`/responses` payload from a live authenticated session, land it as a fixture,
-and write the surface's own condition in `provider_conformance_test.go`. Note
-that the quota headers are not a route to a live guard here: no live quota
-state was found on any endpoint, `/settings` included.
+Reason: **the surface is not parsed, and the repository does not contain the
+evidence needed to parse it.** This was checked rather than assumed during this
+pass.
 
-### Anysphere / Cursor / `cursor:sqlite`
+What the repository holds is a **shape-only** capture:
+`wire-families-2026-09-06.md` records that the method was "keys and types
+recorded, values never", and states in its own scope paragraph that **"no cache
+hit was observed, no usage was parsed out of the SSE stream"**. The request
+body's key set is known. **No response body was retained, and no usage object
+from this path exists anywhere in the repository.**
+
+**Exact missing evidence**, all three required:
+
+1. A real `/responses` **response**, specifically the SSE event carrying usage.
+   The transport is `stream: true` on every call, so usage arrives in stream
+   events and a non-streamed body will not do.
+2. The **field names and nesting** of that usage object. It cannot be assumed
+   to match `/v1/chat/completions`: the request body already differs, carrying
+   `input`, `prompt_cache_key` and `max_output_tokens` where chat completions
+   carry `messages` and `max_tokens`.
+3. Whether a cache **write** is reported at all on this path, which decides
+   between `UNKNOWN` and `NOT_APPLICABLE` for that field.
+
+Obtaining it needs a live authenticated session against
+`cli-chat-proxy.grok.com`. **No attempt was made to fabricate it**, and
+inventing the schema from the chat-completions family is the specific
+assumption this project already made once and had to retract.
+
+The quota headers are not a route around this: no live quota state was found on
+any endpoint, `/settings` included, and the `x-ratelimit-*` headers did not move
+across 8 model calls and roughly 940KB of responses.
+
+**xAI's other surface is unaffected.** `~/.grok/sessions` is production-wired
+and carries the usage this path does not expose.
+
+### Anysphere / Cursor / `state.vscdb` and agent transcripts
 
 ```
+IDENTITY                PASS   both stores located and enumerated
+PRODUCTION REACHABILITY PASS   detected by knownSurfaces and named in the empty-state report
+INGESTION               FAIL   there is no usage evidence to ingest
+CANONICALIZATION        FAIL   nothing to canonicalize
+PROVENANCE              FAIL   nothing to trace
+SEMANTICS               FAIL   no field to classify
+PERSISTENCE             FAIL   no record
+REPORTING               FAIL   absent from every report; the registry says why instead
+FAILURE HANDLING        PASS   the refusal is explicit and carries its measurement
+SCHEMA/DRIFT            PASS   nothing is fabricated
+AUTOMATED TESTS         PASS   for the refusal, not for a reader
+SECURITY/PRIVACY        PASS   detected by path, never opened for content
 FINAL: NOT PRODUCTION-WIRED. Maturity REFUSED.
 ```
 
-Reason: measured and found unmeasurable. 29,665 message rows carry **zero**
-cache fields, so the transcript path cannot produce cache forensics at any
-level of effort. This is a kill with a measurement behind it, recorded so the
-week is not spent rediscovering it.
+**Refusal re-verified 2026-09-29 on the live store, not carried forward on
+trust.** The agent transcripts were re-enumerated today: **118 files, 4,838
+rows, 4,566 of them message rows**, and the complete top-level key set across
+every one of them is `role`, `message`, `type`, `status`, `error`. Those
+numbers reproduce the 2026-09-12 measurement exactly. A deep scan for any key
+matching token, usage, cache or cost found **one** occurrence at any depth, and
+it sits inside message content rather than instrumentation, which is the same
+pasted-API-response artefact the AnythingLLM sweep recorded.
+
+The two halves fail differently and both are load-bearing. In `state.vscdb` the
+counter **exists and is zero**, so Cursor did not record it and no parser
+recovers it. In the transcripts there is **no counter at all**. A reader told
+only the first would reasonably go looking in the second.
+
+**What would unblock it:** Cursor recording a non-zero `tokenCount`, or any
+usage key appearing in the transcripts. Nothing Replay can write changes this.
 
 ---
+
+## Truth statement
+
+> **Replay currently has 6 production-wired surfaces across 5 vendors.**
+
+1. Anthropic, Claude Code, `~/.claude/projects/**/*.jsonl` transcripts
+2. Anthropic, any client, `anthropic:/v1/messages` via `replay serve`
+3. OpenAI, Codex CLI, `~/.codex/sessions` and `archived_sessions`
+4. Ollama, Ollama server, `~/.ollama/logs/server*.log`
+5. DeepSeek, DeepSeek CLI, `openai:/v1/chat/completions` via `replay serve`
+6. xAI, Grok CLI, `~/.grok/sessions` local store. **This is the local store,
+   not a wire.** Grok's wire is `/responses` at `cli-chat-proxy.grok.com` and
+   it is not wired; see the table below
+
+> **The following surfaces remain below PRODUCTION-WIRED:**
+
+| Surface | Maturity | Blocking gate | What would unblock it |
+|---|---|---|---|
+| xAI, Grok CLI, `openai:/responses` | DISCOVERED | INGESTION | A real SSE usage event from a live authenticated session. The capture is shape-only and no response body exists |
+| Anysphere, Cursor, `state.vscdb` and agent transcripts | REFUSED | INGESTION | Cursor recording a non-zero `tokenCount`, or any usage key in the transcripts. Re-verified today; nothing Replay can write changes it |
+| Mintplex, AnythingLLM, `anythingllm.db` | DISCOVERED | INGESTION | A SQLite adapter. The tokens and the provider are there; **no cache field of any kind is**, so a cached read cannot be told from a full-price one |
+| OpenClaw, session log | DISCOVERED | INGESTION | An adapter, plus a contract fact deciding whether its always-zero `cacheWrite` beside populated `cacheRead` is real or dropped. That is the Codex question and it needs the vendor's pricing, not more corpus |
+| Oracle, `meta.json` | DISCOVERED | INGESTION, and the source contradicts itself | An explanation for `totalTokens` 6 against `inputTokens` 4256 on the one session carrying usage at all |
+| any OpenAI-compatible CLI, client half | STUB | not a surface | A capture from a non-DeepSeek client. The **wire** is already wired |
+
+**This is not 100% coverage and the repository does not support claiming it.**
+Four of the six unwired surfaces are unwired because the source does not carry
+the evidence, which is not a Replay defect and cannot be closed by writing
+code.
 
 ## What is deliberately not claimed
 
@@ -212,9 +341,18 @@ week is not spent rediscovering it.
 
 Two, both mutation-proven, so this document cannot drift from the binary:
 
-- `TestPW1` pins the roster of surfaces reaching the cross-surface report
-  against the rows above. Adding or renaming a surface without updating this
-  file fails.
+- `TestPW1` pins the roster of surfaces reaching the cross-surface report.
 - `TestPW2` requires every surface in that report to declare its token unit and
   its quota standing, so no column reads as addable or as "nothing used" when
   it means "cannot answer".
+- `TestWM1` requires every surface `replay burn` reports to carry a
+  PRODUCTION-WIRED row here, matched on its burn name. The first version of
+  this guard scanned the whole document and did **not** fail when a row was
+  deleted to test it, because the name still appeared in prose; it now scans
+  verdict rows only.
+- `TestWM2` fails if a surface `knownSurfaces` refuses with a measured reason
+  appears on a PRODUCTION-WIRED row. This is the guard for a **stale refusal**,
+  which is the failure that actually happened: the 2026-09-06 evidence recorded
+  Grok's local store as carrying no token counts, and 130 files on this machine
+  now do.
+- `TestWM3` requires every vendor row to reach a verdict.

@@ -165,6 +165,38 @@ depth. The events are lifecycle: `phase_changed`, `tool_started`,
 So this surface is readable and it is not a usage surface. Anything built on it
 reads prompts, tool calls and edits, not spend.
 
+**SUPERSEDED 2026-09-29 by a re-measurement. The store carries usage now.**
+
+The paragraph above is left exactly as written because it was true of the
+client version in front of it, and a record that edits its own observations is
+not a record. It is no longer true of this machine.
+
+Re-counted 2026-09-29 under `~/.grok/sessions`, names only:
+
+| | |
+|---|---|
+| files naming `cachedReadTokens` | **130** |
+| files naming `costUsdTicks` | **131** |
+| session directories carrying `usage.json` | **35** |
+| `updates.jsonl` files | **48** |
+
+`replay grok` reads this surface in production and reports 46 sessions, 878
+turns and 912,698,858 prompt tokens of which 844,330,880 were cached, with 34
+sessions agreeing with Grok's own `usage.json`, 1 disagreeing and 11 carrying
+no ledger at all.
+
+**What changed is the client, not the earlier measurement.** The files that
+carry usage are `updates.jsonl` and `usage.json`, and the sweep above searched
+`events.jsonl` and the files that existed then. The original conclusion, that
+the 2026-09-07 `$406.07` figure was unsupported **at the time it was
+published**, stands: it was asserted before anyone opened the files, and being
+accidentally closer to a shape that appeared later is not evidence.
+
+**Still true, and the reason `/responses` remains unwired:** no usage was ever
+parsed out of the SSE stream on that path, the capture recorded keys and types
+and never values, and no response body was retained. See
+`docs/PRODUCTION-WIRING.md`.
+
 **A figure that circulated on the strength of a claim about this store.** An
 analysis on 2026-09-07 reported that these records carry per-turn token counts
 and `costUsdTicks` over 1,411 turns, yielding **$406.07** as "the only measured
