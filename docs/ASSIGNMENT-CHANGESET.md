@@ -24,6 +24,76 @@ Every current value below was read from the tree at `08c0b93`.
 
 ---
 
+## 0. Prerequisite: who the assignor's shareholders are
+
+**RedRobot K.K.'s two shareholders, Daniel Saito and Minoru Saito, are one
+natural person holding two nationalities, two passports and two sets of bank
+accounts.** Recorded here because every question below turns on it, and because
+a reader who sees two names on a shareholder register will otherwise reach the
+wrong conclusion about what this transaction is.
+
+### What that removes
+
+No minority consent. No fairness opinion. No related-party negotiation, because
+there is no second party. No valuation is needed to protect anyone else's
+stake, so the transfer can be made at book value or for nominal consideration
+without anyone being prejudiced by the price.
+
+Authorization on both sides is mechanical: written consent in lieu of a
+meeting, signed once for the K.K. as assignor and once for Uncanny Valley Inc.
+as assignee. The same human signing both sides is not a defect when there is no
+counterparty to be disadvantaged. It still has to be papered, because the
+authorization is what makes the transfer effective, not the intent behind it.
+
+### What it adds, and this is the larger item
+
+**A shareholder schedule that lists two names for one human is a false
+statement about ownership.** Financing documents carry representations that the
+capitalization disclosed is accurate and complete. A $300k instrument and a $3M
+round both make that representation, and the party giving it is you. An
+investor who later discovers that the two shareholders of the predecessor
+entity were the same person will not read it as a harmless formality; they will
+read it as a misstatement in the schedule they priced off, and the remedy sits
+in the indemnity.
+
+The fix is cheap and has to happen before the first instrument is signed, not
+after:
+
+1. **Consolidate the K.K. register, or disclose the identity.** Either the
+   shares are recorded as held by one person under one legal name, or the
+   register keeps both entries and the diligence response states plainly that
+   they are the same individual. Either is defensible. Silence is not.
+2. **Pick one legal identity and use it in every Uncanny Valley document.**
+   Founder shares, the 83(b) election, the assignment, the board consents, the
+   signature blocks. Mixing the two names across those documents puts a
+   chain-of-title question exactly where the asset transfers, which is the one
+   place the repository's own standard says a record must be unambiguous.
+3. **Whichever identity is the K.K.'s registered representative director signs
+   for the K.K.** That is fixed by the Japanese commercial register and is not
+   a choice. If it differs from the identity chosen in (2), the assignment
+   should name both and state the relationship, so the two signatures reconcile
+   on the face of the document.
+
+### The item that needs a specialist, not counsel-in-general
+
+Two nationalities across a Japanese company and a Delaware company is a
+**cross-border tax question before it is a corporate one.** If either identity
+is a US person, ownership of a Japanese corporation carries a separate annual
+information-return obligation and a controlled-foreign-corporation regime, both
+independent of whether the K.K. ever distributes anything, and both with
+penalties that do not depend on tax being owed. The assignment itself is a
+transfer of intangible property out of a Japanese entity, which has its own
+treatment on the Japanese side.
+
+**None of that is resolved by a Delaware formation agent, and none of it is
+resolved by this changeset.** It needs a US-Japan cross-border tax adviser, and
+it should be asked before the assignment executes rather than at the first
+filing deadline after it. The corporate steps in sections 1 to 6 are unaffected
+and can be prepared in parallel.
+
+
+---
+
 ## 1. `LICENSE`
 
 Two lines. The BUSL parameter block is the operative text.
@@ -172,6 +242,17 @@ cosmetic gain.
 4. Trademark filings updated to reflect the new owner of "Replay".
 
 ## What needs an answer before this can be applied
+
+**Blocking, from section 0:**
+
+- Which single legal identity holds the founder shares in Uncanny Valley Inc.
+  Everything else in the corporate file keys off it.
+- Consolidate the K.K. register, or disclose the identity in diligence. Pick
+  one before the $300k instrument is signed.
+- Cross-border tax adviser engaged, and the US-person question answered, before
+  the assignment executes.
+
+**Non-blocking, from the sections above:**
 
 - Does RedRobot KK survive, or wind down? Decides the NOTICE trademark sentence.
 - Effective date of the assignment, for the ADR note.
