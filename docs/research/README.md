@@ -123,6 +123,15 @@ question is unrun. Three are occupied by others with published results.
 **NOT CROSSED.** Exact replication fails; the prior-art condition fails. See
 `IP_GATE.md`.
 
+## Revenue
+
+[REVENUE-PIVOT.md](REVENUE-PIVOT.md) closes the product question and states what
+replaces it. The individual $25/month thesis is dead on the repository's own
+arithmetic, the paid gate and paid feed are both killed, and what survives is
+the operator rather than the software: three work samples, ranked buyers, and
+one fixed-scope commercial experiment with a falsification criterion. It
+proposes no feature and reopens no experiment.
+
 ## What the closeout contains
 
 [FINAL-CLOSEOUT.md](FINAL-CLOSEOUT.md): the evidence freeze and manifests, a
