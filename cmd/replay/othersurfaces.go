@@ -172,6 +172,22 @@ func knownSurfaces(home string) []otherSurface {
 			// to a reader that finds nothing is the defect this file exists to
 			// avoid, and saying "records are here, and here is what cannot be
 			// got out of them" is the honest version.
+			// Re-measured 2026-09-29. Three things the shipped string did not
+			// say, each of which independently blocks a reader:
+			//
+			//  1. Reading the file at all needs SQLite, and this module has no
+			//     dependencies: TestX402_NoSigningCapability fails on a single
+			//     require line in go.mod or on go.sum existing at all. There
+			//     is no SQLite in the standard library.
+			//  2. The corpus is one provider and one model. All 46 rows are
+			//     provider "pd", model "qwen3-vl:4b-instruct", inside a single
+			//     6h48m window on 2026-08-09. No price row exists for that
+			//     model, so the surface's one real advantage, a provider and
+			//     model stamped on every row, currently selects a table that
+			//     is not there.
+			//  3. The storage directory holds a .env beside the database, so
+			//     any walk over that root walks a directory holding provider
+			//     credentials.
 			why: "Replay cannot price AnythingLLM yet: every workspace_chats row records prompt_tokens and completion_tokens in its metrics object, and that object has no cache field, so a cached read there cannot be told from a full-price one",
 		},
 		{
@@ -204,7 +220,28 @@ func knownSurfaces(home string) []otherSurface {
 			// surviving cacheRead counter in the same sentence is what makes
 			// that difference legible: without it the string reads as "no cache
 			// data", which is false and points at the wrong repository.
-			why: "Replay cannot price OpenClaw yet: every assistant row in its session log carries a cacheWrite counter and every one of them is zero, beside cacheRead counters on the same rows that are not",
+			// Re-measured 2026-09-29 for a surface bake-off. The shipped
+			// string said "every assistant row", which over-counted: 218 of
+			// the 451 usage blocks are all-zero on every counter and every
+			// cost field, and an all-zero usage object is ABSENT rather than
+			// a free request, which is the rule the DeepSeek surface already
+			// holds. 193 of those are an internal delivery-mirror row, and
+			// the other 25 are real openrouter blocks carrying no usage.
+			//
+			// Measured: 451 usage blocks across 3 files, 258 carrying any
+			// usage at all, 116 non-zero cacheRead summing to 5,239,589
+			// tokens, and 0 non-zero cacheWrite. Conservation closes exactly,
+			// 7,895,540 + 95,077 + 5,239,589 = 13,230,206 = totalTokens, so
+			// this surface counts EXCLUSIVELY like Anthropic rather than
+			// inclusively like Codex or Grok.
+			//
+			// The biller of record is OpenRouter reselling
+			// anthropic/claude-3.5-haiku, which is the vendor whose pricing
+			// decides the class, and it is not Anthropic. The log's own cost
+			// object is DERIVED and not observed: it reproduces a published
+			// rate card to four decimals, so agreeing with it would prove
+			// nothing about an invoice.
+			why: "Replay cannot price OpenClaw yet: of 451 usage blocks in its session log, 258 carry any usage, 116 of those report a non-zero cacheRead and none of them reports a non-zero cacheWrite, so half the cache bill is unaccounted and the biller of record is OpenRouter rather than Anthropic",
 		},
 		{
 			name: "Oracle",

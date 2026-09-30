@@ -62,6 +62,24 @@ type FieldSpec struct {
 	Read     []string
 	Oracle   []string
 	Sequence []string // a per-request usage block, as opposed to a cumulative one
+	// Exclude names sub-objects the walk must not descend into.
+	//
+	// It exists because a counter name can recur inside one record under a
+	// different UNIT. OpenClaw carries usage.cacheRead in tokens and
+	// usage.cost.cacheRead in US dollars, same spelling, one nested in the
+	// other, and num() accepts any float. Without this, 451 records read as
+	// 902 observations and a fraction of a cent reads as a non-zero token
+	// counter, which is the quantity Classify decides on.
+	//
+	// This is NOT the repeated-counter case Observables documents for Grok.
+	// There the same quantity appears twice. Here a different quantity wears
+	// the same name, so the second reading is not the counter at all and no
+	// amount of dividing fixes it.
+	//
+	// Named sub-objects rather than paths, because the spelling is the
+	// evidence and a path syntax would be a second little language to get
+	// wrong.
+	Exclude []string
 }
 
 // AnthropicFields, CodexFields and GrokFields are the observed spellings.
@@ -99,6 +117,10 @@ var (
 func Probe(root string, spec FieldSpec) (Observables, error) {
 	o := Observables{Boundary: root}
 	oracle := map[string]bool{}
+	skip := map[string]bool{}
+	for _, k := range spec.Exclude {
+		skip[k] = true
+	}
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -126,7 +148,7 @@ func Probe(root string, spec FieldSpec) (Observables, error) {
 			}
 			o.Records++
 			sawWrite, sawRead := false, false
-			walk(v, func(m map[string]any) {
+			walkExcept(v, skip, func(m map[string]any) {
 				for _, k := range spec.Write {
 					if n, ok := num(m[k]); ok {
 						o.WriteObservations++
@@ -193,16 +215,22 @@ func num(v any) (float64, bool) {
 	return f, ok
 }
 
-func walk(v any, visit func(map[string]any)) {
+func walk(v any, visit func(map[string]any)) { walkExcept(v, nil, visit) }
+
+// walkExcept is walk with a set of sub-object names it will not descend into.
+func walkExcept(v any, skip map[string]bool, visit func(map[string]any)) {
 	switch t := v.(type) {
 	case map[string]any:
 		visit(t)
-		for _, child := range t {
-			walk(child, visit)
+		for k, child := range t {
+			if skip[k] {
+				continue
+			}
+			walkExcept(child, skip, visit)
 		}
 	case []any:
 		for _, child := range t {
-			walk(child, visit)
+			walkExcept(child, skip, visit)
 		}
 	}
 }
