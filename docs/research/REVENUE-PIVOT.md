@@ -163,9 +163,10 @@ not of willingness to pay.
 ### 5.2 Enterprise AI FinOps and spend governance
 
 **Who has the pain.** Platform and finance teams carrying a metered AI bill
-nobody can attribute. The sharpest measured instance is the **7.94x**
-cache-blind ceiling finding: a $500/day budget halts execution at $62.94 of real
-spend, roughly $13,000/month of approved capacity that cannot be reached.
+nobody can attribute. The sharpest measured instance is the **8.1x** aggregate
+error in `yc-software/qm`'s spend throttle over 52,511 real requests, where
+collapsing four Anthropic usage fields into one accounts for 101% of the error
+and the flat rate for -1.1%.
 
 **What they would pay for.** An investigation that says what the bill was, where
 the cache is breaking, and where the budget is unreachable.
@@ -249,7 +250,7 @@ lifetime install fetches from 2 distinct IP addresses.
 | **2** | **Inference providers and gateways with cache-dependent margin** (OpenRouter-class, and inference startups) | Highest overlap with WS-1. Their economics depend on cache behaviour they usually have not characterised. Well funded. Access is cold but the artifact travels |
 | **3** | **AI eval and reliability companies** | WS-3 is close to a perfect credential and there is no substitute for it. Smaller budgets, and demand is pure hypothesis |
 | **4** | **Model labs' eval and infrastructure teams** | Highest pay, strongest fit for WS-3, **lowest probability of access** without a referral. Do not lead here |
-| **5** | **Enterprise platform teams with a metered agent bill** | Highest measured pain (7.94x) and real budget, but requires a warm introduction and has already failed at $22k |
+| **5** | **Enterprise platform teams with a metered agent bill** | Highest measured pain (8.1x in a named third party's throttle) and real budget, but requires a warm introduction and has already failed at $22k |
 | **Killed** | Individual developers | The subscription arithmetic is closed. Do not re-approach |
 | **Killed** | Selling Replay as software to any of the above | The panel verdict stands: the paid column collapses, and the BUSL grant already permits the CI use a paid tier would charge for |
 
@@ -287,15 +288,35 @@ is not. But only one lever is large, and that one has an undetermined sign.
 
 | Lever | Measured magnitude | Recoverable? | Status |
 |---|---|---|---|
-| **Cache-blind budget ceiling** | **7.94x** over 57,958 requests. A $500/day ceiling halts at **$62.94** of real spend, leaving ~$13,000/month of approved capacity unreachable | **Sign undetermined.** See below | the only lever large enough to price against |
+| **Cache-collapse in a third party's budget throttle** | **8.1x aggregate over 52,511 requests**, 16.3x on Sonnet, measured against `yc-software/qm`. Ignoring the cache is **101% of the error**; the flat rate is **-1.1%** | **Sign undetermined for the level; the misallocation is sign-independent.** See below | the only lever large enough to price against |
 | Re-billed waste from cache breaks | 2.75% shipping build, 4.99% on v0.5.4, 4.2% on a fan-out session. Realistic recovery 2-3%, so **$60-90/month** on a $3,019 bill | yes, but small | one-time per cause |
 | Reasoning-off by task class | **19.5x** fewer output tokens on lookup, but only **1.41-1.48x** total cost once a warm corpus is in the prompt, because input dominates at 70-98% | partly | class-conditional; 29% accuracy on aggregation, failing as confident wrong numbers |
 | Configuration fixes (MCP bind order, warm-then-fan) | traced every break in one session to one connector binding mid-session | yes | **one afternoon, free, does not recur** |
 | Prompt and prefix structure | **REFUTED.** Two replications, both reversing sign. The 98.8% that would have justified it was an instrument artifact, corrected to 4.2% the same morning | **no** | do not resurrect |
 
-**The finding that matters, and why it is not yet a claim.** The throttling
-figure is roughly 150x larger than the waste figure, and MONEY-PATH 0.7 already
-states the problem with it:
+**PROVENANCE CORRECTION, 2026-09-30.** Earlier versions of this file cited
+**"7.94x over 57,958 requests, halting at $62.94"** four times. **That figure has
+no evidence file.** `7.94` appears in `MONEY-PATH.md`, this file,
+`RESEARCH-INDEX.md`, `guide/commands.md`, and in
+`internal/cachemodel/ceiling_test.go:281`, where it is a **synthetic fixture**:
+`CeilingEffect{Requests: 10, CorrectUSD: 100, BlindUSD: 794}`, which is 7.94
+because 794/100 is. `57,958` and `$62.94` appear in no evidence file at all.
+
+The evidenced ancestor is `docs/evidence/qm-budget-2026-09-08.md`: **8.1x
+aggregate over 52,511 requests**, scoped to `yc-software/qm`'s shipped code, on a
+corpus with a 94-99% cache share. That file states its own limits, which every
+downstream citation dropped: "The ratios are the result. The absolute totals are
+not," and "a QM engineer defending the flat rate as an acceptable approximation
+is **right**, and the finding survives them completely."
+
+A figure in a business document with no provenance is the defect class this
+repository exists to find. It is corrected here rather than carried.
+`MONEY-PATH.md` lines 203 and 578 carry the same unevidenced figure and are
+**not** edited by this pass; that is a separate ticket.
+
+**The finding that matters, and why it is not yet a claim.** The measured error
+is far larger than the waste figure, and MONEY-PATH 0.7 already states the
+problem with it:
 
 > Nobody has asked whether that is value to the buyer or a bill they were
 > deliberately avoiding. If the cap was a guardrail against runaway agents, then
@@ -339,13 +360,15 @@ worth running even if it converts poorly.
 
 **What makes it plausible:** the reconciliation practice was not found in 21
 products examined; the cache-break attribution was not found either; and the
-7.94x ceiling finding is a large, concrete, measured number.
+8.1x finding is a large, concrete, measured number, scoped to one named
+codebase and one corpus.
 
 **What makes it doubtful, recorded honestly:** the recoverable *waste* is 2.75%,
 so on a $2,000/month bill the engagement costs more than a year of the waste it
-finds. **The offer therefore cannot be sold on savings.** The throttling finding
-is 150x larger and is the reason the offer is worth making at all, but its sign
-is undetermined: it is either capacity a buyer already paid for, or a budget
+finds. **The offer therefore cannot be sold on savings.** The throttle-error
+finding is much larger and is the reason the offer is worth making at all, but it
+is scoped to one named codebase, and the sign of any level change is
+undetermined: it is either capacity a buyer already paid for, or a budget
 increase sold to the person who set the budget. If it turns out to be the
 second, this offer has no buyer and the experiment will show that quickly, which
 is the point of running it small.
