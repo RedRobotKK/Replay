@@ -232,6 +232,7 @@ func runBurn(args []string, stdout, stderr io.Writer) error {
 	surfaces = append(surfaces, burnCodex(home, *dir))
 	surfaces = append(surfaces, burnOllama(home, *dir))
 	surfaces = append(surfaces, burnClaudeCode(home, *dir))
+	surfaces = append(surfaces, burnGrok(home, *dir))
 
 	_, _ = fmt.Fprintf(stdout, "\n  %s\n\n", "What your agents are consuming, per surface")
 	const hdr = "  %-14s %9s %14s %17s  %-22s %s\n"
@@ -469,6 +470,82 @@ func burnOllama(home, dir string) surfaceBurn {
 		s.problems = append(s.problems, fmt.Sprintf(
 			"%d of %d requests were served entirely from cache apart from the one token the server re-evaluates by rule; the other %d log no reuse figure. No cache hit rate is reported: a share over the first group measures a population selected for having been cached",
 			measured, s.requests, unmeasured))
+	}
+	return s
+}
+
+// burnGrok reports the Grok CLI's local session store.
+//
+// It reuses readGrok rather than re-walking the directory, for the reason
+// knownStores gives about Codex: a second reader of the same disk is a second
+// answer about the same disk, and this project has already shipped a report
+// disagreeing with the command printed on the next line of it.
+//
+// What this surface can and cannot say:
+//
+//   - Prompt tokens are Grok's inputTokens, which are INCLUSIVE of the cached
+//     read, so the share below divides by the prompt. That is the same family
+//     as Codex and not the same as Claude Code, which partitions the cache out.
+//   - requests is modelCalls, which is what the column means. A turn can make
+//     several model calls, so the turn count is a different quantity and is
+//     not substituted for it.
+//   - No dollars. The tick scale in Grok's own records is unreconciled against
+//     any statement of account, and no xAI rules document is installed, so
+//     there is no rate table to price the tokens with either. The surface is
+//     therefore UNPRICED, which is a different cell from the local-only one
+//     Ollama occupies: xAI does bill for this.
+func burnGrok(home, dir string) surfaceBurn {
+	s := surfaceBurn{
+		name: "grok", unit: "prompt, cached inside",
+		// wire-families-2026-09-06.md: the x-ratelimit-remaining-* headers did
+		// not move across 8 model calls, and no live quota state was found on
+		// any endpoint, /settings included.
+		quota: "none exists",
+	}
+	root := filepath.Join(home, ".grok", "sessions")
+	if dir != "" {
+		root = filepath.Join(dir, "grok")
+	}
+	r, err := readGrok(root)
+	if err != nil {
+		// An unreadable store is not an empty one. Saying so here keeps the
+		// row from reading as a machine that has never run Grok.
+		s.problems = append(s.problems, fmt.Sprintf("the Grok session store under %s could not be read: %v", scrubPath(root), err))
+		return s
+	}
+	s.sessions, s.hasSessions = r.Sessions, r.Sessions > 0
+	s.requests = r.Reconstructed.ModelCalls
+	s.tokens = r.Reconstructed.Prompt
+	if r.Reconstructed.Prompt > 0 {
+		s.cached = float64(r.Reconstructed.CachedRead) / float64(r.Reconstructed.Prompt)
+		s.hasCached = true
+	}
+	// Every request is unpriced, and the report's own notice depends on this
+	// being counted rather than left at zero.
+	s.unpricedReqs = s.requests
+
+	if r.Sessions == 0 {
+		return s
+	}
+	// The reconciliation standing travels with the figure. A prompt total that
+	// the vendor's own ledger disagrees with is not the same number as one it
+	// confirms, and the two are never added.
+	s.problems = append(s.problems, fmt.Sprintf(
+		"%d session(s) agree with Grok's own usage.json, %d disagree by %d prompt tokens, and %d carry no ledger at all (%d tokens reconstructed but unconfirmed, which is UNAVAILABLE and not zero)",
+		r.Matched, r.Diverged, r.DivergedTokens, r.NoLedger, r.NoLedgerTokens))
+	// ADR-0018 at the reporting boundary. surface.XAIContract is deliberately
+	// ContractUnknown: xAI's cache-write pricing was not found, so a
+	// cacheCreationTokens of zero is observationally identical to a client
+	// dropping a counter the provider bills for. That is the Codex defect, and
+	// the column must not let the zeros read as an answer.
+	s.problems = append(s.problems, fmt.Sprintf(
+		"%d of %d session(s) stated a cache-creation figure, and every one observed so far states zero. xAI's cache-write pricing was NOT FOUND, so whether a write is billed here is UNKNOWN, not zero",
+		r.WritesReported, r.Sessions))
+	if r.Unreadable > 0 {
+		s.problems = append(s.problems, fmt.Sprintf("%d line(s) or entries did not parse and are counted nowhere", r.Unreadable))
+	}
+	if r.Inconsistent > 0 {
+		s.problems = append(s.problems, fmt.Sprintf("%d turn(s) whose parts did not add back to their own prompt were excluded", r.Inconsistent))
 	}
 	return s
 }
