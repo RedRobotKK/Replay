@@ -228,12 +228,33 @@ func knownSurfaces(home string) []otherSurface {
 			// holds. 193 of those are an internal delivery-mirror row, and
 			// the other 25 are real openrouter blocks carrying no usage.
 			//
-			// Measured: 451 usage blocks across 3 files, 258 carrying any
-			// usage at all, 116 non-zero cacheRead summing to 5,239,589
-			// tokens, and 0 non-zero cacheWrite. Conservation closes exactly,
-			// 7,895,540 + 95,077 + 5,239,589 = 13,230,206 = totalTokens, so
-			// this surface counts EXCLUSIVELY like Anthropic rather than
-			// inclusively like Codex or Grok.
+			// Measured 2026-09-29, and the corpus boundary matters:
+			//
+			//   all files      451 blocks, 116 non-zero cacheRead
+			//   *.jsonl only   447 blocks, 113 non-zero cacheRead
+			//
+			// The 4-block difference is one soft-deleted file,
+			// *.jsonl.deleted.2026-02-17T..., which surface.Probe skips
+			// because it filters on a .jsonl suffix. Skipping it silently is
+			// a decision nobody made; it is recorded here rather than left to
+			// be rediscovered.
+			//
+			// 218 blocks are all-zero on every counter and every cost field,
+			// and that figure is the same on both corpora because all of them
+			// are in the live file: 193 an internal delivery-mirror row and
+			// 25 real openrouter blocks.
+			//
+			// Conservation holds PER BLOCK, not merely in aggregate: 0 of 451
+			// blocks disagree with their own totalTokens, and the totals are
+			// 7,895,540 + 95,077 + 5,239,589 = 13,230,206. So cacheRead is
+			// DISJOINT from input and this surface counts reads EXCLUSIVELY,
+			// like Anthropic rather than like Codex or Grok.
+			//
+			// What that identity does NOT establish: cacheWrite is 0 on every
+			// block, so it is not a term in the sum and the identity cannot
+			// distinguish a write that was never billed from a counter the
+			// client dropped. The counting convention is established for
+			// READS only.
 			//
 			// The biller of record is OpenRouter reselling
 			// anthropic/claude-3.5-haiku, which is the vendor whose pricing
