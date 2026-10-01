@@ -120,6 +120,16 @@ var ControlsFor = map[string]Controls{
 		Insufficient: "ClassUndetermined is itself the insufficient-evidence result",
 		Gap:          []string{"internal only. RPL-C005 shows the refusal does not always reach the user"},
 	},
+	"RPL-C033": {
+		Basis: Observed, Layer: "none. transcript.Usage has no presence field for the TTL split",
+		Positive:     "an explicit 5m split and an explicit 1h split price differently (EC4)",
+		Negative:     "absent and present-0/0 are byte-identical downstream (EC1)",
+		Insufficient: "the absent case IS the insufficient-evidence case, and it is given a default rather than refused",
+		Assumption: []string{
+			"ASSUMPTION: an absent TTL breakdown means the provider's 5-minute default. RESPONSIBILITY: the provider. REPLAY VERIFIES: nothing. ON VIOLATION: the cache-write leg is understated by 60%, undisclosed",
+		},
+		Gap: []string{"whether providers omit the breakdown for 1h writes is unmeasured and needs live traffic"},
+	},
 	"RPL-C030": {
 		Basis: NoBasis, Layer: "none. Two per-session counters, unpriced and unreadable",
 		Positive:     "MX2 and MX9 disclose; MX4 discloses the wholly unpriced session",

@@ -5,14 +5,14 @@ regenerate it, or it will drift from the code it describes.**
 
 | Result | Count |
 |---|---|
-| BOUNDED | 8 |
+| BOUNDED | 9 |
 | DELIBERATE_NON_CLAIM | 1 |
 | ESTABLISHED | 2 |
 | NOT_MEASURED | 2 |
 | NO_ENDPOINT | 3 |
 | REFUTED | 5 |
 | UNRESOLVED | 1 |
-| **Total** | **22** |
+| **Total** | **23** |
 
 ---
 
@@ -373,6 +373,42 @@ regenerate it, or it will drift from the code it describes.**
   - TestC005_AnUnsourcedContractIsRefused
 
 **Why this result:** The internal layer does what the claim describes. The bound is that it is internal: a provenance field that does not reach the screen protects nobody, which is exactly what RPL-C005 found.
+
+---
+
+## RPL-C033
+
+> A dollar figure states the TTL basis its cache writes were priced on.
+
+| | |
+|---|---|
+| **Result** | **BOUNDED** |
+| Evidence basis | OBSERVED |
+| Deciding layer | none. transcript.Usage has no presence field for the TTL split |
+| Scope | every surface printing a cache-write cost: burn, cost --usage, route |
+| Oracle | longhand multiplier arithmetic, independent of writeEquivalent |
+| Asserted at | README.md:293 |
+
+- **Establishes:**
+  - where the provider supplies a TTL split, the distinction survives and prices correctly
+- **Does NOT establish:**
+  - the claim where the provider supplies NO split. (*WireUsage).Usage() drops the presence bit the wire type carries, so an absent breakdown and a reported 0/0 arrive identically, and writeEquivalent then prices the whole write leg at the SHORT multiplier
+  - ASSUMPTION, not established: that an absent breakdown means a 5-minute TTL. It is the documented provider default and Replay never verifies it. The same 10,000 cache-creation tokens price at $0.037500 on that assumption and $0.060000 if the writes were in fact 1h, a 60% difference
+  - that the assumption is disclosed. It is declared in two code comments and in no output
+- **Assumptions Replay does not verify:**
+  - ASSUMPTION: an absent TTL breakdown means the provider's 5-minute default. RESPONSIBILITY: the provider. REPLAY VERIFIES: nothing. ON VIOLATION: the cache-write leg is understated by 60%, undisclosed
+- **Known gaps:**
+  - whether providers omit the breakdown for 1h writes is unmeasured and needs live traffic
+- **Positive control:** an explicit 5m split and an explicit 1h split price differently (EC4)
+- **Negative control:** absent and present-0/0 are byte-identical downstream (EC1)
+- **Insufficient-evidence control:** the absent case IS the insufficient-evidence case, and it is given a default rather than refused
+- **Tests:**
+  - TestEC1_AbsentAndZeroTTLBreakdownAreIndistinguishable
+  - TestEC2_AnAbsentBreakdownIsPricedOnAnAssumedTTL
+  - TestEC3_TheAssumedDefaultIsDocumentedAtTheSite
+  - TestEC4_TheTTLDistinctionSurvivesWhereTheProviderSuppliesIt
+
+**Why this result:** Bounded rather than refuted, and the distinction matters. The collapse is declared at both sites, so this is not a silent defect; the TTL distinction is honoured wherever the provider reports it. What is undisclosed is that a figure computed on an absent breakdown rests on an assumed default, and the reader is given the dollars without the assumption.
 
 ---
 

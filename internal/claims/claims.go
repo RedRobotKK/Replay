@@ -223,6 +223,30 @@ var Register = []Claim{
 		Why:        "The internal layer does what the claim describes. The bound is that it is internal: a provenance field that does not reach the screen protects nobody, which is exactly what RPL-C005 found.",
 	},
 	{
+		ID:       "RPL-C033",
+		Text:     "A dollar figure states the TTL basis its cache writes were priced on.",
+		Asserted: []string{"README.md:293"},
+		Scope:    "every surface printing a cache-write cost: burn, cost --usage, route",
+		Establishes: []string{
+			"where the provider supplies a TTL split, the distinction survives and prices correctly",
+		},
+		DoesNotEstablish: []string{
+			"the claim where the provider supplies NO split. (*WireUsage).Usage() drops the presence bit the wire type carries, so an absent breakdown and a reported 0/0 arrive identically, and writeEquivalent then prices the whole write leg at the SHORT multiplier",
+			"ASSUMPTION, not established: that an absent breakdown means a 5-minute TTL. It is the documented provider default and Replay never verifies it. The same 10,000 cache-creation tokens price at $0.037500 on that assumption and $0.060000 if the writes were in fact 1h, a 60% difference",
+			"that the assumption is disclosed. It is declared in two code comments and in no output",
+		},
+		Vocabulary: "",
+		Oracle:     "longhand multiplier arithmetic, independent of writeEquivalent",
+		Tests: []string{
+			"TestEC1_AbsentAndZeroTTLBreakdownAreIndistinguishable",
+			"TestEC2_AnAbsentBreakdownIsPricedOnAnAssumedTTL",
+			"TestEC3_TheAssumedDefaultIsDocumentedAtTheSite",
+			"TestEC4_TheTTLDistinctionSurvivesWhereTheProviderSuppliesIt",
+		},
+		Result: Bounded,
+		Why:    "Bounded rather than refuted, and the distinction matters. The collapse is declared at both sites, so this is not a silent defect; the TTL distinction is honoured wherever the provider reports it. What is undisclosed is that a figure computed on an absent breakdown rests on an assumed default, and the reader is given the dollars without the assumption.",
+	},
+	{
 		ID:       "RPL-C030",
 		Text:     "When a whole session cannot be priced, Replay refuses and says why.",
 		Asserted: []string{"README.md:21", "cmd/replay/cost.go:488"},
