@@ -231,7 +231,8 @@ var Register = []Claim{
 			"9 of 19 call sites count the exclusion, refuse with a reason, or substitute a labelled upper bound",
 		},
 		DoesNotEstablish: []string{
-			"the claim. 8 consumer sites take none of the three acceptable actions and let the figure be zero, which TOKEN-PRICES.md:53 names as neither defensible option",
+			"the claim, for the re-billed token count. Two corpora differing only in a model id report 40,000 re-billed tokens and 0, and the human report loses its re-billed line entirely. The quantity is a property of the cache break, computed before any price lookup",
+			"that 8 consumer sites are defective. That census was too coarse and is RETRACTED: most sites gate only dollars, which require a price, and order.go and trim.go carry presence flags the detector missed. The source census was necessary and not sufficient",
 			"that the remaining sites are equivalent to each other. The 9 that handle it use at least four different conventions, so there is no shared contract in code, only a shared document",
 			"the magnitude on any surface. The call-site census is established; what each silent zero does to a printed figure is measured only for cost.go and route.go",
 		},
@@ -239,7 +240,7 @@ var Register = []Claim{
 		Oracle:     "a source census classifying each false branch, with the contract quoted from the repository's own document rather than assumed",
 		Tests:      []string{"TestEC00_ThePriceBooleanIsTheSharedCompressionPoint"},
 		Result:     Refuted,
-		Why:        "The contract is explicit, the repository wrote it, and roughly half the consumers of the boolean violate it. This is the shared compression point behind EC-02, EC-03 and EC-04, which are call sites rather than separate defects. cost.go:717 is the sharpest: RebilledTokens sits inside the priced branch, so a token count needing no price reads zero when pricing fails.",
+		Why:        "The contract is explicit, the repository wrote it, and some consumers of the boolean violate it. CENSUS CORRECTED: a per-site audit found that most flagged sites compute their TOKEN quantities outside the price branch and gate only dollars, which is correct, and that order.go and trim.go carry presence flags the first detector missed. ONE price-independent quantity is suppressed, the re-billed token count, and a mutation campaign then corrected its attribution too: it is gated TWICE, at cost.go:680 and again at cost.go:717, and removing either alone changes nothing. Measured at the user-visible boundary as 40,000 tokens against 0 on corpora differing only in a model name.",
 	},
 	{
 		ID:       "RPL-C033",
