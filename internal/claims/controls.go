@@ -77,11 +77,21 @@ var ControlsFor = map[string]Controls{
 		Gap:          []string{"one report only. Generality across the printed surface is unmeasured"},
 	},
 	"RPL-C005": {
+		Basis: NoBasis, Layer: "none. No type governs what reaches the screen",
+		Positive:     "a fully priced corpus correctly discloses nothing, so the detection is not firing on everything",
+		Negative:     "a mixed corpus discloses nothing either, which is the defect",
+		Insufficient: "the fixture itself: price is unavailable while usage is present and provider-reported",
+		Assumption: []string{
+			"ASSUMPTION: a refusal is conveyed by the words unpriced, not priced or excluded. A refusal worded otherwise is understated by this measurement",
+		},
+		Gap: []string{"only `replay cost` was measured. burn, advise, route, diff, errors, warnings and the TUI were not"},
+	},
+	"RPL-C026": {
 		Basis: NoBasis, Layer: "surface.Class, surface.WriteContract",
-		Positive:     "empty corpus, and zero writes under an unknown contract, both reach ClassUndetermined with a reason",
-		Negative:     "a clean corpus with a sourced contract does NOT refuse, so the refusal is not firing on everything",
-		Insufficient: "the refusal IS the insufficient-evidence result here",
-		Gap:          []string{"refusal correctness is established per-site by scripts/refusal-reachability and not globally", "the user-visible output after a refusal is not inspected; only the internal verdict is"},
+		Positive:     "empty corpus and zero-writes-under-unknown-contract both reach ClassUndetermined with a reason",
+		Negative:     "a clean corpus with a sourced contract does NOT refuse",
+		Insufficient: "ClassUndetermined is itself the insufficient-evidence result",
+		Gap:          []string{"internal only. RPL-C005 shows the refusal does not always reach the user"},
 	},
 	"RPL-C008": {
 		Basis: Observed, Layer: "surface.WriteContract, Observables.WriteFieldPresent",

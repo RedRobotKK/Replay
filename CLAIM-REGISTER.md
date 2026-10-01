@@ -10,8 +10,8 @@ regenerate it, or it will drift from the code it describes.**
 | ESTABLISHED | 2 |
 | NOT_MEASURED | 2 |
 | NO_ENDPOINT | 2 |
-| REFUTED | 1 |
-| **Total** | **15** |
+| REFUTED | 2 |
+| **Total** | **16** |
 
 ---
 
@@ -216,28 +216,66 @@ regenerate it, or it will drift from the code it describes.**
 
 | | |
 |---|---|
+| **Result** | **REFUTED** |
+| Evidence basis | NOT_APPLICABLE |
+| Deciding layer | none. No type governs what reaches the screen |
+| Scope | printed output of `replay cost`, human and JSON |
+| Oracle | the real cost report over a corpus whose unpriceability is verified independently with cachemodel.PriceFor before any output is read |
+| Asserted at | README.md:21 |
+
+- **Establishes:** _none_
+- **Does NOT establish:**
+  - the claim as worded. A transcript holding two priceable and two unpriceable requests produces a printed total over the priceable half only, with NO disclosure in the human report and `unpriced` reporting 0 in the JSON
+  - that the disclosure sentence is reachable per record. cost.go:488 exists and fires only when a WHOLE transcript is unpriced, because `unpriced` has transcript granularity while pricing has record granularity
+  - ASSUMPTION, not established: that a refusal is conveyed by the words unpriced, not priced or excluded. A refusal worded otherwise would be understated by this measurement
+- **Assumptions Replay does not verify:**
+  - ASSUMPTION: a refusal is conveyed by the words unpriced, not priced or excluded. A refusal worded otherwise is understated by this measurement
+- **Known gaps:**
+  - only `replay cost` was measured. burn, advise, route, diff, errors, warnings and the TUI were not
+- **Positive control:** a fully priced corpus correctly discloses nothing, so the detection is not firing on everything
+- **Negative control:** a mixed corpus discloses nothing either, which is the defect
+- **Insufficient-evidence control:** the fixture itself: price is unavailable while usage is present and provider-reported
+- **Tests:**
+  - TestC005_TheFixtureIsolatesExactlyOneUnmeasurableQuantity
+  - TestC005_AMixedTranscriptHidesItsUnpricedRecords
+  - TestC005_TheHumanReportAssertsCompletenessOverAPartlyPricedCorpus
+  - TestC005_AFullyPricedCorpusCorrectlyDisclosesNothing
+
+**Why this result:** Falsified at the printed surface, which is where the claim is made. The report prints a figure it could only partly compute and then states that it is what the work cost. The internal refusal machinery is correct and is registered separately as RPL-C026 rather than used to rescue this wording.
+
+---
+
+## RPL-C026
+
+> Replay's surface classifier refuses to reach a verdict when the evidence cannot support one, and gives a reason.
+
+| | |
+|---|---|
 | **Result** | **BOUNDED** |
 | Evidence basis | NOT_APPLICABLE |
 | Deciding layer | surface.Class, surface.WriteContract |
-| Scope | all printed figures |
-| Oracle | scripts/refusal-reachability neutralises each refusal and requires the suite to notice |
-| Asserted at | README.md:21 |
+| Scope | surface.Classify only. NOT the printed surface, which RPL-C005 refutes |
+| Oracle | paired fixtures whose correct verdict is known from the contract, not from the classifier |
+| Asserted at | internal/surface/identify.go:174 |
 
 - **Establishes:**
-  - absence of a figure is distinguishable from a figure of zero
+  - an empty corpus, and zero write observations under an unknown provider contract, both reach ClassUndetermined
+  - the refusal carries a reason rather than arriving as a bare verdict
+  - an unsourced contract fact is rejected outright, so an assertion with no provenance cannot enter as a provider fact
 - **Does NOT establish:**
-  - that every refusal is correct, only that refusals are reachable and distinguishable
+  - that any refusal reaches the user. RPL-C005 establishes that at least one does not
+  - that every refusal site is correct; reachability is machine-checked per site by scripts/refusal-reachability, correctness is not
 - **Assumptions Replay does not verify:** _none_
 - **Known gaps:**
-  - refusal correctness is established per-site by scripts/refusal-reachability and not globally
-  - the user-visible output after a refusal is not inspected; only the internal verdict is
-- **Positive control:** empty corpus, and zero writes under an unknown contract, both reach ClassUndetermined with a reason
-- **Negative control:** a clean corpus with a sourced contract does NOT refuse, so the refusal is not firing on everything
-- **Insufficient-evidence control:** the refusal IS the insufficient-evidence result here
+  - internal only. RPL-C005 shows the refusal does not always reach the user
+- **Positive control:** empty corpus and zero-writes-under-unknown-contract both reach ClassUndetermined with a reason
+- **Negative control:** a clean corpus with a sourced contract does NOT refuse
+- **Insufficient-evidence control:** ClassUndetermined is itself the insufficient-evidence result
 - **Tests:**
   - TestC005_RefusalIsDistinguishableFromZero
+  - TestC005_AnUnsourcedContractIsRefused
 
-**Why this result:** Reachability of refusals is machine-checked. Correctness of each refusal is per-site and is not established globally.
+**Why this result:** The internal layer does what the claim describes. The bound is that it is internal: a provenance field that does not reach the screen protects nobody, which is exactly what RPL-C005 found.
 
 ---
 
