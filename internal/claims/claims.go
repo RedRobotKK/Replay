@@ -150,9 +150,9 @@ var Register = []Claim{
 		Scope:       "14 CLI surfaces sharing one callable signature, driven over a ledger fixture",
 		Establishes: nil,
 		DoesNotEstablish: []string{
-			"the claim. `replay advise` emits a percentage with no status statement anywhere in its output, confirmed by removing it from the sweep: figures fall 4 to 3 while status holds at 3, so it is the only figure-emitting surface without one",
+			"the claim. `replay advise` is a CONFIRMED COUNTEREXAMPLE: it emits 10% without a status statement, isolated by removing it from the sweep, where figures fall 4 to 3 while status holds at 3. The campaign does NOT establish that it is the only such surface",
 			"anything about 5 of the 14 surfaces. budget, ceiling, prefix and route did not run against this fixture and were not measured",
-			"anything reliable about the JSON surface. The figure detector looks for a dollar sign and JSON emits bare numbers such as totalUsd, so that row is UNDER-MEASURED by this test and must not be read as a pass",
+			"an exhaustive inventory of JSON figures. Two separate facts: DIRECT STRUCTURAL INSPECTION established that `replay cost --json` attaches no tier, provenance or basis field to its numerical values, and SEPARATELY the figure detector under-detected JSON because it looks for a dollar sign while JSON emits bare numbers such as totalUsd. The detector limitation is campaign evidence, not a product pass, and the inventory row for that surface must not be read as one",
 			"ASSUMPTION, not established: that a status is conveyed by a tier word, a dated basis, a list-price statement or a refusal. The detector is deliberately generous, so a surface it marks as failing has really failed",
 		},
 		Vocabulary: "",

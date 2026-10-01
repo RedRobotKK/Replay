@@ -78,14 +78,29 @@ C004 is suspected to be three claims with three different proof obligations:
 | Emitted a figure | **4** |
 | Of those, carried a status statement | **3** |
 
-**The escaping figure: `replay advise` prints `10%` with no status statement
-anywhere in its output.** Isolated by removing it from the sweep: figures fall
-4 to 3 while status holds at 3, so it is the sole offender among those measured.
+**`replay advise` is a CONFIRMED COUNTEREXAMPLE: it emits 10% without a status
+statement.** Isolated by removing it from the sweep, where figures fall 4 to 3
+while status holds at 3.
 
-**Under-measurement, declared.** The figure detector looks for a dollar sign
-and the JSON surface emits bare numbers such as `totalUsd`, so that row is
-under-measured and must not be read as a pass. Five surfaces (budget, ceiling,
-prefix, route, and one further) did not run and are unmeasured, not passing.
+**The campaign does NOT establish that it is the only such surface.** Five of
+fourteen did not run and are unmeasured, and the JSON row is under-detected,
+so the census is incomplete in two directions.
+
+**The JSON surface, as two separate facts.**
+
+1. **Direct structural inspection established** that `replay cost --json`
+   attaches no tier, provenance or basis field to any of its numerical values.
+   Seven top-level keys, none of them one. That finding stands on its own.
+2. **Separately, the figure detector under-detected JSON**, because it looks
+   for a dollar sign while JSON emits bare numbers such as `totalUsd`. So the
+   sweep did NOT exhaustively inventory JSON figures.
+
+**The detector's limitation is campaign evidence, not a product pass.** The
+inventory row for that surface must not be read as one.
+
+**Five of fourteen surfaces did not run** against this fixture (budget,
+ceiling, prefix, route, and one further) and are UNMEASURED. They are neither
+passes nor failures.
 
 ## The three-way split
 

@@ -8,28 +8,20 @@ product asserts, what the evidence actually supports, and where the two differ.
 
 ---
 
-## Executive result
+## Where the authoritative status lives
 
-| | Claims |
-|---|---|
-| **ESTABLISHED** | **2** |
-| **BOUNDED**, true only inside stated conditions | **6** |
-| **NOT_MEASURED**, no valid endpoint | **2** |
-| **NO_ENDPOINT**, structurally unmeasurable | **1** |
-| **DELIBERATE_NON_CLAIM**, the product declines to assert it | **1** |
-| **UNRESOLVED**, evidence insufficient | **1** |
-| **REFUTED** | **0** |
-| **Total registered** | **13** |
+**Per-claim status is NOT in this document.** It is generated from
+`internal/claims` into [CLAIM-REGISTER.md](CLAIM-REGISTER.md), which cannot
+drift from the code because it is rendered from it:
 
-**No claim was refuted.** The claim surface was already disciplined before this
-campaign: the repository explicitly declines to assert savings, prevention,
-intervention outcome, task improvement and error reduction, and those declines
-are load-bearing rather than oversights.
+```sh
+go run scripts/claim-register/main.go
+```
 
-**One claim was downgraded by this campaign**: RPL-C004 moved from asserted to
-UNRESOLVED. See "Claims that were too strong".
-
----
+This document holds the narrative findings only. Where the two differ, the
+register is correct, and an earlier version of this file carried a per-claim
+table that went stale within two attacks. It has been removed rather than
+maintained in parallel.
 
 ## The load-bearing finding
 
@@ -62,26 +54,6 @@ changing only the local price basis:
 
 **A figure that changes when the operator edits their own copy of the price
 list is not a bill.** That is the whole claim, and it is now a test.
-
----
-
-## Claim table
-
-| ID | Claim | Result | Oracle |
-|---|---|---|---|
-| RPL-C001 | Reads transcripts on disk and attributes cache behaviour per turn | BOUNDED | audit-classified fixture corpora |
-| RPL-C004 | Every printed figure carries a truth tier | **UNRESOLVED** | partial only |
-| RPL-C005 | Declines to print what it cannot measure, and says why | BOUNDED | refusal-reachability neutralisation |
-| RPL-C008 | Absence, zero and unknown stay three values | **ESTABLISHED** | paired absent/zero fixtures |
-| RPL-C011 | "Measured" means provider-reported usage, not a charge | BOUNDED | longhand arithmetic, not the production function |
-| RPL-C012 | Can establish what a provider actually billed | **NO_ENDPOINT** | static destination scan |
-| RPL-C013 | Establishes realized savings | DELIBERATE_NON_CLAIM | user-facing string scan |
-| RPL-C015 | Can establish that acting on advice changed anything | **NOT_MEASURED** | the product's own refusal |
-| RPL-C016 | Improves agent task outcomes | **NOT_MEASURED** | R10 benchmark, stopped at ceiling |
-| RPL-C020 | Records from two sessions are never combined into one history | BOUNDED | `oracleJoin`, independent of `requestJoin` |
-| RPL-C021 | No cross-surface grand total | **ESTABLISHED** | structural, by type shape |
-| RPL-C022 | No network request except on a typed command | BOUNDED | enumerated destination set |
-| RPL-C024 | Attributed tokens sum back to the provider's total | BOUNDED | hand-computed conservation fixtures |
 
 ---
 
@@ -128,21 +100,18 @@ assert it, which is why none of these is REFUTED.
 
 ---
 
-## Claims that were too strong
+## Claims that were narrowed or refuted
 
-**RPL-C004, "every figure Replay prints carries a truth tier."**
+Current status for each is in the register. The narrative:
 
-Narrowed to UNRESOLVED. This campaign established that the price basis declares
-its version, its check date and its staleness, and that the staleness warning
-fires at two years and stays silent on the check date itself. It did **not**
-enumerate every printed figure and confirm each carries a tier. The claim is
-plausible and untested at the level it is stated, and it is recorded that way
-rather than assumed.
+**RPL-C004 split into three claims**, because it carried three different proof
+obligations: that a vocabulary exists (C027, UNRESOLVED), that every output
+carries a status (C028, REFUTED), and that the status is correct (C029,
+NO_ENDPOINT). See `docs/evidence/c004-tier-mechanism-2026-09-30.md`.
 
-No claim became stronger as a result of this campaign. Two were confirmed at
-the strength already claimed, and the rest were already bounded correctly.
-
----
+**RPL-C005 was refuted at the printed surface** and its internal half
+registered separately as C026. See
+`docs/evidence/c005-unpriced-granularity-2026-09-30.md`.
 
 ## Mutation results
 
