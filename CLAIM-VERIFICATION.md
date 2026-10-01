@@ -78,7 +78,7 @@ list is not a bill.** That is the whole claim, and it is now a test.
 | RPL-C013 | Establishes realized savings | DELIBERATE_NON_CLAIM | user-facing string scan |
 | RPL-C015 | Can establish that acting on advice changed anything | **NOT_MEASURED** | the product's own refusal |
 | RPL-C016 | Improves agent task outcomes | **NOT_MEASURED** | R10 benchmark, stopped at ceiling |
-| RPL-C020 | Records from two sessions are never joined | BOUNDED | hand-constructed id collision |
+| RPL-C020 | Records from two sessions are never combined into one history | BOUNDED | `oracleJoin`, independent of `requestJoin` |
 | RPL-C021 | No cross-surface grand total | **ESTABLISHED** | structural, by type shape |
 | RPL-C022 | No network request except on a typed command | BOUNDED | enumerated destination set |
 | RPL-C024 | Attributed tokens sum back to the provider's total | BOUNDED | hand-computed conservation fixtures |
@@ -191,9 +191,11 @@ Established three ways, in descending strength:
 
 Recorded rather than omitted, per the standard the campaign was run to.
 
-1. **No true cross-session cross-wiring test exists.** RPL-C020 rests on
-   synthesised-id collision and arrival-order coverage. A fixture pairing
-   session A's request with session B's response was not built. **Named gap.**
+1. ~~No true cross-session cross-wiring test exists.~~ **CLOSED 2026-09-30.**
+   A two-session adversarial fixture now exists with an independent oracle
+   (`oracleJoin`, which never calls `requestJoin`), five tests, and three
+   mutations on the join that all kill. **No crossing was found.** One bound
+   remains and is recorded on RPL-C020 rather than closed: see below.
 2. **Adapter conformance is partial.** A shared suite exists for the economic
    classification layer. The `internal/transcript` parsers have per-surface
    tests and no shared contract suite.
@@ -250,12 +252,46 @@ was added, correctly observing that a package absent from the binary's
 dependency closure ships no behaviour. It is now registered as deliberately
 unwired with a reason, as UNWIRED-LOG.md entry 16.
 
+## The cross-wiring result
+
+**Can an independent reviewer feed Replay evidence from two valid sessions and
+make it tell a plausible but false story?**
+
+**On every path tested, no.** Two sessions with distinct identities, request
+ids, models, token counts and timestamps were built, written to disk, and read
+back through the real cost report. Legitimate associations survived, nothing
+crossed, and adding a foreign session changed nothing about the first.
+
+The result is backed by an independent oracle that reimplements the join rule
+and never calls `requestJoin`, and by three mutations, each of which kills the
+suite: ignoring the provenance flag so synthesised ids join, never detecting
+duplicates, and corrupting the join key.
+
+**One limitation was found and is recorded rather than fixed.**
+
+Two genuinely different requests, in different sessions, on different models,
+with different token counts, are counted as one request when they share a
+provider request id. **The join compares no other field before merging.**
+
+This is not a wrong line of code. Provider request ids are globally unique in
+practice, so the merge is correct under that assumption. It is a finding
+because **the assumption is never verified and the join has no way to notice
+when it fails**: its correctness rests on a property of the provider rather
+than on anything Replay observes. `TestXW2` pins the behaviour and names the
+assumption so a later reader meets it deliberately.
+
+Corroborating on session id or model before merging would close it. That is a
+production change, not a test, and this campaign does not make production
+changes without a demonstrated defect.
+
 ## Recommended next experiments
 
 Only those justified by a gap this campaign identified.
 
-1. **Build the cross-session cross-wiring fixture.** The one mandatory attack
-   not performed. Cheap, deterministic, no spend.
+1. **Decide whether the join should corroborate before merging.** The only
+   finding from the cross-wiring attack. A session-id or model check would
+   close it; whether it is worth the cost depends on whether a provider id
+   collision is considered reachable.
 2. **Enumerate printed figures against their tiers**, to settle RPL-C004 in
    either direction rather than leaving it UNRESOLVED.
 3. **A shared conformance suite for the `internal/transcript` parsers**, so a

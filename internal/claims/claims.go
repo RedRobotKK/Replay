@@ -130,20 +130,32 @@ var Register = []Claim{
 
 	// ------------------------------------------------- correlation and joins
 	{
-		ID:          "RPL-C020",
-		Text:        "Records from two different sessions are never joined to each other.",
-		Asserted:    []string{"cmd/replay/requestjoin_test.go:16"},
-		Scope:       "cross-file and cross-session joins",
-		Establishes: []string{"a locally synthesised id is never used as a join key"},
-		DoesNotEstablish: []string{
-			"that a provider id collision across accounts would be caught",
-			"that a true cross-session body mismatch is rejected. No test constructs session A's request paired with session B's response; the coverage is id-collision and arrival-order only. NAMED GAP",
+		ID:       "RPL-C020",
+		Text:     "Records from two different sessions are never combined into one history.",
+		Asserted: []string{"cmd/replay/overlap.go:23", "cmd/replay/requestjoin_test.go:16"},
+		Scope:    "cross-file and cross-session joins, ledger reader and cost report",
+		Establishes: []string{
+			"a locally synthesised id is never used as a join key, whatever it is spelled",
+			"two sessions with no shared provider id are never reported as sharing a request, end to end through the cost report",
+			"adding a foreign session's evidence does not change what is reported about the first",
 		},
-		Vocabulary: "",
-		Oracle:     "two independently constructed sessions, cross-wired by hand in the fixture",
-		Tests:      []string{"TestRJ1_SynthesisedIDsAreNotJoinedAcrossFiles", "TestRJ2_ProviderIDsStillJoin"},
-		Result:     Bounded,
-		Why:        "Synthesised-id collision is covered and provider ids still join. A true cross-session body mismatch remains UNTESTED and is recorded as a named gap rather than quietly closed.",
+		DoesNotEstablish: []string{
+			"that an id collision across sessions would be caught. Two requests on different models with different token counts merge on a shared provider id alone, because the join compares no other field. This is correct while provider request ids are globally unique, and that uniqueness is a property of the provider which Replay never verifies. Pinned by TestXW2",
+			"that a provider id collision across ACCOUNTS would be caught",
+		},
+		Vocabulary: "transcript.Request.IDMeasured, transcript.Request.Correlation",
+		Oracle:     "oracleJoin in cmd/replay/crosswire_test.go, a reference implementation of the stated rule that never calls requestJoin",
+		Tests: []string{
+			"TestXW1_LegitimateSessionsJoinWithinThemselvesAndNotAcrossThem",
+			"TestXW2_AnIDCollisionAcrossSessionsMergesWithoutCorroboration",
+			"TestXW3_ASuperficiallyCompatibleIdentifierDoesNotJoin",
+			"TestXW4_TwoSessionsOnDiskDoNotShareUsage",
+			"TestXW5_AddingAForeignSessionDoesNotChangeTheFirstSessionsFigures",
+			"TestRJ1_SynthesisedIDsAreNotJoinedAcrossFiles",
+			"TestRJ2_ProviderIDsStillJoin",
+		},
+		Result: Bounded,
+		Why:    "A full two-session adversarial fixture now exists with an independent oracle, and three mutations on the join all kill it. No crossing was found on any path tested. The remaining bound is the id-collision case, which merges without corroboration and is recorded rather than closed.",
 	},
 	{
 		ID:               "RPL-C021",
