@@ -297,3 +297,131 @@ func TestXW5_AddingAForeignSessionDoesNotChangeTheFirstSessionsFigures(t *testin
 			together.total, len(sessionB.ids), alone.total, alone.total+len(sessionB.ids))
 	}
 }
+
+// XW7. The exact boundary of the join contract, as a matrix.
+//
+// The expected column is DERIVED FROM THE CONTRACT, not invented. The
+// contract, from overlap.go and transcript.Request, is two inputs and no
+// others:
+//
+//	id        the request identifier
+//	measured  whether that id came off the provider's wire
+//
+// Session, account, model and correlation are carried on the record and are
+// NOT consulted. The matrix exists to make that explicit rather than leave it
+// as something a reader has to infer from an absence.
+//
+// Account is absent from every row because no account identity exists in the
+// model at all. See RPL-C019, classified NO_ENDPOINT.
+func TestXW7_TheJoinContractBoundary(t *testing.T) {
+	type row struct {
+		name string
+		// what the two records look like
+		idA, idB        string
+		measuredA       bool
+		measuredB       bool
+		sameSession     bool // carried, not consulted
+		sameModel       bool // carried, not consulted
+		sameCorrelation bool // carried, not consulted
+		wantDuplicated  int
+		wantUnjoinable  int
+		note            string
+	}
+
+	rows := []row{
+		{
+			name: "identical in every respect",
+			idA:  "req_X", idB: "req_X", measuredA: true, measuredB: true,
+			sameSession: true, sameModel: true, sameCorrelation: true,
+			wantDuplicated: 1, wantUnjoinable: 0,
+			note: "the legitimate case: one request re-rendered into a sub-agent lane",
+		},
+		{
+			name: "same provider id, different session and model",
+			idA:  "req_X", idB: "req_X", measuredA: true, measuredB: true,
+			sameSession: false, sameModel: false, sameCorrelation: false,
+			wantDuplicated: 1, wantUnjoinable: 0,
+			note: "MERGES. Session and model are carried and not consulted. This is " +
+				"the observed behaviour the campaign records on RPL-C020",
+		},
+		{
+			name: "different provider id, same session",
+			idA:  "req_X", idB: "req_Y", measuredA: true, measuredB: true,
+			sameSession: true, sameModel: true, sameCorrelation: true,
+			wantDuplicated: 0, wantUnjoinable: 0,
+			note: "two requests of one session are two requests",
+		},
+		{
+			name: "different provider id, different session",
+			idA:  "req_X", idB: "req_Y", measuredA: true, measuredB: true,
+			sameSession: false, sameModel: false, sameCorrelation: false,
+			wantDuplicated: 0, wantUnjoinable: 0,
+			note: "no join, and nothing in the record could have caused one",
+		},
+		{
+			name: "synthesised ids, textually identical, same session",
+			idA:  "ledger-0", idB: "ledger-0", measuredA: false, measuredB: false,
+			sameSession: true, sameModel: true, sameCorrelation: true,
+			wantDuplicated: 0, wantUnjoinable: 2,
+			note: "provenance beats text: never a join key whatever it is spelled",
+		},
+		{
+			name: "synthesised ids, textually identical, different session",
+			idA:  "ledger-0", idB: "ledger-0", measuredA: false, measuredB: false,
+			sameSession: false, sameModel: false, sameCorrelation: false,
+			wantDuplicated: 0, wantUnjoinable: 2,
+			note: "the case RJ1 covers, restated here as part of the boundary",
+		},
+		{
+			name: "one measured, one synthesised, same text",
+			idA:  "req_X", idB: "req_X", measuredA: true, measuredB: false,
+			sameSession: false, sameModel: false, sameCorrelation: false,
+			wantDuplicated: 0, wantUnjoinable: 1,
+			note: "a synthesised id does not match a provider id of the same text",
+		},
+	}
+
+	for _, r := range rows {
+		t.Run(r.name, func(t *testing.T) {
+			j := newRequestJoin()
+			j.add(r.idA, r.measuredA)
+			j.add(r.idB, r.measuredB)
+
+			// Independent oracle over the same two records.
+			wantTotal, wantDup, wantUnjoin := oracleJoin([]struct {
+				id       string
+				measured bool
+			}{{r.idA, r.measuredA}, {r.idB, r.measuredB}})
+
+			if j.total != wantTotal || j.duplicated != wantDup || j.unjoinable != wantUnjoin {
+				t.Fatalf("production %+v disagrees with the independent oracle "+
+					"(total %d, duplicated %d, unjoinable %d)", j, wantTotal, wantDup, wantUnjoin)
+			}
+			if j.duplicated != r.wantDuplicated {
+				t.Errorf("duplicated = %d, contract says %d. %s",
+					j.duplicated, r.wantDuplicated, r.note)
+			}
+			if j.unjoinable != r.wantUnjoinable {
+				t.Errorf("unjoinable = %d, contract says %d. %s",
+					j.unjoinable, r.wantUnjoinable, r.note)
+			}
+		})
+	}
+
+	// The matrix must contain at least one row of each outcome, or it is not
+	// a boundary, only a list of agreements.
+	var merges, refusals, unjoinables int
+	for _, r := range rows {
+		if r.wantDuplicated > 0 {
+			merges++
+		} else if r.wantUnjoinable > 0 {
+			unjoinables++
+		} else {
+			refusals++
+		}
+	}
+	if merges == 0 || refusals == 0 || unjoinables == 0 {
+		t.Fatalf("the matrix has %d merges, %d non-joins and %d unjoinable rows; a "+
+			"boundary needs all three or it is not testing a boundary", merges, refusals, unjoinables)
+	}
+}

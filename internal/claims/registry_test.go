@@ -144,3 +144,67 @@ func allTestFuncNames(t *testing.T) map[string]bool {
 	}
 	return names
 }
+
+// Every claim must state how it could fail. A claim with no controls is an
+// opinion with an id.
+func TestEveryClaimHasControls(t *testing.T) {
+	for _, c := range Register {
+		ctl, ok := ControlsFor[c.ID]
+		if !ok {
+			t.Errorf("%s has no entry in ControlsFor. Nobody has said how it could fail.", c.ID)
+			continue
+		}
+		if ctl.Basis == "" {
+			t.Errorf("%s states no evidence basis, so a reader cannot tell whether the "+
+				"figure it concerns is observed or reconstructed", c.ID)
+		}
+		if ctl.Layer == "" {
+			t.Errorf("%s does not say which vocabulary decides it", c.ID)
+		}
+		// A claim that concluded something positive needs both controls. A
+		// non-claim legitimately has neither, because there is nothing to
+		// discriminate.
+		nonClaim := c.Result == NoEndpoint || c.Result == DeliberateNonClaim
+		if !nonClaim {
+			if ctl.Positive == "" {
+				t.Errorf("%s has no positive control", c.ID)
+			}
+			if ctl.Negative == "" {
+				t.Errorf("%s has no negative control, so its check may pass against "+
+					"anything", c.ID)
+			}
+		}
+	}
+	// And nothing may be registered in ControlsFor that is not a claim.
+	ids := map[string]bool{}
+	for _, c := range Register {
+		ids[c.ID] = true
+	}
+	for id := range ControlsFor {
+		if !ids[id] {
+			t.Errorf("ControlsFor has an entry for %s, which is not a registered claim", id)
+		}
+	}
+}
+
+// An assumption is an invariant the claim rests on that Replay does not
+// verify. Where one exists it must be stated in the claim's boundary too, so
+// a reader of DoesNotEstablish alone is not misled.
+func TestAnAssumptionIsVisibleInTheBoundary(t *testing.T) {
+	for _, c := range Register {
+		ctl := ControlsFor[c.ID]
+		if len(ctl.Assumption) == 0 {
+			continue
+		}
+		var boundary string
+		for _, d := range c.DoesNotEstablish {
+			boundary += d + " "
+		}
+		if !strings.Contains(strings.ToLower(boundary), "assum") &&
+			!strings.Contains(strings.ToLower(c.Why), "assum") {
+			t.Errorf("%s rests on a named assumption but neither its boundary nor its "+
+				"Why mentions one. A reader of the claim alone would take it as "+
+				"established.", c.ID)
+		}
+	}
+}

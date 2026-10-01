@@ -57,6 +57,7 @@ var Register = []Claim{
 			"that the dollar figure beside them is what the provider billed",
 			"that the price table matched the account's negotiated rate",
 			"that the figure is reconcilable with an invoice",
+			"ASSUMPTION, not established: that the compiled price table matches the rate the account was actually billed on. Replay cannot check this, and the figure is wrong by exactly the discount where it does not hold",
 		},
 		Vocabulary: "",
 		Oracle:     "independent reimplementation of the cost arithmetic in the test, not an import of CostLegsUSD",
@@ -130,6 +131,21 @@ var Register = []Claim{
 
 	// ------------------------------------------------- correlation and joins
 	{
+		ID:          "RPL-C019",
+		Text:        "Replay distinguishes evidence belonging to different provider accounts.",
+		Asserted:    nil,
+		Scope:       "every correlation path: ledger, transcript readers, cost report",
+		Establishes: nil,
+		DoesNotEstablish: []string{
+			"anything. No account, tenant, organisation, project or workspace identity exists anywhere in the correlation path. A ledger record carries SessionID, AgentID, RequestID and SessionHash and nothing that names whose account it was",
+		},
+		Vocabulary: "",
+		Oracle:     "static scan of every non-test Go file for an account-shaped identity",
+		Tests:      []string{"TestXW6_NoAccountIdentityExistsToCorrelateOn"},
+		Result:     NoEndpoint,
+		Why:        "Not a testing gap: there is no endpoint to test. Two records from different accounts sharing a provider request id are indistinguishable from the same request seen twice, because nothing in the evidence model names the account. Consistent with the distinct-account claim removed at 8e871bf as structurally unavailable, which needed a provider to issue an account-scoped credential and none does.",
+	},
+	{
 		ID:       "RPL-C020",
 		Text:     "Records from two different sessions are never combined into one history.",
 		Asserted: []string{"cmd/replay/overlap.go:23", "cmd/replay/requestjoin_test.go:16"},
@@ -140,8 +156,8 @@ var Register = []Claim{
 			"adding a foreign session's evidence does not change what is reported about the first",
 		},
 		DoesNotEstablish: []string{
-			"that an id collision across sessions would be caught. Two requests on different models with different token counts merge on a shared provider id alone, because the join compares no other field. This is correct while provider request ids are globally unique, and that uniqueness is a property of the provider which Replay never verifies. Pinned by TestXW2",
-			"that a provider id collision across ACCOUNTS would be caught",
+			"that an id collision across sessions would be caught. Two requests on different models with different token counts merge on a shared provider id alone, because the join compares no other field. The implementation conforms to the current join contract under the provider-id uniqueness assumption; this campaign does NOT establish that Replay independently verifies that assumption. Observed under fixture, not theoretical: TestXW2 constructs it and the merge happens",
+			"that evidence from two different provider accounts is distinguishable at all. There is no account identity in the model; see RPL-C019, which classifies that as NO_ENDPOINT rather than as an untested case",
 		},
 		Vocabulary: "transcript.Request.IDMeasured, transcript.Request.Correlation",
 		Oracle:     "oracleJoin in cmd/replay/crosswire_test.go, a reference implementation of the stated rule that never calls requestJoin",
@@ -151,11 +167,12 @@ var Register = []Claim{
 			"TestXW3_ASuperficiallyCompatibleIdentifierDoesNotJoin",
 			"TestXW4_TwoSessionsOnDiskDoNotShareUsage",
 			"TestXW5_AddingAForeignSessionDoesNotChangeTheFirstSessionsFigures",
+			"TestXW7_TheJoinContractBoundary",
 			"TestRJ1_SynthesisedIDsAreNotJoinedAcrossFiles",
 			"TestRJ2_ProviderIDsStillJoin",
 		},
 		Result: Bounded,
-		Why:    "A full two-session adversarial fixture now exists with an independent oracle, and three mutations on the join all kill it. No crossing was found on any path tested. The remaining bound is the id-collision case, which merges without corroboration and is recorded rather than closed.",
+		Why:    "No tested cross-session fixture produced an unintended merge except the deliberate provider-id collision case. That case is an OBSERVED behaviour under a constructed fixture, not a theoretical limitation, and it demonstrates that current join safety depends on provider request-id uniqueness, which Replay does not independently establish.",
 	},
 	{
 		ID:               "RPL-C021",
@@ -216,16 +233,19 @@ var Register = []Claim{
 
 	// -------------------------------------------------------- the footprint
 	{
-		ID:               "RPL-C022",
-		Text:             "The binary makes no network request except for commands the user explicitly types.",
-		Asserted:         []string{"README.md:407", "plugins/replay/skills/replay-doctor/SKILL.md:9"},
-		Scope:            "the shipped binary",
-		Establishes:      []string{"no telemetry, no beacon, no first-run call"},
-		DoesNotEstablish: []string{"anything about the hosted installer, which is checked separately"},
-		Vocabulary:       "",
-		Oracle:           "static enumeration of outbound destinations in non-test code",
-		Tests:            []string{"TestC022_OutboundDestinationsAreAnEnumeratedSet"},
-		Result:           Bounded,
-		Why:              "Checkable statically. A dynamic proof would need a sandboxed run and is not attempted here.",
+		ID:          "RPL-C022",
+		Text:        "The binary makes no network request except for commands the user explicitly types.",
+		Asserted:    []string{"README.md:407", "plugins/replay/skills/replay-doctor/SKILL.md:9"},
+		Scope:       "the shipped binary",
+		Establishes: []string{"no telemetry, no beacon, no first-run call"},
+		DoesNotEstablish: []string{
+			"anything about the hosted installer, which is checked separately",
+			"ASSUMPTION, not established: that a destination is reachable only through a URL literal in Go source. A host assembled at runtime from parts would not be seen by this scan",
+		},
+		Vocabulary: "",
+		Oracle:     "static enumeration of outbound destinations in non-test code",
+		Tests:      []string{"TestC022_OutboundDestinationsAreAnEnumeratedSet"},
+		Result:     Bounded,
+		Why:        "Checkable statically. A dynamic proof would need a sandboxed run and is not attempted here.",
 	},
 }

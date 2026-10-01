@@ -261,3 +261,48 @@ func TestC016_NoTaskImprovementClaimIsAsserted(t *testing.T) {
 		t.Fatal("the improvement detector does not fire on an improvement claim")
 	}
 }
+
+// RPL-C019. Whether an account boundary exists to correlate on at all.
+//
+// The register previously said a cross-account id collision "would not be
+// caught", which reads as an untested case. It is not: there is nothing to
+// test. No account-shaped identity exists anywhere in the correlation path,
+// so two records from different accounts are not merely hard to tell apart,
+// they are indistinguishable by construction.
+//
+// Recording that as NO_ENDPOINT rather than as a gap is the honest
+// classification, and this test is what makes it checkable.
+func TestXW6_NoAccountIdentityExistsToCorrelateOn(t *testing.T) {
+	// The register names these identities in order to record their absence,
+	// so scanning it finds the record and calls it the thing.
+	srcs := userFacingSources(t)
+
+	// Identity shapes that would constitute an account boundary.
+	shapes := regexp.MustCompile(`\b(AccountID|TenantID|OrgID|OrganizationID|OrganisationID|ProjectID|WorkspaceID)\b`)
+
+	var found []string
+	for rel, src := range srcs {
+		if shapes.MatchString(src) {
+			found = append(found, rel)
+		}
+	}
+
+	// POSITIVE CONTROL for the detector: it must fire on the thing it looks
+	// for, or "none found" is worthless.
+	if !shapes.MatchString("type Record struct { AccountID string }") {
+		t.Fatal("the identity detector does not detect an account identity; a clean " +
+			"result proves nothing")
+	}
+	// And it must not fire on the identities that DO exist, or it is too
+	// broad to distinguish them.
+	if shapes.MatchString("type Record struct { SessionID string; AgentID string; RequestID string }") {
+		t.Fatal("the detector fires on SessionID/AgentID/RequestID; it cannot tell an " +
+			"account boundary from the identities Replay actually carries")
+	}
+
+	if len(found) != 0 {
+		t.Errorf("RPL-C019 is classified NO_ENDPOINT, but an account-shaped identity "+
+			"appears in %v. If an account boundary now exists, the claim must be "+
+			"reclassified and tested, not left as NO_ENDPOINT.", found)
+	}
+}
