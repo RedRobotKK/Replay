@@ -1,0 +1,263 @@
+package claims
+
+import (
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+)
+
+// Repository-wide scans. These are the tests for claims whose subject is the
+// whole product surface rather than one package's behaviour.
+//
+// Every scan here carries a positive control: a scan that finds nothing
+// because it is broken would otherwise pass, and a check that cannot fail is
+// not evidence.
+
+func nonTestGoSources(t *testing.T) map[string]string {
+	t.Helper()
+	root := repoRoot(t)
+	out := map[string]string{}
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			switch d.Name() {
+			case ".git", "vendor", "node_modules", "bin", "testdata":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		rel, _ := filepath.Rel(root, path)
+		out[rel] = string(b)
+		return nil
+	})
+	if len(out) < 200 {
+		t.Fatalf("scan found only %d non-test Go files; the walk is broken and every "+
+			"assertion built on it would pass vacuously", len(out))
+	}
+	return out
+}
+
+// userFacingSources is nonTestGoSources minus this register.
+//
+// The register has to quote a claim verbatim in order to classify it as
+// NOT_MEASURED or as a non-claim, so scanning it for claim vocabulary finds
+// the refusal and calls it an assertion. The exclusion is exactly one
+// directory and is asserted to be exactly one directory, so it cannot grow
+// into a place to hide things.
+func userFacingSources(t *testing.T) map[string]string {
+	t.Helper()
+	all := nonTestGoSources(t)
+	out := map[string]string{}
+	excluded := 0
+	for rel, src := range all {
+		if strings.HasPrefix(rel, "internal/claims/") {
+			excluded++
+			continue
+		}
+		out[rel] = src
+	}
+	if excluded == 0 {
+		t.Fatal("the register was not found by the scan, so excluding it proved nothing")
+	}
+	if len(all)-len(out) != excluded {
+		t.Fatalf("exclusion removed %d files but only %d were accounted for",
+			len(all)-len(out), excluded)
+	}
+	return out
+}
+
+var urlRe = regexp.MustCompile(`https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+`)
+
+// RPL-C012. The claim under attack is that Replay can establish what a
+// provider actually billed. It cannot, and the reason is structural: nothing
+// in the binary can reach a place where a charge is recorded.
+//
+// This is an absence proof, so it is built to be falsifiable: the scan is
+// shown to find the destinations that ARE there, and is shown to catch a
+// planted billing endpoint.
+func TestC012_NoProviderBillingEndpointExists(t *testing.T) {
+	srcs := nonTestGoSources(t)
+
+	var found []string
+	for rel, src := range srcs {
+		for _, u := range urlRe.FindAllString(src, -1) {
+			found = append(found, rel+" "+u)
+		}
+	}
+
+	// Positive control. If the scanner finds no URL at all it is broken, and
+	// the absence claim below would be vacuous.
+	if len(found) == 0 {
+		t.Fatal("scanner found no URL anywhere in non-test code; it is broken")
+	}
+
+	// A destination that would indicate authoritative billing. These are the
+	// shapes a provider uses to expose a charge, as distinct from inference.
+	billing := regexp.MustCompile(`(?i)/v\d+/(invoices?|billing|balance|credits?|usage_report)|` +
+		`(?i)(billing|invoice)\.[a-z]+\.(com|ai)|` +
+		`(?i)api\.stripe\.com`)
+
+	var offenders []string
+	for _, f := range found {
+		if billing.MatchString(f) {
+			offenders = append(offenders, f)
+		}
+	}
+	if len(offenders) != 0 {
+		t.Errorf("RPL-C012 is REFUTED: code reaches what looks like an authoritative "+
+			"billing endpoint:\n  %s\nIf this is real, the claim surface must be "+
+			"updated, not the test.", strings.Join(offenders, "\n  "))
+	}
+
+	// Negative control for the detector itself. A planted billing URL must be
+	// caught, or the clean result above means nothing.
+	if !billing.MatchString("x https://api.anthropic.com/v1/invoices") {
+		t.Fatal("the billing detector does not detect a billing endpoint; the clean " +
+			"result above is worthless")
+	}
+	if billing.MatchString("x https://api.anthropic.com/v1/messages") {
+		t.Fatal("the billing detector fires on an ordinary inference endpoint; it is " +
+			"too broad to mean anything")
+	}
+}
+
+// RPL-C022. The footprint claim. The set of REMOTE destinations the shipped
+// binary can reach is small and enumerated; this pins it so that adding one
+// is a deliberate act visible in a diff rather than a quiet change to a
+// promise printed on the README.
+//
+// Scope, stated because it is doing real work here:
+//   - loopback is excluded. A request to 127.0.0.1 is the local proxy or a
+//     local Ollama, and the claim is about the network, not about sockets.
+//   - format placeholders and documentation examples are excluded. They are
+//     not destinations.
+//   - scripts/ is excluded. It is build-tagged tooling, not the binary.
+func TestC022_OutboundDestinationsAreAnEnumeratedSet(t *testing.T) {
+	// Each entry needs a reason, because the reason is what a reviewer checks.
+	allowed := map[string]string{
+		"https://api.anthropic.com":                   "probe and replay serve, both only on a command the user types",
+		"https://www.anthropic.com":                   "the pricing page the compiled price table cites as its source",
+		"https://api.github.com":                      "self-update release check",
+		"https://github.com":                          "self-update artifact download",
+		"https://objects.githubusercontent.com":       "self-update artifact storage",
+		"https://raw.githubusercontent.com":           "the LiteLLM price database, the second price observer",
+		"https://token.actions.githubusercontent.com": "the Sigstore OIDC issuer identity checked during release verification",
+		"https://replay.doctor":                       "opt-in corpus contribution",
+		"https://redrobot.jp":                         "project home",
+		"https://www.redrobot.jp":                     "project home",
+	}
+
+	// Not destinations.
+	skip := regexp.MustCompile(`(?i)^https?://(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0|%[sv]|replay\b|internal\.corp|seller\.test)`)
+
+	srcs := nonTestGoSources(t)
+	host := regexp.MustCompile(`^https?://[^/\s"\'` + "`" + `]+`)
+
+	unexpected := map[string][]string{}
+	counted := 0
+	for rel, src := range srcs {
+		if strings.HasPrefix(rel, "scripts/") {
+			continue
+		}
+		for _, u := range urlRe.FindAllString(src, -1) {
+			h := host.FindString(u)
+			if h == "" || skip.MatchString(h) {
+				continue
+			}
+			h = strings.TrimRight(h, ".")
+			counted++
+			if _, ok := allowed[h]; !ok {
+				unexpected[h] = append(unexpected[h], rel)
+			}
+		}
+	}
+
+	// Positive control. If nothing is counted the enumeration is vacuous.
+	if counted == 0 {
+		t.Fatal("no remote destination found at all; the scan is broken and the " +
+			"enumeration below would pass against any code")
+	}
+	for h, where := range unexpected {
+		t.Errorf("RPL-C022: remote destination %s is not enumerated, seen in %v. "+
+			"Either it is legitimate and belongs in the list with a reason, or the "+
+			"footprint claim is now false.", h, where)
+	}
+
+	// Negative control for the skip rule: it must not swallow a real host.
+	if skip.MatchString("https://api.anthropic.com") {
+		t.Fatal("the loopback skip swallows a real remote host; the enumeration is worthless")
+	}
+}
+
+// RPL-C013. The savings non-claim. The product states it reports what was
+// already spent, never what will be saved. This checks the user-facing
+// strings do not quietly contradict that.
+func TestC013_NoSavingsClaimReachesTheUser(t *testing.T) {
+	// Forecast vocabulary. "saving" alone is not an offence: the repository
+	// legitimately uses it to describe a projection it labels as one, and
+	// "SavingPerTurnUSD" is an internal identifier, not user-facing text.
+	forecast := regexp.MustCompile(`(?i)you (will|could|would) save|` +
+		`save \$|saves you|monthly saving|projected saving per month|` +
+		`guaranteed saving`)
+
+	srcs := userFacingSources(t)
+	var hits []string
+	for rel, src := range srcs {
+		for _, line := range strings.Split(src, "\n") {
+			// Only string literals reach a user.
+			if !strings.Contains(line, `"`) {
+				continue
+			}
+			if forecast.MatchString(line) {
+				hits = append(hits, rel+": "+strings.TrimSpace(line))
+			}
+		}
+	}
+	for _, h := range hits {
+		t.Errorf("RPL-C013 is contradicted by user-facing text: %s", h)
+	}
+
+	// Negative control: the detector must fire on the thing it forbids.
+	if !forecast.MatchString(`fmt.Println("you will save $40 a month")`) {
+		t.Fatal("the forecast detector does not detect a forecast; a clean run proves nothing")
+	}
+}
+
+// RPL-C016. No task-improvement claim is asserted anywhere a user reads.
+// The R10 trial left this NOT_MEASURED, so an assertion would be ahead of the
+// evidence.
+func TestC016_NoTaskImprovementClaimIsAsserted(t *testing.T) {
+	// The first version of this regex could not match the very string the
+	// negative control plants, which is the defect this campaign exists to
+	// find in other people's checks. Widened and re-proven below.
+	bad := regexp.MustCompile(`(?i)(improve|improves|boost|boosts)\s+(\w+\s+){0,2}(task|agent|coding)\s+(\w+\s+){0,2}(outcome|performance|completion|success)|` +
+		`(?i)makes\s+(your\s+)?agents?\s+(smarter|better|more accurate)|` +
+		`(?i)reduces?\s+(your\s+)?(agent\s+)?(errors|mistakes)`)
+
+	srcs := userFacingSources(t)
+	for rel, src := range srcs {
+		for _, line := range strings.Split(src, "\n") {
+			if !strings.Contains(line, `"`) {
+				continue
+			}
+			if bad.MatchString(line) {
+				t.Errorf("RPL-C016 is NOT_MEASURED but %s asserts it: %s",
+					rel, strings.TrimSpace(line))
+			}
+		}
+	}
+	if !bad.MatchString(`"Replay improves agent task performance"`) {
+		t.Fatal("the improvement detector does not fire on an improvement claim")
+	}
+}
