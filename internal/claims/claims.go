@@ -223,6 +223,25 @@ var Register = []Claim{
 		Why:        "The internal layer does what the claim describes. The bound is that it is internal: a provenance field that does not reach the screen protects nobody, which is exactly what RPL-C005 found.",
 	},
 	{
+		ID:       "RPL-C034",
+		Text:     "When a model has no price, Replay never reports its cost as zero.",
+		Asserted: []string{"docs/TOKEN-PRICES.md:53"},
+		Scope:    "every consumer of cachemodel.PriceFor and PriceForAt",
+		Establishes: []string{
+			"9 of 19 call sites count the exclusion, refuse with a reason, or substitute a labelled upper bound",
+		},
+		DoesNotEstablish: []string{
+			"the claim. 8 consumer sites take none of the three acceptable actions and let the figure be zero, which TOKEN-PRICES.md:53 names as neither defensible option",
+			"that the remaining sites are equivalent to each other. The 9 that handle it use at least four different conventions, so there is no shared contract in code, only a shared document",
+			"the magnitude on any surface. The call-site census is established; what each silent zero does to a printed figure is measured only for cost.go and route.go",
+		},
+		Vocabulary: "",
+		Oracle:     "a source census classifying each false branch, with the contract quoted from the repository's own document rather than assumed",
+		Tests:      []string{"TestEC00_ThePriceBooleanIsTheSharedCompressionPoint"},
+		Result:     Refuted,
+		Why:        "The contract is explicit, the repository wrote it, and roughly half the consumers of the boolean violate it. This is the shared compression point behind EC-02, EC-03 and EC-04, which are call sites rather than separate defects. cost.go:717 is the sharpest: RebilledTokens sits inside the priced branch, so a token count needing no price reads zero when pricing fails.",
+	},
+	{
 		ID:       "RPL-C033",
 		Text:     "A dollar figure states the TTL basis its cache writes were priced on.",
 		Asserted: []string{"README.md:293"},

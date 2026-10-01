@@ -10,9 +10,9 @@ regenerate it, or it will drift from the code it describes.**
 | ESTABLISHED | 2 |
 | NOT_MEASURED | 2 |
 | NO_ENDPOINT | 3 |
-| REFUTED | 5 |
+| REFUTED | 6 |
 | UNRESOLVED | 1 |
-| **Total** | **23** |
+| **Total** | **24** |
 
 ---
 
@@ -373,6 +373,38 @@ regenerate it, or it will drift from the code it describes.**
   - TestC005_AnUnsourcedContractIsRefused
 
 **Why this result:** The internal layer does what the claim describes. The bound is that it is internal: a provenance field that does not reach the screen protects nobody, which is exactly what RPL-C005 found.
+
+---
+
+## RPL-C034
+
+> When a model has no price, Replay never reports its cost as zero.
+
+| | |
+|---|---|
+| **Result** | **REFUTED** |
+| Evidence basis | NOT_APPLICABLE |
+| Deciding layer | none. One boolean, no shared convention |
+| Scope | every consumer of cachemodel.PriceFor and PriceForAt |
+| Oracle | a source census classifying each false branch, with the contract quoted from the repository's own document rather than assumed |
+| Asserted at | docs/TOKEN-PRICES.md:53 |
+
+- **Establishes:**
+  - 9 of 19 call sites count the exclusion, refuse with a reason, or substitute a labelled upper bound
+- **Does NOT establish:**
+  - the claim. 8 consumer sites take none of the three acceptable actions and let the figure be zero, which TOKEN-PRICES.md:53 names as neither defensible option
+  - that the remaining sites are equivalent to each other. The 9 that handle it use at least four different conventions, so there is no shared contract in code, only a shared document
+  - the magnitude on any surface. The call-site census is established; what each silent zero does to a printed figure is measured only for cost.go and route.go
+- **Assumptions Replay does not verify:** _none_
+- **Known gaps:**
+  - per-surface magnitude is measured only for cost and route; the other six silent sites are censused but their printed consequence is unmeasured
+- **Positive control:** 9 of 19 sites handle the false branch acceptably, so the contract is satisfiable and is satisfied in places
+- **Negative control:** the detector rejects a bare `if ok {}` and accepts an explicit counter
+- **Insufficient-evidence control:** 2 of the 10 flagged sites are inside PriceForAt itself and are delegation rather than consumption, so the consumer count is 8
+- **Tests:**
+  - TestEC00_ThePriceBooleanIsTheSharedCompressionPoint
+
+**Why this result:** The contract is explicit, the repository wrote it, and roughly half the consumers of the boolean violate it. This is the shared compression point behind EC-02, EC-03 and EC-04, which are call sites rather than separate defects. cost.go:717 is the sharpest: RebilledTokens sits inside the priced branch, so a token count needing no price reads zero when pricing fails.
 
 ---
 

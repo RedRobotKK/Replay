@@ -120,6 +120,13 @@ var ControlsFor = map[string]Controls{
 		Insufficient: "ClassUndetermined is itself the insufficient-evidence result",
 		Gap:          []string{"internal only. RPL-C005 shows the refusal does not always reach the user"},
 	},
+	"RPL-C034": {
+		Basis: NoBasis, Layer: "none. One boolean, no shared convention",
+		Positive:     "9 of 19 sites handle the false branch acceptably, so the contract is satisfiable and is satisfied in places",
+		Negative:     "the detector rejects a bare `if ok {}` and accepts an explicit counter",
+		Insufficient: "2 of the 10 flagged sites are inside PriceForAt itself and are delegation rather than consumption, so the consumer count is 8",
+		Gap:          []string{"per-surface magnitude is measured only for cost and route; the other six silent sites are censused but their printed consequence is unmeasured"},
+	},
 	"RPL-C033": {
 		Basis: Observed, Layer: "none. transcript.Usage has no presence field for the TTL split",
 		Positive:     "an explicit 5m split and an explicit 1h split price differently (EC4)",

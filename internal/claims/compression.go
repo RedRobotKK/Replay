@@ -64,6 +64,16 @@ type Site struct {
 	Negative string
 	// Result is the classification.
 	Result Compression
+	// ContractRequires quotes the invariant that demands preservation, or
+	// states that none was found. A collapse is only category C when this is
+	// non-empty and the site violates it.
+	ContractRequires string
+	// Testability says how the site can be attacked, or why it cannot be.
+	Testability string
+	// Priority ranks confirmed candidates: user-visible quantitative claim
+	// first, then contractual relevance, then surface count, then shared
+	// mechanism. Not by code size and not by test count.
+	Priority int
 	// Why is required.
 	Why string
 }
@@ -72,6 +82,25 @@ type Site struct {
 // sweep and have NOT been attacked; they are listed so the sweep's output is
 // auditable rather than summarised away.
 var Matrix = []Site{
+	{
+		ID:                 "EC-00",
+		Where:              "cachemodel.PriceFor / PriceForAt, the (Price, bool) return. 19 non-test call sites",
+		InputDistinctions:  []string{"model has a price in the compiled table", "model has none"},
+		ProductionRepr:     "one boolean, consumed independently at every call site with no shared convention",
+		UserVisibleRepr:    "at 8 consumer sites, nothing: the figure is simply zero",
+		OracleDistinctions: []string{"OBSERVED", "NO_ENDPOINT"},
+		Lossy:              true,
+		Intentional:        false,
+		ContractSays:       "the repository states the contract in its own words and names the current behaviour as wrong",
+		ContractRequires:   "docs/TOKEN-PRICES.md:53: \"An unpriced model must never count as zero. Two defensible options, and today's behaviour is neither: refuse the request and say the model is unpriced, or price it at the most expensive known row and label the figure an upper bound. Fail conservative, and say which.\"",
+		Testability:        "fully testable. A scan counts the call sites and classifies each false branch; a fixture on an unpriced model exercises each consuming surface",
+		Priority:           1,
+		Claim:              "RPL-C034",
+		Positive:           "9 sites DO count, refuse, or substitute a labelled bound: mcp.go twice, costusage.go, ceiling.go, burn.go twice, statusline.go, analysis/route.go, proxy/passthrough.go",
+		Negative:           "the detector rejects a site with no false branch and accepts an explicit counter, so the split is real",
+		Result:             UnintentionallyCollapsed,
+		Why:                "THE SHARED COMPRESSION POINT. EC-02, EC-03 and EC-04 are not three findings, they are three call sites of this one boolean. The contract exists, is explicit, and names zero as indefensible; roughly half the consumers return zero anyway. Sharpest instance is cost.go:717, where RebilledTokens is assigned inside the priced branch, so a TOKEN count that needs no price at all reads zero when the price lookup fails, and re-billed is the headline figure the product is named for.",
+	},
 	{
 		ID:    "EC-01",
 		Where: "internal/transcript/wire.go:134 (*WireUsage).Usage()",
