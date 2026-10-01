@@ -5,13 +5,13 @@ regenerate it, or it will drift from the code it describes.**
 
 | Result | Count |
 |---|---|
-| BOUNDED | 6 |
+| BOUNDED | 7 |
 | DELIBERATE_NON_CLAIM | 1 |
 | ESTABLISHED | 2 |
 | NOT_MEASURED | 2 |
 | NO_ENDPOINT | 2 |
-| UNRESOLVED | 1 |
-| **Total** | **14** |
+| REFUTED | 1 |
+| **Total** | **15** |
 
 ---
 
@@ -53,29 +53,65 @@ regenerate it, or it will drift from the code it describes.**
 
 | | |
 |---|---|
-| **Result** | **UNRESOLVED** |
+| **Result** | **REFUTED** |
 | Evidence basis | NOT_APPLICABLE |
-| Deciding layer | none. No in-code type governs tier presence |
-| Scope | printed output of the CLI |
-| Oracle | partial. The price basis is shown to declare its own provenance and age; exhaustive per-figure tier coverage is NOT established |
-| Asserted at | README.md:293, docs/adr/0002-replay-engine-and-truth-tiers.md:9 |
+| Deciding layer | none. No tier type, field or enum exists: the vocabulary is free string literals at 15+ sites across 11 packages |
+| Scope | printed output of the shipped binary, human and machine-readable |
+| Oracle | the real cost report run over a fixture corpus and read as text, plus the parsed JSON document |
+| Asserted at | README.md:293, docs/adr/0002-replay-engine-and-truth-tiers.md:12 |
+
+- **Establishes:** _none_
+- **Does NOT establish:**
+  - the universal form. `replay cost --json` emits dollar figures under seven top-level keys and not one of them names a tier, a provenance or a basis. A machine consumer receives money with no way to tell how it was obtained
+  - that the tier vocabulary is the mechanism anywhere. The human cost report labels its dollars by naming a dated price basis and uses none of the three tier words to do it
+  - ASSUMPTION, not established: that a tier is conveyed by those three words. A report conveying provenance by other wording is understated by this measurement, and the cost report turned out to be exactly that case
+- **Assumptions Replay does not verify:**
+  - ASSUMPTION: a tier is conveyed by the words measured, estimated or structural. A report conveying provenance by other wording is understated by this measurement, and the cost report turned out to be exactly that case
+- **Known gaps:**
+  - the printed surface was not enumerated. One report and one JSON document were measured; burn, advise, route, diff, errors, warnings and the TUI were not
+  - README names three tiers and ADR-0002 names two and never contains the word structural. The documents disagree and this campaign did not correct either
+- **Positive control:** the tier detector fires on a labelled line
+- **Negative control:** it does not fire on an unlabelled line, and the figure detector does not fire on a bare integer
+- **Insufficient-evidence control:** not applicable. The claim is about presence, not about a measurement
+- **Tests:**
+  - TestC004_TheCostReportStatesHowItsDollarsWereObtained
+  - TestC004_TheTierVocabularyIsNotHowTheCostReportLabelsMoney
+  - TestC004_TheTierDetectorDiscriminates
+  - TestC004_TheJSONSurfaceCarriesNoTierField
+
+**Why this result:** Falsified as worded, by the machine-readable surface. Separately the three-word vocabulary is not how the human report labels money, and the two documents asserting the claim disagree on what the words are: README names three tiers, ADR-0002 is titled two and never contains the word structural. What is true is registered as RPL-C025 rather than read back into this one.
+
+---
+
+## RPL-C025
+
+> The human cost report states the basis of its dollar figures, with a date, above the figures themselves.
+
+| | |
+|---|---|
+| **Result** | **BOUNDED** |
+| Evidence basis | RECONSTRUCTED |
+| Deciding layer | none |
+| Scope | `replay cost` human output. NOT the JSON surface, and not established for any other report |
+| Oracle | the rendered report inspected as text, with the header isolated from the figures |
+| Asserted at | cmd/replay/cost.go:1057 |
 
 - **Establishes:**
-  - a reader can tell how a number was obtained
+  - a reader meeting the money also meets the basis it was computed on and the date that basis was read
+  - the report says plainly that on a subscription seat the dollars are list price for someone billed per token
 - **Does NOT establish:**
-  - that a 'measured' figure is a billed figure
-  - that the tier is correct, only that one is present
+  - anything about reports other than `replay cost`. The printed surface was not enumerated
+  - that the basis is correct, only that it is stated
 - **Assumptions Replay does not verify:** _none_
 - **Known gaps:**
-  - no enumeration of every user-visible figure against its tier. The claim is asserted at a level this campaign has not reached
-  - no insufficient-evidence control exists, because the claim is about presence rather than about a measurement
-- **Positive control:** the price basis declares version, check date and staleness
-- **Negative control:** a table two years past its check date emits a staleness note; a fresh one does not
-- **Insufficient-evidence control:** _none. Recorded as a gap_
+  - one report only. Generality across the printed surface is unmeasured
+- **Positive control:** the header above the first dollar figure names a price basis and a date
+- **Negative control:** removing the basis from cmd/replay/cost.go kills the test; removing the date kills it separately
+- **Insufficient-evidence control:** a corpus with no priced request reports unpriced rather than a figure
 - **Tests:**
-  - TestC011_ThePriceBasisDeclaresItsOwnProvenanceAndAge
+  - TestC004_TheCostReportStatesHowItsDollarsWereObtained
 
-**Why this result:** This campaign established that the price basis declares its version, its check date and its staleness. It did NOT enumerate every printed figure and confirm each carries a tier. The claim is plausible and untested at the level it is stated.
+**Why this result:** Mutation-proven at two points in cmd/replay/cost.go: removing the price basis from the header kills it, and removing the date kills it separately.
 
 ---
 

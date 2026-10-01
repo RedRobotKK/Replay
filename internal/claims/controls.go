@@ -57,14 +57,24 @@ var ControlsFor = map[string]Controls{
 		Gap:          []string{"no shared conformance suite spans the internal/transcript parsers; each has its own fixtures"},
 	},
 	"RPL-C004": {
-		Basis: NoBasis, Layer: "none. No in-code type governs tier presence",
-		Positive:     "the price basis declares version, check date and staleness",
-		Negative:     "a table two years past its check date emits a staleness note; a fresh one does not",
-		Insufficient: "",
-		Gap: []string{
-			"no enumeration of every user-visible figure against its tier. The claim is asserted at a level this campaign has not reached",
-			"no insufficient-evidence control exists, because the claim is about presence rather than about a measurement",
+		Basis: NoBasis, Layer: "none. No tier type, field or enum exists: the vocabulary is free string literals at 15+ sites across 11 packages",
+		Positive:     "the tier detector fires on a labelled line",
+		Negative:     "it does not fire on an unlabelled line, and the figure detector does not fire on a bare integer",
+		Insufficient: "not applicable. The claim is about presence, not about a measurement",
+		Assumption: []string{
+			"ASSUMPTION: a tier is conveyed by the words measured, estimated or structural. A report conveying provenance by other wording is understated by this measurement, and the cost report turned out to be exactly that case",
 		},
+		Gap: []string{
+			"the printed surface was not enumerated. One report and one JSON document were measured; burn, advise, route, diff, errors, warnings and the TUI were not",
+			"README names three tiers and ADR-0002 names two and never contains the word structural. The documents disagree and this campaign did not correct either",
+		},
+	},
+	"RPL-C025": {
+		Basis: Reconstructed, Layer: "none",
+		Positive:     "the header above the first dollar figure names a price basis and a date",
+		Negative:     "removing the basis from cmd/replay/cost.go kills the test; removing the date kills it separately",
+		Insufficient: "a corpus with no priced request reports unpriced rather than a figure",
+		Gap:          []string{"one report only. Generality across the printed surface is unmeasured"},
 	},
 	"RPL-C005": {
 		Basis: NoBasis, Layer: "surface.Class, surface.WriteContract",
