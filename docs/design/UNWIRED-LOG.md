@@ -201,3 +201,38 @@ branches and documentation promising what the code cannot do. Results land here.
 ---
 
 [Design](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)
+
+## 16. internal/claims, the claim surface rather than the code
+
+Added 2026-09-30. Not reachable from `cmd/replay`, and deliberately so.
+
+Every other package here is absent because its behaviour is not yet wired. This
+one is absent because it has no behaviour to wire. Its subject is what Replay
+asserts it can do: one entry per externally meaningful claim, carrying the
+scope the claim holds in, the evidence it needs, the independent oracle that
+decides it, and the boundary beyond which it is false.
+
+`DoesNotEstablish` is a required field and an empty one fails a test. The
+boundary is the first part of a claim to go missing and the most expensive
+part to lose, so the register refuses to hold a claim that does not state one.
+
+It introduces no seventh epistemic vocabulary. The repository already has
+several, each local to the package that needed it, and each claim names the
+one that actually decides it rather than being translated into a new one.
+
+**What would wire it:** nothing should. A verification register in everyone's
+install is a shipped opinion about the product, not a feature of it.
+
+## 17. scripts/claim-register, the register rendered
+
+Added 2026-09-30. Build-tagged `ignore`, in the same family as
+`guard-reachability`, `refusal-reachability` and `merge-guard`: a tool run
+against the repository rather than behaviour shipped to a user.
+
+It renders `internal/claims` to `CLAIM-REGISTER.md`. The register is the
+source and the document is a projection of it, so the document cannot drift
+from the code it describes. Editing the Markdown is the error; regenerating
+is the fix.
+
+**What would wire it:** nothing should. The binary has no reason to carry a
+formatter for a document about itself.
