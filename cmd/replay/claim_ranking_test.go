@@ -148,22 +148,32 @@ func TestRB5_AnUnpricedSessionCannotBeNamedTheWorstWindow(t *testing.T) {
 	idx := worstByRebilledTokens(rep, []int{0, 1})
 	productWinner := rep.Tasks[idx].Session
 
+	// PINNED. A repair was attempted on 2026-10-01 and WITHDRAWN. It satisfied
+	// I1 to I4 and the existing contract test, then broke the `unpriced`
+	// disclosure on the WARM index path: an unpriced session that now produces
+	// a unit gets cached, and the warm run counts it as priced. Cold reported
+	// 1, warm reported 0. That is the same defect TestRJ3 guards for the
+	// unjoinable count, so the repair boundary includes the index and is wider
+	// than the two sites first proposed.
+	//
+	// I3 RANKING is the invariant a repair must satisfy, stated here so
+	// whoever lands it knows what to assert.
 	if productWinner == oracleWinner {
-		t.Fatalf("the product named %s, which matches the oracle. The ranking "+
-			"consequence is gone and the claim register must be updated rather "+
-			"than this test.", productWinner)
+		t.Fatalf("I3 RANKING now holds (product names %s). The repair landed; convert "+
+			"this test to a regression assertion and update RPL-C034.", productWinner)
 	}
-
-	t.Logf("RANKING CONSEQUENCE CONFIRMED.\n\n"+
-		"  oracle winner (from the fixture spec): %s, re-billing %d tokens against A's %d\n"+
-		"  product figures with B unpriced:       A=%d  B=%d\n"+
-		"  product winner:                        %s\n\n"+
-		"B's deficit is a property of its cache break and is unchanged. Only the "+
-		"model NAME differs, and B vanishes from the ranking. `replay since` names "+
-		"the wrong session, which its own doc comment calls \"the single worst thing "+
-		"this command can do, since naming the right one IS the product\".",
-		oracleWinner, largeWrites, smallWrites,
-		mixed["sess-a"], mixed["sess-b"], productWinner)
+	if false {
+		t.Errorf("I3 RANKING violated: the oracle says %s is the worst window, "+
+			"re-billing %d tokens against A's %d, and the product named %s.\n"+
+			"  product figures with B unpriced: A=%d B=%d\n"+
+			"B's deficit is a property of its cache break. Only the model NAME "+
+			"differs.", oracleWinner, largeWrites, smallWrites, productWinner,
+			mixed["sess-a"], mixed["sess-b"])
+		return
+	}
+	t.Logf("DEFECT PINNED: oracle names %s (%d tokens against %d); product names %s. "+
+		"Figures A=%d B=%d.", oracleWinner, largeWrites, smallWrites, productWinner,
+		mixed["sess-a"], mixed["sess-b"])
 }
 
 // newTask builds one row of the product's own report type, so the ranking

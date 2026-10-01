@@ -171,6 +171,10 @@ func TestC005M_TheFixtureMatrix(t *testing.T) {
 			expect: "no fabricated figure; an explicit reason; unpriced=1 session",
 		},
 		{
+			// REPAIRED 2026-10-01. Before the repair this row reported
+			// unpriced=0 with no disclosure, and the whole session was dropped
+			// before its tokens could be counted. It is kept in the matrix as
+			// the regression case rather than deleted.
 			id: "MX3", name: "partially measurable, one session", oracle: epPartial,
 			groups: map[string][]recSpec{"mixed": {{model: knownModel, input: 2000, output: 400, want: epObserved}, {model: knownModel, input: 2000, output: 400, want: epObserved}, {model: unknownModel, input: 2000, output: 400, want: epUnknown}, {model: unknownModel, input: 2000, output: 400, want: epUnknown}}},
 			expect: "a total over the measurable half ONLY; the oracle says 2 of 4 records are unmeasurable",

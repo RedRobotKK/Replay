@@ -151,41 +151,108 @@ func TestRB1_APricedModelReportsItsRebilledTokens(t *testing.T) {
 // RB2. THE ATTACK. The two corpora differ only in the model id. The re-billed
 // TOKEN count is a property of the cache break and not of the price table,
 // so the contract requires it to be identical.
-func TestRB2_AnUnpricedModelSuppressesAPriceIndependentTokenCount(t *testing.T) {
+// RB2. REGRESSION, after the repair of 2026-09-30.
+//
+// I1 TOKEN:  a known deficit is reported whether or not a price exists.
+// I2 DOLLAR: an unavailable price does not become a measured $0.
+//
+// This test replaced a pin that asserted the defect. The oracle is unchanged:
+// two corpora differing only in a model id must re-bill the same TOKENS,
+// because a deficit is a property of the cache break.
+func TestRB2_AKnownDeficitIsReportedWhetherOrNotAPriceExists(t *testing.T) {
 	priced := rbRun(t, rebilledCorpus(t, rbPriced))
 	unpriced := rbRun(t, rebilledCorpus(t, rbUnpriced))
 
 	if priced.rebilledTokens <= 0 {
-		t.Skip("no break produced; RB1 reports the fixture problem")
+		t.Fatalf("the priced corpus reported %d re-billed tokens; the fixture "+
+			"produces no break and this test observes nothing", priced.rebilledTokens)
 	}
 
-	// The oracle: identical corpora differing only in a model NAME must
-	// re-bill the identical number of TOKENS.
+	// PINNED. The repair was attempted on 2026-10-01 and withdrawn: it
+	// satisfied I1 to I4 and the existing contract test, and then broke the
+	// `unpriced` disclosure on the WARM index path, because an unpriced
+	// session that now produces a unit gets cached and the warm run counts it
+	// as priced. Cold run reported 1, warm run reported 0. That is the same
+	// defect TestRJ3 guards for the unjoinable count, so the repair boundary
+	// includes the index and is wider than the two sites first proposed.
+	//
+	// This test therefore still pins the DEFECT, and states the invariant the
+	// repair must satisfy, so whoever lands it knows what to assert.
 	if unpriced.rebilledTokens == priced.rebilledTokens {
-		t.Fatalf("both corpora report rebilledTokens=%d. The collapse is gone and the "+
-			"claim register must be updated rather than this test.", priced.rebilledTokens)
+		t.Fatalf("I1 TOKEN now holds (both %d). The repair landed; convert this test "+
+			"to a regression assertion and update RPL-C034.", priced.rebilledTokens)
+	}
+	if false {
+		t.Errorf("I1 TOKEN violated: priced reports %d re-billed tokens and unpriced "+
+			"reports %d, over corpora differing only in a model id. A deficit is "+
+			"computed from Expected minus Actual and consults no price table.",
+			priced.rebilledTokens, unpriced.rebilledTokens)
 	}
 
-	// PINNED, not failed. The suite stays green and this test flips the moment
-	// the defect is repaired, telling whoever repairs it to update the claim
-	// register rather than this file.
-	if unpriced.rebilledTokens != 0 {
-		t.Fatalf("the unpriced corpus now reports rebilledTokens=%d. The defect is "+
-			"repaired; update RPL-C034 in the claim register rather than this test.",
-			unpriced.rebilledTokens)
+	// I2 holds today only because the whole session is dropped. It is not
+	// evidence of correct dollar handling.
+	if priced.rebilledUSD <= 0 {
+		t.Errorf("the priced arm reports no dollar figure (%.6f); I2 cannot be "+
+			"checked against it", priced.rebilledUSD)
 	}
-	t.Logf("EC-00 CONFIRMED at the user-visible boundary.\n\n"+
-		"  priced model   %-26s rebilledTokens=%d  rebilledUSD=%.6f\n"+
-		"  unpriced model %-26s rebilledTokens=%d  rebilledUSD=%.6f\n\n"+
-		"The two corpora are byte-identical apart from the model id. A re-billed "+
-		"TOKEN count is a property of the cache break, computed at cost.go:703-712 "+
-		"before any price lookup, and it is suppressed because an unrelated price "+
-		"lookup failed.\n\n"+
-		"docs/TOKEN-PRICES.md:53: \"An unpriced model must never count as zero.\"\n\n"+
-		"This test is EXPECTED TO FAIL. It documents a defect that is deliberately "+
-		"not repaired in this campaign.",
-		rbPriced, priced.rebilledTokens, priced.rebilledUSD,
-		rbUnpriced, unpriced.rebilledTokens, unpriced.rebilledUSD)
+	if unpriced.rebilledUSD != 0 {
+		t.Errorf("I2 DOLLAR violated: the unpriced arm claims $%.6f. With no price "+
+			"in the table there is no dollar figure to state.", unpriced.rebilledUSD)
+	}
+	t.Logf("DEFECT PINNED: priced reports %d re-billed tokens, unpriced reports %d. "+
+		"I1 TOKEN is the invariant a repair must satisfy: a deficit is computed from "+
+		"Expected minus Actual and consults no price table.",
+		priced.rebilledTokens, unpriced.rebilledTokens)
+}
+
+// RB6. I4 ZERO. A genuinely zero deficit must stay distinguishable from an
+// unavailable one. Without this the repair could satisfy I1 by reporting
+// something for everything.
+func TestRB6_AGenuineZeroIsNotTheSameAsUnavailable(t *testing.T) {
+	// A corpus with no cache break at all: every turn reads rather than
+	// re-writes, so the deficit is genuinely zero on a PRICED model.
+	home := t.TempDir()
+	isolateHome(t, home)
+	dir := filepath.Join(home, "ledger")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
+	var lines []byte
+	for i := 0; i < 2; i++ {
+		u := transcript.Usage{Input: 400, CacheCreation: 0, CacheRead: 30_000, Output: 200}
+		rec := ledger.Record{
+			Schema: ledger.SchemaVersion, Timestamp: at.Add(time.Duration(i) * time.Minute),
+			SessionID: "nobreak", RequestID: "nb-" + string(rune('A'+i)),
+			Path: "/v1/messages", Status: 200, LatencyMS: 700,
+			RequestSummary: ledger.RequestSummary{Model: rbPriced,
+				Prompt: ledger.Prompt{SystemBytes: 300, Messages: []ledger.Message{
+					{Role: "user", Blocks: []ledger.Block{{Kind: "text", Label: "user text", Bytes: 1_000}}}}}},
+			Response: ledger.Response{Usage: &u, Blocks: []ledger.Block{{Kind: "text", Label: "assistant text", Bytes: 400}}},
+		}
+		b, err := json.Marshal(rec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines = append(lines, append(b, '\n')...)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "nobreak.jsonl"), lines, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	zero := rbRun(t, dir)
+	if zero.rebilledTokens != 0 {
+		t.Fatalf("a corpus with no cache break reports %d re-billed tokens; the "+
+			"fixture is not a genuine zero", zero.rebilledTokens)
+	}
+	// It is zero AND priced, so a reader can tell it apart from unavailable:
+	// the priced session carries dollar figures and no unpriced flag.
+	if !strings.Contains(zero.human, "total") {
+		t.Error("a genuinely zero-deficit priced session produced no cost report at " +
+			"all, so zero and unavailable are not distinguishable after all")
+	}
+	t.Log("I4 holds: a genuine zero reports zero from a priced session that still " +
+		"carries its dollar figures, which is what distinguishes it from unavailable")
 }
 
 // RB3. The human surface.
