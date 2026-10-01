@@ -121,11 +121,14 @@ var ControlsFor = map[string]Controls{
 		Gap:          []string{"internal only. RPL-C005 shows the refusal does not always reach the user"},
 	},
 	"RPL-C034": {
-		Basis: NoBasis, Layer: "none. One boolean, no shared convention",
-		Positive:     "9 of 19 sites handle the false branch acceptably, so the contract is satisfiable and is satisfied in places",
-		Negative:     "the detector rejects a bare `if ok {}` and accepts an explicit counter",
-		Insufficient: "2 of the 10 flagged sites are inside PriceForAt itself and are delegation rather than consumption, so the consumer count is 8",
-		Gap:          []string{"per-surface magnitude is measured only for cost and route; the other six silent sites are censused but their printed consequence is unmeasured"},
+		Basis: Observed, Layer: "costUnit.Unpriced, a presence field serialized with the unit",
+		Positive:     "after 6794522, both arms report 40,000 re-billed tokens and `since` names the larger session, cold and warm",
+		Negative:     "five mutations all kill: Unpriced propagation, the token assignment, the warm reconstruction, the genuine-zero collapse, and unpriced rows re-entering the dollar statistics",
+		Insufficient: "2 of the 10 originally flagged sites are inside PriceForAt itself and are delegation rather than consumption, so the consumer count is 8",
+		Gap: []string{
+			"7 of 8 consumers were censused from source and NEVER measured at the user-visible boundary. TOKEN-PRICES.md:53 is established as satisfied ONLY at `replay cost` and `replay since` for the re-billed token count",
+			"the 9 compliant sites use at least four different conventions, so there is still no shared contract in code",
+		},
 	},
 	"RPL-C033": {
 		Basis: Observed, Layer: "none. transcript.Usage has no presence field for the TTL split",
@@ -147,16 +150,19 @@ var ControlsFor = map[string]Controls{
 	"RPL-C031": {
 		Basis: NoBasis, Layer: "none",
 		Positive:     "MX1 proves the disclosure can be silent correctly",
-		Negative:     "MX3 and MX10 both show 2 of 4 records unmeasurable with unpriced=0 and no disclosure",
+		Negative:     "MX3 and MX10 both show 2 of 4 records unmeasurable with unpriced=0 and no disclosure, RE-MEASURED after 6794522",
 		Insufficient: "MX4 isolates the boundary: a wholly unpriced session IS disclosed, a half unpriced one is not",
-		Gap:          []string{"only `replay cost` was measured"},
+		Gap: []string{
+			"only `replay cost` was measured",
+			"UNCHANGED BY 6794522. That repair works at session granularity; this claim is about record granularity. A record-level counter is a separate change and was not made",
+		},
 	},
 	"RPL-C032": {
-		Basis: NoBasis, Layer: "none",
-		Positive:     "a priced model is verified priced before the fixture runs",
-		Negative:     "MX1, a nonzero session on the same model, is not reported as unpriced",
-		Insufficient: "the collapse itself: zero and absent reach the same counter",
-		Gap:          []string{"only session cost. Other sites may or may not collapse the same way"},
+		Basis: Observed, Layer: "none. A price-table lookup, not an inference from cost",
+		Positive:     "CW1's genuine-zero state: a session with every usage field zero on a PRICED model reports unpriced=0 and keeps its dollar figures",
+		Negative:     "CW1's unpriced state on the same corpus shape reports unpriced=1, so the two are distinguishable",
+		Insufficient: "before 6794522 both states reached the same counter; MX8 reported unpriced=1 for a genuine zero",
+		Gap:          []string{"only session cost in `replay cost` was revalidated. Other sites may or may not collapse the same way and were not re-measured"},
 	},
 	"RPL-C008": {
 		Basis: Observed, Layer: "surface.WriteContract, Observables.WriteFieldPresent",

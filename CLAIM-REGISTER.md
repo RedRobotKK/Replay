@@ -5,12 +5,12 @@ regenerate it, or it will drift from the code it describes.**
 
 | Result | Count |
 |---|---|
-| BOUNDED | 9 |
+| BOUNDED | 11 |
 | DELIBERATE_NON_CLAIM | 1 |
 | ESTABLISHED | 2 |
 | NOT_MEASURED | 2 |
 | NO_ENDPOINT | 3 |
-| REFUTED | 6 |
+| REFUTED | 4 |
 | UNRESOLVED | 1 |
 | **Total** | **24** |
 
@@ -382,30 +382,38 @@ regenerate it, or it will drift from the code it describes.**
 
 | | |
 |---|---|
-| **Result** | **REFUTED** |
-| Evidence basis | NOT_APPLICABLE |
-| Deciding layer | none. One boolean, no shared convention |
-| Scope | every consumer of cachemodel.PriceFor and PriceForAt |
+| **Result** | **BOUNDED** |
+| Evidence basis | OBSERVED |
+| Deciding layer | costUnit.Unpriced, a presence field serialized with the unit |
+| Scope | MEASURED SURFACES ONLY, narrowed 2026-10-01 to what the evidence covers: the re-billed token count in `replay cost` and the worst-window ranking in `replay since`. The original scope said every consumer of cachemodel.PriceFor and PriceForAt, and 7 of 8 consumers were never measured at the user-visible boundary |
 | Oracle | a source census classifying each false branch, with the contract quoted from the repository's own document rather than assumed |
 | Asserted at | docs/TOKEN-PRICES.md:53 |
 
 - **Establishes:**
   - 9 of 19 call sites count the exclusion, refuse with a reason, or substitute a labelled upper bound
+  - at the two measured surfaces, a known re-billed token count survives an unavailable price. Two corpora differing only in a model id reported 40,000 tokens and 0 before 6794522 and report 40,000 on both arms after it
+  - `replay since` ranks by that count even when the price is unknown: with the unpriced session carrying four times the other's deficit, the command names it, cold and warm
 - **Does NOT establish:**
-  - the claim, for the re-billed token count. Two corpora differing only in a model id report 40,000 re-billed tokens and 0, and the human report loses its re-billed line entirely. The quantity is a property of the cache break, computed before any price lookup
+  - anything about the other consumers of the price boolean. One was repaired; the remaining sites were censused from source and NEVER measured at the user-visible boundary, so TOKEN-PRICES.md:53 is NOT established as satisfied for them
   - that 8 consumer sites are defective. That census was too coarse and is RETRACTED: most sites gate only dollars, which require a price, and order.go and trim.go carry presence flags the detector missed. The source census was necessary and not sufficient
   - that the remaining sites are equivalent to each other. The 9 that handle it use at least four different conventions, so there is no shared contract in code, only a shared document
   - the magnitude on any surface. The call-site census is established; what each silent zero does to a printed figure is measured only for cost.go and route.go
 - **Assumptions Replay does not verify:** _none_
 - **Known gaps:**
-  - per-surface magnitude is measured only for cost and route; the other six silent sites are censused but their printed consequence is unmeasured
-- **Positive control:** 9 of 19 sites handle the false branch acceptably, so the contract is satisfiable and is satisfied in places
-- **Negative control:** the detector rejects a bare `if ok {}` and accepts an explicit counter
-- **Insufficient-evidence control:** 2 of the 10 flagged sites are inside PriceForAt itself and are delegation rather than consumption, so the consumer count is 8
+  - 7 of 8 consumers were censused from source and NEVER measured at the user-visible boundary. TOKEN-PRICES.md:53 is established as satisfied ONLY at `replay cost` and `replay since` for the re-billed token count
+  - the 9 compliant sites use at least four different conventions, so there is still no shared contract in code
+- **Positive control:** after 6794522, both arms report 40,000 re-billed tokens and `since` names the larger session, cold and warm
+- **Negative control:** five mutations all kill: Unpriced propagation, the token assignment, the warm reconstruction, the genuine-zero collapse, and unpriced rows re-entering the dollar statistics
+- **Insufficient-evidence control:** 2 of the 10 originally flagged sites are inside PriceForAt itself and are delegation rather than consumption, so the consumer count is 8
 - **Tests:**
   - TestEC00_ThePriceBooleanIsTheSharedCompressionPoint
+  - TestCW1_TheFourStates
+  - TestCW2_ColdAndWarmAgree
+  - TestCW3_RankingHoldsColdAndWarm
+  - TestRB2_AKnownDeficitIsReportedWhetherOrNotAPriceExists
+  - TestRB5_AnUnpricedSessionCannotBeNamedTheWorstWindow
 
-**Why this result:** The contract is explicit, the repository wrote it, and some consumers of the boolean violate it. CENSUS CORRECTED: a per-site audit found that most flagged sites compute their TOKEN quantities outside the price branch and gate only dollars, which is correct, and that order.go and trim.go carry presence flags the first detector missed. ONE price-independent quantity is suppressed, the re-billed token count, and a mutation campaign then corrected its attribution too: it is gated TWICE, at cost.go:680 and again at cost.go:717, and removing either alone changes nothing. Measured at the user-visible boundary as 40,000 tokens against 0 on corpora differing only in a model name.
+**Why this result:** CLOSED at the two surfaces that were measured and BOUNDED because the others were not. Repaired by 6794522 at three sites, verified cold and warm, and five mutations kill it. The original REFUTED verdict stands as the before state. CENSUS CORRECTED: a per-site audit found that most flagged sites compute their TOKEN quantities outside the price branch and gate only dollars, which is correct, and that order.go and trim.go carry presence flags the first detector missed. ONE price-independent quantity is suppressed, the re-billed token count, and a mutation campaign then corrected its attribution too: it is gated TWICE, at cost.go:680 and again at cost.go:717, and removing either alone changes nothing. Measured at the user-visible boundary as 40,000 tokens against 0 on corpora differing only in a model name.
 
 ---
 
@@ -494,18 +502,20 @@ regenerate it, or it will drift from the code it describes.**
 
 - **Establishes:** _none_
 - **Does NOT establish:**
-  - the claim. `if asRun.CostUSD <= 0 { unpriced++ }` counts whole SESSIONS. A session holding two priceable and two unpriceable records has a cost above zero, so it never increments the counter, its unpriceable records contribute nothing to the total, and nothing is disclosed on either surface. MX3 and MX10 both show it
+  - the claim. The counter operates at SESSION granularity and this claim is about RECORD granularity. A session holding two priceable and two unpriceable records has a priceable model on its first request, so it is not flagged, its unpriceable records still contribute nothing to the total, and nothing is disclosed on either surface
+  - UNCHANGED BY THE REPAIR OF 6794522, verified rather than assumed. That repair replaced an inferred priceability test with a real one at session granularity, which closed RPL-C032 and RPL-C034's measured surface. Re-measured afterwards, MX3 and MX10 still report unpriced=0 with no disclosure. A record-level counter is a separate change and was not made
 - **Assumptions Replay does not verify:** _none_
 - **Known gaps:**
   - only `replay cost` was measured
+  - UNCHANGED BY 6794522. That repair works at session granularity; this claim is about record granularity. A record-level counter is a separate change and was not made
 - **Positive control:** MX1 proves the disclosure can be silent correctly
-- **Negative control:** MX3 and MX10 both show 2 of 4 records unmeasurable with unpriced=0 and no disclosure
+- **Negative control:** MX3 and MX10 both show 2 of 4 records unmeasurable with unpriced=0 and no disclosure, RE-MEASURED after 6794522
 - **Insufficient-evidence control:** MX4 isolates the boundary: a wholly unpriced session IS disclosed, a half unpriced one is not
 - **Tests:**
   - TestC005M_TheFixtureMatrix
   - TestC005_AMixedTranscriptHidesItsUnpricedRecords
 
-**Why this result:** Reproduced from scratch with an independent oracle. The report prints a total over the measurable half and states that it is what the work cost.
+**Why this result:** Reproduced from scratch with an independent oracle. The report prints a total over the measurable half and states that it is what the work cost. Re-evaluated after 6794522 and STILL REFUTED: that repair works at session granularity and this claim is about record granularity, so the two do not meet. Status unchanged on measurement, not on inference.
 
 ---
 
@@ -515,27 +525,30 @@ regenerate it, or it will drift from the code it describes.**
 
 | | |
 |---|---|
-| **Result** | **REFUTED** |
-| Evidence basis | NOT_APPLICABLE |
-| Deciding layer | none |
+| **Result** | **BOUNDED** |
+| Evidence basis | OBSERVED |
+| Deciding layer | none. A price-table lookup, not an inference from cost |
 | Scope | session cost in `replay cost` |
 | Oracle | a session constructed with every usage field zero on a model verified priced before the run |
 | Asserted at | README.md:603 |
 
-- **Establishes:** _none_
+- **Establishes:**
+  - a session that genuinely cost nothing is no longer reported as unpriced. The repair of 6794522 replaced `asRun.CostUSD <= 0` with a real price-table lookup, so priceability is asked rather than inferred from a cost of zero
 - **Does NOT establish:**
-  - the claim, for session cost. The same line, `asRun.CostUSD <= 0`, cannot tell a session that genuinely cost nothing from one that could not be priced. MX8 builds a session with every usage field zero on a PRICED model, and it is reported as unpriced=1
+  - the distinction anywhere other than session cost in `replay cost`. The repair asked the price table directly at ONE site; no other site was revalidated
   - anything about the three-state distinction elsewhere. RPL-C008 establishes it for cache counters, where WriteFieldPresent exists; this is a different site with no equivalent
 - **Assumptions Replay does not verify:** _none_
 - **Known gaps:**
-  - only session cost. Other sites may or may not collapse the same way
-- **Positive control:** a priced model is verified priced before the fixture runs
-- **Negative control:** MX1, a nonzero session on the same model, is not reported as unpriced
-- **Insufficient-evidence control:** the collapse itself: zero and absent reach the same counter
+  - only session cost in `replay cost` was revalidated. Other sites may or may not collapse the same way and were not re-measured
+- **Positive control:** CW1's genuine-zero state: a session with every usage field zero on a PRICED model reports unpriced=0 and keeps its dollar figures
+- **Negative control:** CW1's unpriced state on the same corpus shape reports unpriced=1, so the two are distinguishable
+- **Insufficient-evidence control:** before 6794522 both states reached the same counter; MX8 reported unpriced=1 for a genuine zero
 - **Tests:**
   - TestC005M_TheFixtureMatrix
+  - TestCW1_TheFourStates
+  - TestRB6_AGenuineZeroIsNotTheSameAsUnavailable
 
-**Why this result:** The inverse of RPL-C031 from the same line: that one under-reports by never firing on a mixed session, this one over-reports by firing on a genuine zero. The first version of MX8 did not test this, because it left cache usage priced; that defect in the test is recorded in the evidence file.
+**Why this result:** CLOSED by 6794522 at the site it was raised against, and bounded because only that site was revalidated. Before: MX8 built a session with every usage field zero on a PRICED model and it reported unpriced=1. After: it reports 0, CW1's genuine-zero state passes, and the mutation that restores the inferred test is killed. The original REFUTED verdict stands as history; the first version of MX8 did not test this at all because it left cache usage priced, and that defect in the test is preserved in the evidence file.
 
 ---
 
