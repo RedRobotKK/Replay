@@ -9,9 +9,10 @@ regenerate it, or it will drift from the code it describes.**
 | DELIBERATE_NON_CLAIM | 1 |
 | ESTABLISHED | 2 |
 | NOT_MEASURED | 2 |
-| NO_ENDPOINT | 2 |
-| REFUTED | 2 |
-| **Total** | **16** |
+| NO_ENDPOINT | 3 |
+| REFUTED | 3 |
+| UNRESOLVED | 1 |
+| **Total** | **19** |
 
 ---
 
@@ -79,7 +80,7 @@ regenerate it, or it will drift from the code it describes.**
   - TestC004_TheTierDetectorDiscriminates
   - TestC004_TheJSONSurfaceCarriesNoTierField
 
-**Why this result:** Falsified as worded, by the machine-readable surface. Separately the three-word vocabulary is not how the human report labels money, and the two documents asserting the claim disagree on what the words are: README names three tiers, ADR-0002 is titled two and never contains the word structural. What is true is registered as RPL-C025 rather than read back into this one.
+**Why this result:** Split into RPL-C027, RPL-C028 and RPL-C029, which carry three different proof obligations. Falsified as worded, by the machine-readable surface. Separately the three-word vocabulary is not how the human report labels money, and the two documents asserting the claim disagree on what the words are: README names three tiers, ADR-0002 is titled two and never contains the word structural. What is true is registered as RPL-C025 rather than read back into this one.
 
 ---
 
@@ -207,6 +208,102 @@ regenerate it, or it will drift from the code it describes.**
   - TestConserve_EachLaneConservesIndependently
 
 **Why this result:** A necessary condition that the repository's own tests already state is not sufficient.
+
+---
+
+## RPL-C027
+
+> A truth vocabulary exists: a defined, agreed set of tier words.
+
+| | |
+|---|---|
+| **Result** | **UNRESOLVED** |
+| Evidence basis | NOT_APPLICABLE |
+| Deciding layer | none. The vocabulary is not a type |
+| Scope | the specification, not any output |
+| Oracle | the two specification documents read directly, with a test that fails if either changes |
+| Asserted at | README.md:293, docs/adr/0002-replay-engine-and-truth-tiers.md:12 |
+
+- **Establishes:**
+  - the words measured, estimated and structural appear in the product and in its documentation
+- **Does NOT establish:**
+  - that the set is agreed. ADR-0002 is titled two tiers of truth and names estimated and measured; README names three, adding structural; and of 28 ADRs none supersedes 0002. The authoritative vocabulary is in conflict and nothing resolves it
+  - that the vocabulary is a type. There is no enum, no field and no enforcement: 15+ free string literals across 11 packages
+- **Assumptions Replay does not verify:** _none_
+- **Known gaps:**
+  - no authoritative specification exists to measure compliance against
+- **Positive control:** README names a structural tier
+- **Negative control:** ADR-0002 does not, and the test fails if either document changes
+- **Insufficient-evidence control:** no ADR of 28 supersedes 0002, so nothing resolves the conflict
+- **Tests:**
+  - TestC004_TheTierSpecificationIsInConflict
+
+**Why this result:** The words exist and the specification disagrees with itself. A vocabulary two documents define differently is not yet a vocabulary, and this campaign declines to invent a third tier to reconcile them.
+
+---
+
+## RPL-C028
+
+> Every relevant printed output carries a truth status.
+
+| | |
+|---|---|
+| **Result** | **REFUTED** |
+| Evidence basis | NOT_APPLICABLE |
+| Deciding layer | none |
+| Scope | 14 CLI surfaces sharing one callable signature, driven over a ledger fixture |
+| Oracle | a text-level reference judgement over the fixture's own ground truth, which never calls Replay's classification code because none exists to call |
+| Asserted at | README.md:293 |
+
+- **Establishes:** _none_
+- **Does NOT establish:**
+  - the claim. `replay advise` emits a percentage with no status statement anywhere in its output, confirmed by removing it from the sweep: figures fall 4 to 3 while status holds at 3, so it is the only figure-emitting surface without one
+  - anything about 5 of the 14 surfaces. budget, ceiling, prefix and route did not run against this fixture and were not measured
+  - anything reliable about the JSON surface. The figure detector looks for a dollar sign and JSON emits bare numbers such as totalUsd, so that row is UNDER-MEASURED by this test and must not be read as a pass
+  - ASSUMPTION, not established: that a status is conveyed by a tier word, a dated basis, a list-price statement or a refusal. The detector is deliberately generous, so a surface it marks as failing has really failed
+- **Assumptions Replay does not verify:**
+  - ASSUMPTION: a status is conveyed by a tier word, a dated basis, a list-price statement or a refusal. Deliberately generous, so a surface marked failing has really failed
+- **Known gaps:**
+  - budget, ceiling, prefix and route did not run against this fixture
+  - the JSON surface is UNDER-MEASURED: the figure detector looks for a dollar sign and JSON emits bare numbers
+- **Positive control:** removing advise from the sweep drops figures 4 to 3 while status holds at 3, isolating it as the sole offender
+- **Negative control:** neutralising the figure detector is killed; widening the status detector to match everything is killed
+- **Insufficient-evidence control:** 5 of 14 surfaces did not run and are reported as unmeasured rather than as passes
+- **Tests:**
+  - TestC004_OutputSurfaceInventory
+  - TestC004_TheSurfaceDetectorsDiscriminate
+  - TestC004_TheJSONSurfaceCarriesNoTierField
+
+**Why this result:** Falsified by at least one surface, with 5 of 14 unmeasured and the JSON row under-measured by the detector's own admission. The partial coverage makes it weaker as a census and no weaker as a falsification: one counterexample is enough.
+
+---
+
+## RPL-C029
+
+> The truth status a figure carries is epistemically correct.
+
+| | |
+|---|---|
+| **Result** | **NO_ENDPOINT** |
+| Evidence basis | NOT_APPLICABLE |
+| Deciding layer | none |
+| Scope | any figure carrying a status |
+| Oracle | none is constructible. The mutations this would need, altering a tier/value association or flipping observed to estimated, have no association to alter |
+| Asserted at | _nowhere. This is a non-claim or an inferred boundary_ |
+
+- **Establishes:** _none_
+- **Does NOT establish:**
+  - anything. There is no machine-readable status attached to any figure, so there is nothing to compare against a ground truth. An absent status cannot be wrong, only missing
+- **Assumptions Replay does not verify:** _none_
+- **Known gaps:**
+  - the mutations this claim would need, altering a tier/value association, have no association to alter
+- **Positive control:** _none; not applicable to a non-claim_
+- **Negative control:** _none; not applicable to a non-claim_
+- **Insufficient-evidence control:** no machine-readable status is attached to any figure, so no comparison to a ground truth is constructible
+- **Tests:**
+  - TestC004_OutputSurfaceInventory
+
+**Why this result:** NO_ENDPOINT rather than NOT_MEASURED, and the distinction is the finding. Nothing was left unmeasured: there is no status attached to any figure, so there is nothing that could be correct or incorrect. Correctness of a label is a separate obligation from presence of one, and presence fails first. This is NOT a recommendation to build a tier system.
 
 ---
 

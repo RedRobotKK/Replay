@@ -76,6 +76,33 @@ var ControlsFor = map[string]Controls{
 		Insufficient: "a corpus with no priced request reports unpriced rather than a figure",
 		Gap:          []string{"one report only. Generality across the printed surface is unmeasured"},
 	},
+	"RPL-C027": {
+		Basis: NoBasis, Layer: "none. The vocabulary is not a type",
+		Positive:     "README names a structural tier",
+		Negative:     "ADR-0002 does not, and the test fails if either document changes",
+		Insufficient: "no ADR of 28 supersedes 0002, so nothing resolves the conflict",
+		Gap:          []string{"no authoritative specification exists to measure compliance against"},
+	},
+	"RPL-C028": {
+		Basis: NoBasis, Layer: "none",
+		Positive:     "removing advise from the sweep drops figures 4 to 3 while status holds at 3, isolating it as the sole offender",
+		Negative:     "neutralising the figure detector is killed; widening the status detector to match everything is killed",
+		Insufficient: "5 of 14 surfaces did not run and are reported as unmeasured rather than as passes",
+		Assumption: []string{
+			"ASSUMPTION: a status is conveyed by a tier word, a dated basis, a list-price statement or a refusal. Deliberately generous, so a surface marked failing has really failed",
+		},
+		Gap: []string{
+			"budget, ceiling, prefix and route did not run against this fixture",
+			"the JSON surface is UNDER-MEASURED: the figure detector looks for a dollar sign and JSON emits bare numbers",
+		},
+	},
+	"RPL-C029": {
+		Basis: NoBasis, Layer: "none",
+		Positive:     "",
+		Negative:     "",
+		Insufficient: "no machine-readable status is attached to any figure, so no comparison to a ground truth is constructible",
+		Gap:          []string{"the mutations this claim would need, altering a tier/value association, have no association to alter"},
+	},
 	"RPL-C005": {
 		Basis: NoBasis, Layer: "none. No type governs what reaches the screen",
 		Positive:     "a fully priced corpus correctly discloses nothing, so the detection is not firing on everything",

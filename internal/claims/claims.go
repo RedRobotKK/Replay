@@ -47,7 +47,7 @@ var Register = []Claim{
 			"TestC004_TheJSONSurfaceCarriesNoTierField",
 		},
 		Result: Refuted,
-		Why:    "Falsified as worded, by the machine-readable surface. Separately the three-word vocabulary is not how the human report labels money, and the two documents asserting the claim disagree on what the words are: README names three tiers, ADR-0002 is titled two and never contains the word structural. What is true is registered as RPL-C025 rather than read back into this one.",
+		Why:    "Split into RPL-C027, RPL-C028 and RPL-C029, which carry three different proof obligations. Falsified as worded, by the machine-readable surface. Separately the three-word vocabulary is not how the human report labels money, and the two documents asserting the claim disagree on what the words are: README names three tiers, ADR-0002 is titled two and never contains the word structural. What is true is registered as RPL-C025 rather than read back into this one.",
 	},
 	{
 		ID:       "RPL-C025",
@@ -125,6 +125,61 @@ var Register = []Claim{
 	},
 
 	// ------------------------------------------------------------- refusals
+	{
+		ID:       "RPL-C027",
+		Text:     "A truth vocabulary exists: a defined, agreed set of tier words.",
+		Asserted: []string{"README.md:293", "docs/adr/0002-replay-engine-and-truth-tiers.md:12"},
+		Scope:    "the specification, not any output",
+		Establishes: []string{
+			"the words measured, estimated and structural appear in the product and in its documentation",
+		},
+		DoesNotEstablish: []string{
+			"that the set is agreed. ADR-0002 is titled two tiers of truth and names estimated and measured; README names three, adding structural; and of 28 ADRs none supersedes 0002. The authoritative vocabulary is in conflict and nothing resolves it",
+			"that the vocabulary is a type. There is no enum, no field and no enforcement: 15+ free string literals across 11 packages",
+		},
+		Vocabulary: "",
+		Oracle:     "the two specification documents read directly, with a test that fails if either changes",
+		Tests:      []string{"TestC004_TheTierSpecificationIsInConflict"},
+		Result:     Unresolved,
+		Why:        "The words exist and the specification disagrees with itself. A vocabulary two documents define differently is not yet a vocabulary, and this campaign declines to invent a third tier to reconcile them.",
+	},
+	{
+		ID:          "RPL-C028",
+		Text:        "Every relevant printed output carries a truth status.",
+		Asserted:    []string{"README.md:293"},
+		Scope:       "14 CLI surfaces sharing one callable signature, driven over a ledger fixture",
+		Establishes: nil,
+		DoesNotEstablish: []string{
+			"the claim. `replay advise` emits a percentage with no status statement anywhere in its output, confirmed by removing it from the sweep: figures fall 4 to 3 while status holds at 3, so it is the only figure-emitting surface without one",
+			"anything about 5 of the 14 surfaces. budget, ceiling, prefix and route did not run against this fixture and were not measured",
+			"anything reliable about the JSON surface. The figure detector looks for a dollar sign and JSON emits bare numbers such as totalUsd, so that row is UNDER-MEASURED by this test and must not be read as a pass",
+			"ASSUMPTION, not established: that a status is conveyed by a tier word, a dated basis, a list-price statement or a refusal. The detector is deliberately generous, so a surface it marks as failing has really failed",
+		},
+		Vocabulary: "",
+		Oracle:     "a text-level reference judgement over the fixture's own ground truth, which never calls Replay's classification code because none exists to call",
+		Tests: []string{
+			"TestC004_OutputSurfaceInventory",
+			"TestC004_TheSurfaceDetectorsDiscriminate",
+			"TestC004_TheJSONSurfaceCarriesNoTierField",
+		},
+		Result: Refuted,
+		Why:    "Falsified by at least one surface, with 5 of 14 unmeasured and the JSON row under-measured by the detector's own admission. The partial coverage makes it weaker as a census and no weaker as a falsification: one counterexample is enough.",
+	},
+	{
+		ID:          "RPL-C029",
+		Text:        "The truth status a figure carries is epistemically correct.",
+		Asserted:    nil,
+		Scope:       "any figure carrying a status",
+		Establishes: nil,
+		DoesNotEstablish: []string{
+			"anything. There is no machine-readable status attached to any figure, so there is nothing to compare against a ground truth. An absent status cannot be wrong, only missing",
+		},
+		Vocabulary: "",
+		Oracle:     "none is constructible. The mutations this would need, altering a tier/value association or flipping observed to estimated, have no association to alter",
+		Tests:      []string{"TestC004_OutputSurfaceInventory"},
+		Result:     NoEndpoint,
+		Why:        "NO_ENDPOINT rather than NOT_MEASURED, and the distinction is the finding. Nothing was left unmeasured: there is no status attached to any figure, so there is nothing that could be correct or incorrect. Correctness of a label is a separate obligation from presence of one, and presence fails first. This is NOT a recommendation to build a tier system.",
+	},
 	{
 		ID:          "RPL-C005",
 		Text:        "Anything Replay cannot measure it declines to print, and says why in the place the number would have gone.",
