@@ -5,14 +5,14 @@ regenerate it, or it will drift from the code it describes.**
 
 | Result | Count |
 |---|---|
-| BOUNDED | 7 |
+| BOUNDED | 8 |
 | DELIBERATE_NON_CLAIM | 1 |
 | ESTABLISHED | 2 |
 | NOT_MEASURED | 2 |
 | NO_ENDPOINT | 3 |
-| REFUTED | 3 |
+| REFUTED | 5 |
 | UNRESOLVED | 1 |
-| **Total** | **19** |
+| **Total** | **22** |
 
 ---
 
@@ -373,6 +373,100 @@ regenerate it, or it will drift from the code it describes.**
   - TestC005_AnUnsourcedContractIsRefused
 
 **Why this result:** The internal layer does what the claim describes. The bound is that it is internal: a provenance field that does not reach the screen protects nobody, which is exactly what RPL-C005 found.
+
+---
+
+## RPL-C030
+
+> When a whole session cannot be priced, Replay refuses and says why.
+
+| | |
+|---|---|
+| **Result** | **BOUNDED** |
+| Evidence basis | NOT_APPLICABLE |
+| Deciding layer | none. Two per-session counters, unpriced and unreadable |
+| Scope | session granularity only |
+| Oracle | a fixture matrix whose ground truth the test constructs and therefore knows without reading it back |
+| Asserted at | README.md:21, cmd/replay/cost.go:488 |
+
+- **Establishes:**
+  - a wholly unpriceable session is counted and disclosed
+  - a fully priceable corpus discloses nothing, so the refusal does not fire on everything
+  - a measurable session beside an unmeasurable one does NOT rescue it; foreign evidence is not borrowed
+- **Does NOT establish:**
+  - anything below session granularity. RPL-C031 refutes that
+  - that the explanation is complete, only that it fires and is accurate when it does
+- **Assumptions Replay does not verify:** _none_
+- **Known gaps:**
+  - contradictory and stale evidence were INAPPLICABLE: the ledger reader has no two-source reconciliation for one quantity, so there is nothing to contradict
+- **Positive control:** MX2 and MX9 disclose; MX4 discloses the wholly unpriced session
+- **Negative control:** MX1, a fully measurable corpus, discloses nothing
+- **Insufficient-evidence control:** MX2 is the insufficient-evidence case and is handled correctly
+- **Tests:**
+  - TestC005M_FixtureAssumptionsHold
+  - TestC005M_TheFixtureMatrix
+
+**Why this result:** MX1, MX2, MX4 and MX9 all behave correctly at session granularity. Three mutations on the refusal path all kill.
+
+---
+
+## RPL-C031
+
+> Replay discloses partial coverage: when some records in a session cannot be priced, it says so.
+
+| | |
+|---|---|
+| **Result** | **REFUTED** |
+| Evidence basis | NOT_APPLICABLE |
+| Deciding layer | none |
+| Scope | record granularity within one session |
+| Oracle | the record-level ground truth the fixture declares, compared against the printed figures |
+| Asserted at | README.md:21 |
+
+- **Establishes:** _none_
+- **Does NOT establish:**
+  - the claim. `if asRun.CostUSD <= 0 { unpriced++ }` counts whole SESSIONS. A session holding two priceable and two unpriceable records has a cost above zero, so it never increments the counter, its unpriceable records contribute nothing to the total, and nothing is disclosed on either surface. MX3 and MX10 both show it
+- **Assumptions Replay does not verify:** _none_
+- **Known gaps:**
+  - only `replay cost` was measured
+- **Positive control:** MX1 proves the disclosure can be silent correctly
+- **Negative control:** MX3 and MX10 both show 2 of 4 records unmeasurable with unpriced=0 and no disclosure
+- **Insufficient-evidence control:** MX4 isolates the boundary: a wholly unpriced session IS disclosed, a half unpriced one is not
+- **Tests:**
+  - TestC005M_TheFixtureMatrix
+  - TestC005_AMixedTranscriptHidesItsUnpricedRecords
+
+**Why this result:** Reproduced from scratch with an independent oracle. The report prints a total over the measurable half and states that it is what the work cost.
+
+---
+
+## RPL-C032
+
+> Replay distinguishes a measured zero from an unmeasurable quantity.
+
+| | |
+|---|---|
+| **Result** | **REFUTED** |
+| Evidence basis | NOT_APPLICABLE |
+| Deciding layer | none |
+| Scope | session cost in `replay cost` |
+| Oracle | a session constructed with every usage field zero on a model verified priced before the run |
+| Asserted at | README.md:603 |
+
+- **Establishes:** _none_
+- **Does NOT establish:**
+  - the claim, for session cost. The same line, `asRun.CostUSD <= 0`, cannot tell a session that genuinely cost nothing from one that could not be priced. MX8 builds a session with every usage field zero on a PRICED model, and it is reported as unpriced=1
+  - anything about the three-state distinction elsewhere. RPL-C008 establishes it for cache counters, where WriteFieldPresent exists; this is a different site with no equivalent
+- **Assumptions Replay does not verify:** _none_
+- **Known gaps:**
+  - only session cost. Other sites may or may not collapse the same way
+- **Positive control:** a priced model is verified priced before the fixture runs
+- **Negative control:** MX1, a nonzero session on the same model, is not reported as unpriced
+- **Insufficient-evidence control:** the collapse itself: zero and absent reach the same counter
+- **Tests:**
+  - TestC005M_TheFixtureMatrix
+
+**Why this result:** The inverse of RPL-C031 from the same line: that one under-reports by never firing on a mixed session, this one over-reports by firing on a genuine zero. The first version of MX8 did not test this, because it left cache usage priced; that defect in the test is recorded in the evidence file.
 
 ---
 

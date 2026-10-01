@@ -120,6 +120,27 @@ var ControlsFor = map[string]Controls{
 		Insufficient: "ClassUndetermined is itself the insufficient-evidence result",
 		Gap:          []string{"internal only. RPL-C005 shows the refusal does not always reach the user"},
 	},
+	"RPL-C030": {
+		Basis: NoBasis, Layer: "none. Two per-session counters, unpriced and unreadable",
+		Positive:     "MX2 and MX9 disclose; MX4 discloses the wholly unpriced session",
+		Negative:     "MX1, a fully measurable corpus, discloses nothing",
+		Insufficient: "MX2 is the insufficient-evidence case and is handled correctly",
+		Gap:          []string{"contradictory and stale evidence were INAPPLICABLE: the ledger reader has no two-source reconciliation for one quantity, so there is nothing to contradict"},
+	},
+	"RPL-C031": {
+		Basis: NoBasis, Layer: "none",
+		Positive:     "MX1 proves the disclosure can be silent correctly",
+		Negative:     "MX3 and MX10 both show 2 of 4 records unmeasurable with unpriced=0 and no disclosure",
+		Insufficient: "MX4 isolates the boundary: a wholly unpriced session IS disclosed, a half unpriced one is not",
+		Gap:          []string{"only `replay cost` was measured"},
+	},
+	"RPL-C032": {
+		Basis: NoBasis, Layer: "none",
+		Positive:     "a priced model is verified priced before the fixture runs",
+		Negative:     "MX1, a nonzero session on the same model, is not reported as unpriced",
+		Insufficient: "the collapse itself: zero and absent reach the same counter",
+		Gap:          []string{"only session cost. Other sites may or may not collapse the same way"},
+	},
 	"RPL-C008": {
 		Basis: Observed, Layer: "surface.WriteContract, Observables.WriteFieldPresent",
 		Positive:     "absent write counter classifies III-no-observable",
