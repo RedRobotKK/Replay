@@ -148,32 +148,20 @@ func TestRB5_AnUnpricedSessionCannotBeNamedTheWorstWindow(t *testing.T) {
 	idx := worstByRebilledTokens(rep, []int{0, 1})
 	productWinner := rep.Tasks[idx].Session
 
-	// PINNED. A repair was attempted on 2026-10-01 and WITHDRAWN. It satisfied
-	// I1 to I4 and the existing contract test, then broke the `unpriced`
-	// disclosure on the WARM index path: an unpriced session that now produces
-	// a unit gets cached, and the warm run counts it as priced. Cold reported
-	// 1, warm reported 0. That is the same defect TestRJ3 guards for the
-	// unjoinable count, so the repair boundary includes the index and is wider
-	// than the two sites first proposed.
-	//
-	// I3 RANKING is the invariant a repair must satisfy, stated here so
-	// whoever lands it knows what to assert.
-	if productWinner == oracleWinner {
-		t.Fatalf("I3 RANKING now holds (product names %s). The repair landed; convert "+
-			"this test to a regression assertion and update RPL-C034.", productWinner)
-	}
-	if false {
+	// REGRESSION, after the three-site repair of 2026-10-01.
+	// I3 RANKING: `replay since` ranks by known re-billed tokens even when the
+	// dollar price is unknown.
+	if productWinner != oracleWinner {
 		t.Errorf("I3 RANKING violated: the oracle says %s is the worst window, "+
-			"re-billing %d tokens against A's %d, and the product named %s.\n"+
-			"  product figures with B unpriced: A=%d B=%d\n"+
-			"B's deficit is a property of its cache break. Only the model NAME "+
-			"differs.", oracleWinner, largeWrites, smallWrites, productWinner,
-			mixed["sess-a"], mixed["sess-b"])
+			"re-billing %d tokens against A's %d, and the product named %s "+
+			"(A=%d B=%d). B's deficit is a property of its cache break; only the "+
+			"model NAME differs.", oracleWinner, largeWrites, smallWrites,
+			productWinner, mixed["sess-a"], mixed["sess-b"])
 		return
 	}
-	t.Logf("DEFECT PINNED: oracle names %s (%d tokens against %d); product names %s. "+
-		"Figures A=%d B=%d.", oracleWinner, largeWrites, smallWrites, productWinner,
-		mixed["sess-a"], mixed["sess-b"])
+	t.Logf("I3 holds: B is unpriced and carries %d re-billed tokens against A's %d, "+
+		"and the product names %s. Figures A=%d B=%d.",
+		largeWrites, smallWrites, productWinner, mixed["sess-a"], mixed["sess-b"])
 }
 
 // newTask builds one row of the product's own report type, so the ranking

@@ -168,29 +168,15 @@ func TestRB2_AKnownDeficitIsReportedWhetherOrNotAPriceExists(t *testing.T) {
 			"produces no break and this test observes nothing", priced.rebilledTokens)
 	}
 
-	// PINNED. The repair was attempted on 2026-10-01 and withdrawn: it
-	// satisfied I1 to I4 and the existing contract test, and then broke the
-	// `unpriced` disclosure on the WARM index path, because an unpriced
-	// session that now produces a unit gets cached and the warm run counts it
-	// as priced. Cold run reported 1, warm run reported 0. That is the same
-	// defect TestRJ3 guards for the unjoinable count, so the repair boundary
-	// includes the index and is wider than the two sites first proposed.
-	//
-	// This test therefore still pins the DEFECT, and states the invariant the
-	// repair must satisfy, so whoever lands it knows what to assert.
-	if unpriced.rebilledTokens == priced.rebilledTokens {
-		t.Fatalf("I1 TOKEN now holds (both %d). The repair landed; convert this test "+
-			"to a regression assertion and update RPL-C034.", priced.rebilledTokens)
-	}
-	if false {
+	// REGRESSION, after the three-site repair of 2026-10-01.
+	// I1 TOKEN: a known deficit is reported whether or not a price exists.
+	if unpriced.rebilledTokens != priced.rebilledTokens {
 		t.Errorf("I1 TOKEN violated: priced reports %d re-billed tokens and unpriced "+
 			"reports %d, over corpora differing only in a model id. A deficit is "+
-			"computed from Expected minus Actual and consults no price table.",
+			"Expected minus Actual and consults no price table.",
 			priced.rebilledTokens, unpriced.rebilledTokens)
 	}
-
-	// I2 holds today only because the whole session is dropped. It is not
-	// evidence of correct dollar handling.
+	// I2 DOLLAR: an unavailable price must not become a measured $0.
 	if priced.rebilledUSD <= 0 {
 		t.Errorf("the priced arm reports no dollar figure (%.6f); I2 cannot be "+
 			"checked against it", priced.rebilledUSD)
@@ -199,10 +185,9 @@ func TestRB2_AKnownDeficitIsReportedWhetherOrNotAPriceExists(t *testing.T) {
 		t.Errorf("I2 DOLLAR violated: the unpriced arm claims $%.6f. With no price "+
 			"in the table there is no dollar figure to state.", unpriced.rebilledUSD)
 	}
-	t.Logf("DEFECT PINNED: priced reports %d re-billed tokens, unpriced reports %d. "+
-		"I1 TOKEN is the invariant a repair must satisfy: a deficit is computed from "+
-		"Expected minus Actual and consults no price table.",
-		priced.rebilledTokens, unpriced.rebilledTokens)
+	t.Logf("I1 and I2 hold: %d re-billed tokens on both arms; $%.6f on the priced "+
+		"arm and no dollar figure claimed on the unpriced one.",
+		priced.rebilledTokens, priced.rebilledUSD)
 }
 
 // RB6. I4 ZERO. A genuinely zero deficit must stay distinguishable from an

@@ -63,9 +63,27 @@ type costUnit struct {
 	// Lanes is how many agent lanes were folded into this row. Present only on
 	// a session row, where it is the fan-out, and it is the number that makes
 	// the difference between the two units visible instead of inferred.
-	Lanes          int     `json:"lanes,omitempty"`
-	Model          string  `json:"model"`
-	Requests       int     `json:"requests"`
+	Lanes    int    `json:"lanes,omitempty"`
+	Model    string `json:"model"`
+	Requests int    `json:"requests"`
+	// Unpriced means this unit's TOKEN quantities are known and its DOLLAR
+	// quantities are unavailable, because nothing in the price table knows
+	// its model. It is not "cost zero", and zero dollars is deliberately not
+	// the representation: a genuinely free session is Unpriced=false with
+	// CostUSD=0, and the two must stay distinguishable.
+	//
+	// It exists because a unit's tokens and its dollars have different
+	// provenance and shared a gate until 2026-10-01. A session whose model
+	// was unpriceable was dropped whole, so its re-billed token count never
+	// reached the report although it needed no price to be known, and
+	// `replay since` then ranked worst-window by that field and named the
+	// wrong session.
+	//
+	// It is serialized, because cachedUnit stores the whole costUnit and a
+	// warm run must reach the same disclosure as a cold one. unitSchema()
+	// reflects these json tags into the index key, so an index written before
+	// this field existed is discarded rather than read as Unpriced=false.
+	Unpriced       bool    `json:"unpriced,omitempty"`
 	CostUSD        float64 `json:"costUsd"`
 	UncachedUSD    float64 `json:"uncachedUsd,omitempty"`
 	WriteUSD       float64 `json:"cacheWriteUsd,omitempty"`
@@ -360,8 +378,15 @@ func summarise(units []costUnit) costSummary {
 			s.MixedEpochSessions++
 		}
 	}
+	// Dollar statistics are taken over PRICED rows only. Admitting an unpriced
+	// row's zero would move the median and the p90 by asserting that a session
+	// nobody could price cost nothing, which is the same false zero one column
+	// over.
 	costs := make([]float64, 0, len(units))
 	for _, u := range units {
+		if u.Unpriced {
+			continue
+		}
 		s.TotalUSD += u.CostUSD
 		s.UncachedUSD += u.UncachedUSD
 		s.WriteUSD += u.WriteUSD
@@ -371,7 +396,11 @@ func summarise(units []costUnit) costSummary {
 		costs = append(costs, u.CostUSD)
 	}
 	sort.Float64s(costs)
-	s.Tasks = len(units)
+	// Tasks counts PRICED rows, which is what it has always counted and what
+	// TestAnUnpricedSessionIsExcludedAndCounted defends. An unpriced row is in
+	// the tasks array so its tokens can be read and ranked, and out of this
+	// count so the dollar statistics it labels keep their meaning.
+	s.Tasks = len(costs)
 	s.MedianUSD = percentile(costs, 0.5)
 	s.P90USD = percentile(costs, 0.9)
 	if s.TotalUSD > 0 {
@@ -642,6 +671,10 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	cache := newCostCache(filepath.Join(tipStateDir(), "cost-index.json"), costIndexKey())
 	_ = cache.load()
 	var cold []string
+	// Declared above the warm loop, not below it: the warm path has to add to
+	// them too, or a disclosure holds on a cold run and vanishes on the next.
+	unpriced, unreadable := 0, 0
+
 	var units []costUnit
 	for _, f := range files {
 		if u, ids, unjoinable, ok := cache.get(f); ok {
@@ -650,13 +683,18 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			u.path = f
 			units = append(units, u)
 			join.addCached(ids, unjoinable)
+			// The same replay the join counts get one line above. Without it
+			// an unpriced unit read from the index is indistinguishable from
+			// a priced one and the disclosure dies warm.
+			if u.Unpriced {
+				unpriced++
+			}
 			continue
 		}
 		cold = append(cold, f)
 	}
 	warm := len(units)
 	files = cold
-	unpriced, unreadable := 0, 0
 	_ = forEachSession(files, func(path string, session *transcript.Session, rep *analysis.LaneReport, err error) error {
 		// A file that produced no session is not a file that cost nothing.
 		// This arm used to drop the error and return, so an unreadable
@@ -677,12 +715,19 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		}
 		reqIDs, unjoinable := requestIDs(session, join)
 		asRun := analysis.AsRunSession(session)
-		if asRun.CostUSD <= 0 {
+		// Priceability is asked of the PRICE TABLE, not inferred from a cost of
+		// zero. The old test could not tell a session that genuinely cost
+		// nothing from one nothing could price, and reported both as unpriced.
+		at := sessionTime(rep)
+		_, priceKnown := cachemodel.PriceForAt(model, at)
+		if !priceKnown {
 			unpriced++
-			return nil
 		}
+		// The session keeps its row, flagged. Its dollars are withheld by
+		// summarise; its tokens are not, because they never needed a price.
 		u := costUnit{
-			At:       sessionTime(rep),
+			Unpriced: !priceKnown,
+			At:       at,
 			ID:       prefixID(session.ID),
 			Lane:     laneID(path),
 			Model:    model,
@@ -714,9 +759,11 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		// Price only what was demonstrably spent twice. A cache break's deficit
 		// is tokens the provider re-billed, which is spend that already
 		// happened, not a projection of what a different layout might save.
+		// Outside the price branch. A deficit is Expected minus Actual and
+		// consults no price table, so it is known whether or not a price is.
+		u.RebilledTokens = deficit
 		if price, ok := cachemodel.PriceForAt(model, u.At); ok {
 			u.RebilledUSD = float64(deficit) / 1_000_000 * price.InputPerMTok
-			u.RebilledTokens = deficit
 		}
 		u.UncachedUSD = asRun.UncachedUSD
 		u.WriteUSD = asRun.WriteUSD
