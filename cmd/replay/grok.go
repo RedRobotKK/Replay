@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -558,9 +559,23 @@ func (r grokReading) render(w io.Writer) {
 }
 
 func runGrok(args []string, stdout, stderr io.Writer) error {
+	// Parsed like every other command. Until 2026-10-03 this read args[0] as
+	// a root only when it did not start with "-" and otherwise ignored it,
+	// so an unknown flag, and --help, ran the default root and exited 0.
+	fs := flag.NewFlagSet("grok", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.Usage = func() {
+		_, _ = fmt.Fprint(stderr, "Usage: replay grok [dir]\n\n"+
+			"Reads Grok CLI sessions (updates.jsonl and usage.json) under dir, default\n"+
+			"~/.grok/sessions, reconstructs usage per turn and reconciles it against the\n"+
+			"vendor's own ledger. Takes no flags.\n")
+	}
+	if err := parseArgs(fs, args, stdout); err != nil {
+		return err
+	}
 	root := filepath.Join(os.Getenv("HOME"), ".grok", "sessions")
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		root = args[0]
+	if fs.NArg() > 0 {
+		root = fs.Arg(0)
 	}
 	r, err := readGrok(root)
 	if err != nil {

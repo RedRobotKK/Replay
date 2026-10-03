@@ -17,7 +17,7 @@ killer each surface is held to.
 | `corpus` | yes | `dispatch main.go:182 → runCorpus` | `cmd/replay/corpus.go @ "overall*100, exactOverall*100)"` | `TestE2E_Corpus` | `TestE2E_Corpus` | `M83` | `TestE2E_Corpus` | PASS |
 | `pool` | yes | `dispatch main.go:184 → runPool` | `internal/observation/pool.go @ "t.TotalUSD, t.Submissions, t.Tasks)"` | `TestE2E_Pool` | `TestE2E_Pool` | `M84` | `TestE2E_Pool` | PASS |
 | `codex` | yes | `dispatch main.go:186 → runCodex` | `cmd/replay/codex.go @ "billed += s.Billed.Total()"` | `TestE2E_Codex` | `TestE2E_Codex` | `M85` | `TestE2E_Codex` | PASS |
-| `grok` | yes | `dispatch main.go:188 → runGrok` | `cmd/replay/grok.go @ "if r.Matched+r.Diverged == 0 {"` | `TestE2E_Grok` | `TestE2E_Grok` | `M86` | `TestE2E_Grok` | PASS |
+| `grok` | yes | `dispatch main.go:188 → runGrok` | `cmd/replay/grok.go @ "if r.Matched+r.Diverged == 0 {"; cmd/replay/grok.go @ "if err := parseArgs(fs, args, stdout); err != nil { …"` | `TestE2E_Grok` | `TestE2E_Grok` | `M86, M117` | `TestE2E_Grok` | PASS |
 | `jev` | yes | `dispatch main.go:190 → runJev` | `cmd/replay/jev.go @ "\"    attempt %d  HTTP %d\", a.Ordinal, a.HTTPStatus)"` | `TestE2E_Jev` | `TestE2E_Jev` | `M87` | `TestE2E_Jev` | PASS |
 | `mcp` | yes | `dispatch main.go:192 → runMCPCommand` | `cmd/replay/mcp.go @ "\"      \\\"mcpServers\\\": {\\n\""` | `TestE2E_Mcp` | `TestE2E_Mcp` | `M88` | `TestE2E_Mcp` | PASS |
 | `agents` | yes | `dispatch main.go:194 → runAgents` | `internal/analysis/sources.go @ "\".md\": true, \".markdown\": true,"` | `TestE2E_Agents` | `TestE2E_Agents` | `M89` | `TestE2E_Agents` | PASS |

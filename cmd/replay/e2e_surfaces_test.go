@@ -201,6 +201,13 @@ func TestE2E_Grok(t *testing.T) {
 		t.Fatalf("%v\n%s", err, errb)
 	}
 	mustContain(t, "grok", out, "1 Grok session(s)", "7,142,396", "no session carries a usage.json", "UNAVAILABLE    1 session(s)", "never added")
+	// An unknown flag is refused, like every other command. Until 2026-10-03
+	// grok read args[0] as a root only when it did not start with "-" and
+	// otherwise ignored the argument, so `replay grok --no-such-flag` (and
+	// `--help`) ran the default root and exited 0.
+	if _, _, err := e2e(t, "grok", "--no-such-flag"); err == nil {
+		t.Error("grok accepted --no-such-flag and ran anyway")
+	}
 }
 
 func TestE2E_Jev(t *testing.T) {

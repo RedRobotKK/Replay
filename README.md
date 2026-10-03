@@ -561,8 +561,9 @@ The project's governing rule is [ADR-0014](docs/adr/0014-checks-must-be-able-to-
 is not evidence until it has been observed to fail.** Roughly twenty defects in a single day shared
 one shape — a verification that could not fail — so the rule is now mechanical.
 
-`internal/mutation` keeps **76 real past defects frozen as re-runnable mutants** (numbered M1 to
-M77; M71 was retired), each with the named test that must catch it.
+`internal/mutation` keeps **116 real past defects frozen as re-runnable mutants** (numbered M1 to
+M117, so the highest id is 117; M71 was retired), each with the named test that must catch it. Thirty-nine of them, one per
+dispatched subcommand, were added by the Release 1.0 production surface gate on 2026-10-02.
 `go test -tags mutation ./internal/mutation/` re-applies them all.
 It has already caught a false kill (a mutant the compiler rejected, scored as caught), a test that
 hung instead of failing, and a catalogue entry naming a test that was not actually load-bearing.

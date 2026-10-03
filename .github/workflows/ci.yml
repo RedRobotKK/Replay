@@ -391,7 +391,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      # 115 mutants, frozen as data in internal/mutation/testdata/mutants.json,
+      # 116 mutants, frozen as data in internal/mutation/testdata/mutants.json,
       # thawed one at a time against a scratch copy of the tree to ask whether
       # the check that caught each one still works.
       #
@@ -403,10 +403,19 @@ jobs:
       # -timeout matters as much as the tag. Go's default is 10 minutes and the
       # run needs well over that (the first 76 took eleven minutes; the 2026-10-02
       # gate added 39, one per dispatched surface), so the obvious invocation dies
-      # around mutant 66 of 115 with a timeout panic that looks like a broken
+      # around mutant 66 of 116 with a timeout panic that looks like a broken
       # harness.
       - name: Thaw every frozen mutant and confirm it still dies
         run: go test -tags mutation -timeout 90m -count=1 ./internal/mutation/
+      # The production binary, run as a child process for every dispatched
+      # surface: the real one must pass its black-box checks and refuse bad
+      # input, and each frozen mutant held to that surface, built into a
+      # binary, must fail them. Same build tag, same reason: it starts
+      # processes. docs/evidence/production-grade-matrix.md is compared byte
+      # for byte, so the matrix cannot say PRODUCTION-GRADE about a tree that
+      # is not.
+      - name: Exercise every surface through the production binary
+        run: go test -tags mutation -timeout 30m -count=1 ./internal/blackbox/
 
   surface-drift:
     name: surface drift

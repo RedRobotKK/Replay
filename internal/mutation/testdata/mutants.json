@@ -1539,6 +1539,19 @@
       "killedBy": [
         "TestShareCardNamesThePricedPopulation"
       ]
+    },
+    {
+      "id": "M117",
+      "name": "grok-ignores-an-unknown-flag",
+      "class": "guard-removed",
+      "discovered": "2026-10-03",
+      "note": "How grok shipped until 2026-10-03: no flag set, args[0] taken as a root only when it did not start with '-', anything else ignored. `replay grok --no-such-flag` and `replay grok --help` ran the default root and exited 0. The black-box gate's invalid-input probe found it; every other command refuses.",
+      "file": "cmd/replay/grok.go",
+      "anchor": "\tif err := parseArgs(fs, args, stdout); err != nil {\n\t\treturn err\n\t}\n\troot := filepath.Join(os.Getenv(\"HOME\"), \".grok\", \"sessions\")",
+      "replacement": "\tif err := parseArgs(fs, args, stdout); err != nil {\n\t\t_ = err\n\t}\n\troot := filepath.Join(os.Getenv(\"HOME\"), \".grok\", \"sessions\")",
+      "killedBy": [
+        "TestE2E_Grok"
+      ]
     }
   ],
   "knownSurvivors": [
