@@ -59,6 +59,18 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- **`replay simulate --policy <file> <ledger-dir...>` says which recorded requests
+  a spend cap would have refused.** It replays the ledger `replay serve` wrote
+  through the proxy's own spend guard under an explicit alternative cap, in
+  timestamp order, and prints the requests that would have been refused, the
+  sessions cut and what those requests cost at list price when they ran. Every
+  result is labelled SIMULATED: it is a re-run of recorded requests and says
+  nothing about requests that have not happened. The ledger is read and never
+  written. The policy document is strict: unknown keys, wrong types, negative
+  caps and a document with no cap are usage errors. Certified in
+  [docs/evidence/simulate-p0-2026-10-03.md](docs/evidence/simulate-p0-2026-10-03.md)
+  and documented in [docs/guide/commands.md](docs/guide/commands.md).
+
 - **`replay advise` records, on this machine only, how many findings it showed.**
   A new store, `~/.replay/surfaces.json`, holds a count of runs and of findings
   shown, per subcommand. No paths, no targets, no content, no identifier. **It is
