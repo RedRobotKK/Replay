@@ -49,7 +49,7 @@ folder of section 5. It is the only place a participant's identity and their
 `pNN` label are joined. The analytical dataset (section 4) carries only the
 label.
 
-```
+```text
 participant id        pNN (assigned in enrolment order, p01 to p10)
 name / contact        (outside the repository only)
 eligibility           E1 yes/no + evidence, E2, E3, E4, E5 likewise
@@ -112,10 +112,12 @@ a change is the outcome being counted.
    alias they start it with; if it cannot be determined, record UNKNOWN. Do not
    read it from any file.
 5. **Run the certified command**, and keep both outputs:
-   ```
+
+   ```sh
    replay simulate --policy policy.json <ledger-dir>          > simulate.txt
    replay simulate --policy policy.json <ledger-dir> --json   > simulate.json
    ```
+
    If the report says `0 requests`, this is not an exposure (element 4):
    record "not yet", and the participant may be shown a later run over a
    non-empty population before the list closes.
@@ -224,7 +226,7 @@ How the fields answer the required observations:
 
 Count, once, after the last window closes:
 
-```
+```sh
 go run ./scripts/simexp count <frozen dataset.json> > result.json
 ```
 

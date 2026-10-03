@@ -88,8 +88,6 @@ func NewSpendGuard(limits SpendLimits) *SpendGuard {
 	return &SpendGuard{limits: limits, session: map[string]*spend{}, now: time.Now}
 }
 
-// CapNotEnforced reports that a dollar cap is configured but at least one
-// request could not be priced, so the cap is not being applied to that traffic.
 // SetClock replaces the guard's clock. A replay of recorded requests must roll
 // the day on the records' own timestamps, not on the wall clock of the replay.
 func (g *SpendGuard) SetClock(now func() time.Time) {
@@ -98,6 +96,8 @@ func (g *SpendGuard) SetClock(now func() time.Time) {
 	g.now = now
 }
 
+// CapNotEnforced reports that a dollar cap is configured but at least one
+// request could not be priced, so the cap is not being applied to that traffic.
 func (g *SpendGuard) CapNotEnforced() bool {
 	if g == nil {
 		return false

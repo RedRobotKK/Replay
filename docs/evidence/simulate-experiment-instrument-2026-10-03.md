@@ -23,7 +23,7 @@ UNKNOWN, the window, attribution.
 **What was built.** `scripts/simexp`, a command run by hand once, after every
 window has closed, over a frozen JSON file of exactly ten rows:
 
-```
+```sh
 go run ./scripts/simexp count dataset.json
 ```
 

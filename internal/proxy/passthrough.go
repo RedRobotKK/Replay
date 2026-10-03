@@ -484,6 +484,12 @@ func (s *Server) noteUnparsed(path string) {
 		"Only %s is understood by this build.", path, masking, messagesPath)
 }
 
+// ListCost is listCost for callers outside the request path that must price a
+// recorded usage exactly as the proxy did: replay simulate replays a ledger
+// through the spend guard and would be a different instrument with a different
+// pricing rule.
+func ListCost(u ledger.Usage, model string) (float64, bool) { return listCost(u, model) }
+
 // listCost prices one request's usage at list price, zero for a model
 // the price table does not know.
 // Returns the cost and whether it is an UPPER BOUND rather than a measurement.
@@ -495,12 +501,6 @@ func (s *Server) noteUnparsed(path string) {
 // document in which no row prices at all. The comment below asserted the flag
 // "still fires". It did not, and the refusal text kept saying "at list price"
 // over a total that was partly a bound.
-// ListCost is listCost for callers outside the request path that must price a
-// recorded usage exactly as the proxy did: replay simulate replays a ledger
-// through the spend guard and would be a different instrument with a different
-// pricing rule.
-func ListCost(u ledger.Usage, model string) (float64, bool) { return listCost(u, model) }
-
 func listCost(u ledger.Usage, model string) (float64, bool) {
 	if price, ok := cachemodel.PriceFor(model); ok {
 		return cachemodel.CostUSD(u, price), false
