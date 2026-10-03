@@ -25,7 +25,10 @@ func heavyUsage() ledger.Usage {
 
 // The headline: an unknown model costs something.
 func TestUnpricedCap_AnUnknownModelIsNotFree(t *testing.T) {
-	got := listCost(heavyUsage(), "claude-opus-99-does-not-exist")
+	got, bound := listCost(heavyUsage(), "claude-opus-99-does-not-exist")
+	if !bound {
+		t.Fatal("an unpriced model must be reported as an upper bound, not a measurement")
+	}
 	if got <= 0 {
 		t.Fatalf("an unknown model priced at %v. A dollar cap accumulating zero never reaches "+
 			"its limit, so an operator who asked to stop at $20 has no cap on exactly the "+
@@ -37,7 +40,10 @@ func TestUnpricedCap_AnUnknownModelIsNotFree(t *testing.T) {
 // would have cost for the same usage.
 func TestUnpricedCap_TheEstimateIsAnUpperBound(t *testing.T) {
 	u := heavyUsage()
-	unknown := listCost(u, "claude-opus-99-does-not-exist")
+	unknown, unknownBound := listCost(u, "claude-opus-99-does-not-exist")
+	if !unknownBound {
+		t.Fatal("an unpriced model must be reported as an upper bound")
+	}
 
 	dearest, ok := cachemodel.DearestPrice()
 	if !ok {
@@ -73,7 +79,7 @@ func TestUnpricedCap_AKnownModelIsUnchanged(t *testing.T) {
 		t.Fatal("haiku-4-5 is unpriced; this fixture is wrong")
 	}
 	want := cachemodel.CostUSD(u, p)
-	if got := listCost(u, "claude-haiku-4-5"); got != want {
+	if got, bound := listCost(u, "claude-haiku-4-5"); got != want || bound {
 		t.Fatalf("a known model priced at %v, want its own row's %v", got, want)
 	}
 	// The premise: haiku really is cheaper than the bound, or this test would

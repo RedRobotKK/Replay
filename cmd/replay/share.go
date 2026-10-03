@@ -44,15 +44,29 @@ func shareCard(s costSummary, breaks int) string {
 		return ""
 	}
 
+	// "priced" is load-bearing. RebilledShare is RebilledUSD over TotalUSD, and
+	// TotalUSD excludes every session the price table cannot price, so the
+	// share is of the spend that was priced and never of all of it. The PNG
+	// has said "of priced spend" since 2026-10-01; this card said "of my agent
+	// spend" until 2026-10-02, which on a corpus priced one request in three
+	// read as a claim about three times the work it covered.
 	pct := s.RebilledShare * 100
-	headline := fmt.Sprintf("%.0f%% of my agent spend was paid twice.", pct)
-	if pct > 0 && pct < 1 {
+	var figure string
+	switch {
+	case pct == 0:
+		figure = "None"
+	case pct < 1:
 		// Rounding a real number to "0%" would report a finding as nothing.
-		headline = "Under 1% of my agent spend was paid twice."
+		figure = "Under 1%"
+	case pct > 99 && pct < 100:
+		// The ceiling the PNG has: %.0f renders a measured 99.6% as "100%",
+		// which on a card whose only words are about this figure says every
+		// dollar was re-billed.
+		figure = ">99%"
+	default:
+		figure = fmt.Sprintf("%.0f%%", pct)
 	}
-	if pct == 0 {
-		headline = "None of my agent spend was paid twice."
-	}
+	headline := figure + " of my priced agent spend was paid twice."
 
 	var b strings.Builder
 	line := "  " + strings.Repeat("─", 52)

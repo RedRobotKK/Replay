@@ -245,7 +245,13 @@ func (c *Corpus) UnmarshalJSON(b []byte) error {
 	// submission is worth having; what is not worth having is a document that
 	// never said.
 	if len(found) == 0 {
-		for _, need := range []string{"rebilledUsd", "rebilledShare"} {
+		// Every quantitative key, not only the renamed pair. The pair was
+		// guarded because it had been renamed; the others were never guarded
+		// at all, so a document omitting them parsed to 0.0 and pooled an
+		// absence as a measurement. A missing medianTaskUsd dragged the
+		// published median range to zero. Presence, not value: a genuine
+		// measured zero still pools.
+		for _, need := range []string{"rebilledUsd", "rebilledShare", "tasks", "totalUsd", "medianTaskUsd"} {
 			if _, ok := probe[need]; !ok {
 				return fmt.Errorf("this submission has no %q key. A missing figure and a "+
 					"measured zero are different things, and reading this one would pool "+

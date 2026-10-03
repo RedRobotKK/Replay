@@ -268,7 +268,8 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		if readable {
 			rec.Response = tap.result()
 			if u := rec.Response.Usage; u != nil {
-				s.cfg.Spend.Record(rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output, listCost(*u, rec.Model))
+				usd, bound := listCost(*u, rec.Model)
+				s.cfg.Spend.Record(rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output, usd, bound)
 			}
 		}
 		if tap.rehydrate != nil {
@@ -485,9 +486,18 @@ func (s *Server) noteUnparsed(path string) {
 
 // listCost prices one request's usage at list price, zero for a model
 // the price table does not know.
-func listCost(u ledger.Usage, model string) float64 {
+// Returns the cost and whether it is an UPPER BOUND rather than a measurement.
+//
+// The second return exists because the flag that tells an operator which one
+// they are reading had become unreachable. CapNotEnforced armed on usd <= 0,
+// which was true when an unpriced model counted as zero; once the dearest-row
+// substitution landed, usd > 0 always and the flag could fire only for a rules
+// document in which no row prices at all. The comment below asserted the flag
+// "still fires". It did not, and the refusal text kept saying "at list price"
+// over a total that was partly a bound.
+func listCost(u ledger.Usage, model string) (float64, bool) {
 	if price, ok := cachemodel.PriceFor(model); ok {
-		return cachemodel.CostUSD(u, price)
+		return cachemodel.CostUSD(u, price), false
 	}
 	// An unpriced model is priced at the dearest row this table holds, as an
 	// UPPER BOUND, rather than counted as zero.
@@ -511,8 +521,8 @@ func listCost(u ledger.Usage, model string) float64 {
 	// operator needs to know which one they are reading. ADR-0022's unknown
 	// READ MULTIPLE is the same argument one field over.
 	if dearest, ok := cachemodel.DearestPrice(); ok {
-		return cachemodel.CostUSD(u, dearest)
+		return cachemodel.CostUSD(u, dearest), true
 	}
 	// No priced row at all. Nothing to bound with, so nothing is claimed.
-	return 0
+	return 0, true
 }

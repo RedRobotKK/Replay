@@ -4,6 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/surface"
 	"io"
 	"io/fs"
 	"net"
@@ -13,8 +15,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/RedRobotKK/Replay/internal/cachemodel"
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/proxy"
@@ -94,6 +94,16 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 		}
 		p.Printf("              next: replay replay %s\n", filepath.Join(projects, "<project>"))
 	}
+
+	// The cache signal (RPL-C026). What the transcripts at this boundary can
+	// show about the prompt cache, classified by surface.Classify against the
+	// provider's write contract. The contract is the half a corpus cannot
+	// establish on its own: a cache-write counter that is zero on every record
+	// looks the same under a provider that never writes and a client that
+	// drops the counter, so it is stated here with its source. "undetermined"
+	// is a refusal with its reason and is printed as one; it is the answer
+	// when there is nothing to classify, and it is not a zero.
+	p.Printf("%s", cacheSignalLines(projects))
 
 	// Other agents on this machine.
 	//
@@ -331,4 +341,32 @@ func isLoopbackURL(base string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
+}
+
+// anthropicWriteContract is the independently sourced half of the cache
+// classification: cache writes are a distinctly priced category under the
+// rules in effect, and the figure is named so a reader can go and disagree
+// with the document rather than with the classifier.
+func anthropicWriteContract() surface.ContractFact {
+	return surface.ContractFact{
+		Write: surface.ContractPricedDistinctly,
+		Source: fmt.Sprintf("cache writes priced at %gx (5m) and %gx (1h) of input under %s",
+			cachemodel.WriteMultiplierShort, cachemodel.WriteMultiplierLong, cachemodel.RulesVersionInEffect()),
+	}
+}
+
+// cacheSignalLines classifies the transcripts under projects and renders the
+// verdict as doctor prints the rest: a label, the class, and the reason on
+// the line beneath. The reason is always printed, because a class without it
+// is a verdict a reader cannot check.
+func cacheSignalLines(projects string) string {
+	obs, err := surface.Probe(projects, surface.AnthropicFields)
+	if err != nil {
+		return fmt.Sprintf("cache signal  not read: %v\n\n", err)
+	}
+	v := surface.Classify(obs, anthropicWriteContract())
+	var b strings.Builder
+	fmt.Fprintf(&b, "cache signal  %s\n", v.Class)
+	fmt.Fprintf(&b, "              %s\n\n", wrapAt(v.Why, 74, "              "))
+	return b.String()
 }

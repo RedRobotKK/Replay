@@ -36,7 +36,7 @@ func TestSpendGuard_DayCapIsProcessWideAndAttributed(t *testing.T) {
 	}
 
 	// The first burns the whole day budget on its own.
-	g.Record(noisy, 100, 0)
+	g.Record(noisy, 100, 0, false)
 
 	reason := g.Check(quiet)
 	if reason == "" {

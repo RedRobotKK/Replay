@@ -43,7 +43,7 @@ func TestGG1_ADayCapRestoredFromDiskNamesNobody(t *testing.T) {
 
 	first := NewSpendGuard(SpendLimits{DayTokens: 1_000_000})
 	first.now = fixedClock(day)
-	first.Record("sess-overnight", 1_200_000, 0)
+	first.Record("sess-overnight", 1_200_000, 0, false)
 	first.SaveState(dir)
 
 	// The process dies. The day total returns; the sessions do not.
@@ -75,8 +75,8 @@ func TestGG1b_ALiveSpenderIsStillNamed(t *testing.T) {
 	day := time.Date(2026, 9, 9, 12, 0, 0, 0, time.UTC)
 	g := NewSpendGuard(SpendLimits{DayTokens: 1_000_000})
 	g.now = fixedClock(day)
-	g.Record("sess-small", 100_000, 0)
-	g.Record("sess-big", 950_000, 0)
+	g.Record("sess-small", 100_000, 0, false)
+	g.Record("sess-big", 950_000, 0, false)
 
 	msg := g.Check("sess-small")
 	if msg == "" {

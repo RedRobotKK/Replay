@@ -322,6 +322,25 @@ func NewSessionBuilder(id, path string) *SessionBuilder {
 // Add appends one record. Records must arrive in time order.
 func (b *SessionBuilder) Add(rec Record) {
 	b.added++
+	// Kind is read before anything else, because a record naming one is not a
+	// provider request and must not be triaged as one. The branches below
+	// classify by request shape: refusal, provider failure, no status. Running
+	// a non-request record through them decides its fate on criteria that do
+	// not apply to it, and every path ends at Skipped.
+	//
+	// A switch rather than an if, so the place to add a kind this binary DOES
+	// implement is obvious: a case above the default.
+	switch rec.Kind {
+	case "":
+		// Empty is a provider request, which is what every record written
+		// before Kind existed is. Fall through to the existing triage.
+	default:
+		// Parsed cleanly, kind not implemented here. That is a version gap,
+		// not data loss, and the two are counted separately because Skipped is
+		// surfaced to a user as a format change.
+		b.session.UnknownKinds++
+		return
+	}
 	if rec.Response.Usage == nil || len(rec.Prompt.Messages) == 0 {
 		// A refusal explains itself; an empty record does not.
 		//

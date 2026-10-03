@@ -65,13 +65,15 @@ func TestFixtureProducesTheExpectedSuggestions(t *testing.T) {
 
 func TestCacheTrafficUSD_ZeroTokensAndUnknownModelAreZero(t *testing.T) {
 	now := time.Now()
-	if cacheTrafficUSD(KindLargeResults, 0, "claude-opus-5", now) != 0 {
+	if v, _ := cacheTrafficUSD(KindLargeResults, 0, "claude-opus-5", now); v != 0 {
 		t.Fatal("zero tokens must price as 0, not as a free-looking miss")
 	}
-	if cacheTrafficUSD(KindLargeResults, 1_000_000, "not-a-priced-model", now) != 0 {
-		t.Fatal("an unpriced model must price as 0, excluded not free")
+	// Zero AND reported as unpriceable. The zero alone was the defect: it summed
+	// into the suggestion's dollars and into PredictedUSD, which is the sort key.
+	if v, priced := cacheTrafficUSD(KindLargeResults, 1_000_000, "not-a-priced-model", now); v != 0 || priced {
+		t.Fatalf("an unpriced model must price as 0 AND report priced=false; got %v, %v", v, priced)
 	}
-	if cacheTrafficUSD(KindLargeResults, 1_000_000, "claude-opus-5", now) <= 0 {
+	if v, priced := cacheTrafficUSD(KindLargeResults, 1_000_000, "claude-opus-5", now); v <= 0 || !priced {
 		t.Fatal("opus-5 cache-read of 1M tokens must be positive")
 	}
 }
@@ -385,7 +387,7 @@ func keysOf(m map[string]Suggestion) []string {
 // ranking, so one negative row does not look like an error, it looks like a
 // target worth less than nothing and sorts to the bottom where nobody reads it.
 func TestCacheTrafficUSD_ANegativeTokenCountIsZeroNotNegativeDollars(t *testing.T) {
-	got := cacheTrafficUSD(KindLargeResults, -1, "claude-opus-5", time.Time{})
+	got, _ := cacheTrafficUSD(KindLargeResults, -1, "claude-opus-5", time.Time{})
 	if got != 0 {
 		t.Fatalf("a negative token count priced at %v; it must be 0, because a negative "+
 			"dollar figure summed into a ranking reads as a cheap target rather than as "+
@@ -431,12 +433,12 @@ func TestCacheTrafficUSD_AnUnpricedRowWithRealNumbersDoesNotBill(t *testing.T) {
 			"guard would price it at 0 anyway and this test could not fail", p)
 	}
 
-	if got := cacheTrafficUSD(KindLargeResults, 1_000_000, "unpriced-but-populated", time.Time{}); got != 0 {
+	if got, priced := cacheTrafficUSD(KindLargeResults, 1_000_000, "unpriced-but-populated", time.Time{}); got != 0 || priced {
 		t.Fatalf("an unpriced row billed %v for 1M tokens; a row flagged not-for-billing "+
 			"must price as excluded, not as %v of real money", got, got)
 	}
 	// The break arm prices differently and must also refuse.
-	if got := cacheTrafficUSD(KindCacheBreaks, 1_000_000, "unpriced-but-populated", time.Time{}); got != 0 {
+	if got, priced := cacheTrafficUSD(KindCacheBreaks, 1_000_000, "unpriced-but-populated", time.Time{}); got != 0 || priced {
 		t.Fatalf("an unpriced row billed %v on the cache-break arm", got)
 	}
 }

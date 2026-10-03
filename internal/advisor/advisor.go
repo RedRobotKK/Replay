@@ -163,9 +163,16 @@ type Suggestion struct {
 	// that scale. Ranking is by PredictedUSD, not by token share: a million
 	// cached-read tokens are not a million input tokens.
 	WriteReadUSD float64 `json:"write_read_usd,omitempty"`
-	PredictedUSD float64 `json:"predicted_usd,omitempty"`
-	Estimated    bool    `json:"estimated"`
-	Status       Status  `json:"status"`
+	// UnpricedSessions is how many contributing sessions could not be priced at
+	// all. Non-zero means WriteReadUSD and PredictedUSD are short by an unknown
+	// amount, so this suggestion's dollars are a floor and its position in a
+	// list sorted by PredictedUSD is lower than the evidence supports.
+	//
+	// omitempty: the common suggestion gains no key.
+	UnpricedSessions int     `json:"unpriced_sessions,omitempty"`
+	PredictedUSD     float64 `json:"predicted_usd,omitempty"`
+	Estimated        bool    `json:"estimated"`
+	Status           Status  `json:"status"`
 	// RealizedShare is the drop in the target's share on the newest
 	// sessions, once the suggestion counts as applied.
 	RealizedShare float64   `json:"realized_share,omitempty"`
@@ -179,6 +186,10 @@ type evidence struct {
 	share     float64
 	tokens    int
 	estimated bool
+	// priced is false when no price table could price this session's model, so
+	// usd is 0 because the answer is unavailable rather than because the
+	// traffic was free.
+	priced bool
 	// errorMeasured carries analysis.Figure.ErrorMeasured through to the
 	// aggregate, because it was being thrown away here.
 	//
@@ -295,9 +306,10 @@ func (ob *Observation) note(kind Kind, target string, tokens analysis.Figure, es
 	if tokens.Value <= 0 {
 		return
 	}
+	usd, priced := cacheTrafficUSD(kind, tokens.Value, ob.model, ob.at)
 	ob.targets[key(kind, target)] = evidence{at: ob.at, share: share, tokens: tokens.Value,
 		estimated: estimated, errorMeasured: tokens.ErrorMeasured,
-		usd: cacheTrafficUSD(kind, tokens.Value, ob.model, ob.at)}
+		usd: usd, priced: priced}
 }
 
 // noteReads records a file read at any size; the corpus decides whether
@@ -309,26 +321,36 @@ func (ob *Observation) noteReads(name string, e analysis.BlameEntry) {
 	ev.tokens += e.PromptTokens.Value
 	ev.share = float64(ev.tokens) / float64(ob.prompt)
 	ev.reads += e.Occurrences
-	ev.usd = cacheTrafficUSD(KindHotFile, ev.tokens, ob.model, ob.at)
+	ev.usd, ev.priced = cacheTrafficUSD(KindHotFile, ev.tokens, ob.model, ob.at)
 	ob.targets[k] = ev
 }
 
 // cacheTrafficUSD prices target tokens the way they actually bill once they
 // sit in the prefix: cache reads, except cache-breaks which are re-billed
 // at the input/write rate.
-func cacheTrafficUSD(kind Kind, tokens int, model string, at time.Time) float64 {
+// Returns the dollars and whether the model could be priced at all.
+//
+// The second return exists because a failed lookup returned 0 and that zero
+// summed into the suggestion's dollar figure AND into PredictedUSD, which is
+// the key the recommendations are SORTED on. An unpriceable model therefore
+// read as costing nothing and sank to the bottom of the list, which is the
+// silent-zero defect in the one place it also reorders what the user is told
+// to do first.
+//
+// The arithmetic is unchanged. What changes is that the caller can now say so.
+func cacheTrafficUSD(kind Kind, tokens int, model string, at time.Time) (float64, bool) {
 	if tokens <= 0 {
-		return 0
+		return 0, true // nothing to price is not a pricing failure
 	}
 	p, ok := cachemodel.PriceForAt(model, at)
 	if !ok {
-		return 0
+		return 0, false
 	}
 	mtok := float64(tokens) / 1e6
 	if kind == KindCacheBreaks {
-		return mtok * p.InputPerMTok
+		return mtok * p.InputPerMTok, true
 	}
-	return mtok * p.InputPerMTok * p.ReadMult
+	return mtok * p.InputPerMTok * p.ReadMult, true
 }
 
 // builtinTools is the bucket for definitions that name no server.
@@ -441,6 +463,11 @@ type agg struct {
 	tokens       int
 	reads        int
 	writeReadUSD float64
+	// unpricedSessions counts contributing sessions whose model no price table
+	// could price. Their dollars are 0 because the answer is unavailable, not
+	// because the traffic was free, and WriteReadUSD and PredictedUSD are both
+	// short by an unknown amount when this is non-zero.
+	unpricedSessions int
 }
 
 // Suggest aggregates observations into suggestions, newest evidence
@@ -470,6 +497,11 @@ func Suggest(obs []Observation, applied map[string]bool) []Suggestion {
 			a.tokens += ev.tokens
 			a.reads += ev.reads
 			a.writeReadUSD += ev.usd
+			// One unpriceable session makes the whole figure partial. Kept as
+			// a count so the disclosure can say how much of it is missing.
+			if !ev.priced {
+				a.unpricedSessions++
+			}
 			if t, ok := ob.titles[k]; ok {
 				a.titles = t
 			}
@@ -492,7 +524,7 @@ func Suggest(obs []Observation, applied map[string]bool) []Suggestion {
 		}
 		sid := id(a.kind, a.target)
 		a.applied = applied[sid]
-		s := Suggestion{ID: sid, Kind: a.kind, Target: a.target, Sessions: len(a.evidence), PromptTokens: a.tokens, WriteReadUSD: a.writeReadUSD, Estimated: a.estimated, FirstSeen: a.evidence[0].at, LastSeen: a.evidence[len(a.evidence)-1].at}
+		s := Suggestion{ID: sid, Kind: a.kind, Target: a.target, Sessions: len(a.evidence), PromptTokens: a.tokens, WriteReadUSD: a.writeReadUSD, UnpricedSessions: a.unpricedSessions, Estimated: a.estimated, FirstSeen: a.evidence[0].at, LastSeen: a.evidence[len(a.evidence)-1].at}
 		for _, ev := range a.evidence {
 			s.Share += ev.share
 		}

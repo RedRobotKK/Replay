@@ -1,4 +1,8 @@
-package claims
+package main
+
+// Moved from internal/claims on 2026-10-02: the scans cover the whole tree, and
+// a test that certifies the binary must live in a package the binary links,
+// which internal/claims is not (TestWiringGate_RegisteredOraclesRunInTheShippedClosure).
 
 import (
 	"os"
@@ -17,7 +21,7 @@ import (
 
 func nonTestGoSources(t *testing.T) map[string]string {
 	t.Helper()
-	root := repoRoot(t)
+	root := wiringRepoRoot(t)
 	out := map[string]string{}
 	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {

@@ -164,6 +164,19 @@ var ControlsFor = map[string]Controls{
 		Insufficient: "before 6794522 both states reached the same counter; MX8 reported unpriced=1 for a genuine zero",
 		Gap:          []string{"only session cost in `replay cost` was revalidated. Other sites may or may not collapse the same way and were not re-measured"},
 	},
+	"RPL-C037": {
+		Basis: Reconstructed, Layer: "none. No type carries break-level priceability; `breaks` counts priceable and unpriceable alike",
+		Positive:     "P1/Q and P2/Q2, corpora with 20,000 of 40,000 break tokens unpriceable, where the oracle computes 50% coverage and the report now discloses 50%; plus the second-gate corpus, where every break priced and the figure covers 33%; plus the unequal-deficit corpus at 96% token against 25% count coverage",
+		Negative:     "P1/P and P2/R, fully priceable corpora at 100% coverage, which must never carry a partial-coverage disclosure; and a zero-break corpus, which must carry neither a disclosure nor a re-billed token line",
+		Insufficient: "a corpus where request-level and break-level coverage happen to coincide does not discriminate, which is why P1/Q is built so they diverge (2 of 3 requests priced against 1 of 2 break token halves)",
+		Assumption: []string{
+			"that a future disclosure would be recognisable to the frozen detector. It is proven against a planted sentence and against C035's sentence, which it must not match, but not against a shipped one",
+		},
+		Gap: []string{
+			"the five rejected candidates in TestC037_TheOracleRejectsEveryWrongCandidate are SIMULATED disclosures, retained as an oracle self-check. They are NOT the mutation evidence; ten mutations of the landed implementation are, and are recorded in the evidence file",
+			"only the transcript path of `replay cost` was measured. `replay cost --usage` has the same two-population shape at costusage.go:194/196 and renders the pair at costusage.go:267; it was found by the post-repair audit and is neither measured nor repaired. `replay advise`, the card and the share surface also read re-billed figures and were not examined",
+		},
+	},
 	"RPL-C008": {
 		Basis: Observed, Layer: "surface.WriteContract, Observables.WriteFieldPresent",
 		Positive:     "absent write counter classifies III-no-observable",

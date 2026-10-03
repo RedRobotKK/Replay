@@ -1032,6 +1032,513 @@
         "TestCGA_EachConsentStateGivesItsOwnRefusal"
       ],
       "note": "The same gate on the CORPUS contribution path, which carries aggregate spend. M11 guards the probe path and could not guard this one: two mutants because there are two gates, and a catalogue with one entry for two call sites is a catalogue that tests whichever the parser reaches first."
+    },
+    {
+      "id": "M78",
+      "name": "version-drops-the-tool-name",
+      "class": "funnel",
+      "discovered": "2026-10-02",
+      "note": "The one line a bug report is asked to paste no longer says which tool produced it.",
+      "file": "cmd/replay/main.go",
+      "anchor": "_, err := fmt.Fprintln(stdout, \"replay\", version.String())",
+      "replacement": "_, err := fmt.Fprintln(stdout, version.String())",
+      "killedBy": [
+        "TestE2E_Version"
+      ]
+    },
+    {
+      "id": "M79",
+      "name": "help-omits-the-cost-command",
+      "class": "funnel",
+      "discovered": "2026-10-02",
+      "note": "The usage text stops naming the command the tool exists for. A menu that hides the answer is the funnel defect in its purest form.",
+      "file": "cmd/replay/main.go",
+      "anchor": "  replay cost   <dir...>           cost per task, and --compare <date> for before/after",
+      "replacement": "",
+      "killedBy": [
+        "TestE2E_Help"
+      ]
+    },
+    {
+      "id": "M80",
+      "name": "replay-gate-always-refuses-to-score",
+      "class": "guard-removed",
+      "discovered": "2026-10-02",
+      "note": "The calibration gate inverted: a session that reproduced the provider's reads on 98.7% of turns is told its alternatives cannot be scored, and the policy table never prints.",
+      "file": "internal/analysis/report.go",
+      "anchor": "func (r *LaneReport) WriteReplay(w io.Writer) error {\n\tp := NewPrinter(w)\n\tr.header(p)\n\tif !r.Calibration.Passes() {",
+      "replacement": "func (r *LaneReport) WriteReplay(w io.Writer) error {\n\tp := NewPrinter(w)\n\tr.header(p)\n\tif true {",
+      "killedBy": [
+        "TestE2E_Replay"
+      ]
+    },
+    {
+      "id": "M81",
+      "name": "blame-prints-one-row",
+      "class": "report-truncation",
+      "discovered": "2026-10-02",
+      "note": "The ranking the command exists to show is cut to its first row; the reader sees the largest source and nothing to compare it against.",
+      "file": "internal/analysis/report.go",
+      "anchor": "\tr.blame(p, limit)",
+      "replacement": "\tr.blame(p, 1)",
+      "killedBy": [
+        "TestE2E_Blame"
+      ]
+    },
+    {
+      "id": "M82",
+      "name": "diff-drops-the-cause",
+      "class": "report-truncation",
+      "discovered": "2026-10-02",
+      "note": "Every break is still listed with its size and nothing says why. RPL-C001 promises the cause; this is the report with the promise removed.",
+      "file": "internal/analysis/report.go",
+      "anchor": "\t\tp.Printf(\"    cause: %s\\n\", b.Cause)",
+      "replacement": "\t\t_ = b.Cause",
+      "killedBy": [
+        "TestE2E_Diff"
+      ]
+    },
+    {
+      "id": "M83",
+      "name": "corpus-zeroes-the-exact-rate",
+      "class": "evidence",
+      "discovered": "2026-10-02",
+      "note": "The exact reproduction rate prints as 0.00% beside a 98.73% match rate. A reader tuning the calibration threshold reads a corpus that never reproduced a read exactly.",
+      "file": "cmd/replay/corpus.go",
+      "anchor": "overall*100, exactOverall*100)",
+      "replacement": "overall*100, exactOverall*0)",
+      "killedBy": [
+        "TestE2E_Corpus"
+      ]
+    },
+    {
+      "id": "M84",
+      "name": "pool-counts-submissions-as-tasks",
+      "class": "evidence",
+      "discovered": "2026-10-02",
+      "note": "The pooled task count is the submission count. $300 across 2 tasks reads as a corpus a hundred times richer per task than it is.",
+      "file": "internal/observation/pool.go",
+      "anchor": "\t\tt.TotalUSD, t.Submissions, t.Tasks)",
+      "replacement": "\t\tt.TotalUSD, t.Submissions, t.Submissions)",
+      "killedBy": [
+        "TestE2E_Pool"
+      ]
+    },
+    {
+      "id": "M85",
+      "name": "codex-reports-the-counter-not-the-bill",
+      "class": "attribution-loss",
+      "discovered": "2026-10-02",
+      "note": "The figure labelled billed is Codex's own rebased counter, 550 instead of 3,850 on the compacted fixture: the defect the [NOTE] beneath it exists to warn about, now in the headline.",
+      "file": "cmd/replay/codex.go",
+      "anchor": "\t\tbilled += s.Billed.Total()",
+      "replacement": "\t\tbilled += s.Reported.Total()",
+      "killedBy": [
+        "TestE2E_Codex"
+      ]
+    },
+    {
+      "id": "M86",
+      "name": "grok-vendor-ledger-absence-goes-unsaid",
+      "class": "evidence",
+      "discovered": "2026-10-02",
+      "note": "When no session carries usage.json the VENDOR LEDGER section prints nothing where UNAVAILABLE belongs, so an absent vendor figure reads as a blank, which is the zero ADR-0018 forbids.",
+      "file": "cmd/replay/grok.go",
+      "anchor": "\tif r.Matched+r.Diverged == 0 {",
+      "replacement": "\tif false {",
+      "killedBy": [
+        "TestE2E_Grok"
+      ]
+    },
+    {
+      "id": "M87",
+      "name": "jev-attempt-loses-its-status",
+      "class": "evidence",
+      "discovered": "2026-10-02",
+      "note": "Every attempt reports HTTP 0. A capture of a 200 and a capture of a 500 print the same line.",
+      "file": "cmd/replay/jev.go",
+      "anchor": "\"    attempt %d  HTTP %d\", a.Ordinal, a.HTTPStatus)",
+      "replacement": "\"    attempt %d  HTTP %d\", a.Ordinal, 0)",
+      "killedBy": [
+        "TestE2E_Jev"
+      ]
+    },
+    {
+      "id": "M88",
+      "name": "mcp-install-snippet-misnames-the-key",
+      "class": "funnel",
+      "discovered": "2026-10-02",
+      "note": "The snippet the user is told to paste names a key no agent reads. The command reports success and nothing is installed.",
+      "file": "cmd/replay/mcp.go",
+      "anchor": "\"      \\\"mcpServers\\\": {\\n\"",
+      "replacement": "\"      \\\"mcpServer\\\": {\\n\"",
+      "killedBy": [
+        "TestE2E_Mcp"
+      ]
+    },
+    {
+      "id": "M89",
+      "name": "agents-scan-ignores-markdown",
+      "class": "report-truncation",
+      "discovered": "2026-10-02",
+      "note": "The boot block stops listing the directories where records actually live, because nearly every record is a .md file.",
+      "file": "internal/analysis/sources.go",
+      "anchor": "\".md\": true, \".markdown\": true,",
+      "replacement": "\".markdown\": true,",
+      "killedBy": [
+        "TestE2E_Agents"
+      ]
+    },
+    {
+      "id": "M90",
+      "name": "burn-reads-no-claude-code-root",
+      "class": "report-truncation",
+      "discovered": "2026-10-02",
+      "note": "The Claude Code row reads 'not read' on a machine with transcripts: the one surface most users have is silently absent from the comparison.",
+      "file": "cmd/replay/burn.go",
+      "anchor": "\troots := defaultTranscriptRoots(home)",
+      "replacement": "\troots := defaultTranscriptRoots(\"\")",
+      "killedBy": [
+        "TestE2E_Burn"
+      ]
+    },
+    {
+      "id": "M91",
+      "name": "doctor-drops-the-cache-signal",
+      "class": "funnel",
+      "discovered": "2026-10-02",
+      "note": "The classifier runs and its verdict is discarded. RPL-C026 wired and then unwired in one line: the internal layer does the work and nothing reaches the screen, which is exactly the state the 2026-10-02 wiring gate found.",
+      "file": "cmd/replay/doctor.go",
+      "anchor": "\tp.Printf(\"%s\", cacheSignalLines(projects))",
+      "replacement": "\t_ = cacheSignalLines(projects)",
+      "killedBy": [
+        "TestE2E_Doctor"
+      ]
+    },
+    {
+      "id": "M92",
+      "name": "classifier-reads-an-empty-corpus-as-evidence",
+      "class": "guard-removed",
+      "discovered": "2026-10-02",
+      "note": "Zero records no longer refuses. The empty boundary falls through to the write-count conditions and is classified as if something had been observed.",
+      "file": "internal/surface/identify.go",
+      "anchor": "\tif o.Records == 0 {",
+      "replacement": "\tif o.Records < 0 {",
+      "killedBy": [
+        "TestE2E_DoctorRefusesToClassifyAnEmptyBoundary"
+      ]
+    },
+    {
+      "id": "M93",
+      "name": "probe-plan-omits-that-nothing-was-sent",
+      "class": "claim-outruns-evidence",
+      "discovered": "2026-10-02",
+      "note": "A plan that no longer says it is only a plan. The reader has a list of requests and no statement that none left the machine or cost anything.",
+      "file": "cmd/replay/probe.go",
+      "anchor": "\"\\nNothing was sent. Add --execute to run it.\\n\"",
+      "replacement": "\"\\n\"",
+      "killedBy": [
+        "TestE2E_Probe"
+      ]
+    },
+    {
+      "id": "M94",
+      "name": "rules-blanks-the-version-in-effect",
+      "class": "provenance",
+      "discovered": "2026-10-02",
+      "note": "The rules line prints no version. Every figure the tool prints is built on these rules and the command that names them names nothing.",
+      "file": "cmd/replay/rules.go",
+      "anchor": "\t\t\tcachemodel.RulesVersion, path)",
+      "replacement": "\t\t\t\"\", path)",
+      "killedBy": [
+        "TestE2E_Rules"
+      ]
+    },
+    {
+      "id": "M95",
+      "name": "tui-once-renders-an-empty-frame",
+      "class": "report-truncation",
+      "discovered": "2026-10-02",
+      "note": "--once, the mode a pipe or a screenshot uses, prints the footer and no screen.",
+      "file": "cmd/replay/tui.go",
+      "anchor": "\t\tlines = append(lines, frame...)",
+      "replacement": "\t\tlines = append(lines, frame[:0]...)",
+      "killedBy": [
+        "TestE2E_Tui"
+      ]
+    },
+    {
+      "id": "M96",
+      "name": "statusline-install-names-the-wrong-command",
+      "class": "funnel",
+      "discovered": "2026-10-02",
+      "note": "The snippet wires Claude Code's status line to the bare command, which prints a cost report into a one-line field.",
+      "file": "cmd/replay/statusline.go",
+      "anchor": "      \"command\": \"replay statusline\",",
+      "replacement": "      \"command\": \"replay\",",
+      "killedBy": [
+        "TestE2E_Statusline"
+      ]
+    },
+    {
+      "id": "M97",
+      "name": "cost-cold-path-forgets-the-unpriced-count",
+      "class": "evidence",
+      "discovered": "2026-10-02",
+      "note": "The session is still withheld from the dollars and the count of withheld transcripts is zero, so the report says nothing was left out of a figure something was left out of. RPL-C030's sentence goes quiet.",
+      "file": "cmd/replay/cost.go",
+      "anchor": "\t\tat := sessionTime(rep)\n\t\t_, priceKnown := cachemodel.PriceForAt(model, at)\n\t\tif !priceKnown {\n\t\t\tunpriced++\n\t\t}",
+      "replacement": "\t\tat := sessionTime(rep)\n\t\t_, priceKnown := cachemodel.PriceForAt(model, at)\n\t\tif !priceKnown {\n\t\t\t_ = priceKnown\n\t\t}",
+      "killedBy": [
+        "TestE2E_Cost"
+      ]
+    },
+    {
+      "id": "M98",
+      "name": "ceiling-ratio-is-always-one",
+      "class": "evidence",
+      "discovered": "2026-10-02",
+      "note": "Cache-blind arithmetic 'runs 1.00x high': the command reports that a cache-blind ceiling is exact, which is the opposite of its finding.",
+      "file": "internal/cachemodel/ceiling.go",
+      "anchor": "\t\t\"was given, so where it would halt is not computed.\", r, e.Requests) + rateLimitClause",
+      "replacement": "\t\t\"was given, so where it would halt is not computed.\", 1.0, e.Requests) + rateLimitClause",
+      "killedBy": [
+        "TestE2E_Ceiling"
+      ]
+    },
+    {
+      "id": "M99",
+      "name": "trim-scores-a-cap-ten-times-larger",
+      "class": "evidence",
+      "discovered": "2026-10-02",
+      "note": "The cap the reader typed is not the cap that was scored. The header repeats their number above figures computed for a different one.",
+      "file": "cmd/replay/trim.go",
+      "anchor": "\t\tplan := analysis.ScoreTrim(rep.Lane, rep.Fit, *capBytes)",
+      "replacement": "\t\tplan := analysis.ScoreTrim(rep.Lane, rep.Fit, *capBytes*10)",
+      "killedBy": [
+        "TestE2E_Trim"
+      ]
+    },
+    {
+      "id": "M100",
+      "name": "route-swaps-the-ttl-penalties",
+      "class": "attribution-misplacement",
+      "discovered": "2026-10-02",
+      "note": "The 5m and 1h write penalties change places. Both figures are real and each is printed under the other's TTL, which is RPL-C033's distinction reversed.",
+      "file": "cmd/replay/route.go",
+      "anchor": "r.From.WriteShort, r.From.WriteLong)",
+      "replacement": "r.From.WriteLong, r.From.WriteShort)",
+      "killedBy": [
+        "TestE2E_Route"
+      ]
+    },
+    {
+      "id": "M101",
+      "name": "context-shares-are-a-tenth",
+      "class": "evidence",
+      "discovered": "2026-10-02",
+      "note": "Every share in the table is a tenth of itself. The tokens beside it are right, so the two columns disagree and the percentage is the one a reader quotes.",
+      "file": "cmd/replay/context.go",
+      "anchor": "r.Share*100, formatCount(r.Tokens)",
+      "replacement": "r.Share*10, formatCount(r.Tokens)",
+      "killedBy": [
+        "TestE2E_Context"
+      ]
+    },
+    {
+      "id": "M102",
+      "name": "advise-finds-no-sessions",
+      "class": "evidence",
+      "discovered": "2026-10-02",
+      "note": "The header says 0 sessions were found above findings derived from one. The evidence line under each finding and the header above them disagree.",
+      "file": "cmd/replay/advise.go",
+      "anchor": "len(files), len(obs))",
+      "replacement": "0, len(obs))",
+      "killedBy": [
+        "TestE2E_Advise"
+      ]
+    },
+    {
+      "id": "M103",
+      "name": "learn-reports-no-sessions-found",
+      "class": "evidence",
+      "discovered": "2026-10-02",
+      "note": "The policy file records that no sessions were found, beside a calibrated count of one. A later reader of policy.json cannot tell a corpus from an empty directory.",
+      "file": "internal/learn/learn.go",
+      "anchor": "\tres.Sessions.Found = found",
+      "replacement": "\tres.Sessions.Found = 0",
+      "killedBy": [
+        "TestE2E_Learn"
+      ]
+    },
+    {
+      "id": "M104",
+      "name": "redact-keeps-the-working-directory",
+      "class": "privacy",
+      "discovered": "2026-10-02",
+      "note": "The transcript a user is told is safe to attach to a bug report carries their project path on every line.",
+      "file": "internal/transcript/redact.go",
+      "anchor": "\tobj[\"cwd\"] = \"/redacted\"",
+      "replacement": "\t_ = obj[\"cwd\"]",
+      "killedBy": [
+        "TestE2E_Redact"
+      ]
+    },
+    {
+      "id": "M105",
+      "name": "prefix-never-exits-one",
+      "class": "guard-removed",
+      "discovered": "2026-10-02",
+      "note": "A changed tool set is reported in prose and the exit status says the prefix survives. The one consumer that matters, a CI gate, reads the status.",
+      "file": "cmd/replay/prefix.go",
+      "anchor": "\t\t\t\"  For the size of one such break on your own history:  replay diff <transcript>\\n\")\n\treturn errPrefixInvalidated",
+      "replacement": "\t\t\t\"  For the size of one such break on your own history:  replay diff <transcript>\\n\")\n\treturn nil",
+      "killedBy": [
+        "TestE2E_Prefix"
+      ]
+    },
+    {
+      "id": "M106",
+      "name": "since-reports-only-what-came-before",
+      "class": "evidence",
+      "discovered": "2026-10-02",
+      "note": "The window is inverted: everything since the marker is excluded and everything before it is counted. 'Since you last looked' describes the past.",
+      "file": "cmd/replay/since.go",
+      "anchor": "\t\tif !had || t.At.After(mark) {",
+      "replacement": "\t\tif !had || t.At.Before(mark) {",
+      "killedBy": [
+        "TestE2E_Since"
+      ]
+    },
+    {
+      "id": "M107",
+      "name": "budget-drops-the-tool-bytes",
+      "class": "evidence",
+      "discovered": "2026-10-02",
+      "note": "The committable budget file records that the tool definitions occupy no bytes while pricing the tokens estimated from those bytes. The two fields contradict and the one a reviewer diffs is the bytes.",
+      "file": "cmd/replay/budget.go",
+      "anchor": "\t\t\tToolBytes:    toolBytes,",
+      "replacement": "\t\t\tToolBytes:    0,",
+      "killedBy": [
+        "TestE2E_Budget"
+      ]
+    },
+    {
+      "id": "M108",
+      "name": "purge-removes-the-recent-files",
+      "class": "guard-removed",
+      "discovered": "2026-10-02",
+      "note": "The retention window is inverted: files inside the window are selected and files past it are kept. With --yes this deletes the ledger a user meant to keep.",
+      "file": "cmd/replay/purge.go",
+      "anchor": "\t\tif info.ModTime().After(cutoff) {",
+      "replacement": "\t\tif info.ModTime().Before(cutoff) {",
+      "killedBy": [
+        "TestE2E_Purge"
+      ]
+    },
+    {
+      "id": "M109",
+      "name": "privacy-omits-a-store-it-writes",
+      "class": "privacy",
+      "discovered": "2026-10-02",
+      "note": "advice.json, which carries tool and file names from the user's transcripts, is no longer in the registry replay privacy reads and replay purge sweeps. The contributor-secret gap SURFACES.md records, reproduced on a file that is already registered.",
+      "file": "cmd/replay/stores.go",
+      "anchor": "\t\t\tName: \"advice.json\", Purgeable: true,",
+      "replacement": "\t\t\tName: \"advice-json\", Purgeable: true,",
+      "killedBy": [
+        "TestE2E_Privacy"
+      ]
+    },
+    {
+      "id": "M110",
+      "name": "serve-accepts-a-negative-preflight-ceiling",
+      "class": "guard-removed",
+      "discovered": "2026-10-02",
+      "note": "A negative ceiling is read as a real one and the guard arms with it. An operator who typed a mistake gets a proxy that refuses every request whose prefix exceeds a negative number, or none, and nothing said the value was refused.",
+      "file": "cmd/replay/serve.go",
+      "anchor": "\tcase ceiling < 0:",
+      "replacement": "\tcase ceiling < -1000:",
+      "killedBy": [
+        "TestE2E_Serve"
+      ]
+    },
+    {
+      "id": "M111",
+      "name": "upgrade-verifies-a-download-that-failed",
+      "class": "guard-removed",
+      "discovered": "2026-10-02",
+      "note": "A fetch that failed prints '✓ Checksum verified' and, on a dry run, 'Verified v9.9.9 (0 bytes)'. The release does not exist and the command says it was checked.",
+      "file": "cmd/replay/upgrade.go",
+      "anchor": "\tbin, sig, err := client.Fetch(ctx, target, runtime.GOOS, runtime.GOARCH)\n\tif err != nil {\n\t\treturn err\n\t}",
+      "replacement": "\tbin, sig, err := client.Fetch(ctx, target, runtime.GOOS, runtime.GOARCH)\n\tif err != nil {\n\t\t_ = err\n\t}",
+      "killedBy": [
+        "TestE2E_Upgrade"
+      ]
+    },
+    {
+      "id": "M112",
+      "name": "burn-prints-a-cross-surface-total",
+      "class": "claim-outruns-evidence",
+      "discovered": "2026-10-02",
+      "note": "A total row under columns the next sentence says are not addable. RPL-C021's type-level oracle cannot see this: the reducer is three lines in the renderer, not a field or a method. The 2026-10-02 wiring gate planted a dead reducer beside the type and the name lint stayed green; this is the live version.",
+      "file": "cmd/replay/burn.go",
+      "anchor": "\t_, _ = fmt.Fprintf(stdout, \"\\n  The token columns are not addable. Anthropic reports the prompt with the\\n\")",
+      "replacement": "\ttotal := 0\n\tfor _, s := range surfaces {\n\t\ttotal += s.tokens\n\t}\n\t_, _ = fmt.Fprintf(stdout, \"  %-14s %9s %14s\\n\", \"total\", \"\", comma(total))\n\t_, _ = fmt.Fprintf(stdout, \"\\n  The token columns are not addable. Anthropic reports the prompt with the\\n\")",
+      "killedBy": [
+        "TestC021_BurnPrintsNoCrossSurfaceTotal"
+      ]
+    },
+    {
+      "id": "M113",
+      "name": "cost-header-drops-the-price-table-date",
+      "class": "provenance",
+      "discovered": "2026-10-02",
+      "note": "The header keeps a date, the rules version's, and loses the one RPL-C025 promises: the price table's. Until 2026-10-02 the oracle accepted any date on the line and this survived it.",
+      "file": "cmd/replay/cost.go",
+      "anchor": "\tline := fmt.Sprintf(\"Cost per %s, across %s of Claude Code, at list prices dated %s (caching rules %s).\",\n\t\tper, subject, cachemodel.PriceTableVersion, cachemodel.RulesVersionInEffect())",
+      "replacement": "\tline := fmt.Sprintf(\"Cost per %s, across %s of Claude Code, at list prices undated (caching rules %s).\",\n\t\tper, subject, cachemodel.RulesVersionInEffect())",
+      "killedBy": [
+        "TestC004_TheCostReportStatesHowItsDollarsWereObtained"
+      ]
+    },
+    {
+      "id": "M114",
+      "name": "share-card-names-all-spend",
+      "class": "claim-outruns-evidence",
+      "discovered": "2026-10-02",
+      "note": "The wording the text card shipped with until 2026-10-02. RebilledShare is a share of priced spend; the card said it was a share of all of it.",
+      "file": "cmd/replay/share.go",
+      "anchor": "\theadline := figure + \" of my priced agent spend was paid twice.\"",
+      "replacement": "\theadline := figure + \" of my agent spend was paid twice.\"",
+      "killedBy": [
+        "TestShareCardNamesThePricedPopulation"
+      ]
+    },
+    {
+      "id": "M115",
+      "name": "share-card-rounds-to-a-hundred-percent",
+      "class": "evidence",
+      "discovered": "2026-10-02",
+      "note": "The ceiling the PNG had and the text card did not: a measured 99.6% prints as 100%, which on this card says every dollar was re-billed.",
+      "file": "cmd/replay/share.go",
+      "anchor": "\tcase pct > 99 && pct < 100:",
+      "replacement": "\tcase pct > 100:",
+      "killedBy": [
+        "TestShareCardDoesNotRoundToAHundredPercent"
+      ]
+    },
+    {
+      "id": "M116",
+      "name": "share-halves-the-rebilled-share",
+      "class": "evidence",
+      "discovered": "2026-10-02",
+      "note": "The denominator the headline is computed over is no longer the priced spend. The card's figure halves while every word around it stays the same.",
+      "file": "cmd/replay/cost.go",
+      "anchor": "\t\ts.RebilledShare = s.RebilledUSD / s.TotalUSD",
+      "replacement": "\t\ts.RebilledShare = s.RebilledUSD / (s.TotalUSD * 2)",
+      "killedBy": [
+        "TestShareCardNamesThePricedPopulation"
+      ]
     }
   ],
   "knownSurvivors": [

@@ -210,6 +210,12 @@ func (d Data) rateText() string {
 		return "0%"
 	case pct < 1:
 		return "<1%"
+	case pct > 99 && pct < 100:
+		// The ceiling, which the floor above always had and this did not. %.0f
+		// renders a measured 99.6% as "100%", and on a card whose only words
+		// are "of priced spend, paid twice" that reads as all of it. Rounding
+		// up into a total is the one direction this figure must never go.
+		return ">99%"
 	default:
 		return fmt.Sprintf("%.0f%%", pct)
 	}

@@ -18,11 +18,11 @@ re-billed at write prices.
 
 GitHub labels this repository 'Other' because its licence detector does not know BUSL-1.1; the licence is the Business Source License 1.1, converting to the Apache License 2.0 on 2029-09-06, and the text is in LICENSE.
 
-> **The refusals are the feature.** Anything this tool cannot measure, it declines to print — and
-> says why, in the place the number would have gone. `replay route` will not quote you dollars for a
+> **The refusals are the feature.** Anything this tool cannot price, it leaves out of the figure and
+> says how much it left out, in the place the number would have gone. `replay route` will not quote you dollars for a
 > model pair it has never seen on the wire. `replay context` tells you when its own answer is
-> incomplete because the session was compacted. Every figure carries the population it was measured
-> on and the date it was read. When a number here turns out to be wrong, the correction ships as a
+> incomplete because the session was compacted. The cost report carries the population it was measured
+> on and the date of the price table it used. When a number here turns out to be wrong, the correction ships as a
 > new dated file and the old reading stays visible — including
 > [the time this README overstated its own sample size twentyfold](#how-far-to-trust-it).
 
@@ -292,7 +292,7 @@ Two further reasons not to quote a share, both of which survived the re-runs:
 
 ## Every number says how it was obtained
 
-This is the part that matters, and it is enforced in code rather than promised in a README.
+This is the part that matters.
 
 | Tier | Meaning |
 |---|---|
@@ -300,7 +300,7 @@ This is the part that matters, and it is enforced in code rather than promised i
 | **estimated** | Derived through a byte-to-token fit, printed with its error bar |
 | **structural** | A property of the request shape, not a measurement |
 
-Nothing prints without one. `replay route --to <model>` **refuses to give a dollar figure** for a
+`replay route --to <model>` **refuses to give a dollar figure** for a
 model pair it has not measured, rather than guessing — which is the behaviour a tool that wants to
 be trusted has to have, and the behaviour that makes it less impressive on first run.
 

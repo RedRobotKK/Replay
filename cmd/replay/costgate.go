@@ -37,6 +37,46 @@ var errNotMeasured = errors.New("NOT MEASURED")
 // the exit code would go green on a CI runner with no transcripts and report a
 // clean bill of health nobody earned. Zero priced tasks is refused, loudly,
 // because an absence is not a number under a ceiling.
+
+// rebilledFigureCaveats names every way the figure a ceiling was compared
+// against falls short of the work it appears to describe.
+//
+// One helper rather than a sentence per branch, because the gate's PASS verdict
+// used to say nothing while its FAIL verdict named two of these, and a reader
+// deciding whether to trust a GREEN build needs them more than one deciding
+// whether to trust a red one: a pass is exactly the verdict excluded spend
+// could flip.
+//
+// Four holes, deliberately kept apart rather than summed. They have different
+// causes and different remedies, and a single "coverage" number would say which
+// of them nobody could act on.
+func rebilledFigureCaveats(s costSummary, unpriced, unreadable int) []string {
+	var out []string
+	if unpriced > 0 {
+		out = append(out, fmt.Sprintf(
+			"%d transcript(s) were excluded as unpriced, so the real figure is higher.", unpriced))
+	}
+	if unreadable > 0 {
+		out = append(out, fmt.Sprintf(
+			"%d transcript(s) could not be read at all, so the real figure is higher still.", unreadable))
+	}
+	// Record granularity, which the two above do not reach: these are records
+	// INSIDE transcripts that did price. RPL-C035.
+	if n := s.PricedRequests + s.UnpricedRequests; s.UnpricedRequests > 0 && n > 0 {
+		out = append(out, fmt.Sprintf(
+			"%d of %d requests read priced nothing, so this figure covers part of the work.",
+			s.UnpricedRequests, n))
+	}
+	// Break granularity, which none of the above reach: these are re-billed
+	// TOKENS outside the re-billed DOLLARS. RPL-C037.
+	if s.UnpricedRebilledTokens > 0 && s.RebilledTokens > 0 {
+		out = append(out, fmt.Sprintf(
+			"%d of %d re-billed tokens are outside this figure, on a model no price table carries.",
+			s.UnpricedRebilledTokens, s.RebilledTokens))
+	}
+	return out
+}
+
 func checkRebilledCeiling(ceiling float64, s costSummary, unpriced, unreadable int, stdout io.Writer) error {
 	if ceiling == 0 {
 		return nil // not asked for
@@ -59,25 +99,22 @@ func checkRebilledCeiling(ceiling float64, s costSummary, unpriced, unreadable i
 				"  That is spend nobody chose: context re-billed because a prompt cache broke.\n"+
 				"  For the turn it happened on:  replay diff <transcript>\n",
 			s.RebilledUSD, ceiling, s.Tasks, s.Unit)
-		if unpriced > 0 {
-			// The total the ceiling was compared against has holes in it, and a
-			// reader deciding whether to trust a failed build needs to know how
-			// many. Excluded is not free.
-			_, _ = fmt.Fprintf(stdout,
-				"  %d transcript(s) were excluded as unpriced, so the real figure is higher.\n", unpriced)
-		}
-		if unreadable > 0 {
-			// Same hole, different cause. A transcript the parser could not
-			// read is excluded from the total this ceiling was compared
-			// against exactly as completely as an unpriced one, and until
-			// this line it was named on no surface at all.
-			_, _ = fmt.Fprintf(stdout,
-				"  %d transcript(s) could not be read at all, so the real figure is higher still.\n", unreadable)
+		for _, c := range rebilledFigureCaveats(s, unpriced, unreadable) {
+			_, _ = fmt.Fprintf(stdout, "  %s\n", c)
 		}
 		return fmt.Errorf("%w: $%.2f over $%.2f", errGate, s.RebilledUSD, ceiling)
 	}
 
 	_, _ = fmt.Fprintf(stdout, "\n  GATE: re-billed spend $%.2f is within the $%.2f ceiling.\n",
 		s.RebilledUSD, ceiling)
+	// The same holes the failing verdict names. A pass over a partial figure is
+	// a pass the excluded part could overturn, so it is reported here rather
+	// than only where the build was going to fail anyway.
+	if caveats := rebilledFigureCaveats(s, unpriced, unreadable); len(caveats) > 0 {
+		_, _ = fmt.Fprintf(stdout, "  The figure it was compared against is not complete:\n")
+		for _, c := range caveats {
+			_, _ = fmt.Fprintf(stdout, "    %s\n", c)
+		}
+	}
 	return nil
 }

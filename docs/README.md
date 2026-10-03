@@ -79,3 +79,5 @@ cannot be mistaken for a current one.
 ---
 
 [Repository README](../README.md)
+
+- [Replay 1.0 proof package](PROOF-1.0.md) — what Replay can establish, which artifact establishes it, and what it cannot

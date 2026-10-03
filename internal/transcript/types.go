@@ -285,6 +285,18 @@ type Session struct {
 	// Skipped counts lines the parser could not interpret. Non-zero is not an
 	// error, but it is reported so a format change does not pass silently.
 	Skipped int
+	// UnknownKinds counts records this reader parsed successfully but whose
+	// event kind it does not implement.
+	//
+	// SEPARATE from Skipped, and the separation is the point. Skipped means the
+	// bytes are gone and something is wrong. This means the bytes are fine and
+	// this binary is older than the writer, which is the normal consequence of
+	// an additive schema. Counting the second as the first reports a routine
+	// version gap as data loss.
+	//
+	// Counted rather than ignored, because a record dropped in silence is
+	// indistinguishable from one that was never written.
+	UnknownKinds int
 	// Refusals counts records the proxy wrote because it answered a request
 	// locally — a spend cap, a guard — rather than forwarding it.
 	//

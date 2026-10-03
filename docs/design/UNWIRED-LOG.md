@@ -98,6 +98,15 @@ killed by the suite.
 
 **What would wire it:** a command that reports what this machine's agent
 surfaces can and cannot measure, which `replay doctor` is the natural home for.
+
+**WIRED 2026-10-02.** `replay doctor` prints a `cache signal` line: it probes the
+transcript root with `surface.Probe` and classifies it with `surface.Classify`
+against the Anthropic write contract (`anthropicWriteContract` in
+`cmd/replay/doctor.go`, sourced from the rules in effect). The class is printed
+with its reason on the line beneath, and an empty boundary prints
+`undetermined` with the reason rather than a class or a zero.
+`TestE2E_Doctor` and `TestE2E_DoctorRefusesToClassifyAnEmptyBoundary` hold it
+through `dispatch`. The package is in the shipped closure from this date.
 That has not been proposed or authorised, so the package stays out of the binary
 rather than growing a user-facing surface nobody asked for. The opt-in
 real-machine probe (`REPLAY_PROBE_REAL=1`) is deliberately outside the hermetic

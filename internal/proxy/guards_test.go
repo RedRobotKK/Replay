@@ -16,18 +16,18 @@ func TestSpendGuardCapsSessionAndDay(t *testing.T) {
 	if g.Check("a") != "" {
 		t.Fatal("fresh session must be allowed")
 	}
-	g.Record("a", 60, 0)
+	g.Record("a", 60, 0, false)
 	if g.Check("a") != "" {
 		t.Fatal("under the cap must be allowed")
 	}
-	g.Record("a", 40, 0)
+	g.Record("a", 40, 0, false)
 	if reason := g.Check("a"); reason == "" {
 		t.Fatal("session cap must refuse the next request")
 	}
 	if g.Check("b") != "" {
 		t.Fatal("another session is under its own cap")
 	}
-	g.Record("b", 60, 0)
+	g.Record("b", 60, 0, false)
 	if reason := g.Check("b"); reason == "" {
 		t.Fatal("daily cap must refuse across sessions")
 	}
@@ -37,7 +37,7 @@ func TestSpendGuardRollsOverAtMidnightUTC(t *testing.T) {
 	g := NewSpendGuard(SpendLimits{DayTokens: 10})
 	day := time.Date(2026, 9, 2, 23, 59, 0, 0, time.UTC)
 	g.now = func() time.Time { return day }
-	g.Record("a", 10, 0)
+	g.Record("a", 10, 0, false)
 	if g.Check("a") == "" {
 		t.Fatal("cap must apply today")
 	}
@@ -52,7 +52,7 @@ func TestSpendGuardDisabledIsNoop(t *testing.T) {
 	if g.Enabled() || g.Check("x") != "" {
 		t.Fatal("nil guard must allow everything")
 	}
-	g.Record("x", 1, 0)
+	g.Record("x", 1, 0, false)
 }
 
 func TestDetectLoop(t *testing.T) {
@@ -152,15 +152,15 @@ func TestIsRetryableStatus(t *testing.T) {
 
 func TestSpendGuardDollarCaps(t *testing.T) {
 	g := NewSpendGuard(SpendLimits{SessionUSD: 1, DayUSD: 1.5})
-	g.Record("a", 100, 0.6)
+	g.Record("a", 100, 0.6, false)
 	if g.Check("a") != "" {
 		t.Fatal("under the dollar cap must be allowed")
 	}
-	g.Record("a", 100, 0.4)
+	g.Record("a", 100, 0.4, false)
 	if reason := g.Check("a"); !strings.Contains(reason, "$1.00 of $1.00") {
 		t.Fatalf("session dollar cap must refuse: %q", reason)
 	}
-	g.Record("b", 100, 0.5)
+	g.Record("b", 100, 0.5, false)
 	if reason := g.Check("b"); !strings.Contains(reason, "daily spend cap reached: $1.50") {
 		t.Fatalf("daily dollar cap must refuse across sessions: %q", reason)
 	}
@@ -182,18 +182,27 @@ func TestErrorBudgetJudgesOnlyLargeSessions(t *testing.T) {
 	}
 }
 
-// A dollar cap on a model the price table does not know never fires: listCost
-// returns 0, the running total never grows, and `used >= limit` is never true.
-// The user asked for a cap and silently got none. Failing closed would block
-// traffic over a missing price, which this proxy does not do, so the guard has
-// to be able to say that the cap it was given is not being enforced.
+// A dollar cap on a model the price table does not know is still ENFORCED, and
+// the figure it is enforced against is an UPPER BOUND rather than a
+// measurement: listCost substitutes the dearest known row.
+//
+// REWRITTEN. The original premise, "listCost returns 0, the running total never
+// grows", described the behaviour before that substitution landed. The test
+// kept passing because the flag it checked still armed on usd <= 0, a condition
+// the substitution made unreachable, so the test was asserting a mechanism that
+// no longer existed while the operator-facing signal had gone silent.
+//
+// The intent is unchanged and is the point: a cap whose total is a bound must
+// say so, because the operator cannot otherwise tell which of the two they are
+// reading.
 func TestDollarCapOnAnUnpricedModelIsReportedNotSilentlyIgnored(t *testing.T) {
 	g := NewSpendGuard(SpendLimits{SessionUSD: 20})
 	if g.CapNotEnforced() {
 		t.Fatal("nothing has happened yet")
 	}
-	// Tokens were spent, but the model could not be priced.
-	g.Record("s1", 500_000, 0)
+	// Tokens were spent on a model the table could not price, so the cost is
+	// the dearest row standing in for it.
+	g.Record("s1", 500_000, 12.50, true)
 	if !g.CapNotEnforced() {
 		t.Fatal("a dollar cap that cannot be enforced must be reportable, not silent")
 	}
@@ -203,7 +212,7 @@ func TestDollarCapOnAnUnpricedModelIsReportedNotSilentlyIgnored(t *testing.T) {
 
 	// A priced session behaves exactly as before.
 	h := NewSpendGuard(SpendLimits{SessionUSD: 20})
-	h.Record("s2", 500_000, 25)
+	h.Record("s2", 500_000, 25, false)
 	if h.CapNotEnforced() {
 		t.Fatal("a priced session enforces its cap normally")
 	}
@@ -221,7 +230,7 @@ func TestDayCapSurvivesARestart(t *testing.T) {
 
 	first := NewSpendGuard(SpendLimits{DayUSD: 10})
 	first.LoadState(dir)
-	first.Record("s1", 500_000, 7.50)
+	first.Record("s1", 500_000, 7.50, false)
 	if msg := first.Check("s1"); msg != "" {
 		t.Fatalf("fixture: $7.50 of $10 should not refuse yet: %q", msg)
 	}
@@ -230,7 +239,7 @@ func TestDayCapSurvivesARestart(t *testing.T) {
 	// The process dies and comes back. The day's spend must come back with it.
 	second := NewSpendGuard(SpendLimits{DayUSD: 10})
 	second.LoadState(dir)
-	second.Record("s2", 200_000, 3.00) // takes the day to $10.50
+	second.Record("s2", 200_000, 3.00, false) // takes the day to $10.50
 	if msg := second.Check("s2"); msg == "" {
 		t.Fatal("the day cap did not survive the restart: $10.50 of $10 was allowed")
 	}
@@ -243,7 +252,7 @@ func TestPersistedStateFromAnotherDayIsDiscarded(t *testing.T) {
 	g := NewSpendGuard(SpendLimits{DayUSD: 10})
 	g.now = func() time.Time { return time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC) }
 	g.LoadState(dir)
-	g.Record("s1", 0, 50) // way over
+	g.Record("s1", 0, 50, false) // way over
 	g.SaveState(dir)
 
 	next := NewSpendGuard(SpendLimits{DayUSD: 10})
@@ -286,15 +295,15 @@ func TestSpendGuardEvictsLeastRecentlyUsedUnderAFrozenClock(t *testing.T) {
 	ids := make([]string, maxSpendSessions)
 	for i := range ids {
 		ids[i] = fmt.Sprintf("s%04d", i)
-		g.Record(ids[i], 1, 0)
+		g.Record(ids[i], 1, 0, false)
 	}
 	// Touch every session except the first, so it is unambiguously the least
 	// recently used and every seen timestamp remains identical.
 	for _, id := range ids[1:] {
-		g.Record(id, 1, 0)
+		g.Record(id, 1, 0, false)
 	}
 
-	g.Record("newcomer", 1, 0)
+	g.Record("newcomer", 1, 0, false)
 
 	g.mu.Lock()
 	defer g.mu.Unlock()

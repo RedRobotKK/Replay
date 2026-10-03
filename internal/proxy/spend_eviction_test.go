@@ -31,16 +31,16 @@ func TestSpendGuard_EvictsLeastRecentlyUsedWhenTheClockCannotSeparateRecords(t *
 
 	// Fill the table exactly. "first" is the least recently used from here on,
 	// because nothing touches it again.
-	g.Record("first", 1, 0)
+	g.Record("first", 1, 0, false)
 	for i := 0; i < maxSpendSessions-1; i++ {
-		g.Record(fmt.Sprintf("filler-%d", i), 1, 0)
+		g.Record(fmt.Sprintf("filler-%d", i), 1, 0, false)
 	}
 	if len(g.session) != maxSpendSessions {
 		t.Fatalf("table should be full: %d", len(g.session))
 	}
 
 	// One more session forces exactly one eviction. The victim must be "first".
-	g.Record("newcomer", 1, 0)
+	g.Record("newcomer", 1, 0, false)
 
 	if _, ok := g.session["first"]; ok {
 		t.Error("the least recently used session survived; something else was evicted " +
@@ -59,16 +59,16 @@ func TestSpendGuard_AStillActiveHeavySessionOutlivesIdleOnes(t *testing.T) {
 	tick := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
 	g.now = func() time.Time { return tick }
 
-	g.Record("heavy", 500_000, 0)
+	g.Record("heavy", 500_000, 0, false)
 	for i := 0; i < maxSpendSessions-1; i++ {
-		g.Record(fmt.Sprintf("idle-%d", i), 1, 0)
+		g.Record(fmt.Sprintf("idle-%d", i), 1, 0, false)
 	}
 	// Touch the heavy lane again: it is now the most recently used entry that
 	// the coarse clock still stamps identically to every other.
-	g.Record("heavy", 500_000, 0)
+	g.Record("heavy", 500_000, 0, false)
 
 	for i := 0; i < 32; i++ {
-		g.Record(fmt.Sprintf("late-%d", i), 1, 0)
+		g.Record(fmt.Sprintf("late-%d", i), 1, 0, false)
 	}
 	if _, ok := g.session["heavy"]; !ok {
 		t.Error("the heavy, recently-touched session was evicted while idle sessions " +

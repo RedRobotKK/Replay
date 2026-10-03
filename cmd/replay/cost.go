@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -83,15 +84,46 @@ type costUnit struct {
 	// warm run must reach the same disclosure as a cold one. unitSchema()
 	// reflects these json tags into the index key, so an index written before
 	// this field existed is discarded rather than read as Unpriced=false.
-	Unpriced       bool    `json:"unpriced,omitempty"`
-	CostUSD        float64 `json:"costUsd"`
-	UncachedUSD    float64 `json:"uncachedUsd,omitempty"`
-	WriteUSD       float64 `json:"cacheWriteUsd,omitempty"`
-	ReadUSD        float64 `json:"cacheReadUsd,omitempty"`
-	OutputUSD      float64 `json:"outputUsd,omitempty"`
-	RebilledUSD    float64 `json:"rebilledUsd"`
-	RebilledTokens int     `json:"rebilledTokens,omitempty"`
-	Breaks         int     `json:"breaks"`
+	Unpriced bool `json:"unpriced,omitempty"`
+	// PricedRequests and UnpricedRequests say how much of CostUSD's
+	// denominator it covers. Requests counts records OBSERVED and CostUSD
+	// sums only those that priced, so a row showing both without these two
+	// says nothing about the relationship between them.
+	//
+	// The pair rather than one derived from Requests, following burn.go,
+	// which holds its own request total and still computes coverage from
+	// priced/(priced+unpriced).
+	PricedRequests   int     `json:"pricedRequests,omitempty"`
+	UnpricedRequests int     `json:"unpricedRequests,omitempty"`
+	CostUSD          float64 `json:"costUsd"`
+	UncachedUSD      float64 `json:"uncachedUsd,omitempty"`
+	WriteUSD         float64 `json:"cacheWriteUsd,omitempty"`
+	ReadUSD          float64 `json:"cacheReadUsd,omitempty"`
+	OutputUSD        float64 `json:"outputUsd,omitempty"`
+	RebilledUSD      float64 `json:"rebilledUsd"`
+	RebilledTokens   int     `json:"rebilledTokens,omitempty"`
+	// UnpricedRebilledTokens is the part of RebilledTokens that RebilledUSD
+	// does NOT represent: deficit tokens on a break whose own record no price
+	// table could price at that record's timestamp.
+	//
+	// One counter rather than a pair, because RebilledTokens already supplies
+	// the total and is accumulated unconditionally one line above. The
+	// represented half is RebilledTokens minus this, and the conservation
+	// invariant is checkable from the two fields that exist. C035 took paired
+	// counters for a reason that does not transfer: `Requests` means
+	// priced-only in costusage.go, so deriving from it would have been right
+	// by coincidence.
+	//
+	// The EXCEPTION is the field rather than the represented part, matching
+	// costUnit.Unpriced and the top-level `unpriced` count, so omitempty
+	// means "nothing excluded" and the common document gains no key.
+	//
+	// It is serialized for the same reason Unpriced is: cachedUnit stores the
+	// whole costUnit, so a warm run reaches the same disclosure as a cold one
+	// with no warm-path code. Accumulating it in the cold walk instead is the
+	// defect that sank the first EC-00 repair.
+	UnpricedRebilledTokens int `json:"unpricedRebilledTokens,omitempty"`
+	Breaks                 int `json:"breaks"`
 	// MixedEpochs is set when this session's requests ran under more than one
 	// labelled tool-set epoch, so its total is a sum across tool sets rather
 	// than one as-run figure. Empty on every session recorded without
@@ -221,7 +253,27 @@ func foldSessions(units []costUnit) []costUnit {
 			continue
 		}
 		s.Lanes++
+		// Q01. Both flags are recomputed over every lane rather than inherited
+		// from whichever one was seen first. Files arrive size-descending with
+		// path as the tie-break, and cache-warm units are appended before any
+		// cold file is walked, so an inherited flag made a session's reported
+		// cost depend on lane FILE NAMES and on the contents of the cost index.
+		// Renaming a lane moved one fixture from $0.135000 to $0.000000.
+		//
+		// A session's dollars are unavailable only if NO lane could price, so
+		// Unpriced is an AND. A session spans epochs if ANY lane does, so
+		// MixedEpochs is an OR. Both are order-independent, which is the
+		// property the blocker was about.
+		//
+		// This does NOT settle whether a per-lane boolean is the right
+		// predicate at all; the lane flag is still computed from that lane's
+		// FIRST record while pricing has record granularity. That is a
+		// separate, narrower question and it is deliberately left open.
+		s.Unpriced = s.Unpriced && u.Unpriced
+		s.MixedEpochs = s.MixedEpochs || u.MixedEpochs
 		s.Requests += u.Requests
+		s.PricedRequests += u.PricedRequests
+		s.UnpricedRequests += u.UnpricedRequests
 		s.CostUSD += u.CostUSD
 		s.UncachedUSD += u.UncachedUSD
 		s.WriteUSD += u.WriteUSD
@@ -229,6 +281,7 @@ func foldSessions(units []costUnit) []costUnit {
 		s.OutputUSD += u.OutputUSD
 		s.RebilledUSD += u.RebilledUSD
 		s.RebilledTokens += u.RebilledTokens
+		s.UnpricedRebilledTokens += u.UnpricedRebilledTokens
 		s.Breaks += u.Breaks
 		s.Repeated += u.Repeated
 		s.Errored += u.Errored
@@ -294,6 +347,11 @@ type costSummary struct {
 	P90USD        float64 `json:"p90Usd"`
 	RebilledUSD   float64 `json:"rebilledUsd"`
 	RebilledShare float64 `json:"rebilledShare"`
+	// PricedRequests and UnpricedRequests say what share of the observed
+	// requests TotalUSD actually covers. Without them a partial total is
+	// presented as a complete one, which is the defect this pair closes.
+	PricedRequests   int `json:"pricedRequests,omitempty"`
+	UnpricedRequests int `json:"unpricedRequests,omitempty"`
 	// RebilledTokens is the same waste before it is multiplied by a price.
 	//
 	// The dollar figure is meaningless to a flat-seat subscriber, who is not
@@ -303,6 +361,17 @@ type costSummary struct {
 	// measurement of it came back null (README.md:228-235). The deficit was
 	// always in tokens first, and in tokens is where it can be stated.
 	RebilledTokens int `json:"rebilledTokens,omitempty"`
+	// UnpricedRebilledTokens is the part of RebilledTokens that RebilledUSD
+	// does not represent. RPL-C037: the two were printed as one result over
+	// two populations, so a corpus where every break priced and one where
+	// half did reached the same dollar and token pair.
+	//
+	// Two gates decide it, not one. A break whose own record cannot be priced
+	// is excluded at the per-break site; and summarise withholds a
+	// unit-flagged session's dollars WHOLE, so every break token in such a
+	// session is excluded too however well its own records price. Counting
+	// only the first gate discloses 100% against a figure covering 33%.
+	UnpricedRebilledTokens int `json:"unpricedRebilledTokens,omitempty"`
 	// MixedEpochSessions counts sessions whose total spans more than one
 	// labelled tool-set epoch. Such a total is still the sum of what was
 	// spent; it is simply not one as-run, and a reader comparing it against
@@ -373,7 +442,22 @@ func summarise(units []costUnit) costSummary {
 	}
 	s.Route = routeLine(models)
 	for _, u := range units {
+		// Over every unit, priced and unpriced alike. The question these
+		// answer is what share of the OBSERVED requests the total covers, so
+		// excluding the unpriced rows here would make the figure agree with
+		// itself by construction.
+		s.PricedRequests += u.PricedRequests
+		s.UnpricedRequests += u.UnpricedRequests
 		s.RebilledTokens += u.RebilledTokens
+		// The second gate. The priced-only loop below withholds this unit's
+		// RebilledUSD entirely, so none of its break tokens are represented,
+		// however well its own records priced. The per-break counter alone
+		// would call them covered.
+		if u.Unpriced {
+			s.UnpricedRebilledTokens += u.RebilledTokens
+		} else {
+			s.UnpricedRebilledTokens += u.UnpricedRebilledTokens
+		}
 		if u.MixedEpochs {
 			s.MixedEpochSessions++
 		}
@@ -486,6 +570,29 @@ func renderCost(s costSummary, unpriced, unreadable int, out io.Writer, stateDir
 		fmt.Fprintf(&b, "\n%s\n", wrapAt(n, 78, ""))
 	}
 	fmt.Fprintf(&b, "\nRe-billed is the part nobody chose: tokens billed twice because a prompt cache\nbroke. It is not a forecast of savings, it is what was already spent twice.\n")
+	// RPL-C037. The dollar figure and the token count above cover different
+	// populations: RebilledUSD represents only breaks the price table could
+	// price, in sessions whose dollars were not withheld whole, and
+	// RebilledTokens counts every break. Printed as one result they collapsed
+	// a corpus where every break priced and one where half did onto the same
+	// pair.
+	//
+	// This is a different statement from the request-coverage sentence
+	// further down, which is about requests and about the total. A session can
+	// be fully inside the total and still have break tokens outside the
+	// re-billed figure.
+	//
+	// Floored, following burn.go: coverage that rounds up reads as complete
+	// beside an incomplete figure. Never clamped.
+	//
+	// Suppressed when nothing is excluded, and when there was no break, so
+	// the line appears only where it carries information.
+	if s.UnpricedRebilledTokens > 0 && s.RebilledTokens > 0 {
+		represented := s.RebilledTokens - s.UnpricedRebilledTokens
+		cover := math.Floor(float64(represented) / float64(s.RebilledTokens) * 100)
+		fmt.Fprintf(&b, "\nThe re-billed figure covers %.0f%% of those tokens: %d of %d were priced, and\n%d ran on a model no price table carries at the time they ran. Those are not\nfree, and what they cost is not established here.\n",
+			cover, represented, s.RebilledTokens, s.UnpricedRebilledTokens)
+	}
 	if s.RebilledTokens > 0 {
 		// What this paragraph may and may not assert.
 		//
@@ -512,6 +619,20 @@ func renderCost(s costSummary, unpriced, unreadable int, out io.Writer, stateDir
 			"down a rate-limit window was measured here across 3.09M tokens and the\n"+
 			"utilisation counter did not move: a null result, not a saving. `replay advise`\n"+
 			"ranks what to cut by cache-write and cache-read dollars, not by token share.\n")
+	}
+	// Partial coverage, which is a different statement from the one below:
+	// that one is about whole transcripts nothing could price, this is about
+	// requests INSIDE transcripts that were priced. A session can be in the
+	// total and still be only partly covered by it.
+	//
+	// The share is floored, following burn.go: 60,370 of 60,402 printed as
+	// "100%" beside an incomplete total is worse than no figure, because the
+	// reader stops looking for the missing part.
+	if s.UnpricedRequests > 0 && s.PricedRequests > 0 {
+		n := s.PricedRequests + s.UnpricedRequests
+		cover := math.Floor(float64(s.PricedRequests) / float64(n) * 100)
+		fmt.Fprintf(&b, "\nThe total above covers %.0f%% of the requests read: %d of %d priced, %d on a\nmodel no price table carries. Those %d are not in the figure and are not free;\nwhat they cost is not established here.\n",
+			cover, s.PricedRequests, n, s.UnpricedRequests, s.UnpricedRequests)
 	}
 	if unpriced > 0 {
 		fmt.Fprintf(&b, "\n%d further transcripts were read but not priced, because their model is not in\nthe price table. They are excluded rather than counted as free.\n", unpriced)
@@ -726,13 +847,15 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		// The session keeps its row, flagged. Its dollars are withheld by
 		// summarise; its tokens are not, because they never needed a price.
 		u := costUnit{
-			Unpriced: !priceKnown,
-			At:       at,
-			ID:       prefixID(session.ID),
-			Lane:     laneID(path),
-			Model:    model,
-			Requests: asRun.Requests,
-			CostUSD:  asRun.CostUSD,
+			Unpriced:         !priceKnown,
+			At:               at,
+			ID:               prefixID(session.ID),
+			Lane:             laneID(path),
+			Model:            model,
+			Requests:         asRun.Requests,
+			PricedRequests:   asRun.PricedRequests,
+			UnpricedRequests: asRun.UnpricedRequests,
+			CostUSD:          asRun.CostUSD,
 
 			MixedEpochs: asRun.MixedEpochs(),
 		}
@@ -746,6 +869,24 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		// One analysis pass, reused for all four, because a second walk of a
 		// seventeen-lane session is the expensive thing here.
 		deficit := 0
+		// rebilled is accumulated per BREAK, at the rate of the record the
+		// break happened on, because a deficit's cost is a property of the
+		// record and not of whichever record arrived first.
+		//
+		// Until 2026-10-01 the session total was monetised once at
+		// Requests[0].Model. The same four records in three arrival orders
+		// then priced at $0.300000, $0.048000 and $0.048000, and two records
+		// nothing could price ADDED $0.032 because their deficit was billed
+		// at a rate belonging to a different record.
+		//
+		// Break.Turn.Request carries the model and the timestamp
+		// (calibrate.go:23), so this needs nothing the loop did not already
+		// have.
+		rebilled := 0.0
+		// unpricedDeficit is the half of deficit that rebilled does not cover.
+		// Accumulated here rather than derived later, because the price answer
+		// is known only at this point and nothing downstream can recover it.
+		unpricedDeficit := 0
 		for _, lr := range analysis.AnalyzeEveryLane(session) {
 			u.Breaks += len(lr.Breaks)
 			u.Repeated += lr.ReReads.Repeated
@@ -753,7 +894,24 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 				u.Errored += e.Count
 			}
 			for _, br := range lr.Breaks {
+				// Tokens first and unconditionally. A deficit is Expected
+				// minus Actual and consults no price table, so an unpriceable
+				// record still contributes its tokens; only its dollars are
+				// withheld.
 				deficit += br.Deficit
+				if br.Turn.Request != nil {
+					if p, ok := cachemodel.PriceForAt(br.Turn.Request.Model, br.Turn.Request.Timestamp); ok {
+						rebilled += float64(br.Deficit) / 1_000_000 * p.InputPerMTok
+						continue
+					}
+				}
+				// Every path that reaches here contributed tokens to deficit
+				// and nothing to rebilled, so these tokens are exactly the
+				// part the dollar figure does not represent. The nil-request
+				// arm lands here too: a break whose record is missing cannot
+				// be priced, and recording it as represented would be the
+				// silent zero one column over.
+				unpricedDeficit += br.Deficit
 			}
 		}
 		// Price only what was demonstrably spent twice. A cache break's deficit
@@ -762,9 +920,8 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		// Outside the price branch. A deficit is Expected minus Actual and
 		// consults no price table, so it is known whether or not a price is.
 		u.RebilledTokens = deficit
-		if price, ok := cachemodel.PriceForAt(model, u.At); ok {
-			u.RebilledUSD = float64(deficit) / 1_000_000 * price.InputPerMTok
-		}
+		u.RebilledUSD = rebilled
+		u.UnpricedRebilledTokens = unpricedDeficit
 		u.UncachedUSD = asRun.UncachedUSD
 		u.WriteUSD = asRun.WriteUSD
 		u.ReadUSD = asRun.ReadUSD

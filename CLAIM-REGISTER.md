@@ -5,14 +5,14 @@ regenerate it, or it will drift from the code it describes.**
 
 | Result | Count |
 |---|---|
-| BOUNDED | 11 |
+| BOUNDED | 12 |
 | DELIBERATE_NON_CLAIM | 1 |
 | ESTABLISHED | 2 |
 | NOT_MEASURED | 2 |
 | NO_ENDPOINT | 3 |
 | REFUTED | 4 |
 | UNRESOLVED | 1 |
-| **Total** | **24** |
+| **Total** | **25** |
 
 ---
 
@@ -43,6 +43,8 @@ regenerate it, or it will drift from the code it describes.**
 - **Insufficient-evidence control:** a corpus with zero records returns ClassUndetermined
 - **Tests:**
   - TestFixtureCorporaClassifyAsTheAuditFound
+  - TestE2E_Diff
+  - TestE2E_Cost
 
 **Why this result:** Holds for four surfaces and is explicitly refused for three others. The bound is the claim.
 
@@ -351,16 +353,17 @@ regenerate it, or it will drift from the code it describes.**
 | **Result** | **BOUNDED** |
 | Evidence basis | NOT_APPLICABLE |
 | Deciding layer | surface.Class, surface.WriteContract |
-| Scope | surface.Classify only. NOT the printed surface, which RPL-C005 refutes |
+| Scope | surface.Classify, and its verdict with reason on `replay doctor`'s cache signal line since 2026-10-02. NOT the cost report's printed figures, which RPL-C005 refutes |
 | Oracle | paired fixtures whose correct verdict is known from the contract, not from the classifier |
-| Asserted at | internal/surface/identify.go:174 |
+| Asserted at | internal/surface/identify.go:174, cmd/replay/doctor.go |
 
 - **Establishes:**
   - an empty corpus, and zero write observations under an unknown provider contract, both reach ClassUndetermined
   - the refusal carries a reason rather than arriving as a bare verdict
   - an unsourced contract fact is rejected outright, so an assertion with no provenance cannot enter as a provider fact
+  - the verdict and its reason reach the user: replay doctor prints the class and, on an empty boundary, undetermined with the reason, through the shipped dispatch path
 - **Does NOT establish:**
-  - that any refusal reaches the user. RPL-C005 establishes that at least one does not
+  - that every refusal reaches the user. RPL-C005 establishes that the cost report's does not; this claim's reaches doctor
   - that every refusal site is correct; reachability is machine-checked per site by scripts/refusal-reachability, correctness is not
 - **Assumptions Replay does not verify:** _none_
 - **Known gaps:**
@@ -371,8 +374,10 @@ regenerate it, or it will drift from the code it describes.**
 - **Tests:**
   - TestC005_RefusalIsDistinguishableFromZero
   - TestC005_AnUnsourcedContractIsRefused
+  - TestE2E_Doctor
+  - TestE2E_DoctorRefusesToClassifyAnEmptyBoundary
 
-**Why this result:** The internal layer does what the claim describes. The bound is that it is internal: a provenance field that does not reach the screen protects nobody, which is exactly what RPL-C005 found.
+**Why this result:** The classifier does what the claim describes and, since 2026-10-02, its verdict and reason are printed by replay doctor. The bound is the surface: doctor only, for the Anthropic transcript boundary, under a contract fact doctor states with its source. The cost report's own refusal (RPL-C005) is a separate finding.
 
 ---
 
@@ -552,6 +557,60 @@ regenerate it, or it will drift from the code it describes.**
 
 ---
 
+## RPL-C037
+
+> The re-billed dollar figure and the re-billed token count `replay cost` prints together describe the same re-billing.
+
+| | |
+|---|---|
+| **Result** | **BOUNDED** |
+| Evidence basis | RECONSTRUCTED |
+| Deciding layer | none. No type carries break-level priceability; `breaks` counts priceable and unpriceable alike |
+| Scope | break granularity within `replay cost`, human and JSON surfaces |
+| Oracle | a break-token ledger computed from the fixture specification, never from RebilledUSD or RebilledTokens, compared against the rendered and serialized re-billing surface |
+| Asserted at | cmd/replay/cost.go:547, cmd/replay/cost.go:549 |
+
+- **Establishes:**
+  - the token count. RebilledTokens covers every break and is correct, which RPL-C036 settled
+  - the pairing is now disclosed rather than true. `replay cost` states what share of the re-billed tokens the dollar figure represents, floored and never clamped, and states the excluded count. Suppressed where nothing is excluded and where there was no break
+  - the disclosure describes the figure rather than the price lookup. A unit-flagged session's break tokens are excluded although every one of its breaks priced, which a per-break-only counter reported as 100% against a figure covering 33%
+- **Does NOT establish:**
+  - the pairing itself, which is unchanged. RebilledUSD still covers only breaks whose own record could be priced, at cost.go:885 and again at cost.go:453, and RebilledTokens still counts every break at cost.go:433. The repair is a disclosure: no dollar and no token figure moved, which TestC037_P1 asserts in both directions
+  - anything about break COUNT coverage, which is deliberately not disclosed. On a corpus of one 90,000-token priceable break against three 1,000-token unpriceable ones, token coverage is 96% and count coverage 25%; the dollar figure is token-weighted, so the count would describe a different population
+  - any surface other than `replay cost`. `replay advise`, the card and the share surface read re-billed figures and were not examined for the same collapse
+  - that C035's disclosure covers this. That sentence is about requests and about TotalUSD; held identical across two corpora it leaves break coverage at 100% and 50% indistinguishable
+  - ASSUMPTION, not established: that a future disclosure would be recognisable to the frozen detector. It is proven against a planted sentence, not against a shipped one, and a disclosure worded without the words priced, price table or unpriceable would not be seen
+  - anything about `replay since`, which ranks on RebilledTokens alone and is outside this claim
+  - `replay cost --usage`, which is a SECOND path inside the same command with the same shape: costusage.go:194 accumulates sDeficit unconditionally, costusage.go:196 adds to sRebilled only `if priced`, and costusage.go:267 renders the two as one pair. Found by the post-repair surface audit, NOT measured and NOT repaired
+- **Assumptions Replay does not verify:**
+  - that a future disclosure would be recognisable to the frozen detector. It is proven against a planted sentence and against C035's sentence, which it must not match, but not against a shipped one
+- **Known gaps:**
+  - the five rejected candidates in TestC037_TheOracleRejectsEveryWrongCandidate are SIMULATED disclosures, retained as an oracle self-check. They are NOT the mutation evidence; ten mutations of the landed implementation are, and are recorded in the evidence file
+  - only the transcript path of `replay cost` was measured. `replay cost --usage` has the same two-population shape at costusage.go:194/196 and renders the pair at costusage.go:267; it was found by the post-repair audit and is neither measured nor repaired. `replay advise`, the card and the share surface also read re-billed figures and were not examined
+- **Positive control:** P1/Q and P2/Q2, corpora with 20,000 of 40,000 break tokens unpriceable, where the oracle computes 50% coverage and the report now discloses 50%; plus the second-gate corpus, where every break priced and the figure covers 33%; plus the unequal-deficit corpus at 96% token against 25% count coverage
+- **Negative control:** P1/P and P2/R, fully priceable corpora at 100% coverage, which must never carry a partial-coverage disclosure; and a zero-break corpus, which must carry neither a disclosure nor a re-billed token line
+- **Insufficient-evidence control:** a corpus where request-level and break-level coverage happen to coincide does not discriminate, which is why P1/Q is built so they diverge (2 of 3 requests priced against 1 of 2 break token halves)
+- **Tests:**
+  - TestC037_FixtureAssumptions
+  - TestC037_P1_TheRebillingSurfaceCollapses
+  - TestC037_P1b_RequestCoverageCarriesNoBreakCoverage
+  - TestC037_P2_NoBreakCoverageIsDisclosed
+  - TestC037_P3_FullCoverageEmitsNoPartialDisclosure
+  - TestC037_P4_ZeroBreakCorpusEmitsNoDisclosure
+  - TestC037_TheDetectorDiscriminates
+  - TestC037_TheOracleRejectsEveryWrongCandidate
+  - TestC037R1_TheFourCoverageCases
+  - TestC037R2_UnequalDeficitsRuleOutCountCoverage
+  - TestC037R3_TheUnitGateDecidesRepresentation
+  - TestC037R4_AZeroRatePriceableBreakIsFullyRepresented
+  - TestC037R5_ColdAndWarmDiscloseTheSame
+  - TestC037R6_TheIndexKeyCarriesTheCounter
+  - TestC037R7_TheCounterSurvivesTheLaneFold
+
+**Why this result:** REPAIRED 2026-10-02 by one counter, UnpricedRebilledTokens, and one disclosure. Frozen first: two corpora on one model name, 40,000 break tokens each, one fully priceable and one with 20,000 unpriceable, rendered an identical re-billed result and identical JSON. After the repair the 100% arm discloses nothing and the 50% arm discloses 50%, while both still report $0.020000 over 40,000 tokens. Ten production mutations killed, including count-based, request-based, per-break-only, forced-100%, inverted, and deriving priceability from a nonzero contribution; the lane-fold mutation SURVIVED first because every fixture was single-lane, and a two-lane case was added rather than the survivor explained away. Bounded because only `replay cost` was measured. cost.go:70-77's principle, that unpriced is not zero cost, now holds for RebilledUSD as it already did for CostUSD.
+
+---
+
 ## RPL-C008
 
 > Absence, zero and unknown are three different values, and Replay never collapses them.
@@ -576,6 +635,8 @@ regenerate it, or it will drift from the code it describes.**
 - **Insufficient-evidence control:** present-and-zero under an unknown contract is itself the refusal
 - **Tests:**
   - TestC008_AbsentFieldAndZeroFieldDiffer
+  - TestB5_AnOmittedQuantitativeKeyIsRefusedNotReadAsZero
+  - TestE2E_Cost
 
 **Why this result:** Positive, negative and mutation controls all discriminate. WriteFieldPresent and PrefixMeasured exist for exactly this.
 
@@ -661,7 +722,7 @@ regenerate it, or it will drift from the code it describes.**
 | Evidence basis | NOT_APPLICABLE |
 | Deciding layer | none. Enforced by the shape of the type |
 | Scope | replay burn |
-| Oracle | type-level: the summary type exposes no addition |
+| Oracle | type-level: the summary type exposes no addition; and behavioural: the rendered burn report, with two surfaces populated, carries no total line and not the sum of the per-surface figures |
 | Asserted at | cmd/replay/burn.go:20 |
 
 - **Establishes:**
@@ -675,6 +736,7 @@ regenerate it, or it will drift from the code it describes.**
 - **Insufficient-evidence control:** has* flags keep 'not applicable to this surface' distinct from zero
 - **Tests:**
   - TestC021_NoCrossSurfaceTotalIsReachable
+  - TestC021_BurnPrintsNoCrossSurfaceTotal
 
 **Why this result:** Enforced by the shape of the type rather than by a convention, and a mutation that adds a total is caught.
 

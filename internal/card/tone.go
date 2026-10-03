@@ -151,7 +151,7 @@ type cScript struct {
 //
 // The lead figure and the segments beside it are one row on the card, laid out
 // by measurement rather than at fixed stops, so they are one line here. A
-// preview that stacked them would show "5%" alone above "of spend paid twice",
+// preview that stacked them would show "5%" alone above "of priced spend, paid twice",
 // which is four fragments of a sentence read as four statements.
 func (s cScript) script() Script {
 	lines := append([]string{}, s.Head...)
@@ -193,7 +193,7 @@ func sayC(t Tone, d Data) cScript {
 	s.Rate = d.rateText()
 	s.Lead = s.Rate
 	s.Segs = []string{
-		"of spend paid twice",
+		"of priced spend, paid twice",
 		fmt.Sprintf("%d cache breaks", d.Breaks),
 		fmt.Sprintf("%d %s", d.Tasks, d.unit()),
 	}

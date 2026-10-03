@@ -23,10 +23,20 @@ import (
 // rather than take the headline on trust.
 
 type comparison struct {
-	BeforeTasks  int
-	AfterTasks   int
-	BeforeMedian float64
-	AfterMedian  float64
+	BeforeTasks int
+	AfterTasks  int
+	// BeforeCounted and AfterCounted are the rows that entered the median. A
+	// row demonstrably unpriceable, meaning its own counters say some records
+	// were read and none of them priced, contributes no dollars and is left
+	// out of both the median and the evidence gate.
+	//
+	// SEPARATE from BeforeTasks/AfterTasks, which keep meaning "rows observed".
+	// Collapsing the two would hide the exclusion, and this report is the one
+	// figure in the product meant to face an invoice.
+	BeforeCounted int
+	AfterCounted  int
+	BeforeMedian  float64
+	AfterMedian   float64
 	// MedianDelta is the fractional change in cost per task. Negative is a
 	// saving.
 	MedianDelta float64
@@ -59,7 +69,39 @@ func splitAt(units []costUnit, cut time.Time) (before, after []costUnit) {
 
 func compare(before, after []costUnit, unit string) comparison {
 	c := comparison{BeforeTasks: len(before), AfterTasks: len(after), Unit: unit}
-	c.Enough = len(before) >= minSideTasks && len(after) >= minSideTasks
+
+	// Priceable rows only, which is the rule cost.go:447-456 already states for
+	// its own median: "Admitting an unpriced row's zero would move the median
+	// and the p90 by asserting that a session nobody could price cost nothing."
+	// This report did not apply it, so eleven unpriceable rows beside ten
+	// priced $1.00 rows reported a 100% saving.
+	//
+	// The predicate is the request counters, not the Unpriced flag. On a FOLDED
+	// row that flag is inherited from whichever lane was seen first, so gating
+	// on it would make this figure depend on lane ordering and on the cost
+	// index. The counters are summed in the fold and are immune to both.
+	//
+	// A priced row that genuinely cost $0.00 is a MEASUREMENT and still counts.
+	// THREE states, not two. A row whose counters say records were read and
+	// none priced is demonstrably unpriceable and is excluded. A row carrying
+	// NO counters at all is absence, not a negative, and excluding it would
+	// convert missing evidence into evidence of nothing, which is the one rule
+	// this repository will not break. It is left in.
+	unpriceable := func(u costUnit) bool {
+		return u.UnpricedRequests > 0 && u.PricedRequests == 0
+	}
+	counted := func(us []costUnit) []costUnit {
+		out := make([]costUnit, 0, len(us))
+		for _, u := range us {
+			if !unpriceable(u) {
+				out = append(out, u)
+			}
+		}
+		return out
+	}
+	bp, ap := counted(before), counted(after)
+	c.BeforeCounted, c.AfterCounted = len(bp), len(ap)
+	c.Enough = len(bp) >= minSideTasks && len(ap) >= minSideTasks
 
 	med := func(us []costUnit) float64 {
 		if len(us) == 0 {
@@ -72,7 +114,7 @@ func compare(before, after []costUnit, unit string) comparison {
 		sort.Float64s(costs)
 		return percentile(costs, 0.5)
 	}
-	c.BeforeMedian, c.AfterMedian = med(before), med(after)
+	c.BeforeMedian, c.AfterMedian = med(bp), med(ap)
 	if c.BeforeMedian > 0 {
 		c.MedianDelta = (c.AfterMedian - c.BeforeMedian) / c.BeforeMedian
 	}
@@ -120,8 +162,15 @@ func renderCompare(c comparison, predicted float64) string {
 		return b.String()
 	}
 	fmt.Fprintf(&b, "Cost per %s, before and after.\n\n", noun)
-	fmt.Fprintf(&b, "  before   %d %s, median $%.2f\n", c.BeforeTasks, nouns, c.BeforeMedian)
-	fmt.Fprintf(&b, "  after    %d %s, median $%.2f\n", c.AfterTasks, nouns, c.AfterMedian)
+	fmt.Fprintf(&b, "  before   %d %s, median $%.2f\n", c.BeforeCounted, nouns, c.BeforeMedian)
+	fmt.Fprintf(&b, "  after    %d %s, median $%.2f\n", c.AfterCounted, nouns, c.AfterMedian)
+	// The exclusion, named rather than folded into the counts above. A row
+	// nobody could price contributes no dollars and is out of both medians;
+	// saying so is the difference between a smaller figure and a wrong one.
+	if ex := (c.BeforeTasks - c.BeforeCounted) + (c.AfterTasks - c.AfterCounted); ex > 0 {
+		fmt.Fprintf(&b, "           %d further %s were read and priced nothing, so they are in\n"+
+			"           neither median. They are excluded, not free.\n", ex, nouns)
+	}
 	fmt.Fprintf(&b, "  change   %+.0f%% per %s, on %+.0f%% %s volume\n", c.MedianDelta*100, noun, c.VolumeDelta*100, noun)
 	if math.Abs(c.VolumeDelta) > 0.4 {
 		fmt.Fprintf(&b, "\nVolume moved by more than 40%%, so the two periods are not comparable work.\nTreat the per-%s figure with suspicion.\n", noun)

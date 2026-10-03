@@ -61,6 +61,21 @@ type Record struct {
 	// SessionID is the client-supplied session header, or a hash of the
 	// stable prefix when the client sent none.
 	SessionID string `json:"session_id"`
+	// Kind names what this record is evidence OF. Empty means a provider
+	// request, which is what every record written before this field existed is,
+	// so an absent Kind keeps its original meaning and no history is
+	// reinterpreted.
+	//
+	// It is the one addition the schema gate permits: record.go's rule is "ADD
+	// optional fields, never rename or repurpose one", and an old reader
+	// ignores this while a new reader sees absence.
+	//
+	// It exists so a reader can tell a record it cannot INTERPRET from one it
+	// merely does not IMPLEMENT. Without it, store.go's fallthrough counts the
+	// second as the first, and Session.Skipped is surfaced to a user as a
+	// format change.
+	Kind string `json:"kind,omitempty"`
+
 	// AgentID is the client-supplied sub-agent header, empty for the main loop.
 	AgentID string `json:"agent_id,omitempty"`
 	// RequestID is the provider's request id from the response headers.

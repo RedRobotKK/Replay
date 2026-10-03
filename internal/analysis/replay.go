@@ -35,6 +35,25 @@ type Tally struct {
 	// CostUSD is the list-price cost when the model is in the price table,
 	// and zero otherwise. Priced reports say which.
 	CostUSD float64
+	// PricedRequests and UnpricedRequests say which, and they are the reason
+	// the sentence above is now true rather than aspirational.
+	//
+	// Requests counts records OBSERVED and CostUSD sums only the subset that
+	// priced, so the two describe different sets and nothing related them
+	// until 2026-10-01. A session holding two priceable and two unpriceable
+	// records reported four requests beside a cost covering two, and read
+	// identically to one where all four priced.
+	//
+	// Both are kept rather than deriving one from Requests, following
+	// burn.go, which holds a `requests` total of its own and still computes
+	// coverage as priced/(priced+unpriced). That decoupling is deliberate
+	// there and is deliberate here: `Requests` already means different things
+	// on different paths, counting observed records here and priced records
+	// in costusage.go, so a coverage figure derived from it would be correct
+	// only by coincidence. The pair is self-checking instead, because
+	// PricedRequests+UnpricedRequests must equal Requests by construction.
+	PricedRequests   int
+	UnpricedRequests int
 	// Four billed legs. They sum to CostUSD. Printed by `replay cost` so a
 	// token cut that only shrinks cache reads is not mistaken for an input cut.
 	UncachedUSD float64
@@ -63,16 +82,37 @@ func (t *Tally) AddAt(u transcript.Usage, model string, at time.Time) {
 	t.Output += u.Output
 	t.EffectiveTokens += cachemodel.EffectiveTokens(u, model)
 	if p, ok := cachemodel.PriceForAt(model, at); ok {
+		t.PricedRequests++
 		legs := cachemodel.CostLegsUSD(u, p)
 		t.CostUSD += legs.Total()
 		t.UncachedUSD += legs.Uncached
 		t.WriteUSD += legs.Write
 		t.ReadUSD += legs.Read
 		t.OutputUSD += legs.Output
+	} else {
+		// The branch that did not exist. This is where the price lookup's
+		// boolean used to die, taking with it the only record of how much of
+		// CostUSD's denominator it covered.
+		t.UnpricedRequests++
 	}
 }
 
 // CachedShare is cache reads divided by prompt tokens.
+// PricedShare is priced requests divided by the requests that reached a price
+// lookup at all. The denominator is the PAIR, not Requests, for the reason
+// stated on the fields: Requests means different things on different paths and
+// a coverage figure must not depend on which path it was built from.
+//
+// Zero requests returns 0, which a caller must read with PricedRequests and
+// UnpricedRequests beside it: a share of nothing is not a coverage of none.
+func (t Tally) PricedShare() float64 {
+	n := t.PricedRequests + t.UnpricedRequests
+	if n == 0 {
+		return 0
+	}
+	return float64(t.PricedRequests) / float64(n)
+}
+
 func (t Tally) CachedShare() float64 {
 	return cachemodel.CachedShare(t.Reads, t.PromptTokens)
 }

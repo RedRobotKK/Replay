@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -132,6 +133,16 @@ func TestC004_TheCostReportStatesHowItsDollarsWereObtained(t *testing.T) {
 	if !hasDate {
 		t.Errorf("RPL-C004: the header states a basis with no date, so a reader "+
 			"cannot tell how stale it is.\nheader: %q", header)
+	}
+	// RPL-C025, the specific date. "Any date" let a header that had dropped
+	// the price-table date pass on the strength of the rules version's date
+	// beside it (the 2026-10-02 wiring gate planted exactly that and this
+	// test stayed green). The date a reader needs is the price table's, and
+	// it is the one constant that says which table priced these dollars.
+	if !strings.Contains(header, "dated "+cachemodel.PriceTableVersion) {
+		t.Errorf("RPL-C025: the header does not name the price table's own date %q; "+
+			"a date from elsewhere in the line is not the basis of the dollars.\nheader: %q",
+			cachemodel.PriceTableVersion, header)
 	}
 }
 

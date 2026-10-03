@@ -64,10 +64,15 @@ type SpendGuard struct {
 	dayUsed spend
 	now     func() time.Time
 	// unpriceable records that a dollar cap was configured and at least one
-	// request could not be priced. Such a request adds nothing to the running
-	// total, so the cap can never be reached and the user silently has no cap
-	// at all. Refusing traffic over a missing price is not this proxy's
-	// behaviour, so the guard has to be able to say so instead.
+	// request could not be priced from the table, so its cost in the running
+	// total is the dearest known row standing in for it.
+	//
+	// The total is then an UPPER BOUND rather than a measurement. That is the
+	// deliberate choice: counting an unknown model as zero failed OPEN, and an
+	// operator who asked to stop at $20 had no cap at all on exactly the
+	// traffic most likely to be expensive. Erring high costs them a cap that
+	// fires early, which they can see and raise. What they cannot see, unless
+	// this flag says so, is which of the two they are reading.
 	unpriceable bool
 	// order increments on every touch and breaks ties that the clock cannot.
 	// Eviction scanned seen alone, which is only least-recently-used if
@@ -100,13 +105,20 @@ func (g *SpendGuard) Enabled() bool {
 }
 
 // Record adds a completed request's tokens and list-price cost.
-func (g *SpendGuard) Record(sessionID string, tokens int, usd float64) {
+// upperBound says the cost is the dearest known row standing in for a model
+// the table could not price, so the running total is a bound and not a
+// measurement.
+func (g *SpendGuard) Record(sessionID string, tokens int, usd float64, upperBound bool) {
 	if !g.Enabled() || (tokens <= 0 && usd <= 0) {
 		return
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if usd <= 0 && tokens > 0 && (g.limits.SessionUSD > 0 || g.limits.DayUSD > 0) {
+	// Armed where the substitution happened, not where the cost came out zero.
+	// The old condition described the behaviour before the dearest-row
+	// substitution and became unreachable when that landed, so the one signal
+	// an operator had that their cap total is an over-estimate stopped firing.
+	if upperBound && (g.limits.SessionUSD > 0 || g.limits.DayUSD > 0) {
 		g.unpriceable = true
 	}
 	g.rollDay()
