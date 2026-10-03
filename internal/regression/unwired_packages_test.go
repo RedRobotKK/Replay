@@ -44,6 +44,7 @@ func TestNoNewlyUnwiredPackages(t *testing.T) {
 	known := map[string]string{
 		"internal/regression":          "this package. Test-only by design, and correctly absent.",
 		"scripts/x402-e2e":             "an end-to-end tool built separately, not part of the binary.",
+		"scripts/simexp":               "the counter for the pre-registered simulate experiment (docs/evidence/simulate-experiment-prereg-2026-10-03.md), run by hand once over a frozen ten-row dataset. Correctly absent: it is an experiment measurement, not a product primitive, and the gatekeeper's Decision 2 forbids a cap-state system in the binary.",
 		"scripts/guard-reachability":   "a developer tool carrying //go:build ignore, run by CI against a pull request diff. Correctly absent: it neutralises the binary's conditionals, so being part of the binary would be the defect.",
 		"scripts/refusal-reachability": "the same, scoped to refusals rather than to a diff. Correctly absent for the same reason: it rewrites the binary's source to force a guard false, and a tool that does that must not be in the binary.",
 		"internal/guardcheck":          "the analysis behind scripts/guard-reachability, split out so it can be tested at all — the script carries //go:build ignore, so nothing could reach a line of it. Correctly absent for the same reason the script is: it exists to disable the binary's conditionals, and shipping that capability inside the binary would be the defect. The split also keeps os/exec out of an importable package (cmd/replay/x402_test.go X6c).",

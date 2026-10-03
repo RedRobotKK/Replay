@@ -1578,6 +1578,19 @@
       "killedBy": [
         "TestSimulate_ReplaysInTimestampOrderRegardlessOfFileOrder"
       ]
+    },
+    {
+      "id": "M120",
+      "name": "simexp-infers-attribution",
+      "class": "evidence",
+      "discovered": "2026-10-03",
+      "note": "A participant who reports changing a cap and reports that the simulation did not influence it is counted as qualifying. That is the one inference the pre-registration forbids (element 15, Decision 3): attribution is the participant's statement, and a cap change without it does not count toward the primary outcome. With this in, eight unattributed changes would read as a surviving hypothesis.",
+      "file": "scripts/simexp/count.go",
+      "anchor": "\tcase \"no\":\n\t\treturn outNotAttributed\n",
+      "replacement": "\tcase \"no\":\n\t\treturn outQualifies\n",
+      "killedBy": [
+        "TestCount_AChangeWithoutAttributionDoesNotQualify"
+      ]
     }
   ],
   "knownSurvivors": [
