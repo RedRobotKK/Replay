@@ -211,6 +211,50 @@ branches and documentation promising what the code cannot do. Results land here.
 
 [Design](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)
 
+## 15. internal/stateledger, beliefs rather than spans
+
+Added 2026-09-27. Not reachable from `cmd/replay`, and deliberately so: nothing
+yet builds a ledger from a transcript, and that reader is a product decision
+rather than a missing function.
+
+A trace records what calls were made. This records what was believed, what
+check moved it, and what stayed open. The unit is a claim whose standing
+changes, each change naming the check that caused it.
+
+Its one load-bearing rule is that contradicting a claim does not establish its
+replacement. `Replacement` is a pointer, nil means genuinely unknown, and a
+contradiction with no replacement leaves an open question that the renderer
+prints. Checks are graded `locates` / `executable` / `dispositive`, and only a
+dispositive check may settle a claim, because running a check is not answering
+the question.
+
+The package knows nothing about Grok. The Grok investigation is a golden
+fixture, not a special case.
+
+**What would wire it:** a reader that constructs a ledger from a transcript.
+Not built, not designed, not implied by this package.
+
+**Repaired 2026-10-03, still unwired.** A check or a revision recorded against
+a claim id that does not exist was accepted and then never rendered, because
+`Render` walks claims and prints what hangs off each. Both are now kept and
+printed under an `ORPHANED` section (`internal/stateledger/orphan_test.go`,
+RED first; two hand mutations killed, the golden rendering of the Grok
+investigation unchanged). The package has no persistence, no carrier and no
+consumer, and `docs/evidence/e4-01-state-representability-2026-10-02.md`
+records why none is built: the carrier is gated on an outcome signal no corpus
+carries.
+
+## Audit in flight
+
+Three agents, launched 2026-09-09, each using a different detection method because
+the confirmed cases were found four different ways: exported symbols with no
+non-test caller; config fields, flags and env vars nothing sets; unreachable
+branches and documentation promising what the code cannot do. Results land here.
+
+---
+
+[Design](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)
+
 ## 16. internal/claims, the claim surface rather than the code
 
 Added 2026-09-30. Not reachable from `cmd/replay`, and deliberately so.
