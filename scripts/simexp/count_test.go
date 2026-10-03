@@ -467,3 +467,66 @@ func TestRun_ExitCodesAndStreams(t *testing.T) {
 		}
 	}
 }
+
+// Gate 3 correction 1: the end-of-window question is asked on or after the
+// end (pre-registration element 11, procedure step 10), so an answer dated
+// before the window end is not an observation and the file is rejected, in
+// both window modes. An answer on the end date itself is in.
+func TestCount_AnAnswerBeforeTheWindowEndIsRejected(t *testing.T) {
+	t.Run("cohort", func(t *testing.T) {
+		d := baseDataset()
+		qualifying(d, 0)
+		setRow(d, 0, "answeredOn", "2026-11-30") // end is 2026-12-01
+		_, err := count(encode(t, d))
+		if err == nil || !strings.Contains(err.Error(), "dataset rejected") || !strings.Contains(err.Error(), "p01") || !strings.Contains(err.Error(), "before the window end") {
+			t.Errorf("answer the day before the end: err=%v; want a rejection naming p01 and the window end", err)
+		}
+		setRow(d, 0, "answeredOn", "2026-12-01")
+		if p := rowByID(t, mustCount(t, d), "p01"); !p.Qualifying {
+			t.Errorf("answer on the end date: %+v; want qualifying", p)
+		}
+	})
+	t.Run("per-participant", func(t *testing.T) {
+		d := baseDataset()
+		d["window"] = map[string]any{"mode": "per-participant"}
+		d["frozenOn"] = "2026-12-20"
+		qualifying(d, 1)
+		setRow(d, 1, "exposedOn", "2026-11-10") // end is 2026-12-10
+		setRow(d, 1, "answeredOn", "2026-12-09")
+		_, err := count(encode(t, d))
+		if err == nil || !strings.Contains(err.Error(), "p02") || !strings.Contains(err.Error(), "before the window end") {
+			t.Errorf("answer the day before a per-participant end: err=%v; want a rejection naming p02", err)
+		}
+		setRow(d, 1, "answeredOn", "2026-12-10")
+		if p := rowByID(t, mustCount(t, d), "p02"); !p.Qualifying {
+			t.Errorf("answer on the per-participant end date: %+v; want qualifying", p)
+		}
+	})
+}
+
+// Gate 3 correction 2: a participant found ineligible after enrolment is
+// reported as UNKNOWN and stays in the ten (element 9), under a label that
+// says why, whatever else the row reports. The field is optional and typed.
+func TestCount_IneligibleAfterEnrolmentIsReportedAsUnknownAndStays(t *testing.T) {
+	d := baseDataset()
+	qualifying(d, 0)
+	setRow(d, 0, "ineligibleAfterEnrolment", true)
+	r := mustCount(t, d)
+	p := rowByID(t, r, "p01")
+	if p.Qualifying || p.Outcome != "UNKNOWN: ineligible after enrolment" {
+		t.Errorf("p01: qualifying=%v outcome=%q", p.Qualifying, p.Outcome)
+	}
+	if r.Denominator != 10 || len(r.Participants) != 10 || r.Secondary.Unknown != 1 || r.Primary.Qualifying != 0 {
+		t.Errorf("denominator=%d rows=%d unknown=%d qualifying=%d; want 10, 10, 1, 0", r.Denominator, len(r.Participants), r.Secondary.Unknown, r.Primary.Qualifying)
+	}
+	d = baseDataset()
+	setRow(d, 0, "ineligibleAfterEnrolment", "yes")
+	if _, err := count(encode(t, d)); err == nil || !strings.Contains(err.Error(), "dataset rejected") {
+		t.Errorf("a string where the flag should be a bool: err=%v; want a rejection", err)
+	}
+	d = baseDataset()
+	setRow(d, 0, "ineligibleAfterEnrolment", false)
+	if p := rowByID(t, mustCount(t, d), "p01"); p.Outcome != "cap unchanged" {
+		t.Errorf("flag false: outcome=%q; want the ordinary chain", p.Outcome)
+	}
+}

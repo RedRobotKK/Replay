@@ -1591,6 +1591,19 @@
       "killedBy": [
         "TestCount_AChangeWithoutAttributionDoesNotQualify"
       ]
+    },
+    {
+      "id": "M121",
+      "name": "simexp-accepts-an-early-answer",
+      "class": "evidence",
+      "discovered": "2026-10-03",
+      "note": "An answer dated before the participant's window end is counted as the end-of-window observation. The pre-registration asks the question on or after the end (element 11); an early answer measures a shorter window than the thirty days the experiment froze, and a change made after the answer is never seen. Found at Gate 3 by auditing the counter against the pre-registration, before any participant existed.",
+      "file": "scripts/simexp/count.go",
+      "anchor": "\t\tif answered, ok, _ := date(\"answeredOn\", p.AnsweredOn); ok && !end.IsZero() && answered.Before(end) {",
+      "replacement": "\t\tif false {",
+      "killedBy": [
+        "TestCount_AnAnswerBeforeTheWindowEndIsRejected"
+      ]
     }
   ],
   "knownSurvivors": [

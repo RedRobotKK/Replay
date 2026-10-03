@@ -34,11 +34,11 @@ first of them is exposed. It cannot grow or shrink afterwards. A shortfall
 stops the experiment before it starts (WAITING FOR 10 EXISTING USERS); it never
 shrinks the denominator.
 
-**Decide before the first enrolment, and write it at the top of the list:**
-whether the ten run as a common cohort (one pre-registered end date at least
-thirty days after the last possible exposure) or per participant (each window
-is thirty days from that participant's exposure). Per participant is the
-default when enrolments are staggered by more than a few days.
+**Window mode, decided by the gatekeeper at Gate 3: PER-PARTICIPANT.** Each
+participant's thirty-day clock begins at the first qualifying showing of the
+simulation and ends thirty days later. A clock never starts at enrolment unless
+enrolment and exposure happen at the same sitting. The line "window mode:
+per-participant" is written at the top of the enrolment list.
 
 ---
 
@@ -56,9 +56,9 @@ eligibility           E1 yes/no + evidence, E2, E3, E4, E5 likewise
 enrolment date        YYYY-MM-DD
 machine               how the participant names the machine whose ledger is simulated
 ledger directory      as the participant names it
-window mode           cohort (end YYYY-MM-DD) | per-participant
+window mode           per-participant (decided at Gate 3)
 experiment start      YYYY-MM-DD = the date the simulation was SHOWN (exposure), or "not yet"
-experiment end        YYYY-MM-DD = start + 30 days (per-participant) or the cohort end
+experiment end        YYYY-MM-DD = start + 30 days
 exposure status       not yet | shown on YYYY-MM-DD | UNKNOWN
 cap before            the four serve flags as the participant states them, or UNKNOWN
 alternative cap       the policy the participant chose
@@ -195,13 +195,16 @@ Blank template (the placeholders make it uncountable until filled):
       "changed": "yes | no | UNKNOWN",
       "capAfter": "present only when changed is yes: {\"maxSessionUsd\": 2} or UNKNOWN",
       "influenced": "yes | no | UNKNOWN",
-      "answeredOn": "YYYY-MM-DD or UNKNOWN"
+      "answeredOn": "YYYY-MM-DD or UNKNOWN",
+      "ineligibleAfterEnrolment": false
     }
   ]
 }
 ```
 
-For a cohort, `"window": {"mode": "cohort", "end": "YYYY-MM-DD"}`. A cap set is
+`ineligibleAfterEnrolment` is optional; `true` only for a participant found
+ineligible under the five checks after enrolment (element 9), whose row then
+reads `UNKNOWN: ineligible after enrolment` and stays in the ten. A cap set is
 an object with any of the four keys `maxSessionTokens`, `maxDayTokens`,
 `maxSessionUsd`, `maxDayUsd`; `{}` means no cap; a key absent or zero is no
 cap for that setting. Rows run `p01` to `p10`.
@@ -253,29 +256,31 @@ Checked on 2026-10-03 against the counter as committed in `8191486`
 | 5 | both a cap change and the participant's statement | qualifies only when `changed` is yes and `influenced` is yes | CONSISTENT |
 | 7 | any of the four flags; zero or absent is no cap; enabling and disabling count | the four keys only; zero and absent compared alike; `changed` is the participant's word and the cap values only cross-check it | CONSISTENT |
 | 8 | UNKNOWN is a third state; UNKNOWN in the chain is non-qualifying and reported | the chain stops at the first UNKNOWN and names it; the row stays; nothing imputed | CONSISTENT |
-| 9 | a participant found ineligible after enrolment is reported as UNKNOWN, not removed | the row stays in the ten; but there is no field for this case, so the operator must express it by setting `changed` and `influenced` to UNKNOWN, and the row's outcome will read "UNKNOWN: whether the cap changed", which is a correct count under a label that does not say why | GAP, reported below |
+| 9 | a participant found ineligible after enrolment is reported as UNKNOWN, not removed | the row stays in the ten; `ineligibleAfterEnrolment: true` gives the outcome `UNKNOWN: ineligible after enrolment`, never qualifying (corrected at Gate 3, below) | CONSISTENT |
 | 12 | the row's fields; frozen file with digest; one count | all fields present; `datasetSha256` is the digest of the bytes counted; the command is run once by hand | CONSISTENT |
 | 13, 14 | fewer than three kills; no adjustment | `threshold = 3` compared with `<`; constants, not inputs | CONSISTENT |
 | 15 | attribution participant-reported, never inferred | `influenced` is the only source; dates, caps and exposures never feed it; frozen mutant M120 guards exactly this | CONSISTENT |
 | section 8 | one primary rule; enable count secondary and decides nothing | `enabledACap` is printed under `secondary` and no branch reads it | CONSISTENT |
 | duplicates, provenance | | duplicate labels rejected; input order preserved; digest printed | CONSISTENT |
 
-**Two findings, neither changed anything.**
+**Two findings, both closed at Gate 3 by the gatekeeper's order** (the
+correction is recorded in `simulate-experiment-instrument-2026-10-03.md`,
+section 6; the text below is the finding as reported).
 
 1. **Ineligible after enrolment (element 9).** The counter has no way to say
    "ineligible"; the case is expressible only as UNKNOWN on the chain fields,
    which counts correctly and labels imprecisely. Options are a one-field
    addition to the row (`status: "ineligible-after-enrolment"`) with a matching
    outcome, which is a counter change, or the procedure above, which records
-   the reason in the enrolment record and the notes. This document adopts the
-   second until the gatekeeper says otherwise.
+   the reason in the enrolment record and the notes. **Resolution: the field
+   was added.** The enrolment record still carries the reason.
 2. **An answer dated before the window end.** The pre-registration says the
    question is asked on or after the end; it does not say what an early answer
    is. The counter accepts one. The procedure (step 10) never asks early, so no
    such row can arise from a correctly run experiment; a row with
    `answeredOn` before the end is an operator error to be corrected before the
-   freeze. Making the counter reject it is a one-line change that was not made,
-   because the counter is certified and the case is not a counting defect.
+   freeze. **Resolution: the counter now rejects it**, naming the participant,
+   the answer date and the window end; an answer on the end date is accepted.
 
 ---
 

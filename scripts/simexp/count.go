@@ -69,6 +69,9 @@ type participant struct {
 	CapAfter       *caps  `json:"capAfter,omitempty"`
 	Influenced     string `json:"influenced"`
 	AnsweredOn     string `json:"answeredOn"`
+	// IneligibleAfterEnrolment is element 9: a participant found ineligible
+	// after enrolment is reported as UNKNOWN and stays in the ten.
+	IneligibleAfterEnrolment bool `json:"ineligibleAfterEnrolment,omitempty"`
 }
 
 // caps is either a set of the four serve cap values or UNKNOWN.
@@ -186,6 +189,7 @@ const (
 	outUnkInfluenced = "UNKNOWN: whether the simulation influenced the change"
 	outUnkNoAnswer   = "UNKNOWN: no end-of-window answer"
 	outUnkLate       = "UNKNOWN: answer after the window"
+	outUnkIneligible = "UNKNOWN: ineligible after enrolment"
 )
 
 func rejected(format string, a ...any) error {
@@ -283,6 +287,12 @@ func count(raw []byte) (result, error) {
 		if !end.IsZero() && frozen.Before(end) {
 			return result{}, rejected("window not closed for %s (ends %s, frozen %s)", p.ID, end.Format(day), d.FrozenOn)
 		}
+		// Element 11: the end-of-window question is asked on or after the
+		// end. An answer dated earlier is not that observation, and a row
+		// carrying one is an operator error to correct before the freeze.
+		if answered, ok, _ := date("answeredOn", p.AnsweredOn); ok && !end.IsZero() && answered.Before(end) {
+			return result{}, rejected("%s: answeredOn %s is before the window end %s; the end-of-window question is asked on or after the end", p.ID, p.AnsweredOn, end.Format(day))
+		}
 		row := participantRow{ID: p.ID, CapBefore: p.CapBefore, AlternativeCap: p.AlternativeCap, CapAfter: p.CapAfter}
 		row.Outcome = classify(p, end)
 		switch row.Outcome {
@@ -355,9 +365,13 @@ func validate(p participant) error {
 	return nil
 }
 
-// classify is the chain of element 8, in order: exposure, answer, change,
-// attribution. The first UNKNOWN or negative stops it.
+// classify is the chain of element 8, in order: eligibility (element 9),
+// exposure, answer, change, attribution. The first UNKNOWN or negative stops
+// it.
 func classify(p participant, end time.Time) string {
+	if p.IneligibleAfterEnrolment {
+		return outUnkIneligible
+	}
 	if p.ExposedOn == unknown {
 		return outNotExposed
 	}

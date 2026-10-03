@@ -113,3 +113,34 @@ anchored outside the replay surfaces.
 (one allowlist entry); `internal/mutation/testdata/mutants.json` (M120);
 `README.md` and `.github/workflows/ci.yml` (catalogue count); this document and
 its index row.
+
+---
+
+## 6. Correction at Gate 3 (2026-10-03, before any participant existed)
+
+The audit of the counter against the pre-registration
+(`simulate-experiment-operations-2026-10-03.md`, section 6) found two cases the
+counter did not express, and the gatekeeper ordered both closed before the
+first observation. Nothing else changed: denominator, UNKNOWN handling,
+attribution, threshold, duration and treatment are as certified above.
+
+1. **An answer dated before the window end is rejected.** Element 11 asks the
+   end-of-window question on or after the end; an earlier answer measures a
+   shorter window than the thirty days and misses any change made after it.
+   The counter now rejects the file, naming the participant, the answer date
+   and the window end, in both window modes. An answer on the end date is in.
+2. **Ineligible after enrolment has its own outcome.** Element 9 reports such
+   a participant as UNKNOWN and keeps them in the ten. The row takes an
+   optional boolean `ineligibleAfterEnrolment`; when true the outcome is
+   `UNKNOWN: ineligible after enrolment`, counted under UNKNOWN, never
+   qualifying, whatever else the row says. Absent or false, the chain runs as
+   before. A non-boolean value is an unknown shape and is rejected.
+
+Gates for the correction: two RED tests (five cases) failed on the certified
+counter for the expected reasons (the early answer was accepted; the flag was
+an unknown field), then passed; the 14 earlier tests unchanged and green; the
+hand sweep rerun with four boundary mutants added, **22/22 killed** (early
+answer accepted; boundary rejects the end date itself; flag ignored; flag
+qualifies), file restored byte-identical; M121 `simexp-accepts-an-early-answer`
+frozen and killed through the registered harness together with M120; the
+built command's tests green; lint on the new code 0 issues.
