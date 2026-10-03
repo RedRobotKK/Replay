@@ -198,3 +198,23 @@ making it afterwards would be the threshold adjustment element 14 forbids.
 Enrolment list: does not exist. Release carrying the command: does not exist (the
 commit is on a branch, unreleased). Observations: none. The next roadmap gate,
 Phase 3, stops at WAITING FOR 10 EXISTING USERS until both exist.
+
+---
+
+## 8. Resolution of section 6 (added 2026-10-03, before any enrolment)
+
+The gatekeeper decided, after Gate 1 and before any observation exists: **"Do NOT
+make 'enable a cap' a second kill criterion."** The experiment has exactly one
+primary commercial decision rule, element 13: fewer than three of the ten enrolled
+participants who were shown the simulation change their spend cap because of that
+simulation, and the current Pro hypothesis is killed or redesigned.
+
+The enable figure from experiment 10 is retained only as a secondary descriptive
+observation. It must not create a second kill rule, override the primary outcome,
+rescue a failed primary outcome, alter the denominator, alter the threshold, or
+trigger a post-hoc reinterpretation. Reported separately, with no decision riding
+on any of them: the number who had no cap and enabled one; the number who changed
+an existing cap; the number who changed a cap but did not attribute it to the
+simulation; the number with an UNKNOWN or missing observation.
+
+Section 6 is therefore closed. Nothing in sections 1 to 5 changes.
