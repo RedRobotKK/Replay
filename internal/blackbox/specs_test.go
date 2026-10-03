@@ -481,6 +481,32 @@ var specs = map[string]spec{
 		},
 		Invalid: unknownFlag("since"),
 	},
+	"simulate": {
+		Setup: func(t *testing.T, bin string) (string, []check) {
+			home, dir := ledgerHome(t)
+			policy := filepath.Join(home, "policy.json")
+			mustWrite(t, policy, []byte(`{"maxSessionUsd": 0.05}`))
+			return home, []check{
+				{Label: "replays the ledger under the cap", Args: []string{"simulate", "--policy", policy, "--json", dir}, Exit: 0, JSON: func(d map[string]any) error {
+					a, _ := num(d, "summary", "admitted")
+					r, _ := num(d, "summary", "refused")
+					if sim, _ := d["simulated"].(bool); !sim || a != 3 || r != 1 {
+						return fmt.Errorf("simulated=%v admitted=%v refused=%v, want true 3 1", d["simulated"], a, r)
+					}
+					return nil
+				}},
+				{Label: "human report is labelled SIMULATED", Args: []string{"simulate", "--policy", policy, dir}, Exit: 0, Stdout: []string{"SIMULATED: policy ", "refused    1"}, Forbid: []string{"saving", "forecast"}},
+			}
+		},
+		Invalid: func(home string) check {
+			p := filepath.Join(home, "bad-policy.json")
+			_ = os.WriteFile(p, []byte(`{"maxSesionUsd": 1}`), 0o600)
+			return check{Label: "a misspelled cap key is refused", Args: []string{"simulate", "--policy", p, filepath.Join(home, "ledger")}, Exit: 1}
+		},
+		JSONOut: func(home string) [][]string {
+			return [][]string{{"simulate", "--policy", filepath.Join(home, "policy.json"), "--json", filepath.Join(home, "ledger")}}
+		},
+	},
 	"budget": {
 		Setup: func(t *testing.T, bin string) (string, []check) {
 			home, dir := ledgerHome(t)

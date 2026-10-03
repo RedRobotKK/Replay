@@ -1552,6 +1552,32 @@
       "killedBy": [
         "TestE2E_Grok"
       ]
+    },
+    {
+      "id": "M118",
+      "name": "simulate-never-records-the-spend",
+      "class": "guard-removed",
+      "discovered": "2026-10-03",
+      "note": "The replay checks the cap before every request and never credits an admitted request's spend to the guard, so the cap is never reached and every recorded request is reported admitted. A simulation that cannot refuse is a report that the cap is free, which is the one thing it must never say.",
+      "file": "cmd/replay/simulate.go",
+      "anchor": "\t\t\tguard.Record(m.rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output, m.usd, m.ub)",
+      "replacement": "\t\t\t_ = u",
+      "killedBy": [
+        "TestE2E_Simulate"
+      ]
+    },
+    {
+      "id": "M119",
+      "name": "simulate-replays-in-file-order",
+      "class": "evidence",
+      "discovered": "2026-10-03",
+      "note": "The comparator always answers false, so the stable sort leaves the records in the order the files were listed and written: alphabetical by file, arrival order within one. A day cap then lands on whichever session's file sorts first instead of on the request that actually came after the cap was reached, and the report is a replay of a history that did not happen in that order.",
+      "file": "cmd/replay/simulate.go",
+      "anchor": "\t\ta, b := members[i].rec, members[j].rec\n\t\tif !a.Timestamp.Equal(b.Timestamp) {",
+      "replacement": "\t\ta, b := members[i].rec, members[j].rec\n\t\tif true {\n\t\t\treturn false\n\t\t}\n\t\tif !a.Timestamp.Equal(b.Timestamp) {",
+      "killedBy": [
+        "TestSimulate_ReplaysInTimestampOrderRegardlessOfFileOrder"
+      ]
     }
   ],
   "knownSurvivors": [

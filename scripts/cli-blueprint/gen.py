@@ -33,7 +33,7 @@ COMMANDS = [
     "route", "trim", "codex", "grok", "burn", "agents", "mcp", "corpus", "learn",
     "probe", "doctor", "rules", "statusline", "redact", "version", "prefix", "since", "budget",
     "jev",
-    "upgrade", "purge", "privacy", "pool",
+    "upgrade", "purge", "privacy", "pool", "simulate",
 ]
 
 # What each command is for, and the two facts an agent needs before running one
@@ -87,6 +87,7 @@ META = {
     "prefix":     ("Whether a change to a tool-server document voids the cached prefix", "none", "none"),
     "since":      ("What ran, and what it cost, since you last looked", "none", "~/.replay/seen.json, one timestamp; --peek writes nothing"),
     "budget":     ("What this configuration costs on every request, before any work", "none", "none"),
+    "simulate":   ("Which recorded requests a spend cap would have refused, replayed through the proxy's own guard; SIMULATED, never a forecast", "none", "none"),
 }
 
 SCREENS = [

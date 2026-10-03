@@ -387,7 +387,7 @@ read the transcript root `replay doctor` already discovers, and say on stderr wh
 argument still wins when you give it. This is not a convenience — a first command that needs a path
 the reader does not know yet is a command they do not run.
 
-`replay --help` lists all thirty-two, grouped and ordered by what they are worth rather than
+`replay --help` lists all thirty-three, grouped and ordered by what they are worth rather than
 alphabetically, because the list is what a person reads before they know which of them matters. That
 number is compared against the binary's dispatch switch by `internal/regression` RC1, which is why it
 is allowed to be here and why the same figure is not written into the other documents. Full
@@ -561,8 +561,8 @@ The project's governing rule is [ADR-0014](docs/adr/0014-checks-must-be-able-to-
 is not evidence until it has been observed to fail.** Roughly twenty defects in a single day shared
 one shape — a verification that could not fail — so the rule is now mechanical.
 
-`internal/mutation` keeps **116 real past defects frozen as re-runnable mutants** (numbered M1 to
-M117, so the highest id is 117; M71 was retired), each with the named test that must catch it. Thirty-nine of them, one per
+`internal/mutation` keeps **118 real past defects frozen as re-runnable mutants** (numbered M1 to
+M119, so the highest id is 119; M71 was retired), each with the named test that must catch it. Thirty-nine of them, one per
 dispatched subcommand, were added by the Release 1.0 production surface gate on 2026-10-02.
 `go test -tags mutation ./internal/mutation/` re-applies them all.
 It has already caught a false kill (a mutant the compiler rejected, scored as caught), a test that

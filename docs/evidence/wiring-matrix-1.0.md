@@ -37,12 +37,13 @@ killer each surface is held to.
 | `redact` | yes | `dispatch main.go:222 → runRedact` | `internal/transcript/redact.go @ "obj[\"cwd\"] = \"/redacted\""` | `TestE2E_Redact` | `TestE2E_Redact` | `M104` | `TestE2E_Redact` | PASS |
 | `prefix` | yes | `dispatch main.go:224 → runPrefix` | `cmd/replay/prefix.go @ "\"  For the size of one such break on your own history:  r…"` | `TestE2E_Prefix` | `TestE2E_Prefix` | `M105` | `TestE2E_Prefix` | PASS |
 | `since` | yes | `dispatch main.go:226 → runSince` | `cmd/replay/since.go @ "if !had \|\| t.At.After(mark) {"` | `TestE2E_Since` | `TestE2E_Since` | `M106` | `TestE2E_Since` | PASS |
-| `budget` | yes | `dispatch main.go:228 → runBudget` | `cmd/replay/budget.go @ "ToolBytes:    toolBytes,"` | `TestE2E_Budget` | `TestE2E_Budget` | `M107` | `TestE2E_Budget` | PASS |
-| `purge` | yes | `dispatch main.go:230 → runPurge` | `cmd/replay/purge.go @ "if info.ModTime().After(cutoff) {"` | `TestE2E_Purge` | `TestE2E_Purge` | `M108` | `TestE2E_Purge` | PASS |
-| `privacy` | yes | `dispatch main.go:232 → runPrivacy` | `cmd/replay/stores.go @ "Name: \"advice.json\", Purgeable: true,"` | `TestE2E_Privacy` | `TestE2E_Privacy` | `M109` | `TestE2E_Privacy` | PASS |
-| `serve` | yes | `dispatch main.go:234 → runServe` | `cmd/replay/serve.go @ "case ceiling < 0:"` | `TestE2E_Serve` | `TestE2E_Serve` | `M110` | `TestE2E_Serve` | PASS |
-| `upgrade` | yes | `dispatch main.go:236 → runUpgrade` | `cmd/replay/upgrade.go @ "bin, sig, err := client.Fetch(ctx, target, runtime.GOOS, …"` | `TestE2E_Upgrade` | `TestE2E_Upgrade` | `M111` | `TestE2E_Upgrade` | PASS |
+| `simulate` | yes | `dispatch main.go:228 → runSimulate` | `cmd/replay/simulate.go @ "guard.Record(m.rec.SessionID, u.Input+u.CacheCreation+u.C…"` | `TestE2E_Simulate` | `TestE2E_Simulate` | `M118` | `TestE2E_Simulate` | PASS |
+| `budget` | yes | `dispatch main.go:230 → runBudget` | `cmd/replay/budget.go @ "ToolBytes:    toolBytes,"` | `TestE2E_Budget` | `TestE2E_Budget` | `M107` | `TestE2E_Budget` | PASS |
+| `purge` | yes | `dispatch main.go:232 → runPurge` | `cmd/replay/purge.go @ "if info.ModTime().After(cutoff) {"` | `TestE2E_Purge` | `TestE2E_Purge` | `M108` | `TestE2E_Purge` | PASS |
+| `privacy` | yes | `dispatch main.go:234 → runPrivacy` | `cmd/replay/stores.go @ "Name: \"advice.json\", Purgeable: true,"` | `TestE2E_Privacy` | `TestE2E_Privacy` | `M109` | `TestE2E_Privacy` | PASS |
+| `serve` | yes | `dispatch main.go:236 → runServe` | `cmd/replay/serve.go @ "case ceiling < 0:"` | `TestE2E_Serve` | `TestE2E_Serve` | `M110` | `TestE2E_Serve` | PASS |
+| `upgrade` | yes | `dispatch main.go:238 → runUpgrade` | `cmd/replay/upgrade.go @ "bin, sig, err := client.Fetch(ctx, target, runtime.GOOS, …"` | `TestE2E_Upgrade` | `TestE2E_Upgrade` | `M111` | `TestE2E_Upgrade` | PASS |
 
-**33 surfaces discovered: 33 PASS, 0 FAIL.**
+**34 surfaces discovered: 34 PASS, 0 FAIL.**
 
 PRODUCTION SURFACE GATE: PASS

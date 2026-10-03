@@ -225,6 +225,8 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 		return runPrefix(args[1:], stdout, stderr)
 	case "since":
 		return runSince(args[1:], stdout, stderr)
+	case "simulate":
+		return runSimulate(args[1:], stdout, stderr)
 	case "budget":
 		return runBudget(args[1:], stdout, stderr)
 	case "purge":
@@ -675,6 +677,7 @@ Setup and maintenance:
   replay rules  [--update <src>]   show the provider rules in effect, or install a dated document
   replay statusline                live spend and cache-miss cost, for Claude Code's status line
   replay since                     what ran and what it cost since you last looked
+  replay simulate --policy F <ledger>  which recorded requests a cap would have refused (SIMULATED)
   replay prefix --before F --after F  does this change void the cached prefix (exit 1 if so)
   replay budget <ledger-dir>       what this setup costs on every request, as a committable file
   replay redact <transcript>       strip content, keep structure and usage (for bug reports)

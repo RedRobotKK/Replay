@@ -17,7 +17,7 @@ reach the network, and does it write. Both are answered per command below, and
 summarised here.
 
 **Opens no socket and writes nothing** — safe to run at will:
-`ceiling`, `diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `grok`, `mcp`, `statusline`, `redact`, `version`, `prefix`, `budget`, `jev`, `pool`.
+`ceiling`, `diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `grok`, `mcp`, `statusline`, `redact`, `version`, `prefix`, `budget`, `jev`, `pool`, `simulate`.
 
 **Leaves the machine:** `serve` proxies every request to the provider.
 `probe --execute` sends billable requests, and without `--execute` it prints a
@@ -72,6 +72,7 @@ to test whether `~/.replay` is writable.
 | [`purge`](#purge) | Remove ledger records past a retention window, or one session's | none | removes ledger records under the directory given; nothing unless --yes |
 | [`privacy`](#privacy) | Everything Replay has written to this machine, and what each store holds | none | nothing: it reports and never removes |
 | [`pool`](#pool) | Aggregate corpus submissions into one figure, with its roster | none | none |
+| [`simulate`](#simulate) | Which recorded requests a spend cap would have refused, replayed through the proxy's own guard; SIMULATED, never a forecast | none | none |
 
 ### cost
 
@@ -402,6 +403,12 @@ Aggregate corpus submissions into one figure, with its roster.
 | `-json` | bool | emit the pooled document rather than the table |
 | `-pooled-at` | string | the date this pool was assembled, recorded in the document (default: today, UTC) |
 
+### simulate
+
+Which recorded requests a spend cap would have refused, replayed through the proxy's own guard; SIMULATED, never a forecast.
+
+Takes no flags.
+
 ## The TUI covers the same ground
 
 `replay tui` opens the same answers as movable screens. `--screen <name>` opens
@@ -442,4 +449,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-32 commands, 112 flags, read from the binary.
+33 commands, 112 flags, read from the binary.

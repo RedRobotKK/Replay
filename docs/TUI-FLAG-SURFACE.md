@@ -28,8 +28,8 @@ a flag is defined in `cmd/replay` and appears in no table here.
 
 | Archetype | Flags | What it looks like |
 |---|---|---|
-| Replaces the surface | 13 | There is no TUI. `--json` means a machine is reading, and drawing a frame for it is wrong |
-| Plumbing, shown once | 20 | A header line, never interactive. Where it listens, where it writes, what it talks to |
+| Replaces the surface | 14 | There is no TUI. `--json` means a machine is reading, and drawing a frame for it is wrong |
+| Plumbing, shown once | 21 | A header line, never interactive. Where it listens, where it writes, what it talks to |
 | Threshold that can fire | 22 | A meter with **four** states: unset, armed, approaching, fired |
 | Posture, on or not covered | 16 | A line saying what is on, and more importantly what it does **not** reach |
 | Scope of the question | 12 | The query line. What this screen is about, and what it excludes |
@@ -95,11 +95,12 @@ asking you to trust a summary of the thing rather than the thing.
 
 ## The full mapping
 
-### Replaces the surface (13)
+### Replaces the surface (14)
 
 | Flag | Command | Type |
 |---|---|---|
 | `--json` | `advise` | bool |
+| `--json` | `simulate` | bool |
 | `--once` | `tui` | bool |
 | `--json` | `context` | bool |
 | `--json` | `cost` | bool |
@@ -134,7 +135,7 @@ replaces the act of upgrading with a report about it, and `--version` replaces
 produces rather than tuning how it behaves. `--dry-run` is already classified
 elsewhere in this file. -->
 
-### Plumbing, shown once (20)
+### Plumbing, shown once (21)
 
 | Flag | Command | Type |
 |---|---|---|
@@ -142,6 +143,7 @@ elsewhere in this file. -->
 | `--peek` | `since` | bool |
 | `--before` | `prefix` | string |
 | `--after` | `prefix` | string |
+| `--policy` | `simulate` | string |
 | `--contribute-dir` | `probe` | string |
 | `--export` | `rules` | bool |
 | `--install` | `statusline` | bool |

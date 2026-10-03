@@ -799,6 +799,50 @@ measurement of money that nobody made.
 
 The marker lives at `~/.replay/seen.json` and holds one timestamp.
 
+### `replay simulate --policy <file> <ledger-dir...> [--json]`
+
+Which of the requests a ledger recorded would have been refused under a spend cap
+that was not in force when they ran. The cap is a JSON document in the proxy's own
+terms, and the replay runs the proxy's own guard over the records in the order they
+happened:
+
+```sh
+echo '{"maxSessionUsd": 5}' > policy.json
+replay simulate --policy policy.json ~/.replay/ledger
+replay simulate --policy policy.json ~/.replay/ledger --json > simulated.json
+```
+
+```text
+SIMULATED: policy 4f1c0a9e2b7d (session $5.00) replayed over 2,431 requests in 61 sessions from ~/.replay/ledger,
+at list prices dated 2026-09-07 (caching rules anthropic-2026-09-01).
+
+  admitted   2,219
+  refused    212   in 9 session(s)
+  list price of the refused requests: $37.1020. That is what they cost at list when
+  they ran; what the agent would have done instead is not recorded.
+```
+
+| Flag | What it does |
+|---|---|
+| `--policy <file>` | Required. JSON with any of `maxSessionTokens`, `maxDayTokens`, `maxSessionUsd`, `maxDayUsd`, the four caps `replay serve` takes as flags. An unknown key is refused rather than ignored, because a misspelled cap would silently evaluate as off; a document that enables no cap is refused for the same reason |
+| `--json` | Every simulated decision: session, request id, timestamp, model, list price, whether it was priced at the dearest known rate, admitted or refused, and the guard's reason. Deterministic: the same ledger and the same policy produce the same bytes |
+
+**Every result is SIMULATED, and the word is on the first line.** It is a replay of
+requests that were recorded, under a cap they did not run under. It says nothing
+about requests that have not happened, and the list price of the refused requests is
+what those requests cost when they ran, not a saving: what the agent would have done
+when refused is not recorded anywhere.
+
+Three kinds of record are counted and not replayed, and the report says how many: a
+request the proxy refused at the time (its usage was never observed), a request with
+no usage in its response, and a file that could not be read. A request on a model the
+price table does not carry is counted at the dearest known rate, which is what the
+proxy does to it, and is reported as such. The policy hash on the first line is the
+SHA-256 of the cap's canonical form, so a result can always be tied to the exact cap
+that produced it without any registry.
+
+Reads the ledger and the policy file. Writes nothing and reaches no network.
+
 ### `replay privacy [--json]`
 
 Everything Replay has written to this machine, and what each store holds.

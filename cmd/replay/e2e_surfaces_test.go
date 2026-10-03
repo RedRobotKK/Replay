@@ -483,6 +483,64 @@ func TestE2E_Since(t *testing.T) {
 		"excluded: their model is not in the price table")
 }
 
+func TestE2E_Simulate(t *testing.T) {
+	home := t.TempDir()
+	isolateHome(t, home)
+	dir := filepath.Join(home, "ledger")
+	e2eLedger(t, dir)
+	policy := filepath.Join(home, "policy.json")
+	if err := os.WriteFile(policy, []byte(`{"maxSessionUsd": 0.05}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, errb, err := e2e(t, "simulate", "--policy", policy, "--json", dir)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, errb)
+	}
+	var rep struct {
+		Simulated bool `json:"simulated"`
+		Policy    struct {
+			Hash string `json:"hash"`
+		} `json:"policy"`
+		Summary struct {
+			Admitted int `json:"admitted"`
+			Refused  int `json:"refused"`
+		} `json:"summary"`
+		Decisions []struct {
+			Session   string  `json:"session"`
+			ListUSD   float64 `json:"listUsd"`
+			Simulated string  `json:"simulated"`
+		} `json:"decisions"`
+	}
+	if err := json.Unmarshal([]byte(out), &rep); err != nil {
+		t.Fatalf("simulate --json: %v\n%s", err, out)
+	}
+	// The proxy's rule, recomputed: a request is refused exactly when the
+	// session's admitted list spend before it has reached the cap. On this
+	// ledger that is the second unpriced request (16.9 dollars at the dearest
+	// rate) and nothing else, so 3 admitted, 1 refused.
+	spent := map[string]float64{}
+	for _, d := range rep.Decisions {
+		want := "admitted"
+		if spent[d.Session] >= 0.05 {
+			want = "refused"
+		}
+		if d.Simulated != want {
+			t.Errorf("%s: simulated %q, want %q", d.Session, d.Simulated, want)
+		}
+		if d.Simulated == "admitted" {
+			spent[d.Session] += d.ListUSD
+		}
+	}
+	if !rep.Simulated || rep.Policy.Hash == "" || rep.Summary.Admitted != 3 || rep.Summary.Refused != 1 {
+		t.Errorf("simulated=%v hash=%q admitted=%d refused=%d; want true, a hash, 3, 1\n%s", rep.Simulated, rep.Policy.Hash, rep.Summary.Admitted, rep.Summary.Refused, out)
+	}
+	human, _, err := e2e(t, "simulate", "--policy", policy, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustContain(t, "simulate", human, "SIMULATED: policy "+rep.Policy.Hash, "refused    1", "says nothing about requests")
+}
+
 func TestE2E_Budget(t *testing.T) {
 	home := t.TempDir()
 	isolateHome(t, home)
