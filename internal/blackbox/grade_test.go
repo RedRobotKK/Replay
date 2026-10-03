@@ -181,10 +181,17 @@ func status(r *row) string {
 	return "BLOCKED"
 }
 
+// relativise strips the two paths that name the generating machine, the
+// repository root first because on a laptop it sits under the home directory.
 func relativise(home string, args []string) []string {
+	repo, _ := filepath.Abs(filepath.Join("..", ".."))
 	out := make([]string, len(args))
 	for i, a := range args {
-		out[i] = strings.ReplaceAll(a, home, "$HOME")
+		out[i] = a
+		if repo != "" {
+			out[i] = strings.ReplaceAll(out[i], repo, "$REPO")
+		}
+		out[i] = strings.ReplaceAll(out[i], home, "$HOME")
 		out[i] = strings.ReplaceAll(out[i], filepath.Dir(filepath.Dir(home)), "…")
 	}
 	return out
