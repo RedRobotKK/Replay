@@ -68,7 +68,7 @@ func loadSimulatePolicy(path string) (simulatePolicy, error) {
 	if err != nil {
 		return p, fmt.Errorf("policy: %w: %w", err, errUsage)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // read-only policy file; a close error carries no information we can act on
 	dec := json.NewDecoder(f)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&p); err != nil {

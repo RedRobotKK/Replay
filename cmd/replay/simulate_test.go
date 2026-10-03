@@ -160,7 +160,7 @@ func TestSimulate_ARequestPastTheCapIsRefused(t *testing.T) {
 // the cap. Recomputed here independently of the command.
 func TestSimulate_ThePopulationFollowsTheGuardsRule(t *testing.T) {
 	_, dir := simLedger(t)
-	const cap = 0.05
+	const sessionCap = 0.05
 	r, _, err := simulateJSON(t, writePolicy(t, dir, `{"maxSessionUsd": 0.05}`), dir)
 	if err != nil {
 		t.Fatal(err)
@@ -168,7 +168,7 @@ func TestSimulate_ThePopulationFollowsTheGuardsRule(t *testing.T) {
 	spent := map[string]float64{}
 	for i, d := range r.Decisions {
 		want := "admitted"
-		if spent[d.Session] >= cap {
+		if spent[d.Session] >= sessionCap {
 			want = "refused"
 		}
 		if d.Simulated != want {
