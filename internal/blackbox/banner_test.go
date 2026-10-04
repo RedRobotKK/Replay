@@ -5,8 +5,9 @@ package blackbox
 // The first screen of `replay serve`, read from the shipped binary. A user
 // who runs an OpenAI-compatible client is told how to point it at the proxy,
 // and a user who runs Codex CLI is told, before any traffic flows, that the
-// Responses path is forwarded unread. Written RED against the v0.7.0 banner,
-// which named ANTHROPIC_BASE_URL and nothing else.
+// Responses path is read and what is not measured on it. Written RED against
+// the v0.7.0 banner, which named ANTHROPIC_BASE_URL and nothing else; the
+// Responses clause flipped with R-1, when the path became readable.
 
 import (
 	"bytes"
@@ -68,7 +69,7 @@ func itoa(n int) string {
 	return string(b)
 }
 
-func TestBB_ServeBannerNamesEveryClientAndWhatItCannotRead(t *testing.T) {
+func TestBB_ServeBannerNamesEveryClientAndEveryReadPath(t *testing.T) {
 	bin := productionBinary(t)
 	banner := serveBannerFromBinary(t, bin.Path)
 	for _, want := range []string{
@@ -78,15 +79,15 @@ func TestBB_ServeBannerNamesEveryClientAndWhatItCannotRead(t *testing.T) {
 		"/v1/messages",
 		"/v1/chat/completions",
 		"/v1/responses",
-		"forwarded unread",
+		"not measured",
 	} {
 		if !strings.Contains(banner, want) {
 			t.Errorf("the serve banner does not say %q:\n%s", want, banner)
 		}
 	}
-	for _, forbidden := range []string{"Responses API is supported", "reads /v1/responses"} {
+	for _, forbidden := range []string{"forwarded unread", "no ledger"} {
 		if strings.Contains(banner, forbidden) {
-			t.Errorf("the banner claims %q, which this build does not do", forbidden)
+			t.Errorf("the banner claims %q, which stopped being true with R-1", forbidden)
 		}
 	}
 }

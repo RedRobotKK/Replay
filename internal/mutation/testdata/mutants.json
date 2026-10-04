@@ -1646,15 +1646,15 @@
     },
     {
       "id": "M125",
-      "name": "serve-banner-claims-responses-is-read",
+      "name": "serve-banner-misstates-the-responses-path",
       "class": "evidence",
       "discovered": "2026-10-04",
-      "note": "The first screen of replay serve told a Codex CLI user to point the tool at the proxy and nothing else; the tool speaks /v1/responses, which this build forwards unread, so the user saw traffic flow and got an empty report with no error. The banner now names every client variable and says what is not read; this mutant makes it claim the opposite.",
+      "note": "The first screen of replay serve told a Codex CLI user to point the tool at the proxy and nothing else; the tool speaks /v1/responses, which the build then forwarded unread, so the user saw traffic flow and got an empty report with no error. The banner was made to say what is and is not read. R-1 (2026-10-04) made the path readable and the banner now lists it among the read paths and names the one figure not measured on it; this mutant restores the pre-R-1 claim that it is forwarded unread, which would send a Codex user to the offline reader for traffic the proxy now records.",
       "file": "cmd/replay/serve.go",
-      "anchor": "\"%s (Codex CLI, GPT-6 Astra) is forwarded unread by this build: no ledger\\n\"+",
-      "replacement": "\"%s (Codex CLI, GPT-6 Astra) is read by this build like the other two: ledger\\n\"+",
+      "anchor": "\"%s (Codex CLI, GPT-6 Astra). Cache-break causes are not classified on\\n\"+",
+      "replacement": "\"%s (Codex CLI, GPT-6 Astra) is forwarded unread by this build: no ledger\\n\"+",
       "killedBy": [
-        "TestServeBannerNamesEveryClientAndWhatItCannotRead"
+        "TestServeBannerNamesEveryClientAndEveryReadPath"
       ]
     },
     {
@@ -1669,6 +1669,136 @@
       "killedBy": [
         "TestEmptyCostScreenHandsOffToServe"
       ]
+    },
+    {
+      "id": "M127",
+      "name": "responses-path-dropped-from-readable",
+      "class": "attribution-loss",
+      "discovered": "2026-10-04",
+      "file": "internal/proxy/passthrough.go",
+      "anchor": "\treadable := messages || openai || responses\n",
+      "replacement": "\treadable := messages || openai\n",
+      "killedBy": [
+        "TestR1_ANonStreamingResponsesReplyIsLedgeredWithNormalisedUsage"
+      ],
+      "note": "The route predicate exists and the readable set does not include it: a Responses request is masked and forwarded with no summary, no guard and no ledger record, which is exactly the pre-R-1 state with a banner that now says otherwise."
+    },
+    {
+      "id": "M128",
+      "name": "responses-stream-read-by-the-chat-parser",
+      "class": "attribution-loss",
+      "discovered": "2026-10-04",
+      "file": "internal/proxy/tap.go",
+      "anchor": "\t\tcase t.responses:\n\t\t\tt.rstream = &ledger.ResponsesStreamParser{}\n",
+      "replacement": "\t\tcase t.responses && false:\n\t\t\tt.rstream = &ledger.ResponsesStreamParser{}\n",
+      "killedBy": [
+        "TestR1_AStreamedResponsesReplyIsLedgeredFromTheCompletedEvent"
+      ],
+      "note": "Both OpenAI shapes answer with text/event-stream. With the route ignored the Anthropic parser reads a Responses stream, recognises no frame, and the turn is ledgered with no usage: a streamed Codex session prices as free."
+    },
+    {
+      "id": "M129",
+      "name": "responses-input-copied-inclusive",
+      "class": "attribution-misplacement",
+      "discovered": "2026-10-04",
+      "file": "internal/transcript/responses.go",
+      "anchor": "\t\tInput:         u.InputTokens - cached - write,\n",
+      "replacement": "\t\tInput:         u.InputTokens,\n",
+      "killedBy": [
+        "TestResponsesUsage_NormalisesInclusiveCounts"
+      ],
+      "note": "The provider's inclusive input copied into the exclusive field: the cached share is counted twice, the error grows with the hit rate, and the sessions this tool exists for read as the most expensive. Langfuse shipped this bug; the chat-completions adapter was written to avoid it."
+    },
+    {
+      "id": "M130",
+      "name": "responses-stream-ignores-the-terminal-event",
+      "class": "attribution-loss",
+      "discovered": "2026-10-04",
+      "file": "internal/ledger/responses_stream.go",
+      "anchor": "\tcase \"response.completed\", \"response.incomplete\":\n",
+      "replacement": "\tcase \"response.completed.never\":\n",
+      "killedBy": [
+        "TestResponses_StreamUsageComesFromTheTerminalEvent"
+      ],
+      "note": "Usage arrives once, on response.completed or response.incomplete. A parser that waits for another event records every streamed turn as without usage, and no cap sees a streamed Codex session."
+    },
+    {
+      "id": "M131",
+      "name": "responses-empty-usage-recorded-as-zero",
+      "class": "evidence",
+      "discovered": "2026-10-04",
+      "file": "internal/ledger/responses.go",
+      "anchor": "\tif raw.Usage != nil && !raw.Usage.Empty() {\n",
+      "replacement": "\tif raw.Usage != nil {\n",
+      "killedBy": [
+        "TestResponses_NoUsageAndEmptyUsageAreAbsence"
+      ],
+      "note": "`\"usage\": {}` is the absence of a measurement. Recorded as a measured zero it enters every average as a free request and the QT-7a counter never sees it."
+    },
+    {
+      "id": "M132",
+      "name": "responses-session-ignores-prompt-cache-key",
+      "class": "attribution-misplacement",
+      "discovered": "2026-10-04",
+      "file": "internal/ledger/responses.go",
+      "anchor": "\tif req.PromptCacheKey != \"\" {\n",
+      "replacement": "\tif req.PromptCacheKey != \"\" && false {\n",
+      "killedBy": [
+        "TestResponses_SessionHashIsThePromptCacheKey"
+      ],
+      "note": "The one piece of session identity the Responses protocol carries is the client's prompt_cache_key. Falling back to the structural hash splits one Codex conversation into a session per prompt shape, so a session cap never accumulates and every lane comparison is against a stranger."
+    },
+    {
+      "id": "M133",
+      "name": "responses-cache-break-classified-by-the-messages-rule",
+      "class": "evidence",
+      "discovered": "2026-10-04",
+      "file": "internal/proxy/state.go",
+      "anchor": "\tif ln.seen && !isResponses(rec.Path) {\n",
+      "replacement": "\tif ln.seen {\n",
+      "killedBy": [
+        "TestR1_NoCacheBreakIsClassifiedOnTheResponsesPath"
+      ],
+      "note": "The live classifier expects the previous prompt total as this request's cache read, which is Anthropic's documented rule. Applied to a provider whose cache is keyed by the client, it names causes that did not happen, in the log and on the record, for every Codex turn whose read differs."
+    },
+    {
+      "id": "M134",
+      "name": "responses-unreadable-body-not-marked",
+      "class": "evidence",
+      "discovered": "2026-10-04",
+      "file": "internal/ledger/responses.go",
+      "anchor": "\tif raw.Object != \"\" && raw.Object != \"response\" {\n\t\treturn Response{Unparsed: true}\n\t}\n",
+      "replacement": "",
+      "killedBy": [
+        "TestResponses_UnreadableBodiesAreMarkedUnparsed"
+      ],
+      "note": "QT-7c on the new path: a body of another kind behind a 200 must be told from a message that carried no usage, because the operator action differs. Without the mark it counts as the provider omitting usage."
+    },
+    {
+      "id": "M135",
+      "name": "responses-reasoning-tokens-dropped",
+      "class": "attribution-loss",
+      "discovered": "2026-10-04",
+      "file": "internal/transcript/responses.go",
+      "anchor": "\t\tout.ThinkingTokens = u.OutputDetails.ReasoningTokens\n",
+      "replacement": "\t\tout.ThinkingTokens = 0\n",
+      "killedBy": [
+        "TestResponsesUsage_NormalisesInclusiveCounts"
+      ],
+      "note": "Reasoning tokens are the share of output a reasoning model spent thinking and the measured size of the block the provider replays. Dropped, every byte-to-token fit on a Codex session reads the thinking as free."
+    },
+    {
+      "id": "M136",
+      "name": "responses-summariser-not-selected",
+      "class": "guard-removed",
+      "discovered": "2026-10-04",
+      "file": "internal/proxy/passthrough.go",
+      "anchor": "\t\tif responses {\n\t\t\tsummarize = ledger.SummarizeResponsesRequest\n\t\t}\n",
+      "replacement": "",
+      "killedBy": [
+        "TestR1_TheLoopGuardSeesRepeatedResponsesToolCalls"
+      ],
+      "note": "The Messages summariser cannot read a Responses body, so no summary is taken, the loop detector sees no tool calls and the session falls back to no identity: the guards are inert on a path the banner says they cover."
     }
   ],
   "knownSurvivors": [

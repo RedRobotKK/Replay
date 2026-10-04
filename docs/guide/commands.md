@@ -607,12 +607,19 @@ Point your agent at it with the variable its SDK reads:
 - OpenAI SDKs and other chat-completions clients: `export OPENAI_BASE_URL=http://127.0.0.1:4000/v1`
 - Aider: `export OPENAI_API_BASE=http://127.0.0.1:4000/v1`
 
-This build reads, guards and records two request shapes: `/v1/messages` and
-`/v1/chat/completions`. The OpenAI Responses API, `/v1/responses`, which Codex CLI and GPT-6
-Astra speak, is forwarded unread: no ledger record, no spend cap and no figure for that
-traffic, and the proxy says so once on stderr when it first sees it. Secrets in it are still
-masked. A Codex user has the offline path instead, `replay codex`, which reads the rollout
-logs Codex writes. Flags are below.
+This build reads, guards and records three request shapes: `/v1/messages`,
+`/v1/chat/completions` and the OpenAI Responses API, `/v1/responses`, which Codex CLI and
+GPT-6 Astra speak. On the Responses path usage is read from `response.usage`, on the
+non-streaming reply and on the `response.completed` or `response.incomplete` event of a
+stream; the cached share is split out of the inclusive input figure and reasoning tokens are
+carried as thinking. The session is the client's own `prompt_cache_key`, hashed, when the
+client sends one. One figure is not taken there: cache-break causes are not classified,
+because that provider's cache is keyed by the client and the expectation the live classifier
+uses is not established for it; the proxy says so once on stderr. OpenAI models are priced
+when the dated OpenAI rules document is installed, `replay rules --update
+docs/rules/openai-2026-09-15.json`; without it an OpenAI model is charged at the dearest known
+row as an upper bound and `replay doctor` says so. A Codex user also has the offline path,
+`replay codex`, which reads the rollout logs Codex writes. Flags are below.
 
 Every response's rate-limit headers are recorded on the ledger entry — the `anthropic-ratelimit-*` and
 `x-ratelimit-*` families, plus `retry-after` — kept **verbatim**, as the strings the provider sent. The
@@ -1620,7 +1627,7 @@ is `/replay/status`, which you ask for.
 | `replay_cost_unpriced_requests_total` | counter | — | Requests the rules could not price. Independent of the doctor's unenforced-cap warning, which also needs a dollar cap configured |
 | `replay_responses_without_usage_total` | counter | — | 2xx responses on a readable path that parsed as a response and carried no usage object. Nothing was priced or counted for them, so no cap saw them; `replay doctor` warns when a dollar cap is set. Distinct from unpriced (usage present, model unknown), from a measured zero, and from the unreadable bodies below |
 | `replay_responses_unparsed_total` | counter | — | 2xx response bodies on a readable path that could not be read as a response: not JSON, not a message, dropped past the size cap, or cut short. Nothing was counted for them either, and the fix is different: this is a defect between client, proxy and provider, not a provider that omitted usage. **Not** `replay_unparsed_requests_total`, which counts paths this build cannot read |
-| `replay_unparsed_requests_total` | counter | — | Requests on a path this build cannot read. **Excludes** `/v1/chat/completions`, which is read |
+| `replay_unparsed_requests_total` | counter | — | Requests on a path this build cannot read. **Excludes** `/v1/chat/completions` and `/v1/responses`, which are read |
 | `replay_unmasked_requests_total` | counter | — | Requests on a path the masker cannot cover. This is what `/v1/chat/completions` increments, and it counts them whether or not `--mask` was passed, because the question the counter answers is how much traffic took the unmaskable path |
 | `replay_refused_total` | counter | `guard` | Requests refused locally, by guard |
 | `replay_upstream_errors_total` | counter | `status` | Provider responses with an error status |
