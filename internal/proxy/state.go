@@ -247,6 +247,8 @@ type stats struct {
 	unparsed map[string]int
 	// unmasked counts requests on paths the masker does not understand.
 	unmasked map[string]int
+	// disclosed records paths whose once-only disclosure has been printed.
+	disclosed map[string]bool
 }
 
 func newStats() *stats {
@@ -261,6 +263,7 @@ func newStats() *stats {
 		breaches:      map[string]int{},
 		unparsed:      map[string]int{},
 		unmasked:      map[string]int{},
+		disclosed:     map[string]bool{},
 		reverted:      map[string]bool{},
 		masked:        map[string]int{},
 		rehydrated:    map[string]int{},
@@ -303,7 +306,13 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 	if prefixChanged {
 		st.prefixChanges++
 	}
-	if ln.seen {
+	// Not on the Responses path. The classifier's expectation is the previous
+	// prompt total, Anthropic's documented prefix rule; OpenAI's cache is
+	// addressed by the client's prompt_cache_key and nothing on the wire
+	// establishes the same expectation, so a classification here would name
+	// causes that did not happen. The lane state and the tallies below still
+	// update, so cost and the session summary are complete.
+	if ln.seen && !isResponses(rec.Path) {
 		outcome, expected := cachemodel.ClassifyRead(ln.last, cur)
 		out = &ledger.CacheOutcome{Outcome: outcome.String(), Expected: expected}
 		if outcome == cachemodel.ReadBroken {
@@ -1050,6 +1059,19 @@ func (s *stats) unparsedTotal() (n int) {
 		n += v
 	}
 	return n
+}
+
+// noteDisclosed reports whether a once-only disclosure for a path has not
+// been printed yet, and marks it printed.
+func (s *stats) noteDisclosed(path string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.disclosed == nil {
+		s.disclosed = map[string]bool{}
+	}
+	first := !s.disclosed[path]
+	s.disclosed[path] = true
+	return first
 }
 
 // noteUnmasked records a request the masker did not cover, reporting whether

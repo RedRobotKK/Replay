@@ -1,0 +1,1 @@
+{"id":"resp_0a1e","object":"response","created_at":1791158580,"status":"completed","model":"gpt-6-astra","output":[{"id":"msg_4","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Done.","annotations":[]}]}],"usage":{},"store":false}

@@ -39,10 +39,15 @@ type tapKey struct{}
 // they pass; for JSON responses the body is buffered up to the cap.
 type responseTap struct {
 	ostream *ledger.OpenAIStreamParser
+	rstream *ledger.ResponsesStreamParser
 	// openai selects the OpenAI-compatible response parser. The two shapes
 	// report usage differently enough that guessing from the body would be a
 	// heuristic where the request path already knows the answer.
 	openai bool
+	// responses selects the Responses API parsers, for the same reason: both
+	// OpenAI shapes answer with text/event-stream, and only the route knows
+	// which frames to expect.
+	responses bool
 	http.ResponseWriter
 	// upstreamFailed is set by the error handler when no response arrived.
 	upstreamFailed bool
@@ -73,9 +78,12 @@ func (t *responseTap) WriteHeader(code int) {
 	// TestTap_AnEventStreamPastTheBufferCapIsStillMeasured is the boundary
 	// where the two paths stop agreeing.
 	if ledger.IsEventStream(ct) && !t.gz {
-		if t.openai {
+		switch {
+		case t.responses:
+			t.rstream = &ledger.ResponsesStreamParser{}
+		case t.openai:
 			t.ostream = &ledger.OpenAIStreamParser{}
-		} else {
+		default:
 			t.stream = &ledger.StreamParser{}
 		}
 	}
@@ -90,6 +98,8 @@ func (t *responseTap) Write(p []byte) (int, error) {
 	// The tap must never affect delivery: parse after forwarding, and stop
 	// buffering rather than grow without bound.
 	switch {
+	case t.rstream != nil:
+		_, _ = t.rstream.Write(p[:n]) // never fails
 	case t.ostream != nil:
 		_, _ = t.ostream.Write(p[:n]) // never fails
 	case t.stream != nil:
@@ -110,6 +120,9 @@ func (t *responseTap) Flush() {
 }
 
 func (t *responseTap) result() ledger.Response {
+	if t.rstream != nil {
+		return t.rstream.Result()
+	}
 	if t.ostream != nil {
 		return t.ostream.Result()
 	}
@@ -162,6 +175,11 @@ func (t *responseTap) result() ledger.Response {
 		// still knows which family this is; guessing from the body would
 		// put an OpenAI usage frame through the Anthropic parser and
 		// record the turn as free.
+		if t.responses {
+			sp := &ledger.ResponsesStreamParser{}
+			_, _ = sp.Write(body)
+			return sp.Result()
+		}
 		if t.openai {
 			sp := &ledger.OpenAIStreamParser{}
 			_, _ = sp.Write(body)
@@ -170,6 +188,9 @@ func (t *responseTap) result() ledger.Response {
 		sp := &ledger.StreamParser{}
 		_, _ = sp.Write(body) // StreamParser.Write never fails
 		return sp.Result()
+	}
+	if t.responses {
+		return ledger.ParseResponsesResponse(body)
 	}
 	if t.openai {
 		return ledger.ParseOpenAIResponse(body)

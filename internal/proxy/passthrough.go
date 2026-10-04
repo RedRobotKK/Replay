@@ -32,7 +32,7 @@ import (
 // handler.
 //
 // It also holds what decides whether a request is readable at all —
-// isMessages and isChatCompletions — and noteUnparsed, which says out loud
+// isMessages, isChatCompletions and isResponses — and noteUnparsed, which says out loud
 // that a path Replay cannot read has no cap, no budget, no loop detection
 // and no masking on it. Protection that quietly is not there is worse than
 // protection nobody claimed.
@@ -52,8 +52,9 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	messages := isMessages(r.URL.Path)
 	openai := isChatCompletions(r.URL.Path)
+	responses := isResponses(r.URL.Path)
 	// readable is a body this build can summarise, guard and ledger.
-	readable := messages || openai
+	readable := messages || openai || responses
 	if !readable && r.Method == http.MethodPost {
 		// A POST somewhere else is a client sending real work down a path
 		// this build cannot read. Every guard and every figure is inert for
@@ -81,6 +82,12 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		// never saw the label. Position is the guard: a disclosure reachable
 		// only through a config branch will eventually be lost to one.
 		s.noteExperimentalUnmasked(r.URL.Path)
+	}
+	if responses && r.Method == http.MethodPost {
+		// Read since R-1. The NOT PARSED line above no longer fires for this
+		// path, so this is the one line that tells the operator what is and
+		// is not measured on it.
+		s.noteResponsesRead(r.URL.Path)
 	}
 	rec := ledger.Record{Timestamp: start, Path: r.URL.Path, SessionID: r.Header.Get(HeaderSessionID), AgentID: r.Header.Get(HeaderAgentID)}
 
@@ -178,6 +185,9 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		if openai {
 			summarize = ledger.SummarizeOpenAIRequest
 		}
+		if responses {
+			summarize = ledger.SummarizeResponsesRequest
+		}
 		if sum, err := summarize(body, s.cfg.Store.Labeler()); err == nil {
 			rec.RequestSummary = sum
 			summarized = true
@@ -225,7 +235,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 	r, retries := withRetryCounter(r)
 
-	tap := &responseTap{ResponseWriter: w, openai: openai}
+	tap := &responseTap{ResponseWriter: w, openai: openai, responses: responses}
 	if messages && s.cfg.Rehydrator != nil && !s.cfg.NoPolicy {
 		tap.rehydrate = &rehydration{rh: s.cfg.Rehydrator}
 		r = r.WithContext(context.WithValue(r.Context(), tapKey{}, tap))
@@ -393,11 +403,11 @@ func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Recor
 const (
 	messagesPath        = "/v1/messages"
 	chatCompletionsPath = "/v1/chat/completions"
-	// responsesPath is OpenAI's Responses API, which is what GPT-6 Astra
-	// speaks and what Grok's CLI posts to. This build does NOT read it: no
-	// usage comes off a reply on this path and no guard sees a request on it.
-	// It is named here only so the masker can be pointed at it, because
-	// masking is the one rewrite that does not need to understand the body.
+	// responsesPath is OpenAI's Responses API, which is what Codex CLI and
+	// GPT-6 Astra speak. Read since R-1 (2026-10-04): usage comes off the
+	// reply, the guards see the request and the ledger records it. Grok's
+	// CLI posts to a bare /responses at its own origin, which this suffix
+	// does not match, and that traffic stays unread.
 	responsesPath = "/v1/responses"
 )
 
@@ -414,7 +424,7 @@ const (
 	MessagesPath        = messagesPath
 	ChatCompletionsPath = chatCompletionsPath
 	// ResponsesPath is named so the serve banner can say, before any
-	// traffic, that this build forwards it unread.
+	// traffic, that this build reads it and what it does not measure there.
 	ResponsesPath = responsesPath
 )
 
@@ -422,7 +432,9 @@ func isMessages(path string) bool {
 	return strings.HasSuffix(path, messagesPath)
 }
 
-// isResponses reports OpenAI's Responses endpoint.
+// isResponses reports OpenAI's Responses endpoint, read by its own parsers
+// (ledger.SummarizeResponsesRequest, ledger.ParseResponsesResponse and
+// ledger.ResponsesStreamParser).
 //
 // It is deliberately NOT folded into isChatCompletions. That family is
 // rewritten by withUsageReporting, which re-encodes the whole body with
@@ -497,7 +509,30 @@ func (s *Server) noteUnparsed(path string) {
 	}
 	s.cfg.Logger.Printf("NOT PARSED %s: Replay forwards this path unchanged and cannot read it. "+
 		"No ledger record, no spend cap, no error budget, no loop detection %s. "+
-		"Only %s is understood by this build.", path, masking, messagesPath)
+		"Only %s, %s and %s are understood by this build.", path, masking, messagesPath, chatCompletionsPath, responsesPath)
+}
+
+// noteResponsesRead says, once per path, what is true of the Responses path
+// now that it is read: which guards apply, that the masker runs, and the one
+// thing this build does not measure on it. It fires unconditionally, like
+// noteExperimentalUnmasked, so no flag can turn the disclosure off.
+//
+// The NOT MEASURED clause is the point. The live cache classifier compares
+// this request's cache read against the previous prompt total in its lane,
+// which is Anthropic's documented prefix rule. OpenAI's cache is addressed
+// by the client's own prompt_cache_key and reported back as cached_tokens,
+// and nothing on the wire establishes that the same expectation holds, so
+// the classifier is skipped for this path (stats.observe) rather than
+// allowed to name a cause that did not happen.
+func (s *Server) noteResponsesRead(path string) {
+	if !s.stats.noteDisclosed(path) || s.cfg.Logger == nil {
+		return
+	}
+	s.cfg.Logger.Printf("READ %s: usage is read from response.usage on this path, so the ledger, the spend cap, "+
+		"the error budget and the loop detector apply, and secrets ARE masked on this path when a masker is configured. "+
+		"Cache-break classification is NOT MEASURED here: the provider's cache is addressed by the client's "+
+		"prompt_cache_key, and the previous-prompt expectation the classifier uses is not established for it. "+
+		"Verified against a local upstream shaped to Codex CLI's own parser, never against OpenAI itself.", path)
 }
 
 // ListCost is listCost for callers outside the request path that must price a

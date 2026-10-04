@@ -1,0 +1,9 @@
+event: response.created
+data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_0a1b","object":"response","status":"in_progress","model":"gpt-6-astra","output":[],"usage":null}}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","sequence_number":1,"item_id":"msg_5","output_index":0,"content_index":0,"delta":"Running the "}
+
+event: response.incomplete
+data: {"type":"response.incomplete","sequence_number":2,"response":{"id":"resp_0a1b","object":"response","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"model":"gpt-6-astra","output":[{"id":"msg_5","type":"message","status":"incomplete","role":"assistant","content":[{"type":"output_text","text":"Running the ","annotations":[]}]}],"usage":{"input_tokens":1500,"input_tokens_details":{"cached_tokens":0},"output_tokens":64,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":1564}}}
+

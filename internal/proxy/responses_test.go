@@ -130,27 +130,33 @@ func TestRES3_TheResponsesPathIsNotTreatedAsChatCompletions(t *testing.T) {
 	}
 }
 
-// Masked is not read. This build still cannot take usage off a Responses
-// reply, so the path must keep saying it is unparsed. Silence here would be
-// the mistake noteExperimentalUnmasked was written about: a gap that used to
-// be announced and quietly stops being announced.
-func TestRES4_TheResponsesPathStillDeclaresItselfUnparsed(t *testing.T) {
+// RES4, the deliberate behaviour change of R-1. This build reads a Responses
+// body for usage, so the path must stop declaring itself unparsed: a NOT
+// PARSED line on a path that is ledgered and capped would tell the operator
+// their cap is inert when it is not. The earlier form of this test asserted
+// the opposite, and that assertion was true of the build it was written
+// against; the probe of 2026-10-04 and the parser that followed changed the
+// fact, not the standard.
+func TestRES4_TheResponsesPathNoLongerDeclaresItselfUnparsed(t *testing.T) {
 	vault, err := masking.OpenVault(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	up := &respUpstream{}
-	base, _, logs := startProxyWith(t, up, Config{Masker: masking.New(vault, nil)})
+	base, dir, logs := startProxyWith(t, up, Config{Masker: masking.New(vault, nil)})
 
 	postResponses(t, base, `{"model":"gpt-6-astra","input":[{"role":"user","content":[{"type":"input_text","text":"hi"}]}]}`)
+	if recs := waitLedger(t, dir, 1); len(recs) == 0 {
+		t.Fatal("no ledger record: the path is still forwarded unread")
+	}
 
 	s := logs.String()
-	if !strings.Contains(s, responsesPath) {
-		t.Fatalf("nothing in the log names %s, so an operator is told nothing about this traffic:\n%s", responsesPath, s)
+	if bytes.Contains([]byte(s), []byte("NOT PARSED "+responsesPath)) {
+		t.Errorf("the path is read and ledgered and still announced as NOT PARSED, so an operator "+
+			"is told their cap is inert on traffic it covers:\n%s", s)
 	}
-	if !bytes.Contains([]byte(s), []byte("NOT PARSED")) {
-		t.Errorf("the unparsed disclosure stopped firing for %s. Usage is still not read on this "+
-			"path, and a masked request is not a read one:\n%s", responsesPath, s)
+	if !strings.Contains(s, "READ "+responsesPath) {
+		t.Errorf("nothing in the log says what is true of %s now:\n%s", responsesPath, s)
 	}
 }
 
@@ -175,8 +181,11 @@ func TestRES5_TheUnparsedLineDoesNotDenyMaskingThatIsRunning(t *testing.T) {
 	postResponses(t, base, `{"model":"gpt-6-astra","input":[{"role":"user","content":[{"type":"input_text","text":"hi"}]}]}`)
 
 	s := logs.String()
-	if !strings.Contains(s, "NOT PARSED "+responsesPath) {
-		t.Fatalf("no unparsed line for %s:\n%s", responsesPath, s)
+	// Re-anchored by R-1: the line this path prints is the READ disclosure
+	// now, since the NOT PARSED one would be false. The two assertions below
+	// are unchanged.
+	if !strings.Contains(s, "READ "+responsesPath) {
+		t.Fatalf("no disclosure line for %s:\n%s", responsesPath, s)
 	}
 	if strings.Contains(s, "no secret masking apply to it") {
 		t.Errorf("the disclosure denies masking on a path where the masker is running, so an "+

@@ -1,0 +1,27 @@
+event: response.created
+data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_0a1b","object":"response","status":"in_progress","model":"gpt-6-astra","output":[],"usage":null}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":1,"output_index":0,"item":{"id":"rs_1","type":"reasoning","summary":[]}}
+
+event: response.reasoning_summary_text.delta
+data: {"type":"response.reasoning_summary_text.delta","sequence_number":2,"item_id":"rs_1","output_index":0,"summary_index":0,"delta":"Weighing the two options."}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":1,"item":{"id":"msg_1","type":"message","status":"in_progress","role":"assistant","content":[]}}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","sequence_number":4,"item_id":"msg_1","output_index":1,"content_index":0,"delta":"Running the "}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","sequence_number":5,"item_id":"msg_1","output_index":1,"content_index":0,"delta":"listing now."}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":6,"output_index":1,"item":{"id":"msg_1","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Running the listing now.","annotations":[]}]}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":7,"output_index":2,"item":{"id":"fc_1","type":"function_call","status":"completed","call_id":"call_1","name":"shell","arguments":"{\"command\":[\"ls\",\"-la\"]}"}}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":8,"response":{"id":"resp_0a1b","object":"response","status":"completed","model":"gpt-6-astra","output":[{"id":"rs_1","type":"reasoning","summary":[{"type":"summary_text","text":"Weighing the two options."}]},{"id":"msg_1","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Running the listing now.","annotations":[]}]},{"id":"fc_1","type":"function_call","status":"completed","call_id":"call_1","name":"shell","arguments":"{\"command\":[\"ls\",\"-la\"]}"}],"usage":{"input_tokens":1500,"input_tokens_details":{"cached_tokens":1000},"output_tokens":300,"output_tokens_details":{"reasoning_tokens":200},"total_tokens":1800}}}
+
