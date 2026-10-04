@@ -600,9 +600,19 @@ The reasoning is [ADR-0013](../adr/0013-x402-rules-feed.md).
 
 ### `replay serve`
 
-Starts the local proxy on `127.0.0.1:4000`. Point your agent at it with
-`export ANTHROPIC_BASE_URL=http://127.0.0.1:4000` and every figure moves from estimated to measured.
-Flags are below.
+Starts the local proxy on `127.0.0.1:4000` and every figure moves from estimated to measured.
+Point your agent at it with the variable its SDK reads:
+
+- Claude Code and the Anthropic SDKs: `export ANTHROPIC_BASE_URL=http://127.0.0.1:4000`
+- OpenAI SDKs and other chat-completions clients: `export OPENAI_BASE_URL=http://127.0.0.1:4000/v1`
+- Aider: `export OPENAI_API_BASE=http://127.0.0.1:4000/v1`
+
+This build reads, guards and records two request shapes: `/v1/messages` and
+`/v1/chat/completions`. The OpenAI Responses API, `/v1/responses`, which Codex CLI and GPT-6
+Astra speak, is forwarded unread: no ledger record, no spend cap and no figure for that
+traffic, and the proxy says so once on stderr when it first sees it. Secrets in it are still
+masked. A Codex user has the offline path instead, `replay codex`, which reads the rollout
+logs Codex writes. Flags are below.
 
 Every response's rate-limit headers are recorded on the ledger entry — the `anthropic-ratelimit-*` and
 `x-ratelimit-*` families, plus `retry-after` — kept **verbatim**, as the strings the provider sent. The

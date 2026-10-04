@@ -1643,6 +1643,32 @@
       "killedBy": [
         "TestQT7c_ANonJSONBodyIsCountedAsUnparsedNotAsMissingUsage"
       ]
+    },
+    {
+      "id": "M125",
+      "name": "serve-banner-claims-responses-is-read",
+      "class": "evidence",
+      "discovered": "2026-10-04",
+      "note": "The first screen of replay serve told a Codex CLI user to point the tool at the proxy and nothing else; the tool speaks /v1/responses, which this build forwards unread, so the user saw traffic flow and got an empty report with no error. The banner now names every client variable and says what is not read; this mutant makes it claim the opposite.",
+      "file": "cmd/replay/serve.go",
+      "anchor": "\"%s (Codex CLI, GPT-6 Astra) is forwarded unread by this build: no ledger\\n\"+",
+      "replacement": "\"%s (Codex CLI, GPT-6 Astra) is read by this build like the other two: ledger\\n\"+",
+      "killedBy": [
+        "TestServeBannerNamesEveryClientAndWhatItCannotRead"
+      ]
+    },
+    {
+      "id": "M126",
+      "name": "empty-cost-screen-offers-no-next-step",
+      "class": "evidence",
+      "discovered": "2026-10-04",
+      "note": "The cost screen the installer opens first, on a machine with no Claude Code transcripts, offered one note: an environment variable for transcripts kept elsewhere. A user of any other agent was left with nothing to run. The screen now names the live path and, when Codex rollouts are present, the offline reader; this mutant drops the live path again.",
+      "file": "internal/tui/measured.go",
+      "anchor": "\t\t\tnote(false, \"replay serve: measure any agent live, no transcripts needed\"),\n",
+      "replacement": "",
+      "killedBy": [
+        "TestEmptyCostScreenHandsOffToServe"
+      ]
     }
   ],
   "knownSurvivors": [
