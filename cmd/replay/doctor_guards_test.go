@@ -35,7 +35,7 @@ func TestDoctorShoutsWhenADollarCapIsNotEnforced(t *testing.T) {
 	if !strings.Contains(got, "WARNING") {
 		t.Fatalf("an unenforced cap must be loud, got:\n%s", got)
 	}
-	if !strings.Contains(got, "not being applied") {
+	if !strings.Contains(got, "upper bound") {
 		t.Fatalf("the warning must say what is actually wrong, got:\n%s", got)
 	}
 	// Naming the flag beats describing it. The reader is being told their

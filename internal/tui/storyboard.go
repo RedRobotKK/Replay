@@ -157,9 +157,9 @@ func Storyboard() []Scene {
 		kv("counted so far", "$2.41"),
 		kv("could not be priced", "12 requests"),
 		"", "  notes",
-		note(true, "this cap cannot be reached. Unpriced requests add nothing to"),
-		"      the total, so the limit you set is not being applied to them.",
-		note(false, "priced traffic is still capped normally."),
+		note(true, "unpriced requests were charged at the dearest known rate,"),
+		"      as an upper bound, so this cap can fire early on them.",
+		note(false, "priced traffic is capped on measured cost."),
 	)
 
 	add(16, "Settings, with provenance",

@@ -55,7 +55,7 @@ func TestGuardsSaysWhenADollarCapIsNotBeingEnforced(t *testing.T) {
 	g := liveGuards()
 	g.SpendCapNotEnforced = true
 	body := GuardsScreen(g, someAdvice(), 20).String()
-	if !strings.Contains(body, "NOT enforced") {
+	if !strings.Contains(body, "upper bound") {
 		t.Errorf("a dollar cap that is not being applied is not reported:\n%s", body)
 	}
 	if !Urgent(GuardsScreen(g, someAdvice(), 20).Lines) {

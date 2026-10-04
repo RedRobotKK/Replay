@@ -82,7 +82,7 @@ func TestSpentRowSaysWhenTheCapIsNotEnforced(t *testing.T) {
 	}
 	loud := spentRow(GuardState{Reachable: true, CostUSD: 12.34, DayCostUSD: 2.10,
 		SpendCapNotEnforced: true})
-	if !strings.Contains(loud, "NOT enforced") {
+	if !strings.Contains(loud, "upper bound") {
 		t.Errorf("an unenforced cap is not marked in the spend cell: %q", loud)
 	}
 	if loud == ok {

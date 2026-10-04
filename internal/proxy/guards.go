@@ -97,7 +97,10 @@ func (g *SpendGuard) SetClock(now func() time.Time) {
 }
 
 // CapNotEnforced reports that a dollar cap is configured but at least one
-// request could not be priced, so the cap is not being applied to that traffic.
+// request could not be priced and was charged at the dearest known rate, as an
+// upper bound, so the cap is applied to an over-estimate of that traffic and
+// can fire early. The name predates the dearest-row rule (#261) and is kept
+// because it is the status key readers already look for.
 func (g *SpendGuard) CapNotEnforced() bool {
 	if g == nil {
 		return false

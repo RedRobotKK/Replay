@@ -149,9 +149,9 @@ Local proxy: forwards to the provider, records a ledger.
 | `-mask-patterns` | string | file of user-defined patterns for -mask, one per line as name<TAB>regexp |
 | `-mask-ttl` | duration | with -mask, how long a masked secret stays in the vault before it is evicted. Masking turns a transient secret into one at rest and the vault key sits beside the ciphertext, so this is the window a compromised host hands over. 0 keeps entries forever, which was the behaviour before v0.6 and is the wrong default. Re-sending a secret restores its entry, and the placeholder is unchanged (default 24h0m0s) |
 | `-max-day-tokens` | int | refuse requests once this many tokens were consumed today, UTC (0 = off) |
-| `-max-day-usd` | float | refuse requests once today's list-price cost reaches this many dollars, UTC (0 = off) |
+| `-max-day-usd` | float | refuse requests once today's list-price cost reaches this many dollars, UTC (0 = off; a model not in the price table is priced at the dearest known rate, as an upper bound) |
 | `-max-session-tokens` | int | refuse a session's next request once it has consumed this many tokens (0 = off) |
-| `-max-session-usd` | float | refuse a session's next request once its list-price cost reaches this many dollars (0 = off; models not in the price table count as free) |
+| `-max-session-usd` | float | refuse a session's next request once its list-price cost reaches this many dollars (0 = off; a model not in the price table is priced at the dearest known rate, as an upper bound) |
 | `-metrics-listen` | string | bind a second, read-only listener for /replay/metrics, /replay/status and /replay/healthz. It never proxies. Use it when the proxy is on a socket and a scraper needs a port |
 | `-policy-file` | string | EXPERIMENTAL: apply the context-edit candidate selected by replay learn (usually ~/.replay/policy.json), read at each session's first request; an explicit -context-edit-trigger wins; a session keeps its first decision whatever the file does later |
 | `-preflight` | int | refuse a request whose changed system prompt or tool definitions would re-lay more than this many tokens, estimated from the prefix bytes (0 = off). The number is the ceiling and supplying it is what turns the guard on |

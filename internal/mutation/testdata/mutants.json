@@ -1604,6 +1604,19 @@
       "killedBy": [
         "TestCount_AnAnswerBeforeTheWindowEndIsRejected"
       ]
+    },
+    {
+      "id": "M122",
+      "name": "serve-help-says-unpriced-models-are-free",
+      "class": "evidence",
+      "discovered": "2026-10-03",
+      "note": "The --max-session-usd help says a model not in the price table counts as free, while the guard charges it at the dearest known rate as an upper bound. The qualification pass (QT-7b) found the flag, the guide, the alerting guide, the doctor warning and the TUI all describing the behaviour the code had been changed away from; an operator reading any of them would expect a cap that never fires on a new model, and get one that fires early.",
+      "file": "cmd/replay/serve.go",
+      "anchor": "(0 = off; a model not in the price table is priced at the dearest known rate, as an upper bound)\")\n\tmaxDayUSD",
+      "replacement": "(0 = off; models not in the price table count as free)\")\n\tmaxDayUSD",
+      "killedBy": [
+        "TestQT7b_EverySurfaceStatesTheUnpricedModelRuleTheCodeApplies"
+      ]
     }
   ],
   "knownSurvivors": [

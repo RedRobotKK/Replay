@@ -48,12 +48,14 @@ func guardLines(st proxy.Status) []string {
 		out = append(out, fmt.Sprintf("$%.2f at list price since start, $%.2f today (UTC)", st.CostUSD, st.DayCostUSD))
 	}
 	if st.SpendCapNotEnforced {
-		// Loud on purpose. The failure is that the user believes they have a
-		// limit they do not have, which is worse than having set none.
+		// Loud on purpose. The user needs to know which figure they are reading:
+		// an unpriced model is charged at the dearest known rate, as an upper
+		// bound, so the cap fires early on it rather than never, and the dollar
+		// figures overstate that traffic until the model has a price.
 		out = append(out,
-			"WARNING: a dollar cap is set, but some traffic could not be priced, so the",
-			"         cap is not being applied to it. An agent looping on an unpriced",
-			"         model can run up a real bill without ever reaching your limit.")
+			"WARNING: a dollar cap is set, but some traffic could not be priced. It was",
+			"         charged at the dearest known rate, as an upper bound, so the cap",
+			"         can fire early on that traffic and the figures above overstate it.")
 		// Telling somebody to add a cap they already have is noise, and noise
 		// in a warning is how a warning stops being read. A token cap counts
 		// whether or not a model can be priced, so when one is running it is

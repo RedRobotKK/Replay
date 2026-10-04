@@ -21,8 +21,9 @@ type GuardState struct {
 	Refusals   map[string]int
 	CostUSD    float64
 	DayCostUSD float64
-	// SpendCapNotEnforced is a dollar cap that is set and is not being applied
-	// to some traffic, because that traffic could not be priced.
+	// SpendCapNotEnforced is a dollar cap that is set while some traffic could
+	// not be priced and was charged at the dearest known rate, as an upper
+	// bound. The name is the status key; the cap is applied, early.
 	SpendCapNotEnforced bool
 }
 
@@ -105,13 +106,12 @@ func GuardsScreen(g GuardState, advice []string, sessions int) Screen {
 		"", "  notes")
 
 	if g.SpendCapNotEnforced {
-		// Urgent, and the mechanism named. "Not enforced" on its own is a
-		// status a reader cannot act on; the reason they cannot act on it is
-		// that the fix is a price, not a number.
+		// Urgent, and the mechanism named. The fix is a price, not a number:
+		// until the model is in the table the cap works on an upper bound.
 		lines = append(lines,
-			note(true, "a dollar cap is set and is NOT enforced on some"),
-			"      traffic, because it could not be priced. A loop on",
-			"      an unpriced model bills with no limit reached.")
+			note(true, "a dollar cap is set; some traffic was unpriced"),
+			"      and charged at the dearest known rate, as an",
+			"      upper bound, so the cap can fire early on it.")
 		lines = append(lines, nextFor(g)...)
 	}
 	if !g.Reachable {
@@ -211,7 +211,7 @@ func spentRow(g GuardState) string {
 		return "unknown, nothing to ask"
 	}
 	if g.SpendCapNotEnforced {
-		return fmt.Sprintf("$%.2f today, cap NOT enforced", g.DayCostUSD)
+		return fmt.Sprintf("$%.2f today, cap on an upper bound", g.DayCostUSD)
 	}
 	return fmt.Sprintf("$%.2f since start, $%.2f today", g.CostUSD, g.DayCostUSD)
 }

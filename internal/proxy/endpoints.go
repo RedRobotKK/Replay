@@ -55,9 +55,9 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	// A failed write means the reader went away; nothing to do.
 	st := s.stats.status()
-	// A dollar cap that cannot be applied is worth reporting: an unpriced model
-	// contributes nothing to the running total, so the cap never fires and the
-	// operator silently has no cap on that traffic.
+	// A dollar cap applied to an over-estimate is worth reporting: an unpriced
+	// model is charged at the dearest known rate, as an upper bound, so the cap
+	// can fire early and the operator should know which figure they are reading.
 	st.SpendCapNotEnforced = s.cfg.Spend.CapNotEnforced()
 	st.Caps = s.cfg.Spend.Configured()
 	_ = json.NewEncoder(w).Encode(st)

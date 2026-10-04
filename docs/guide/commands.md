@@ -1434,7 +1434,7 @@ decide whether a request goes out at all.
 | Flag | What it does |
 |---|---|
 | `--max-session-tokens`, `--max-day-tokens` | Refuse the *next* request once the cap is reached. Never a response already in flight |
-| `--max-session-usd`, `--max-day-usd` | The same, priced from a dated table. A model not in the table counts as free |
+| `--max-session-usd`, `--max-day-usd` | The same, priced from a dated table. A model not in the table is charged at the dearest known rate, as an upper bound, so the cap fires early on it rather than never |
 
 A refusal arrives as a provider-shaped error your agent will show you. Send
 `x-replay-override: <reason>` to proceed once.

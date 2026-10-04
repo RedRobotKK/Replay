@@ -143,7 +143,7 @@ func TestBothSurfacesReadTheSameGuardFields(t *testing.T) {
 		},
 	}
 	screen := tui.GuardsScreen(g, nil, 0).String()
-	if !strings.Contains(screen, "NOT enforced") {
+	if !strings.Contains(screen, "upper bound") {
 		t.Errorf("doctor warns about the unenforced cap and the screen does not:\n%s", screen)
 	}
 	// Both name the refusing guard, not just a count.

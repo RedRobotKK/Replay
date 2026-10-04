@@ -243,8 +243,8 @@ Each names the path or address it failed on.
   15:05:44  anthropic  api.anthropic.com        messages          parsed
 
   notes
-  ! the day dollar cap is NOT being enforced: 12 requests could not be
-    priced, so they add nothing to the total and the cap cannot be reached.
+  ! the day dollar cap counts 12 unpriced requests at the dearest known
+    rate, as an upper bound, so it can fire early on them.
   - grok /responses is forwarded unread: no ledger record, no spend cap,
     no masking and no loop detection apply to it.
   - openai is parsed against a stub and has never been verified live.

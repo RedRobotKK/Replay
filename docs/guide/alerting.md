@@ -38,7 +38,7 @@ Threshold is zero because there is no acceptable rate. If you are deliberately r
 path without masking, silence this alert explicitly rather than raising the number, so the
 decision is written down somewhere.
 
-### A dollar cap is not being applied to some traffic
+### A dollar cap is counting some traffic at an upper bound
 
 ```promql
 increase(replay_cost_unpriced_requests_total[15m]) > 0
@@ -46,8 +46,9 @@ increase(replay_cost_unpriced_requests_total[15m]) > 0
 ```
 
 The second clause is what makes this actionable rather than noisy: unpriced traffic only
-matters for a *dollar* cap. An agent looping on an unpriced model runs up a real bill without
-ever reaching the limit. `replay doctor` says the same thing at the terminal.
+matters for a *dollar* cap. A request on an unpriced model is charged at the dearest known
+rate, as an upper bound, so the cap can fire early on it and the dollar figures overstate that
+traffic until the model has a price. `replay doctor` says the same thing at the terminal.
 
 The fix is not to raise a threshold. Add `--max-day-tokens` or `--max-session-tokens`, which
 count whether or not a model can be priced, then `replay rules --update <file|URL>` so the

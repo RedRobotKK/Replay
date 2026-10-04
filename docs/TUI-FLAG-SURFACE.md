@@ -50,11 +50,12 @@ conditions, and three of them are invisible if the surface only prints a number:
 A fifth condition matters more than any of them and belongs to no flag value:
 
 ```text
-  ! this cap cannot be reached. 12 requests could not be priced, so they
-    add nothing to the total and the limit will never be met.
+  ! 12 requests could not be priced and were charged at the dearest known
+    rate, as an upper bound, so this cap can fire early on them.
 ```
 
-That is `SpendGuard.CapNotEnforced`. The user set a cap and does not have one.
+That is `SpendGuard.CapNotEnforced`, a name that predates the dearest-row rule.
+The user set a cap and has one that works on an over-estimate of some traffic.
 No flag expresses it, which is exactly why the surface has to.
 
 ## Why posture is written as what it misses
