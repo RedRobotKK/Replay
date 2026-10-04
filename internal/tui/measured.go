@@ -78,6 +78,10 @@ type Machine struct {
 	// LedgerDir and LedgerWritable describe where a proxy would record.
 	LedgerDir      string
 	LedgerWritable bool
+	// OtherAgentCommands names the offline readers for other agents whose
+	// records are on this machine, for example "replay codex". Populated by
+	// the caller; empty when no other agent has records here.
+	OtherAgentCommands []string
 	// PriceTableDate and PriceAgeDays date the compiled price table.
 	PriceTableDate string
 	PriceAgeDays   int
@@ -393,7 +397,12 @@ func CostScreen(m Machine, tick int, sel Selection) Screen {
 		lines = append(lines,
 			"  No transcripts to add up.", "",
 			"  "+cell("looked in", 22)+shortPath(m.ProjectsDir),
-			"", "  notes",
+			"", "  notes")
+		for _, cmd := range m.OtherAgentCommands {
+			lines = append(lines, note(false, cmd+": this machine has that agent's records"))
+		}
+		lines = append(lines,
+			note(false, "replay serve: measure any agent live, no transcripts needed"),
 			note(false, "REPLAY_TRANSCRIPTS=/path/to/projects replay tui"))
 		lines = WithBanner(lines, Unavailable, "no transcripts under "+shortPath(m.ProjectsDir))
 		return Screen{Key: 'c', Title: "cost", Lines: padCost(lines), BodyRows: len(lines), From: Unavailable}

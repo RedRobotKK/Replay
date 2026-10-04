@@ -726,6 +726,14 @@ func machineState() tui.Machine {
 		projects = roots[0]
 	}
 	m.ProjectsDir = projects
+	// The same detection the no-argument command and doctor already run, so
+	// the empty cost screen names the offline reader for records that are
+	// here, not only the variable for transcripts kept elsewhere.
+	for _, s := range findOtherSurfaces(home) {
+		if s.cmd != "" {
+			m.OtherAgentCommands = append(m.OtherAgentCommands, s.cmd)
+		}
+	}
 
 	c := countTranscripts(projects)
 	// Sessions and files are both carried, under their own names. Folding them
