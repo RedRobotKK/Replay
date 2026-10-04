@@ -413,6 +413,9 @@ const (
 const (
 	MessagesPath        = messagesPath
 	ChatCompletionsPath = chatCompletionsPath
+	// ResponsesPath is named so the serve banner can say, before any
+	// traffic, that this build forwards it unread.
+	ResponsesPath = responsesPath
 )
 
 func isMessages(path string) bool {

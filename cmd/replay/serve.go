@@ -219,12 +219,32 @@ func runServe(args []string, stdout, stderr io.Writer) error {
 				addr, target, dir, addr, dir, envDisabled)
 			return
 		}
-		_, _ = fmt.Fprintf(stdout, "replay serve listening on http://%s -> %s\nledger: %s\n\nPoint your agent at it:\n  export ANTHROPIC_BASE_URL=http://%s\n\nThen analyze measured data with:\n  replay replay %s\n\nStop with Ctrl-C. Disable without uninstalling: %s=1.\n", addr, target, dir, addr, dir, envDisabled)
+		_, _ = fmt.Fprint(stdout, serveBanner(addr, target.String(), dir))
 	}()
 	// Persist on the way out, so an ordinary restart does not hand the next
 	// process a clean slate for a cap the operator set hours ago.
 	defer spend.SaveState(dir)
 	return srv.ListenAndServe(ctx)
+}
+
+// serveBanner is the first screen of the http transport: where the proxy
+// listens, how each kind of client is pointed at it, which request shapes
+// this build reads, and which it forwards unread. The last line matters most
+// to a Codex CLI user, whose tool speaks /v1/responses: without it they would
+// configure the proxy, see traffic flow, and get an empty report with no
+// error. Said here, before any traffic, rather than once on stderr after.
+func serveBanner(addr, target, dir string) string {
+	return fmt.Sprintf("replay serve listening on http://%s -> %s\nledger: %s\n\n"+
+		"Point your agent at it:\n"+
+		"  Claude Code and Anthropic SDKs:        export ANTHROPIC_BASE_URL=http://%s\n"+
+		"  OpenAI SDKs, chat-completions clients: export OPENAI_BASE_URL=http://%s/v1\n"+
+		"  Aider:                                 export OPENAI_API_BASE=http://%s/v1\n\n"+
+		"Read, guarded and recorded: %s and %s.\n"+
+		"%s (Codex CLI, GPT-6 Astra) is forwarded unread by this build: no ledger\n"+
+		"record and no spend cap for that traffic; secrets in it are still masked.\n\n"+
+		"Then analyze measured data with:\n  replay replay %s\n\n"+
+		"Stop with Ctrl-C. Disable without uninstalling: %s=1.\n",
+		addr, target, dir, addr, addr, addr, proxy.MessagesPath, proxy.ChatCompletionsPath, proxy.ResponsesPath, dir, envDisabled)
 }
 
 // vaultDirName is where the masking vault lives under ~/.replay.
