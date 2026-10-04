@@ -28,6 +28,9 @@ type GuardState struct {
 	// ResponsesWithoutUsage is the count of 2xx responses that carried no
 	// usage object; nothing was counted for them, so no cap saw them.
 	ResponsesWithoutUsage int
+	// ResponsesUnparsed is the count of 2xx responses whose body could not
+	// be read as a response; nothing was counted for them either.
+	ResponsesUnparsed int
 }
 
 // Caps is which limits are configured, not their values. Whether a limit
@@ -120,6 +123,11 @@ func GuardsScreen(g GuardState, advice []string, sessions int) Screen {
 	if n := g.ResponsesWithoutUsage; n > 0 {
 		lines = append(lines,
 			note(g.Caps.DayUSD || g.Caps.SessionUSD, fmt.Sprintf("%d response(s) carried no usage; nothing was", n)),
+			"      counted for them, so a dollar cap did not see them.")
+	}
+	if n := g.ResponsesUnparsed; n > 0 {
+		lines = append(lines,
+			note(g.Caps.DayUSD || g.Caps.SessionUSD, fmt.Sprintf("%d response(s) could not be read; nothing was", n)),
 			"      counted for them, so a dollar cap did not see them.")
 	}
 	if !g.Reachable {

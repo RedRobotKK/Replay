@@ -123,6 +123,7 @@ func TestBothSurfacesReadTheSameGuardFields(t *testing.T) {
 		DayCostUSD:            2.10,
 		SpendCapNotEnforced:   true,
 		ResponsesWithoutUsage: 5,
+		ResponsesUnparsed:     4,
 		Caps:                  proxy.CapStatus{DayUSD: true, SessionTokens: true},
 	}
 	// What doctor says.
@@ -139,6 +140,7 @@ func TestBothSurfacesReadTheSameGuardFields(t *testing.T) {
 		CostUSD: st.CostUSD, DayCostUSD: st.DayCostUSD,
 		SpendCapNotEnforced:   st.SpendCapNotEnforced,
 		ResponsesWithoutUsage: st.ResponsesWithoutUsage,
+		ResponsesUnparsed:     st.ResponsesUnparsed,
 		Caps: tui.Caps{
 			SessionUSD: st.Caps.SessionUSD, DayUSD: st.Caps.DayUSD,
 			SessionTokens: st.Caps.SessionTokens, DayTokens: st.Caps.DayTokens,
@@ -147,6 +149,9 @@ func TestBothSurfacesReadTheSameGuardFields(t *testing.T) {
 	screen := tui.GuardsScreen(g, nil, 0).String()
 	if !strings.Contains(screen, "upper bound") {
 		t.Errorf("doctor warns about the unenforced cap and the screen does not:\n%s", screen)
+	}
+	if !strings.Contains(doctor, "could not be read") || !strings.Contains(screen, "could not be read") {
+		t.Errorf("response bodies that could not be read are not reported by both surfaces:\n--- doctor ---\n%s\n--- screen ---\n%s", doctor, screen)
 	}
 	if !strings.Contains(doctor, "no usage") || !strings.Contains(screen, "no usage") {
 		t.Errorf("responses without usage are not reported by both surfaces:\n--- doctor ---\n%s\n--- screen ---\n%s", doctor, screen)

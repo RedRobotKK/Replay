@@ -19,7 +19,7 @@ func ParseResponse(body []byte) Response {
 		ContextManagement *contextManagement    `json:"context_management"`
 	}
 	if err := json.Unmarshal(body, &msg); err != nil || msg.Type != "message" {
-		return Response{}
+		return Response{Unparsed: true}
 	}
 	resp := Response{Blocks: stripText(transcript.DecodeBlocks(msg.Content, transcript.RoleAssistant, nil, nil))}
 	if msg.Usage != nil {

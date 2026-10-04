@@ -236,6 +236,11 @@ type stats struct {
 	// does not see them; distinct from unpriced (usage present, model not in
 	// the table) and from a measured zero (usage present, all zero).
 	noUsage int
+	// unparsedBody counts 2xx responses on a readable path whose body could
+	// not be read as a response: not JSON, not a message, dropped or cut
+	// short. Distinct from unparsed below, which is paths this build cannot
+	// read, and from noUsage, which parsed and simply carried no usage.
+	unparsedBody int
 	// unparsed counts requests on paths this build cannot read, by path.
 	// Everything Replay does hangs off parsing, so these requests were
 	// forwarded with every guard and the masker inert.
@@ -753,6 +758,10 @@ type Status struct {
 	// ResponsesWithoutUsage counts 2xx responses that carried no usage
 	// object. Nothing was priced or counted for them, so no cap saw them.
 	ResponsesWithoutUsage int `json:"responses_without_usage"`
+	// ResponsesUnparsed counts 2xx responses whose body could not be read as
+	// a response at all. Nothing was counted for them either; the fix is a
+	// different one.
+	ResponsesUnparsed int `json:"responses_unparsed"`
 	// Refusals counts requests answered locally, by guard. The total is in
 	// Requests["refused"]; this names which guard did it, which is the part a
 	// person needs to act on.
@@ -810,6 +819,7 @@ func (s *stats) status() Status {
 	}
 	out.CostUSD = s.costUSD
 	out.ResponsesWithoutUsage = s.noUsage
+	out.ResponsesUnparsed = s.unparsedBody
 	if s.now().UTC().Format("2006-01-02") == s.dayStamp {
 		out.DayCostUSD = s.dayCostUSD
 	}
@@ -884,6 +894,9 @@ func (s *stats) metrics() string {
 	line("# HELP replay_responses_without_usage_total 2xx responses that carried no usage object, so nothing was counted for them and no cap saw them.")
 	line("# TYPE replay_responses_without_usage_total counter")
 	line("replay_responses_without_usage_total %d", s.noUsage)
+	line("# HELP replay_responses_unparsed_total 2xx response bodies that could not be read as a response (not JSON, not a message, dropped or cut short), so nothing was counted for them. Not the same as replay_unparsed_requests_total, which counts paths this build cannot read.")
+	line("# TYPE replay_responses_unparsed_total counter")
+	line("replay_responses_unparsed_total %d", s.unparsedBody)
 	unparsed := 0
 	for _, v := range s.unparsed {
 		unparsed += v
@@ -970,10 +983,17 @@ func sortedKeys(m map[string]int) []string {
 	return keys
 }
 
-// noteNoUsage counts a 2xx response that carried no usage object.
+// noteNoUsage counts a 2xx response that parsed and carried no usage object.
 func (s *stats) noteNoUsage() {
 	s.mu.Lock()
 	s.noUsage++
+	s.mu.Unlock()
+}
+
+// noteUnparsedBody counts a 2xx response whose body could not be read.
+func (s *stats) noteUnparsedBody() {
+	s.mu.Lock()
+	s.unparsedBody++
 	s.mu.Unlock()
 }
 

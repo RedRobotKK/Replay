@@ -249,6 +249,12 @@ type Response struct {
 	// side.
 	AppliedEdits       int `json:"applied_edits,omitempty"`
 	ClearedInputTokens int `json:"cleared_input_tokens,omitempty"`
+	// Unparsed says the body could not be read as a response at all: not
+	// JSON, not a message, dropped, or cut short. It is set only where the
+	// parser or the tap knows that, never inferred from an empty result, so
+	// a legal message with no content and no usage is not marked. It is what
+	// tells "nothing was measured" from "the provider reported nothing".
+	Unparsed bool `json:"unparsed,omitempty"`
 }
 
 // CacheOutcome is the live classification of one response's cache read.

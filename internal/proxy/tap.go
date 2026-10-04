@@ -117,13 +117,13 @@ func (t *responseTap) result() ledger.Response {
 		return t.stream.Result()
 	}
 	if t.dropped {
-		return ledger.Response{}
+		return ledger.Response{Unparsed: true}
 	}
 	body := t.buffer.Bytes()
 	if t.gz {
 		zr, err := gzip.NewReader(bytes.NewReader(body))
 		if err != nil {
-			return ledger.Response{}
+			return ledger.Response{Unparsed: true}
 		}
 		decoded, err := io.ReadAll(io.LimitReader(zr, MaxResponseBytes))
 		if err != nil {
@@ -153,7 +153,7 @@ func (t *responseTap) result() ledger.Response {
 			// The intent it was kept on is now also the outcome. A read error
 			// means WE KNOW the body is incomplete, which the parser cannot
 			// know — it only sees bytes that do not parse.
-			return ledger.Response{}
+			return ledger.Response{Unparsed: true}
 		}
 		body = decoded
 	}

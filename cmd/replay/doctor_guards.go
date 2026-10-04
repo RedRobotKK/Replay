@@ -84,6 +84,18 @@ func guardLines(st proxy.Status) []string {
 			out = append(out, fmt.Sprintf("%d response(s) carried no usage; nothing was counted for them.", n))
 		}
 	}
+	if n := st.ResponsesUnparsed; n > 0 {
+		// A body nobody could read is not a provider that omitted usage;
+		// it is a defect between the client and the proxy, or at the
+		// provider. Same consequence for a cap, different fix.
+		if st.Caps.DayUSD || st.Caps.SessionUSD {
+			out = append(out,
+				fmt.Sprintf("WARNING: %d response(s) could not be read. Nothing was counted for them,", n),
+				"         so your dollar cap did not see that traffic at all.")
+		} else {
+			out = append(out, fmt.Sprintf("%d response(s) could not be read; nothing was counted for them.", n))
+		}
+	}
 	return out
 }
 

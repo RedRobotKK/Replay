@@ -1630,6 +1630,19 @@
       "killedBy": [
         "TestQT7a_ResponsesWithoutUsageAreCountedAndSurfaced"
       ]
+    },
+    {
+      "id": "M124",
+      "name": "proxy-counts-an-unreadable-body-as-missing-usage",
+      "class": "evidence",
+      "discovered": "2026-10-03",
+      "note": "A 2xx body that could not be read at all (not JSON, an error object behind a 200, a truncated or dropped body) is counted as a message that parsed and carried no usage. The two states need different fixes: a provider that omits usage wants a usage-reporting option or a price-table update; a body nobody could read is a defect between client, proxy and provider. The qualification pass (QT-7c) sent ten malformed bodies and got ten records with no usage and no signal; after QT-7a they were counted under the wrong name.",
+      "file": "internal/proxy/passthrough.go",
+      "anchor": "\t\t\t\tif rec.Response.Unparsed {\n\t\t\t\t\ts.stats.noteUnparsedBody()\n\t\t\t\t} else {\n\t\t\t\t\ts.stats.noteNoUsage()\n\t\t\t\t}\n",
+      "replacement": "\t\t\t\ts.stats.noteNoUsage()\n",
+      "killedBy": [
+        "TestQT7c_ANonJSONBodyIsCountedAsUnparsedNotAsMissingUsage"
+      ]
     }
   ],
   "knownSurvivors": [

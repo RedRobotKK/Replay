@@ -118,7 +118,7 @@ type openAIResponse struct {
 func ParseOpenAIResponse(body []byte) Response {
 	var raw openAIResponse
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return Response{}
+		return Response{Unparsed: true}
 	}
 	var out Response
 	// An empty or all-zero usage object is not a measurement of nothing, it is

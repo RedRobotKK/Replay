@@ -274,8 +274,15 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 				// A 2xx that said nothing about what it cost. The guard never
 				// sees it, so a dollar cap does not either; count it where the
 				// decision not to price it is made, so the operator can see
-				// how much traffic the cap is blind to (QT-7a).
-				s.stats.noteNoUsage()
+				// how much traffic the cap is blind to (QT-7a), and say which
+				// kind: a body nobody could read is a defect somewhere; a
+				// message that parsed and carried no usage is the provider's
+				// doing (QT-7c).
+				if rec.Response.Unparsed {
+					s.stats.noteUnparsedBody()
+				} else {
+					s.stats.noteNoUsage()
+				}
 			}
 		}
 		if tap.rehydrate != nil {

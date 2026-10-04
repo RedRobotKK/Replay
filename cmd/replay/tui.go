@@ -992,6 +992,7 @@ func guardState() tui.GuardState {
 	g.CostUSD, g.DayCostUSD = st.CostUSD, st.DayCostUSD
 	g.SpendCapNotEnforced = st.SpendCapNotEnforced
 	g.ResponsesWithoutUsage = st.ResponsesWithoutUsage
+	g.ResponsesUnparsed = st.ResponsesUnparsed
 	g.Caps = tui.Caps{
 		SessionUSD:    st.Caps.SessionUSD,
 		DayUSD:        st.Caps.DayUSD,
