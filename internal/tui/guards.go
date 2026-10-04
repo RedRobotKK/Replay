@@ -25,6 +25,9 @@ type GuardState struct {
 	// not be priced and was charged at the dearest known rate, as an upper
 	// bound. The name is the status key; the cap is applied, early.
 	SpendCapNotEnforced bool
+	// ResponsesWithoutUsage is the count of 2xx responses that carried no
+	// usage object; nothing was counted for them, so no cap saw them.
+	ResponsesWithoutUsage int
 }
 
 // Caps is which limits are configured, not their values. Whether a limit
@@ -113,6 +116,11 @@ func GuardsScreen(g GuardState, advice []string, sessions int) Screen {
 			"      and charged at the dearest known rate, as an",
 			"      upper bound, so the cap can fire early on it.")
 		lines = append(lines, nextFor(g)...)
+	}
+	if n := g.ResponsesWithoutUsage; n > 0 {
+		lines = append(lines,
+			note(g.Caps.DayUSD || g.Caps.SessionUSD, fmt.Sprintf("%d response(s) carried no usage; nothing was", n)),
+			"      counted for them, so a dollar cap did not see them.")
 	}
 	if !g.Reachable {
 		lines = append(lines,

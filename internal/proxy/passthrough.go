@@ -270,6 +270,12 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			if u := rec.Response.Usage; u != nil {
 				usd, bound := listCost(*u, rec.Model)
 				s.cfg.Spend.Record(rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output, usd, bound)
+			} else if rec.Status >= 200 && rec.Status < 300 {
+				// A 2xx that said nothing about what it cost. The guard never
+				// sees it, so a dollar cap does not either; count it where the
+				// decision not to price it is made, so the operator can see
+				// how much traffic the cap is blind to (QT-7a).
+				s.stats.noteNoUsage()
 			}
 		}
 		if tap.rehydrate != nil {

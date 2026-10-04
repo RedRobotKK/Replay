@@ -117,12 +117,13 @@ func TestTheScreenAndTheCommandCountTheSameSessions(t *testing.T) {
 // still take it from the same field.
 func TestBothSurfacesReadTheSameGuardFields(t *testing.T) {
 	st := proxy.Status{
-		Requests:            map[string]int{"refused": 4},
-		Refusals:            map[string]int{"spend_cap": 3, "loop": 1},
-		CostUSD:             12.34,
-		DayCostUSD:          2.10,
-		SpendCapNotEnforced: true,
-		Caps:                proxy.CapStatus{DayUSD: true, SessionTokens: true},
+		Requests:              map[string]int{"refused": 4},
+		Refusals:              map[string]int{"spend_cap": 3, "loop": 1},
+		CostUSD:               12.34,
+		DayCostUSD:            2.10,
+		SpendCapNotEnforced:   true,
+		ResponsesWithoutUsage: 5,
+		Caps:                  proxy.CapStatus{DayUSD: true, SessionTokens: true},
 	}
 	// What doctor says.
 	doctor := strings.Join(guardLines(st), "\n")
@@ -136,7 +137,8 @@ func TestBothSurfacesReadTheSameGuardFields(t *testing.T) {
 		Reachable: true, Addr: "127.0.0.1:4000",
 		Refused: st.Requests["refused"], Refusals: st.Refusals,
 		CostUSD: st.CostUSD, DayCostUSD: st.DayCostUSD,
-		SpendCapNotEnforced: st.SpendCapNotEnforced,
+		SpendCapNotEnforced:   st.SpendCapNotEnforced,
+		ResponsesWithoutUsage: st.ResponsesWithoutUsage,
 		Caps: tui.Caps{
 			SessionUSD: st.Caps.SessionUSD, DayUSD: st.Caps.DayUSD,
 			SessionTokens: st.Caps.SessionTokens, DayTokens: st.Caps.DayTokens,
@@ -145,6 +147,9 @@ func TestBothSurfacesReadTheSameGuardFields(t *testing.T) {
 	screen := tui.GuardsScreen(g, nil, 0).String()
 	if !strings.Contains(screen, "upper bound") {
 		t.Errorf("doctor warns about the unenforced cap and the screen does not:\n%s", screen)
+	}
+	if !strings.Contains(doctor, "no usage") || !strings.Contains(screen, "no usage") {
+		t.Errorf("responses without usage are not reported by both surfaces:\n--- doctor ---\n%s\n--- screen ---\n%s", doctor, screen)
 	}
 	// Both name the refusing guard, not just a count.
 	for _, want := range []string{"spend_cap", "loop"} {

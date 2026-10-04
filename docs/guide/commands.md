@@ -1608,6 +1608,7 @@ is `/replay/status`, which you ask for.
 | `replay_cost_usd_total` | counter | — | List-price cost since start |
 | `replay_cost_usd_day` | gauge | — | List-price cost for the current UTC day. A gauge because it resets at midnight, and a counter that resets makes every `rate()` wrong |
 | `replay_cost_unpriced_requests_total` | counter | — | Requests the rules could not price. Independent of the doctor's unenforced-cap warning, which also needs a dollar cap configured |
+| `replay_responses_without_usage_total` | counter | — | 2xx responses on a readable path that carried no usage object. Nothing was priced or counted for them, so no cap saw them; `replay doctor` warns when a dollar cap is set. Distinct from unpriced (usage present, model unknown) and from a measured zero |
 | `replay_unparsed_requests_total` | counter | — | Requests on a path this build cannot read. **Excludes** `/v1/chat/completions`, which is read |
 | `replay_unmasked_requests_total` | counter | — | Requests on a path the masker cannot cover. This is what `/v1/chat/completions` increments, and it counts them whether or not `--mask` was passed, because the question the counter answers is how much traffic took the unmaskable path |
 | `replay_refused_total` | counter | `guard` | Requests refused locally, by guard |

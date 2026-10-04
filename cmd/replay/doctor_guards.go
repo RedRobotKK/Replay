@@ -72,6 +72,18 @@ func guardLines(st proxy.Status) []string {
 		out = append(out,
 			"         Then `replay rules --update <file|URL>` so the model has a price.")
 	}
+	if n := st.ResponsesWithoutUsage; n > 0 {
+		// Nothing was counted for these, so no cap of any kind saw them.
+		// A dollar cap makes that a warning; without one it is still a fact
+		// the reader needs, because the token caps need the usage object too.
+		if st.Caps.DayUSD || st.Caps.SessionUSD {
+			out = append(out,
+				fmt.Sprintf("WARNING: %d response(s) carried no usage. Nothing was counted for them,", n),
+				"         so your dollar cap did not see that traffic at all.")
+		} else {
+			out = append(out, fmt.Sprintf("%d response(s) carried no usage; nothing was counted for them.", n))
+		}
+	}
 	return out
 }
 

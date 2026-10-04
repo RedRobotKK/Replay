@@ -231,6 +231,11 @@ type stats struct {
 	// contribute nothing to the totals, so without this the totals would read
 	// as complete when they are not.
 	unpriced int
+	// noUsage counts 2xx responses on a readable path whose body carried no
+	// usage object. Nothing is priced or counted for them, so a dollar cap
+	// does not see them; distinct from unpriced (usage present, model not in
+	// the table) and from a measured zero (usage present, all zero).
+	noUsage int
 	// unparsed counts requests on paths this build cannot read, by path.
 	// Everything Replay does hangs off parsing, so these requests were
 	// forwarded with every guard and the masker inert.
@@ -745,6 +750,9 @@ type Status struct {
 	// SpendCapNotEnforced is true when a dollar cap is configured and at least
 	// one request could not be priced, so that traffic is not capped at all.
 	SpendCapNotEnforced bool `json:"spend_cap_not_enforced,omitempty"`
+	// ResponsesWithoutUsage counts 2xx responses that carried no usage
+	// object. Nothing was priced or counted for them, so no cap saw them.
+	ResponsesWithoutUsage int `json:"responses_without_usage"`
 	// Refusals counts requests answered locally, by guard. The total is in
 	// Requests["refused"]; this names which guard did it, which is the part a
 	// person needs to act on.
@@ -801,6 +809,7 @@ func (s *stats) status() Status {
 		}
 	}
 	out.CostUSD = s.costUSD
+	out.ResponsesWithoutUsage = s.noUsage
 	if s.now().UTC().Format("2006-01-02") == s.dayStamp {
 		out.DayCostUSD = s.dayCostUSD
 	}
@@ -872,6 +881,9 @@ func (s *stats) metrics() string {
 	line("# HELP replay_cost_unpriced_requests_total Requests whose model the rules could not price, so they are in no cost figure.")
 	line("# TYPE replay_cost_unpriced_requests_total counter")
 	line("replay_cost_unpriced_requests_total %d", s.unpriced)
+	line("# HELP replay_responses_without_usage_total 2xx responses that carried no usage object, so nothing was counted for them and no cap saw them.")
+	line("# TYPE replay_responses_without_usage_total counter")
+	line("replay_responses_without_usage_total %d", s.noUsage)
 	unparsed := 0
 	for _, v := range s.unparsed {
 		unparsed += v
@@ -956,6 +968,13 @@ func sortedKeys(m map[string]int) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// noteNoUsage counts a 2xx response that carried no usage object.
+func (s *stats) noteNoUsage() {
+	s.mu.Lock()
+	s.noUsage++
+	s.mu.Unlock()
 }
 
 // addCost folds one request's list-price cost into the running and UTC-day

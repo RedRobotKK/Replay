@@ -1617,6 +1617,19 @@
       "killedBy": [
         "TestQT7b_EverySurfaceStatesTheUnpricedModelRuleTheCodeApplies"
       ]
+    },
+    {
+      "id": "M123",
+      "name": "proxy-never-counts-a-response-without-usage",
+      "class": "evidence",
+      "discovered": "2026-10-03",
+      "note": "A 2xx response that carries no usage object is forwarded, nothing is priced for it, the spend guard never sees it, and the proxy records nothing about it anywhere an operator can read. The qualification pass (QT-7a) sent thirty such responses under a dollar cap: zero refused, cost zero, no signal. With the increment gone the status field, the metric, the doctor warning and the TUI line all read zero over traffic the cap is blind to.",
+      "file": "internal/proxy/passthrough.go",
+      "anchor": "\t\t\t\ts.stats.noteNoUsage()\n",
+      "replacement": "\t\t\t\t_ = s.stats\n",
+      "killedBy": [
+        "TestQT7a_ResponsesWithoutUsageAreCountedAndSurfaced"
+      ]
     }
   ],
   "knownSurvivors": [
