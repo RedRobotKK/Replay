@@ -188,11 +188,19 @@ func (p applyPlan) record(tr transition) error {
 }
 
 // write applies the plan, or explains why it will not.
+func (p applyPlan) write(path string, out io.Writer, commit bool) error {
+	_, err := p.apply(path, out, commit)
+	return err
+}
+
+// apply is write with the transition as it ended: the zero transition for
+// a dry run or a no-op, the refusal for a refusal (with its error), and
+// the recorded transition for a write, verified or not.
 //
 // The file belongs to the user and predates this tool, so: refuse on
 // untrustworthy input, keep every key we did not set, back up what was there,
 // and write owner-only.
-func (p applyPlan) write(path string, out io.Writer, commit bool) error {
+func (p applyPlan) apply(path string, out io.Writer, commit bool) (transition, error) {
 	if !p.Trustworthy {
 		reason := p.Reason
 		if reason == "" {
@@ -201,18 +209,20 @@ func (p applyPlan) write(path string, out io.Writer, commit bool) error {
 		// A refusal under --yes is a request to apply that was not carried
 		// out. On the machine this was built on it is the only truthful
 		// record of the intervention, so it is written as what it is.
+		var tr transition
 		if commit {
-			if err := p.record(transition{event: "INTERVENTION_REFUSED", at: time.Now().UTC(), settingsPath: path,
+			tr = transition{event: "INTERVENTION_REFUSED", at: time.Now().UTC(), settingsPath: path,
 				backupPath: "NONE", backupNote: "nothing was written", intended: "UNDECIDED", applied: "NONE",
-				actual: p.Have, stateChange: "NOT_ATTEMPTED", reason: reason}); err != nil {
-				return fmt.Errorf("refusing to change %s: %s (and the refusal was not recorded: %v)", p.Setting, reason, err)
+				actual: p.Have, stateChange: "NOT_ATTEMPTED", reason: reason}
+			if err := p.record(tr); err != nil {
+				return tr, fmt.Errorf("refusing to change %s: %s (and the refusal was not recorded: %v)", p.Setting, reason, err)
 			}
 		}
-		return fmt.Errorf("refusing to change %s: %s", p.Setting, reason)
+		return tr, fmt.Errorf("refusing to change %s: %s", p.Setting, reason)
 	}
 	if p.Want == p.Have {
 		_, err := fmt.Fprintf(out, "%s is already %s. Nothing to change.\n", p.Setting, p.Want)
-		return err
+		return transition{}, err
 	}
 
 	have := p.Have
@@ -222,7 +232,7 @@ func (p applyPlan) write(path string, out io.Writer, commit bool) error {
 	if !commit {
 		_, err := fmt.Fprintf(out, "would set %s: %s -> %s in %s\n  %s\nRe-run with --apply --yes to write it.\n",
 			p.Setting, have, p.Want, path, p.Evidence)
-		return err
+		return transition{}, err
 	}
 
 	settings := map[string]any{}
@@ -236,31 +246,31 @@ func (p applyPlan) write(path string, out io.Writer, commit bool) error {
 		// user has something in there we do not understand, and guessing is
 		// how a tool destroys a config it was asked to improve.
 		if err := json.Unmarshal(existing, &settings); err != nil {
-			return fmt.Errorf("%s is not valid JSON, so it will not be modified: %w", path, err)
+			return transition{}, fmt.Errorf("%s is not valid JSON, so it will not be modified: %w", path, err)
 		}
 		backup := fmt.Sprintf("%s.bak-%s", path, now.Format("20060102T150405Z"))
 		if err := os.WriteFile(backup, existing, 0o600); err != nil {
-			return fmt.Errorf("write backup: %w", err)
+			return transition{}, fmt.Errorf("write backup: %w", err)
 		}
 		if _, err := fmt.Fprintf(out, "backed up %s\n", filepath.Base(backup)); err != nil {
-			return err
+			return transition{}, err
 		}
 		backupPath, backupNote = backup, ""
 	case !os.IsNotExist(err):
-		return err
+		return transition{}, err
 	default:
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-			return err
+			return transition{}, err
 		}
 	}
 
 	settings[p.Setting] = p.Want
 	body, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
-		return err
+		return transition{}, err
 	}
 	if err := os.WriteFile(path, append(body, '\n'), 0o600); err != nil {
-		return err
+		return transition{}, err
 	}
 	// INTERVENTION_APPLIED is earned by reading the value back, not by the
 	// write returning nil. Something else may own the file, or the write
@@ -279,15 +289,53 @@ func (p applyPlan) write(path string, out io.Writer, commit bool) error {
 		tr.event, tr.stateChange = "APPLY_ATTEMPTED", "UNVERIFIED"
 	}
 	if err := p.record(tr); err != nil {
-		return fmt.Errorf("the setting was written but its record was not: %w", err)
+		return tr, fmt.Errorf("the setting was written but its record was not: %w", err)
 	}
 	if tr.stateChange != "VERIFIED" {
 		_, err = fmt.Fprintf(out, "wrote %s: %s -> %s in %s, but the change was not confirmed: the file now reads %s\n",
 			p.Setting, have, p.Want, path, tr.actual)
-		return err
+		return tr, err
 	}
 	_, err = fmt.Fprintf(out, "set %s: %s -> %s in %s\n", p.Setting, have, p.Want, path)
-	return err
+	return tr, err
+}
+
+// applyDocument is the machine-readable answer to --apply --json: the
+// decision, and what happened to the setting when --yes was given.
+func applyDocument(plan applyPlan, settings string, commit bool) (map[string]any, error) {
+	out := map[string]any{
+		"schema":       "replay.apply.v1",
+		"settingsPath": settings,
+		"applicable":   []any{},
+		"manual":       manualSteps,
+	}
+	if !plan.Trustworthy {
+		out["refused"] = map[string]any{"setting": plan.Setting, "reason": plan.Reason}
+		return out, nil
+	}
+	// The entry describes the transition as it ended, never the flag that
+	// asked for it: "applied" is earned by the read-back, the same way the
+	// record on disk earns INTERVENTION_APPLIED.
+	entry := map[string]any{
+		"setting":      plan.Setting,
+		"current":      plan.Have,
+		"proposed":     plan.Want,
+		"evidence":     plan.Evidence,
+		"applied":      false,
+		"state_change": "NOT_REQUESTED",
+	}
+	if commit {
+		tr, err := plan.apply(settings, io.Discard, true)
+		if err != nil {
+			return nil, err
+		}
+		entry["applied"] = tr.stateChange == "VERIFIED"
+		entry["event"] = tr.event
+		entry["state_change"] = tr.stateChange
+		entry["actual"] = tr.actual
+	}
+	out["applicable"] = []any{entry}
+	return out, nil
 }
 
 // ttlObservation is one session's cost under each TTL, in effective tokens.

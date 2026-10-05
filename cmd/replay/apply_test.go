@@ -796,3 +796,90 @@ func TestTTLPlanFromInputsCountsUnpricedSpendAgainstCoverage(t *testing.T) {
 		t.Errorf("1100 of 6100 scored is 18%% coverage and must refuse: %+v", plan)
 	}
 }
+
+// The --json document says "applied" only for a change read back from the
+// file, and carries the transition as it ended.
+//
+// The guide offers replay.apply.v1 "for an agent to act on". It said
+// "applied": true from the --yes flag, before the write ran and whatever the
+// read-back found: one boolean carrying intent, attempt and verification at
+// once. The record on disk distinguishes them; the document an agent reads
+// must say the same thing.
+//
+// PASS: applied is true only with state_change VERIFIED; an unconfirmed
+// write says applied false, APPLY_ATTEMPTED, UNVERIFIED, and the value the
+// file holds; a dry run says applied false and that nothing was requested.
+// FAIL: applied true on an unconfirmed write, which is what shipped.
+func TestApplyDocumentSaysAppliedOnlyForAVerifiedChange(t *testing.T) {
+	dir := t.TempDir()
+	p := writeSettings(t, dir, map[string]any{"promptCacheTtl": "1h"})
+	log := filepath.Join(dir, "interventions.jsonl")
+	plan := applyPlan{Setting: "promptCacheTtl", Want: "5m", Have: "1h", Trustworthy: true, Log: log,
+		verify: func(_, _ string) (string, bool) { return "1h", true }}
+	doc, err := applyDocument(plan, p, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := doc["applicable"].([]any)[0].(map[string]any)
+	for k, want := range map[string]any{"applied": false, "event": "APPLY_ATTEMPTED", "state_change": "UNVERIFIED", "actual": "1h"} {
+		if entry[k] != want {
+			t.Errorf("unconfirmed write: %s = %v, want %v", k, entry[k], want)
+		}
+	}
+
+	plan.verify = nil
+	doc, err = applyDocument(plan, p, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry = doc["applicable"].([]any)[0].(map[string]any)
+	for k, want := range map[string]any{"applied": true, "event": "INTERVENTION_APPLIED", "state_change": "VERIFIED", "actual": "5m"} {
+		if entry[k] != want {
+			t.Errorf("verified write: %s = %v, want %v", k, entry[k], want)
+		}
+	}
+
+	doc, err = applyDocument(plan, p, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry = doc["applicable"].([]any)[0].(map[string]any)
+	if entry["applied"] != false || entry["state_change"] != "NOT_REQUESTED" {
+		t.Errorf("dry run: applied = %v, state_change = %v", entry["applied"], entry["state_change"])
+	}
+	if len(readInterventions(t, log)) != 2 {
+		t.Error("two writes were requested, so two records exist; the dry run wrote none")
+	}
+}
+
+// The document's other two endings: a refusal is reported as one with its
+// reason and no applicable entry, and a write that fails is an error, not a
+// document that says anything about the setting.
+func TestApplyDocumentReportsRefusalsAndWriteFailures(t *testing.T) {
+	dir := t.TempDir()
+	p := writeSettings(t, dir, map[string]any{"promptCacheTtl": "1h"})
+	refused := applyPlan{Setting: "promptCacheTtl", Have: "1h", Reason: "no single setting is right for this corpus"}
+	doc, err := applyDocument(refused, p, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := doc["refused"].(map[string]any)["reason"]; got != refused.Reason {
+		t.Errorf("refused reason = %v", got)
+	}
+	if entries := doc["applicable"].([]any); len(entries) != 0 {
+		t.Errorf("a refused plan has no applicable entry: %v", entries)
+	}
+
+	// The record cannot be written: the log path sits under a file.
+	unwritable := filepath.Join(p, "interventions.jsonl")
+	plan := applyPlan{Setting: "promptCacheTtl", Want: "5m", Have: "1h", Trustworthy: true, Log: unwritable}
+	if _, err := applyDocument(plan, p, true); err == nil || !strings.Contains(err.Error(), "its record was not") {
+		t.Errorf("a write whose record failed is an error, got %v", err)
+	}
+	// The same for a refusal under --yes whose record cannot be written.
+	refused.Log = unwritable
+	var out strings.Builder
+	if err := refused.write(p, &out, true); err == nil || !strings.Contains(err.Error(), "refusal was not recorded") {
+		t.Errorf("a refusal whose record failed says so, got %v", err)
+	}
+}

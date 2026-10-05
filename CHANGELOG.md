@@ -50,6 +50,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- **`replay advise --apply --json` says `applied` only for a change read back
+  from the file.** The `replay.apply.v1` entry carried `"applied": true` from
+  the `--yes` flag, before the write ran and whatever the read-back found. It
+  now carries the transition as it ended: `event`, `state_change`, `actual`,
+  and `applied` true only with `state_change: VERIFIED`; without `--yes` it
+  says `NOT_REQUESTED`. Frozen as M144.
 - **`replay advise --apply --yes` records what happened to the setting, as
   it happened.** One line per request in `~/.replay/interventions.jsonl`.
   `INTERVENTION_APPLIED` is earned by reading the value back from the file

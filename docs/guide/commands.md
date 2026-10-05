@@ -1038,6 +1038,12 @@ question about the same setting, "which TTL helps the typical session", weighing
 equally; on a corpus whose largest sessions prefer one TTL and whose many small sessions prefer
 the other, the two can disagree, and both are right about what they measure.
 
+**`--apply --json` says `applied` only for a change read back from the file.** The
+`replay.apply.v1` document carries the same transition as the record: `applied` is true only with
+`state_change: VERIFIED`; an unconfirmed write reports `APPLY_ATTEMPTED`, `UNVERIFIED` and the value
+the file holds; without `--yes` the entry says `NOT_REQUESTED`. Until 2026-10-05 the field was set
+from the `--yes` flag before the write ran.
+
 **A request to apply leaves a record, as it ended.** Each `--apply --yes` appends one line to
 `~/.replay/interventions.jsonl`. The event is `INTERVENTION_APPLIED` only when the value was read
 back from the settings file after the write (`state_change=VERIFIED`); `APPLY_ATTEMPTED` with

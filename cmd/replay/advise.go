@@ -248,27 +248,9 @@ func applySettings(reports []*analysis.LaneReport, stdout io.Writer, commit, asJ
 	// caller that applies the manual ones is doing something this tool refused
 	// to do.
 	if asJSON {
-		out := map[string]any{
-			"schema":       "replay.apply.v1",
-			"settingsPath": settings,
-			"applicable":   []any{},
-			"manual":       manualSteps,
-		}
-		if plan.Trustworthy {
-			out["applicable"] = []any{map[string]any{
-				"setting":  plan.Setting,
-				"current":  plan.Have,
-				"proposed": plan.Want,
-				"evidence": plan.Evidence,
-				"applied":  commit,
-			}}
-		} else {
-			out["refused"] = map[string]any{"setting": plan.Setting, "reason": plan.Reason}
-		}
-		if commit && plan.Trustworthy {
-			if err := plan.write(settings, io.Discard, true); err != nil {
-				return err
-			}
+		out, err := applyDocument(plan, settings, commit)
+		if err != nil {
+			return err
 		}
 		b, err := json.MarshalIndent(out, "", "  ")
 		if err != nil {

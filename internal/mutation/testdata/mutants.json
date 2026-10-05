@@ -1890,6 +1890,19 @@
         "TestTTLInputRefusesASubAgentLaneBeforeAggregation"
       ],
       "note": "promptCacheTtl governs the main-thread query sources; sub-agents are governed by subagentPromptCacheTtl, read from the installed client's resolver on 2026-10-05. Both predictors scored sub-agent transcripts, 2,223 files on the machine this was built on, all written with isSidechain, under TTL policies the setting cannot apply to them: learn reported ttl-1h at minus 35% over 1,087 sessions, and with sub-agents excluded reports minus 4% over 9. A predictor must not score a workload the intervention cannot reach. This mutant admits the sidechain lane again."
+    },
+    {
+      "id": "M144",
+      "name": "apply-json-said-applied-from-the-flag",
+      "class": "claim-outruns-evidence",
+      "discovered": "2026-10-05",
+      "file": "cmd/replay/apply.go",
+      "anchor": "\t\tentry[\"applied\"] = tr.stateChange == \"VERIFIED\"\n",
+      "replacement": "\t\tentry[\"applied\"] = commit\n",
+      "killedBy": [
+        "TestApplyDocumentSaysAppliedOnlyForAVerifiedChange"
+      ],
+      "note": "replay.apply.v1 is the document the guide offers an agent to act on. It said \"applied\": true from the --yes flag, set before the write ran and whatever the read-back found, with the write's own output discarded: one boolean carrying intent, attempt and verification at once, while the record on disk kept them apart. The entry now carries the transition as it ended, and applied is true only with state_change VERIFIED. This mutant reads the flag again."
     }
   ],
   "knownSurvivors": [

@@ -47,6 +47,12 @@ therefore a refusal, and it is now written as one.
 | quality_outcome | UNAVAILABLE | no task-outcome signal exists |
 | block, model | UNAVAILABLE | no experiment exists |
 
+The same transition reaches the machine-readable surface: the
+`replay.apply.v1` entry carries `event`, `state_change`, `actual`, and
+`applied` true only with `state_change: VERIFIED`; a dry run says
+`NOT_REQUESTED`. Until later on 2026-10-05 it said `applied: true` from the
+`--yes` flag before the write ran (M144).
+
 The invariant: INTERVENTION_APPLIED is permitted only when the value was
 read back from the file. A write that returns without error and a file
 that then reads something else is APPLY_ATTEMPTED, UNVERIFIED, and the
