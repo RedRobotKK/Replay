@@ -1,6 +1,6 @@
 # 15. Single-tenant state is a boundary, not an implementation detail
 
-**Status:** Accepted
+**Status:** Accepted, amended by [0028](0028-replay-is-a-product-with-a-hosted-service.md)
 **Date:** 2026-09-06
 
 ## Context

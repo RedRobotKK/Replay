@@ -20,7 +20,7 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | [0012](0012-dual-licensing-deferred.md) | Dual licensing considered and declined; the CLA stays | Reversed by 0016 |
 | [0013](0013-x402-rules-feed.md) | Sell a maintained rules feed over x402; the binary never holds a key | Accepted |
 | [0014](0014-checks-must-be-able-to-fail.md) | A check must be able to fail, and reachability is asserted mechanically | Accepted |
-| [0015](0015-single-tenant-state-is-a-boundary.md) | Single-tenant state is a boundary, not an implementation detail | Accepted |
+| [0015](0015-single-tenant-state-is-a-boundary.md) | Single-tenant state is a boundary, not an implementation detail | Accepted, amended by 0028 |
 | [0016](0016-business-source-license.md) | Relicense under the Business Source License 1.1 | Accepted |
 | [0017](0017-the-unintelligent-router.md) | Routing decided by cache structure, not by reading the prompt | Rejected |
 | [0018](0018-this-is-an-instrument-not-an-app.md) | Provenance is a field, not a comment: absence, zero and unknown are three values | Accepted |
@@ -28,10 +28,11 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | [0020](0020-compile-the-merge-not-the-branch.md) | Compile the merge, not the branch: two green PRs have put main in the red twice | Accepted |
 | [0021](0021-unknown-model-cache-read-multiple.md) | Unknown-model cache-read multiple is two questions: 0.025 for the instrument, unpriced for money | Superseded by 0022 |
 | [0022](0022-unknown-model-read-multiple-the-bias-runs-the-other-way.md) | Unknown-model read multiple: the bias runs the other way | Accepted |
-| [0023](0023-entitlement-is-a-signed-document-not-an-account.md) | Entitlement is a signed document, not an account | Proposed |
+| [0023](0023-entitlement-is-a-signed-document-not-an-account.md) | Entitlement is a signed document, not an account | Superseded by 0028 |
 | [0024](0024-deprecation-is-a-promise-made-before-1-0.md) | Deprecation is a promise that has to be made before 1.0 | Proposed |
 | [0026](0026-a-surviving-guard-is-permitted-only-with-evidence.md) | A surviving guard is permitted only with evidence, addressed one guard at a time | Proposed |
 | [0027](0027-a-reader-decision-is-persisted-apart-from-the-computed-status.md) | A reader decision is persisted apart from the computed status | Proposed |
+| [0028](0028-replay-is-a-product-with-a-hosted-service.md) | Replay is a product with a hosted service, and three closed capabilities are reopened | Accepted |
 
 ---
 

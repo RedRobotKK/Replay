@@ -1,6 +1,6 @@
 # 23. Entitlement is a signed document, not an account
 
-**Status:** Proposed
+**Status:** Superseded by [0028](0028-replay-is-a-product-with-a-hosted-service.md)
 **Date:** 2026-09-13
 
 ## Context
