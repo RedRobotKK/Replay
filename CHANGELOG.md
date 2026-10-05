@@ -4,6 +4,29 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-05
+
+### Added
+
+- **`replay serve` reads the OpenAI Responses API, `/v1/responses`, the path Codex
+  CLI and GPT-6 Astra speak.** Usage is read from `response.usage` on the
+  non-streaming reply and on the `response.completed` or `response.incomplete`
+  event of a stream, normalised the way the chat-completions path is (the cached
+  share split out of the inclusive input, reasoning tokens carried as thinking, a
+  cache write only when the provider reports one), and fed to the same ledger,
+  spend cap, error budget, loop detector and pricing as the other two paths. The
+  session is the client's own `prompt_cache_key`, hashed, when present. Two things
+  are deliberately not done on this path: cache-break causes are not classified,
+  because that provider's cache is keyed by the client and the live classifier's
+  expectation is not established for it, and the proxy says so once on stderr; and
+  no live OpenAI endpoint was called, so the wire fixtures are built to Codex CLI's
+  own parser and test helper rather than captured. OpenAI models are priced when
+  `docs/rules/openai-2026-09-15.json` is installed with `replay rules --update`;
+  without it the existing dearest-row upper bound applies. The serve banner and the
+  guide no longer say the path is forwarded unread.
+
+## [0.7.0] - 2026-10-03
+
 ### Fixed
 
 - **A status the verifier wrote is no longer read back as a decision the reader
@@ -58,23 +81,6 @@ All notable changes to this project are documented here. The format follows [Kee
   predates it. It bounds the next schema bump, not the last one.
 
 ### Added
-
-- **`replay serve` reads the OpenAI Responses API, `/v1/responses`, the path Codex
-  CLI and GPT-6 Astra speak.** Usage is read from `response.usage` on the
-  non-streaming reply and on the `response.completed` or `response.incomplete`
-  event of a stream, normalised the way the chat-completions path is (the cached
-  share split out of the inclusive input, reasoning tokens carried as thinking, a
-  cache write only when the provider reports one), and fed to the same ledger,
-  spend cap, error budget, loop detector and pricing as the other two paths. The
-  session is the client's own `prompt_cache_key`, hashed, when present. Two things
-  are deliberately not done on this path: cache-break causes are not classified,
-  because that provider's cache is keyed by the client and the live classifier's
-  expectation is not established for it, and the proxy says so once on stderr; and
-  no live OpenAI endpoint was called, so the wire fixtures are built to Codex CLI's
-  own parser and test helper rather than captured. OpenAI models are priced when
-  `docs/rules/openai-2026-09-15.json` is installed with `replay rules --update`;
-  without it the existing dearest-row upper bound applies. The serve banner and the
-  guide no longer say the path is forwarded unread.
 
 - **`replay simulate --policy <file> <ledger-dir...>` says which recorded requests
   a spend cap would have refused.** It replays the ledger `replay serve` wrote
