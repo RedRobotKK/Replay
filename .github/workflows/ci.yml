@@ -379,7 +379,17 @@ jobs:
     # copies the tree and runs the suite once per mutant. A CI runner is
     # slower, so the ceiling is generous — the job failing on the clock would
     # say nothing about the commit under test.
-    timeout-minutes: 60
+    #
+    # The ceiling was 60 and it was the binding limit. The two steps below
+    # carry their own budgets, 90m for the catalogue and 30m for the
+    # black-box pass, and a job limit smaller than their sum cancels the job
+    # on the clock after the first step has already passed. Measured on this
+    # runner: a catalogue of 123 entries took 51 minutes on 2026-10-03; one of
+    # 135 entries took 59.4 minutes on 2026-10-05, reported every entry
+    # killed, and the job was cancelled 36 seconds into the black-box step.
+    # 120 is the sum of what the steps are allowed, so the job can only end
+    # on a result.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         # The harness enumerates the tree with `git ls-files --cached --others`
