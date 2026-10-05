@@ -1,0 +1,13 @@
+{
+  "schema": "replay.ttl-schedule.v1",
+  "register_sha256": "6fb642fb94e211bde2f9aa353a40d4a49fdd25a7feec216539b8eb7f699a8363",
+  "method": "sha256 of the frozen register; block 1 is treatment when the first byte of the digest is even, control when odd; arms alternate",
+  "blocks": [
+    "control",
+    "treatment",
+    "control",
+    "treatment",
+    "control",
+    "treatment"
+  ]
+}

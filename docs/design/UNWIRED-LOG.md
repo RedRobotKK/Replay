@@ -289,3 +289,22 @@ is the fix.
 
 **What would wire it:** nothing should. The binary has no reason to carry a
 formatter for a document about itself.
+
+## 17. scripts/ttl-block, the block starter for the cache-TTL field study
+
+Added 2026-10-05. Untagged, tested, and in the same family as `simexp`: a
+tool run by hand at each boundary of a pre-registered experiment, never
+part of the binary.
+
+It writes `promptCacheTtl` into the operator's own Claude Code settings
+file for the arm the frozen schedule names, reads it back, and appends the
+block to `docs/evidence/ttl-blocks-2026-10-05.jsonl` as it ended: started
+and verified, or not started. It refuses an arm the schedule did not name,
+a block already started, an overlap, and any register edited after the
+schedule was derived from it. The register is
+`docs/evidence/ttl-register-2026-10-05.md`, frozen by hash.
+
+**What would wire it:** nothing should. `replay advise --apply` proposes
+1h on the corpus the study runs on, and the register states that Replay
+does not write the setting on its own. The experiment writes it; the
+product records what the product does.
