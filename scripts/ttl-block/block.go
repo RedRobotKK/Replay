@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -54,17 +55,26 @@ type blockRecord struct {
 	SpanIntact      *bool  `json:"span_intact,omitempty"`
 	RegisterSHA256  string `json:"register_sha256"`
 	ScheduleSHA256  string `json:"schedule_sha256"`
+	ToolCommit      string `json:"tool_commit"`
 	Reason          string `json:"reason,omitempty"`
 }
 
-// readBack opens the settings file again and reports the value it holds,
+// readBack is readSetting behind a variable, so a test can make the read
+// disagree with the write. marshalJSON and marshalIndent are the encoder
+// behind variables for the same reason: nothing in this program can hand
+// them a value they refuse, and the refusal paths still have to be seen.
+var (
+	readBack      = readSetting
+	marshalJSON   = json.Marshal
+	marshalIndent = json.MarshalIndent
+)
+
+// readSetting opens the settings file again and reports the value it holds,
 // UNSET when the key is absent, or false when it cannot be read as JSON.
-// A variable so a test can make the read disagree with the write.
-var readBack = func(path string) (string, bool) {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return "", false
-	}
+func readSetting(path string) (string, bool) {
+	// A file that cannot be read leaves b nil, and the decoder refuses nil
+	// the same way it refuses anything that is not JSON.
+	b, _ := os.ReadFile(path)
 	var m map[string]any
 	if err := json.Unmarshal(b, &m); err != nil {
 		return "", false
@@ -81,8 +91,78 @@ func fileSHA256(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return bytesSHA256(b), nil
+}
+
+func bytesSHA256(b []byte) string {
 	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:]), nil
+	return hex.EncodeToString(sum[:])
+}
+
+// toolCommit names the commit this tool ran from, so a block record can be
+// tied to the code that wrote it, or UNAVAILABLE when the repository cannot
+// say. Read from the git files, never by running git: this repository keeps
+// os/exec out of everything but the mutation harness (cmd/replay X6c).
+var toolCommit = func() string {
+	// A working directory that cannot be determined is the empty string,
+	// which the walk below exhausts at once and reports UNAVAILABLE.
+	wd, _ := os.Getwd()
+	return gitHead(wd)
+}
+
+// gitHead resolves HEAD for the repository or worktree containing dir, an
+// absolute path: a detached hash, a loose ref file, or a packed ref.
+// UNAVAILABLE otherwise.
+func gitHead(dir string) string {
+	gitDir, commonDir := gitDirs(dir)
+	if gitDir == "" {
+		return "UNAVAILABLE"
+	}
+	head, err := os.ReadFile(filepath.Join(gitDir, "HEAD"))
+	if err != nil {
+		return "UNAVAILABLE"
+	}
+	line := strings.TrimSpace(string(head))
+	if !strings.HasPrefix(line, "ref: ") {
+		return line
+	}
+	ref := strings.TrimPrefix(line, "ref: ")
+	if b, err := os.ReadFile(filepath.Join(commonDir, ref)); err == nil {
+		return strings.TrimSpace(string(b))
+	}
+	// No packed-refs file reads as no lines, and no line names the ref.
+	packed, _ := os.ReadFile(filepath.Join(commonDir, "packed-refs"))
+	for _, l := range strings.Split(string(packed), "\n") {
+		if strings.HasSuffix(l, " "+ref) {
+			return strings.Fields(l)[0]
+		}
+	}
+	return "UNAVAILABLE"
+}
+
+// gitDirs finds the .git directory for dir, following a worktree's gitdir
+// file, and the common directory that holds refs and packed-refs.
+func gitDirs(dir string) (gitDir, commonDir string) {
+	for d := dir; ; d = filepath.Dir(d) {
+		candidate := filepath.Join(d, ".git")
+		info, err := os.Stat(candidate)
+		if err == nil {
+			if info.IsDir() {
+				return candidate, candidate
+			}
+			// A .git file that cannot be read names no gitdir, and an empty
+			// gitdir resolves to nothing below.
+			b, _ := os.ReadFile(candidate)
+			g := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(string(b)), "gitdir:"))
+			if c, err := os.ReadFile(filepath.Join(g, "commondir")); err == nil {
+				return g, filepath.Join(g, strings.TrimSpace(string(c)))
+			}
+			return g, g
+		}
+		if parent := filepath.Dir(d); parent == d {
+			return "", ""
+		}
+	}
 }
 
 // makeSchedule derives the block order from the register's hash: block 1 is
@@ -127,7 +207,7 @@ func readLog(path string) ([]blockRecord, error) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading the block log: %w", err)
 	}
 	var out []blockRecord
 	for _, line := range splitLines(b) {
@@ -158,9 +238,9 @@ func splitLines(b []byte) [][]byte {
 }
 
 func appendRecord(path string, r blockRecord) error {
-	body, err := json.Marshal(r)
+	body, err := marshalJSON(r)
 	if err != nil {
-		return err
+		return fmt.Errorf("encoding the block record: %w", err)
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
@@ -198,21 +278,20 @@ func startBlock(p paths, block int, arm string, now time.Time) (blockRecord, err
 		return blockRecord{}, err
 	}
 
-	prior, _ := readBack(p.settings)
-	if prior == "" {
-		prior = "UNREADABLE"
-	}
 	settings := map[string]any{}
 	existing, err := os.ReadFile(p.settings)
-	backup := "NONE"
+	backup, prior := "NONE", "UNSET"
 	switch {
 	case err == nil:
 		if err := json.Unmarshal(existing, &settings); err != nil {
 			return blockRecord{}, fmt.Errorf("%s is not valid JSON, so it will not be modified: %w", p.settings, err)
 		}
+		if v, ok := settings[settingKey].(string); ok {
+			prior = v
+		}
 		backup = fmt.Sprintf("%s.bak-%s", p.settings, now.UTC().Format("20060102T150405Z"))
 		if err := os.WriteFile(backup, existing, 0o600); err != nil {
-			return blockRecord{}, err
+			return blockRecord{}, fmt.Errorf("backup not written, so the settings file was not touched: %w", err)
 		}
 	case !errors.Is(err, os.ErrNotExist):
 		return blockRecord{}, err
@@ -228,22 +307,22 @@ func startBlock(p paths, block int, arm string, now time.Time) (blockRecord, err
 	} else {
 		delete(settings, settingKey)
 	}
-	body, err := json.MarshalIndent(settings, "", "  ")
+	body, err := marshalIndent(settings, "", "  ")
 	if err != nil {
-		return blockRecord{}, err
+		return blockRecord{}, fmt.Errorf("encoding the settings, so nothing was written: %w", err)
 	}
-	if err := os.WriteFile(p.settings, append(body, '\n'), 0o600); err != nil {
+	written := make([]byte, 0, len(body)+1)
+	written = append(written, body...)
+	written = append(written, '\n')
+	if err := os.WriteFile(p.settings, written, 0o600); err != nil {
 		return blockRecord{}, err
 	}
 	configured, readable := readBack(p.settings)
-	sha, err := fileSHA256(p.settings)
-	if err != nil {
-		return blockRecord{}, err
-	}
 	rec := blockRecord{Schema: schemaBlock, Event: "BLOCK_STARTED", Block: block, Arm: arm,
 		Mechanism: "settings-file", At: now.UTC().Format(time.RFC3339), SettingsPath: p.settings,
 		PriorValue: prior, RequestedValue: requested, ConfiguredValue: configured, StateChange: "VERIFIED",
-		BackupPath: backup, SettingsSHA256: sha, RegisterSHA256: regSHA, ScheduleSHA256: schedSHA}
+		BackupPath: backup, SettingsSHA256: bytesSHA256(written), RegisterSHA256: regSHA, ScheduleSHA256: schedSHA,
+		ToolCommit: toolCommit()}
 	switch {
 	case !readable:
 		rec.Event, rec.StateChange, rec.ConfiguredValue = "BLOCK_NOT_STARTED", "UNVERIFIED", "UNREADABLE"
@@ -318,7 +397,7 @@ func endBlock(p paths, block int, now time.Time) (blockRecord, error) {
 	intact := sha == startSHA
 	rec := blockRecord{Schema: schemaBlock, Event: "BLOCK_ENDED", Block: block, Mechanism: "settings-file",
 		At: now.UTC().Format(time.RFC3339), SettingsPath: p.settings, SettingsSHA256: sha, SpanIntact: &intact,
-		RegisterSHA256: regSHA, ScheduleSHA256: schedSHA}
+		RegisterSHA256: regSHA, ScheduleSHA256: schedSHA, ToolCommit: toolCommit()}
 	if !intact {
 		rec.Reason = "the settings file changed during the block; sessions after the change are excluded by the register's span rule"
 	}
@@ -334,18 +413,21 @@ func frozen(p paths) (schedule, string, string, error) {
 	}
 	b, err := os.ReadFile(p.schedule)
 	if err != nil {
-		return schedule{}, "", "", err
+		return schedule{}, "", "", fmt.Errorf("reading the schedule: %w", err)
 	}
 	var s schedule
 	if err := json.Unmarshal(b, &s); err != nil {
 		return schedule{}, "", "", err
 	}
 	if s.RegisterSHA256 != regSHA {
-		return schedule{}, "", "", fmt.Errorf("the schedule was derived from register %s but the register now hashes to %s; nothing runs against an amended register until the schedule is re-derived and refrozen", s.RegisterSHA256[:12], regSHA[:12])
+		return schedule{}, "", "", fmt.Errorf("the schedule was derived from register %s but the register now hashes to %s; nothing runs against an amended register until the schedule is re-derived and refrozen", short(s.RegisterSHA256), short(regSHA))
 	}
-	schedSHA, err := fileSHA256(p.schedule)
-	if err != nil {
-		return schedule{}, "", "", err
+	return s, bytesSHA256(b), regSHA, nil
+}
+
+func short(h string) string {
+	if len(h) > 12 {
+		return h[:12]
 	}
-	return s, schedSHA, regSHA, nil
+	return h
 }
