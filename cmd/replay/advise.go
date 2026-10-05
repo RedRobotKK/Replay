@@ -241,19 +241,7 @@ func applySettings(reports []*analysis.LaneReport, stdout io.Writer, commit, asJ
 	if err != nil {
 		return fmt.Errorf("find home directory: %w", err)
 	}
-	settings := filepath.Join(claudeConfigDir(home), "settings.json")
-
-	have := ""
-	if b, err := os.ReadFile(settings); err == nil {
-		var m map[string]any
-		if json.Unmarshal(b, &m) == nil {
-			if v, ok := m["promptCacheTtl"].(string); ok {
-				have = v
-			}
-		}
-	}
-
-	plan := ttlPlan(reports, have)
+	settings, plan := settingsPlan(reports, home)
 
 	// An agent asked to "optimise my settings" needs the decision, not prose it
 	// has to parse back. Applicable and manual are separate lists on purpose: a
@@ -312,6 +300,26 @@ func applySettings(reports []*analysis.LaneReport, stdout io.Writer, commit, asJ
 	}
 	p.Printf("\nThe ranked list above this section is the same advice, measured against your own\nsessions rather than asserted.\n")
 	return p.Err()
+}
+
+// settingsPlan names the settings file under this home, reads the value it
+// holds today, and builds the plan with its record pointed at this home's
+// intervention log. One function, so the production path and the test of
+// it cannot drift apart.
+func settingsPlan(reports []*analysis.LaneReport, home string) (string, applyPlan) {
+	settings := filepath.Join(claudeConfigDir(home), "settings.json")
+	have := ""
+	if b, err := os.ReadFile(settings); err == nil {
+		var m map[string]any
+		if json.Unmarshal(b, &m) == nil {
+			if v, ok := m["promptCacheTtl"].(string); ok {
+				have = v
+			}
+		}
+	}
+	plan := ttlPlan(reports, have)
+	plan.Log = interventionLogPath(home)
+	return settings, plan
 }
 
 // formatCount renders a token count the way the reports do.

@@ -33,7 +33,7 @@ func TestSN1_DisclosedNamesEqualHomeStoreNames(t *testing.T) {
 		"vault",
 		"ledger",
 		"archive",
-		"advice.json",
+		"advice.json", "interventions.jsonl",
 		"policy.json",
 		"cost-index.json",
 		"measurements.jsonl",

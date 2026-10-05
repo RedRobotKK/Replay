@@ -32,6 +32,159 @@ type applyPlan struct {
 	Reason      string
 	// Evidence is the one line a person needs to judge the change themselves.
 	Evidence string
+	// PredictedShare is the margin the evidence line states, as a fraction:
+	// the simulator's prediction, carried as a number so the record of the
+	// write holds the figure the write was justified by.
+	PredictedShare float64
+	// Log is where the record of an applied change is appended. Empty means
+	// no record is kept, which only a test should want.
+	Log string
+	// verify reads the setting back after a write. Nil means readSettingValue.
+	verify func(path, setting string) (string, bool)
+}
+
+// readSettingValue opens the settings file again and reports the value it
+// holds for the setting, UNSET when the key is absent, or false when the
+// file cannot be read as JSON.
+func readSettingValue(path, setting string) (string, bool) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", false
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		return "", false
+	}
+	v, ok := m[setting].(string)
+	if !ok {
+		return "UNSET", true
+	}
+	return v, true
+}
+
+// interventionLogPath is the provenance log under the reader's home.
+func interventionLogPath(home string) string {
+	return filepath.Join(home, ".replay", "interventions.jsonl")
+}
+
+// interventionRecord is one request to change a user's configuration, as
+// it ended: INTERVENTION_APPLIED when the written value was read back from
+// the file, APPLY_ATTEMPTED when it was not, INTERVENTION_REFUSED when the
+// plan refused under --yes.
+//
+// Every field is either the fact as it was or the word UNAVAILABLE. The
+// prediction is a number with its basis named; the realized effect is not
+// a number until a measurement exists, and nothing here is one. The
+// register in docs/evidence/ttl-register-2026-10-05.md says what a
+// measurement would have to be.
+type interventionRecord struct {
+	Schema       string `json:"schema"`
+	Event        string `json:"event"`
+	Intervention string `json:"intervention"`
+	Policy       string `json:"policy"`
+	Setting      string `json:"setting"`
+	At           string `json:"at"`
+	// ApplyRequested is true for every record: a dry run writes none.
+	// ApplyAttempted is false for a refusal. StateChange is VERIFIED only
+	// when the value was read back from the file after the write,
+	// UNVERIFIED when it was not, NOT_ATTEMPTED for a refusal.
+	ApplyRequested       bool    `json:"apply_requested"`
+	ApplyAttempted       bool    `json:"apply_attempted"`
+	PriorValue           string  `json:"prior_value"`
+	IntendedValue        string  `json:"intended_value"`
+	AppliedValue         string  `json:"applied_value"`
+	ActualValue          string  `json:"actual_value"`
+	StateChange          string  `json:"state_change"`
+	Reason               string  `json:"reason,omitempty"`
+	SettingsPath         string  `json:"settings_path"`
+	BackupPath           string  `json:"backup_path"`
+	BackupNote           string  `json:"backup_note,omitempty"`
+	PredictedEffect      float64 `json:"predicted_effect"`
+	PredictedEffectBasis string  `json:"predicted_effect_basis"`
+	PredictedEffectText  string  `json:"predicted_effect_text"`
+	RealizedEffect       string  `json:"realized_effect"`
+	Outcome              string  `json:"outcome"`
+	QualityOutcome       string  `json:"quality_outcome"`
+	Block                string  `json:"block"`
+	Surface              string  `json:"surface"`
+	Model                string  `json:"model"`
+}
+
+// transition is what happened to the setting, as it happened.
+type transition struct {
+	event        string
+	at           time.Time
+	settingsPath string
+	backupPath   string
+	backupNote   string
+	intended     string
+	applied      string
+	actual       string
+	stateChange  string
+	attempted    bool
+	reason       string
+}
+
+// record appends the provenance line for a request to apply, whether it
+// ended in a verified change, an unconfirmed write, or a refusal.
+func (p applyPlan) record(tr transition) error {
+	if p.Log == "" {
+		return nil
+	}
+	prior := p.Have
+	if false && (prior == "") {
+		prior = "UNSET"
+	}
+	actual := tr.actual
+	if actual == "" {
+		actual = "UNSET"
+	}
+	policy := p.Setting + "=" + p.Want
+	if p.Want == "" {
+		policy = p.Setting + "=UNDECIDED"
+	}
+	rec := interventionRecord{
+		Schema:               "replay.intervention.v1",
+		Event:                tr.event,
+		Intervention:         "client-setting",
+		Policy:               policy,
+		Setting:              p.Setting,
+		At:                   tr.at.Format(time.RFC3339),
+		ApplyRequested:       true,
+		ApplyAttempted:       tr.attempted,
+		PriorValue:           prior,
+		IntendedValue:        tr.intended,
+		AppliedValue:         tr.applied,
+		ActualValue:          actual,
+		StateChange:          tr.stateChange,
+		Reason:               tr.reason,
+		SettingsPath:         tr.settingsPath,
+		BackupPath:           tr.backupPath,
+		BackupNote:           tr.backupNote,
+		PredictedEffect:      p.PredictedShare,
+		PredictedEffectBasis: "SIMULATOR",
+		PredictedEffectText:  p.Evidence,
+		RealizedEffect:       "UNAVAILABLE",
+		Outcome:              "NOT_YET_MEASURED",
+		QualityOutcome:       "UNAVAILABLE",
+		Block:                "UNAVAILABLE",
+		Surface:              "claude-code",
+		Model:                "UNAVAILABLE",
+	}
+	body, err := json.Marshal(rec)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(p.Log), 0o700); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(p.Log, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(append(body, '\n'))
+	return err
 }
 
 // write applies the plan, or explains why it will not.
@@ -44,6 +197,16 @@ func (p applyPlan) write(path string, out io.Writer, commit bool) error {
 		reason := p.Reason
 		if reason == "" {
 			reason = "the calibration for this corpus is not good enough to act on"
+		}
+		// A refusal under --yes is a request to apply that was not carried
+		// out. On the machine this was built on it is the only truthful
+		// record of the intervention, so it is written as what it is.
+		if commit {
+			if err := p.record(transition{event: "INTERVENTION_REFUSED", at: time.Now().UTC(), settingsPath: path,
+				backupPath: "NONE", backupNote: "nothing was written", intended: "UNDECIDED", applied: "NONE",
+				actual: p.Have, stateChange: "NOT_ATTEMPTED", reason: reason}); err != nil {
+				return fmt.Errorf("refusing to change %s: %s (and the refusal was not recorded: %v)", p.Setting, reason, err)
+			}
 		}
 		return fmt.Errorf("refusing to change %s: %s", p.Setting, reason)
 	}
@@ -63,6 +226,9 @@ func (p applyPlan) write(path string, out io.Writer, commit bool) error {
 	}
 
 	settings := map[string]any{}
+	// One instant names the backup and dates the record of the write.
+	now := time.Now().UTC()
+	backupPath, backupNote := "NONE", "no settings file existed before this write"
 	existing, err := os.ReadFile(path)
 	switch {
 	case err == nil:
@@ -72,13 +238,14 @@ func (p applyPlan) write(path string, out io.Writer, commit bool) error {
 		if err := json.Unmarshal(existing, &settings); err != nil {
 			return fmt.Errorf("%s is not valid JSON, so it will not be modified: %w", path, err)
 		}
-		backup := fmt.Sprintf("%s.bak-%s", path, time.Now().UTC().Format("20060102T150405Z"))
+		backup := fmt.Sprintf("%s.bak-%s", path, now.Format("20060102T150405Z"))
 		if err := os.WriteFile(backup, existing, 0o600); err != nil {
 			return fmt.Errorf("write backup: %w", err)
 		}
 		if _, err := fmt.Fprintf(out, "backed up %s\n", filepath.Base(backup)); err != nil {
 			return err
 		}
+		backupPath, backupNote = backup, ""
 	case !os.IsNotExist(err):
 		return err
 	default:
@@ -93,6 +260,30 @@ func (p applyPlan) write(path string, out io.Writer, commit bool) error {
 		return err
 	}
 	if err := os.WriteFile(path, append(body, '\n'), 0o600); err != nil {
+		return err
+	}
+	// INTERVENTION_APPLIED is earned by reading the value back, not by the
+	// write returning nil. Something else may own the file, or the write
+	// may not have landed as JSON the client reads.
+	verify := p.verify
+	if verify == nil {
+		verify = readSettingValue
+	}
+	actual, readable := verify(path, p.Setting)
+	tr := transition{event: "INTERVENTION_APPLIED", at: now, settingsPath: path, backupPath: backupPath,
+		backupNote: backupNote, intended: p.Want, applied: p.Want, actual: actual, stateChange: "VERIFIED", attempted: true}
+	switch {
+	case !readable:
+		tr.event, tr.stateChange, tr.actual = "APPLY_ATTEMPTED", "UNVERIFIED", "UNREADABLE"
+	case actual != p.Want:
+		tr.event, tr.stateChange = "APPLY_ATTEMPTED", "UNVERIFIED"
+	}
+	if err := p.record(tr); err != nil {
+		return fmt.Errorf("the setting was written but its record was not: %w", err)
+	}
+	if tr.stateChange != "VERIFIED" {
+		_, err = fmt.Fprintf(out, "wrote %s: %s -> %s in %s, but the change was not confirmed: the file now reads %s\n",
+			p.Setting, have, p.Want, path, tr.actual)
 		return err
 	}
 	_, err = fmt.Fprintf(out, "set %s: %s -> %s in %s\n", p.Setting, have, p.Want, path)
@@ -186,6 +377,7 @@ func chooseTTLWithCoverage(obs []ttlObservation, have string, coverage float64) 
 
 	plan.Trustworthy = true
 	plan.Want = want
+	plan.PredictedShare = margin
 	plan.Evidence = fmt.Sprintf("%s costs %.1f%% fewer effective tokens across %d sessions that reproduced at or above 95%%, covering %.0f%% of the corpus's scored spend (%d sessions differ between the two TTLs)",
 		want, margin*100, len(obs), coverage*100, differing)
 	return plan

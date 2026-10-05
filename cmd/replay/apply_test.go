@@ -3,12 +3,15 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // `replay advise --apply` writes one setting: the prompt cache TTL. Everything
@@ -321,5 +324,381 @@ func TestHoistingKeepsAStringFlagWithItsValue(t *testing.T) {
 	// loaded gun for the next command that takes a flag with a value.
 	if src := string(mustRead(t, "main.go")); strings.Contains(src, "func hoistFlags(") {
 		t.Fatal("the value-blind hoistFlags is back; every value-taking flag after a path breaks again")
+	}
+}
+
+// readInterventions parses the provenance log, one JSON object per line.
+func readInterventions(t *testing.T, p string) []map[string]any {
+	t.Helper()
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("no intervention record: %v", err)
+	}
+	var out []map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		if line == "" {
+			continue
+		}
+		var m map[string]any
+		if err := json.Unmarshal([]byte(line), &m); err != nil {
+			t.Fatalf("record is not JSON: %v\n%s", err, line)
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+// The one intervention Replay performs itself leaves a record.
+//
+// `advise --apply --yes` writes promptCacheTtl into the user's settings and
+// records nothing: not that it did it, not when, not what it predicted. The
+// control-thesis panel of 2026-10-05 made the record the first condition of
+// any measurement, and the register written before this test says what it
+// must hold. Every field below is either the fact as it is, or the word
+// UNAVAILABLE.
+//
+// PASS: one record, the prior and applied values as they were, the instant
+// of the write, the backup that was made, the predicted effect as a number
+// with SIMULATOR as its basis, and no realized figure of any kind.
+// FAIL: no record, which is what shipped.
+func TestApplyRecordsTheInterventionItPerformed(t *testing.T) {
+	dir := t.TempDir()
+	p := writeSettings(t, dir, map[string]any{"promptCacheTtl": "1h", "env": map[string]any{"FOO": "bar"}})
+	log := filepath.Join(dir, "interventions.jsonl")
+	plan := applyPlan{Setting: "promptCacheTtl", Want: "5m", Have: "1h", Trustworthy: true,
+		PredictedShare: 0.28, Evidence: "5m costs 28.0% fewer effective tokens across 755 sessions", Log: log}
+	before := time.Now().UTC().Add(-time.Second)
+	var out strings.Builder
+	if err := plan.write(p, &out, true); err != nil {
+		t.Fatal(err)
+	}
+	recs := readInterventions(t, log)
+	if len(recs) != 1 {
+		t.Fatalf("want exactly one record, got %d", len(recs))
+	}
+	r := recs[0]
+	for k, want := range map[string]any{
+		"schema":                 "replay.intervention.v1",
+		"event":                  "INTERVENTION_APPLIED",
+		"intervention":           "client-setting",
+		"policy":                 "promptCacheTtl=5m",
+		"setting":                "promptCacheTtl",
+		"apply_requested":        true,
+		"apply_attempted":        true,
+		"prior_value":            "1h",
+		"intended_value":         "5m",
+		"applied_value":          "5m",
+		"actual_value":           "5m",
+		"state_change":           "VERIFIED",
+		"settings_path":          p,
+		"predicted_effect":       0.28,
+		"predicted_effect_basis": "SIMULATOR",
+		"predicted_effect_text":  plan.Evidence,
+		"realized_effect":        "UNAVAILABLE",
+		"outcome":                "NOT_YET_MEASURED",
+		"quality_outcome":        "UNAVAILABLE",
+		"block":                  "UNAVAILABLE",
+		"surface":                "claude-code",
+		"model":                  "UNAVAILABLE",
+	} {
+		if r[k] != want {
+			t.Errorf("%s = %v (%T), want %v", k, r[k], r[k], want)
+		}
+	}
+	at, err := time.Parse(time.RFC3339, fmt.Sprint(r["at"]))
+	if err != nil {
+		t.Fatalf("at is not an RFC3339 instant: %v", r["at"])
+	}
+	if at.Before(before) || at.After(time.Now().UTC().Add(time.Second)) {
+		t.Errorf("at = %v is not the instant of this write", at)
+	}
+	b := backupsIn(t, dir)
+	if len(b) != 1 || r["backup_path"] != filepath.Join(dir, b[0]) {
+		t.Errorf("backup_path = %v, want the backup that was made: %v", r["backup_path"], b)
+	}
+	if !strings.Contains(string(mustRead(t, filepath.Join(dir, b[0]))), `"1h"`) {
+		t.Error("the backup the record points at does not hold the prior value")
+	}
+}
+
+// A dry run and a no-op record nothing: nothing was requested, or nothing
+// needed to change.
+func TestApplyRecordsNothingWhenItChangesNothing(t *testing.T) {
+	dir := t.TempDir()
+	p := writeSettings(t, dir, map[string]any{"promptCacheTtl": "1h"})
+	log := filepath.Join(dir, "interventions.jsonl")
+	var out strings.Builder
+	dry := applyPlan{Setting: "promptCacheTtl", Want: "5m", Have: "1h", Trustworthy: true, Log: log}
+	if err := dry.write(p, &out, false); err != nil {
+		t.Fatal(err)
+	}
+	noop := applyPlan{Setting: "promptCacheTtl", Want: "1h", Have: "1h", Trustworthy: true, Log: log}
+	if err := noop.write(p, &out, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(log); !os.IsNotExist(err) {
+		t.Fatalf("a record was written although nothing changed: %v", err)
+	}
+}
+
+// A refusal under --yes is recorded as a refusal: apply was requested, not
+// attempted, the state did not change, and the reason is the predictor's.
+//
+// On the machine this was built on, `advise --apply --yes` refuses ("no
+// single setting is right for this corpus"), so the only truthful record
+// of the intervention here is this one. It is not INTERVENTION_APPLIED.
+func TestApplyRecordsARefusalWhenApplyWasRequested(t *testing.T) {
+	dir := t.TempDir()
+	p := writeSettings(t, dir, map[string]any{"promptCacheTtl": "1h"})
+	log := filepath.Join(dir, "interventions.jsonl")
+	var out strings.Builder
+	refused := applyPlan{Setting: "promptCacheTtl", Have: "1h", Reason: "no single setting is right for this corpus", Log: log}
+	if err := refused.write(p, &out, true); err == nil {
+		t.Fatal("an untrustworthy plan must refuse")
+	}
+	recs := readInterventions(t, log)
+	if len(recs) != 1 {
+		t.Fatalf("want one refusal record, got %d", len(recs))
+	}
+	r := recs[0]
+	for k, want := range map[string]any{
+		"event":           "INTERVENTION_REFUSED",
+		"apply_requested": true,
+		"apply_attempted": false,
+		"prior_value":     "1h",
+		"intended_value":  "UNDECIDED",
+		"applied_value":   "NONE",
+		"actual_value":    "1h",
+		"state_change":    "NOT_ATTEMPTED",
+		"reason":          "no single setting is right for this corpus",
+		"realized_effect": "UNAVAILABLE",
+		"outcome":         "NOT_YET_MEASURED",
+	} {
+		if r[k] != want {
+			t.Errorf("%s = %v, want %v", k, r[k], want)
+		}
+	}
+	if got := readSettings(t, p)["promptCacheTtl"]; got != "1h" {
+		t.Errorf("a refusal must not touch the file: %v", got)
+	}
+	// A dry run of a refused plan is not a request to apply.
+	dry := applyPlan{Setting: "promptCacheTtl", Have: "1h", Reason: "x", Log: filepath.Join(dir, "other.jsonl")}
+	_ = dry.write(p, &out, false)
+	if _, err := os.Stat(filepath.Join(dir, "other.jsonl")); !os.IsNotExist(err) {
+		t.Error("a dry run records nothing, refused or not")
+	}
+}
+
+// INTERVENTION_APPLIED is earned by reading the value back from disk, not by
+// the write call returning nil. When the file does not hold the intended
+// value afterwards, the record says APPLY_ATTEMPTED and the state change
+// UNVERIFIED, and the actual value is what was read.
+func TestApplyDoesNotClaimAppliedWithoutReadingTheValueBack(t *testing.T) {
+	dir := t.TempDir()
+	p := writeSettings(t, dir, map[string]any{"promptCacheTtl": "1h"})
+	log := filepath.Join(dir, "interventions.jsonl")
+	plan := applyPlan{Setting: "promptCacheTtl", Want: "5m", Have: "1h", Trustworthy: true, Log: log,
+		// Something else owns the file: the value read back is not the one written.
+		verify: func(path, setting string) (string, bool) { return "1h", true }}
+	var out strings.Builder
+	if err := plan.write(p, &out, true); err != nil {
+		t.Fatal(err)
+	}
+	r := readInterventions(t, log)[0]
+	for k, want := range map[string]any{
+		"event":           "APPLY_ATTEMPTED",
+		"apply_attempted": true,
+		"applied_value":   "5m",
+		"actual_value":    "1h",
+		"state_change":    "UNVERIFIED",
+	} {
+		if r[k] != want {
+			t.Errorf("%s = %v, want %v", k, r[k], want)
+		}
+	}
+	if !strings.Contains(out.String(), "not confirmed") {
+		t.Errorf("the reader must be told the change was not confirmed: %q", out.String())
+	}
+
+	// An unreadable file after the write is UNVERIFIED too, with the value UNREADABLE.
+	plan.verify = func(path, setting string) (string, bool) { return "", false }
+	if err := plan.write(p, &out, true); err != nil {
+		t.Fatal(err)
+	}
+	r = readInterventions(t, log)[1]
+	if r["state_change"] != "UNVERIFIED" || r["actual_value"] != "UNREADABLE" {
+		t.Errorf("unreadable after write: %v / %v", r["state_change"], r["actual_value"])
+	}
+}
+
+// readSettingValue is the independent check: it opens the file again and
+// reports what it holds, or that it could not be read.
+func TestReadSettingValueReportsWhatTheFileHolds(t *testing.T) {
+	dir := t.TempDir()
+	p := writeSettings(t, dir, map[string]any{"promptCacheTtl": "5m"})
+	if v, ok := readSettingValue(p, "promptCacheTtl"); !ok || v != "5m" {
+		t.Errorf("got %q %v, want 5m true", v, ok)
+	}
+	if v, ok := readSettingValue(p, "absent"); !ok || v != "UNSET" {
+		t.Errorf("an absent key reads as UNSET, got %q %v", v, ok)
+	}
+	if _, ok := readSettingValue(filepath.Join(dir, "missing.json"), "promptCacheTtl"); ok {
+		t.Error("a missing file is not readable")
+	}
+}
+
+// An absent prior value is recorded as UNSET, and an absent backup as none,
+// never as an empty string that reads as a value.
+func TestApplyRecordsAnAbsentPriorValueAndBackupExplicitly(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "nested", "settings.json")
+	log := filepath.Join(dir, "interventions.jsonl")
+	plan := applyPlan{Setting: "promptCacheTtl", Want: "5m", Have: "", Trustworthy: true, PredictedShare: 0.28, Log: log}
+	var out strings.Builder
+	if err := plan.write(p, &out, true); err != nil {
+		t.Fatal(err)
+	}
+	r := readInterventions(t, log)[0]
+	if r["prior_value"] != "UNSET" {
+		t.Errorf("prior_value = %v, want UNSET", r["prior_value"])
+	}
+	if r["event"] != "INTERVENTION_APPLIED" || r["state_change"] != "VERIFIED" || r["actual_value"] != "5m" {
+		t.Errorf("a write into a fresh file is verified by reading it back: %v / %v / %v", r["event"], r["state_change"], r["actual_value"])
+	}
+	if r["backup_path"] != "NONE" || r["backup_note"] != "no settings file existed before this write" {
+		t.Errorf("an absent backup must be named as absent: %v / %v", r["backup_path"], r["backup_note"])
+	}
+}
+
+// The record never manufactures a realized result. Prediction is a number
+// with a stated basis; realization is the word UNAVAILABLE until a
+// measurement exists, and no field in the record carries a saving.
+func TestApplyRecordDoesNotManufactureARealizedResult(t *testing.T) {
+	dir := t.TempDir()
+	p := writeSettings(t, dir, map[string]any{})
+	log := filepath.Join(dir, "interventions.jsonl")
+	plan := applyPlan{Setting: "promptCacheTtl", Want: "5m", Have: "", Trustworthy: true, PredictedShare: 0.28, Log: log}
+	var out strings.Builder
+	if err := plan.write(p, &out, true); err != nil {
+		t.Fatal(err)
+	}
+	r := readInterventions(t, log)[0]
+	if _, isNumber := r["predicted_effect"].(float64); !isNumber {
+		t.Errorf("predicted_effect must be the simulator's number, got %v (%T)", r["predicted_effect"], r["predicted_effect"])
+	}
+	if _, isNumber := r["realized_effect"].(float64); isNumber {
+		t.Fatalf("realized_effect is a number before any measurement: %v", r["realized_effect"])
+	}
+	for k := range r {
+		if strings.Contains(k, "saving") || strings.Contains(k, "measured") {
+			t.Errorf("record carries a field that reads as a result: %s", k)
+		}
+	}
+}
+
+// chooseTTL hands its margin to the record as the prediction, so the number
+// the write was justified by is the number that gets tested.
+func TestChooseTTLCarriesItsMarginAsThePrediction(t *testing.T) {
+	obs := make([]ttlObservation, 12)
+	for i := range obs {
+		obs[i] = ttlObservation{Short: 70, Long: 100}
+	}
+	plan := chooseTTLWithCoverage(obs, "", 1)
+	if !plan.Trustworthy || plan.Want != "5m" {
+		t.Fatalf("setup: 5m wins by 30%%, got %+v", plan)
+	}
+	if plan.PredictedShare != 0.3 {
+		t.Errorf("PredictedShare = %v, want the 0.30 margin the evidence line states", plan.PredictedShare)
+	}
+}
+
+// The log lives with Replay's other stores, and the store registry names it
+// as provenance that a retention window does not remove.
+func TestInterventionLogIsARegisteredStore(t *testing.T) {
+	home := t.TempDir()
+	if got, want := interventionLogPath(home), filepath.Join(home, ".replay", "interventions.jsonl"); got != want {
+		t.Errorf("interventionLogPath = %s, want %s", got, want)
+	}
+	for _, s := range homeStores() {
+		if s.Name == "interventions.jsonl" {
+			if s.Purgeable {
+				t.Error("provenance of a change Replay made is not subject to a retention window")
+			}
+			return
+		}
+	}
+	t.Error("interventions.jsonl is not a registered store, so replay purge and the privacy page do not know it exists")
+}
+
+// The production path points the plan's record at this home's log, and
+// reads the value the settings file holds today as the prior value.
+func TestSettingsPlanRecordsUnderThisHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeSettings(t, filepath.Join(home, ".claude"), map[string]any{"promptCacheTtl": "1h"})
+	settings, plan := settingsPlan(nil, home)
+	if settings != filepath.Join(home, ".claude", "settings.json") {
+		t.Errorf("settings path = %s", settings)
+	}
+	if plan.Log != interventionLogPath(home) {
+		t.Errorf("the production plan must record under this home: Log = %q", plan.Log)
+	}
+	if plan.Have != "1h" {
+		t.Errorf("the prior value is what the file holds today, got %q", plan.Have)
+	}
+}
+
+// The margin is a defined quantity, not decoration.
+//
+// Over the sessions scored, chooseTTLWithCoverage sums each TTL's simulated
+// effective tokens. The winner is the smaller sum. margin = (loser - winner)
+// / loser: the share of the losing TTL's total that the winning TTL avoids.
+// It is never negative, because the winner is defined as the smaller sum; a
+// tie is refused before any margin exists; and the sign of a preference is
+// carried by Want, not by the number. Checked here on figures a person can
+// add up by hand: 70 against 100 on every one of twelve sessions.
+func TestChooseTTLMarginIsTheShareOfTheLoserAvoided(t *testing.T) {
+	obs := make([]ttlObservation, 12)
+	for i := range obs {
+		obs[i] = ttlObservation{Short: 70, Long: 100}
+	}
+	plan := chooseTTLWithCoverage(obs, "", 1)
+	if plan.Want != "5m" || !plan.Trustworthy {
+		t.Fatalf("5m sums to 840 against 1200, so 5m wins: %+v", plan)
+	}
+	if plan.PredictedShare != 0.3 {
+		t.Errorf("margin = (1200-840)/1200 = 0.30, got %v", plan.PredictedShare)
+	}
+	// The mirror image prefers 1h with the same margin: the number is the
+	// size of the lead, the TTL is the direction.
+	for i := range obs {
+		obs[i] = ttlObservation{Short: 100, Long: 70}
+	}
+	plan = chooseTTLWithCoverage(obs, "", 1)
+	if plan.Want != "1h" || plan.PredictedShare != 0.3 {
+		t.Errorf("mirror: want 1h at 0.30, got %s at %v", plan.Want, plan.PredictedShare)
+	}
+	// Token-weighted, not session-weighted: one session of 1000 against 700
+	// outweighs eleven sessions that prefer the other way by 1.
+	obs = make([]ttlObservation, 12)
+	for i := range obs {
+		obs[i] = ttlObservation{Short: 101, Long: 100}
+	}
+	obs[0] = ttlObservation{Short: 700, Long: 1000}
+	plan = chooseTTLWithCoverage(obs, "", 1)
+	// short = 700 + 11*101 = 1811; long = 1000 + 11*100 = 2100; margin = 289/2100.
+	if plan.Want != "5m" || math.Abs(plan.PredictedShare-289.0/2100.0) > 1e-9 {
+		t.Errorf("token-weighted: want 5m at %.4f, got %s at %v", 289.0/2100.0, plan.Want, plan.PredictedShare)
+	}
+	// A tie is refused before any margin exists, and carries no prediction.
+	for i := range obs {
+		obs[i] = ttlObservation{Short: 100, Long: 100}
+	}
+	plan = chooseTTLWithCoverage(obs, "", 1)
+	if plan.Trustworthy || plan.PredictedShare != 0 {
+		t.Errorf("a tie has no margin: %+v", plan)
 	}
 }

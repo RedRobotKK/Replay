@@ -76,6 +76,13 @@ func homeStores() []store {
 				"Derived from your transcripts; carries tool and file names, no message text.",
 		},
 		{
+			Name: "interventions.jsonl", Purgeable: false,
+			Holds: "one line per change `replay advise --apply --yes` made to your settings: the " +
+				"setting, the prior and applied values, the instant, the backup it made, and the " +
+				"predicted effect with its basis. Provenance of a change this tool made, so a " +
+				"retention window does not remove it.",
+		},
+		{
 			Name: "policy.json", Purgeable: false,
 			Holds: "the request policy `replay learn` derived. Configuration you chose, so a " +
 				"retention window does not remove it.",

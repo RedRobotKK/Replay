@@ -1851,6 +1851,19 @@
         "TestNoteSetsASessionAsideWhenAttributionExceedsThePrompt"
       ],
       "note": "An advisor share is a source's estimated tokens over the provider's prompt total, and nothing bounded it above. On 2026-10-05 a lane that joined 46 compaction segments made replay advise lead with \"Bash inputs are 155% of prompt tokens\"; the suite was green, the real corpus was not. A share above one is an instrument that disagrees with the bill, so the session is set aside and counted in the header instead of ranked. This mutant raises the bound past anything a session can reach."
+    },
+    {
+      "id": "M141",
+      "name": "intervention-applied-claimed-without-reading-the-value-back",
+      "class": "claim-outruns-evidence",
+      "discovered": "2026-10-05",
+      "file": "cmd/replay/apply.go",
+      "anchor": "\tcase actual != p.Want:\n\t\ttr.event, tr.stateChange = \"APPLY_ATTEMPTED\", \"UNVERIFIED\"\n",
+      "replacement": "\tcase false:\n\t\ttr.event, tr.stateChange = \"APPLY_ATTEMPTED\", \"UNVERIFIED\"\n",
+      "killedBy": [
+        "TestApplyDoesNotClaimAppliedWithoutReadingTheValueBack"
+      ],
+      "note": "Until 2026-10-05 the only intervention Replay performs itself, writing promptCacheTtl, left no record beyond a backup file. The record added that day earns INTERVENTION_APPLIED by reading the value back from the settings file after the write; when the file reads something else the record says APPLY_ATTEMPTED with state_change UNVERIFIED and the value it found. This mutant claims the change whenever the write call returned nil, which is the write succeeding, not the state changing."
     }
   ],
   "knownSurvivors": [

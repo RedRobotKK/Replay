@@ -11,13 +11,14 @@ import (
 // Everything this tool writes to the reader's machine, in one list.
 //
 // The purge command was built against ~/.replay/ledger because that is where
-// the retention gap was found. Looking properly, the tool writes thirteen things:
+// the retention gap was found. Looking properly, the tool writes fourteen things:
 //
 //	ledger/            per-request records, counts and timings, no content
 //	                   — and ledger-<name>/, one directory per named upstream
 //	vault/             masking vault — holds the reader's actual secrets
 //	archive/           rotated ledger records
 //	advice.json        findings, and which the reader marked applied
+//	interventions.jsonl one line per setting `advise --apply --yes` changed, with the prediction it rested on
 //	policy.json        learned request policy
 //	cost-index.json    a cache keyed by transcript path
 //	measurements.jsonl probe readings
@@ -68,7 +69,7 @@ func TestST1_EveryStoreTheToolWritesIsRegistered(t *testing.T) {
 
 	// Names the source itself uses for things under the home directory.
 	mustBeRegistered := []string{
-		"ledger", "vault", "archive", "advice.json", "policy.json",
+		"ledger", "vault", "archive", "advice.json", "interventions.jsonl", "policy.json",
 		"cost-index.json", "measurements.jsonl", "seen.json", "tip.json",
 		"surfaces.json",
 	}

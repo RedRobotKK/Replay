@@ -31,6 +31,18 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- **`replay advise --apply --yes` records what happened to the setting, as
+  it happened.** One line per request in `~/.replay/interventions.jsonl`.
+  `INTERVENTION_APPLIED` is earned by reading the value back from the file
+  after the write; a write the file does not then confirm is
+  `APPLY_ATTEMPTED` with `state_change=UNVERIFIED`; a plan that refuses under
+  `--yes` is `INTERVENTION_REFUSED` with its reason, which is the record this
+  machine produces. Every line carries the prior, intended, applied and
+  actual values, the instant, the backup made (or `NONE`), and the predicted
+  effect as the simulator's number with its basis named; the realized effect
+  is `UNAVAILABLE` and the outcome `NOT_YET_MEASURED`, and the record never
+  fills them in. A dry run and a no-op write nothing. The log is a
+  registered store that no retention window removes. Frozen as M141.
 - **`replay advise` sets aside a session whose attribution exceeds the
   provider's prompt total, and says how many.** A share is a source's
   estimated tokens over the provider's prompt total and nothing bounded it

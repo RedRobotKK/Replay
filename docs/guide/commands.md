@@ -894,7 +894,7 @@ The question a subject access request asks, and one this tool could not answer u
 local-first tool is unusually well placed to: nothing has to be requested from anyone, because the
 whole answer is a directory on your own disk.
 
-Thirteen stores sit under `~/.replay`, and the report says what each holds in plain terms — including
+Fourteen stores sit under `~/.replay`, and the report says what each holds in plain terms — including
 what it does **not** hold. The ledger carries timings, token counts, cache outcomes, a request path
 and a session id, and never message content.
 
@@ -1028,6 +1028,19 @@ not choose.
 `--apply` proposes the one setting the evidence can decide and shows the diff; on its own it only
 describes the change, and `--yes` is what actually writes it. Two steps rather than one because a
 tool editing your settings unasked is a different thing from a tool suggesting an edit.
+
+**A request to apply leaves a record, as it ended.** Each `--apply --yes` appends one line to
+`~/.replay/interventions.jsonl`. The event is `INTERVENTION_APPLIED` only when the value was read
+back from the settings file after the write (`state_change=VERIFIED`); `APPLY_ATTEMPTED` with
+`state_change=UNVERIFIED` when the file then read something else or could not be read; and
+`INTERVENTION_REFUSED` with the predictor's reason when the plan refused, which is what happens on
+the machine this was built on. Every record carries the prior value (or `UNSET`), the intended,
+applied and actual values, the instant, the backup made (or `NONE`), and the predicted effect as
+the simulator's number with `predicted_effect_basis=SIMULATOR`. The realized effect is
+`UNAVAILABLE` and the outcome `NOT_YET_MEASURED` at the instant of the request, and the record
+never fills them in. A dry run and a no-op write nothing. Until 2026-10-05 a write left no trace
+beyond the backup file, and a write returning without error was the only sense in which anything
+was known to have changed.
 
 **It sets aside a session whose attribution exceeds the provider's bill.** A share is a source's
 estimated tokens over the provider's prompt total for the lane, and a share above one hundred percent
