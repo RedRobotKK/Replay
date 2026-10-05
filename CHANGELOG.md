@@ -4,6 +4,40 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- **The conversation after a compaction is the same lane.** A lane was keyed on
+  the first conversational line of a request's parent chain, and Claude Code
+  starts every compaction with a parentless boundary, so each post-compaction
+  segment was filed as a sub-agent lane. On one real session with 46
+  compactions and no sub-agent at all, `replay context` reported "one lane of
+  46, 45 sub-agent lanes, carrying 24,666 requests, are not counted above", and
+  every offline command that reports on the main lane saw one segment: on that
+  session `replay cost <file>` put re-billed at $97.99 and now puts it at
+  $315.94, the total unchanged. Over this machine's corpus, 10 of 10 compacted
+  sessions carried the false PARTIAL note before and 1 after. Frozen as M138.
+- **`replay codex` and `replay burn` printed a quota window Codex had not
+  reported.** Codex 0.154 writes a credits-based limit with no rolling window;
+  the newest reading of any shape was taken and its absent windows printed as
+  "0% used, window unknown". The reader now says whether a window was reported,
+  the view prefers the newest windowed reading and labels an older one as such,
+  and the reset instant, parsed since the quota signal was found and never
+  shown, is printed with its distance from the clock. Frozen as M137.
+
+### Added
+
+- **`replay context` accounts for each compaction the client recorded.** One
+  line per boundary: the prompt before and what was kept, from the client's own
+  record; what the first prompt after the boundary carried, from the
+  transcript; and the part of it that was not the kept summary, marked
+  calculated. Measured on this machine, the kept share is 2.8% at the median
+  and the first prompt after a boundary is 79k tokens against 27k kept. A
+  boundary with no request after it, a rewrite without sizes, and a record that
+  kept more than it had are each named rather than computed. Nothing here is
+  forward-looking: the line appears after the client records a compaction, by
+  the decision of the twelve-role panel recorded in
+  `docs/evidence/compaction-panel-2026-10-05.md`. Frozen as M139.
+
 ## [0.8.0] - 2026-10-05
 
 ### Added

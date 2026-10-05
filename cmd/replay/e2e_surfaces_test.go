@@ -653,3 +653,23 @@ func TestE2E_Upgrade(t *testing.T) {
 		t.Fatalf("a release the index does not carry must fail, printed:\n%s%s", out, errb)
 	}
 }
+
+// replay context accounts for each recorded compaction: what the client kept
+// and what the first prompt after the boundary carried.
+func TestE2E_ContextReportsWhatACompactionKept(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "session.jsonl")
+	src := `{"type":"user","uuid":"u0","sessionId":"s","timestamp":"2026-09-06T00:00:00Z","cwd":"/tmp/x","message":{"role":"user","content":"start"}}
+{"type":"assistant","uuid":"a0","parentUuid":"u0","sessionId":"s","timestamp":"2026-09-06T00:00:01Z","requestId":"r0","message":{"role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"working"}],"usage":{"input_tokens":1000,"cache_read_input_tokens":965000,"output_tokens":20}}}
+{"type":"system","subtype":"compact_boundary","uuid":"b1","sessionId":"s","timestamp":"2026-09-06T00:00:05Z","compactMetadata":{"trigger":"auto","preTokens":969218,"postTokens":26970}}
+{"type":"user","uuid":"u1","parentUuid":"b1","sessionId":"s","timestamp":"2026-09-06T00:00:06Z","isCompactSummary":true,"message":{"role":"user","content":"summary of the work so far"}}
+{"type":"assistant","uuid":"a1","parentUuid":"u1","sessionId":"s","timestamp":"2026-09-06T00:00:07Z","requestId":"r1","message":{"role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"continuing"}],"usage":{"input_tokens":79383,"output_tokens":20}}}
+`
+	if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, errb, err := e2e(t, "context", p)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, errb)
+	}
+	mustContain(t, "context", out, "as the client recorded it", "26k kept", "the first prompt after it carried 79k tokens", "52k", "calculated")
+}

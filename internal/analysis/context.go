@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/RedRobotKK/Replay/internal/transcript"
@@ -172,6 +173,101 @@ type ContextGap struct {
 	LanesTotal      int
 	LanesReported   int
 	RequestsOmitted int
+	// CompactionEvents is each recorded compaction with the first prompt
+	// that followed it, in order.
+	CompactionEvents []CompactionEvent
+}
+
+// CompactionEvent is one recorded compaction placed in its lane.
+type CompactionEvent struct {
+	Trigger    string
+	PreTokens  int
+	PostTokens int
+	// FirstPromptAfter is the prompt total of the first request after the
+	// boundary, or zero when none is recorded.
+	FirstPromptAfter int
+}
+
+// firstPromptAfter is the prompt total of the first request in the lane
+// after the instant, or zero when none follows or the instant is unknown.
+//
+// The zero time is "unknown", not "the beginning": a compaction the client
+// did not date must not be paired with the session's first prompt.
+func firstPromptAfter(lane *transcript.Lane, at time.Time) int {
+	if lane == nil || at.IsZero() {
+		return 0
+	}
+	for _, r := range lane.Requests {
+		if r.Timestamp.After(at) {
+			return r.Usage.PromptTotal()
+		}
+	}
+	return 0
+}
+
+// CompactionDetail is the per-event account of what each recorded
+// compaction kept and what the next prompt carried. Nil when nothing was
+// recorded.
+//
+// Every figure names how it is known. Before and kept are the client's own
+// record; the first prompt after is the transcript's usage; their difference
+// is calculated. Nothing here is forward-looking: the panel of 2026-10-05
+// ruled that a compaction is reported after the client records it, never
+// announced before.
+func (g ContextGap) CompactionDetail() []string {
+	if len(g.CompactionEvents) == 0 {
+		return nil
+	}
+	lines := []string{"Compaction, as the client recorded it:"}
+	for i, e := range g.CompactionEvents {
+		var b strings.Builder
+		b.WriteString(strconv.Itoa(i + 1))
+		b.WriteString(" of ")
+		b.WriteString(strconv.Itoa(len(g.CompactionEvents)))
+		if e.Trigger != "" {
+			b.WriteString(" (")
+			b.WriteString(e.Trigger)
+			b.WriteString(")")
+		}
+		b.WriteString(": ")
+		switch {
+		case e.PreTokens <= 0:
+			b.WriteString("the rewrite was recorded without its sizes")
+		case e.PostTokens > e.PreTokens:
+			// One record in the measured corpus keeps more than it had. The
+			// sizes are printed as recorded and no share is derived from them.
+			b.WriteString(shortCount(e.PreTokens))
+			b.WriteString(" tokens before the boundary, ")
+			b.WriteString(shortCount(e.PostTokens))
+			b.WriteString(" after, which is more than before as the client recorded it, so no kept share is derived")
+		default:
+			b.WriteString(shortCount(e.PreTokens))
+			b.WriteString(" tokens before the boundary, ")
+			b.WriteString(shortCount(e.PostTokens))
+			b.WriteString(" kept (")
+			b.WriteString(tenthPercent(float64(e.PostTokens) / float64(e.PreTokens)))
+			b.WriteString(")")
+		}
+		if e.FirstPromptAfter > 0 {
+			b.WriteString("; the first prompt after it carried ")
+			b.WriteString(shortCount(e.FirstPromptAfter))
+			b.WriteString(" tokens")
+			if e.PreTokens > 0 && e.FirstPromptAfter > e.PostTokens {
+				b.WriteString(", ")
+				b.WriteString(shortCount(e.FirstPromptAfter - e.PostTokens))
+				b.WriteString(" of which was not the kept summary (calculated)")
+			}
+		} else {
+			b.WriteString("; no prompt is recorded after the boundary")
+		}
+		b.WriteString(".")
+		lines = append(lines, b.String())
+	}
+	return lines
+}
+
+func tenthPercent(f float64) string {
+	return strconv.FormatFloat(f*100, 'f', 1, 64) + "%"
 }
 
 // Partial reports whether lanes were left out of these figures.
@@ -335,6 +431,12 @@ func MeasureGap(session *transcript.Session, lane *transcript.Lane, attributed i
 		for _, c := range session.Compactions {
 			recorded++
 			g.CompactedTokens += c.Dropped()
+			g.CompactionEvents = append(g.CompactionEvents, CompactionEvent{
+				Trigger:          c.Trigger,
+				PreTokens:        c.PreTokens,
+				PostTokens:       c.PostTokens,
+				FirstPromptAfter: firstPromptAfter(lane, c.At),
+			})
 		}
 		g.Compactions = recorded
 	}

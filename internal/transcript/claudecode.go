@@ -180,12 +180,18 @@ func ParseClaudeCode(r io.Reader) (*Session, error) {
 		switch {
 		case l.CompactMetadata != nil:
 			m := l.CompactMetadata
+			// The instant is the boundary's own timestamp. An unparseable one
+			// leaves the zero time, and a zero time pairs with no request:
+			// placing a compaction before every request would charge the
+			// session's first prompt to it.
+			at, _ := parseTime(l.Timestamp)
 			session.Compactions = append(session.Compactions, Compaction{
 				Trigger:           m.Trigger,
 				PreTokens:         m.PreTokens,
 				PostTokens:        m.PostTokens,
 				CumulativeDropped: m.CumulativeDroppedTokens,
 				DurationMS:        m.DurationMS,
+				At:                at,
 			})
 			sawBoundary = true
 		case l.IsCompactSummary && !sawBoundary:
@@ -226,12 +232,23 @@ func ParseClaudeCode(r io.Reader) (*Session, error) {
 	for _, id := range order {
 		group := groups[id]
 		sort.SliceStable(group, func(i, j int) bool { return group[i].APIBlockIndex < group[j].APIBlockIndex })
-		req, laneID, err := dec.buildRequest(group)
+		req, laneID, continued, err := dec.buildRequest(group)
 		if err != nil {
 			// One malformed request (no usage on an interrupted call, a bad
 			// timestamp) must not hide the rest of the session.
 			session.Skipped++
 			continue
+		}
+		if !group[0].IsSidechain {
+			// A compaction replaces the main conversation, so the segment
+			// after it is that conversation continued. A sidechain keeps its
+			// own root whatever it is rooted at.
+			if continued && dec.mainLane != "" {
+				laneID = dec.mainLane
+			}
+			if dec.mainLane == "" {
+				dec.mainLane = laneID
+			}
 		}
 		lane := session.Lane(laneID, group[0].IsSidechain)
 		lane.Requests = append(lane.Requests, req)
@@ -307,16 +324,29 @@ type decoder struct {
 	// its own storage; decodeAssistantRun reorders the sub-slice in place
 	// but keeps no reference to it.
 	chain []*rawLine
+
+	// mainLane is the id of the first non-sidechain lane seen. A request
+	// whose parent chain is rooted at a compaction joins it: the client
+	// starts a compaction with a parentless boundary, so the chain after it
+	// has no link to the chain before, and keying lanes on chain roots alone
+	// filed every post-compaction segment as a new lane. Measured on one
+	// real session: 46 boundaries, 46 parentless records, no sidechain
+	// record, and `replay context` reported "one lane of 46, 45 sub-agent
+	// lanes".
+	mainLane string
 }
 
-func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
+// buildRequest decodes one request and names its lane. continued reports
+// that the request's parent chain is rooted at a compaction, which is the
+// main conversation carrying on rather than a conversation of its own.
+func (d *decoder) buildRequest(group []*rawLine) (req *Request, laneID string, continued bool, err error) {
 	first := group[0]
 	if first.Message == nil || first.Message.Usage == nil {
-		return nil, "", fmt.Errorf("assistant line has no usage")
+		return nil, "", false, fmt.Errorf("assistant line has no usage")
 	}
 	ts, err := parseTime(first.Timestamp)
 	if err != nil {
-		return nil, "", err
+		return nil, "", false, err
 	}
 	// The output is decoded directly, never through the memo: the same
 	// lines reappear in later contexts as runs of the parent chain, and a
@@ -324,9 +354,9 @@ func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
 	// so a run holds fewer lines than the whole group.
 	out, err := decodeAssistantRun(group, d.toolNames)
 	if err != nil {
-		return nil, "", err
+		return nil, "", false, err
 	}
-	req := &Request{
+	req = &Request{
 		ID: first.requestKey(),
 		// Both halves of this id came off the wire: requestKey returns the
 		// provider's requestId, or the provider's message id where the
@@ -348,13 +378,16 @@ func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
 	for cur := d.byUUID[first.ParentUUID]; cur != nil; cur = d.byUUID[cur.ParentUUID] {
 		chain = append(chain, cur)
 		if len(chain) > len(d.byUUID) {
-			return nil, "", fmt.Errorf("parent chain cycle at %s", cur.UUID)
+			return nil, "", false, fmt.Errorf("parent chain cycle at %s", cur.UUID)
 		}
 	}
 	for i, j := 0, len(chain)-1; i < j; i, j = i+1, j-1 {
 		chain[i], chain[j] = chain[j], chain[i]
 	}
 	d.chain = chain
+	// Rooted at the boundary where the client wrote one, at the summary
+	// where it hung the summary off nothing.
+	continued = len(chain) > 0 && (chain[0].CompactMetadata != nil || chain[0].IsCompactSummary)
 
 	// One context message per chain line at most: user lines contribute
 	// one, a run of assistant lines contributes one between them, and hook
@@ -362,7 +395,6 @@ func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
 	// growth of a slice that is appended to once per ancestor.
 	req.Context = make([]*Message, 0, len(chain))
 
-	laneID := ""
 	for i := 0; i < len(chain); i++ {
 		l := chain[i]
 		if laneID == "" && (l.Type == lineTypeUser || l.Type == lineTypeAssistant) {
@@ -372,7 +404,7 @@ func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
 		case lineTypeUser:
 			msg, err := d.userMessage(l)
 			if err != nil {
-				return nil, "", err
+				return nil, "", false, err
 			}
 			req.Context = append(req.Context, msg)
 		case lineTypeAssistant:
@@ -388,7 +420,7 @@ func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
 			}
 			msg, err := d.assistantMessage(chain[i : runEnd+1])
 			if err != nil {
-				return nil, "", err
+				return nil, "", false, err
 			}
 			req.Context = append(req.Context, msg)
 			i = runEnd
@@ -400,7 +432,7 @@ func (d *decoder) buildRequest(group []*rawLine) (*Request, string, error) {
 	if laneID == "" {
 		laneID = first.UUID
 	}
-	return req, laneID, nil
+	return req, laneID, continued, nil
 }
 
 // memo returns the cached message for key or builds and caches it.

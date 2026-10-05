@@ -389,6 +389,9 @@ type Compaction struct {
 	// CumulativeDropped is the client's own running total for the session.
 	CumulativeDropped int
 	DurationMS        int
+	// At is the instant the client wrote the boundary. It is what lets a
+	// compaction be placed between two requests of a lane.
+	At time.Time
 }
 
 // Sized reports whether the client recorded the sizes. A compaction with no

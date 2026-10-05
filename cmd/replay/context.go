@@ -143,6 +143,12 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 		gap := analysis.MeasureGap(session, rep.Lane, total)
 		_, _ = fmt.Fprintf(stdout, "\n  %s\n", analysis.FitNote(rep.Fit))
 		_, _ = fmt.Fprintf(stdout, "\n  %s\n", gap.Note())
+		if detail := gap.CompactionDetail(); len(detail) > 0 {
+			_, _ = fmt.Fprintf(stdout, "\n  %s\n", detail[0])
+			for _, line := range detail[1:] {
+				_, _ = fmt.Fprintf(stdout, "    %s\n", line)
+			}
+		}
 		return nil
 	})
 	if err != nil {

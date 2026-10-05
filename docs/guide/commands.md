@@ -748,6 +748,24 @@ is reported as unmeasurable rather than treated as zero. Across this corpus the 
 records, at a median of 999,029 tokens before against 23,218 after: a retention of 2.55%, which is the
 scale of the error this note exists to declare.
 
+**It accounts for each compaction the client recorded.** Under the note, one line per compaction:
+the prompt size before the boundary and what the client kept, both from the client's own record,
+then what the first prompt after the boundary carried, from the transcript's usage, and the part of
+that prompt which was not the kept summary, marked calculated. On the machine this was built on the
+kept share is 2.8% at the median and the first prompt after a boundary is 79k tokens against 27k
+kept, so about 52k tokens re-enter on the first turn that the summary did not carry. A boundary with
+no request after it says so, a rewrite recorded without sizes says so, and a record that kept more
+than it had is printed as recorded with no share derived. Nothing here is forward-looking: the line
+appears after the client records a compaction, never before, and `context` does not say how near a
+session is to one, because the window is not in the record.
+
+**The conversation after a compaction is the same lane.** Through v0.8.0 every compaction segment
+was filed as its own lane, because the client starts a compaction with a parentless boundary and
+lanes were keyed on the chain root. On one real session with 46 compactions and no sub-agent at all,
+`context` reported "one lane of 46, 45 sub-agent lanes, carrying 24,666 requests, are not counted
+above", and every offline command saw one segment of such a session. A segment rooted at a
+compaction now continues the main lane; a true sub-agent lane keeps its own root.
+
 ### `replay learn`
 
 Scores candidate context layouts from your own history and selects one. It refuses to score

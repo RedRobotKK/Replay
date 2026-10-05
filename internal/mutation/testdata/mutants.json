@@ -1812,6 +1812,32 @@
         "TestCodexViewDoesNotPrintAWindowThatWasNotReported"
       ],
       "note": "Codex 0.154 reports a credits-based limit with no rolling window. The view took the newest reading of any shape and printed its absent windows as \"0% used, window unknown\": on the machine that found it, every one of the newest 60 rollouts carried that shape, so the shipped quota block was a measurement of nothing. The view now prefers the newest windowed reading, says what a windowless reading does report, and never renders a window that was not there; this mutant makes it take any reading again."
+    },
+    {
+      "id": "M138",
+      "name": "compaction-segment-filed-as-sub-agent-lane",
+      "class": "attribution-misplacement",
+      "discovered": "2026-10-05",
+      "file": "internal/transcript/claudecode.go",
+      "anchor": "\t\t\tif continued && dec.mainLane != \"\" {\n",
+      "replacement": "\t\t\tif !continued && dec.mainLane != \"\" {\n",
+      "killedBy": [
+        "TestCM6_AContinuationAfterACompactionIsTheSameLane"
+      ],
+      "note": "A lane was keyed on the first conversational line of a request's parent chain, and the client starts every compaction with a parentless boundary, so each post-compaction segment became a lane of its own. On one real session with 46 compactions and no sidechain record, replay context reported one lane of 46 with 45 sub-agent lanes carrying 24,666 requests; every offline command reports on MainLane, so each saw one segment. Measured over this machine's corpus: 10 of 10 compacted sessions carried the false PARTIAL note under v0.8.0, 1 after the repair. This mutant files the continuation as a new lane again."
+    },
+    {
+      "id": "M139",
+      "name": "compaction-kept-share-derived-above-one-hundred",
+      "class": "evidence",
+      "discovered": "2026-10-05",
+      "file": "internal/analysis/context.go",
+      "anchor": "\t\tcase e.PostTokens > e.PreTokens:\n",
+      "replacement": "\t\tcase e.PostTokens > e.PreTokens*1000:\n",
+      "killedBy": [
+        "TestCompactionDetailWithholdsAShareAboveOneHundred"
+      ],
+      "note": "One record in the measured corpus reports postTokens above preTokens (22,303 to 296,742). Dropped() already clamps that record out of the overstatement total; the per-event detail added on 2026-10-05 prints the kept share, and without this guard the record reads as 1330% kept beside figures a reader is meant to trust. The guard prints the sizes as recorded and withholds the share; this mutant derives it anyway."
     }
   ],
   "knownSurvivors": [

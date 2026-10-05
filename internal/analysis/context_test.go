@@ -3,6 +3,9 @@ package analysis
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // Attribution of what a session's context is made of.
@@ -234,5 +237,118 @@ func TestGapNoteRefusesAnImpossibleShare(t *testing.T) {
 	ok := ContextGap{AttributedTokens: 1_000_000, Compactions: 1, CompactedTokens: 250_000}
 	if !strings.Contains(ok.Note(), "25%") {
 		t.Errorf("a share under 100%% must still be reported: %q", ok.Note())
+	}
+}
+
+// Each recorded compaction is paired with the first prompt after it.
+//
+// The client records what a compaction kept; the transcript records what the
+// next request then carried. The two together are the only measured account
+// of what a compaction costs the turn that follows, and the pairing is by the
+// boundary's instant against the lane's request timestamps.
+//
+// PASS: the first event pairs with the request after its boundary, not the
+// one before; a boundary with no request after it reports zero.
+// FAIL: every event paired with the first request, or with nothing.
+func TestGapPairsEachCompactionWithTheFirstPromptAfterIt(t *testing.T) {
+	t0 := time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
+	at := func(s int) time.Time { return t0.Add(time.Duration(s) * time.Second) }
+	lane := &transcript.Lane{Requests: []*transcript.Request{
+		{Timestamp: at(0), Usage: transcript.Usage{CacheRead: 966_000}},
+		{Timestamp: at(10), Usage: transcript.Usage{Input: 79_383}},
+		{Timestamp: at(20), Usage: transcript.Usage{Input: 90_000}},
+	}}
+	session := &transcript.Session{Lanes: []*transcript.Lane{lane}, Compactions: []transcript.Compaction{
+		{Trigger: "auto", PreTokens: 969_218, PostTokens: 26_970, At: at(5)},
+		{Trigger: "auto", PreTokens: 500_000, PostTokens: 20_000, At: at(30)},
+	}}
+	g := MeasureGap(session, lane, 1_000_000)
+	if len(g.CompactionEvents) != 2 {
+		t.Fatalf("want 2 events, got %d: %+v", len(g.CompactionEvents), g.CompactionEvents)
+	}
+	if got := g.CompactionEvents[0].FirstPromptAfter; got != 79_383 {
+		t.Errorf("first event pairs with the request AFTER its boundary (79,383), got %d", got)
+	}
+	if got := g.CompactionEvents[0].PostTokens; got != 26_970 {
+		t.Errorf("the event carries the client's kept size, got %d", got)
+	}
+	if got := g.CompactionEvents[1].FirstPromptAfter; got != 0 {
+		t.Errorf("no request follows the second boundary, so nothing may be reported; got %d", got)
+	}
+}
+
+// The detail says what was kept and what the next prompt carried, with each
+// figure labelled by how it is known.
+//
+// PASS: before and kept as the client recorded them, the kept share, the
+// first prompt after, and the remainder marked calculated. No forward-looking
+// word: the panel of 2026-10-05 ruled that nothing here predicts anything.
+// FAIL: a missing figure, or a sentence that reads as a forecast.
+func TestCompactionDetailSaysWhatWasKeptAndWhatCameBack(t *testing.T) {
+	g := ContextGap{Compactions: 1, CompactionEvents: []CompactionEvent{
+		{Trigger: "auto", PreTokens: 969_218, PostTokens: 26_970, FirstPromptAfter: 79_383},
+	}}
+	joined := strings.Join(g.CompactionDetail(), "\n")
+	for _, want := range []string{"1 of 1 (auto):", "969k", "26k kept", "2.8%", "79k", "52k", "calculated", "client"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("detail lacks %q:\n%s", want, joined)
+		}
+	}
+	for _, banned := range []string{"approach", "will ", "expect", "forecast", "window", "predict"} {
+		if strings.Contains(strings.ToLower(joined), banned) {
+			t.Errorf("detail must not read as a forecast, found %q:\n%s", banned, joined)
+		}
+	}
+}
+
+// A boundary with no request after it says so instead of subtracting zero.
+func TestCompactionDetailWithoutAFollowingPromptSaysSo(t *testing.T) {
+	g := ContextGap{Compactions: 1, CompactionEvents: []CompactionEvent{
+		{PreTokens: 969_218, PostTokens: 26_970},
+	}}
+	joined := strings.Join(g.CompactionDetail(), "\n")
+	if !strings.Contains(joined, "no prompt is recorded after the boundary") {
+		t.Errorf("an absent next prompt must be named, not computed as zero:\n%s", joined)
+	}
+	if strings.Contains(joined, "calculated") {
+		t.Errorf("nothing is calculated from an absent prompt:\n%s", joined)
+	}
+}
+
+// A rewrite recorded without sizes is still listed, and says so.
+func TestCompactionDetailWithoutSizesSaysSo(t *testing.T) {
+	g := ContextGap{Compactions: 1, CompactionEvents: []CompactionEvent{{FirstPromptAfter: 50_000}}}
+	joined := strings.Join(g.CompactionDetail(), "\n")
+	if !strings.Contains(joined, "1 of 1: the rewrite was recorded without its sizes") {
+		t.Errorf("an unsized rewrite must be named as such, with no trigger invented for it:\n%s", joined)
+	}
+	if strings.Contains(joined, "0 tokens before") || strings.Contains(joined, "kept (") {
+		t.Errorf("no size may be printed for an unsized rewrite:\n%s", joined)
+	}
+}
+
+// An inferred compaction has no client record to detail.
+func TestCompactionDetailIsSilentOnAnInferredCompaction(t *testing.T) {
+	g := ContextGap{Compactions: 1, InferredCompactions: 1}
+	if got := g.CompactionDetail(); got != nil {
+		t.Errorf("nothing was recorded, so there is nothing to detail; got %q", got)
+	}
+}
+
+// A record that kept more than it had gets no share.
+//
+// One record in the measured corpus reports postTokens above preTokens
+// (22,303 to 296,742). A kept share of 1330% would discredit every figure
+// beside it, so the sizes are printed as recorded and the share is withheld.
+func TestCompactionDetailWithholdsAShareAboveOneHundred(t *testing.T) {
+	g := ContextGap{Compactions: 1, CompactionEvents: []CompactionEvent{
+		{PreTokens: 22_303, PostTokens: 296_742, FirstPromptAfter: 300_000},
+	}}
+	joined := strings.Join(g.CompactionDetail(), "\n")
+	if strings.Contains(joined, "kept (") || strings.Contains(joined, "%") {
+		t.Errorf("no share may be derived when kept exceeds before:\n%s", joined)
+	}
+	if !strings.Contains(joined, "more than before as the client recorded it") {
+		t.Errorf("the record must be named as it is:\n%s", joined)
 	}
 }
