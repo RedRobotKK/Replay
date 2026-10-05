@@ -59,10 +59,9 @@ func (p *ResponsesStreamParser) line(line []byte) {
 	if !bytes.HasPrefix(line, []byte(prefix)) {
 		return
 	}
+	// An empty payload (a keepalive line) fails to decode below and is
+	// skipped there; it needs no check of its own.
 	payload := bytes.TrimSpace(line[len(prefix):])
-	if len(payload) == 0 {
-		return
-	}
 	var ev struct {
 		Type     string               `json:"type"`
 		Delta    string               `json:"delta"`
@@ -84,7 +83,12 @@ func (p *ResponsesStreamParser) line(line []byte) {
 			p.tools = append(p.tools, ev.Item.blocks()...)
 		}
 	case "response.completed", "response.incomplete":
-		if ev.Response == nil || len(ev.Response.Usage) == 0 || string(ev.Response.Usage) == "null" {
+		// A terminal event with no response object is malformed; without
+		// this it would be a nil dereference in the tap. A usage that is
+		// absent fails to decode, and one that is null or empty decodes to a
+		// zero value that Result treats as no measurement, so neither needs
+		// a check here.
+		if ev.Response == nil {
 			return
 		}
 		var u transcript.ResponsesUsage

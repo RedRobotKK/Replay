@@ -235,3 +235,109 @@ func TestResponses_SessionHashIsThePromptCacheKey(t *testing.T) {
 		t.Error("the fallback collided with the keyed session")
 	}
 }
+
+// The guard gate on PR #334 reported this summariser's error branch and the
+// bound on its fallback session identity as never entered by any test.
+
+// A body the parser refuses must come back as an error and an empty summary,
+// so the proxy forwards it unsummarised rather than guarding and ledgering a
+// request nobody read.
+func TestResponses_SummarizeRefusesAnUnreadableBody(t *testing.T) {
+	for name, body := range map[string][]byte{"not JSON": []byte("<html>"), "input is an object": []byte(`{"model":"m","input":{"x":1}}`)} {
+		sum, err := SummarizeResponsesRequest(body, nil)
+		if err == nil {
+			t.Errorf("%s: no error", name)
+		}
+		if sum.Model != "" || sum.SessionHash != "" || sum.PrefixHash != "" || len(sum.Prompt.Messages) != 0 {
+			t.Errorf("%s: a summary was returned beside the error: %+v", name, sum)
+		}
+	}
+}
+
+// Without a prompt_cache_key the session is the prefix and the first two
+// items, by structure. Bounded at two on purpose: every later turn appends
+// items, and an identity that read them all would make each turn its own
+// session, so no cap could accumulate and no lane could be compared. Two
+// bodies that agree on the prefix and the first two items are one session
+// whatever follows; two that differ in the second item are not.
+func TestResponses_FallbackSessionIdentityIsBoundedToTheFirstTwoItems(t *testing.T) {
+	body := func(items ...string) []byte {
+		return []byte(`{"model":"gpt-6-astra","instructions":"be brief","input":[` + strings.Join(items, ",") + `]}`)
+	}
+	user := `{"type":"message","role":"user","content":[{"type":"input_text","text":"list the files"}]}`
+	call := `{"type":"function_call","call_id":"c1","name":"shell","arguments":"{\"command\":[\"ls\"]}"}`
+	out := `{"type":"function_call_output","call_id":"c1","output":"total 0"}`
+	later := `{"type":"message","role":"user","content":[{"type":"input_text","text":"now something else entirely"}]}`
+	turn1, _ := SummarizeResponsesRequest(body(user, call), nil)
+	turn2, _ := SummarizeResponsesRequest(body(user, call, out), nil)
+	turn3, _ := SummarizeResponsesRequest(body(user, call, out, later), nil)
+	if turn1.SessionHash == "" || turn1.SessionHash != turn2.SessionHash || turn2.SessionHash != turn3.SessionHash {
+		t.Errorf("one conversation, three turns, three sessions: %q %q %q", turn1.SessionHash, turn2.SessionHash, turn3.SessionHash)
+	}
+	other, _ := SummarizeResponsesRequest(body(user, later), nil)
+	if other.SessionHash == turn1.SessionHash {
+		t.Error("a different second item hashed to the same session")
+	}
+	one, _ := SummarizeResponsesRequest(body(user), nil)
+	if one.SessionHash == "" || one.SessionHash == turn1.SessionHash {
+		t.Errorf("a single-item body: %q (must be an identity, and not the two-item one)", one.SessionHash)
+	}
+}
+
+// The stream parser's pending-line cap, on the precedent of
+// TestStreamParserStopsOnAnEndlessLine. A line that never ends is not a
+// stream this parser understands; it stops keeping it rather than growing
+// without bound, and once dropped it stays dropped: a well-formed stream
+// arriving afterwards on the same connection is not read as if nothing
+// happened, because the record for this turn is already unreliable.
+func TestResponsesStreamParserStopsOnAnEndlessLineAndStaysStopped(t *testing.T) {
+	p := &ResponsesStreamParser{}
+	chunk := []byte(strings.Repeat("x", 300_000))
+	for i := 0; i < 10; i++ {
+		if _, err := p.Write(chunk); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !p.dropped || p.pending.Len() != 0 {
+		t.Fatalf("parser must stop buffering past the cap: dropped=%v pending=%d", p.dropped, p.pending.Len())
+	}
+	// A complete, valid stream after the drop.
+	if _, err := p.Write(responsesFixture(t, "stream-completed.sse")); err != nil {
+		t.Fatal(err)
+	}
+	if p.pending.Len() != 0 {
+		t.Errorf("a dropped parser resumed buffering: pending=%d", p.pending.Len())
+	}
+	if got := p.Result(); got.Usage != nil || len(got.Blocks) != 0 {
+		t.Errorf("a dropped stream reported usage or structure from bytes that followed the drop: %+v", got)
+	}
+}
+
+// Framing the wire is allowed to send and a terminal event that carries no
+// usage object. An empty data line is a keepalive and is ignored; a
+// response.completed with usage null, or with no response object at all,
+// yields no usage and no panic. These are the observable contracts behind
+// two branches that were removed as redundant with the JSON decoder.
+func TestResponsesStreamParserTolerantOfKeepalivesAndTerminalEventsWithoutUsage(t *testing.T) {
+	p := &ResponsesStreamParser{}
+	feed(p, []byte("data:\n\ndata: \n\n"+string(responsesFixture(t, "stream-completed.sse"))), 1)
+	if got := p.Result(); got.Usage == nil || got.Usage.Output != 300 {
+		t.Errorf("keepalive lines broke the read: %+v", got)
+	}
+	for name, terminal := range map[string]string{
+		"usage null":         `{"type":"response.completed","response":{"id":"r","usage":null}}`,
+		"usage absent":       `{"type":"response.completed","response":{"id":"r"}}`,
+		"no response object": `{"type":"response.completed"}`,
+		"usage empty object": `{"type":"response.incomplete","response":{"id":"r","usage":{}}}`,
+	} {
+		q := &ResponsesStreamParser{}
+		feed(q, []byte("event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\ndata: "+terminal+"\n\n"), 0)
+		got := q.Result()
+		if got.Usage != nil {
+			t.Errorf("%s: usage %+v recorded for a terminal event that carried none", name, *got.Usage)
+		}
+		if len(got.Blocks) != 1 || got.Blocks[0].Bytes != 2 {
+			t.Errorf("%s: the text that arrived was lost: %+v", name, got.Blocks)
+		}
+	}
+}

@@ -118,3 +118,85 @@ func TestParseResponsesRequest_CallKeysIdentifyRepeatedCalls(t *testing.T) {
 		t.Errorf("different arguments share a key: %q", a)
 	}
 }
+
+// The guard gate on PR #334 reported the error and clamp branches of this
+// adapter as never entered by any test. Each one below is a contract a
+// caller depends on, written RED against the branch neutralised (the
+// behaviour already existed; the evidence did not).
+
+// A share below zero is a provider bug or a shape this build does not
+// understand. It is clamped to zero so a negative fresh count never flows
+// into a cost figure as a saving, and the inclusive input is kept whole.
+func TestResponsesUsage_NegativeSharesAreClampedNotSubtracted(t *testing.T) {
+	negWrite := -7
+	cases := []struct {
+		name string
+		in   *ResponsesUsage
+		want Usage
+	}{
+		{"negative cached", withInputDetails(1500, -5, nil, 300, 0), Usage{Input: 1500, Output: 300}},
+		{"negative write", withInputDetails(1500, 0, &negWrite, 300, 0), Usage{Input: 1500, Output: 300}},
+		{"both negative", withInputDetails(1500, -5, &negWrite, 300, 0), Usage{Input: 1500, Output: 300}},
+	}
+	for _, c := range cases {
+		if got := c.in.Usage(); got != c.want {
+			t.Errorf("%s: %+v, want %+v (a negative share must not inflate Input or appear as a read or write)", c.name, got, c.want)
+		}
+	}
+}
+
+// A body the parser cannot read is an error, not a partial summary. The
+// proxy forwards such a request unsummarised, which is the established
+// behaviour on every path, and it can only do that if this returns an error
+// rather than an empty request it would guard and ledger as real.
+func TestParseResponsesRequest_RefusesWhatItCannotRead(t *testing.T) {
+	cases := map[string][]byte{
+		"not JSON":                    []byte("<html>"),
+		"input is an object":          []byte(`{"model":"m","input":{"bad":1}}`),
+		"input item is not an object": []byte(`{"model":"m","input":["just a string"]}`),
+		"input item is a bare number": []byte(`{"model":"m","input":[42]}`),
+	}
+	for name, body := range cases {
+		req, err := ParseResponsesRequest(body)
+		if err == nil {
+			t.Errorf("%s: no error, got %+v; the proxy would guard and ledger a request it could not read", name, req)
+		}
+		if req != nil {
+			t.Errorf("%s: a request was returned beside the error: %+v", name, req)
+		}
+	}
+}
+
+// A content value that is absent, a plain string, or a list of parts is
+// measured by the text it carries. Absent is zero; a string is its byte
+// length, escapes and multibyte characters included, exactly as a part's
+// text would be. ContentBytes already gives both answers, so this pins the
+// contract that let the string fast path be removed as redundant.
+func TestResponsesContentBytes_MeasuresText(t *testing.T) {
+	cases := []struct {
+		raw  string
+		want int
+	}{
+		{``, 0},
+		{`""`, 0},
+		{`"hello"`, 5},
+		{`"a\"b\\c"`, 5},
+		{`"日本語"`, len("日本語")},
+		{`[{"type":"input_text","text":"hello"},{"type":"input_text","text":"日本語"}]`, 5 + len("日本語")},
+		{`[{"type":"input_image","image_url":"data:x"}]`, len("type") + len("input_image") + len("image_url") + len("data:x")},
+	}
+	for _, c := range cases {
+		if got := ResponsesContentBytes([]byte(c.raw)); got != c.want {
+			t.Errorf("%s: %d, want %d", c.raw, got, c.want)
+		}
+	}
+	// And through the request reader: an item with no content and a tool
+	// result with no output are legal and measure zero.
+	req, err := ParseResponsesRequest([]byte(`{"model":"m","input":[{"type":"message","role":"user"},{"type":"function_call_output","call_id":"c"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(req.Items) != 2 || req.Items[0].Block.Bytes != 0 || req.Items[1].Block.Bytes != 0 {
+		t.Errorf("content-less items: %+v", req.Items)
+	}
+}

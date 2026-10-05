@@ -191,9 +191,48 @@ in force (`GOFLAGS=-p=2`):
 | QT-7a, QT-7b, QT-7c evidence and tests against `1175e41` | unchanged |
 | docs guards and `internal/regression` | green |
 
+## Guard gate repair, same day
+
+PR #334 ran the repository's `guard reachability` check on `3903712` and it
+exited 1. The check neutralises each conditional on an added line and reruns
+only that guard's own package tests; a survivor whose body no in-package test
+enters is UNREACHED, one whose body runs with nothing asserting on it is
+INERT. On the branch: 65 guards, 48 caught, 17 survived, all 17 introduced,
+15 of them in R-1's files. Whole-repository coverage and a no-spend probe of
+the production binary classified the 15: none on the production chain, which
+the 35 caught R-1 guards and the black-box run cover; 11 reachable
+error-handling branches with no test in any package; 2 dead by construction;
+2 redundant with the JSON decoder. The release claim above was incomplete as
+a release claim until this gate passed, and is restored only by what follows.
+
+Repaired within R-1 scope only:
+
+| Branch | Treatment | Proof |
+|---|---|---|
+| transcript `cached < 0`, `write < 0` | tested: a negative share is clamped, never subtracted | neutralised: Input 1505, CacheRead -5; killed |
+| transcript body not JSON, input an object, item not an object | tested: the parser refuses, returns no request | neutralised: an empty request returned without error; killed, three forms |
+| ledger summariser `err != nil` | tested: error and empty summary, so the proxy forwards unsummarised | neutralised: nil dereference; killed |
+| ledger fallback identity `i == 2` | tested: three turns of one conversation are one session, a different second item is not | neutralised as `i == 99`: three sessions; killed |
+| stream pending cap, dropped stays dropped | tested on the `TestStreamParserStopsOnAnEndlessLine` precedent, plus a valid stream after the drop is not read | neutralised: pending 3,000,000 bytes, then usage read after a drop; killed, both |
+| stream terminal event without a response object | tested: no usage, no panic, text kept | neutralised: nil dereference; killed |
+| stream `len(payload) == 0` | deleted: the decoder rejects an empty payload and the line is skipped the same way | keepalive lines tested through the decoder |
+| stream nil, empty or null usage | reduced to the nil-response check: an absent usage fails to decode and null or `{}` decodes to a value `Result` treats as none | tested, all four forms |
+| transcript `len(raw) == 0` and the string fast path | deleted: `ContentBytes` gives an absent value zero and a string its decoded byte length, escapes and multibyte characters included | tested, seven forms, through the request reader too |
+| proxy `s.disclosed == nil` | deleted: `newStats` is the only constructor and makes the map | no test; the state cannot occur |
+| ledger `json.Marshal` error | one manifest entry, `structurally-unreachable`, justified by encoding/json's documented failure cases for an int and a slice of string-and-int structs | the checker reports it evidenced |
+
+Ten hand mutations, ten killed, files restored byte-identically. The tool
+rerun locally against `origin/main` after the repair: 61 guards, 3 survived,
+0 pre-existing, 1 evidenced, 2 unexplained, exit 1. The two are the QT-7a
+and QT-7c lines in `internal/tui/guards.go`, entered only by a `cmd/replay`
+test and frozen out of this repair's scope, and the 25 stale jev entries
+remain stale under the checker's current rule. Both are outside R-1 and are
+reported, not touched.
+
 ## Decision
 
-**R-1 PRODUCTION-READY**, with the three limits above stated on the surface
-rather than in this file alone: fixtures built not captured; cache-break
+**R-1 PRODUCTION-READY** on its own evidence, with the three limits above
+stated on the surface rather than in this file alone; release eligibility is
+the repository's gate, recorded in the section above: fixtures built not captured; cache-break
 classification not measured on this path; OpenAI pricing requires the installed
 rules document and the Codex default models are bounded until a row exists.

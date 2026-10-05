@@ -212,18 +212,13 @@ func responsesItemBlock(item responsesInputItem, rawLen int) ResponsesItem {
 }
 
 // ResponsesContentBytes measures a Responses content value by its text: a
-// plain string by its length, a list of typed parts by the text each
-// carries, and a part with no text (an image, a file) by its whole size.
-// ContentBytes would count the part's keys and type names too, which are
-// framing the user did not write and the model does not read as prompt.
+// list of typed parts by the text each carries, and a part with no text (an
+// image, a file) by its whole size. ContentBytes would count the parts'
+// keys and type names too, which are framing the user did not write and the
+// model does not read as prompt. Anything that is not a list, a plain
+// string or an absent value included, is measured by ContentBytes, which
+// already gives a string its decoded length and an absent value zero.
 func ResponsesContentBytes(raw json.RawMessage) int {
-	if len(raw) == 0 {
-		return 0
-	}
-	var text string
-	if json.Unmarshal(raw, &text) == nil {
-		return len(text)
-	}
 	var parts []json.RawMessage
 	if json.Unmarshal(raw, &parts) != nil {
 		return ContentBytes(raw)

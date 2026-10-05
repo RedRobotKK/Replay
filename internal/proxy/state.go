@@ -1062,13 +1062,11 @@ func (s *stats) unparsedTotal() (n int) {
 }
 
 // noteDisclosed reports whether a once-only disclosure for a path has not
-// been printed yet, and marks it printed.
+// been printed yet, and marks it printed. The map is made in newStats, the
+// one constructor, so there is no nil case to guard.
 func (s *stats) noteDisclosed(path string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.disclosed == nil {
-		s.disclosed = map[string]bool{}
-	}
 	first := !s.disclosed[path]
 	s.disclosed[path] = true
 	return first
