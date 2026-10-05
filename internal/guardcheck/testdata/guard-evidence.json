@@ -232,5 +232,41 @@
     "category": "structurally-unreachable",
     "justification": "The value marshalled is an anonymous struct of one int and one []transcript.ToolDef, a slice of structs of a string and an int. encoding/json fails only on unsupported types (channels, functions, complex numbers), cyclic values, map keys that cannot be encoded, or a Marshaler that returns an error; none of those can occur for these types. The branch is retained rather than deleted for the same reason as blockIdentity's identical guard in the same package: a hash must stay defined in a request path, and the branch states that contract where a reader will look.",
     "evidence": "Neutralised as `false && (err != nil)` on 2026-10-04 and the ledger package suite run: every outcome byte-identical. The claim rests on encoding/json's documented failure cases for the concrete types marshalled, not on the absence of a test input; no input to SummarizeResponsesRequest can change the types that reach this call."
+  },
+  {
+    "pkg": "./cmd/replay",
+    "func": "(applyPlan).record",
+    "cond": "err != nil",
+    "producer": "body, err := json.Marshal(rec)",
+    "category": "structurally-unreachable",
+    "justification": "interventionRecord is a struct of strings, bools and one float64 with no interface, map, channel or function field and no custom marshaller, so encoding/json cannot fail on it: the only Marshal errors are unsupported types, cyclic values and marshaller errors, none of which this value can carry. No test can make the condition true.",
+    "evidence": "Reviewed on 2026-10-05 against the struct definition in cmd/replay/apply.go. Neutralising the branch leaves a nil body on a path that cannot occur; the write of the record is covered by TestApplyRecordsTheInterventionItPerformed and the open failure by TestApplyRecordNamesTheEdgesOfItsOwnStorage."
+  },
+  {
+    "pkg": "./cmd/replay",
+    "func": "readSettingValue",
+    "cond": "err != nil",
+    "producer": "b, err := os.ReadFile(path)",
+    "category": "dominated",
+    "justification": "Dropping this error leaves b nil, and json.Unmarshal of a nil byte slice fails with \"unexpected end of JSON input\" on the next line, which returns the same (\"\", false) the read guard returns. The file is still reported unreadable; what changes is which call names it.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-10-05 and re-run: TestReadSettingValueReportsWhatTheFileHolds (missing file) and TestApplyRecordNamesTheEdgesOfItsOwnStorage (file that is not JSON) both still pass, each receiving (\"\", false)."
+  },
+  {
+    "pkg": "./cmd/replay",
+    "func": "(applyPlan).record",
+    "cond": "err != nil",
+    "producer": "err := os.MkdirAll(filepath.Dir(p.Log), 0o700)",
+    "category": "dominated",
+    "justification": "Dropping this error proceeds to os.OpenFile on the same path, which fails for every reason MkdirAll could have failed (a path component that is a file, a permission refusal), and the open guard three lines below returns that error. The record is still not written and the caller still reports \"the setting was written but its record was not\"; what changes is which syscall the error names.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-10-05 and re-run: TestApplyDocumentReportsRefusalsAndWriteFailures (log path under a file) still fails the write with the same message; TestApplyRecordNamesTheEdgesOfItsOwnStorage shows the directory is created when it can be."
+  },
+  {
+    "pkg": "./cmd/replay",
+    "func": "(applyPlan).record",
+    "cond": "err != nil",
+    "producer": "f, err := os.OpenFile(p.Log, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)",
+    "category": "dominated",
+    "justification": "Dropping this error leaves f a nil *os.File. (*os.File).Write checks its receiver first and returns os.ErrInvalid on nil, and (*os.File).Close does the same, so errors.Join on the next line is non-nil and the caller reports the record as not written exactly as before. No partial record can be produced because nothing is written through a nil file.",
+    "evidence": "Neutralised as `false && (err != nil)` on 2026-10-05 and re-run: TestApplyRecordNamesTheEdgesOfItsOwnStorage (log path that is a directory) still fails the write with \"its record was not\"; the nil-receiver behaviour of os.File is documented in the standard library."
   }
 ]

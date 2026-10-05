@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // The viewer leads with what was billed, and never with the rebased counter.
@@ -215,5 +217,71 @@ func TestCodexViewDoesNotPrintAWindowThatWasNotReported(t *testing.T) {
 	// absent, not zero.
 	if !strings.Contains(got, "secondary   not reported") {
 		t.Errorf("an absent secondary window is not said to be absent:\n%s", got)
+	}
+}
+
+// The newest windowed reading is printed as the current quota, not as an
+// older session's reading. The fixture's newest reading carries windows, so
+// the view must take the windowed branch: the windowless wording belongs
+// only to a corpus whose newest reading reports no window.
+func TestCodexViewPrintsTheNewestWindowedReadingAsCurrent(t *testing.T) {
+	old := timeNow
+	timeNow = func() time.Time { return time.Date(2026, 3, 21, 20, 0, 0, 0, time.UTC) }
+	defer func() { timeNow = old }()
+	var out, errOut bytes.Buffer
+	if err := run([]string{"codex", "codexdata"}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "quota (") || !strings.Contains(got, "% used") {
+		t.Errorf("a windowed newest reading is printed as the current quota:\n%s", got)
+	}
+	for _, banned := range []string{"no rolling window", "from an older session"} {
+		if strings.Contains(got, banned) {
+			t.Errorf("the windowless wording appeared although the newest reading has windows: %q\n%s", banned, got)
+		}
+	}
+}
+
+// credits renders each shape Codex reports, and only that shape.
+func TestCreditsRendersEachShapeCodexReports(t *testing.T) {
+	balance := 12.5
+	for _, tc := range []struct {
+		in   *transcript.CodexCredits
+		want string
+	}{
+		{nil, "not reported"},
+		{&transcript.CodexCredits{Unlimited: true}, "unlimited"},
+		{&transcript.CodexCredits{HasCredits: true, Balance: &balance}, "balance 12.5"},
+		{&transcript.CodexCredits{HasCredits: true}, "some, balance not reported"},
+		{&transcript.CodexCredits{}, "none"},
+	} {
+		if got := credits(tc.in); got != tc.want {
+			t.Errorf("credits(%+v) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// resets renders an absent instant as nothing, a passed one as passed, a
+// near one in hours and minutes, and a far one in days and hours.
+func TestResetsRendersAbsentPassedNearAndFar(t *testing.T) {
+	now := time.Date(2026, 3, 21, 20, 0, 0, 0, time.UTC)
+	if got := resets(0, now); got != "" {
+		t.Errorf("no instant renders as nothing, got %q", got)
+	}
+	if got := resets(now.Add(-time.Minute).Unix(), now); !strings.Contains(got, "(passed") {
+		t.Errorf("a reset behind the clock has passed, got %q", got)
+	}
+	if got := resets(now.Add(2*time.Hour+4*time.Minute+35*time.Second).Unix(), now); !strings.HasSuffix(got, ", in 2h05m") {
+		t.Errorf("2h04m35s rounds to 2h05m, got %q", got)
+	}
+	if got := resets(now.Add(47*time.Hour+59*time.Minute).Unix(), now); !strings.HasSuffix(got, ", in 47h59m") {
+		t.Errorf("under two days stays in hours, got %q", got)
+	}
+	if got := resets(now.Add(48*time.Hour).Unix(), now); !strings.HasSuffix(got, ", in 2d00h") {
+		t.Errorf("two days reads as days and hours, got %q", got)
+	}
+	if got := resets(now.Add(10*24*time.Hour+10*time.Hour).Unix(), now); !strings.HasSuffix(got, ", in 10d10h") {
+		t.Errorf("ten days and ten hours, got %q", got)
 	}
 }

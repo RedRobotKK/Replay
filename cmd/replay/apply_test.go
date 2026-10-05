@@ -883,3 +883,43 @@ func TestApplyDocumentReportsRefusalsAndWriteFailures(t *testing.T) {
 		t.Errorf("a refusal whose record failed says so, got %v", err)
 	}
 }
+
+// The remaining ways a record or a read-back can end, each named rather
+// than silent: settings that are not JSON read as unreadable; a refusal
+// with no prior value records UNSET and an undecided policy; a log under a
+// directory that does not exist yet is created; a log path that is a
+// directory cannot be opened and the write says its record was not kept.
+func TestApplyRecordNamesTheEdgesOfItsOwnStorage(t *testing.T) {
+	dir := t.TempDir()
+	bad := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(bad, []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := readSettingValue(bad, "promptCacheTtl"); ok {
+		t.Error("settings that are not JSON are not readable")
+	}
+
+	if err := os.MkdirAll(filepath.Join(dir, "a"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	p := writeSettings(t, filepath.Join(dir, "a"), map[string]any{})
+	nested := filepath.Join(dir, "deep", "er", "interventions.jsonl")
+	refused := applyPlan{Setting: "promptCacheTtl", Have: "", Reason: "x", Log: nested}
+	var out strings.Builder
+	if err := refused.write(p, &out, true); err == nil {
+		t.Fatal("setup: the plan refuses")
+	}
+	r := readInterventions(t, nested)[0]
+	if r["actual_value"] != "UNSET" || r["prior_value"] != "UNSET" || r["policy"] != "promptCacheTtl=UNDECIDED" {
+		t.Errorf("a refusal with nothing set records UNSET and an undecided policy: %v / %v / %v", r["actual_value"], r["prior_value"], r["policy"])
+	}
+
+	asDir := filepath.Join(dir, "logdir")
+	if err := os.MkdirAll(asDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	plan := applyPlan{Setting: "promptCacheTtl", Want: "5m", Have: "", Trustworthy: true, Log: asDir}
+	if err := plan.write(p, &out, true); err == nil || !strings.Contains(err.Error(), "its record was not") {
+		t.Errorf("a log path that is a directory cannot be opened, got %v", err)
+	}
+}
