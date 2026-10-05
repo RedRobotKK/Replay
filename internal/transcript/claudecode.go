@@ -239,18 +239,18 @@ func ParseClaudeCode(r io.Reader) (*Session, error) {
 			session.Skipped++
 			continue
 		}
-		if !group[0].IsSidechain {
-			// A compaction replaces the main conversation, so the segment
-			// after it is that conversation continued. A sidechain keeps its
-			// own root whatever it is rooted at.
-			if continued && dec.mainLane != "" {
-				laneID = dec.mainLane
-			}
-			if dec.mainLane == "" {
-				dec.mainLane = laneID
-			}
-		}
 		lane := session.Lane(laneID, group[0].IsSidechain)
+		// The client starts a compaction with a parentless boundary, so the
+		// chain after it has no link to the chain before, and a lane keyed on
+		// its chain root alone read as a sub-agent. Measured on one real
+		// session: 46 boundaries, 46 parentless records, no sidechain record,
+		// and `replay context` reported "one lane of 46, 45 sub-agent lanes".
+		// The segment stays its own lane and is marked as the conversation
+		// continued; a sidechain keeps its own standing whatever it is rooted
+		// at.
+		if continued && !group[0].IsSidechain {
+			lane.Continuation = true
+		}
 		lane.Requests = append(lane.Requests, req)
 	}
 	if len(session.Lanes) == 0 {
@@ -324,16 +324,6 @@ type decoder struct {
 	// its own storage; decodeAssistantRun reorders the sub-slice in place
 	// but keeps no reference to it.
 	chain []*rawLine
-
-	// mainLane is the id of the first non-sidechain lane seen. A request
-	// whose parent chain is rooted at a compaction joins it: the client
-	// starts a compaction with a parentless boundary, so the chain after it
-	// has no link to the chain before, and keying lanes on chain roots alone
-	// filed every post-compaction segment as a new lane. Measured on one
-	// real session: 46 boundaries, 46 parentless records, no sidechain
-	// record, and `replay context` reported "one lane of 46, 45 sub-agent
-	// lanes".
-	mainLane string
 }
 
 // buildRequest decodes one request and names its lane. continued reports

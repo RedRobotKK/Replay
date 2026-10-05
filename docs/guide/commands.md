@@ -759,12 +759,15 @@ than it had is printed as recorded with no share derived. Nothing here is forwar
 appears after the client records a compaction, never before, and `context` does not say how near a
 session is to one, because the window is not in the record.
 
-**The conversation after a compaction is the same lane.** Through v0.8.0 every compaction segment
-was filed as its own lane, because the client starts a compaction with a parentless boundary and
-lanes were keyed on the chain root. On one real session with 46 compactions and no sub-agent at all,
-`context` reported "one lane of 46, 45 sub-agent lanes, carrying 24,666 requests, are not counted
-above", and every offline command saw one segment of such a session. A segment rooted at a
-compaction now continues the main lane; a true sub-agent lane keeps its own root.
+**A compaction segment is named as a segment, not a sub-agent.** Through v0.8.0 the note on a
+compacted session called every segment after a boundary a sub-agent lane, because the client starts
+a compaction with a parentless boundary and lanes were keyed on the chain root. On one real session
+with 46 compactions and no sub-agent at all, `context` reported "one lane of 46, 45 sub-agent lanes,
+carrying 24,666 requests, are not counted above". The note now reads "one segment of 46: the history
+was compacted between them", with the other segments' request count, and a true sub-agent lane keeps
+its own sentence. The report still covers one segment, by design: each segment is a different
+context, and a share computed across all of them would set content from every context against the
+prompts of one.
 
 ### `replay learn`
 

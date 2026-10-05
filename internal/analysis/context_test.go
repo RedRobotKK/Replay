@@ -253,18 +253,36 @@ func TestGapNoteRefusesAnImpossibleShare(t *testing.T) {
 func TestGapPairsEachCompactionWithTheFirstPromptAfterIt(t *testing.T) {
 	t0 := time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
 	at := func(s int) time.Time { return t0.Add(time.Duration(s) * time.Second) }
+	// The request after the boundary sits in the continuation lane the
+	// boundary started, not in the lane being reported; a later lane in file
+	// order can hold an earlier request; a sub-agent's request after the
+	// boundary is not the conversation's.
 	lane := &transcript.Lane{Requests: []*transcript.Request{
 		{Timestamp: at(0), Usage: transcript.Usage{CacheRead: 966_000}},
+	}}
+	later := &transcript.Lane{Continuation: true, Requests: []*transcript.Request{
+		{Timestamp: at(15), Usage: transcript.Usage{Input: 85_000}},
+	}}
+	next := &transcript.Lane{Continuation: true, Requests: []*transcript.Request{
 		{Timestamp: at(10), Usage: transcript.Usage{Input: 79_383}},
 		{Timestamp: at(20), Usage: transcript.Usage{Input: 90_000}},
 	}}
-	session := &transcript.Session{Lanes: []*transcript.Lane{lane}, Compactions: []transcript.Compaction{
+	side := &transcript.Lane{Sidechain: true, Requests: []*transcript.Request{
+		{Timestamp: at(6), Usage: transcript.Usage{Input: 11_000}},
+	}}
+	session := &transcript.Session{Lanes: []*transcript.Lane{lane, later, next, side}, Compactions: []transcript.Compaction{
 		{Trigger: "auto", PreTokens: 969_218, PostTokens: 26_970, At: at(5)},
 		{Trigger: "auto", PreTokens: 500_000, PostTokens: 20_000, At: at(30)},
 	}}
 	g := MeasureGap(session, lane, 1_000_000)
 	if len(g.CompactionEvents) != 2 {
 		t.Fatalf("want 2 events, got %d: %+v", len(g.CompactionEvents), g.CompactionEvents)
+	}
+	// Three segments of the conversation and one sub-agent; the other two
+	// segments carry three requests, the sub-agent one.
+	if g.LanesTotal != 4 || g.SegmentsTotal != 3 || g.RequestsOmitted != 4 || g.SegmentRequestsOmitted != 3 {
+		t.Errorf("lanes %d segments %d omitted %d of which in segments %d; want 4, 3, 4, 3",
+			g.LanesTotal, g.SegmentsTotal, g.RequestsOmitted, g.SegmentRequestsOmitted)
 	}
 	if got := g.CompactionEvents[0].FirstPromptAfter; got != 79_383 {
 		t.Errorf("first event pairs with the request AFTER its boundary (79,383), got %d", got)
@@ -350,5 +368,69 @@ func TestCompactionDetailWithholdsAShareAboveOneHundred(t *testing.T) {
 	}
 	if !strings.Contains(joined, "more than before as the client recorded it") {
 		t.Errorf("the record must be named as it is:\n%s", joined)
+	}
+}
+
+// The partial note names compaction segments as segments, not sub-agents.
+//
+// On a real session with 46 compactions and no sub-agent at all the note
+// read "this is one lane of 46. 45 sub-agent lanes, carrying 24666 requests,
+// are not counted above". The lanes were the conversation before and after
+// each compaction.
+//
+// PASS: segments are called segments with their request count; sub-agent
+// lanes keep their own sentence with their own count.
+// FAIL: compaction segments called sub-agent lanes.
+func TestPartialNoteNamesSegmentsNotSubAgents(t *testing.T) {
+	g := ContextGap{LanesTotal: 46, LanesReported: 1, SegmentsTotal: 46,
+		RequestsOmitted: 24_666, SegmentRequestsOmitted: 24_666}
+	note := g.Note()
+	for _, want := range []string{"one segment of 46", "45 segments", "24666 requests", "compacted between them"} {
+		if !strings.Contains(note, want) {
+			t.Errorf("note lacks %q: %s", want, note)
+		}
+	}
+	if strings.Contains(note, "sub-agent") {
+		t.Errorf("no sub-agent exists in this session: %s", note)
+	}
+
+	mixed := ContextGap{LanesTotal: 3, LanesReported: 1, SegmentsTotal: 2,
+		RequestsOmitted: 12, SegmentRequestsOmitted: 10}
+	note = mixed.Note()
+	for _, want := range []string{"one segment of 2", "1 segment, carrying 10 requests", "are not counted above. 1 sub-agent lane, carrying 2 requests"} {
+		if !strings.Contains(note, want) {
+			t.Errorf("mixed note lacks %q: %s", want, note)
+		}
+	}
+	if strings.Contains(note, "one lane of") {
+		t.Errorf("the segment sentence already placed the reader; no second opening: %s", note)
+	}
+
+	only := ContextGap{LanesTotal: 3, LanesReported: 1, SegmentsTotal: 1, RequestsOmitted: 7}
+	note = only.Note()
+	if !strings.Contains(note, "one lane of 3. 2 sub-agent lanes, carrying 7 requests") {
+		t.Errorf("a session with sub-agents and no compaction keeps the lane wording: %s", note)
+	}
+	if strings.Contains(note, "segment") {
+		t.Errorf("no segment exists without a compaction: %s", note)
+	}
+}
+
+// A boundary the client did not date pairs with nothing.
+//
+// The zero time is "unknown", not "the beginning". Pairing it with the
+// session's first prompt would charge that prompt to a compaction that
+// happened at some unknown later point.
+func TestGapDoesNotPairAnUndatedCompactionWithTheFirstPrompt(t *testing.T) {
+	t0 := time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
+	lane := &transcript.Lane{Requests: []*transcript.Request{
+		{Timestamp: t0, Usage: transcript.Usage{Input: 50_000}},
+	}}
+	session := &transcript.Session{Lanes: []*transcript.Lane{lane}, Compactions: []transcript.Compaction{
+		{PreTokens: 900_000, PostTokens: 20_000},
+	}}
+	g := MeasureGap(session, lane, 1_000_000)
+	if got := g.CompactionEvents[0].FirstPromptAfter; got != 0 {
+		t.Errorf("an undated boundary has no first prompt after it, got %d", got)
 	}
 }

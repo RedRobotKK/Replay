@@ -173,22 +173,26 @@ func TestCompactionCarriesTheBoundaryInstant(t *testing.T) {
 	}
 }
 
-// The conversation after a compaction is the same lane as the one before.
+// The segment after a compaction is the conversation continued, not a sub-agent.
 //
 // A lane is keyed on the first conversational line of a request's parent
 // chain. The client starts a compaction with a parentless boundary, hangs the
 // summary off it, and hangs every later turn off the summary, so the chain
 // of a post-compaction request is rooted at the summary and the parser filed
-// it as a new lane. Measured on one real session: 46 boundaries, 46
-// parentless records, all of them boundaries, no sidechain record at all,
-// and `replay context` reported "one lane of 46, 45 sub-agent lanes, carrying
-// 24,666 requests, are not counted above". Every offline command reports on
-// MainLane, so each of them saw one segment of a compacted session and called
-// the rest sub-agents.
+// it as a lane indistinguishable from a sub-agent's. Measured on one real
+// session: 46 boundaries, 46 parentless records, all of them boundaries, no
+// sidechain record at all, and `replay context` reported "one lane of 46, 45
+// sub-agent lanes, carrying 24,666 requests, are not counted above".
 //
-// PASS: one lane carrying both requests; a true sidechain stays its own lane.
-// FAIL: two lanes, which is what shipped.
-func TestCM6_AContinuationAfterACompactionIsTheSameLane(t *testing.T) {
+// The segment stays a lane of its own: its requests' contexts are a
+// different context from the one before the boundary, and merging them set
+// content from 46 contexts against the prompts of one (`replay advise` then
+// reported a source at 155% of prompt tokens). It is marked instead.
+//
+// PASS: two non-sidechain lanes, the second marked Continuation; the true
+// sidechain is neither.
+// FAIL: no mark, which is what shipped.
+func TestCM6_ASegmentAfterACompactionIsTheConversationContinued(t *testing.T) {
 	s, err := ParseClaudeCode(strings.NewReader(`
 {"type":"user","uuid":"u0","sessionId":"s","timestamp":"2026-09-06T00:00:00Z","message":{"role":"user","content":"start"}}
 {"type":"assistant","uuid":"a0","parentUuid":"u0","sessionId":"s","timestamp":"2026-09-06T00:00:01Z","requestId":"r0","message":{"role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"working"}],"usage":{"input_tokens":1000,"cache_read_input_tokens":965000,"output_tokens":20}}}
@@ -201,18 +205,27 @@ func TestCM6_AContinuationAfterACompactionIsTheSameLane(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	var main, side int
+	var first, second, side *Lane
 	for _, l := range s.Lanes {
-		if l.Sidechain {
-			side++
-			continue
-		}
-		main++
-		if len(l.Requests) != 2 {
-			t.Errorf("the main lane carries the request before and after the compaction, got %d", len(l.Requests))
+		switch {
+		case l.Sidechain:
+			side = l
+		case len(l.Requests) == 1 && l.Requests[0].ID == "r0":
+			first = l
+		case len(l.Requests) == 1 && l.Requests[0].ID == "r1":
+			second = l
 		}
 	}
-	if main != 1 || side != 1 {
-		t.Fatalf("want one main lane and one sidechain, got %d main, %d sidechain (%d lanes)", main, side, len(s.Lanes))
+	if first == nil || second == nil || side == nil || len(s.Lanes) != 3 {
+		t.Fatalf("want the segment before, the segment after and the sidechain as three lanes, got %d", len(s.Lanes))
+	}
+	if first.Continuation {
+		t.Error("the segment before the boundary is not a continuation")
+	}
+	if !second.Continuation {
+		t.Error("the segment after the boundary is the conversation continued and must say so")
+	}
+	if side.Continuation {
+		t.Error("a sidechain is a sub-agent whatever it is rooted at")
 	}
 }

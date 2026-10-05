@@ -110,10 +110,13 @@ files, and their composition is not established here.
   the kept share, the first prompt after, and the calculated remainder, with
   the three stated absences. Frozen as M139.
 - Finding the first prompt after a boundary exposed that every post-compaction
-  segment was filed as a sub-agent lane (46 lanes on a 46-compaction session
-  with no sidechain record); repaired, frozen as M138, measured on the corpus
-  as 10 of 10 compacted sessions carrying a false PARTIAL note before and 1
-  after.
+  segment was reported as a sub-agent lane (46 lanes on a 46-compaction
+  session with no sidechain record; 10 of 10 compacted sessions on this
+  machine). Segments are now marked as the conversation continued and named
+  as segments in the note; frozen as M138. Merging them into one lane was
+  tried first and withdrawn: `replay advise` then reported a source at 155%
+  of prompt tokens, because content from 46 contexts was set against one
+  lane's prompts. Each segment is a different context and stays its own lane.
 - Not shipped: the inferred-ceiling line. It needs a learner over the home
   corpus and the three unavailable states, and the minority objection stands
   until a second operator's corpus exists.

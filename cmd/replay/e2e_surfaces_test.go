@@ -671,5 +671,8 @@ func TestE2E_ContextReportsWhatACompactionKept(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v\n%s", err, errb)
 	}
-	mustContain(t, "context", out, "as the client recorded it", "26k kept", "the first prompt after it carried 79k tokens", "52k", "calculated")
+	mustContain(t, "context", out, "one segment of 2", "as the client recorded it", "26k kept", "the first prompt after it carried 79k tokens", "52k", "calculated")
+	if strings.Contains(out, "sub-agent") {
+		t.Errorf("this session has no sub-agent, only a compaction:\n%s", out)
+	}
 }

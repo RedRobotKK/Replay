@@ -6,19 +6,21 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
-- **The conversation after a compaction is the same lane.** A lane was keyed on
-  the first conversational line of a request's parent chain, and Claude Code
+- **Compaction segments are no longer called sub-agent lanes.** A lane was keyed
+  on the first conversational line of a request's parent chain, and Claude Code
   starts every compaction with a parentless boundary, so each post-compaction
-  segment was filed as a sub-agent lane. On one real session with 46
-  compactions and no sub-agent at all, `replay context` reported "one lane of
-  46, 45 sub-agent lanes, carrying 24,666 requests, are not counted above", and
-  every offline command that reports on the main lane saw one segment. Over
-  this machine's corpus, 10 of 10 compacted sessions carried the false PARTIAL
-  note before and 1 after; `replay cost` is unchanged by this, because it
-  already priced every lane. (An earlier draft of this entry, and the commit
-  that carries the fix, said per-file re-billed moved from $97.99 to $315.94:
-  the $97.99 came from a v0.6.2 binary on the path, and v0.8.0 built from its
-  tag already reports $315.94.) Frozen as M138.
+  segment was a lane indistinguishable from a sub-agent's. On one real session
+  with 46 compactions and no sub-agent at all, `replay context` reported "one
+  lane of 46, 45 sub-agent lanes, carrying 24,666 requests, are not counted
+  above"; over this machine's corpus, 10 of 10 compacted sessions carried that
+  wording. A segment is now marked as the conversation continued and the note
+  says "one segment of 46: the history was compacted between them". The segment
+  stays a lane of its own on purpose: every request after a boundary has a
+  different context from every request before it, and merging them (tried and
+  withdrawn the same night) set content from 46 contexts against one lane's
+  prompts, with `replay advise` reporting a source at 155% of prompt tokens.
+  Every figure the offline commands print is therefore unchanged. Frozen as
+  M138.
 - **`replay codex` and `replay burn` printed a quota window Codex had not
   reported.** Codex 0.154 writes a credits-based limit with no rolling window;
   the newest reading of any shape was taken and its absent windows printed as

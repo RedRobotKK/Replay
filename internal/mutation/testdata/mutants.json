@@ -1819,12 +1819,12 @@
       "class": "attribution-misplacement",
       "discovered": "2026-10-05",
       "file": "internal/transcript/claudecode.go",
-      "anchor": "\t\t\tif continued && dec.mainLane != \"\" {\n",
-      "replacement": "\t\t\tif !continued && dec.mainLane != \"\" {\n",
+      "anchor": "\t\tif continued && !group[0].IsSidechain {\n\t\t\tlane.Continuation = true\n",
+      "replacement": "\t\tif continued && group[0].IsSidechain {\n\t\t\tlane.Continuation = true\n",
       "killedBy": [
-        "TestCM6_AContinuationAfterACompactionIsTheSameLane"
+        "TestCM6_ASegmentAfterACompactionIsTheConversationContinued"
       ],
-      "note": "A lane was keyed on the first conversational line of a request's parent chain, and the client starts every compaction with a parentless boundary, so each post-compaction segment became a lane of its own. On one real session with 46 compactions and no sidechain record, replay context reported one lane of 46 with 45 sub-agent lanes carrying 24,666 requests; every offline command reports on MainLane, so each saw one segment. Measured over this machine's corpus: 10 of 10 compacted sessions carried the false PARTIAL note under v0.8.0, 1 after the repair. This mutant files the continuation as a new lane again."
+      "note": "A lane was keyed on the first conversational line of a request's parent chain, and the client starts every compaction with a parentless boundary, so each post-compaction segment was a lane indistinguishable from a sub-agent's. On one real session with 46 compactions and no sidechain record, replay context reported one lane of 46 with 45 sub-agent lanes carrying 24,666 requests. The segment stays its own lane (merging them set content from 46 contexts against one lane's prompts, and replay advise reported a source at 155% of prompt tokens) and is marked as the conversation continued, so the note names segments and the compaction detail finds the first prompt after a boundary. This mutant marks the sidechain instead."
     },
     {
       "id": "M139",

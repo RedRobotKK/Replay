@@ -173,6 +173,15 @@ type ContextGap struct {
 	LanesTotal      int
 	LanesReported   int
 	RequestsOmitted int
+	// SegmentsTotal is how many of the lanes are the main conversation: the
+	// lane before any compaction and each continuation after one. Keeping
+	// them apart from sub-agent lanes is what lets the note say "one segment
+	// of 46" rather than call 45 compaction segments sub-agents, which it
+	// did on a real session with no sub-agent at all.
+	SegmentsTotal int
+	// SegmentRequestsOmitted is how many of RequestsOmitted sit in the other
+	// segments rather than in sub-agent lanes.
+	SegmentRequestsOmitted int
 	// CompactionEvents is each recorded compaction with the first prompt
 	// that followed it, in order.
 	CompactionEvents []CompactionEvent
@@ -188,21 +197,35 @@ type CompactionEvent struct {
 	FirstPromptAfter int
 }
 
-// firstPromptAfter is the prompt total of the first request in the lane
-// after the instant, or zero when none follows or the instant is unknown.
+// firstPromptAfter is the prompt total of the earliest request of the main
+// conversation after the instant, or zero when none follows or the instant
+// is unknown.
 //
-// The zero time is "unknown", not "the beginning": a compaction the client
-// did not date must not be paired with the session's first prompt.
-func firstPromptAfter(lane *transcript.Lane, at time.Time) int {
-	if lane == nil || at.IsZero() {
+// Every segment of the conversation is searched, not only the lane being
+// reported: the request after a boundary sits in the continuation lane the
+// boundary started. Sub-agent lanes are not, since a sub-agent's prompt says
+// nothing about what the conversation re-sent. The zero time is "unknown",
+// not "the beginning": a compaction the client did not date must not be
+// paired with the session's first prompt.
+func firstPromptAfter(session *transcript.Session, at time.Time) int {
+	if at.IsZero() {
 		return 0
 	}
-	for _, r := range lane.Requests {
-		if r.Timestamp.After(at) {
-			return r.Usage.PromptTotal()
+	var best *transcript.Request
+	for _, l := range session.Lanes {
+		if l.Sidechain {
+			continue
+		}
+		for _, r := range l.Requests {
+			if r.Timestamp.After(at) && (best == nil || r.Timestamp.Before(best.Timestamp)) {
+				best = r
+			}
 		}
 	}
-	return 0
+	if best == nil {
+		return 0
+	}
+	return best.Usage.PromptTotal()
 }
 
 // CompactionDetail is the per-event account of what each recorded
@@ -307,15 +330,40 @@ func (g ContextGap) Note() string {
 	if g.Partial() {
 		// Said first and said plainly. A reader who stops here should still
 		// know these figures are not the whole session.
-		b.WriteString("PARTIAL: this is one lane of ")
-		b.WriteString(shortCount(g.LanesTotal))
-		b.WriteString(". ")
-		b.WriteString(plural(g.LanesTotal-g.LanesReported, "sub-agent lane"))
-		if g.RequestsOmitted > 0 {
-			b.WriteString(", carrying ")
-			b.WriteString(plural(g.RequestsOmitted, "request"))
+		b.WriteString("PARTIAL: ")
+		segments := g.SegmentsTotal - 1
+		subagents := g.LanesTotal - g.SegmentsTotal
+		if g.SegmentsTotal == 0 {
+			// The reported lane is itself a sidechain, so every other lane
+			// is one too.
+			subagents = g.LanesTotal - 1
 		}
-		b.WriteString(", are not counted above.")
+		if segments > 0 {
+			b.WriteString("this is one segment of ")
+			b.WriteString(shortCount(g.SegmentsTotal))
+			b.WriteString(": the history was compacted between them, and the other ")
+			b.WriteString(plural(segments, "segment"))
+			if g.SegmentRequestsOmitted > 0 {
+				b.WriteString(", carrying ")
+				b.WriteString(plural(g.SegmentRequestsOmitted, "request"))
+			}
+			b.WriteString(", are not counted above.")
+		}
+		if subagents > 0 {
+			if segments > 0 {
+				b.WriteString(" ")
+			} else {
+				b.WriteString("this is one lane of ")
+				b.WriteString(shortCount(g.LanesTotal))
+				b.WriteString(". ")
+			}
+			b.WriteString(plural(subagents, "sub-agent lane"))
+			if n := g.RequestsOmitted - g.SegmentRequestsOmitted; n > 0 {
+				b.WriteString(", carrying ")
+				b.WriteString(plural(n, "request"))
+			}
+			b.WriteString(", are not counted above.")
+		}
 		if g.Overstated() {
 			b.WriteString(" ")
 		}
@@ -418,8 +466,14 @@ func MeasureGap(session *transcript.Session, lane *transcript.Lane, attributed i
 		g.LanesTotal = len(session.Lanes)
 		g.LanesReported = 1
 		for _, l := range session.Lanes {
+			if !l.Sidechain {
+				g.SegmentsTotal++
+			}
 			if l != lane {
 				g.RequestsOmitted += len(l.Requests)
+				if !l.Sidechain {
+					g.SegmentRequestsOmitted += len(l.Requests)
+				}
 			}
 		}
 	}
@@ -435,7 +489,7 @@ func MeasureGap(session *transcript.Session, lane *transcript.Lane, attributed i
 				Trigger:          c.Trigger,
 				PreTokens:        c.PreTokens,
 				PostTokens:       c.PostTokens,
-				FirstPromptAfter: firstPromptAfter(lane, c.At),
+				FirstPromptAfter: firstPromptAfter(session, c.At),
 			})
 		}
 		g.Compactions = recorded

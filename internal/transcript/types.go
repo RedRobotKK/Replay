@@ -206,7 +206,14 @@ type ToolDef struct {
 type Lane struct {
 	ID        string
 	Sidechain bool
-	Requests  []*Request
+	// Continuation marks a lane rooted at a compaction: the main conversation
+	// carried on after the client rewrote its history, not a conversation of
+	// its own. It stays a lane of its own, because every request after the
+	// boundary has a different context from every request before it, and a
+	// share of prompt tokens computed across both would set content from
+	// both contexts against the prompts of one.
+	Continuation bool
+	Requests     []*Request
 }
 
 // Source says where a session's data came from. It decides the truth tier
