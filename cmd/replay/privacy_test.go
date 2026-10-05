@@ -531,3 +531,95 @@ func TestPV8_MeasureStoreCountsFilesAndAbsence(t *testing.T) {
 		t.Errorf("measureStore(directory) = (%d, %d), want (4, 2): a directory is not a file", b, n)
 	}
 }
+
+// purge --older-than acts on ledger directories only.
+//
+// It enumerated whatever directory it was given and removed every .jsonl
+// older than the window, registry or not. Pointed at ~/.replay itself it
+// removed measurements.jsonl (what a model billed for a known request)
+// and interventions.jsonl (the record of every change Replay made to the
+// reader's settings, which the registry marks as never subject to a
+// retention window). Recorded in docs/evidence/purge-hazard-2026-10-05.md.
+//
+// PASS: the directory is refused by name, nothing is removed, and the
+// refusal says what the command acts on.
+// FAIL: both files gone, which is what shipped.
+func TestPG10_OlderThanRefusesADirectoryTheRegistryDoesNotNameAsALedger(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, ".replay")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-72 * time.Hour)
+	for _, name := range []string{"measurements.jsonl", "interventions.jsonl"} {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(p, old, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var out, errb bytes.Buffer
+	err := runPurge([]string{dir, "--older-than", "1d", "--yes"}, &out, &errb)
+	if err == nil {
+		t.Fatal("a directory the registry does not name as a ledger must be refused")
+	}
+	if !strings.Contains(err.Error(), "ledger director") {
+		t.Errorf("the refusal must say what purge acts on: %v", err)
+	}
+	for _, name := range []string{"measurements.jsonl", "interventions.jsonl"} {
+		if _, statErr := os.Stat(filepath.Join(dir, name)); statErr != nil {
+			t.Errorf("%s was removed from a refused directory", name)
+		}
+	}
+}
+
+// The guard keeps every valid ledger directory purgeable and refuses the
+// rest by the registry's own terms: the ledger, a ledger-<name> sibling and
+// the archive are acted on; the vault, which the registry marks as never
+// subject to a window, and a directory named after a file store are not.
+func TestPG11_OlderThanStillActsOnLedgerDirectoriesAndOnlyThose(t *testing.T) {
+	old := time.Now().Add(-72 * time.Hour)
+	plant := func(dir string) string {
+		t.Helper()
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		p := filepath.Join(dir, "s1.jsonl")
+		if err := os.WriteFile(p, []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(p, old, old); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	home := t.TempDir()
+	for _, name := range []string{"ledger", "ledger-grok", "archive"} {
+		p := plant(filepath.Join(home, ".replay", name))
+		var out, errb bytes.Buffer
+		if err := runPurge([]string{filepath.Dir(p), "--older-than", "1d", "--yes"}, &out, &errb); err != nil {
+			t.Errorf("%s is a ledger directory and must still be purged: %v", name, err)
+		}
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("%s: the old record was not removed", name)
+		}
+	}
+	for _, name := range []string{"vault", "policy.json", "ledgerx", "notes"} {
+		p := plant(filepath.Join(home, ".replay", name))
+		var out, errb bytes.Buffer
+		if err := runPurge([]string{filepath.Dir(p), "--older-than", "1d", "--yes"}, &out, &errb); err == nil {
+			t.Errorf("%s is not a ledger directory and must be refused", name)
+		}
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%s: a file was removed from a refused directory", name)
+		}
+	}
+	for dir, want := range map[string]bool{"ledger": true, "ledger-x": true, "archive": true, "ledger-": true,
+		"vault": false, "ledgerx": false, "measurements.jsonl": false, ".": false} {
+		if got := isLedgerDir(filepath.Join(home, ".replay", dir)); got != want {
+			t.Errorf("isLedgerDir(%q) = %v, want %v", dir, got, want)
+		}
+	}
+}

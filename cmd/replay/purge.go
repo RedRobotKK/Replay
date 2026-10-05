@@ -111,6 +111,14 @@ func runPurge(args []string, stdout, stderr io.Writer) error {
 	}
 
 	dir := fs.Arg(0)
+	// The registry decides what a ledger directory is. This command removed
+	// every .jsonl in whatever directory it was given; pointed at ~/.replay
+	// itself it took the probe measurements and the record of every change
+	// made to the reader's settings, both marked as evidence no retention
+	// window removes. Refused by name, before anything is read.
+	if !isLedgerDir(dir) {
+		return fmt.Errorf("purge --older-than acts on ledger directories only (ledger, ledger-<name>, archive); %s is not one, so nothing was read or removed", dir)
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("reading the ledger directory: %w", err)
@@ -363,4 +371,22 @@ func warnUnreadable(stdout io.Writer, n int) {
 	}
 	_, _ = fmt.Fprintf(stdout, "\n%d file(s) could not be read and were not examined. "+
 		"This report covers the rest; it is not a statement about those.\n", n)
+}
+
+// isLedgerDir reports whether the registry names this directory as a ledger
+// store a retention window may act on: the ledger, a ledger-<name> sibling
+// for a named upstream, or the archive of rotated records. The vault is a
+// directory the registry refuses a window for, and everything else under
+// ~/.replay is a file.
+func isLedgerDir(dir string) bool {
+	base := filepath.Base(filepath.Clean(dir))
+	for _, s := range homeStores() {
+		if !s.Dir || !s.Purgeable {
+			continue
+		}
+		if base == s.Name || (s.Prefix && strings.HasPrefix(base, s.Name+"-")) {
+			return true
+		}
+	}
+	return false
 }

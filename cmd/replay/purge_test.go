@@ -39,9 +39,16 @@ import (
 // command tested only on its happy path is how data goes missing quietly.
 
 // ledgerWith writes n session files with the given ages, and returns the dir.
+//
+// The directory is named ledger, as the registry names it: since 2026-10-05
+// purge --older-than refuses any directory the registry does not name as a
+// ledger store (TestPG10), so a fixture in a bare temp dir is refused too.
 func ledgerWith(t *testing.T, ages ...time.Duration) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir := filepath.Join(t.TempDir(), "ledger")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	now := time.Now()
 	for i, age := range ages {
 		p := filepath.Join(dir, "session-"+string(rune('a'+i))+".jsonl")
@@ -520,7 +527,9 @@ func TestPG16_TheLedgerDirectoryIsRequired(t *testing.T) {
 	}
 
 	var out2, errb2 bytes.Buffer
-	err = runPurge([]string{filepath.Join(t.TempDir(), "absent"), "--older-than", "30d"}, &out2, &errb2)
+	// An absent directory that is ledger-shaped: the name guard admits it,
+	// and the read is what fails.
+	err = runPurge([]string{filepath.Join(t.TempDir(), "absent", "ledger"), "--older-than", "30d"}, &out2, &errb2)
 	if err == nil {
 		t.Fatal("purge ran against a directory that does not exist")
 	}

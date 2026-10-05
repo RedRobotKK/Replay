@@ -927,6 +927,13 @@ Two different questions, and the command refuses to guess which you meant if you
 `--older-than` is a **retention policy**: what is old enough to go. `--session` is an **erasure
 request**: what is about one session, whatever its age.
 
+**`--older-than` acts on ledger directories only.** The registry decides what those are: the ledger,
+a `ledger-<name>` sibling for a named upstream, or the archive of rotated records. Any other directory
+is refused by name before anything is read. Until 2026-10-05 the command removed every `.jsonl` older
+than the window wherever it was pointed, and pointed at `~/.replay` itself it took the probe
+measurements and the record of every change `advise --apply --yes` made to your settings, both of
+which the registry marks as evidence no retention window removes.
+
 Three decisions, all because this is the one command whose mistake cannot be undone by running it
 again:
 

@@ -1903,6 +1903,19 @@
         "TestApplyDocumentSaysAppliedOnlyForAVerifiedChange"
       ],
       "note": "replay.apply.v1 is the document the guide offers an agent to act on. It said \"applied\": true from the --yes flag, set before the write ran and whatever the read-back found, with the write's own output discarded: one boolean carrying intent, attempt and verification at once, while the record on disk kept them apart. The entry now carries the transition as it ended, and applied is true only with state_change VERIFIED. This mutant reads the flag again."
+    },
+    {
+      "id": "M145",
+      "name": "purge-older-than-acted-on-any-directory",
+      "class": "privacy",
+      "discovered": "2026-10-05",
+      "file": "cmd/replay/purge.go",
+      "anchor": "\tif !isLedgerDir(dir) {\n",
+      "replacement": "\tif isLedgerDir(dir) && false {\n",
+      "killedBy": [
+        "TestPG10_OlderThanRefusesADirectoryTheRegistryDoesNotNameAsALedger"
+      ],
+      "note": "purge --older-than enumerated whatever directory it was given and removed every .jsonl older than the window, registry or not. Pointed at ~/.replay itself it removed measurements.jsonl, what a model billed for a known request, and interventions.jsonl, the record of every change Replay made to the reader's settings, both marked by the registry as evidence no retention window removes. It now refuses by name, before anything is read, any directory the registry does not name as a ledger store: the ledger, a ledger-<name> sibling, or the archive. This mutant removes the refusal."
     }
   ],
   "knownSurvivors": [

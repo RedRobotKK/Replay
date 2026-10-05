@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **`replay purge --older-than` acted on any directory it was given.** It
+  removed every `.jsonl` older than the window wherever it was pointed;
+  pointed at `~/.replay` itself it took `measurements.jsonl` and
+  `interventions.jsonl`, both marked by the registry as evidence no
+  retention window removes. It now refuses by name, before anything is
+  read, any directory the registry does not name as a ledger store: the
+  ledger, a `ledger-<name>` sibling, or the archive. Frozen as M145.
 - **`replay learn` dropped every session over a million effective tokens
   from its verdicts as a "tie".** A session's saving is a share of its own
   as-run effective tokens; the tie floor multiplied one part per million by
