@@ -1799,6 +1799,19 @@
         "TestR1_TheLoopGuardSeesRepeatedResponsesToolCalls"
       ],
       "note": "The Messages summariser cannot read a Responses body, so no summary is taken, the loop detector sees no tool calls and the session falls back to no identity: the guards are inert on a path the banner says they cover."
+    },
+    {
+      "id": "M137",
+      "name": "codex-quota-absent-window-printed-as-zero",
+      "class": "evidence",
+      "discovered": "2026-10-05",
+      "file": "cmd/replay/codex.go",
+      "anchor": "\tcase latest != nil && latest.HasWindow:\n",
+      "replacement": "\tcase latest != nil:\n",
+      "killedBy": [
+        "TestCodexViewDoesNotPrintAWindowThatWasNotReported"
+      ],
+      "note": "Codex 0.154 reports a credits-based limit with no rolling window. The view took the newest reading of any shape and printed its absent windows as \"0% used, window unknown\": on the machine that found it, every one of the newest 60 rollouts carried that shape, so the shipped quota block was a measurement of nothing. The view now prefers the newest windowed reading, says what a windowless reading does report, and never renders a window that was not there; this mutant makes it take any reading again."
     }
   ],
   "knownSurvivors": [

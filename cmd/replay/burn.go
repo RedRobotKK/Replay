@@ -393,7 +393,11 @@ func burnCodex(home, dir string) surfaceBurn {
 			comma(int(cacheRead)), v))
 	}
 	if q != nil {
-		s.quota = fmt.Sprintf("%.0f%% of %s", q.PrimaryUsedPercent, minutes(q.PrimaryWindowMinutes))
+		if q.HasWindow {
+			s.quota = fmt.Sprintf("%.0f%% of %s", q.PrimaryUsedPercent, minutes(q.PrimaryWindowMinutes))
+		} else {
+			s.quota = fmt.Sprintf("no window reported (limit %s)", plainOr(q.LimitID, "unknown"))
+		}
 	}
 	if rebased > 0 {
 		s.problems = append(s.problems, fmt.Sprintf(

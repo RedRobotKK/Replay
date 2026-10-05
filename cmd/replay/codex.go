@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
@@ -91,7 +92,11 @@ func runCodex(args []string, stdout, stderr io.Writer) error {
 	var billed, reported int
 	var refused, unparsable, reEmitted, compacted, quotas int
 	var breaks, coldTokens int
-	var latest *transcript.CodexQuota
+	// latest is the newest reading of any shape; latestWindowed the newest
+	// that reported a rolling window. They differ on a machine whose plan
+	// moved to a credits-based limit: the newest reading then says nothing
+	// about a window, and the last one that did is older.
+	var latest, latestWindowed *transcript.CodexQuota
 	type row struct {
 		name             string
 		billed, reported int
@@ -121,6 +126,9 @@ func runCodex(args []string, stdout, stderr io.Writer) error {
 		if s.Quota != nil {
 			quotas++
 			latest = s.Quota
+			if s.Quota.HasWindow {
+				latestWindowed = s.Quota
+			}
 		}
 		breaks += len(s.Breaks)
 		for _, b := range s.Breaks {
@@ -183,14 +191,24 @@ func runCodex(args []string, stdout, stderr io.Writer) error {
 		_, _ = fmt.Fprintf(stdout, "    this is read off the log rather than inferred from a prefix.\n\n")
 	}
 
-	if latest != nil {
+	switch {
+	case latest != nil && latest.HasWindow:
 		_, _ = fmt.Fprintf(stdout, "  quota (%s plan, from %d session(s) that recorded it)\n",
 			plainOr(latest.PlanType, "unknown"), quotas)
-		_, _ = fmt.Fprintf(stdout, "    %-10s %5.0f%% used   window %s\n", "primary",
-			latest.PrimaryUsedPercent, minutes(latest.PrimaryWindowMinutes))
-		_, _ = fmt.Fprintf(stdout, "    %-10s %5.0f%% used   window %s\n\n", "secondary",
-			latest.SecondaryUsedPercent, minutes(latest.SecondaryWindowMinutes))
-	} else {
+		writeQuotaWindows(stdout, latest, timeNow())
+	case latest != nil:
+		// The newest reading reports no window. Say what it does report,
+		// and never render the absent window as a percentage of nothing.
+		_, _ = fmt.Fprintf(stdout, "  quota (limit %s, from %d session(s) that recorded it)\n",
+			plainOr(latest.LimitID, "unknown"), quotas)
+		_, _ = fmt.Fprintf(stdout, "    the newest reading reports no rolling window; credits: %s\n", credits(latest.Credits))
+		if latestWindowed != nil {
+			_, _ = fmt.Fprintf(stdout, "    the last window reading is from an older session, %s plan:\n", plainOr(latestWindowed.PlanType, "unknown"))
+			writeQuotaWindows(stdout, latestWindowed, timeNow())
+		} else {
+			_, _ = fmt.Fprintf(stdout, "\n")
+		}
+	default:
 		_, _ = fmt.Fprintf(stdout, "  quota   not recorded in these sessions\n\n")
 	}
 
@@ -203,6 +221,60 @@ func plainOr(s, fallback string) string {
 		return fallback
 	}
 	return s
+}
+
+// writeQuotaWindows prints the rolling windows a reading carries. A window
+// Codex did not report has no minutes, and is said to be absent rather
+// than rendered as zero percent of nothing.
+func writeQuotaWindows(stdout io.Writer, q *transcript.CodexQuota, now time.Time) {
+	writeQuotaWindow(stdout, "primary", q.PrimaryUsedPercent, q.PrimaryWindowMinutes, q.PrimaryResetsAt, now)
+	writeQuotaWindow(stdout, "secondary", q.SecondaryUsedPercent, q.SecondaryWindowMinutes, q.SecondaryResetsAt, now)
+	_, _ = fmt.Fprintf(stdout, "\n")
+}
+
+func writeQuotaWindow(stdout io.Writer, name string, used float64, window int, resetsAt int64, now time.Time) {
+	if window <= 0 {
+		_, _ = fmt.Fprintf(stdout, "    %-10s  not reported\n", name)
+		return
+	}
+	_, _ = fmt.Fprintf(stdout, "    %-10s %5.0f%% used   window %s%s\n", name, used, minutes(window), resets(resetsAt, now))
+}
+
+// credits renders a credits object as Codex reported it.
+func credits(c *transcript.CodexCredits) string {
+	switch {
+	case c == nil:
+		return "not reported"
+	case c.Unlimited:
+		return "unlimited"
+	case c.Balance != nil:
+		return fmt.Sprintf("balance %g", *c.Balance)
+	case c.HasCredits:
+		return "some, balance not reported"
+	default:
+		return "none"
+	}
+}
+
+// resets renders the instant a rate-limit window resets, as Codex recorded
+// it, and how far from now that is. The percentage alone is half an answer:
+// a user at 98% acts differently with two hours to the reset than with two
+// days. A reset already behind the clock is said to have passed, because
+// the newest reading on disk can be older than its own window and a
+// countdown into the past would be a figure about nothing.
+func resets(unix int64, now time.Time) string {
+	if unix <= 0 {
+		return ""
+	}
+	at := time.Unix(unix, 0).UTC()
+	if !at.After(now) {
+		return fmt.Sprintf("   resets %s (passed; this reading is older than its window)", at.Format(time.RFC3339))
+	}
+	d := at.Sub(now).Round(time.Minute)
+	if d >= 48*time.Hour {
+		return fmt.Sprintf("   resets %s, in %dd%02dh", at.Format(time.RFC3339), int(d.Hours())/24, int(d.Hours())%24)
+	}
+	return fmt.Sprintf("   resets %s, in %dh%02dm", at.Format(time.RFC3339), int(d.Hours()), int(d.Minutes())%60)
 }
 
 func minutes(m int) string {

@@ -29,6 +29,15 @@ const SourceCodex Source = "codex-rollout"
 type CodexQuota struct {
 	LimitID  string
 	PlanType string
+	// HasWindow says a rolling window was reported at all. Codex 0.154
+	// writes a second shape, limit_id "premium", with no primary or
+	// secondary window and a credits object instead; measured on
+	// 2026-10-05, the newest 60 of 464 rollouts on one machine carried it.
+	// Without this flag the absent windows read as zeros and a view printed
+	// "0% used" about a limit that reports no percentage.
+	HasWindow bool
+	// Credits is the credits object of that shape, nil when not reported.
+	Credits *CodexCredits
 	// Primary is the short rolling window, secondary the long one. Measured
 	// locally at 300 and 10080 minutes — five hours and seven days — but both
 	// are read from the record rather than assumed.
@@ -216,6 +225,20 @@ type codexUsage struct {
 	Total      int `json:"total_tokens"`
 }
 
+// CodexCredits is the credits object Codex reports under a credits-based
+// limit, copied as reported. Balance is nil when Codex wrote null.
+type CodexCredits struct {
+	HasCredits bool
+	Unlimited  bool
+	Balance    *float64
+}
+
+type codexCredits struct {
+	HasCredits bool     `json:"has_credits"`
+	Unlimited  bool     `json:"unlimited"`
+	Balance    *float64 `json:"balance"`
+}
+
 type codexWindow struct {
 	UsedPercent   float64 `json:"used_percent"`
 	WindowMinutes int     `json:"window_minutes"`
@@ -223,10 +246,11 @@ type codexWindow struct {
 }
 
 type codexRateLimits struct {
-	LimitID   string       `json:"limit_id"`
-	PlanType  string       `json:"plan_type"`
-	Primary   *codexWindow `json:"primary"`
-	Secondary *codexWindow `json:"secondary"`
+	LimitID   string        `json:"limit_id"`
+	PlanType  string        `json:"plan_type"`
+	Primary   *codexWindow  `json:"primary"`
+	Secondary *codexWindow  `json:"secondary"`
+	Credits   *codexCredits `json:"credits"`
 }
 
 // usage converts a Codex snapshot, or reports that it cannot be believed.
@@ -418,7 +442,10 @@ func (s *CodexSession) event(p codexPayload) {
 }
 
 func (r *codexRateLimits) quota() *CodexQuota {
-	q := &CodexQuota{LimitID: r.LimitID, PlanType: r.PlanType}
+	q := &CodexQuota{LimitID: r.LimitID, PlanType: r.PlanType, HasWindow: r.Primary != nil || r.Secondary != nil}
+	if r.Credits != nil {
+		q.Credits = &CodexCredits{HasCredits: r.Credits.HasCredits, Unlimited: r.Credits.Unlimited, Balance: r.Credits.Balance}
+	}
 	if r.Primary != nil {
 		q.PrimaryUsedPercent = r.Primary.UsedPercent
 		q.PrimaryWindowMinutes = r.Primary.WindowMinutes

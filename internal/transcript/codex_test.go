@@ -141,3 +141,37 @@ func TestCodexDoesNotInventBreaksWhereTheCacheNeverHeld(t *testing.T) {
 		}
 	}
 }
+
+// Codex 0.154 writes a second rate-limit shape: limit_id "premium", no
+// primary or secondary window, and a credits object. Measured on this
+// machine on 2026-10-05: the newest 60 of 464 rollouts all carry it. The
+// reader used to copy the absent windows as zeros, so a view could print
+// "0% used, window unknown" as if it had been reported. The reading now
+// says whether a window exists and carries the credits it does report.
+func TestCodexCreditsQuotaCarriesNoWindow(t *testing.T) {
+	s, err := ParseCodexFile("codexdata/creditsquota.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Quota == nil {
+		t.Fatal("the rate_limits payload was dropped")
+	}
+	q := s.Quota
+	if q.HasWindow {
+		t.Errorf("no window was reported and the reading claims one: %+v", *q)
+	}
+	if q.LimitID != "premium" {
+		t.Errorf("limit id %q, want premium", q.LimitID)
+	}
+	if q.Credits == nil || q.Credits.HasCredits || q.Credits.Unlimited || q.Credits.Balance != nil {
+		t.Errorf("credits not read as reported (has_credits false, unlimited false, balance null): %+v", q.Credits)
+	}
+	// And the windowed shape still says it has one.
+	w, err := ParseCodexFile("codexdata/compacted.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Quota == nil || !w.Quota.HasWindow || w.Quota.Credits != nil {
+		t.Errorf("a windowed reading lost its window or gained credits: %+v", w.Quota)
+	}
+}

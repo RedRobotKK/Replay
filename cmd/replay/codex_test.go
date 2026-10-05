@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The viewer leads with what was billed, and never with the rebased counter.
@@ -133,5 +134,86 @@ func TestTheReEmissionNoteIsAbsentWhenNothingRepeated(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "repeated usage this session had already") {
 		t.Errorf("the re-emission note appeared on a corpus with none:\n%s", out.String())
+	}
+}
+
+// The reset instant. Codex records resets_at beside used_percent on every
+// turn, the reader has parsed it since the quota signal was found, and the
+// view never printed it: a user was told "98% used" and not when that
+// would stop being true, which is the half of the answer they act on.
+// Written RED against the view that printed only the percentage and the
+// window.
+func TestCodexViewSaysWhenTheQuotaResets(t *testing.T) {
+	old := timeNow
+	timeNow = func() time.Time { return time.Date(2026, 3, 21, 20, 0, 0, 0, time.UTC) }
+	defer func() { timeNow = old }()
+	var out, errOut bytes.Buffer
+	if err := run([]string{"codex", "codexdata"}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	// primary resets_at 1774130675 is 2026-03-21T22:04:35Z, 2h04m35s after the
+	// frozen clock, which rounds to 2h05m; secondary 1774296354 is 2026-03-23T20:05:54Z.
+	for _, want := range []string{
+		"resets 2026-03-21T22:04:35Z",
+		"in 2h05m",
+		"resets 2026-03-23T20:05:54Z",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the quota block does not say %q; the reset instant is in every Codex record and was parsed:\n%s", want, got)
+		}
+	}
+	// A reading older than its own window: the reset has passed, and the
+	// view must say so rather than print a countdown into the past.
+	timeNow = func() time.Time { return time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC) }
+	out.Reset()
+	if err := run([]string{"codex", "codexdata"}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); !strings.Contains(got, "resets 2026-03-21T22:04:35Z (passed") {
+		t.Errorf("a reset that has already happened is printed as if it were ahead:\n%s", got)
+	}
+}
+
+// A corpus whose newest session reports credits and no window, after an
+// older session that reported a window. The view must not print the
+// absent window as 0%, must say what the newest reading does report, and
+// may show the older window reading only labelled as older.
+func TestCodexViewDoesNotPrintAWindowThatWasNotReported(t *testing.T) {
+	dir := t.TempDir()
+	older := `{"timestamp":"2026-03-21T00:36:01.000Z","type":"session_meta","payload":{"id":"019d0f52-8ca6-7f00-0000-00000000old1","cli_version":"0.117.0"}}
+{"timestamp":"2026-03-21T00:36:10.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1000,"cached_input_tokens":400,"output_tokens":100,"reasoning_output_tokens":40,"total_tokens":1100},"last_token_usage":{"input_tokens":1000,"cached_input_tokens":400,"output_tokens":100,"reasoning_output_tokens":40,"total_tokens":1100},"model_context_window":258400},"rate_limits":{"limit_id":"codex","plan_type":"plus","primary":{"used_percent":37.0,"window_minutes":300,"resets_at":1774130675},"secondary":null}}}
+`
+	newer := `{"timestamp":"2026-10-04T10:00:00.000Z","type":"session_meta","payload":{"id":"019d0f52-8ca6-7f00-0000-00000000new1","cli_version":"0.154.0"}}
+{"timestamp":"2026-10-04T10:00:05.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1000,"cached_input_tokens":400,"output_tokens":100,"reasoning_output_tokens":40,"total_tokens":1100},"last_token_usage":{"input_tokens":1000,"cached_input_tokens":400,"output_tokens":100,"reasoning_output_tokens":40,"total_tokens":1100},"model_context_window":258400},"rate_limits":{"limit_id":"premium","limit_name":null,"primary":null,"secondary":null,"credits":{"has_credits":false,"unlimited":false,"balance":null},"plan_type":null}}}
+`
+	for name, body := range map[string]string{"rollout-2026-03-21T00-36-01-old1.jsonl": older, "rollout-2026-10-04T10-00-00-new1.jsonl": newer} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	old := timeNow
+	timeNow = func() time.Time { return time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC) }
+	defer func() { timeNow = old }()
+	var out, errOut bytes.Buffer
+	if err := run([]string{"codex", dir}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if strings.Contains(got, "0% used") || strings.Contains(got, "window unknown") {
+		t.Errorf("an absent window is printed as a measured zero:\n%s", got)
+	}
+	for _, want := range []string{"premium", "no rolling window", "credits: none"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the newest reading's own content is not said (%q):\n%s", want, got)
+		}
+	}
+	if !strings.Contains(got, "older session") || !strings.Contains(got, "37% used") {
+		t.Errorf("the older window reading is not shown as older:\n%s", got)
+	}
+	// That older reading carried a primary window only; its secondary is
+	// absent, not zero.
+	if !strings.Contains(got, "secondary   not reported") {
+		t.Errorf("an absent secondary window is not said to be absent:\n%s", got)
 	}
 }

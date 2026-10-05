@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -52,5 +54,33 @@ func TestBurnSaysWhichSurfacesCannotReportQuota(t *testing.T) {
 	got := out.String()
 	if !strings.Contains(got, "not reported") && !strings.Contains(got, "none") {
 		t.Errorf("a surface with no quota signal must say so rather than show a blank:\n%s", got)
+	}
+}
+
+// Codex's credits-based limit reports no rolling window. The quota column
+// used to render that as "0% of unknown", a measurement of nothing beside
+// surfaces honestly marked "not reported". Written RED against that cell.
+func TestBurnDoesNotRenderAMissingCodexWindowAsZero(t *testing.T) {
+	dir := t.TempDir()
+	codex := filepath.Join(dir, "codex")
+	if err := os.MkdirAll(codex, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"timestamp":"2026-10-04T10:00:00.000Z","type":"session_meta","payload":{"id":"019d0f52-8ca6-7f00-0000-00000000burn","cli_version":"0.154.0"}}
+{"timestamp":"2026-10-04T10:00:05.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1000,"cached_input_tokens":400,"output_tokens":100,"reasoning_output_tokens":40,"total_tokens":1100},"last_token_usage":{"input_tokens":1000,"cached_input_tokens":400,"output_tokens":100,"reasoning_output_tokens":40,"total_tokens":1100},"model_context_window":258400},"rate_limits":{"limit_id":"premium","primary":null,"secondary":null,"credits":{"has_credits":false,"unlimited":false,"balance":null}}}}
+`
+	if err := os.WriteFile(filepath.Join(codex, "rollout-2026-10-04T10-00-00-burn.jsonl"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	if err := run([]string{"burn", "--dir", dir}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if strings.Contains(got, "0% of") {
+		t.Errorf("an absent window is rendered as a measured zero:\n%s", got)
+	}
+	if !strings.Contains(got, "no window reported (limit premium)") {
+		t.Errorf("the codex row does not say the window is absent:\n%s", got)
 	}
 }

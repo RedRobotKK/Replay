@@ -1368,7 +1368,10 @@ What each agent surface on this machine is consuming: Codex, Ollama and Claude C
 | `-dir <path>` | Read surfaces from this directory instead of the machine's own. |
 
 **It prints no cross-surface total, and that is the point.** The three do not count the same thing.
-Codex counts tokens against a rolling quota window. Claude Code counts tokens billed. Ollama's
+Codex counts tokens against a rolling quota window, where it reports one: the credits-based
+limit Codex 0.154 reports carries no window, and `replay codex` and `replay burn` say so rather
+than print a zero. `replay codex` prints each window's reset instant beside its percentage, and
+marks a reset that has already passed. Claude Code counts tokens billed. Ollama's
 total *excludes* the cached prefix entirely, because it reports work done rather than context
 held, so an Ollama figure and a Codex figure are not the same unit and adding them produces a
 number with no meaning. Each row says what it counts, in its own words, and the sum is left
