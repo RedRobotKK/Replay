@@ -451,7 +451,12 @@ func main() {
 	if mErr != nil {
 		fail("%v", mErr)
 	}
-	evidenced, unexplained, stale := guardcheck.ClassifyEvidenced(introduced, manifest)
+	// Stale is decided against the guards this run caught: a caught guard
+	// with an entry is a claim a test has since disproved. Guards the diff
+	// never touched are not consulted, so a manifest written for one change
+	// does not fail every later one (see ClassifyEvidenced).
+	caught := guardcheck.Without(guards, survivors, unchecked)
+	evidenced, unexplained, stale := guardcheck.ClassifyEvidenced(caught, introduced, manifest)
 
 	unreached := withVerdict(unexplained, verdicts, unreachedVerdict)
 	inert := withVerdict(unexplained, verdicts, inertVerdict)

@@ -83,11 +83,18 @@ addressing on it would have exempted guards by collision.
 **Everything fails closed.** A manifest that will not parse fails the run; so
 does an entry with no justification, no evidence, an unknown category, or a
 duplicate address. A survivor with no entry fails the run exactly as before. An
-entry that matches no surviving introduced guard is *stale* and fails the run
-too, for the reason the frozen-mutant catalogue fails on an anchor that no
-longer resolves: an entry nobody can tie to a guard has stopped describing the
-tree, and letting those accumulate is how this becomes the blanket waiver it
-exists not to be.
+entry whose guard this run put to the suite and caught is *stale* and fails the
+run too, for the reason the frozen-mutant catalogue fails on an anchor that no
+longer resolves: a test now distinguishes the guard, so the entry has stopped
+describing the tree, and letting those accumulate is how this becomes the
+blanket waiver it exists not to be. The verdict is scoped to what the run
+measured. An entry for a guard the change did not touch is not consulted: the
+run has no new fact about it, and consulting it anyway is what the first
+implementation did, which failed every later pull request that changed any Go
+file on the 25 entries written here (2026-09-25: 0 survivors, 0 unexplained,
+exit 1). An entry whose guard was rewritten matches nothing and exempts
+nothing; the rewritten guard fails the run as an ordinary unexplained
+survivor, and retiring the orphaned entry is maintenance.
 
 **Order matters.** The manifest is consulted only after the base tree has had
 its say, so an evidenced entry can never stand in for grandfathering the base

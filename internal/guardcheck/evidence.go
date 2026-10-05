@@ -144,7 +144,31 @@ func LoadManifest(path string) (*Manifest, error) {
 // that no longer resolves: an entry nobody can tie to a guard has stopped
 // describing the tree, and a mechanism that let those accumulate would become
 // the blanket waiver this one exists not to be.
-func ClassifyEvidenced(introduced []Guard, m *Manifest) (evidenced []Evidenced, unexplained []Guard, stale []Evidence) {
+// ClassifyEvidenced splits this run's surviving introduced guards into the
+// ones the manifest accounts for and the ones it does not, and reports the
+// entries that have stopped describing the tree.
+//
+// caught is every guard this run put to the suite whose neutralisation turned
+// a test red. An entry is STALE when the guard it names is among them: a test
+// now distinguishes that guard, so the claim that none could is no longer true
+// and the entry should go. That is the case ADR-0026 wrote stale detection
+// for, and it is the only one that can be decided from a diff-scoped run.
+//
+// An entry whose guard this run never analysed is not consulted. It was
+// written for a guard that sits in the base tree, unchanged by this change,
+// and the run has no new fact about it. The first version of this function
+// marked every such entry stale, so the manifest written for the 25 jev.go
+// guards on 2026-09-20 failed every later pull request that touched any Go
+// file at all: the run of 2026-09-25 reported 0 survivors and 0 unexplained
+// guards and still exited 1 on those 25. Scoping the stale verdict to what the
+// run measured is what the ADR's "an entry nobody can tie to a guard" meant.
+//
+// An entry whose guard was removed or rewritten matches nothing and is never
+// consulted again. It cannot exempt anything, because no guard carries its
+// address, and the rewritten guard arrives as an ordinary unexplained
+// survivor that fails the run on its own. Retiring such an entry is
+// maintenance, not a gate.
+func ClassifyEvidenced(caught, introduced []Guard, m *Manifest) (evidenced []Evidenced, unexplained []Guard, stale []Evidence) {
 	if m == nil {
 		return nil, introduced, nil
 	}
@@ -159,8 +183,9 @@ func ClassifyEvidenced(introduced []Guard, m *Manifest) (evidenced []Evidenced, 
 		used[addr] = true
 		evidenced = append(evidenced, Evidenced{Guard: g, Evidence: e})
 	}
-	for addr, e := range m.byAddr {
-		if !used[addr] {
+	for _, g := range caught {
+		addr := g.EvidenceAddress()
+		if e, ok := m.byAddr[addr]; ok && !used[addr] {
 			stale = append(stale, e)
 		}
 	}
@@ -171,6 +196,26 @@ func ClassifyEvidenced(introduced []Guard, m *Manifest) (evidenced []Evidenced, 
 		return stale[i].Producer < stale[j].Producer
 	})
 	return evidenced, unexplained, stale
+}
+
+// Without returns the guards in all that appear in none of the excluded
+// lists, compared by evidence address. The reviewer uses it to name the
+// guards a run caught: everything it analysed less what survived and less
+// what the compiler refused.
+func Without(all []Guard, excluded ...[]Guard) []Guard {
+	drop := map[EvidenceAddress]bool{}
+	for _, list := range excluded {
+		for _, g := range list {
+			drop[g.EvidenceAddress()] = true
+		}
+	}
+	var out []Guard
+	for _, g := range all {
+		if !drop[g.EvidenceAddress()] {
+			out = append(out, g)
+		}
+	}
+	return out
 }
 
 // Evidenced is a survivor and the entry that accounts for it.

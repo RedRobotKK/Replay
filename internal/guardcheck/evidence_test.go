@@ -229,7 +229,7 @@ func TestEV6_EvidenceExemptsOnlyTheGuardItNames(t *testing.T) {
 		Justification:   "dominated by the next check",
 		Evidence:        "probed against the fixture corpus",
 	})
-	evidenced, unexplained, stale := ClassifyEvidenced(gs, m)
+	evidenced, unexplained, stale := ClassifyEvidenced(nil, gs, m)
 	if len(evidenced) != 1 || evidenced[0].Guard.Line != gs[0].Line {
 		t.Fatalf("evidenced = %d, want exactly the named guard", len(evidenced))
 	}
@@ -241,18 +241,119 @@ func TestEV6_EvidenceExemptsOnlyTheGuardItNames(t *testing.T) {
 	}
 }
 
-// EV7: an entry matching no surviving introduced guard is stale and fails.
+// EV7: an entry for a guard this run caught is stale and fails. The guard
+// was put to the suite and a test turned red without it, so the claim that
+// no test could distinguish it has stopped describing the tree.
 func TestEV7_StaleEvidenceIsReported(t *testing.T) {
+	g := Guard{Pkg: "./x", Func: "f", Cond: "err != nil", Producer: "v, err := f()"}
 	m := mustManifest(t, Evidence{
-		EvidenceAddress: EvidenceAddress{Pkg: "./x", Func: "gone", Cond: "err != nil", Producer: "v, err := f()"},
+		EvidenceAddress: g.EvidenceAddress(),
 		Category:        Dominated,
 		Justification:   "j",
 		Evidence:        "e",
 	})
-	_, _, stale := ClassifyEvidenced(nil, m)
+	_, _, stale := ClassifyEvidenced([]Guard{g}, nil, m)
 	if len(stale) != 1 {
-		t.Fatalf("stale = %d, want 1: an entry nobody can tie to a guard has stopped "+
-			"describing the tree", len(stale))
+		t.Fatalf("stale = %d, want 1: the guard this entry names was caught, so the "+
+			"entry has stopped describing the tree", len(stale))
+	}
+}
+
+// EV16: an entry for a guard this run never analysed is left alone. It was
+// written for a guard in the base tree that this change did not touch, and
+// the run has no new fact about it, so it is neither evidenced nor stale.
+//
+// Pinned on the real manifest, because that is where the defect lived: the
+// 25 jev.go entries of 2026-09-20 failed every later pull request that
+// changed any Go file, including one with 0 survivors and 0 unexplained
+// guards on 2026-09-25, under the rule this test replaces.
+func TestEV16_EvidenceForAnUntouchedGuardIsNotStale(t *testing.T) {
+	m, err := LoadManifest("testdata/guard-evidence.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.byAddr) < 25 {
+		t.Fatalf("the real manifest holds %d entries; the fixture this test relies on is gone", len(m.byAddr))
+	}
+	// A run over a file that holds no jev guard: everything it analysed was
+	// caught except the one guard the manifest accounts for.
+	gs, err := Conditionals("../ledger/responses.go", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var caught, introduced []Guard
+	for i := range gs {
+		gs[i].Pkg = "./internal/ledger"
+		if gs[i].Func == "responsesPrefixIdentity" && gs[i].Cond == "err != nil" {
+			introduced = append(introduced, gs[i])
+		} else {
+			caught = append(caught, gs[i])
+		}
+	}
+	if len(introduced) != 1 {
+		t.Fatalf("fixture: the evidenced ledger guard was not found: %d", len(introduced))
+	}
+	evidenced, unexplained, stale := ClassifyEvidenced(caught, introduced, m)
+	if len(evidenced) != 1 || len(unexplained) != 0 {
+		t.Errorf("the run's own evidenced guard: evidenced=%d unexplained=%d, want 1 and 0", len(evidenced), len(unexplained))
+	}
+	if len(stale) != 0 {
+		t.Errorf("stale = %d, want 0: these entries name guards in a file this run never analysed:\n%+v", len(stale), stale)
+	}
+	// And the same manifest, consulted by a run that analysed nothing at all,
+	// reports nothing stale either.
+	if _, _, stale := ClassifyEvidenced(nil, nil, m); len(stale) != 0 {
+		t.Errorf("a run with no guards marked %d entries stale", len(stale))
+	}
+}
+
+// EV17: the three verdicts side by side, on one manifest. A caught guard's
+// entry is stale; a surviving introduced guard's entry is evidenced; a guard
+// nobody analysed keeps its entry untouched. Each address is distinct so a
+// classification that leaks from one bucket into another is visible.
+func TestEV17_StaleIsDecidedOnlyForGuardsThisRunCaught(t *testing.T) {
+	caughtG := Guard{Pkg: "./p", Func: "a", Cond: "err != nil", Producer: "v, err := a()"}
+	survivedG := Guard{Pkg: "./p", Func: "b", Cond: "err != nil", Producer: "v, err := b()"}
+	untouchedG := Guard{Pkg: "./p", Func: "c", Cond: "err != nil", Producer: "v, err := c()"}
+	entry := func(g Guard) Evidence {
+		return Evidence{EvidenceAddress: g.EvidenceAddress(), Category: Dominated, Justification: "j", Evidence: "e"}
+	}
+	m := mustManifest(t, entry(caughtG), entry(survivedG), entry(untouchedG))
+	evidenced, unexplained, stale := ClassifyEvidenced([]Guard{caughtG}, []Guard{survivedG}, m)
+	if len(evidenced) != 1 || evidenced[0].Guard.Func != "b" {
+		t.Errorf("evidenced = %+v, want exactly the surviving guard b", evidenced)
+	}
+	if len(unexplained) != 0 {
+		t.Errorf("unexplained = %+v, want none", unexplained)
+	}
+	if len(stale) != 1 || stale[0].Func != "a" {
+		t.Errorf("stale = %+v, want exactly the caught guard a; c was never analysed and must be left alone", stale)
+	}
+}
+
+// EV18: a surviving introduced guard with an entry is evidenced and never
+// stale, even when the same guard is also listed as caught by mistake: the
+// survivor's own verdict wins, because it is the one this run measured.
+func TestEV18_AnEvidencedSurvivorIsNeverAlsoStale(t *testing.T) {
+	g := Guard{Pkg: "./p", Func: "f", Cond: "err != nil", Producer: "v, err := g()"}
+	m := mustManifest(t, Evidence{EvidenceAddress: g.EvidenceAddress(), Category: StructurallyUnreachable, Justification: "j", Evidence: "e"})
+	evidenced, unexplained, stale := ClassifyEvidenced([]Guard{g}, []Guard{g}, m)
+	if len(evidenced) != 1 || len(unexplained) != 0 || len(stale) != 0 {
+		t.Errorf("evidenced=%d unexplained=%d stale=%d, want 1, 0 and 0", len(evidenced), len(unexplained), len(stale))
+	}
+}
+
+// EV19: Without drops by address, and leaves the rest in order.
+func TestEV19_WithoutDropsByAddress(t *testing.T) {
+	a := Guard{Pkg: "./p", Func: "a", Cond: "x", Producer: "p"}
+	b := Guard{Pkg: "./p", Func: "b", Cond: "x", Producer: "p"}
+	c := Guard{Pkg: "./p", Func: "c", Cond: "x", Producer: "p"}
+	got := Without([]Guard{a, b, c}, []Guard{b}, []Guard{c})
+	if len(got) != 1 || got[0].Func != "a" {
+		t.Errorf("Without = %+v, want only a", got)
+	}
+	if got := Without([]Guard{a, b}); len(got) != 2 {
+		t.Errorf("nothing excluded: %+v", got)
 	}
 }
 
@@ -280,8 +381,8 @@ func TestEV8_TheManifestFailsClosed(t *testing.T) {
 				if err != nil {
 					t.Fatalf("a literal condition should parse: %v", err)
 				}
-				if _, unexplained, stale := ClassifyEvidenced([]Guard{{Pkg: "./p", Func: "f", Cond: "err != nil"}}, m); len(unexplained) != 1 || len(stale) != 1 {
-					t.Errorf("a star matched something; unexplained=%d stale=%d", len(unexplained), len(stale))
+				if _, unexplained, stale := ClassifyEvidenced(nil, []Guard{{Pkg: "./p", Func: "f", Cond: "err != nil"}}, m); len(unexplained) != 1 || len(stale) != 0 {
+					t.Errorf("a star matched something; unexplained=%d stale=%d (the star entry names no analysed guard, so it is left alone and exempts nothing)", len(unexplained), len(stale))
 				}
 				return
 			}
@@ -295,7 +396,7 @@ func TestEV8_TheManifestFailsClosed(t *testing.T) {
 // EV9: a nil manifest exempts nothing.
 func TestEV9_NoManifestExemptsNothing(t *testing.T) {
 	gs := []Guard{{Pkg: "./p", Func: "f", Cond: "err != nil", Producer: "v, err := g()"}}
-	evidenced, unexplained, _ := ClassifyEvidenced(gs, nil)
+	evidenced, unexplained, _ := ClassifyEvidenced(nil, gs, nil)
 	if len(evidenced) != 0 || len(unexplained) != 1 {
 		t.Errorf("a nil manifest exempted something: evidenced=%d unexplained=%d",
 			len(evidenced), len(unexplained))
@@ -441,7 +542,7 @@ func TestEV13_AnAbsentManifestIsEmptyRatherThanAnError(t *testing.T) {
 	}
 	// An empty manifest exempts nothing, which is what makes the absence safe.
 	g := Guard{Pkg: "./p", Func: "f", Cond: "err != nil", Producer: "v, err := g()"}
-	evidenced, unexplained, stale := ClassifyEvidenced([]Guard{g}, m)
+	evidenced, unexplained, stale := ClassifyEvidenced(nil, []Guard{g}, m)
 	if len(evidenced) != 0 || len(unexplained) != 1 || len(stale) != 0 {
 		t.Errorf("an absent manifest exempted something: evidenced=%d unexplained=%d stale=%d, "+
 			"want 0, 1 and 0", len(evidenced), len(unexplained), len(stale))
@@ -498,9 +599,13 @@ func TestEV15_StaleEntriesSortByFunctionBeforeProducer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// No introduced guards, so both entries are stale and the whole list is
-	// what the comparator ordered.
-	_, _, stale := ClassifyEvidenced(nil, m)
+	// Both guards were caught and neither survived, so both entries are stale
+	// and the whole list is what the comparator ordered.
+	caught := []Guard{
+		{Pkg: "./p", Func: "bbb", Cond: "err != nil", Producer: "aaa, err := a()"},
+		{Pkg: "./p", Func: "aaa", Cond: "err != nil", Producer: "zzz, err := z()"},
+	}
+	_, _, stale := ClassifyEvidenced(caught, nil, m)
 	if len(stale) != 2 {
 		t.Fatalf("want 2 stale entries, got %d", len(stale))
 	}
