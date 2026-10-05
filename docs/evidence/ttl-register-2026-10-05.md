@@ -1,9 +1,24 @@
 # Register: cache-TTL setting, written before any write
 
-**Status: REGISTERED, NOT STARTED.** Nothing has been written to any
-settings file. This register exists so that the measurement cannot be
-designed after the result is known. It follows the panel of
-[control-panel-2026-10-05.md](control-panel-2026-10-05.md).
+**Status: REGISTERED, NOT STARTED, NOT YET JUSTIFIED (amended the same
+day).** Nothing has been written to any settings file. This register exists
+so that the measurement cannot be designed after the result is known. It
+follows the panel of [control-panel-2026-10-05.md](control-panel-2026-10-05.md).
+
+**Amendment, 2026-10-05, before any observation.** The hypothesis below
+rests on `learn`'s 28.0%, which [intervention-truth-2026-10-05.md](intervention-truth-2026-10-05.md)
+shows is a session-weighted mean over a population that mixes main-thread
+sessions (1-hour writes) with sub-agent sessions (5-minute writes). On the
+simulator's own bill-weighted terms, 5m sits 0.2% below as-run and the
+costliest tenth of sessions prefers 1h by 3.4%; the apply path refuses on
+this machine for that reason. Before any block runs: the primary metric
+must be bill-weighted (effective tokens over the arm, cost per new input
+token pooled over the arm), with the session-weighted mean secondary; the
+expected effect must be restated from the bill-weighted simulation, which
+is about zero; sub-agent transcripts must be excluded from both arms unless
+the setting is shown to govern them; and the predictor whose number is
+tested must be named. Until those are settled the experiment is not
+justified, and nothing starts.
 
 ## Hypothesis
 
