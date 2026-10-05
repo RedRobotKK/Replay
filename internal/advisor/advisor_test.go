@@ -2,11 +2,14 @@ package advisor
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
@@ -440,5 +443,138 @@ func TestCacheTrafficUSD_AnUnpricedRowWithRealNumbersDoesNotBill(t *testing.T) {
 	// The break arm prices differently and must also refuse.
 	if got, priced := cacheTrafficUSD(KindCacheBreaks, 1_000_000, "unpriced-but-populated", time.Time{}); got != 0 || priced {
 		t.Fatalf("an unpriced row billed %v on the cache-break arm", got)
+	}
+}
+
+// A session whose attribution exceeds the provider's prompt total is set
+// aside, not ranked.
+//
+// The share is a source's estimated tokens over the provider's prompt
+// total, and nothing bounded it from above. On 2026-10-05 a lane that joined
+// 46 compaction segments carried content from 46 contexts against the
+// prompts of one, and `replay advise` led with "Bash inputs are 155% of
+// prompt tokens". No test caught it: the only share assertion on the real
+// fixture is a floor. A share above one means the instrument disagrees with
+// the bill, and a session whose instrument disagrees with the bill has
+// nothing to rank.
+//
+// PASS: the target is not recorded, the session says it was set aside.
+// FAIL: a share above one recorded and later printed as a percentage.
+func TestNoteSetsASessionAsideWhenAttributionExceedsThePrompt(t *testing.T) {
+	ob := Observation{prompt: 1000, targets: map[string]evidence{}, titles: map[string][3]string{}}
+	ob.note(KindToolInputs, "Bash", analysis.Figure{Value: 1550}, true)
+	if !ob.OverAttributed() {
+		t.Fatal("1550 attributed over a prompt of 1000 must set the session aside")
+	}
+	if len(ob.targets) != 0 {
+		t.Errorf("no target may be recorded from a share above one, got %+v", ob.targets)
+	}
+
+	// Reads accumulate per file; the bound applies to the running total.
+	ob = Observation{prompt: 1000, targets: map[string]evidence{}, titles: map[string][3]string{}}
+	ob.noteReads("Read main.go", analysis.BlameEntry{PromptTokens: analysis.Figure{Value: 600}, Occurrences: 1})
+	if ob.OverAttributed() {
+		t.Fatal("600 of 1000 is within the bill")
+	}
+	ob.noteReads("Read main.go", analysis.BlameEntry{PromptTokens: analysis.Figure{Value: 600}, Occurrences: 1})
+	if !ob.OverAttributed() {
+		t.Fatal("1200 of 1000 is over the bill")
+	}
+	if _, ok := ob.targets[key(KindHotFile, "Read main.go")]; ok {
+		t.Error("a hot-file total above the bill may not stay recorded")
+	}
+}
+
+// Suggest ranks nothing from a session that was set aside.
+func TestSuggestIgnoresASetAsideSession(t *testing.T) {
+	at := time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC)
+	good := Observation{at: at, prompt: 1000, targets: map[string]evidence{
+		key(KindToolInputs, "Bash"): {at: at, share: 0.3, tokens: 300, priced: true},
+	}, titles: map[string][3]string{}}
+	bad := Observation{at: at.Add(time.Hour), prompt: 1000, overAttributed: true, targets: map[string]evidence{
+		key(KindToolInputs, "Bash"): {at: at.Add(time.Hour), share: 1.55, tokens: 1550, priced: true},
+	}, titles: map[string][3]string{}}
+	got := Suggest([]Observation{good, bad}, nil)
+	if len(got) != 1 || got[0].Sessions != 1 {
+		t.Fatalf("one suggestion from one session, got %+v", got)
+	}
+	if got[0].Share > 1 {
+		t.Errorf("share %.2f above one reached the ranking", got[0].Share)
+	}
+	if SetAside([]Observation{good, bad}) != 1 {
+		t.Errorf("SetAside must count the one flagged session")
+	}
+}
+
+// No suggestion share above one, over every transcript this package can
+// reach: the vendored files in CI, and the machine's own corpus when
+// REPLAY_CORPUS_DIR names it.
+//
+// The vendored files cannot reproduce the 155% case, so this test is the
+// local real-data gate rather than the proof; the proof is the unit test
+// above and mutant M140.
+func TestInvariant_NoSuggestionShareAboveOne(t *testing.T) {
+	paths := []string{"../transcript/testdata/session-redacted.jsonl"}
+	if dir := os.Getenv("REPLAY_CORPUS_DIR"); dir != "" {
+		more, err := filepath.Glob(filepath.Join(dir, "*", "*.jsonl"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, more...)
+	}
+	var obs []Observation
+	for _, p := range paths {
+		s, err := transcript.ParseClaudeCodeFile(p)
+		if err != nil {
+			continue
+		}
+		if ob, ok := Observe(s); ok {
+			for k, ev := range ob.targets {
+				if ev.share > 1 && !ob.overAttributed {
+					t.Errorf("%s: %s share %.2f recorded without setting the session aside", filepath.Base(p), k, ev.share)
+				}
+			}
+			obs = append(obs, ob)
+		}
+	}
+	for _, s := range Suggest(obs, nil) {
+		if s.Share > 1 || s.Share < 0 {
+			t.Errorf("%s %s: share %.3f outside [0, 1]", s.Kind, s.Target, s.Share)
+		}
+	}
+	t.Logf("%d observations, %d set aside", len(obs), SetAside(obs))
+}
+
+// A set-aside session changes nothing about tracking either.
+//
+// Suggest samples every observation once per target for track(), seen or
+// not, and an unseen sample counts as a session where the target was
+// absent. A session set aside is not a session where Bash inputs were
+// absent; it is a session with no instrument. Skipping it in the ranking
+// but sampling it in the tracking would move the realized share.
+func TestSuggestDoesNotSampleASetAsideSessionForTracking(t *testing.T) {
+	at := time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC)
+	k := key(KindToolInputs, "Bash")
+	var obs []Observation
+	for i := 0; i < 12; i++ {
+		share := 0.5
+		if i >= 8 {
+			share = 0.1
+		}
+		obs = append(obs, Observation{at: at.Add(time.Duration(i) * time.Hour), prompt: 1000,
+			targets: map[string]evidence{k: {at: at, share: share, tokens: int(share * 1000), priced: true}},
+			titles:  map[string][3]string{}})
+	}
+	applied := map[string]bool{id(KindToolInputs, "Bash"): true}
+	before := Suggest(append([]Observation(nil), obs...), applied)
+	if len(before) != 1 || before[0].Status == Pending {
+		t.Fatalf("setup: an applied suggestion over 12 sessions must be judged, got %+v", before)
+	}
+	aside := Observation{at: at.Add(13 * time.Hour), prompt: 1000, overAttributed: true,
+		targets: map[string]evidence{}, titles: map[string][3]string{}}
+	after := Suggest(append(append([]Observation(nil), obs...), aside), applied)
+	if len(after) != 1 || after[0].Status != before[0].Status || after[0].RealizedShare != before[0].RealizedShare {
+		t.Errorf("a set-aside session moved the tracking: before %s %.3f, after %s %.3f",
+			before[0].Status, before[0].RealizedShare, after[0].Status, after[0].RealizedShare)
 	}
 }

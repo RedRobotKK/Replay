@@ -231,6 +231,32 @@ type Observation struct {
 	model   string
 	targets map[string]evidence // keyed by kind + target
 	titles  map[string][3]string
+	// overAttributed marks a session whose attribution exceeded the
+	// provider's prompt total: the instrument disagrees with the bill, so
+	// nothing from the session is ranked.
+	overAttributed bool
+}
+
+// OverAttributed reports whether the session was set aside because a
+// source's attributed tokens exceeded the provider's prompt total.
+func (ob Observation) OverAttributed() bool { return ob.overAttributed }
+
+// setAside drops everything recorded from the session: the targets noted
+// before the one that exceeded the bill came from the same instrument.
+func (ob *Observation) setAside() {
+	ob.overAttributed = true
+	ob.targets = map[string]evidence{}
+}
+
+// SetAside counts the observations that were set aside.
+func SetAside(obs []Observation) int {
+	n := 0
+	for _, ob := range obs {
+		if ob.overAttributed {
+			n++
+		}
+	}
+	return n
 }
 
 // Observe extracts targets from one session's main lane. Sessions that
@@ -300,6 +326,14 @@ func fileTarget(label string) string {
 // for kinds whose threshold is elsewhere.
 func (ob *Observation) note(kind Kind, target string, tokens analysis.Figure, estimated bool) {
 	share := float64(tokens.Value) / float64(ob.prompt)
+	// More attributed to one source than the provider billed for the whole
+	// lane is not a large share, it is an instrument that disagrees with the
+	// bill. Measured once at 155% on a lane that joined 46 compaction
+	// segments; nothing bounded the share above until then.
+	if share > 1 {
+		ob.setAside()
+		return
+	}
 	if kind != KindCacheBreaks && kind != KindFirstTurn && share < MinShare {
 		return
 	}
@@ -321,6 +355,10 @@ func (ob *Observation) noteReads(name string, e analysis.BlameEntry) {
 	ev.tokens += e.PromptTokens.Value
 	ev.share = float64(ev.tokens) / float64(ob.prompt)
 	ev.reads += e.Occurrences
+	if ev.share > 1 {
+		ob.setAside()
+		return
+	}
 	ev.usd, ev.priced = cacheTrafficUSD(KindHotFile, ev.tokens, ob.model, ob.at)
 	ob.targets[k] = ev
 }
@@ -484,6 +522,9 @@ func Suggest(obs []Observation, applied map[string]bool) []Suggestion {
 	aggs := map[string]*agg{}
 	var order []string
 	for _, ob := range obs {
+		if ob.overAttributed {
+			continue
+		}
 		for k, ev := range ob.targets {
 			a, ok := aggs[k]
 			if !ok {
@@ -509,6 +550,9 @@ func Suggest(obs []Observation, applied map[string]bool) []Suggestion {
 	}
 	sort.Strings(order)
 	for _, ob := range obs {
+		if ob.overAttributed {
+			continue
+		}
 		for k, a := range aggs {
 			// The comma-ok is the whole fix. Without it this read is
 			// indistinguishable from a measured zero.

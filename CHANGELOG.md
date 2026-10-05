@@ -31,6 +31,15 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- **`replay advise` sets aside a session whose attribution exceeds the
+  provider's prompt total, and says how many.** A share is a source's
+  estimated tokens over the provider's prompt total and nothing bounded it
+  from above; on a lane that joined 46 compaction segments the ranking led
+  with "Bash inputs are 155% of prompt tokens" while the test suite was green.
+  A share above one is an instrument that disagrees with the bill, so the
+  session is counted in the header ("3,213 found, 2,643 calibrated, 0 set
+  aside") and ranked nowhere. A local invariant test runs the same bound over
+  the machine's own corpus when `REPLAY_CORPUS_DIR` names it. Frozen as M140.
 - **`replay context` accounts for each compaction the client recorded.** One
   line per boundary: the prompt before and what was kept, from the client's own
   record; what the first prompt after the boundary carried, from the

@@ -1352,8 +1352,8 @@
       "discovered": "2026-10-02",
       "note": "The header says 0 sessions were found above findings derived from one. The evidence line under each finding and the header above them disagree.",
       "file": "cmd/replay/advise.go",
-      "anchor": "len(files), len(obs))",
-      "replacement": "0, len(obs))",
+      "anchor": "len(files), len(obs), advisor.SetAside(obs))",
+      "replacement": "0, len(obs), advisor.SetAside(obs))",
       "killedBy": [
         "TestE2E_Advise"
       ]
@@ -1838,6 +1838,19 @@
         "TestCompactionDetailWithholdsAShareAboveOneHundred"
       ],
       "note": "One record in the measured corpus reports postTokens above preTokens (22,303 to 296,742). Dropped() already clamps that record out of the overstatement total; the per-event detail added on 2026-10-05 prints the kept share, and without this guard the record reads as 1330% kept beside figures a reader is meant to trust. The guard prints the sizes as recorded and withholds the share; this mutant derives it anyway."
+    },
+    {
+      "id": "M140",
+      "name": "advisor-share-above-one-ranked",
+      "class": "claim-outruns-evidence",
+      "discovered": "2026-10-05",
+      "file": "internal/advisor/advisor.go",
+      "anchor": "\tif share > 1 {\n\t\tob.setAside()\n\t\treturn\n\t}\n\tif kind != KindCacheBreaks",
+      "replacement": "\tif share > 100 {\n\t\tob.setAside()\n\t\treturn\n\t}\n\tif kind != KindCacheBreaks",
+      "killedBy": [
+        "TestNoteSetsASessionAsideWhenAttributionExceedsThePrompt"
+      ],
+      "note": "An advisor share is a source's estimated tokens over the provider's prompt total, and nothing bounded it above. On 2026-10-05 a lane that joined 46 compaction segments made replay advise lead with \"Bash inputs are 155% of prompt tokens\"; the suite was green, the real corpus was not. A share above one is an instrument that disagrees with the bill, so the session is set aside and counted in the header instead of ranked. This mutant raises the bound past anything a session can reach."
     }
   ],
   "knownSurvivors": [

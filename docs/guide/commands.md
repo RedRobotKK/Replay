@@ -1029,6 +1029,13 @@ not choose.
 describes the change, and `--yes` is what actually writes it. Two steps rather than one because a
 tool editing your settings unasked is a different thing from a tool suggesting an edit.
 
+**It sets aside a session whose attribution exceeds the provider's bill.** A share is a source's
+estimated tokens over the provider's prompt total for the lane, and a share above one hundred percent
+is not a large share: it is an instrument that disagrees with the bill. Such a session is counted in
+the header ("3216 found, 2646 calibrated, 4 set aside") and ranked nowhere. The case that forced the
+bound was a lane that joined 46 compaction segments and led the ranking with "Bash inputs are 155% of
+prompt tokens" while every test was green.
+
 `--out` names the advice file that tracks whether a suggestion was later borne out
 (default `~/.replay/advice.json`). Pass `--out -` to keep no state, which makes each run independent
 and gives up the `verified` / `not verified` follow-up that the tracking exists for.

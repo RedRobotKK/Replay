@@ -396,7 +396,7 @@ func TestE2E_Advise(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v\n%s", err, errb)
 	}
-	mustContain(t, "advise", out, "Sessions: 1 found, 1 calibrated", "cache breaks re-billed 1% of prompt tokens")
+	mustContain(t, "advise", out, "Sessions: 1 found, 1 calibrated, 0 set aside", "cache breaks re-billed 1% of prompt tokens")
 }
 
 func TestE2E_Learn(t *testing.T) {

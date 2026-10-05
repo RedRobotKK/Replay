@@ -133,7 +133,7 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 		prose = stderr
 	}
 	p := analysis.NewPrinter(prose)
-	p.Printf("Sessions: %d found, %d calibrated. Ranked by cache-write and cache-read dollars, not token share. Predictions assume the target is halved.\n\n", len(files), len(obs))
+	p.Printf("Sessions: %d found, %d calibrated, %d set aside (attribution exceeded the provider's prompt total). Ranked by cache-write and cache-read dollars, not token share. Predictions assume the target is halved.\n\n", len(files), len(obs), advisor.SetAside(obs))
 	if len(suggestions) == 0 {
 		p.Printf("No token source above %.0f%% of prompt tokens in any session.\n", advisor.MinShare*100)
 	}
@@ -212,7 +212,7 @@ func runAdvise(args []string, stdout, stderr io.Writer) error {
 	// file wholesale, so dropping it here would delete the reader's record on
 	// the next advise and make the mark they were told was saved last exactly
 	// until they used the tool again.
-	data, err := json.MarshalIndent(adviceFile{Schema: advisor.AdviceFileSchema, Generated: time.Now().UTC(), Sessions: len(obs), Transcripts: len(files), Suggestions: suggestions, Decisions: decisions}, "", "  ")
+	data, err := json.MarshalIndent(adviceFile{Schema: advisor.AdviceFileSchema, Generated: time.Now().UTC(), Sessions: len(obs) - advisor.SetAside(obs), Transcripts: len(files), Suggestions: suggestions, Decisions: decisions}, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode advice file: %w", err)
 	}

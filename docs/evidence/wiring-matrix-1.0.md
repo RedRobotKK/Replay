@@ -32,7 +32,7 @@ killer each surface is held to.
 | `trim` | yes | `dispatch main.go:212 → runTrim` | `cmd/replay/trim.go @ "plan := analysis.ScoreTrim(rep.Lane, rep.Fit, *capBytes)"` | `TestE2E_Trim` | `TestE2E_Trim` | `M99` | `TestE2E_Trim` | PASS |
 | `route` | yes | `dispatch main.go:214 → runRoute` | `cmd/replay/route.go @ "r.From.WriteShort, r.From.WriteLong)"` | `TestE2E_Route` | `TestE2E_Route` | `M100` | `TestE2E_Route` | PASS |
 | `context` | yes | `dispatch main.go:216 → runContext` | `cmd/replay/context.go @ "r.Share*100, formatCount(r.Tokens)"` | `TestE2E_Context` | `TestE2E_Context` | `M101` | `TestE2E_Context` | PASS |
-| `advise` | yes | `dispatch main.go:218 → runAdvise` | `cmd/replay/advise.go @ "len(files), len(obs))"` | `TestE2E_Advise` | `TestE2E_Advise` | `M102` | `TestE2E_Advise` | PASS |
+| `advise` | yes | `dispatch main.go:218 → runAdvise` | `cmd/replay/advise.go @ "len(files), len(obs), advisor.SetAside(obs))"` | `TestE2E_Advise` | `TestE2E_Advise` | `M102` | `TestE2E_Advise` | PASS |
 | `learn` | yes | `dispatch main.go:220 → runLearn` | `internal/learn/learn.go @ "res.Sessions.Found = found"` | `TestE2E_Learn` | `TestE2E_Learn` | `M103` | `TestE2E_Learn` | PASS |
 | `redact` | yes | `dispatch main.go:222 → runRedact` | `internal/transcript/redact.go @ "obj[\"cwd\"] = \"/redacted\""` | `TestE2E_Redact` | `TestE2E_Redact` | `M104` | `TestE2E_Redact` | PASS |
 | `prefix` | yes | `dispatch main.go:224 → runPrefix` | `cmd/replay/prefix.go @ "\"  For the size of one such break on your own history:  r…"` | `TestE2E_Prefix` | `TestE2E_Prefix` | `M105` | `TestE2E_Prefix` | PASS |

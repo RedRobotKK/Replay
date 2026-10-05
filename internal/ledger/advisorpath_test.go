@@ -63,7 +63,11 @@ func TestAP1_ToolsSurviveTheLedgerAndReachTheAdvisor(t *testing.T) {
 				Blocks: []ledger.Block{{
 					Kind: transcript.KindToolUse, ToolName: "Bash", Bytes: 60,
 				}},
-				Usage: &transcript.Usage{Input: 500, Output: 60},
+				// 11,800 bytes of prompt billed as 3,500 tokens. This fixture
+				// used to bill it as 500, which no provider does, and the
+				// advisor now sets aside a session whose attribution exceeds
+				// its bill rather than ranking it.
+				Usage: &transcript.Usage{Input: 3500, Output: 60},
 			},
 		}
 		if err := store.Append(rec); err != nil {
