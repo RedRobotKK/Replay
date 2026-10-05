@@ -93,6 +93,17 @@ own terms; 8.2% was the first prompt after, over the prompt before. Both are
 now printed by name, and the difference, median 52k tokens, is marked
 calculated.
 
+## Repeat cost at file level, measured the same day
+
+The productivity researcher's item: is "did I have to repeat information
+afterward" attributable at file level. Over the 22 boundaries on this
+machine with at least five Read calls after them, the share of the first
+thirty Reads that were files already read before the boundary is 0.00 at
+the median and 0.10 at p90; 18 of the 22 boundaries re-read nothing. So on
+this machine the item collapses to the token pair above, as its proposer
+said it would: the 52k tokens beyond the kept summary are not re-reads of
+files, and their composition is not established here.
+
 ## What shipped from this decision
 
 - `replay context` prints one line per recorded compaction: before, kept,
