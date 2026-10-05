@@ -537,7 +537,7 @@ func TestWiringGate_ProvenRowsCiteShippedPackages(t *testing.T) {
 	pkg := regexp.MustCompile("`(internal/[a-z0-9_/]+)`")
 	proven := 0
 	for i, line := range strings.Split(string(body), "\n") {
-		if !strings.HasPrefix(line, "|") || !(strings.Contains(line, "| ESTABLISHED |") || strings.Contains(line, "PROVEN")) {
+		if !strings.HasPrefix(line, "|") || (!strings.Contains(line, "| ESTABLISHED |") && !strings.Contains(line, "PROVEN")) {
 			continue
 		}
 		proven++

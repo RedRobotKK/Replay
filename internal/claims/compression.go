@@ -17,20 +17,20 @@ package claims
 type Compression string
 
 const (
-	// Lossless: every distinction the contract requires survives.
+	// Lossless means every distinction the contract requires survives.
 	Lossless Compression = "LOSSLESS"
-	// IntentionallyCollapsed: distinctions are lost and the contract says so,
+	// IntentionallyCollapsed means distinctions are lost and the contract says so,
 	// usually with the reason in a comment at the site.
 	IntentionallyCollapsed Compression = "INTENTIONALLY_COLLAPSED"
-	// UnintentionallyCollapsed: the contract requires a distinction that the
+	// UnintentionallyCollapsed means the contract requires a distinction that the
 	// site does not preserve. This is the only value that names a defect.
 	UnintentionallyCollapsed Compression = "UNINTENTIONALLY_COLLAPSED"
-	// CompressionUnmeasured: a candidate that was found and not attacked.
+	// CompressionUnmeasured means a candidate that was found and not attacked.
 	CompressionUnmeasured Compression = "UNMEASURED"
-	// CompressionNoEndpoint: no user-visible claim depends on this site, so
+	// CompressionNoEndpoint means no user-visible claim depends on this site, so
 	// there is nothing for a collapse to damage.
 	CompressionNoEndpoint Compression = "NO_ENDPOINT"
-	// CompressionNotApplicable: inspected and found not to be a convergence.
+	// CompressionNotApplicable means inspected and found not to be a convergence.
 	CompressionNotApplicable Compression = "NOT_APPLICABLE"
 )
 

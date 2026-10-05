@@ -21,22 +21,22 @@ package claims
 type Result string
 
 const (
-	// Established: a positive control passes, a negative control fails, and
+	// Established means a positive control passes, a negative control fails, and
 	// at least one mutation that should break it does break it.
 	Established Result = "ESTABLISHED"
-	// Bounded: true only inside conditions named in Scope. The commonest
+	// Bounded means true only inside conditions named in Scope. The commonest
 	// honest outcome, and the one that over-claiming erases.
 	Bounded Result = "BOUNDED"
-	// Refuted: a controlled fixture contradicts the claim as worded.
+	// Refuted means a controlled fixture contradicts the claim as worded.
 	Refuted Result = "REFUTED"
-	// NotMeasured: no endpoint exists. Not evidence of absence.
+	// NotMeasured means no endpoint exists. Not evidence of absence.
 	NotMeasured Result = "NOT_MEASURED"
-	// NoEndpoint: stronger than NotMeasured. No endpoint can exist from the
+	// NoEndpoint is stronger than NotMeasured. No endpoint can exist from the
 	// evidence Replay has access to, for a structural reason that is stated.
 	NoEndpoint Result = "NO_ENDPOINT"
-	// Unresolved: evidence is present but does not settle it.
+	// Unresolved means evidence is present but does not settle it.
 	Unresolved Result = "UNRESOLVED"
-	// DeliberateNonClaim: the product explicitly declines to assert this, and
+	// DeliberateNonClaim means the product explicitly declines to assert this, and
 	// the decline is itself load-bearing and tested.
 	DeliberateNonClaim Result = "DELIBERATE_NON_CLAIM"
 )

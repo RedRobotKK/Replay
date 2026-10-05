@@ -19,6 +19,8 @@ package claims
 // reconstruction starts reading as an observation.
 type EvidenceBasis string
 
+// The evidence bases, from the one a provider stated to the one nothing can
+// settle.
 const (
 	Observed      EvidenceBasis = "OBSERVED"      // read from a provider's own record
 	Reconstructed EvidenceBasis = "RECONSTRUCTED" // derived from local artifacts
@@ -27,6 +29,9 @@ const (
 	NoBasis       EvidenceBasis = "NOT_APPLICABLE"
 )
 
+// Controls is what a claim is verified against: its evidence basis, the
+// fixtures where it must hold, must not hold, and must refuse, and the
+// assumptions and gaps that are stated rather than hidden.
 type Controls struct {
 	// Basis is the epistemic class of the underlying measurement.
 	Basis EvidenceBasis
@@ -48,6 +53,7 @@ type Controls struct {
 	Gap []string
 }
 
+// ControlsFor maps a claim id to its controls.
 var ControlsFor = map[string]Controls{
 	"RPL-C001": {
 		Basis: Reconstructed, Layer: "surface.Class",

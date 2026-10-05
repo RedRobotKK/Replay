@@ -412,11 +412,12 @@ func TestXW7_TheJoinContractBoundary(t *testing.T) {
 	// a boundary, only a list of agreements.
 	var merges, refusals, unjoinables int
 	for _, r := range rows {
-		if r.wantDuplicated > 0 {
+		switch {
+		case r.wantDuplicated > 0:
 			merges++
-		} else if r.wantUnjoinable > 0 {
+		case r.wantUnjoinable > 0:
 			unjoinables++
-		} else {
+		default:
 			refusals++
 		}
 	}

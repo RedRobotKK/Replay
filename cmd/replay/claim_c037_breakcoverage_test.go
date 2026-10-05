@@ -629,11 +629,11 @@ type c037Disclosure struct {
 
 func c037Candidates() []c037Disclosure {
 	return []c037Disclosure{
-		{"CORRECT: priced break tokens over all break tokens", func(o c037Oracle, p c037Prod) (float64, int) {
+		{"CORRECT: priced break tokens over all break tokens", func(o c037Oracle, _ c037Prod) (float64, int) {
 			c, _ := o.Coverage()
 			return c, o.Total()
 		}},
-		{"M1 force the disclosure to 100%", func(o c037Oracle, p c037Prod) (float64, int) {
+		{"M1 force the disclosure to 100%", func(o c037Oracle, _ c037Prod) (float64, int) {
 			return 1, o.Total()
 		}},
 		{"M2 derive coverage from REQUEST counts", func(o c037Oracle, p c037Prod) (float64, int) {
@@ -655,7 +655,7 @@ func c037Candidates() []c037Disclosure {
 			}
 			return 1, o.Total()
 		}},
-		{"M5 drop unpriceable break tokens and claim full coverage", func(o c037Oracle, p c037Prod) (float64, int) {
+		{"M5 drop unpriceable break tokens and claim full coverage", func(o c037Oracle, _ c037Prod) (float64, int) {
 			return 1, o.PricedTokens
 		}},
 	}

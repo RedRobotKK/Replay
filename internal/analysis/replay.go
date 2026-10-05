@@ -97,7 +97,6 @@ func (t *Tally) AddAt(u transcript.Usage, model string, at time.Time) {
 	}
 }
 
-// CachedShare is cache reads divided by prompt tokens.
 // PricedShare is priced requests divided by the requests that reached a price
 // lookup at all. The denominator is the PAIR, not Requests, for the reason
 // stated on the fields: Requests means different things on different paths and
@@ -113,6 +112,7 @@ func (t Tally) PricedShare() float64 {
 	return float64(t.PricedRequests) / float64(n)
 }
 
+// CachedShare is cache reads divided by prompt tokens.
 func (t Tally) CachedShare() float64 {
 	return cachemodel.CachedShare(t.Reads, t.PromptTokens)
 }

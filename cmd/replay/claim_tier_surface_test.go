@@ -57,7 +57,7 @@ func tierSurfaces() []surfaceProbe {
 	return []surfaceProbe{
 		{"cost", runCost, func(d string) []string { return []string{d} }},
 		{"cost --json", runCost, func(d string) []string { return []string{"--json", d} }},
-		{"burn", runBurn, func(d string) []string { return nil }},
+		{"burn", runBurn, func(_ string) []string { return nil }},
 		{"advise", runAdvise, func(d string) []string { return []string{d} }},
 		{"since", runSince, func(d string) []string { return []string{d} }},
 		{"context", runContext, func(d string) []string { return []string{d} }},
@@ -67,8 +67,8 @@ func tierSurfaces() []surfaceProbe {
 		{"budget", runBudget, func(d string) []string { return []string{d} }},
 		{"prefix", runPrefix, func(d string) []string { return []string{d} }},
 		{"learn", runLearn, func(d string) []string { return []string{d} }},
-		{"rules", runRules, func(d string) []string { return nil }},
-		{"privacy", runPrivacy, func(d string) []string { return nil }},
+		{"rules", runRules, func(_ string) []string { return nil }},
+		{"privacy", runPrivacy, func(_ string) []string { return nil }},
 	}
 }
 

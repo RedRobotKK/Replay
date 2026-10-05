@@ -215,9 +215,7 @@ func num(v any) (float64, bool) {
 	return f, ok
 }
 
-func walk(v any, visit func(map[string]any)) { walkExcept(v, nil, visit) }
-
-// walkExcept is walk with a set of sub-object names it will not descend into.
+// walkExcept visits every object in v, skipping the sub-object names in skip.
 func walkExcept(v any, skip map[string]bool, visit func(map[string]any)) {
 	switch t := v.(type) {
 	case map[string]any:

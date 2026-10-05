@@ -4,8 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/RedRobotKK/Replay/internal/cachemodel"
-	"github.com/RedRobotKK/Replay/internal/surface"
 	"io"
 	"io/fs"
 	"net"
@@ -15,6 +13,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/surface"
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/proxy"
