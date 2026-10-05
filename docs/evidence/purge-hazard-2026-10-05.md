@@ -1,6 +1,7 @@
 # Purge hazard, 2026-10-05
 
-**Recorded separately from the TTL work on purpose. Not fixed here.**
+**Recorded separately from the TTL work on purpose. Fixed as its own unit
+in `e9da6a8`, 2026-10-05; the proof is at the end of this record.**
 
 **Command shape.** `replay purge <dir> --older-than <window> --yes`
 enumerates the entries directly inside `<dir>`, keeps those whose name ends
@@ -36,3 +37,23 @@ fails today because both files are removed.
 registry: accept the ledger store and `ledger-*` siblings and the archive;
 refuse any other directory with "purge acts on ledger directories; <dir>
 is not one". One commit, one mutant, no change to the TTL unit.
+
+## Proof, e9da6a8
+
+- RED: `TestPG10_OlderThanRefusesADirectoryTheRegistryDoesNotNameAsALedger`
+  against the previous code: "a directory the registry does not name as a
+  ledger must be refused", both files removed.
+- GREEN: `isLedgerDir` from the registry; the refusal names what the
+  command acts on, before anything is read.
+- Positive control: `TestPG11_OlderThanStillActsOnLedgerDirectoriesAndOnlyThose`:
+  ledger, ledger-grok and archive still purge; vault, policy.json, ledgerx
+  and notes are refused with their files intact; eight name cases pinned.
+- Mutation: 8 hand mutations on the guard (removed, inverted, exact match
+  dropped, prefix dropped, prefix without the dash, purgeable check
+  dropped, dir check dropped, every store accepted), 8 killed; M145 frozen
+  and killed through the harness.
+- Regression: full suite clean, lint 0 issues, 3 introduced guards, 0
+  survived. Two fixtures renamed to ledger-shaped paths with their
+  assertions unchanged.
+- Not changed: `--session`, which walks the directory given; the registry
+  contract; anything on the TTL path.
