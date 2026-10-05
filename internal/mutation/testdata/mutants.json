@@ -1864,6 +1864,32 @@
         "TestApplyDoesNotClaimAppliedWithoutReadingTheValueBack"
       ],
       "note": "Until 2026-10-05 the only intervention Replay performs itself, writing promptCacheTtl, left no record beyond a backup file. The record added that day earns INTERVENTION_APPLIED by reading the value back from the settings file after the write; when the file reads something else the record says APPLY_ATTEMPTED with state_change UNVERIFIED and the value it found. This mutant claims the change whenever the write call returned nil, which is the write succeeding, not the state changing."
+    },
+    {
+      "id": "M142",
+      "name": "learn-tie-floor-compared-a-share-to-a-token-count",
+      "class": "evidence",
+      "discovered": "2026-10-05",
+      "file": "internal/learn/learn.go",
+      "anchor": "\t\tif !ok || math.Abs(saving) < minMeaningfulShare {\n",
+      "replacement": "\t\tif !ok || math.Abs(saving) < minMeaningfulShare*s.AsRun.EffectiveTokens {\n",
+      "killedBy": [
+        "TestASavingShareIsNotComparedToATokenCount"
+      ],
+      "note": "A session's saving is a share of its own as-run effective tokens. The tie floor multiplied one part per million by the session's token count and compared the share to that, so every session over a million effective tokens was dropped from the verdict as a tie while the same share on a small session counted. On this machine's corpus the correction moved ttl-5m from 755 to 897 sessions and the context-edit(trigger=50000) candidate from 1,203 to 1,653, the dropped sessions being the ones that carry the bill. This mutant restores the token-count comparison."
+    },
+    {
+      "id": "M143",
+      "name": "ttl-plan-scored-a-sub-agent-lane-the-setting-cannot-reach",
+      "class": "claim-outruns-evidence",
+      "discovered": "2026-10-05",
+      "file": "cmd/replay/apply.go",
+      "anchor": "\tif r == nil || r.Lane == nil || r.Lane.Sidechain {\n\t\treturn false\n\t}\n",
+      "replacement": "\tif r == nil || r.Lane == nil {\n\t\treturn false\n\t}\n",
+      "killedBy": [
+        "TestTTLInputRefusesASubAgentLaneBeforeAggregation"
+      ],
+      "note": "promptCacheTtl governs the main-thread query sources; sub-agents are governed by subagentPromptCacheTtl, read from the installed client's resolver on 2026-10-05. Both predictors scored sub-agent transcripts, 2,223 files on the machine this was built on, all written with isSidechain, under TTL policies the setting cannot apply to them: learn reported ttl-1h at minus 35% over 1,087 sessions, and with sub-agents excluded reports minus 4% over 9. A predictor must not score a workload the intervention cannot reach. This mutant admits the sidechain lane again."
     }
   ],
   "knownSurvivors": [

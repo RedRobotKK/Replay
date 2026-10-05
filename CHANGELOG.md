@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **`replay learn` dropped every session over a million effective tokens
+  from its verdicts as a "tie".** A session's saving is a share of its own
+  as-run effective tokens; the tie floor multiplied one part per million by
+  the session's token count and compared the share to that. On this
+  machine's corpus the correction takes ttl-5m from 755 to 897 sessions and
+  context-edit(trigger=50000) from 1,203 to 1,653; the sessions that were
+  dropped are the ones that carry the bill. Frozen as M142.
+- **Both TTL predictors scored sub-agent transcripts the setting cannot
+  reach.** `promptCacheTtl` governs the main-thread query sources; sub-agents
+  are governed by `subagentPromptCacheTtl`, read from the installed client's
+  own resolver. On this machine every one of 2,223 sub-agent transcripts
+  wrote 5-minute caches with the setting unset, and scoring them under 1h
+  produced "ttl-1h minus 35%" in `learn`. The TTL family is now scored on
+  main-thread lanes only in `learn`, and `advise --apply` refuses a sidechain
+  lane before any aggregation. With sub-agents excluded, `learn` reports
+  ttl-1h at minus 4% over 9 sessions, and the apply predictor, which weighs
+  sessions by their tokens, now proposes 1h on this corpus where it refused
+  before; `learn`, which weighs sessions equally, still selects 5m. The two
+  answer different questions, and each now says which. Frozen as M143.
 - **Compaction segments are no longer called sub-agent lanes.** A lane was keyed
   on the first conversational line of a request's parent chain, and Claude Code
   starts every compaction with a parentless boundary, so each post-compaction

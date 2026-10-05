@@ -139,6 +139,15 @@ func Score(s *transcript.Session, candidates []Candidate) (SessionScore, bool) {
 	}
 	out.ReadsAfterClear = rep.ReReads.RepeatedAfterClear
 	for _, c := range candidates {
+		// The TTL family is a client setting that governs the main-thread
+		// query sources only (promptCacheTtl); sub-agents are governed by
+		// subagentPromptCacheTtl, read from the client's own resolver on
+		// 2026-10-05. A sub-agent lane is outside what the setting can
+		// reach, so it carries no TTL evidence. Context-edit candidates run
+		// in the proxy and reach every request.
+		if c.Family == FamilyTTL && lane.Sidechain {
+			continue
+		}
 		var r analysis.PolicyResult
 		switch {
 		case c.ContextEdit != nil:
@@ -344,13 +353,16 @@ func selectFrom(candidates []Candidate, scores []SessionScore, found int, opts O
 // judge scores one candidate against the rules that do not depend on
 // other candidates.
 // minMeaningfulShare is the floor below which a simulated saving is treated as
-// arithmetic noise rather than evidence, as a share of the session's own scale.
+// arithmetic noise rather than evidence.
 //
-// Relative, not absolute: savings are in effective tokens, so the same figure
-// means something different on a session of a hundred tokens and one of three
-// hundred million. One part per million is far below anything a person would
-// act on and far above the rounding that makes a policy identical to as-run
-// score a few billionths rather than exactly zero.
+// A saving is already a share of the session's own as-run effective tokens
+// (see Score), so the floor is a share too. One part per million is far
+// below anything a person would act on and far above the rounding that
+// makes a policy identical to as-run score a few billionths rather than
+// exactly zero. Until 2026-10-05 this floor was multiplied by the session's
+// token count, which compared a share to a token count: every session over
+// a million effective tokens was dropped from the verdict as a tie, and
+// the sessions that carry the bill were the ones excluded.
 const minMeaningfulShare = 1e-6
 
 func judge(c Candidate, scores []SessionScore, opts Options) Verdict {
@@ -364,11 +376,7 @@ func judge(c Candidate, scores []SessionScore, opts Options) Verdict {
 		// saving of a few billionths of a token. Exact equality let that count
 		// as full evidence on every session, and a tight interval around noise
 		// is still an interval above zero.
-		scale := s.AsRun.EffectiveTokens
-		if scale <= 0 {
-			scale = float64(s.AsRun.PromptTokens)
-		}
-		if !ok || math.Abs(saving) < minMeaningfulShare*scale {
+		if !ok || math.Abs(saving) < minMeaningfulShare {
 			continue
 		}
 		v.Estimated = v.Estimated || s.Estimated[c.Name]

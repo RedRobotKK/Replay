@@ -345,3 +345,120 @@ func TestJudgeIgnoresSavingsTooSmallToBeReal(t *testing.T) {
 		t.Fatalf("a saving of 1e-9 counted as evidence on %d sessions", v.Sessions)
 	}
 }
+
+// The TTL family is not scored on a sub-agent lane.
+//
+// Claude Code resolves the cache TTL per query source: `promptCacheTtl`
+// governs the main-thread sources (repl_main_thread*, sdk, auto_mode,
+// memdir_relevance) and `subagentPromptCacheTtl` governs every other
+// source, read from the installed client's own resolver on 2026-10-05.
+// Sub-agent transcripts are written with isSidechain on every record, and
+// 2,222 of 2,223 on the machine this was built on wrote 5-minute caches
+// only. Scoring them under ttl-1h produced "ttl-1h minus 35%", a figure
+// about a policy the setting cannot apply to them. A predictor must never
+// score a workload the intervention cannot reach.
+//
+// PASS: a session whose scored lane is a sidechain carries no TTL saving,
+// and still carries its context-edit savings, which the proxy applies to
+// every request.
+// FAIL: a TTL saving on a sub-agent, which is what shipped.
+func TestScoreDoesNotScoreTheTTLFamilyOnASubAgentLane(t *testing.T) {
+	s, err := transcript.ParseClaudeCodeFile("../transcript/testdata/session-redacted.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range s.Lanes {
+		l.Sidechain = true
+	}
+	sc, ok := Score(s, Catalog())
+	if !ok {
+		t.Fatal("setup: the fixture must calibrate")
+	}
+	for _, name := range []string{"ttl-5m", "ttl-1h"} {
+		if v, present := sc.Saving[name]; present {
+			t.Errorf("%s scored at %.4f on a sub-agent lane the setting does not govern", name, v)
+		}
+	}
+	var contextEdit int
+	for name := range sc.Saving {
+		if strings.HasPrefix(name, "context-edit") {
+			contextEdit++
+		}
+	}
+	if contextEdit == 0 {
+		t.Error("context-edit candidates apply through the proxy to every request and must still be scored")
+	}
+}
+
+// A session with no TTL evidence does not count toward the TTL verdict,
+// however large it is: population filtering happens before aggregation.
+func TestSelectCountsOnlySessionsWithTTLEvidence(t *testing.T) {
+	candidates, scores := synthetic(20, 7)
+	huge := SessionScore{SessionID: "sub-agent", AsRun: analysis.Tally{PromptTokens: 1e9, EffectiveTokens: 1e9},
+		Saving: map[string]float64{"good": 0.9}, Cached: map[string]float64{"good": 0.8}, Estimated: map[string]bool{}}
+	with := Select(candidates, append(append([]SessionScore(nil), scores...), huge), 21, Options{MinSessions: 5}, time.Now())
+	without := Select(candidates, scores, 20, Options{MinSessions: 5}, time.Now())
+	a, b := find(with, "simple"), find(without, "simple")
+	if a.Sessions != b.Sessions || a.Mean != b.Mean || a.Decision != b.Decision {
+		t.Errorf("a session without TTL evidence moved the TTL verdict: %d/%.4f/%s against %d/%.4f/%s",
+			a.Sessions, a.Mean, a.Decision, b.Sessions, b.Mean, b.Decision)
+	}
+}
+
+// Session-weighted means answer "what happens to the typical session":
+// one enormous session is one vote. The bill-weighted aggregator in
+// cmd/replay (chooseTTLWithCoverage) answers the other question and is
+// tested there; neither replaces the other.
+func TestSessionWeightedMeanGivesOneEnormousSessionOneVote(t *testing.T) {
+	c := Candidate{Name: "simple", Family: FamilyTTL}
+	var scores []SessionScore
+	for i := 0; i < 11; i++ {
+		scores = append(scores, SessionScore{SessionID: fmt.Sprintf("s%d", i), AsRun: analysis.Tally{PromptTokens: 100, EffectiveTokens: 100},
+			Saving: map[string]float64{"simple": 0.2}, Cached: map[string]float64{"simple": 0.8}, Estimated: map[string]bool{}})
+	}
+	small := judge(c, scores, Options{MinSessions: 5})
+	scores = append(scores, SessionScore{SessionID: "whale", AsRun: analysis.Tally{PromptTokens: 1e9, EffectiveTokens: 1e9},
+		Saving: map[string]float64{"simple": -0.5}, Cached: map[string]float64{"simple": 0.8}, Estimated: map[string]bool{}})
+	big := judge(c, scores, Options{MinSessions: 5})
+	want := (11*0.2 - 0.5) / 12
+	if math.Abs(big.Mean-want) > 1e-9 {
+		t.Errorf("mean with the whale = %.4f, want %.4f: its size must not weight it", big.Mean, want)
+	}
+	if small.Sessions != 11 || big.Sessions != 12 {
+		t.Errorf("sessions counted %d then %d, want 11 then 12", small.Sessions, big.Sessions)
+	}
+}
+
+// A saving below one part per million of the session's own scale is a
+// tie, and a tie is not evidence: it is not counted toward Sessions.
+func TestATieIsNotCountedAsEvidence(t *testing.T) {
+	c := Candidate{Name: "simple", Family: FamilyTTL}
+	scores := []SessionScore{
+		{SessionID: "tie", AsRun: analysis.Tally{PromptTokens: 100, EffectiveTokens: 100}, Saving: map[string]float64{"simple": 1e-9}, Cached: map[string]float64{}, Estimated: map[string]bool{}},
+		{SessionID: "real", AsRun: analysis.Tally{PromptTokens: 100, EffectiveTokens: 100}, Saving: map[string]float64{"simple": 0.2}, Cached: map[string]float64{}, Estimated: map[string]bool{}},
+	}
+	v := judge(c, scores, Options{MinSessions: 1})
+	if v.Sessions != 1 {
+		t.Errorf("a tie counted as evidence: %d sessions, want 1", v.Sessions)
+	}
+}
+
+// A saving is a share; the tie floor is a share. Comparing a share to one
+// part per million of the session's token count dropped every session over
+// a million effective tokens from the verdict as a "tie": a 28% saving on
+// a five-million-token session was not evidence, while the same share on a
+// thousand-token session was. The sessions that carry the bill were the
+// ones excluded.
+//
+// PASS: a large session with a real saving counts.
+// FAIL: it is treated as a tie, which is what shipped.
+func TestASavingShareIsNotComparedToATokenCount(t *testing.T) {
+	c := Candidate{Name: "simple", Family: FamilyTTL}
+	scores := []SessionScore{
+		{SessionID: "large", AsRun: analysis.Tally{PromptTokens: 5e6, EffectiveTokens: 5e6}, Saving: map[string]float64{"simple": 0.28}, Cached: map[string]float64{}, Estimated: map[string]bool{}},
+	}
+	v := judge(c, scores, Options{MinSessions: 1})
+	if v.Sessions != 1 {
+		t.Errorf("a 28%% saving on a 5M-token session is evidence; counted %d sessions", v.Sessions)
+	}
+}

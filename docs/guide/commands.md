@@ -1029,6 +1029,15 @@ not choose.
 describes the change, and `--yes` is what actually writes it. Two steps rather than one because a
 tool editing your settings unasked is a different thing from a tool suggesting an edit.
 
+**It decides on main-thread lanes only, weighed by their tokens.** `promptCacheTtl` governs the
+main conversation's requests; sub-agent requests are governed by `subagentPromptCacheTtl`, so a
+sub-agent lane is not an input to this decision however well it reproduced. The decision is
+token-weighted: it answers "which TTL lowers the simulated bill", and the margin it states is the
+share of the dearer TTL's total that the cheaper one avoids. `replay learn` answers a different
+question about the same setting, "which TTL helps the typical session", weighing every session
+equally; on a corpus whose largest sessions prefer one TTL and whose many small sessions prefer
+the other, the two can disagree, and both are right about what they measure.
+
 **A request to apply leaves a record, as it ended.** Each `--apply --yes` appends one line to
 `~/.replay/interventions.jsonl`. The event is `INTERVENTION_APPLIED` only when the value was read
 back from the settings file after the write (`state_change=VERIFIED`); `APPLY_ATTEMPTED` with

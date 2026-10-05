@@ -87,7 +87,9 @@ func runLearn(args []string, stdout, stderr io.Writer) error {
 		}
 		p.Printf("  %-36s %8d %7.1f%% (%+.1f..%+.1f) %8.1f%% %s\n", name, v.Sessions, v.Mean*100, v.Interval[0]*100, v.Interval[1]*100, v.HoldoutMean*100, v.Decision)
 	}
-	p.Printf("  saving is the share of as-run effective tokens avoided; * = estimated via the fit\n\n")
+	p.Printf("  saving is the share of as-run effective tokens avoided, per session, averaged over the sessions\n" +
+		"  where the candidate differs from as-run; * = estimated via the fit. The ttl candidates are scored\n" +
+		"  on main-thread lanes only: promptCacheTtl does not govern sub-agent requests.\n\n")
 	if res.Selected == nil {
 		p.Printf("Selected: none (%s)\n", res.Reason)
 	} else {

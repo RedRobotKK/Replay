@@ -12,6 +12,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/RedRobotKK/Replay/internal/analysis"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // `replay advise --apply` writes one setting: the prompt cache TTL. Everything
@@ -499,7 +502,7 @@ func TestApplyDoesNotClaimAppliedWithoutReadingTheValueBack(t *testing.T) {
 	log := filepath.Join(dir, "interventions.jsonl")
 	plan := applyPlan{Setting: "promptCacheTtl", Want: "5m", Have: "1h", Trustworthy: true, Log: log,
 		// Something else owns the file: the value read back is not the one written.
-		verify: func(path, setting string) (string, bool) { return "1h", true }}
+		verify: func(_, _ string) (string, bool) { return "1h", true }}
 	var out strings.Builder
 	if err := plan.write(p, &out, true); err != nil {
 		t.Fatal(err)
@@ -521,7 +524,7 @@ func TestApplyDoesNotClaimAppliedWithoutReadingTheValueBack(t *testing.T) {
 	}
 
 	// An unreadable file after the write is UNVERIFIED too, with the value UNREADABLE.
-	plan.verify = func(path, setting string) (string, bool) { return "", false }
+	plan.verify = func(_, _ string) (string, bool) { return "", false }
 	if err := plan.write(p, &out, true); err != nil {
 		t.Fatal(err)
 	}
@@ -700,5 +703,96 @@ func TestChooseTTLMarginIsTheShareOfTheLoserAvoided(t *testing.T) {
 	plan = chooseTTLWithCoverage(obs, "", 1)
 	if plan.Trustworthy || plan.PredictedShare != 0 {
 		t.Errorf("a tie has no margin: %+v", plan)
+	}
+}
+
+// A sub-agent lane is not an input to the TTL plan, whatever it reproduced.
+//
+// `promptCacheTtl` governs the main-thread query sources only; sub-agents
+// are governed by `subagentPromptCacheTtl`. A report whose lane is a
+// sidechain is refused before any aggregation, ahead of the calibration
+// gate, so a well-calibrated sub-agent can never move the decision.
+func TestTTLInputRefusesASubAgentLaneBeforeAggregation(t *testing.T) {
+	side := &analysis.LaneReport{Lane: &transcript.Lane{ID: "sub", Sidechain: true}}
+	if ttlEligible(side) {
+		t.Error("a sidechain lane is outside the setting's control and must not be an input")
+	}
+	if ttlEligible(nil) {
+		t.Error("nil is not an input")
+	}
+	if in := ttlInputOf(side); in != (ttlInput{}) {
+		t.Errorf("a lane ttlEligible refuses contributes nothing, got %+v", in)
+	}
+	uncalibrated := &analysis.LaneReport{Lane: &transcript.Lane{ID: "main"}}
+	if ttlEligible(uncalibrated) {
+		t.Error("a report with no calibration is not an input")
+	}
+	poor := &analysis.LaneReport{Lane: &transcript.Lane{ID: "main"}, Calibration: &analysis.Calibration{Reproduced: 18, Broken: 2}}
+	if ttlEligible(poor) {
+		t.Error("90% reproduced is under the 95% gate")
+	}
+	main := &analysis.LaneReport{Lane: &transcript.Lane{ID: "main"}, Calibration: &analysis.Calibration{Reproduced: 19, Broken: 1}}
+	if !ttlEligible(main) {
+		t.Error("a main-thread lane at 95% reproduced is an input, even before its policies are priced")
+	}
+	// The same calibration on a sidechain is still refused: the lane, not
+	// the calibration, decides eligibility.
+	main.Lane.Sidechain = true
+	if ttlEligible(main) {
+		t.Error("eligibility is decided by the lane before the calibration is consulted")
+	}
+}
+
+// The decile veto behaves exactly as specified: when the costliest tenth
+// of sessions prefers the other TTL from the token-weighted total, the
+// plan refuses and says so, even though the total clears the margin.
+func TestChooseTTLDecileVetoRefusesASplitVerdict(t *testing.T) {
+	obs := make([]ttlObservation, 12)
+	for i := range obs {
+		obs[i] = ttlObservation{Short: 80, Long: 100}
+	}
+	// The costliest session prefers 1h; it alone is the top tenth of twelve.
+	obs[0] = ttlObservation{Short: 2000, Long: 1950}
+	// Totals: short 2880, long 3050: 5m leads by 5.6%, above the 1% margin.
+	plan := chooseTTLWithCoverage(obs, "", 1)
+	if plan.Trustworthy {
+		t.Fatalf("the top decile prefers 1h while the total prefers 5m; the plan must refuse, got %+v", plan)
+	}
+	if !strings.Contains(plan.Reason, "no single setting is right") || !strings.Contains(plan.Reason, "1h is cheaper on the largest sessions") {
+		t.Errorf("the refusal must name the split: %q", plan.Reason)
+	}
+	// Under ten sessions the decile is too small to veto, and the total decides.
+	plan = chooseTTLWithCoverage(obs[:9], "", 1)
+	if !plan.Trustworthy || plan.Want != "5m" {
+		t.Errorf("with nine sessions there is no decile to consult: %+v", plan)
+	}
+}
+
+// Reports that are not inputs leave the plan with nothing to decide on.
+func TestTTLPlanIgnoresReportsThatAreNotInputs(t *testing.T) {
+	reports := []*analysis.LaneReport{nil, {Lane: &transcript.Lane{ID: "sub", Sidechain: true}}}
+	plan := ttlPlan(reports, "")
+	if plan.Trustworthy || !strings.Contains(plan.Reason, "no session in this corpus reproduced well enough") {
+		t.Errorf("nil and sidechain reports are not inputs: %+v", plan)
+	}
+}
+
+// An eligible lane whose TTLs were not priced counts toward the spend the
+// plan is answerable for, and not toward what it scored: coverage falls,
+// and a plan over a thin slice of the spend refuses.
+func TestTTLPlanFromInputsCountsUnpricedSpendAgainstCoverage(t *testing.T) {
+	var inputs []ttlInput
+	for i := 0; i < 11; i++ {
+		inputs = append(inputs, ttlInput{asRun: 100, obs: ttlObservation{Short: 70, Long: 100}})
+	}
+	plan := ttlPlanFromInputs(inputs, "")
+	if !plan.Trustworthy || plan.Want != "5m" || plan.PredictedShare != 0.3 {
+		t.Fatalf("eleven priced lanes decide: %+v", plan)
+	}
+	// One eligible lane worth more than all of them together, unpriced.
+	inputs = append(inputs, ttlInput{asRun: 5000})
+	plan = ttlPlanFromInputs(inputs, "")
+	if plan.Trustworthy || !strings.Contains(plan.Reason, "only 18%") {
+		t.Errorf("1100 of 6100 scored is 18%% coverage and must refuse: %+v", plan)
 	}
 }

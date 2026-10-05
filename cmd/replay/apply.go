@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -132,7 +133,7 @@ func (p applyPlan) record(tr transition) error {
 		return nil
 	}
 	prior := p.Have
-	if false && (prior == "") {
+	if prior == "" {
 		prior = "UNSET"
 	}
 	actual := tr.actual
@@ -182,9 +183,8 @@ func (p applyPlan) record(tr transition) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	_, err = f.Write(append(body, '\n'))
-	return err
+	_, werr := f.Write(append(body, '\n'))
+	return errors.Join(werr, f.Close())
 }
 
 // write applies the plan, or explains why it will not.
@@ -383,6 +383,52 @@ func chooseTTLWithCoverage(obs []ttlObservation, have string, coverage float64) 
 	return plan
 }
 
+// ttlInput is one lane's cost under each TTL, with the as-run spend it stands for.
+type ttlInput struct {
+	asRun float64
+	obs   ttlObservation
+}
+
+// ttlInputOf is what a lane contributes to the TTL decision: nothing at
+// all when it is not eligible, its as-run spend toward coverage when it
+// is, and its observation only when both TTLs were priced.
+//
+// A sidechain is refused first: promptCacheTtl governs the main-thread
+// query sources and subagentPromptCacheTtl the rest, so a sub-agent lane
+// is outside what this plan can change, however well it reproduced.
+func ttlInputOf(r *analysis.LaneReport) ttlInput {
+	if !ttlEligible(r) {
+		return ttlInput{}
+	}
+	var in ttlInput
+	for _, pol := range r.Policies() {
+		switch pol.Name {
+		case "as-run":
+			in.asRun = pol.EffectiveTokens
+		case "ttl-5m0s":
+			in.obs.Short = pol.EffectiveTokens
+		case "ttl-1h0m0s":
+			in.obs.Long = pol.EffectiveTokens
+		}
+	}
+	return in
+}
+
+// ttlEligible is the population gate: a main-thread lane that reproduced
+// at or above the match rate. The lane is consulted before the
+// calibration, because a sub-agent is outside the setting's reach however
+// well it reproduced.
+func ttlEligible(r *analysis.LaneReport) bool {
+	const minMatchRate = 0.95
+	if r == nil || r.Lane == nil || r.Lane.Sidechain {
+		return false
+	}
+	if r.Calibration == nil || r.Calibration.Compared() == 0 {
+		return false
+	}
+	return float64(r.Calibration.Reproduced)/float64(r.Calibration.Compared()) >= minMatchRate
+}
+
 // ttlPlan turns scored reports into observations and asks chooseTTL.
 //
 // A session only counts when the engine reproduced it well enough to believe.
@@ -390,35 +436,26 @@ func chooseTTLWithCoverage(obs []ttlObservation, have string, coverage float64) 
 // confident recommendation built on turns we could not reproduce is exactly the
 // failure this tool exists to point at.
 func ttlPlan(reports []*analysis.LaneReport, have string) applyPlan {
-	const minMatchRate = 0.95
-	var obs []ttlObservation
-	// Coverage is a share of as-run spend: what could be scored over what was
-	// trusted. Leaving the unscoreable sessions out of the denominator is how a
-	// recommendation ends up describing only the cheap tail of a corpus.
-	var trustedTokens, scoredTokens float64
+	inputs := make([]ttlInput, 0, len(reports))
 	for _, r := range reports {
-		if r == nil || r.Calibration == nil || r.Calibration.Compared() == 0 {
-			continue
-		}
-		if float64(r.Calibration.Reproduced)/float64(r.Calibration.Compared()) < minMatchRate {
-			continue
-		}
-		var o ttlObservation
-		var asRun float64
-		for _, pol := range r.Policies() {
-			switch pol.Name {
-			case "as-run":
-				asRun = pol.EffectiveTokens
-			case "ttl-5m0s":
-				o.Short = pol.EffectiveTokens
-			case "ttl-1h0m0s":
-				o.Long = pol.EffectiveTokens
-			}
-		}
-		trustedTokens += asRun
-		if o.Short > 0 && o.Long > 0 {
-			scoredTokens += asRun
-			obs = append(obs, o)
+		inputs = append(inputs, ttlInputOf(r))
+	}
+	return ttlPlanFromInputs(inputs, have)
+}
+
+// ttlPlanFromInputs aggregates eligible lanes and asks chooseTTL.
+//
+// Coverage is a share of as-run spend: what could be scored over what was
+// trusted. Leaving the unscoreable sessions out of the denominator is how a
+// recommendation ends up describing only the cheap tail of a corpus.
+func ttlPlanFromInputs(inputs []ttlInput, have string) applyPlan {
+	var obs []ttlObservation
+	var trustedTokens, scoredTokens float64
+	for _, in := range inputs {
+		trustedTokens += in.asRun
+		if in.obs.Short > 0 && in.obs.Long > 0 {
+			scoredTokens += in.asRun
+			obs = append(obs, in.obs)
 		}
 	}
 	coverage := 1.0
