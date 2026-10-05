@@ -45,7 +45,7 @@ jobs:
       # versions later. It did not fail, which is the reason to pin it now
       # rather than after it does: an SBOM whose generator changes underneath a
       # release is a supply-chain document nobody can reproduce.
-      - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+      - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           syft-version: v1.42.3
       - name: Verify the tag is on main
