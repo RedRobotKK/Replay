@@ -110,7 +110,13 @@ hand-computable test: (loser minus winner) over loser, never negative, a
 tie refused before any margin exists, token-weighted. The production path is
 proven to record under the user's home by a test of `settingsPlan`.
 
-## Experiment readiness: NOT YET JUSTIFIED
+## Experiment readiness: NOT YET JUSTIFIED (superseded the same day)
+
+Later on 2026-10-05 the control boundary was established from the
+client's own resolver and both predictors were corrected and tested; see
+[ttl-control-boundary-2026-10-05.md](ttl-control-boundary-2026-10-05.md)
+and the second amendment of the register. The verdict below is kept as it
+was written.
 
 1. The intervention can be performed: yes, by `plan.write`, and verified by
    read-back: yes, as of today.
