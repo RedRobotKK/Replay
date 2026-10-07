@@ -79,6 +79,16 @@ const (
 	HeaderSessionID = "x-claude-code-session-id"
 	HeaderAgentID   = "x-claude-code-agent-id"
 	HeaderToken     = "x-replay-token"
+	// HeaderTenantID is SP-5's proxy-boundary input (docs/requirements.md):
+	// the tenant key "the unit a budget belongs to" that every guarded
+	// request carries. Empty resolves to tenancy.LocalTenant
+	// (tenancy.ResolveTenant's own rule), so a client that never sends this
+	// — every existing local workflow — keeps today's zero-configuration
+	// behaviour exactly. Anything else must be a legal, non-reserved
+	// identity (tenancy.ValidateTenantID) or the request is refused before
+	// any guard runs, never pooled into tenancy.LocalTenant or any other
+	// shared bucket.
+	HeaderTenantID = "x-replay-tenant-id"
 )
 
 // Config is everything serve needs.
@@ -229,6 +239,10 @@ func New(cfg Config) (*Server, error) {
 			// listener token, which is not the client's header to the
 			// provider.
 			r.Out.Header.Del(HeaderToken)
+			// Same reasoning for the tenant header: it is Replay's own
+			// internal attribution input (SP-5), resolved and consumed
+			// before this point, and has no business reaching the provider.
+			r.Out.Header.Del(HeaderTenantID)
 			// Rewrite drops the client's own forwarding headers; they are
 			// the client's bytes and go through like any other header.
 			for _, h := range forwardingHeaders {

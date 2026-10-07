@@ -17,6 +17,7 @@ import (
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/ledger"
 	"github.com/RedRobotKK/Replay/internal/proxy"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 // replay simulate --policy <file> <ledger-dir...>
@@ -218,7 +219,15 @@ func runSimulate(args []string, stdout, stderr io.Writer) error {
 		sessions[m.rec.SessionID] = true
 		d := simulateDecision{Session: m.rec.SessionID, RequestID: m.rec.RequestID, TS: m.rec.Timestamp.UTC().Format(time.RFC3339Nano),
 			Model: m.rec.Model, ListUSD: m.usd, UpperBound: m.ub}
-		if reason := guard.Check(m.rec.SessionID); reason != "" {
+		// SP-6 scopes the guard's caps per tenant, but the ledger this tool
+		// replays carries no tenant field (SP-5/SP-6 deliberately did not
+		// add one; see the build note) and every record in it was produced
+		// by a local, single-operator ledger directory in the first place.
+		// That is exactly tenancy.LocalTenant by construction
+		// (tenancy.ResolveTenant("")), so replaying every record under it
+		// reproduces this tool's existing, pre-tenancy behaviour exactly
+		// rather than guessing at a tenant split the ledger does not record.
+		if reason := guard.Check(tenancy.LocalTenant, m.rec.SessionID); reason != "" {
 			d.Simulated, d.Reason = "refused", reason
 			rep.Summary.Refused++
 			rep.Summary.RefusedListUSD += m.usd
@@ -227,7 +236,7 @@ func runSimulate(args []string, stdout, stderr io.Writer) error {
 			d.Simulated = "admitted"
 			rep.Summary.Admitted++
 			u := m.rec.Response.Usage
-			guard.Record(m.rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output, m.usd, m.ub)
+			guard.Record(tenancy.LocalTenant, m.rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output, m.usd, m.ub)
 		}
 		rep.Decisions = append(rep.Decisions, d)
 	}

@@ -48,6 +48,11 @@ var (
 	refusalLoop        = refusal{http.StatusBadRequest, "replay_loop", "loop"}
 	refusalErrorBudget = refusal{http.StatusBadRequest, "replay_error_budget", "error_budget"}
 	refusalPreFlight   = refusal{http.StatusBadRequest, "replay_preflight_deficit", "preflight_deficit"}
+	// refusalTenantUnresolved is SP-5's own refusal: a request whose
+	// HeaderTenantID failed to resolve (tenancy.ResolveTenant) never reaches
+	// the spend guard, the breaker, the loop detector or the ledger's
+	// accumulators pooled under any identity at all.
+	refusalTenantUnresolved = refusal{http.StatusBadRequest, "replay_tenant_unresolved", "tenant_unresolved"}
 )
 
 // refuse answers a request locally in the provider's error shape so any

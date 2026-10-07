@@ -37,7 +37,7 @@ killer each surface is held to.
 | `redact` | yes | `dispatch main.go:222 → runRedact` | `internal/transcript/redact.go @ "obj[\"cwd\"] = \"/redacted\""` | `TestE2E_Redact` | `TestE2E_Redact` | `M104` | `TestE2E_Redact` | PASS |
 | `prefix` | yes | `dispatch main.go:224 → runPrefix` | `cmd/replay/prefix.go @ "\"  For the size of one such break on your own history:  r…"` | `TestE2E_Prefix` | `TestE2E_Prefix` | `M105` | `TestE2E_Prefix` | PASS |
 | `since` | yes | `dispatch main.go:226 → runSince` | `cmd/replay/since.go @ "if !had \|\| t.At.After(mark) {"` | `TestE2E_Since` | `TestE2E_Since` | `M106` | `TestE2E_Since` | PASS |
-| `simulate` | yes | `dispatch main.go:228 → runSimulate` | `cmd/replay/simulate.go @ "guard.Record(m.rec.SessionID, u.Input+u.CacheCreation+u.C…"` | `TestE2E_Simulate` | `TestE2E_Simulate` | `M118` | `TestE2E_Simulate` | PASS |
+| `simulate` | yes | `dispatch main.go:228 → runSimulate` | `cmd/replay/simulate.go @ "guard.Record(tenancy.LocalTenant, m.rec.SessionID, u.Inpu…"` | `TestE2E_Simulate` | `TestE2E_Simulate` | `M118` | `TestE2E_Simulate` | PASS |
 | `budget` | yes | `dispatch main.go:230 → runBudget` | `cmd/replay/budget.go @ "ToolBytes:    toolBytes,"` | `TestE2E_Budget` | `TestE2E_Budget` | `M107` | `TestE2E_Budget` | PASS |
 | `purge` | yes | `dispatch main.go:232 → runPurge` | `cmd/replay/purge.go @ "if info.ModTime().After(cutoff) {"` | `TestE2E_Purge` | `TestE2E_Purge` | `M108` | `TestE2E_Purge` | PASS |
 | `privacy` | yes | `dispatch main.go:234 → runPrivacy` | `cmd/replay/stores.go @ "Name: \"advice.json\", Purgeable: true,"` | `TestE2E_Privacy` | `TestE2E_Privacy` | `M109` | `TestE2E_Privacy` | PASS |

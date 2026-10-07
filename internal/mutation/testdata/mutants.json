@@ -1560,7 +1560,7 @@
       "discovered": "2026-10-03",
       "note": "The replay checks the cap before every request and never credits an admitted request's spend to the guard, so the cap is never reached and every recorded request is reported admitted. A simulation that cannot refuse is a report that the cap is free, which is the one thing it must never say.",
       "file": "cmd/replay/simulate.go",
-      "anchor": "\t\t\tguard.Record(m.rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output, m.usd, m.ub)",
+      "anchor": "\t\t\tguard.Record(tenancy.LocalTenant, m.rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output, m.usd, m.ub)",
       "replacement": "\t\t\t_ = u",
       "killedBy": [
         "TestE2E_Simulate"

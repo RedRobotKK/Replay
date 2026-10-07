@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 // SP-7: a refusal names the spender.
@@ -32,11 +34,11 @@ func fixedClock(t time.Time) func() time.Time { return func() time.Time { return
 // backwards - the caller is the victim of the cap, not its cause.
 func TestSP7_DayCapNamesTheLargestSpender(t *testing.T) {
 	g := NewSpendGuard(SpendLimits{DayTokens: 100})
-	g.Record("lane-heavy", 70, 0, false)
-	g.Record("lane-light", 25, 0, false)
-	g.Record("lane-tiny", 5, 0, false) // most recent, and the smallest
+	g.Record(tenancy.LocalTenant, "lane-heavy", 70, 0, false)
+	g.Record(tenancy.LocalTenant, "lane-light", 25, 0, false)
+	g.Record(tenancy.LocalTenant, "lane-tiny", 5, 0, false) // most recent, and the smallest
 
-	reason := g.Check("lane-innocent")
+	reason := g.Check(tenancy.LocalTenant, "lane-innocent")
 	if reason == "" {
 		t.Fatal("the day cap must refuse, or this test asserts nothing")
 	}
@@ -63,12 +65,12 @@ func TestSP7_AttributionIsScopedToTheDayNotTheSessionLifetime(t *testing.T) {
 	day1 := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
 	g := NewSpendGuard(SpendLimits{DayTokens: 100})
 	g.now = fixedClock(day1)
-	g.Record("lane-yesterday", 99, 0, false)
+	g.Record(tenancy.LocalTenant, "lane-yesterday", 99, 0, false)
 
 	g.now = fixedClock(day1.Add(24 * time.Hour))
-	g.Record("lane-today", 100, 0, false)
+	g.Record(tenancy.LocalTenant, "lane-today", 100, 0, false)
 
-	reason := g.Check("lane-innocent")
+	reason := g.Check(tenancy.LocalTenant, "lane-innocent")
 	if reason == "" {
 		t.Fatal("the day cap must refuse on the new day")
 	}
@@ -96,15 +98,15 @@ func TestSP7_IncompleteAccountingIsDisclosedNotGuessed(t *testing.T) {
 	g := NewSpendGuard(SpendLimits{DayTokens: 1_000_000})
 
 	// One heavy spender, then enough churn to evict it.
-	g.Record("lane-the-real-cause", 500_000, 0, false)
+	g.Record(tenancy.LocalTenant, "lane-the-real-cause", 500_000, 0, false)
 	for i := 0; i < maxSpendSessions+16; i++ {
-		g.Record(fmt.Sprintf("lane-%d", i), 500, 0, false)
+		g.Record(tenancy.LocalTenant, fmt.Sprintf("lane-%d", i), 500, 0, false)
 	}
-	if _, ok := g.session["lane-the-real-cause"]; ok {
+	if _, ok := g.session[tenancy.LocalTenant]["lane-the-real-cause"]; ok {
 		t.Fatal("the heavy session was not evicted, so this test does not exercise the gap")
 	}
 
-	reason := g.Check("lane-innocent")
+	reason := g.Check(tenancy.LocalTenant, "lane-innocent")
 	if reason == "" {
 		t.Fatal("the day cap must refuse")
 	}
@@ -122,10 +124,10 @@ func TestSP7_IncompleteAccountingIsDisclosedNotGuessed(t *testing.T) {
 // whenever a cheap model is chatty and an expensive one is terse.
 func TestSP7_DollarCapAttributesByDollars(t *testing.T) {
 	g := NewSpendGuard(SpendLimits{DayUSD: 10})
-	g.Record("lane-chatty-cheap", 900_000, 1.00, false)
-	g.Record("lane-terse-costly", 4_000, 9.00, false)
+	g.Record(tenancy.LocalTenant, "lane-chatty-cheap", 900_000, 1.00, false)
+	g.Record(tenancy.LocalTenant, "lane-terse-costly", 4_000, 9.00, false)
 
-	reason := g.Check("lane-innocent")
+	reason := g.Check(tenancy.LocalTenant, "lane-innocent")
 	if reason == "" {
 		t.Fatal("the dollar cap must refuse")
 	}
@@ -146,10 +148,10 @@ func TestSP7_DollarCapAttributesByDollars(t *testing.T) {
 // FAIL: leader text leaking onto a refusal it does not describe.
 func TestSP7_SessionCapDoesNotNameAnotherLane(t *testing.T) {
 	g := NewSpendGuard(SpendLimits{SessionTokens: 50, DayTokens: 10_000})
-	g.Record("lane-other", 900, 0, false)
-	g.Record("lane-mine", 50, 0, false)
+	g.Record(tenancy.LocalTenant, "lane-other", 900, 0, false)
+	g.Record(tenancy.LocalTenant, "lane-mine", 50, 0, false)
 
-	reason := g.Check("lane-mine")
+	reason := g.Check(tenancy.LocalTenant, "lane-mine")
 	if reason == "" {
 		t.Fatal("the session cap must refuse")
 	}
@@ -171,9 +173,9 @@ func TestSP7_SessionCapDoesNotNameAnotherLane(t *testing.T) {
 // FAIL: any interpolation of an environment value, a path, or a credential.
 func TestSP7_AttributionLeaksNothingBeyondTheSessionID(t *testing.T) {
 	g := NewSpendGuard(SpendLimits{DayTokens: 10})
-	g.Record("sess-abc123", 10, 0, false)
+	g.Record(tenancy.LocalTenant, "sess-abc123", 10, 0, false)
 
-	reason := g.Check("other")
+	reason := g.Check(tenancy.LocalTenant, "other")
 	for _, forbidden := range []string{"/Users/", "/home/", "sk-ant", "Bearer ", "x-api-key"} {
 		if strings.Contains(reason, forbidden) {
 			t.Errorf("the attributed refusal leaked %q: %q", forbidden, reason)

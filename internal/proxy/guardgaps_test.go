@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 // Guard surfaces that were built and never observed.
@@ -43,7 +45,7 @@ func TestGG1_ADayCapRestoredFromDiskNamesNobody(t *testing.T) {
 
 	first := NewSpendGuard(SpendLimits{DayTokens: 1_000_000})
 	first.now = fixedClock(day)
-	first.Record("sess-overnight", 1_200_000, 0, false)
+	first.Record(tenancy.LocalTenant, "sess-overnight", 1_200_000, 0, false)
 	first.SaveState(dir)
 
 	// The process dies. The day total returns; the sessions do not.
@@ -51,7 +53,7 @@ func TestGG1_ADayCapRestoredFromDiskNamesNobody(t *testing.T) {
 	second.now = fixedClock(day)
 	second.LoadState(dir)
 
-	msg := second.Check("sess-fresh")
+	msg := second.Check(tenancy.LocalTenant, "sess-fresh")
 	if msg == "" {
 		t.Fatal("the day cap did not survive the restart at all")
 	}
@@ -75,10 +77,10 @@ func TestGG1b_ALiveSpenderIsStillNamed(t *testing.T) {
 	day := time.Date(2026, 9, 9, 12, 0, 0, 0, time.UTC)
 	g := NewSpendGuard(SpendLimits{DayTokens: 1_000_000})
 	g.now = fixedClock(day)
-	g.Record("sess-small", 100_000, 0, false)
-	g.Record("sess-big", 950_000, 0, false)
+	g.Record(tenancy.LocalTenant, "sess-small", 100_000, 0, false)
+	g.Record(tenancy.LocalTenant, "sess-big", 950_000, 0, false)
 
-	msg := g.Check("sess-small")
+	msg := g.Check(tenancy.LocalTenant, "sess-small")
 	if msg == "" {
 		t.Fatal("1.05M of a 1M day cap must refuse")
 	}

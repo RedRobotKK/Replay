@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 // Eviction must stay least-recently-used when the clock cannot separate the
@@ -31,22 +33,22 @@ func TestSpendGuard_EvictsLeastRecentlyUsedWhenTheClockCannotSeparateRecords(t *
 
 	// Fill the table exactly. "first" is the least recently used from here on,
 	// because nothing touches it again.
-	g.Record("first", 1, 0, false)
+	g.Record(tenancy.LocalTenant, "first", 1, 0, false)
 	for i := 0; i < maxSpendSessions-1; i++ {
-		g.Record(fmt.Sprintf("filler-%d", i), 1, 0, false)
+		g.Record(tenancy.LocalTenant, fmt.Sprintf("filler-%d", i), 1, 0, false)
 	}
-	if len(g.session) != maxSpendSessions {
-		t.Fatalf("table should be full: %d", len(g.session))
+	if len(g.session[tenancy.LocalTenant]) != maxSpendSessions {
+		t.Fatalf("table should be full: %d", len(g.session[tenancy.LocalTenant]))
 	}
 
 	// One more session forces exactly one eviction. The victim must be "first".
-	g.Record("newcomer", 1, 0, false)
+	g.Record(tenancy.LocalTenant, "newcomer", 1, 0, false)
 
-	if _, ok := g.session["first"]; ok {
+	if _, ok := g.session[tenancy.LocalTenant]["first"]; ok {
 		t.Error("the least recently used session survived; something else was evicted " +
 			"instead, so the table is not an LRU when the clock is coarse")
 	}
-	if _, ok := g.session["newcomer"]; !ok {
+	if _, ok := g.session[tenancy.LocalTenant]["newcomer"]; !ok {
 		t.Error("the newcomer was evicted immediately")
 	}
 }
@@ -59,18 +61,18 @@ func TestSpendGuard_AStillActiveHeavySessionOutlivesIdleOnes(t *testing.T) {
 	tick := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
 	g.now = func() time.Time { return tick }
 
-	g.Record("heavy", 500_000, 0, false)
+	g.Record(tenancy.LocalTenant, "heavy", 500_000, 0, false)
 	for i := 0; i < maxSpendSessions-1; i++ {
-		g.Record(fmt.Sprintf("idle-%d", i), 1, 0, false)
+		g.Record(tenancy.LocalTenant, fmt.Sprintf("idle-%d", i), 1, 0, false)
 	}
 	// Touch the heavy lane again: it is now the most recently used entry that
 	// the coarse clock still stamps identically to every other.
-	g.Record("heavy", 500_000, 0, false)
+	g.Record(tenancy.LocalTenant, "heavy", 500_000, 0, false)
 
 	for i := 0; i < 32; i++ {
-		g.Record(fmt.Sprintf("late-%d", i), 1, 0, false)
+		g.Record(tenancy.LocalTenant, fmt.Sprintf("late-%d", i), 1, 0, false)
 	}
-	if _, ok := g.session["heavy"]; !ok {
+	if _, ok := g.session[tenancy.LocalTenant]["heavy"]; !ok {
 		t.Error("the heavy, recently-touched session was evicted while idle sessions " +
 			"survived. Attribution would then name an idle lane for its spend")
 	}

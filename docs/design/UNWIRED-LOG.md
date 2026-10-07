@@ -341,3 +341,22 @@ guard's own accumulators. Both are specified in `docs/requirements.md`,
 gated on ADR-0015 as ADR-0028 amends it, and neither is built here: wiring
 either is a separate, larger, separately-verified unit, not a consequence
 of this one existing.
+
+**WIRED 2026-10-07.** `internal/proxy` now imports `internal/tenancy`.
+`passthrough.go`'s `handle` resolves `HeaderTenantID`
+("x-replay-tenant-id") with `tenancy.ResolveTenant` before the circuit
+breaker, before the body is read, and before anything is counted; an
+empty header resolves to `tenancy.LocalTenant` so every existing local
+workflow is unaffected, and anything else that fails to resolve is
+refused (`refusalTenantUnresolved`) rather than pooled — SP-5's own
+acceptance criterion, including the mutation clause ("removing the
+resolution step must not leave the suite green"), which
+`TestSP5_HTTPRequestWithAnUnresolvableTenantIsRefused` and its sibling
+unit tests in `internal/proxy/spend_tenancy_test.go` hold. `SpendGuard`'s
+`session` and `dayUsed` accumulators (`internal/proxy/guards.go`) are now
+keyed by `tenancy.TenantID` as the outer map — SP-6 — and `spend-day.json`
+persists and restores per tenant, with a read-only compatibility path for
+a pre-SP-6 flat file landing under `tenancy.LocalTenant`.
+`TestSP6_DayCapDoesNotCrossTenants` is SP-6's row's own acceptance
+criterion verbatim. `internal/quota` is untouched and remains its own,
+separate, unwired entry below.

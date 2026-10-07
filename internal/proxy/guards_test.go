@@ -9,26 +9,27 @@ import (
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 func TestSpendGuardCapsSessionAndDay(t *testing.T) {
 	g := NewSpendGuard(SpendLimits{SessionTokens: 100, DayTokens: 150})
-	if g.Check("a") != "" {
+	if g.Check(tenancy.LocalTenant, "a") != "" {
 		t.Fatal("fresh session must be allowed")
 	}
-	g.Record("a", 60, 0, false)
-	if g.Check("a") != "" {
+	g.Record(tenancy.LocalTenant, "a", 60, 0, false)
+	if g.Check(tenancy.LocalTenant, "a") != "" {
 		t.Fatal("under the cap must be allowed")
 	}
-	g.Record("a", 40, 0, false)
-	if reason := g.Check("a"); reason == "" {
+	g.Record(tenancy.LocalTenant, "a", 40, 0, false)
+	if reason := g.Check(tenancy.LocalTenant, "a"); reason == "" {
 		t.Fatal("session cap must refuse the next request")
 	}
-	if g.Check("b") != "" {
+	if g.Check(tenancy.LocalTenant, "b") != "" {
 		t.Fatal("another session is under its own cap")
 	}
-	g.Record("b", 60, 0, false)
-	if reason := g.Check("b"); reason == "" {
+	g.Record(tenancy.LocalTenant, "b", 60, 0, false)
+	if reason := g.Check(tenancy.LocalTenant, "b"); reason == "" {
 		t.Fatal("daily cap must refuse across sessions")
 	}
 }
@@ -37,22 +38,22 @@ func TestSpendGuardRollsOverAtMidnightUTC(t *testing.T) {
 	g := NewSpendGuard(SpendLimits{DayTokens: 10})
 	day := time.Date(2026, 9, 2, 23, 59, 0, 0, time.UTC)
 	g.now = func() time.Time { return day }
-	g.Record("a", 10, 0, false)
-	if g.Check("a") == "" {
+	g.Record(tenancy.LocalTenant, "a", 10, 0, false)
+	if g.Check(tenancy.LocalTenant, "a") == "" {
 		t.Fatal("cap must apply today")
 	}
 	g.now = func() time.Time { return day.Add(2 * time.Minute) }
-	if g.Check("a") != "" {
+	if g.Check(tenancy.LocalTenant, "a") != "" {
 		t.Fatal("daily counter must reset after midnight")
 	}
 }
 
 func TestSpendGuardDisabledIsNoop(t *testing.T) {
 	var g *SpendGuard
-	if g.Enabled() || g.Check("x") != "" {
+	if g.Enabled() || g.Check(tenancy.LocalTenant, "x") != "" {
 		t.Fatal("nil guard must allow everything")
 	}
-	g.Record("x", 1, 0, false)
+	g.Record(tenancy.LocalTenant, "x", 1, 0, false)
 }
 
 func TestDetectLoop(t *testing.T) {
@@ -152,16 +153,16 @@ func TestIsRetryableStatus(t *testing.T) {
 
 func TestSpendGuardDollarCaps(t *testing.T) {
 	g := NewSpendGuard(SpendLimits{SessionUSD: 1, DayUSD: 1.5})
-	g.Record("a", 100, 0.6, false)
-	if g.Check("a") != "" {
+	g.Record(tenancy.LocalTenant, "a", 100, 0.6, false)
+	if g.Check(tenancy.LocalTenant, "a") != "" {
 		t.Fatal("under the dollar cap must be allowed")
 	}
-	g.Record("a", 100, 0.4, false)
-	if reason := g.Check("a"); !strings.Contains(reason, "$1.00 of $1.00") {
+	g.Record(tenancy.LocalTenant, "a", 100, 0.4, false)
+	if reason := g.Check(tenancy.LocalTenant, "a"); !strings.Contains(reason, "$1.00 of $1.00") {
 		t.Fatalf("session dollar cap must refuse: %q", reason)
 	}
-	g.Record("b", 100, 0.5, false)
-	if reason := g.Check("b"); !strings.Contains(reason, "daily spend cap reached: $1.50") {
+	g.Record(tenancy.LocalTenant, "b", 100, 0.5, false)
+	if reason := g.Check(tenancy.LocalTenant, "b"); !strings.Contains(reason, "daily spend cap reached: $1.50") {
 		t.Fatalf("daily dollar cap must refuse across sessions: %q", reason)
 	}
 }
@@ -202,21 +203,21 @@ func TestDollarCapOnAnUnpricedModelIsReportedNotSilentlyIgnored(t *testing.T) {
 	}
 	// Tokens were spent on a model the table could not price, so the cost is
 	// the dearest row standing in for it.
-	g.Record("s1", 500_000, 12.50, true)
+	g.Record(tenancy.LocalTenant, "s1", 500_000, 12.50, true)
 	if !g.CapNotEnforced() {
 		t.Fatal("a dollar cap that cannot be enforced must be reportable, not silent")
 	}
-	if msg := g.Check("s1"); msg != "" {
+	if msg := g.Check(tenancy.LocalTenant, "s1"); msg != "" {
 		t.Fatalf("the cap must not fire on an unpriceable session: %q", msg)
 	}
 
 	// A priced session behaves exactly as before.
 	h := NewSpendGuard(SpendLimits{SessionUSD: 20})
-	h.Record("s2", 500_000, 25, false)
+	h.Record(tenancy.LocalTenant, "s2", 500_000, 25, false)
 	if h.CapNotEnforced() {
 		t.Fatal("a priced session enforces its cap normally")
 	}
-	if msg := h.Check("s2"); msg == "" {
+	if msg := h.Check(tenancy.LocalTenant, "s2"); msg == "" {
 		t.Fatal("the cap should have fired at $25 of $20")
 	}
 }
@@ -230,8 +231,8 @@ func TestDayCapSurvivesARestart(t *testing.T) {
 
 	first := NewSpendGuard(SpendLimits{DayUSD: 10})
 	first.LoadState(dir)
-	first.Record("s1", 500_000, 7.50, false)
-	if msg := first.Check("s1"); msg != "" {
+	first.Record(tenancy.LocalTenant, "s1", 500_000, 7.50, false)
+	if msg := first.Check(tenancy.LocalTenant, "s1"); msg != "" {
 		t.Fatalf("fixture: $7.50 of $10 should not refuse yet: %q", msg)
 	}
 	first.SaveState(dir)
@@ -239,8 +240,8 @@ func TestDayCapSurvivesARestart(t *testing.T) {
 	// The process dies and comes back. The day's spend must come back with it.
 	second := NewSpendGuard(SpendLimits{DayUSD: 10})
 	second.LoadState(dir)
-	second.Record("s2", 200_000, 3.00, false) // takes the day to $10.50
-	if msg := second.Check("s2"); msg == "" {
+	second.Record(tenancy.LocalTenant, "s2", 200_000, 3.00, false) // takes the day to $10.50
+	if msg := second.Check(tenancy.LocalTenant, "s2"); msg == "" {
 		t.Fatal("the day cap did not survive the restart: $10.50 of $10 was allowed")
 	}
 }
@@ -252,13 +253,13 @@ func TestPersistedStateFromAnotherDayIsDiscarded(t *testing.T) {
 	g := NewSpendGuard(SpendLimits{DayUSD: 10})
 	g.now = func() time.Time { return time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC) }
 	g.LoadState(dir)
-	g.Record("s1", 0, 50, false) // way over
+	g.Record(tenancy.LocalTenant, "s1", 0, 50, false) // way over
 	g.SaveState(dir)
 
 	next := NewSpendGuard(SpendLimits{DayUSD: 10})
 	next.now = func() time.Time { return time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC) }
 	next.LoadState(dir)
-	if msg := next.Check("s1"); msg != "" {
+	if msg := next.Check(tenancy.LocalTenant, "s1"); msg != "" {
 		t.Fatalf("yesterday's spend leaked into today: %q", msg)
 	}
 }
@@ -271,7 +272,7 @@ func TestSpendStateFailsOpenOnAnUnreadableFile(t *testing.T) {
 	}
 	g := NewSpendGuard(SpendLimits{DayUSD: 10})
 	g.LoadState(dir) // must not panic, must not error out
-	if msg := g.Check("s1"); msg != "" {
+	if msg := g.Check(tenancy.LocalTenant, "s1"); msg != "" {
 		t.Fatalf("a corrupt state file must not refuse traffic: %q", msg)
 	}
 }
@@ -295,23 +296,23 @@ func TestSpendGuardEvictsLeastRecentlyUsedUnderAFrozenClock(t *testing.T) {
 	ids := make([]string, maxSpendSessions)
 	for i := range ids {
 		ids[i] = fmt.Sprintf("s%04d", i)
-		g.Record(ids[i], 1, 0, false)
+		g.Record(tenancy.LocalTenant, ids[i], 1, 0, false)
 	}
 	// Touch every session except the first, so it is unambiguously the least
 	// recently used and every seen timestamp remains identical.
 	for _, id := range ids[1:] {
-		g.Record(id, 1, 0, false)
+		g.Record(tenancy.LocalTenant, id, 1, 0, false)
 	}
 
-	g.Record("newcomer", 1, 0, false)
+	g.Record(tenancy.LocalTenant, "newcomer", 1, 0, false)
 
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if _, ok := g.session[ids[0]]; ok {
+	if _, ok := g.session[tenancy.LocalTenant][ids[0]]; ok {
 		t.Errorf("%s was the least recently used and survived eviction", ids[0])
 	}
 	for _, id := range ids[1:] {
-		if _, ok := g.session[id]; !ok {
+		if _, ok := g.session[tenancy.LocalTenant][id]; !ok {
 			t.Fatalf("%s was touched more recently than %s and was evicted instead; "+
 				"eviction is not ordered when the clock cannot separate touches", id, ids[0])
 		}

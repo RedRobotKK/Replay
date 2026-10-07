@@ -12,6 +12,7 @@ import (
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 // The request path: one request in, one response out, one ledger record.
@@ -90,6 +91,25 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		s.noteResponsesRead(r.URL.Path)
 	}
 	rec := ledger.Record{Timestamp: start, Path: r.URL.Path, SessionID: r.Header.Get(HeaderSessionID), AgentID: r.Header.Get(HeaderAgentID)}
+
+	// SP-5 (docs/requirements.md): tenant identity is resolved before any
+	// cap is consulted, not only before the spend guard specifically. The
+	// breaker, the loop detector and the pre-flight ceiling all sit behind
+	// s.guard below, and a request this proxy cannot attribute to a tenant
+	// must not reach any of them having been silently pooled into one. An
+	// empty header resolves to tenancy.LocalTenant (ResolveTenant's own
+	// rule), so a client that sends no tenant header — every existing local
+	// workflow, today and after this change — is unaffected. Anything else
+	// that fails to resolve is refused here, before the circuit breaker,
+	// before the body is read, and before anything is counted: SP-5's own
+	// words are "refused, never pooled into a shared bucket."
+	tenant, tenantErr := tenancy.ResolveTenant(r.Header.Get(HeaderTenantID))
+	if tenantErr != nil {
+		s.refuseSession(w, rec.SessionID, "", refusalTenantUnresolved,
+			"tenant identity could not be resolved: "+tenantErr.Error()+
+				"; omit "+HeaderTenantID+" to run as the local default, or send a valid identity", 0)
+		return
+	}
 
 	ok, probe, wait := s.cfg.Breaker.Allow()
 	if !ok {
@@ -195,7 +215,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		if rec.SessionID == "" {
 			rec.SessionID = rec.SessionHash
 		}
-		if !s.guard(w, r, &rec) {
+		if !s.guard(w, r, &rec, tenant) {
 			return
 		}
 		if messages {
@@ -279,7 +299,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			rec.Response = tap.result()
 			if u := rec.Response.Usage; u != nil {
 				usd, bound := listCost(*u, rec.Model)
-				s.cfg.Spend.Record(rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output, usd, bound)
+				s.cfg.Spend.Record(tenant, rec.SessionID, u.Input+u.CacheCreation+u.CacheRead+u.Output, usd, bound)
 			} else if rec.Status >= 200 && rec.Status < 300 {
 				// A 2xx that said nothing about what it cost. The guard never
 				// sees it, so a dollar cap does not either; count it where the
@@ -369,9 +389,9 @@ func setBody(r *http.Request, body []byte) {
 
 // guard applies the spend cap and loop detector to a summarized request.
 // It reports false when the request was answered locally.
-func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Record) bool {
+func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Record, tenant tenancy.TenantID) bool {
 	override := r.Header.Get(HeaderOverride)
-	if reason := s.cfg.Spend.Check(rec.SessionID); reason != "" {
+	if reason := s.cfg.Spend.Check(tenant, rec.SessionID); reason != "" {
 		if override == "" {
 			s.refuseSession(w, rec.SessionID, rec.Model, refusalSpendCap, reason+". Raise the cap, start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
 			return false
