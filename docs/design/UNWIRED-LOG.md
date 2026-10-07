@@ -308,3 +308,36 @@ schedule was derived from it. The register is
 1h on the corpus the study runs on, and the register states that Replay
 does not write the setting on its own. The experiment writes it; the
 product records what the product does.
+
+## 18. internal/tenancy, the identity primitive before the surfaces that need it
+
+Added 2026-10-07. Not reachable from `cmd/replay`, and deliberately so, in
+the same family as `internal/stateledger`: the shape is built before the
+decision to wire it is taken, not instead of taking it.
+
+ADR-0028 amends ADR-0015 to say the tenant dimension "is the first
+engineering unit" of the hosted service, "not a reason to defer it", and
+`docs/requirements.md` SP-5 already specifies what that dimension resolves
+and refuses: a tenant key before any cap is consulted, refused rather than
+pooled into a shared bucket when it cannot be resolved. This package is
+that primitive: `TenantID` and `AccountID` as distinct, validated types,
+`ResolveTenant` as the resolution rule (empty input still resolves to the
+fixed local default, so every existing local workflow keeps working with
+zero configuration), and a tenant-scoped `Registry` proving the isolation
+property (`Put`/`Get` refuse an unresolved tenant and never cross tenants,
+not even by falling back to the local default) as a data-structure
+property, mutation-tested, rather than a request-time check nothing yet
+calls.
+
+It carries no account, order, plan, balance or payment-method field: the
+unit of sale is explicitly undecided (ADR-0028, consequence 6), and this
+package does not pre-empt that decision. It cannot reach a network or a
+process (`TestTenancy_ImportAllowlist`, in the family of
+`internal/observation`'s `TestO7`).
+
+**What would wire it:** SP-5's remaining half, resolution "at the proxy
+boundary" inside `internal/proxy`, and SP-6's per-tenant caps on the spend
+guard's own accumulators. Both are specified in `docs/requirements.md`,
+gated on ADR-0015 as ADR-0028 amends it, and neither is built here: wiring
+either is a separate, larger, separately-verified unit, not a consequence
+of this one existing.

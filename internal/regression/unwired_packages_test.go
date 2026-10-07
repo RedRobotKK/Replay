@@ -62,6 +62,7 @@ func TestNoNewlyUnwiredPackages(t *testing.T) {
 		"internal/dogfoodbaseline":     "OPEN, and correctly absent. Pins what survives of docs/evidence/dogfood-baseline-2026-09-25.md: the frozen block's internal arithmetic and the three rate metrics entailed by it. The measurement itself is a dated observation of a live tree that has since changed and cannot be re-run, so the package deliberately reads nothing and a test enforces that through its imports. UNWIRED-LOG.md #13.",
 		"internal/outputdiscipline":    "OPEN, and correctly absent. Re-derives the two published tables of docs/evidence/output-discipline-2026-09-25.md from the run sets that produced them, so an unnamed fixture set cannot silently drift from a published figure. It re-computes one dated benchmark and ships no behaviour to a user of the binary. UNWIRED-LOG.md #12.",
 		"internal/feed":                "OPEN, may be by design — the rules feed is served from the site, not the binary. UNWIRED-LOG.md #9.",
+		"internal/tenancy":             "OPEN, and correctly absent. The tenant and account identity primitive ADR-0028 (amending ADR-0015) and docs/requirements.md SP-5 name: validated types, a resolution rule, and a mutation-tested isolation guarantee, with no caller yet. Wiring it is SP-5's proxy-boundary resolution and SP-6's per-tenant caps, both separately specified and unbuilt. UNWIRED-LOG.md #18.",
 	}
 
 	all, inBinary := reachable(t)

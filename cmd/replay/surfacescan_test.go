@@ -266,7 +266,48 @@ func TestC016_NoTaskImprovementClaimIsAsserted(t *testing.T) {
 	}
 }
 
-// RPL-C019. Whether an account boundary exists to correlate on at all.
+// correlationPathSources restricts the account-identity scan below to the
+// files RPL-C019's own Scope field names: "every correlation path: ledger,
+// transcript readers, cost report". A repo-wide scan was the right breadth
+// before any account-shaped identity existed anywhere and worked only
+// because nothing matched by construction. ADR-0028's tenancy unit
+// (internal/tenancy, an unwired primitive: docs/design/UNWIRED-LOG.md) now
+// defines TenantID and AccountID deliberately, for a hosted-service
+// ownership primitive that is not part of this correlation path. RPL-C019
+// is "can two provider-account records be told apart in the
+// ledger/transcript/cost-report path", not "does any account-shaped word
+// exist anywhere in the binary"; scoping the scan to
+// the claim's own stated Scope keeps the original protection exactly as
+// strong where it matters (it still catches an account-shaped identity
+// introduced into the ledger, a transcript reader, or the cost report,
+// including one reached only through an import, since the importing
+// file's own source then contains the identifier) and stops it firing on
+// an unrelated, already-recorded identity living outside that path.
+func correlationPathSources(t *testing.T) map[string]string {
+	t.Helper()
+	all := nonTestGoSources(t)
+	out := map[string]string{}
+	prefixes := []string{"internal/ledger/", "internal/transcript/"}
+	exact := map[string]bool{"cmd/replay/cost.go": true}
+	for rel, src := range all {
+		match := exact[rel]
+		for _, p := range prefixes {
+			if strings.HasPrefix(rel, p) {
+				match = true
+			}
+		}
+		if match {
+			out[rel] = src
+		}
+	}
+	if len(out) < 5 {
+		t.Fatalf("correlation-path scan found only %d files; the scope list is probably wrong", len(out))
+	}
+	return out
+}
+
+// RPL-C019. Whether an account boundary exists to correlate on, in the
+// ledger/transcript-reader/cost-report path specifically.
 //
 // The register previously said a cross-account id collision "would not be
 // caught", which reads as an untested case. It is not: there is nothing to
@@ -275,11 +316,16 @@ func TestC016_NoTaskImprovementClaimIsAsserted(t *testing.T) {
 // they are indistinguishable by construction.
 //
 // Recording that as NO_ENDPOINT rather than as a gap is the honest
-// classification, and this test is what makes it checkable.
+// classification, and this test is what makes it checkable. Scoped to the
+// correlation path (see correlationPathSources) rather than the whole
+// repository since RPL-C038: a hosted-service tenant/account identity now
+// exists in internal/tenancy, deliberately, for a different question than
+// this claim asks, and a repo-wide scan would fail on it forever for no
+// finding.
 func TestXW6_NoAccountIdentityExistsToCorrelateOn(t *testing.T) {
 	// The register names these identities in order to record their absence,
 	// so scanning it finds the record and calls it the thing.
-	srcs := userFacingSources(t)
+	srcs := correlationPathSources(t)
 
 	// Identity shapes that would constitute an account boundary.
 	shapes := regexp.MustCompile(`\b(AccountID|TenantID|OrgID|OrganizationID|OrganisationID|ProjectID|WorkspaceID)\b`)

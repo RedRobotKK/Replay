@@ -402,10 +402,10 @@ var Register = []Claim{
 			"anything. No account, tenant, organisation, project or workspace identity exists anywhere in the correlation path. A ledger record carries SessionID, AgentID, RequestID and SessionHash and nothing that names whose account it was",
 		},
 		Vocabulary: "",
-		Oracle:     "static scan of every non-test Go file for an account-shaped identity",
+		Oracle:     "static scan of the ledger, transcript-reader and cost-report source for an account-shaped identity",
 		Tests:      []string{"TestXW6_NoAccountIdentityExistsToCorrelateOn"},
 		Result:     NoEndpoint,
-		Why:        "Not a testing gap: there is no endpoint to test. Two records from different accounts sharing a provider request id are indistinguishable from the same request seen twice, because nothing in the evidence model names the account. Consistent with the distinct-account claim removed at 8e871bf as structurally unavailable, which needed a provider to issue an account-scoped credential and none does.",
+		Why:        "Not a testing gap: there is no endpoint to test. Two records from different accounts sharing a provider request id are indistinguishable from the same request seen twice, because nothing in the evidence model names the account. Consistent with the distinct-account claim removed at 8e871bf as structurally unavailable, which needed a provider to issue an account-scoped credential and none does. The scan was repo-wide until a hosted-service identity existed anywhere to find; one now does, in internal/tenancy, an unwired primitive for ADR-0028's hosted service (docs/design/UNWIRED-LOG.md) rather than for correlating provider accounts, so the scan is scoped to this claim's own Scope field rather than failing on an unrelated, already-recorded identity forever.",
 	},
 	{
 		ID:       "RPL-C020",
