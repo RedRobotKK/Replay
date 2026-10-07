@@ -78,6 +78,31 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
+	// A first, lighter pass over every file builds the observed-ceiling
+	// table before anything is printed: the table pools compactions across
+	// the whole corpus (docs/evidence/compaction-panel-2026-10-05.md's
+	// gate is read against the reader's own machine, not one session), so
+	// it has to exist before the first session's report can cite it. This
+	// parses every Claude Code transcript a second time; forEachSession's
+	// own pass below does the heavier attribution work the ceiling table
+	// does not need. A corpus large enough for this to matter is a cost
+	// this unit accepts rather than hides.
+	var corpus []*transcript.Session
+	for _, f := range files {
+		session, err := transcript.ParseClaudeCodeFile(f)
+		// A file this pass cannot parse is simply not counted toward the
+		// ceiling table, the same ADR-0018 absence this command already
+		// accepts below: forEachSession's own visit skips a session it
+		// could not analyze (err != nil || rep == nil) rather than failing
+		// the whole run, and a reader missing from the ceiling table is
+		// one fewer data point, not a false reading.
+		if err != nil {
+			continue
+		}
+		corpus = append(corpus, session)
+	}
+	ceilings := analysis.BuildContextCeilings(corpus)
+
 	printed := 0
 	// sysTokens and allTokens accumulate across the walk so the population
 	// comparison below is printed once per run rather than once per transcript.
@@ -144,9 +169,13 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 		_, _ = fmt.Fprintf(stdout, "\n  %s\n", analysis.FitNote(rep.Fit))
 		_, _ = fmt.Fprintf(stdout, "\n  %s\n", gap.Note())
 		if detail := gap.CompactionDetail(); len(detail) > 0 {
+			ceilingLines := analysis.ContextCeilingDetail(session, ceilings)
 			_, _ = fmt.Fprintf(stdout, "\n  %s\n", detail[0])
-			for _, line := range detail[1:] {
+			for i, line := range detail[1:] {
 				_, _ = fmt.Fprintf(stdout, "    %s\n", line)
+				if i < len(ceilingLines) && ceilingLines[i] != "" {
+					_, _ = fmt.Fprintf(stdout, "      %s\n", ceilingLines[i])
+				}
 			}
 		}
 		return nil

@@ -676,3 +676,54 @@ func TestE2E_ContextReportsWhatACompactionKept(t *testing.T) {
 		t.Errorf("this session has no sub-agent, only a compaction:\n%s", out)
 	}
 }
+
+// replay context, run against a directory with at least ten recorded
+// compactions for one model, reports an observed ceiling line beside the
+// per-event detail. Nine is withheld, by name; ten clears the panel's gate.
+func TestE2E_ContextReportsAnObservedCeilingAtTenCompactionsNotNine(t *testing.T) {
+	build := func(dir string, n int) {
+		var b strings.Builder
+		pre := []int{963_705, 964_000, 965_000, 966_870, 970_000, 980_000, 990_000, 995_000, 996_000, 998_021}
+		base := time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
+		fmtTS := func(i int, offset time.Duration) string {
+			return base.Add(time.Duration(i)*10*time.Minute + offset).Format(time.RFC3339)
+		}
+		for i := 0; i < n; i++ {
+			fmt.Fprintf(&b, `{"type":"user","uuid":"u%d","sessionId":"s","timestamp":"%s","cwd":"/tmp/x","message":{"role":"user","content":"go"}}
+`, i, fmtTS(i, 0))
+			fmt.Fprintf(&b, `{"type":"assistant","uuid":"a%d","parentUuid":"u%d","sessionId":"s","timestamp":"%s","requestId":"r%d","message":{"role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":1000,"output_tokens":20}}}
+`, i, i, fmtTS(i, time.Second), i)
+			fmt.Fprintf(&b, `{"type":"system","subtype":"compact_boundary","uuid":"b%d","sessionId":"s","timestamp":"%s","compactMetadata":{"trigger":"auto","preTokens":%d,"postTokens":1000}}
+`, i, fmtTS(i, 5*time.Second), pre[i])
+			fmt.Fprintf(&b, `{"type":"user","uuid":"c%d","parentUuid":"b%d","sessionId":"s","timestamp":"%s","isCompactSummary":true,"message":{"role":"user","content":"summary"}}
+`, i, i, fmtTS(i, 6*time.Second))
+		}
+		if err := os.WriteFile(filepath.Join(dir, "session.jsonl"), []byte(b.String()), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	nine := t.TempDir()
+	build(nine, 9)
+	out, errb, err := e2e(t, "context", nine)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, errb)
+	}
+	mustContain(t, "context", out, "withheld, only 9 compactions recorded here (need 10)")
+	if strings.Contains(out, "998,021") {
+		t.Errorf("nine recordings must not print a ceiling figure:\n%s", out)
+	}
+
+	ten := t.TempDir()
+	build(ten, 10)
+	out, errb, err = e2e(t, "context", ten)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, errb)
+	}
+	mustContain(t, "context", out, "observed ceiling for claude-opus-5 on this machine", "998,021", "estimated, n=10")
+	for _, bad := range []string{"approach", "will ", "expect", "forecast", "window", "predict"} {
+		if strings.Contains(strings.ToLower(out), bad) {
+			t.Errorf("output contains the banned word %q:\n%s", bad, out)
+		}
+	}
+}
