@@ -137,6 +137,7 @@ func ParseClaudeCodeFile(path string) (*Session, error) {
 		return nil, fmt.Errorf("%s: %w", filepath.Base(path), err)
 	}
 	s.Path = path
+	s.RepositoryID = repositoryIDFromPath(path)
 	return s, nil
 }
 
@@ -155,15 +156,20 @@ func ParseClaudeCode(r io.Reader) (*Session, error) {
 		byUUID[l.UUID] = l
 	}
 
-	session := &Session{Skipped: skipped, Source: SourceTranscript}
+	session := &Session{Skipped: skipped, Source: SourceTranscript, RepositoryID: RepositoryUnknown}
 	// sawBoundary pairs a compact_boundary with the summary that follows it.
 	sawBoundary := false
 	for _, l := range lines {
 		if l.SessionID != "" && session.ID == "" {
 			session.ID = l.SessionID
 		}
-		if l.Version != "" && session.ClientVersion == "" {
-			session.ClientVersion = l.Version
+		session.ClientVersions = recordClientVersion(session.ClientVersions, l.Version)
+		if session.ClientVersion == "" && len(session.ClientVersions) > 0 {
+			// Kept in step with the complete record for backward
+			// compatibility: ClientVersion is the first-seen version,
+			// exactly as it always was, derived here rather than tracked
+			// separately so the two cannot disagree.
+			session.ClientVersion = session.ClientVersions[0]
 		}
 		// A compaction is a PAIR of records, not one. The client writes a
 		// boundary - type "system", subtype "compact_boundary", carrying

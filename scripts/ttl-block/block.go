@@ -57,6 +57,30 @@ type blockRecord struct {
 	ScheduleSHA256  string `json:"schedule_sha256"`
 	ToolCommit      string `json:"tool_commit"`
 	Reason          string `json:"reason,omitempty"`
+
+	// ToolTreeSHA256 is the sha256 of the measurement tool itself (toolTreeSHA256
+	// over toolTreeGoFiles), captured at BLOCK_STARTED and BLOCK_ENDED.
+	// UNAVAILABLE when it could not be computed (see ToolTreeError), distinct
+	// from SettingsSHA256 and SpanIntact above: that pair is about the
+	// settings file this study writes, this pair is about the code that
+	// measures it. Neither is voided by a change in the other.
+	ToolTreeSHA256 string `json:"tool_tree_sha256,omitempty"`
+	// ToolTreeFiles is every hashed file mapped to its own sha256, carried so
+	// a later BLOCK_ENDED can name exactly what changed rather than only
+	// disclosing that something did.
+	ToolTreeFiles map[string]string `json:"tool_tree_files,omitempty"`
+	// ToolTreeError explains a ToolTreeSHA256 of UNAVAILABLE.
+	ToolTreeError string `json:"tool_tree_error,omitempty"`
+	// ToolTreeIntact is set only on BLOCK_ENDED, when both the start and end
+	// hashes were computed: whether the measurement tool was unchanged across
+	// the block. nil when either hash is UNAVAILABLE, because intactness is
+	// then not known, not false. A false value does NOT void the block and
+	// excludes no session on its own; it is disclosed, and analysis of the
+	// block's sessions is pinned to the tool_commit recorded at BLOCK_STARTED.
+	ToolTreeIntact *bool `json:"tool_tree_intact,omitempty"`
+	// ToolTreeChangedFiles names every path whose hash differed between the
+	// block's start and end snapshots, set only when ToolTreeIntact is false.
+	ToolTreeChangedFiles []string `json:"tool_tree_changed_files,omitempty"`
 }
 
 // readBack is readSetting behind a variable, so a test can make the read
@@ -253,6 +277,24 @@ func appendRecord(path string, r blockRecord) error {
 // paths is everything a block operation needs to find.
 type paths struct {
 	settings, register, schedule, log string
+	// toolTreeRoots names the directories hashed for ToolTreeSHA256. Carried
+	// on paths, like every other location this program reads or writes,
+	// rather than as a package-level constant, so a test can point it at a
+	// temporary tree instead of this repository's own source.
+	toolTreeRoots []string
+}
+
+// captureToolTree hashes the measurement tool and reports it the way a
+// blockRecord carries it: a sum and its per-file breakdown, or UNAVAILABLE
+// and the reason when the hash could not be computed. It never returns an
+// error itself, because a disclosure failure must not be confused with the
+// settings-file failures that startBlock and endBlock do return as errors.
+func captureToolTree(p paths) (sum string, files map[string]string, errMsg string) {
+	sum, files, err := toolTreeSHA256(p.toolTreeRoots...)
+	if err != nil {
+		return "UNAVAILABLE", nil, err.Error()
+	}
+	return sum, files, ""
 }
 
 // startBlock puts the settings file into the arm the schedule names for the
@@ -318,11 +360,12 @@ func startBlock(p paths, block int, arm string, now time.Time) (blockRecord, err
 		return blockRecord{}, err
 	}
 	configured, readable := readBack(p.settings)
+	toolSum, toolFiles, toolErr := captureToolTree(p)
 	rec := blockRecord{Schema: schemaBlock, Event: "BLOCK_STARTED", Block: block, Arm: arm,
 		Mechanism: "settings-file", At: now.UTC().Format(time.RFC3339), SettingsPath: p.settings,
 		PriorValue: prior, RequestedValue: requested, ConfiguredValue: configured, StateChange: "VERIFIED",
 		BackupPath: backup, SettingsSHA256: bytesSHA256(written), RegisterSHA256: regSHA, ScheduleSHA256: schedSHA,
-		ToolCommit: toolCommit()}
+		ToolCommit: toolCommit(), ToolTreeSHA256: toolSum, ToolTreeFiles: toolFiles, ToolTreeError: toolErr}
 	switch {
 	case !readable:
 		rec.Event, rec.StateChange, rec.ConfiguredValue = "BLOCK_NOT_STARTED", "UNVERIFIED", "UNREADABLE"
@@ -384,10 +427,13 @@ func endBlock(p paths, block int, now time.Time) (blockRecord, error) {
 	if openBlock(log) != block {
 		return blockRecord{}, fmt.Errorf("block %d is not the open block", block)
 	}
-	var startSHA string
+	var startSHA, startToolSHA string
+	var startToolFiles map[string]string
 	for _, r := range log {
 		if r.Event == "BLOCK_STARTED" && r.Block == block {
 			startSHA = r.SettingsSHA256
+			startToolSHA = r.ToolTreeSHA256
+			startToolFiles = r.ToolTreeFiles
 		}
 	}
 	sha, err := fileSHA256(p.settings)
@@ -395,11 +441,25 @@ func endBlock(p paths, block int, now time.Time) (blockRecord, error) {
 		return blockRecord{}, err
 	}
 	intact := sha == startSHA
+	toolSum, toolFiles, toolErr := captureToolTree(p)
 	rec := blockRecord{Schema: schemaBlock, Event: "BLOCK_ENDED", Block: block, Mechanism: "settings-file",
 		At: now.UTC().Format(time.RFC3339), SettingsPath: p.settings, SettingsSHA256: sha, SpanIntact: &intact,
-		RegisterSHA256: regSHA, ScheduleSHA256: schedSHA, ToolCommit: toolCommit()}
+		RegisterSHA256: regSHA, ScheduleSHA256: schedSHA, ToolCommit: toolCommit(),
+		ToolTreeSHA256: toolSum, ToolTreeFiles: toolFiles, ToolTreeError: toolErr}
 	if !intact {
 		rec.Reason = "the settings file changed during the block; sessions after the change are excluded by the register's span rule"
+	}
+	// ToolTreeIntact is left nil (unknown, not false) unless both the start
+	// and end hashes were actually computed. A mismatch does not void the
+	// block or exclude any session on its own; it is disclosed, with the
+	// changed files named, and analysis stays pinned to the tool_commit
+	// recorded at BLOCK_STARTED.
+	if startToolSHA != "" && startToolSHA != "UNAVAILABLE" && toolSum != "UNAVAILABLE" {
+		toolIntact := toolSum == startToolSHA
+		rec.ToolTreeIntact = &toolIntact
+		if !toolIntact {
+			rec.ToolTreeChangedFiles = toolTreeDiff(startToolFiles, toolFiles)
+		}
 	}
 	return rec, appendRecord(p.log, rec)
 }

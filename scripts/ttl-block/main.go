@@ -43,7 +43,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if err := fs.Parse(args[1:]); err != nil {
 		return 2
 	}
-	p := paths{settings: *settings, register: *register, schedule: *sched, log: *logp}
+	p := paths{settings: *settings, register: *register, schedule: *sched, log: *logp, toolTreeRoots: toolTreeGoFiles}
 	var rec blockRecord
 	var err error
 	switch args[0] {

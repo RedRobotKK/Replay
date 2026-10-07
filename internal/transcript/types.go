@@ -287,8 +287,20 @@ type Session struct {
 	ID            string
 	Path          string
 	ClientVersion string
-	Source        Source
-	Lanes         []*Lane
+	// ClientVersions is every client version this session's transcript lines
+	// carried, first-seen order, deduplicated. ClientVersion above keeps its
+	// first-seen meaning for existing consumers (cmd/replay/corpus.go and
+	// contribute.go read it as one representative string); this is the
+	// complete record, and the only one a straddling check may read. See
+	// ClientVersionProvenance.
+	ClientVersions []string `json:"client_versions,omitempty"`
+	// RepositoryID identifies the project directory this session's
+	// transcript was recorded under, derived from where the file sits on
+	// disk (Path), never from anything inside the transcript's own content.
+	// RepositoryUnknown when Path is unset. See repositoryIDFromPath.
+	RepositoryID string `json:"repository_id,omitempty"`
+	Source       Source
+	Lanes        []*Lane
 	// Skipped counts lines the parser could not interpret. Non-zero is not an
 	// error, but it is reported so a format change does not pass silently.
 	Skipped int
