@@ -466,6 +466,11 @@ func endBlock(p paths, block int, now time.Time) (blockRecord, error) {
 
 // frozen loads the schedule and checks it was derived from the register as
 // it is now: a register edited after the schedule was fixed is refused.
+// It also checks the schedule against the block log: makeSchedule has no
+// input from the log, so a register that still hashes correctly can still
+// have been re-derived into a schedule that disagrees with what an
+// already-started block's own record says happened. historyAgrees catches
+// that before any further block starts or ends.
 func frozen(p paths) (schedule, string, string, error) {
 	regSHA, err := fileSHA256(p.register)
 	if err != nil {
@@ -482,7 +487,37 @@ func frozen(p paths) (schedule, string, string, error) {
 	if s.RegisterSHA256 != regSHA {
 		return schedule{}, "", "", fmt.Errorf("the schedule was derived from register %s but the register now hashes to %s; nothing runs against an amended register until the schedule is re-derived and refrozen", short(s.RegisterSHA256), short(regSHA))
 	}
+	log, err := readLog(p.log)
+	if err != nil {
+		return schedule{}, "", "", err
+	}
+	if err := historyAgrees(log, s); err != nil {
+		return schedule{}, "", "", err
+	}
 	return s, bytesSHA256(b), regSHA, nil
+}
+
+// historyAgrees refuses a schedule whose recorded arm for an already-started
+// block differs from that block's own BLOCK_STARTED record in the log. The
+// schedule is derived purely from the register's hash and has no input from
+// the log, so this is the only thing that would catch a re-derived schedule
+// silently contradicting a block that already ran, however the two came to
+// disagree. It checks every started block, not only the most recent, so a
+// second or third re-derivation is caught exactly the same way the first
+// would be.
+func historyAgrees(log []blockRecord, s schedule) error {
+	for _, r := range log {
+		if r.Event != "BLOCK_STARTED" {
+			continue
+		}
+		if r.Block < 1 || r.Block > len(s.Blocks) {
+			continue
+		}
+		if s.Blocks[r.Block-1] != r.Arm {
+			return fmt.Errorf("the schedule names block %d as %s, but its own log record says it started as %s; the schedule disagrees with block %d's own history and is refused", r.Block, s.Blocks[r.Block-1], r.Arm, r.Block)
+		}
+	}
+	return nil
 }
 
 func short(h string) string {

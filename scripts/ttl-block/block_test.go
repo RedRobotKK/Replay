@@ -222,6 +222,61 @@ func TestAnAmendedRegisterRefusesEveryOperation(t *testing.T) {
 	}
 }
 
+// A schedule can be re-derived from a register whose hash matches today
+// while still disagreeing with what an already-run block's own log record
+// says happened, because makeSchedule has no input from the log at all.
+// historyAgrees is the check that catches this before any further block
+// starts: it refuses when the schedule's recorded arm for an already-started
+// block differs from that block's own BLOCK_STARTED record, independent of
+// why the two came to disagree.
+func TestFrozenRefusesWhenTheScheduleDisagreesWithAnAlreadyStartedBlock(t *testing.T) {
+	p := fixture(t, map[string]any{})
+	s := readSched(t, p)
+	now := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
+	if _, err := startBlock(p, 1, s.Blocks[0], now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := endBlock(p, 1, now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	// Re-derive a schedule against the same, unedited register: the hash
+	// still matches, but a fresh derivation is not guaranteed to agree with
+	// what block 1 actually ran as, and here it is made to disagree on
+	// purpose by flipping block 1's arm while leaving the register hash
+	// untouched.
+	disagreeing := s
+	disagreeing.Blocks = append([]string(nil), s.Blocks...)
+	disagreeing.Blocks[0] = other(s.Blocks[0])
+	b, err := json.Marshal(disagreeing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p.schedule, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := startBlock(p, 2, disagreeing.Blocks[1], now.Add(2*time.Hour)); err == nil ||
+		!strings.Contains(err.Error(), "disagrees with block 1's own") {
+		t.Errorf("want a refusal naming the schedule/history disagreement on block 1, got %v", err)
+	}
+}
+
+// The same check does not fire when the schedule and the log agree, which is
+// the ordinary case for every block this study has actually run.
+func TestFrozenAllowsAScheduleThatAgreesWithHistory(t *testing.T) {
+	p := fixture(t, map[string]any{})
+	s := readSched(t, p)
+	now := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
+	if _, err := startBlock(p, 1, s.Blocks[0], now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := endBlock(p, 1, now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := startBlock(p, 2, s.Blocks[1], now.Add(2*time.Hour)); err != nil {
+		t.Errorf("an agreeing schedule must not be refused: %v", err)
+	}
+}
+
 // TestMain isolates HOME and USERPROFILE for the whole run: main.go resolves
 // the home directory to find the settings file, and a test that reached the
 // reader's real home could write to the file the study itself changes.
