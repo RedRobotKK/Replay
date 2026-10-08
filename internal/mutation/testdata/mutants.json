@@ -960,12 +960,12 @@
       "class": "evidence",
       "discovered": "2026-09-06",
       "file": "internal/proxy/guards.go",
-      "anchor": "\t\t\toldest, oldestOrder := \"\", uint64(0)\n\t\t\tfor k, v := range g.session {\n\t\t\t\tif oldest == \"\" || v.order < oldestOrder {\n\t\t\t\t\toldest, oldestOrder = k, v.order\n\t\t\t\t}\n\t\t\t}",
-      "replacement": "\t\t\toldest, oldestSeen := \"\", time.Time{}\n\t\t\tfor k, v := range g.session {\n\t\t\t\tif oldest == \"\" || v.seen.Before(oldestSeen) {\n\t\t\t\t\toldest, oldestSeen = k, v.seen\n\t\t\t\t}\n\t\t\t}",
+      "anchor": "\tfor k, v := range sessions {\n\t\tif oldest == nil || v.order < oldest.order {\n\t\t\toldestID, oldest = k, v\n\t\t}\n\t}",
+      "replacement": "\tfor k, v := range sessions {\n\t\tif oldest == nil || v.seen.Before(oldest.seen) {\n\t\t\toldestID, oldest = k, v\n\t\t}\n\t}",
       "killedBy": [
         "TestSpendGuardEvictsLeastRecentlyUsedUnderAFrozenClock"
       ],
-      "note": "Was a stand-in for the LRU fix arriving from its branch. The fix landed, the row was promoted, and nothing then guarded the eviction order at all. This restores the pre-fix comparison: under a clock too coarse to separate a burst every seen compares equal and the victim is whichever key Go's randomised map iteration yields. Fails 1023 times in 1024, measured 5 of 5."
+      "note": "Was a stand-in for the LRU fix arriving from its branch. The fix landed, the row was promoted, and nothing then guarded the eviction order at all. This restores the pre-fix comparison: under a clock too coarse to separate a burst every seen compares equal and the victim is whichever key Go's randomised map iteration yields. Fails 1023 times in 1024, measured 5 of 5. Re-anchored 2026-10-08: SP-8 extracted the loop into lruVictim(sessions map[string]*spend), replacing the two-variable oldest/oldestOrder form with a single *spend pointer and its .order field, so the original anchor no longer matched and the mutant could not be applied (found by a real sweep, not inferred). Same defect, same killer test, re-expressed against the current shape: v.order < oldest.order reverts to v.seen.Before(oldest.seen)."
     },
     {
       "id": "M72",
