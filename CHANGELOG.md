@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **README.md still offered the forensic week ADR-0028 withdrew, and called
+  itself "Replay Doctor" in its own lead sentence.** Independent
+  re-verification of REPLAY-GTM-02 found the $22,000/$18,000-$25,000
+  fixed-fee engagement live in this repository's own README, three weeks
+  after [ADR-0028](docs/adr/0028-replay-is-a-product-with-a-hosted-service.md)
+  retired it, directly contradicting the "nothing is for sale today" heading
+  two paragraphs above it. Replaced with a one-line statement that the offer
+  is withdrawn. Separately, a document titled "Replay" described itself as
+  "Replay Doctor" in its first sentence and in its author attribution;
+  reworded to "Replay" to match its own title, with one sentence noting the
+  npm/web name is the same binary. Evidence, provenance tracing for the
+  public headline figures, and what remains blocked on surfaces outside this
+  repository (replay.doctor, redrobot.jp) are recorded in
+  [docs/evidence/gtm-02-public-surface-retrofit-2026-10-08.md](docs/evidence/gtm-02-public-surface-retrofit-2026-10-08.md).
+  No production code changed; verified by the existing README/docs
+  regression suite staying green.
 - **A day-cap refusal named the session and never the tenant.** SP-7's own
   text asked for a second look once SP-5's tenant resolution landed; nobody
   had taken it. `SpendGuard.attributeDay`, the refusal log line and the

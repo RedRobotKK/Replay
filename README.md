@@ -10,9 +10,11 @@
 [![License](https://img.shields.io/badge/licence-BUSL--1.1-blue)](LICENSE)
 [![Go Reference](https://pkg.go.dev/badge/github.com/RedRobotKK/Replay.svg)](https://pkg.go.dev/github.com/RedRobotKK/Replay)
 
-**If the agent bill went up and nothing errored, a prompt cache broke.** Replay Doctor reads the
+**If the agent bill went up and nothing errored, a prompt cache broke.** Replay reads the
 transcripts already on your disk and names the turn it broke on, the cause, and the tokens
-re-billed at write prices.
+re-billed at write prices. (Published to npm and at replay.doctor under the name "Replay
+Doctor" — same binary, same repository, two names in use across different surfaces; this
+repository's own name is Replay.)
 
 ![A triage session: pick a finding, open the evidence behind it, mark it applied](docs/demo/triage.gif)
 
@@ -653,8 +655,11 @@ useful than the sentence it replaced, which is [recorded there too](SPONSORS.md)
 If a paid capability is ever added it will be **something that does not exist
 today**, and it will not be gated on sponsorship either.
 
-There is one paid thing that does exist and it is not a tier: a week of the
-maintainer's attention over your own corpus. Nobody has bought one.
+**The fixed-fee forensic week that used to be offered here is withdrawn.**
+[ADR-0028](docs/adr/0028-replay-is-a-product-with-a-hosted-service.md)
+(2026-10-05) retired it: "the fixed-fee forensic engagement is not offered
+and is not to be proposed again." The heading above is current, not
+historical — nothing is for sale today.
 
 ## About the author
 
@@ -662,7 +667,7 @@ maintainer's attention over your own corpus. Nobody has bought one.
   <img src="https://github.com/saitodaniel.png?size=160" alt="Daniel Saito" width="120" align="left" hspace="20" vspace="6">
 </a>
 
-Replay Doctor is written and maintained by **Daniel Saito**, founder of
+Replay is written and maintained by **Daniel Saito**, founder of
 [Red Robot K.K.](https://redrobot.jp), Tokyo. One person, one machine, one
 account: every figure this project publishes was measured on that machine, and
 every report says so rather than implying a population it does not have.
