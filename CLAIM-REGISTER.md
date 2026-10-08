@@ -652,7 +652,7 @@ regenerate it, or it will drift from the code it describes.**
 | Evidence basis | NOT_APPLICABLE |
 | Deciding layer | none. No account identity exists to govern |
 | Scope | every correlation path: ledger, transcript readers, cost report |
-| Oracle | static scan of every non-test Go file for an account-shaped identity |
+| Oracle | static scan of the ledger, transcript-reader and cost-report source for an account-shaped identity |
 | Asserted at | _nowhere. This is a non-claim or an inferred boundary_ |
 
 - **Establishes:** _none_
@@ -663,11 +663,11 @@ regenerate it, or it will drift from the code it describes.**
   - not a gap in testing. There is no endpoint to test.
 - **Positive control:** _none; not applicable to a non-claim_
 - **Negative control:** _none; not applicable to a non-claim_
-- **Insufficient-evidence control:** a grep of every non-test Go file finds no AccountID, TenantID, OrgID, ProjectID or WorkspaceID
+- **Insufficient-evidence control:** the scan no longer treats every TenantID as an account identity by spelling alone: internal/tenancy.TenantID (commit 646736d) is Replay's own internal ownership/namespace partition for hosted multi-tenancy, not a provider-account correlation handle, so the detector exempts it specifically while still catching AccountID, OrgID, OrganizationID, OrganisationID, ProjectID and WorkspaceID, and any TenantID that is locally redeclared rather than the registered primitive
 - **Tests:**
   - TestXW6_NoAccountIdentityExistsToCorrelateOn
 
-**Why this result:** Not a testing gap: there is no endpoint to test. Two records from different accounts sharing a provider request id are indistinguishable from the same request seen twice, because nothing in the evidence model names the account. Consistent with the distinct-account claim removed at 8e871bf as structurally unavailable, which needed a provider to issue an account-scoped credential and none does.
+**Why this result:** Not a testing gap: there is no endpoint to test. Two records from different accounts sharing a provider request id are indistinguishable from the same request seen twice, because nothing in the evidence model names the account. Consistent with the distinct-account claim removed at 8e871bf as structurally unavailable, which needed a provider to issue an account-scoped credential and none does. The scan was repo-wide until a hosted-service identity existed anywhere to find; one now does, in internal/tenancy, an unwired primitive for ADR-0028's hosted service (docs/design/UNWIRED-LOG.md) rather than for correlating provider accounts, so the scan is scoped to this claim's own Scope field rather than failing on an unrelated, already-recorded identity forever.
 
 ---
 
