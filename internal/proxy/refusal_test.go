@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 // A guard firing is the product's strongest claim and today it leaves almost no
@@ -26,7 +27,7 @@ func TestRefusalIsLoggedWithAttribution(t *testing.T) {
 	s := &Server{cfg: Config{Logger: log.New(&buf, "", 0)}, stats: newStats()}
 	w := httptest.NewRecorder()
 
-	s.refuseSession(w, "session-abcdef123456789", "claude-opus-5", refusalLoop,
+	s.refuseSession(w, tenancy.LocalTenant, "session-abcdef123456789", "claude-opus-5", refusalLoop,
 		"the same Bash call was just made 12 times in a row", 0)
 
 	got := buf.String()
@@ -46,7 +47,7 @@ func TestRefusalStillAnswersTheClient(t *testing.T) {
 	s := &Server{cfg: Config{Logger: log.New(&buf, "", 0)}, stats: newStats()}
 	w := httptest.NewRecorder()
 
-	s.refuseSession(w, "s1", "claude-opus-5", refusalCircuitOpen, "the provider has been failing", 30*time.Second)
+	s.refuseSession(w, tenancy.LocalTenant, "s1", "claude-opus-5", refusalCircuitOpen, "the provider has been failing", 30*time.Second)
 
 	if w.Code != refusalCircuitOpen.status {
 		t.Fatalf("status %d, want %d", w.Code, refusalCircuitOpen.status)
@@ -74,7 +75,7 @@ func TestRefusalIsNeverObservedAsAProviderFailure(t *testing.T) {
 	var buf bytes.Buffer
 	s := &Server{cfg: Config{Logger: log.New(&buf, "", 0), Breaker: br}, stats: newStats()}
 	for i := 0; i < 20; i++ {
-		s.refuseSession(httptest.NewRecorder(), "s1", "claude-opus-5", refusalCircuitOpen, "holding", time.Second)
+		s.refuseSession(httptest.NewRecorder(), tenancy.LocalTenant, "s1", "claude-opus-5", refusalCircuitOpen, "holding", time.Second)
 	}
 	// Twenty refusals must not have touched the breaker's failure count.
 	// Still open, and still refusing: nothing reset or re-armed it.
@@ -87,7 +88,7 @@ func TestRefusalIsNeverObservedAsAProviderFailure(t *testing.T) {
 func TestRefusalSurvivesAMinimalConfig(t *testing.T) {
 	s := &Server{cfg: Config{}, stats: newStats()}
 	w := httptest.NewRecorder()
-	s.refuseSession(w, "", "claude-opus-5", refusalSpendCap, "cap reached", 0)
+	s.refuseSession(w, tenancy.LocalTenant, "", "claude-opus-5", refusalSpendCap, "cap reached", 0)
 	if w.Code != refusalSpendCap.status {
 		t.Fatalf("status %d", w.Code)
 	}
@@ -106,7 +107,7 @@ func TestRefusalIsRecordedOnTheLedger(t *testing.T) {
 	}
 
 	s := &Server{cfg: Config{Store: store, Logger: log.New(&bytes.Buffer{}, "", 0)}, stats: newStats()}
-	s.recordRefusal("sess-1234567890ab", "claude-opus-5", refusalLoop, "the same Bash call ran 12 times in a row")
+	s.recordRefusal(tenancy.LocalTenant, "sess-1234567890ab", "claude-opus-5", refusalLoop, "the same Bash call ran 12 times in a row")
 
 	var found map[string]any
 	for _, line := range readLedgerLines(t, dir) {
@@ -136,7 +137,7 @@ func TestRefusalRecordCarriesNoContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &Server{cfg: Config{Store: store, Logger: log.New(&bytes.Buffer{}, "", 0)}, stats: newStats()}
-	s.recordRefusal("s1", "claude-opus-5", refusalSpendCap, "daily spend cap reached: $50.00 of $50.00 at list price")
+	s.recordRefusal(tenancy.LocalTenant, "s1", "claude-opus-5", refusalSpendCap, "daily spend cap reached: $50.00 of $50.00 at list price")
 
 	body := string(bytes.Join(readLedgerLines(t, dir), []byte("\n")))
 	// Assert on content, not on JSON key names: "prompt" and "messages" are
@@ -160,7 +161,92 @@ func TestRefusalRecordingIsOptional(t *testing.T) {
 		}
 	}()
 	s := &Server{cfg: Config{}, stats: newStats()}
-	s.recordRefusal("s1", "m", refusalLoop, "loop")
+	s.recordRefusal(tenancy.LocalTenant, "s1", "m", refusalLoop, "loop")
+}
+
+// SP-7's own text: "Re-read this row once SP-5 lands: naming a session is
+// not naming a tenant." SP-5 landed 2026-10-07 (internal/tenancy wired into
+// internal/proxy). An org-wide refusal that cannot say who spent the budget
+// is an outage with no operator action attached, and that is true of the
+// tenant as much as the session: a day cap tripped by tenant "acme" and one
+// tripped by tenant "umbrella" are two different operator conversations.
+//
+// PASS: a refusal fired for a non-local tenant names that tenant in the log
+// line and in the ledger record.
+// FAIL: the tenant is silently dropped, leaving only the session id — which
+// is exactly what every refusal did before this test existed.
+func TestRefusalNamesTheTenantInTheLogLine(t *testing.T) {
+	var buf bytes.Buffer
+	s := &Server{cfg: Config{Logger: log.New(&buf, "", 0)}, stats: newStats()}
+	w := httptest.NewRecorder()
+
+	s.refuseSession(w, tenancy.TenantID("acme"), "sess-known-1234", "claude-opus-5", refusalSpendCap,
+		"daily spend cap reached: $50.00 of $50.00 at list price", 0)
+
+	got := buf.String()
+	if !strings.Contains(got, "acme") {
+		t.Fatalf("a refusal for a non-local tenant must name it in the log line:\n%s", got)
+	}
+}
+
+// The local default must stay silent about tenancy. Printing "tenant=LOCAL"
+// on every line a single developer ever sees would be noise for a concept
+// that, for them, has never existed and never needs to.
+func TestRefusalDoesNotNameTheLocalTenant(t *testing.T) {
+	var buf bytes.Buffer
+	s := &Server{cfg: Config{Logger: log.New(&buf, "", 0)}, stats: newStats()}
+	w := httptest.NewRecorder()
+
+	s.refuseSession(w, tenancy.LocalTenant, "sess-known-1234", "claude-opus-5", refusalSpendCap, "cap reached", 0)
+
+	if strings.Contains(buf.String(), "LOCAL") {
+		t.Fatalf("the local default tenant must not be printed as though it were a real tenant:\n%s", buf.String())
+	}
+}
+
+// The ledger record is the artifact that outlives the scrollback, and it is
+// what SP-7's acceptance criterion names explicitly: "a refusal record names
+// the tenant and survives the ledger's existing leak assertions."
+func TestRefusalRecordNamesTheTenant(t *testing.T) {
+	dir := t.TempDir()
+	store, err := ledger.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{cfg: Config{Store: store, Logger: log.New(&bytes.Buffer{}, "", 0)}, stats: newStats()}
+	s.recordRefusal(tenancy.TenantID("acme"), "sess-1234567890ab", "claude-opus-5", refusalSpendCap,
+		"daily spend cap reached: $50.00 of $50.00 at list price")
+
+	var found map[string]any
+	for _, line := range readLedgerLines(t, dir) {
+		var rec map[string]any
+		if json.Unmarshal(line, &rec) == nil && rec["refusal"] != nil {
+			found = rec
+		}
+	}
+	if found == nil {
+		t.Fatal("no refusal record reached the ledger")
+	}
+	if found["tenant_id"] != "acme" {
+		t.Fatalf("tenant_id=%v, want %q", found["tenant_id"], "acme")
+	}
+}
+
+// omitempty means the field must be absent, not present-and-blank, for the
+// tenant every pre-existing ledger reader has to keep tolerating.
+func TestRefusalRecordOmitsTheLocalTenant(t *testing.T) {
+	dir := t.TempDir()
+	store, err := ledger.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{cfg: Config{Store: store, Logger: log.New(&bytes.Buffer{}, "", 0)}, stats: newStats()}
+	s.recordRefusal(tenancy.LocalTenant, "s1", "claude-opus-5", refusalLoop, "loop")
+
+	body := string(bytes.Join(readLedgerLines(t, dir), []byte("\n")))
+	if strings.Contains(body, "tenant_id") {
+		t.Fatalf("the local tenant must not appear on the ledger at all:\n%s", body)
+	}
 }
 
 func readLedgerLines(t *testing.T, dir string) [][]byte {

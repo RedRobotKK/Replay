@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -142,6 +143,15 @@ type Record struct {
 	Refusal string `json:"refusal,omitempty"`
 	// RefusalReason is the guard message: counts and thresholds, never content.
 	RefusalReason string `json:"refusal_reason,omitempty"`
+	// TenantID names which tenant a refusal was fired for (SP-7, once SP-5's
+	// tenant dimension existed to name). Set with TenantIDOf, below, which
+	// omits it for tenancy.LocalTenant: every pre-SP-5 record and every
+	// record from a solo install already satisfies the absent case, and a
+	// single developer's ledger gains no field it has to learn to ignore.
+	// Set only by the refusal path today; nothing else in this package
+	// writes it, so its absence on a non-refusal record means nothing about
+	// which tenant made the request.
+	TenantID string `json:"tenant_id,omitempty"`
 	// Trimmed counts blocks a destructive transform removed content from, by
 	// tool name. Nothing writes it yet: the live trimmer does not ship, and
 	// this is the landing place so that when one is built its effect is on
@@ -190,6 +200,21 @@ type Record struct {
 	// Cache is the proxy's live classification of this response's cache
 	// read against the previous request in the session, when known.
 	Cache *CacheOutcome `json:"cache,omitempty"`
+}
+
+// TenantIDOf is how a caller sets Record.TenantID from ADR-0028's
+// registered internal/tenancy.TenantID primitive. The field itself stays a
+// plain string, like every other identity on this schema (SessionID,
+// AgentID, RequestID): a reader that has never imported internal/tenancy
+// can still decode every record. tenancy.LocalTenant — the fixed identity
+// every pre-SP-5 and every solo install already runs as — is omitted
+// rather than written out, so a single developer's ledger gains no field
+// to learn to ignore.
+func TenantIDOf(tenant tenancy.TenantID) string {
+	if tenant == "" || tenant == tenancy.LocalTenant {
+		return ""
+	}
+	return string(tenant)
 }
 
 // RequestSummary is what the proxy learns from a request body: its

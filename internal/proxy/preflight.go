@@ -120,7 +120,7 @@ func (s *Server) preFlight(w http.ResponseWriter, rec *ledger.Record, override s
 		return true
 	}
 
-	s.refuseSession(w, rec.SessionID, rec.Model, refusalPreFlight,
+	s.refuseSession(w, tenant, rec.SessionID, rec.Model, refusalPreFlight,
 		msg+". Raise the ceiling, or send "+HeaderOverride+" with a reason to proceed once.", 0)
 	return false
 }

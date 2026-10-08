@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 // What Replay sends when it answers a request itself instead of forwarding
@@ -70,16 +71,33 @@ var (
 // 503 and IsRetryableStatus covers 500-599, so feeding a refusal to
 // Breaker.Observe would re-arm the cooldown on every request an open circuit
 // refuses, and the circuit would never close.
-func (s *Server) refuseSession(w http.ResponseWriter, sessionID, model string, kind refusal, message string, retryAfter time.Duration) {
+//
+// tenant is named in the log line and the ledger record (SP-7, re-read once
+// SP-5 landed: naming a session is not naming a tenant), except when tenant
+// is tenancy.LocalTenant — the fixed identity every pre-SP-5 and every solo
+// install already runs as, which must stay silent about a dimension it has
+// never had and does not need.
+func (s *Server) refuseSession(w http.ResponseWriter, tenant tenancy.TenantID, sessionID, model string, kind refusal, message string, retryAfter time.Duration) {
 	if s.cfg.Logger != nil {
 		id := short(sessionID)
 		if id == "" {
 			id = "unattributed"
 		}
-		s.cfg.Logger.Printf("REFUSED %s session=%s %s", kind.counter, id, message)
+		s.cfg.Logger.Printf("REFUSED %s session=%s%s %s", kind.counter, id, tenantLogSuffix(tenant), message)
 	}
-	s.recordRefusal(sessionID, model, kind, message)
+	s.recordRefusal(tenant, sessionID, model, kind, message)
 	s.refuse(w, kind, message, retryAfter)
+}
+
+// tenantLogSuffix is " tenant=<id>" for any tenant other than the local
+// default, and empty for it — the same omit-the-default rule
+// ledger.Record.TenantID follows, applied to the log line rather than the
+// JSON field.
+func tenantLogSuffix(tenant tenancy.TenantID) string {
+	if tenant == "" || tenant == tenancy.LocalTenant {
+		return ""
+	}
+	return " tenant=" + string(tenant)
 }
 
 // recordRefusal writes a refusal to the ledger from its own path.
@@ -93,7 +111,7 @@ func (s *Server) refuseSession(w http.ResponseWriter, sessionID, model string, k
 // A log line cannot be analysed. This record is what makes it possible to ask,
 // tomorrow, how many sessions hit a guard and what they looked like when they
 // did, which is the only local answer to a threshold nobody has evidence for.
-func (s *Server) recordRefusal(sessionID, model string, kind refusal, reason string) {
+func (s *Server) recordRefusal(tenant tenancy.TenantID, sessionID, model string, kind refusal, reason string) {
 	if s.cfg.Store == nil {
 		return
 	}
@@ -104,6 +122,7 @@ func (s *Server) recordRefusal(sessionID, model string, kind refusal, reason str
 		Status:         kind.status,
 		Refusal:        kind.counter,
 		RefusalReason:  reason,
+		TenantID:       ledger.TenantIDOf(tenant),
 		RequestSummary: ledger.RequestSummary{Model: model},
 	})
 }

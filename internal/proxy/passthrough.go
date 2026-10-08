@@ -105,7 +105,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	// words are "refused, never pooled into a shared bucket."
 	tenant, tenantErr := tenancy.ResolveTenant(r.Header.Get(HeaderTenantID))
 	if tenantErr != nil {
-		s.refuseSession(w, rec.SessionID, "", refusalTenantUnresolved,
+		s.refuseSession(w, tenancy.TenantUnknown, rec.SessionID, "", refusalTenantUnresolved,
 			"tenant identity could not be resolved: "+tenantErr.Error()+
 				"; omit "+HeaderTenantID+" to run as the local default, or send a valid identity", 0)
 		return
@@ -113,7 +113,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 	ok, probe, wait := s.cfg.Breaker.Allow()
 	if !ok {
-		s.refuseSession(w, r.Header.Get(HeaderSessionID), "", refusalCircuitOpen, fmt.Sprintf("the provider has been failing; Replay is holding requests for %s so the agent stops burning retries", wait.Round(time.Second)), wait)
+		s.refuseSession(w, tenant, r.Header.Get(HeaderSessionID), "", refusalCircuitOpen, fmt.Sprintf("the provider has been failing; Replay is holding requests for %s so the agent stops burning retries", wait.Round(time.Second)), wait)
 		return
 	}
 	// A half-open probe that never reaches an outcome (refused below, or
@@ -393,14 +393,14 @@ func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Recor
 	override := r.Header.Get(HeaderOverride)
 	if reason := s.cfg.Spend.Check(tenant, rec.SessionID); reason != "" {
 		if override == "" {
-			s.refuseSession(w, rec.SessionID, rec.Model, refusalSpendCap, reason+". Raise the cap, start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
+			s.refuseSession(w, tenant, rec.SessionID, rec.Model, refusalSpendCap, reason+". Raise the cap, start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
 			return false
 		}
 		s.cfg.Logger.Printf("spend cap overridden for session=%s: %s", short(rec.SessionID), override)
 	}
 	if reason := s.cfg.ErrorBudget.Check(s.stats.errorTokens(tenant, rec.SessionID)); reason != "" {
 		if override == "" {
-			s.refuseSession(w, rec.SessionID, rec.Model, refusalErrorBudget, reason+". Look at what is failing (replay replay on the ledger names it), start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
+			s.refuseSession(w, tenant, rec.SessionID, rec.Model, refusalErrorBudget, reason+". Look at what is failing (replay replay on the ledger names it), start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
 			return false
 		}
 		s.cfg.Logger.Printf("error budget overridden for session=%s: %s", short(rec.SessionID), override)
@@ -408,7 +408,7 @@ func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Recor
 	v := DetectLoop(rec.Prompt, s.cfg.Loops)
 	switch {
 	case v.Block && override == "":
-		s.refuseSession(w, rec.SessionID, rec.Model, refusalLoop, fmt.Sprintf("the same %s call was just made %d times in a row; Replay stopped the loop. Send %s with a reason to proceed once.", v.Label, v.Repeats, HeaderOverride), 0)
+		s.refuseSession(w, tenant, rec.SessionID, rec.Model, refusalLoop, fmt.Sprintf("the same %s call was just made %d times in a row; Replay stopped the loop. Send %s with a reason to proceed once.", v.Label, v.Repeats, HeaderOverride), 0)
 		return false
 	case v.Block:
 		s.cfg.Logger.Printf("loop block overridden for session=%s: %s", short(rec.SessionID), override)

@@ -454,21 +454,32 @@ func (g *SpendGuard) dayLeader(tenant tenancy.TenantID, byUSD bool) (id string, 
 
 // attributeDay appends who spent tenant's day budget to a day-cap refusal, or
 // says the accounting cannot support a name. Callers hold the lock.
+//
+// SP-7's own text flagged itself for a second look once SP-5 landed: "naming
+// a session is not naming a tenant." SP-5 has landed (internal/tenancy wired
+// into internal/proxy), so every branch here now also names tenant when it
+// is anything other than tenancy.LocalTenant — the fixed identity every
+// pre-SP-5 and every solo install already runs as, which stays silent about
+// a dimension it has never had.
 func (g *SpendGuard) attributeDay(tenant tenancy.TenantID, reason string, byUSD bool) string {
 	id, tokens, usd, complete := g.dayLeader(tenant, byUSD)
+	tenantNote := ""
+	if tenant != tenancy.LocalTenant {
+		tenantNote = fmt.Sprintf(" for tenant %s", tenant)
+	}
 	if id == "" {
 		// Nothing recorded today under a live session: the spend is real and
 		// entirely unattributable, which is worth saying rather than hiding.
-		return reason + "; no live session accounts for it"
+		return reason + tenantNote + "; no live session accounts for it"
 	}
 	if !complete {
-		return fmt.Sprintf("%s; attribution is partial, the largest session still accounted for "+
-			"holds %d tokens and earlier sessions were dropped", reason, tokens)
+		return fmt.Sprintf("%s%s; attribution is partial, the largest session still accounted for "+
+			"holds %d tokens and earlier sessions were dropped", reason, tenantNote, tokens)
 	}
 	if byUSD {
-		return fmt.Sprintf("%s; most of it from session %s ($%.2f)", reason, id, usd)
+		return fmt.Sprintf("%s%s; most of it from session %s ($%.2f)", reason, tenantNote, id, usd)
 	}
-	return fmt.Sprintf("%s; most of it from session %s (%d tokens)", reason, id, tokens)
+	return fmt.Sprintf("%s%s; most of it from session %s (%d tokens)", reason, tenantNote, id, tokens)
 }
 
 // rollDay resets the daily counters, for every tenant at once, at UTC

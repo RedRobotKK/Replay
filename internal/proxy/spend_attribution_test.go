@@ -185,3 +185,51 @@ func TestSP7_AttributionLeaksNothingBeyondTheSessionID(t *testing.T) {
 		t.Errorf("the refusal should name the spender it was given: %q", reason)
 	}
 }
+
+// SP7-7: re-reading this row now that SP-5 has landed, as its own text asks.
+// "Naming a session is not naming a tenant" - an org-wide day cap refusal
+// for tenant "acme" and one for tenant "umbrella" are two different operator
+// conversations, and the reason string before this test named only the
+// session either way.
+//
+// PASS: a day-cap refusal for a non-local tenant names that tenant, in
+// addition to the session SP7-1 already names.
+// FAIL: the tenant is silently dropped, leaving only the session id.
+func TestSP7_DayCapNamesTheTenantOnceSP5Lands(t *testing.T) {
+	g := NewSpendGuard(SpendLimits{DayTokens: 100})
+	g.Record(tenancy.TenantID("acme"), "lane-heavy", 70, 0, false)
+	g.Record(tenancy.TenantID("acme"), "lane-light", 25, 0, false)
+	g.Record(tenancy.TenantID("acme"), "lane-tiny", 5, 0, false)
+
+	reason := g.Check(tenancy.TenantID("acme"), "lane-innocent")
+	if reason == "" {
+		t.Fatal("the day cap must refuse, or this test asserts nothing")
+	}
+	if !strings.Contains(reason, "acme") {
+		t.Fatalf("a day-cap refusal for a non-local tenant must name the tenant: %q", reason)
+	}
+	if !strings.Contains(reason, "lane-heavy") {
+		t.Fatalf("naming the tenant must not come at the cost of naming the spender: %q", reason)
+	}
+}
+
+// SP7-8: the local default stays exactly as it read before SP-5, because it
+// is the tenant every existing single-operator install already runs as.
+//
+// PASS: a day-cap refusal under tenancy.LocalTenant never mentions "LOCAL".
+// FAIL: the local default is printed as though it were a real tenant a
+// solo developer now has to parse past.
+func TestSP7_DayCapDoesNotNameTheLocalTenant(t *testing.T) {
+	g := NewSpendGuard(SpendLimits{DayTokens: 100})
+	g.Record(tenancy.LocalTenant, "lane-heavy", 70, 0, false)
+	g.Record(tenancy.LocalTenant, "lane-light", 25, 0, false)
+	g.Record(tenancy.LocalTenant, "lane-tiny", 5, 0, false)
+
+	reason := g.Check(tenancy.LocalTenant, "lane-innocent")
+	if reason == "" {
+		t.Fatal("the day cap must refuse, or this test asserts nothing")
+	}
+	if strings.Contains(reason, "LOCAL") {
+		t.Fatalf("the local default tenant must not be printed as though it were a real tenant: %q", reason)
+	}
+}

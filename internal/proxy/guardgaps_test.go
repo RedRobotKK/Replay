@@ -248,13 +248,13 @@ func TestGG6_ARefusalWithNoSessionIsNamedUnattributed(t *testing.T) {
 	var buf bytes.Buffer
 	s := &Server{cfg: Config{Logger: log.New(&buf, "", 0)}, stats: newStats()}
 
-	s.refuseSession(httptest.NewRecorder(), "", "claude-opus-5", refusalCircuitOpen, "provider failing", time.Second)
+	s.refuseSession(httptest.NewRecorder(), tenancy.LocalTenant, "", "claude-opus-5", refusalCircuitOpen, "provider failing", time.Second)
 	if !strings.Contains(buf.String(), "session=unattributed") {
 		t.Fatalf("a refusal with no session must say so:\n%s", buf.String())
 	}
 
 	buf.Reset()
-	s.refuseSession(httptest.NewRecorder(), "sess-known-1234", "claude-opus-5", refusalSpendCap, "over", 0)
+	s.refuseSession(httptest.NewRecorder(), tenancy.LocalTenant, "sess-known-1234", "claude-opus-5", refusalSpendCap, "over", 0)
 	got := buf.String()
 	if strings.Contains(got, "unattributed") || !strings.Contains(got, "sess-known-1") {
 		t.Fatalf("a refusal that has a session must name it:\n%s", got)
