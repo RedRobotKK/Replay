@@ -23,12 +23,16 @@ names three things none of which are ticked anywhere:
 |---|---|
 | An external security review, published | **Not commissioned.** Needs a third party and has weeks of lead time |
 | Signed, reproducible releases | Signed, yes: Sigstore keyless bound to the workflow and tag, an SBOM per ARCHIVE (the ten Linux packages get none; `artifacts: archive` in .goreleaser.yaml). **Reproducible: verified once, on 2026-09-13, not yet enforced.** All four published platforms of v0.5.4 rebuild to identical bytes, by a script anybody can run ([evidence](docs/evidence/reproducible-build-2026-09-13.md), [script](scripts/reproduce-release.sh)). Nothing runs it on a new tag, so this is a fact about v0.5.4 rather than a property of releases |
-| Caching rules for a second provider | **Not started** |
+| Caching rules for a second provider | **Not started** (as of 2026-09-13). **Corrected 2026-10-08, not deleted:** typed, mutation-tested `CacheRules` for OpenAI's published Astra-tier pricing landed 2026-09-15 as `AstraRules()` (`internal/cachemodel/openai.go`, see [`docs/ROADMAP.md`](docs/ROADMAP.md)'s v0.8 section). Confirmed again today by a repository-wide search: no non-test caller selects it. "Not started" undersold the code that exists; "calibrated" would oversell it. The gate is published rules **and** a calibration corpus against real traffic, and only the first half exists. Second-provider production calibration remains outstanding. |
 
 Two of those three cannot be done alone. The review needs a reviewer, and the
 independence problem underneath the second provider needs a corpus from a
 machine that is not this one. The third was done alone, on 2026-09-13, and is
-the only one of the three that moved. **A 1.0 tagged before they land would be a version
+the only one of the three that moved. **Corrected 2026-10-08:** the second-provider
+row also moved since this sentence was written, with the typed rules landing
+2026-09-15, but the gate itself (rules **and** a calibration corpus) has not,
+so the sentence's conclusion stands even though its premise is now dated.
+**A 1.0 tagged before all three land would be a version
 number asserting something nobody checked**, which is the exact defect this file
 was written to prevent.
 
