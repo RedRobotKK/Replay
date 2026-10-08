@@ -322,30 +322,56 @@ func correlationPathSources(t *testing.T) map[string]string {
 // exists in internal/tenancy, deliberately, for a different question than
 // this claim asks, and a repo-wide scan would fail on it forever for no
 // finding.
+// accountShapedIdentityShapes are the identity shapes that would
+// constitute the account boundary RPL-C019 forbids anywhere in the
+// ledger/transcript/cost-report correlation path (see
+// correlationPathSources). Package-level so accountShapedIdentityHits
+// and the regression tests in surfacescan_tenancy_test.go share the one
+// detector TestXW6 itself runs, rather than each re-declaring their own
+// copy of it.
+var accountShapedIdentityShapes = regexp.MustCompile(`\b(AccountID|TenantID|OrgID|OrganizationID|OrganisationID|ProjectID|WorkspaceID)\b`)
+
+// accountShapedIdentityHits is RPL-C019's detector: which account-shaped
+// identity shapes appear in src. See referencesRegisteredTenancyPrimitive
+// (surfacescan_tenancy_test.go) for the one semantic exception this
+// applies, to TenantID only.
+func accountShapedIdentityHits(src string) []string {
+	matches := accountShapedIdentityShapes.FindAllString(src, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	internal := referencesRegisteredTenancyPrimitive(src)
+	var hits []string
+	for _, m := range matches {
+		if m == "TenantID" && internal {
+			continue
+		}
+		hits = append(hits, m)
+	}
+	return hits
+}
+
 func TestXW6_NoAccountIdentityExistsToCorrelateOn(t *testing.T) {
 	// The register names these identities in order to record their absence,
 	// so scanning it finds the record and calls it the thing.
 	srcs := correlationPathSources(t)
 
-	// Identity shapes that would constitute an account boundary.
-	shapes := regexp.MustCompile(`\b(AccountID|TenantID|OrgID|OrganizationID|OrganisationID|ProjectID|WorkspaceID)\b`)
-
 	var found []string
 	for rel, src := range srcs {
-		if shapes.MatchString(src) {
+		if len(accountShapedIdentityHits(src)) > 0 {
 			found = append(found, rel)
 		}
 	}
 
 	// POSITIVE CONTROL for the detector: it must fire on the thing it looks
 	// for, or "none found" is worthless.
-	if !shapes.MatchString("type Record struct { AccountID string }") {
+	if len(accountShapedIdentityHits("type Record struct { AccountID string }")) == 0 {
 		t.Fatal("the identity detector does not detect an account identity; a clean " +
 			"result proves nothing")
 	}
 	// And it must not fire on the identities that DO exist, or it is too
 	// broad to distinguish them.
-	if shapes.MatchString("type Record struct { SessionID string; AgentID string; RequestID string }") {
+	if len(accountShapedIdentityHits("type Record struct { SessionID string; AgentID string; RequestID string }")) != 0 {
 		t.Fatal("the detector fires on SessionID/AgentID/RequestID; it cannot tell an " +
 			"account boundary from the identities Replay actually carries")
 	}

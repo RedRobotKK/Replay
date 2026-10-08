@@ -17,6 +17,7 @@ import (
 	"github.com/RedRobotKK/Replay/internal/learn"
 	"github.com/RedRobotKK/Replay/internal/ledger"
 	"github.com/RedRobotKK/Replay/internal/policy"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 // Tests for policyinject.go: a session decides once and is pinned for its
@@ -302,10 +303,10 @@ func TestPolicyIsChosenBySessionType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p, ok := store.Pin("sess-large"); !ok || p.Type != "opus/large-prefix" || p.Trigger != 300000 {
+	if p, ok := store.Pin(tenancy.LocalTenant, "sess-large"); !ok || p.Type != "opus/large-prefix" || p.Trigger != 300000 {
 		t.Fatalf("large pin: %+v %v", p, ok)
 	}
-	if p, ok := store.Pin("sess-small"); !ok || p.Type != "opus/small-prefix" || p.Policy != "" {
+	if p, ok := store.Pin(tenancy.LocalTenant, "sess-small"); !ok || p.Type != "opus/small-prefix" || p.Policy != "" {
 		t.Fatalf("small pin: %+v %v", p, ok)
 	}
 	if !strings.Contains(logs.String(), "type=opus/small-prefix runs without a policy") {
@@ -396,10 +397,10 @@ func TestTrialShareSplitsSessionsIntoArms(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p, ok := store.Pin(control); !ok || p.Trial != trialControl || p.Decision != string(policy.Control) {
+	if p, ok := store.Pin(tenancy.LocalTenant, control); !ok || p.Trial != trialControl || p.Decision != string(policy.Control) {
 		t.Fatalf("control pin: %+v %v", p, ok)
 	}
-	if p, ok := store.Pin(treated); !ok || p.Trial != trialTreated || p.Policy != policy.Name {
+	if p, ok := store.Pin(tenancy.LocalTenant, treated); !ok || p.Trial != trialTreated || p.Policy != policy.Name {
 		t.Fatalf("treated pin: %+v %v", p, ok)
 	}
 	if !strings.Contains(logs.String(), "is a control") {
@@ -448,7 +449,7 @@ func TestGuardrailBreachesRevertThePolicyUntilANewerFile(t *testing.T) {
 	if r, ok := store.Revert(); !ok || r.Breached != 2 || !r.PolicyGenerated.Equal(learned) {
 		t.Fatalf("revert not persisted: %+v %v", r, ok)
 	}
-	if p, ok := store.Pin("sess-after-revert"); !ok || p.Decision != string(policy.Reverted) {
+	if p, ok := store.Pin(tenancy.LocalTenant, "sess-after-revert"); !ok || p.Decision != string(policy.Reverted) {
 		t.Fatalf("post-revert pin: %+v %v", p, ok)
 	}
 

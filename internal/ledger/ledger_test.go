@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -235,14 +236,14 @@ func TestPinsPersistAcrossReopen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := store.Pin("s1"); ok {
+	if _, ok := store.Pin(tenancy.LocalTenant, "s1"); ok {
 		t.Fatal("fresh store must have no pins")
 	}
 	at := time.Date(2026, 9, 3, 3, 0, 0, 0, time.UTC)
-	if err := store.SetPin(Pin{SessionID: "s1", Policy: "context-edit", Trigger: 200000, Keep: 6, Decision: "applied", At: at}); err != nil {
+	if err := store.SetPin(tenancy.LocalTenant, Pin{SessionID: "s1", Policy: "context-edit", Trigger: 200000, Keep: 6, Decision: "applied", At: at}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SetPin(Pin{SessionID: "s2", Decision: "no policy configured", At: at}); err != nil {
+	if err := store.SetPin(tenancy.LocalTenant, Pin{SessionID: "s2", Decision: "no policy configured", At: at}); err != nil {
 		t.Fatal(err)
 	}
 	// A line the reader cannot parse is skipped, not fatal.
@@ -260,11 +261,11 @@ func TestPinsPersistAcrossReopen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, ok := again.Pin("s1")
+	p, ok := again.Pin(tenancy.LocalTenant, "s1")
 	if !ok || p.Trigger != 200000 || p.Keep != 6 || p.Decision != "applied" || !p.At.Equal(at) {
 		t.Fatalf("pin not persisted: %+v %v", p, ok)
 	}
-	if p, ok := again.Pin("s2"); !ok || p.Policy != "" {
+	if p, ok := again.Pin(tenancy.LocalTenant, "s2"); !ok || p.Policy != "" {
 		t.Fatalf("a no-policy pin must persist too: %+v %v", p, ok)
 	}
 }
@@ -365,7 +366,7 @@ func TestLedgerSessionsCarryTheirTrialArm(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := store.SetPin(Pin{SessionID: "control-1", Decision: "control", Trial: TrialControl, At: at}); err != nil {
+	if err := store.SetPin(tenancy.LocalTenant, Pin{SessionID: "control-1", Decision: "control", Trial: TrialControl, At: at}); err != nil {
 		t.Fatal(err)
 	}
 	arms := map[string]string{}
@@ -374,7 +375,7 @@ func TestLedgerSessionsCarryTheirTrialArm(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		store.MarkControl(s)
+		store.MarkControl(tenancy.LocalTenant, s)
 		arms[id] = s.Trial
 	}
 	if arms["treated-1"] != TrialTreated || arms["control-1"] != TrialControl || arms["plain-1"] != "" {

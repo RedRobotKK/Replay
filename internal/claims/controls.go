@@ -226,7 +226,7 @@ var ControlsFor = map[string]Controls{
 		Basis: NoBasis, Layer: "none. No account identity exists to govern",
 		Positive:     "",
 		Negative:     "",
-		Insufficient: "a grep of every non-test Go file finds no AccountID, TenantID, OrgID, ProjectID or WorkspaceID",
+		Insufficient: "the scan no longer treats every TenantID as an account identity by spelling alone: internal/tenancy.TenantID (commit 646736d) is Replay's own internal ownership/namespace partition for hosted multi-tenancy, not a provider-account correlation handle, so the detector exempts it specifically while still catching AccountID, OrgID, OrganizationID, OrganisationID, ProjectID and WorkspaceID, and any TenantID that is locally redeclared rather than the registered primitive",
 		Gap:          []string{"not a gap in testing. There is no endpoint to test."},
 	},
 	"RPL-C020": {

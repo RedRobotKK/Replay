@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/ownerdir"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -40,10 +41,16 @@ var safeName = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
 // Store appends records to one file per session.
 type Store struct {
-	dir      string
-	labeler  *Labeler
-	mu       sync.Mutex
-	pins     map[string]Pin
+	dir     string
+	labeler *Labeler
+	mu      sync.Mutex
+	// pins is nested by tenant exactly like internal/proxy's stats.sessions
+	// and SpendGuard.dayUsed (SP-6, SP-9): a persisted policy pin is owned
+	// by (tenant, sessionID), never by sessionID alone (SP-10). A
+	// session id is a client-chosen string this proxy never issues or
+	// namespaces, so two tenants that happen to send the same one must
+	// not land in one shared Pin and inherit each other's policy decision.
+	pins     map[tenancy.TenantID]map[string]Pin
 	revert   Revert
 	reverted bool
 }
@@ -407,12 +414,14 @@ const (
 )
 
 // MarkControl marks a session the pins say was held out of a trial, when
-// its records show no policy.
-func (s *Store) MarkControl(session *transcript.Session) {
+// its records show no policy. tenant is the pin's owner (SP-10): a
+// session id is a client-chosen string, and the trial arm it was held to
+// is only ever meaningful for the one tenant that ran it.
+func (s *Store) MarkControl(tenant tenancy.TenantID, session *transcript.Session) {
 	if session.Trial != "" {
 		return
 	}
-	if p, ok := s.Pin(session.ID); ok && p.Trial == TrialControl {
+	if p, ok := s.Pin(tenant, session.ID); ok && p.Trial == TrialControl {
 		session.Trial = TrialControl
 	}
 }
@@ -512,6 +521,16 @@ const pinsFile = ".pins"
 // session's life across policy-file rewrites and proxy restarts (PX-8).
 type Pin struct {
 	SessionID string `json:"session_id"`
+	// TenantID is the pin's owner (SP-10): a persisted policy pin belongs
+	// to (tenant, SessionID), never to SessionID alone, because SessionID
+	// is a client-chosen string this proxy never issues or namespaces.
+	// Empty on a line written before SP-10 (every release through
+	// 206aee2): loadPins reads that absence as tenancy.LocalTenant,
+	// exactly as SP-6's spend-day.json reads its own pre-tenancy flat
+	// fields. Every pin SetPin itself writes carries this explicitly -
+	// SetPin overwrites it from its own tenant argument so the map key
+	// and the serialized field can never disagree.
+	TenantID string `json:"tenant_id,omitempty"`
 	// Policy names the pinned policy, empty when the session runs with
 	// none. Trigger and Keep are its parameters.
 	Policy   string    `json:"policy,omitempty"`
@@ -582,18 +601,28 @@ func loadRevert(path string) (Revert, bool) {
 	return r, true
 }
 
-// Pin returns the persisted decision for a session, if one was made.
-func (s *Store) Pin(sessionID string) (Pin, bool) {
+// Pin returns the persisted decision for a session under one tenant, if
+// one was made. tenant is never reconstructed from sessionID (SP-10): a
+// tenant with no pins of its own has no entry in s.pins, so this reads as
+// a clean miss rather than falling through to any other tenant's pin.
+func (s *Store) Pin(tenant tenancy.TenantID, sessionID string) (Pin, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	p, ok := s.pins[sessionID]
+	p, ok := s.pins[tenant][sessionID]
 	return p, ok
 }
 
-// SetPin persists a session's decision. The file is append-only; the
-// last line for a session wins on reload, and the first decision is the
-// only one the proxy ever writes.
-func (s *Store) SetPin(p Pin) error {
+// SetPin persists one tenant's decision for a session. The file is
+// append-only; the last line for a (tenant, session) pair wins on
+// reload, and the first decision is the only one the proxy ever writes.
+//
+// p.TenantID is overwritten from tenant before it is marshaled, rather
+// than trusted from the caller's struct literal: the map key this pin is
+// stored under and the tenant_id field this pin is serialized with must
+// never be able to disagree, which trusting two independent inputs for
+// the same fact would allow.
+func (s *Store) SetPin(tenant tenancy.TenantID, p Pin) error {
+	p.TenantID = string(tenant)
 	line, err := json.Marshal(p)
 	if err != nil {
 		return fmt.Errorf("encode pin: %w", err)
@@ -611,15 +640,48 @@ func (s *Store) SetPin(p Pin) error {
 	if err := f.Close(); err != nil {
 		return fmt.Errorf("close pins file: %w", err)
 	}
-	s.pins[p.SessionID] = p
+	if s.pins[tenant] == nil {
+		s.pins[tenant] = map[string]Pin{}
+	}
+	s.pins[tenant][p.SessionID] = p
 	return nil
+}
+
+// persistedPinTenantKey validates one pin's TenantID field before it is
+// allowed to become a live tenant bucket, exactly the role
+// internal/proxy/guards.go's persistedTenantKey plays for spend-day.json
+// (SP-6). Restated here rather than imported for the same reason that
+// comment gives: this is Pin.TenantID, a bare string field, not a
+// tenancy.Tenant, so ValidateTenantID alone is the wrong check - it
+// reserves LocalTenant for fresh input, and LocalTenant is exactly the
+// key a pin explicitly written for the local/default workflow carries.
+// A key that fails this is skipped by loadPins rather than guessed at:
+// a malformed tenant dimension must never silently become LocalTenant's
+// or any other tenant's pin.
+func persistedPinTenantKey(raw string) (tenancy.TenantID, bool) {
+	if raw == string(tenancy.LocalTenant) {
+		return tenancy.LocalTenant, true
+	}
+	if tenancy.ValidateTenantID(raw) != nil {
+		return "", false
+	}
+	return tenancy.TenantID(raw), true
 }
 
 // loadPins reads the pins file; a missing file is an empty map and a
 // line that does not parse is skipped, since a pin the proxy cannot read
-// is a decision it must make again rather than a reason to refuse to start.
-func loadPins(path string) (map[string]Pin, error) {
-	pins := map[string]Pin{}
+// is a decision it must make again rather than a reason to refuse to
+// start. A line whose TenantID is empty was written before SP-10 (every
+// release through 206aee2, when Pin carried no tenant dimension at all)
+// and is read as tenancy.LocalTenant - the only tenant that code could
+// have been, exactly as SP-6 reads a pre-tenancy spend-day.json's flat
+// fields. A line whose TenantID is present but fails
+// persistedPinTenantKey is skipped on its own, the same "discard what
+// cannot be trusted" rule already applied to a line that fails to parse
+// at all, rather than let a corrupted tenant dimension reassign a pin's
+// ownership to a tenant that never made the decision it names.
+func loadPins(path string) (map[tenancy.TenantID]map[string]Pin, error) {
+	pins := map[tenancy.TenantID]map[string]Pin{}
 	f, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return pins, nil
@@ -634,7 +696,19 @@ func loadPins(path string) (map[string]Pin, error) {
 		if err := json.Unmarshal(scanner.Bytes(), &p); err != nil || p.SessionID == "" {
 			continue
 		}
-		pins[p.SessionID] = p
+		tenant := tenancy.LocalTenant
+		if p.TenantID != "" {
+			t, ok := persistedPinTenantKey(p.TenantID)
+			if !ok {
+				continue
+			}
+			tenant = t
+		}
+		p.TenantID = string(tenant)
+		if pins[tenant] == nil {
+			pins[tenant] = map[string]Pin{}
+		}
+		pins[tenant][p.SessionID] = p
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("read pins file: %w", err)

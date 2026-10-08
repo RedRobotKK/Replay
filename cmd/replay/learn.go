@@ -12,6 +12,7 @@ import (
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/learn"
 	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -135,6 +136,18 @@ func runLearn(args []string, stdout, stderr io.Writer) error {
 // markControl consults a ledger directory's pins for the session's trial
 // arm. A directory that cannot be opened contributes no arm; the rest of
 // learning does not depend on it.
+//
+// tenancy.LocalTenant, not a reconstructed identity: this CLI reads
+// whatever ledger directories were named on its own command line, as one
+// operator working on their own files. A ledger record (internal/ledger
+// Record) carries no tenant field at all - tenant is resolved only at
+// the live proxy's HTTP boundary (SP-5) and was never part of what a
+// ledger file records - so there is no real tenant for this offline walk
+// to thread through, genuinely unlike the live proxy path SP-10 fixes.
+// This is also exactly the pin ownership every pre-SP-10 line already
+// has (Pin.TenantID absent, read back as LocalTenant by loadPins), so an
+// existing solo-developer install's `replay learn` sees the same pins it
+// always did.
 func markControl(stores map[string]*ledger.Store, dir string, session *transcript.Session) {
 	store, ok := stores[dir]
 	if !ok {
@@ -146,7 +159,7 @@ func markControl(stores map[string]*ledger.Store, dir string, session *transcrip
 		stores[dir] = store
 	}
 	if store != nil {
-		store.MarkControl(session)
+		store.MarkControl(tenancy.LocalTenant, session)
 	}
 }
 

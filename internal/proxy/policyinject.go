@@ -58,7 +58,7 @@ func (s *Server) applyPolicy(r *http.Request, rec *ledger.Record, body []byte, s
 	edit, decision, ok := s.stats.pinned(tenant, rec.SessionID)
 	if !ok {
 		var generated time.Time
-		edit, decision, generated = s.decidePolicy(rec.SessionID, beta, clientSet, rec.Model, promptSize(rec.Prompt))
+		edit, decision, generated = s.decidePolicy(tenant, rec.SessionID, beta, clientSet, rec.Model, promptSize(rec.Prompt))
 		s.stats.pin(tenant, rec.SessionID, edit, decision, generated)
 	}
 	if edit == nil || decision != policy.Applied {
@@ -95,9 +95,13 @@ func (s *Server) policyConfigured() bool {
 // decidePolicy makes a session's decision at its first request in this
 // process. A pin persisted by an earlier process wins over everything,
 // then the flag, then the policy file. The decision is persisted so a
-// restart or a rewritten file cannot change a running session.
-func (s *Server) decidePolicy(sessionID, beta string, clientSet bool, model string, promptBytes int) (*policy.ContextEdit, policy.Decision, time.Time) {
-	if pin, ok := s.cfg.Store.Pin(sessionID); ok {
+// restart or a rewritten file cannot change a running session. tenant
+// is applyPolicy's already-resolved identity (SP-5's proxy boundary),
+// threaded through rather than reconstructed here: a persisted pin is
+// owned by (tenant, sessionID), never by sessionID alone (SP-10), and
+// sessionID is a client-chosen string two tenants may send identically.
+func (s *Server) decidePolicy(tenant tenancy.TenantID, sessionID, beta string, clientSet bool, model string, promptBytes int) (*policy.ContextEdit, policy.Decision, time.Time) {
+	if pin, ok := s.cfg.Store.Pin(tenant, sessionID); ok {
 		var edit *policy.ContextEdit
 		if pin.Policy == policy.Name {
 			edit = &policy.ContextEdit{TriggerTokens: pin.Trigger, KeepLast: pin.Keep}
@@ -126,7 +130,7 @@ func (s *Server) decidePolicy(sessionID, beta string, clientSet bool, model stri
 		decision = edit.Admissible(beta, clientSet)
 		pin.Policy, pin.Trigger, pin.Keep, pin.Decision = policy.Name, edit.TriggerTokens, edit.KeepLast, string(decision)
 	}
-	if err := s.cfg.Store.SetPin(pin); err != nil {
+	if err := s.cfg.Store.SetPin(tenant, pin); err != nil {
 		// Fail open: the session runs under the in-memory pin.
 		s.cfg.Logger.Printf("policy pin not persisted for session=%s: %v", short(sessionID), err)
 	}

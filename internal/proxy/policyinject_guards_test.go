@@ -93,7 +93,7 @@ func TestPolicyInject_APinThatCannotBePersistedFailsOpen(t *testing.T) {
 	}}
 	s.stats = newStats()
 
-	edit, decision, _ := s.decidePolicy("sess-nopin-0000-longer-than-twelve", policy.BetaFeature, false, "claude-opus-5", 4096)
+	edit, decision, _ := s.decidePolicy(tenancy.LocalTenant, "sess-nopin-0000-longer-than-twelve", policy.BetaFeature, false, "claude-opus-5", 4096)
 
 	if edit == nil && decision == policy.Applied {
 		t.Fatal("a decision of Applied with no edit is not a state the caller can use")

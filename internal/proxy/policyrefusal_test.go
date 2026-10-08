@@ -14,6 +14,7 @@ import (
 	"github.com/RedRobotKK/Replay/internal/learn"
 	"github.com/RedRobotKK/Replay/internal/ledger"
 	"github.com/RedRobotKK/Replay/internal/policy"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 // Three policy refusals that no test in this package executed.
@@ -65,14 +66,14 @@ func writeSelection(t *testing.T, path string, c *learn.Candidate) {
 // being handed to Apply and put on the wire.
 func TestPR1_APersistedPinWithInvalidParametersIsRefused(t *testing.T) {
 	s, logs := policyServer(t, Config{ContextEdit: &policy.ContextEdit{TriggerTokens: 200000, KeepLast: 6}})
-	if err := s.cfg.Store.SetPin(ledger.Pin{
+	if err := s.cfg.Store.SetPin(tenancy.LocalTenant, ledger.Pin{
 		SessionID: "sess-bad", Policy: policy.Name,
 		Trigger: 0, Keep: 6, Decision: string(policy.Applied), At: time.Now(),
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	edit, decision, _ := s.decidePolicy("sess-bad", policy.BetaFeature, false, "claude-opus-5", 200000)
+	edit, decision, _ := s.decidePolicy(tenancy.LocalTenant, "sess-bad", policy.BetaFeature, false, "claude-opus-5", 200000)
 
 	if edit != nil {
 		t.Fatalf("a pin with trigger=0 must not become a live policy, got %+v", edit)
@@ -93,13 +94,13 @@ func TestPR1_APersistedPinWithInvalidParametersIsRefused(t *testing.T) {
 // FAIL: nil, meaning the refusal above swallowed the legitimate case too.
 func TestPR1b_AValidPersistedPinIsStillHonoured(t *testing.T) {
 	s, _ := policyServer(t, Config{})
-	if err := s.cfg.Store.SetPin(ledger.Pin{
+	if err := s.cfg.Store.SetPin(tenancy.LocalTenant, ledger.Pin{
 		SessionID: "sess-ok", Policy: policy.Name,
 		Trigger: 150000, Keep: 3, Decision: string(policy.Applied), At: time.Now(),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	edit, decision, _ := s.decidePolicy("sess-ok", policy.BetaFeature, false, "claude-opus-5", 200000)
+	edit, decision, _ := s.decidePolicy(tenancy.LocalTenant, "sess-ok", policy.BetaFeature, false, "claude-opus-5", 200000)
 	if edit == nil || edit.TriggerTokens != 150000 || edit.KeepLast != 3 {
 		t.Fatalf("a valid pin must be restored exactly: %+v", edit)
 	}

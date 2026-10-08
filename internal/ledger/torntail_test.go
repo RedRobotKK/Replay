@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 // A ledger being written is not a ledger with a corrupt record in it.
@@ -335,15 +337,18 @@ func TestTL9_AnUnreadablePinIsSkippedNotFatal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("two bad lines made the whole pins file fatal: %v", err)
 	}
-	if len(pins) != 2 {
-		t.Errorf("pins = %d, want 2; got %v", len(pins), pins)
+	// Every line here carries no tenant_id, so all of it is pre-SP-10 data
+	// and lands under tenancy.LocalTenant (loadPins' own rule).
+	local := pins[tenancy.LocalTenant]
+	if len(local) != 2 {
+		t.Errorf("pins = %d, want 2; got %v", len(local), local)
 	}
-	if _, ok := pins[""]; ok {
+	if _, ok := local[""]; ok {
 		t.Error("a pin was installed under the empty session id. Every session that " +
 			"cannot name itself would then share one pin")
 	}
 	for _, want := range []string{"keep-me", "keep-me-too"} {
-		if _, ok := pins[want]; !ok {
+		if _, ok := local[want]; !ok {
 			t.Errorf("pin %q was lost to a bad line elsewhere in the file", want)
 		}
 	}
