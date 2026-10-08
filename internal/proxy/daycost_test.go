@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -25,8 +26,8 @@ func TestMetricsCarriesAggregateAndDayCost(t *testing.T) {
 	s.now = func() time.Time { return day }
 
 	u := transcript.Usage{Input: 100_000, CacheRead: 900_000, Output: 20_000}
-	s.observe(costRec("a", "claude-opus-5", day, u))
-	s.observe(costRec("b", "claude-opus-5", day, u))
+	s.observe(tenancy.LocalTenant, costRec("a", "claude-opus-5", day, u))
+	s.observe(tenancy.LocalTenant, costRec("b", "claude-opus-5", day, u))
 
 	m := s.metrics()
 	for _, want := range []string{"replay_cost_usd_total", "replay_cost_usd_day"} {
@@ -51,12 +52,12 @@ func TestDayCostRollsAtUTCMidnightAndTheTotalDoesNot(t *testing.T) {
 	first := time.Date(2026, 9, 4, 23, 59, 0, 0, time.UTC)
 	s.now = func() time.Time { return first }
 	u := transcript.Usage{Input: 100_000, CacheRead: 900_000, Output: 20_000}
-	s.observe(costRec("a", "claude-opus-5", first, u))
+	s.observe(tenancy.LocalTenant, costRec("a", "claude-opus-5", first, u))
 	total1, day1 := s.costs()
 
 	next := first.Add(2 * time.Minute) // 2026-09-05 00:01 UTC
 	s.now = func() time.Time { return next }
-	s.observe(costRec("a", "claude-opus-5", next, u))
+	s.observe(tenancy.LocalTenant, costRec("a", "claude-opus-5", next, u))
 	total2, day2 := s.costs()
 
 	if total2 <= total1 {
@@ -77,7 +78,7 @@ func TestCostIsReportedWithNoCapConfigured(t *testing.T) {
 	s := newStats()
 	at := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
 	s.now = func() time.Time { return at }
-	s.observe(costRec("a", "claude-opus-5", at, transcript.Usage{Input: 50_000, CacheRead: 500_000}))
+	s.observe(tenancy.LocalTenant, costRec("a", "claude-opus-5", at, transcript.Usage{Input: 50_000, CacheRead: 500_000}))
 	if total, _ := s.costs(); total <= 0 {
 		t.Fatal("cost must not depend on a SpendGuard being enabled")
 	}
@@ -88,7 +89,7 @@ func TestUnpricedTrafficDoesNotFabricateAZeroCost(t *testing.T) {
 	s := newStats()
 	at := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
 	s.now = func() time.Time { return at }
-	s.observe(costRec("a", "a-model-nobody-priced", at, transcript.Usage{Input: 50_000, CacheRead: 500_000}))
+	s.observe(tenancy.LocalTenant, costRec("a", "a-model-nobody-priced", at, transcript.Usage{Input: 50_000, CacheRead: 500_000}))
 	total, _ := s.costs()
 	if total != 0 {
 		t.Fatalf("an unpriced model contributed %.6f", total)

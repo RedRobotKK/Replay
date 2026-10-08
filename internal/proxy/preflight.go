@@ -6,6 +6,7 @@ import (
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 // Pre-flight deficit, checked before the request reaches the provider.
@@ -63,7 +64,7 @@ const tokensPerByte = analysis.DefaultTokensPerByte
 // body, because the prefix hash and byte counts are already on rec. And it does
 // not write a bare status, because every other guard here answers in the
 // provider's error shape, which is the only thing an agent renders to a user.
-func (s *Server) preFlight(w http.ResponseWriter, rec *ledger.Record, override string) bool {
+func (s *Server) preFlight(w http.ResponseWriter, rec *ledger.Record, override string, tenant tenancy.TenantID) bool {
 	policy := s.cfg.PreFlight
 	if rec.PrefixHash == "" {
 		return true
@@ -78,7 +79,7 @@ func (s *Server) preFlight(w http.ResponseWriter, rec *ledger.Record, override s
 	// Read through laneSnapshot rather than session(): this runs on the
 	// request goroutine while the bookkeeping goroutine is writing the same
 	// map, and session() both writes and assumes its caller holds the lock.
-	prior, laneSeen := s.stats.laneSnapshot(rec.SessionID, rec.AgentID)
+	prior, laneSeen := s.stats.laneSnapshot(tenant, rec.SessionID, rec.AgentID)
 	if !laneSeen || prior == "" {
 		return true
 	}

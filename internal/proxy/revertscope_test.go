@@ -8,6 +8,7 @@ import (
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/ledger"
 	"github.com/RedRobotKK/Replay/internal/policy"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 func breachingReads() analysis.ReReads {
@@ -23,7 +24,7 @@ func trialOf(revertAfter int) TrialSettings {
 func pinSession(s *stats, id string, edit *policy.ContextEdit, gen time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st := s.session(id)
+	st := s.session(tenancy.LocalTenant, id)
 	st.policy, st.edit, st.generated = policy.Applied, edit, gen
 }
 
@@ -44,10 +45,10 @@ func TestBreachesDoNotCarryAcrossPolicies(t *testing.T) {
 	genNew := time.Date(2026, 9, 4, 0, 0, 0, 0, time.UTC)
 
 	pinSession(s, "s-old", old, genOld)
-	s.noteBreach(store, trialOf(2), "s-old", old, breachingReads(), genOld)
+	s.noteBreach(store, trialOf(2), tenancy.LocalTenant, "s-old", old, breachingReads(), genOld)
 
 	pinSession(s, "s-new", next, genNew)
-	line := s.noteBreach(store, trialOf(2), "s-new", next, breachingReads(), genNew)
+	line := s.noteBreach(store, trialOf(2), tenancy.LocalTenant, "s-new", next, breachingReads(), genNew)
 
 	if strings.Contains(line, "reverted") {
 		t.Fatalf("one breach on the new policy reverted it using the old policy's evidence: %s", line)
@@ -70,9 +71,9 @@ func TestTwoBreachesOnOnePolicyStillRevert(t *testing.T) {
 	gen := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 
 	pinSession(s, "s1", edit, gen)
-	s.noteBreach(store, trialOf(2), "s1", edit, breachingReads(), gen)
+	s.noteBreach(store, trialOf(2), tenancy.LocalTenant, "s1", edit, breachingReads(), gen)
 	pinSession(s, "s2", edit, gen)
-	line := s.noteBreach(store, trialOf(2), "s2", edit, breachingReads(), gen)
+	line := s.noteBreach(store, trialOf(2), tenancy.LocalTenant, "s2", edit, breachingReads(), gen)
 
 	if !strings.Contains(line, "reverted") {
 		t.Fatalf("two breaches on one policy must revert it: %s", line)
@@ -103,11 +104,11 @@ func TestANewerPolicyCanStillBeReverted(t *testing.T) {
 
 	for _, id := range []string{"a1", "a2"} {
 		pinSession(s, id, old, genOld)
-		s.noteBreach(store, trialOf(2), id, old, breachingReads(), genOld)
+		s.noteBreach(store, trialOf(2), tenancy.LocalTenant, id, old, breachingReads(), genOld)
 	}
 	for _, id := range []string{"b1", "b2"} {
 		pinSession(s, id, next, genNew)
-		s.noteBreach(store, trialOf(2), id, next, breachingReads(), genNew)
+		s.noteBreach(store, trialOf(2), tenancy.LocalTenant, id, next, breachingReads(), genNew)
 	}
 	rev, ok := store.Revert()
 	if !ok {
@@ -126,8 +127,8 @@ func TestOneSessionCountsOnce(t *testing.T) {
 	edit := &policy.ContextEdit{TriggerTokens: 20_000, KeepLast: 3}
 	gen := time.Now()
 	pinSession(s, "s1", edit, gen)
-	s.noteBreach(store, trialOf(2), "s1", edit, breachingReads(), gen)
-	if line := s.noteBreach(store, trialOf(2), "s1", edit, breachingReads(), gen); line != "" {
+	s.noteBreach(store, trialOf(2), tenancy.LocalTenant, "s1", edit, breachingReads(), gen)
+	if line := s.noteBreach(store, trialOf(2), tenancy.LocalTenant, "s1", edit, breachingReads(), gen); line != "" {
 		t.Fatalf("the same session breached twice and was counted twice: %s", line)
 	}
 	if _, ok := store.Revert(); ok {

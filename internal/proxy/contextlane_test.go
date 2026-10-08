@@ -9,6 +9,7 @@ import (
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 // Every lane's context breakdown must survive its siblings finishing.
@@ -36,10 +37,10 @@ func TestRescore_ALaneDoesNotEraseItsSiblingsContext(t *testing.T) {
 		r := rec
 		r.SessionID = "fanout"
 		r.AgentID = ""
-		s.observe(&r)
-		s.rescore(&r)
+		s.observe(tenancy.LocalTenant, &r)
+		s.rescore(tenancy.LocalTenant, &r)
 	}
-	mainBefore := s.session("fanout").contextFor("")
+	mainBefore := s.session(tenancy.LocalTenant, "fanout").contextFor("")
 	if len(mainBefore) == 0 {
 		t.Fatal("the main loop produced no context entries, so this test cannot fail. The " +
 			"fixture no longer carries content that Blame can attribute")
@@ -50,18 +51,18 @@ func TestRescore_ALaneDoesNotEraseItsSiblingsContext(t *testing.T) {
 		r := rec
 		r.SessionID = "fanout"
 		r.AgentID = "lane-a"
-		s.observe(&r)
-		s.rescore(&r)
+		s.observe(tenancy.LocalTenant, &r)
+		s.rescore(tenancy.LocalTenant, &r)
 	}
 
-	mainAfter := s.session("fanout").contextFor("")
+	mainAfter := s.session(tenancy.LocalTenant, "fanout").contextFor("")
 	if len(mainAfter) != len(mainBefore) {
 		t.Errorf("the main loop's context went from %d entries to %d when a sub-agent lane "+
 			"finished. rescore analyses one lane and must not store that lane's answer as "+
 			"the session's.", len(mainBefore), len(mainAfter))
 	}
 
-	laneAfter := s.session("fanout").contextFor("lane-a")
+	laneAfter := s.session(tenancy.LocalTenant, "fanout").contextFor("lane-a")
 	if len(laneAfter) == 0 {
 		t.Error("the sub-agent lane's own context breakdown was not recorded. Keying by lane " +
 			"is only worth doing if each lane is actually readable")
@@ -70,12 +71,12 @@ func TestRescore_ALaneDoesNotEraseItsSiblingsContext(t *testing.T) {
 	// The accessor must discriminate. Returning the main loop's rows for any
 	// key asked of it would satisfy both assertions above while storing
 	// nothing per lane at all.
-	if got := s.session("fanout").contextFor("no-such-lane"); len(got) != 0 {
+	if got := s.session(tenancy.LocalTenant, "fanout").contextFor("no-such-lane"); len(got) != 0 {
 		t.Errorf("contextFor(\"no-such-lane\") returned %d entries. A lane that never ran has "+
 			"no breakdown, and an accessor that answers anyway is reporting another lane's "+
 			"figures under this lane's name", len(got))
 	}
-	if got := s.session("fanout").reReadsFor("no-such-lane"); got != (analysis.ReReads{}) {
+	if got := s.session(tenancy.LocalTenant, "fanout").reReadsFor("no-such-lane"); got != (analysis.ReReads{}) {
 		t.Errorf("reReadsFor(\"no-such-lane\") returned %+v, want the zero value", got)
 	}
 }
@@ -97,12 +98,12 @@ func TestStatus_ReReadsAndWhatIfAreAlsoPerLane(t *testing.T) {
 			r := rec
 			r.SessionID = "fanout"
 			r.AgentID = agent
-			s.observe(&r)
-			s.rescore(&r)
+			s.observe(tenancy.LocalTenant, &r)
+			s.rescore(tenancy.LocalTenant, &r)
 		}
 	}
 
-	st := s.session("fanout")
+	st := s.session(tenancy.LocalTenant, "fanout")
 	for name, got := range map[string]int{
 		"context": len(st.context),
 		"reReads": len(st.reReads),
@@ -152,8 +153,8 @@ func TestStatus_ContextStaysAnArrayAndGainsAPerLaneMap(t *testing.T) {
 			r := rec
 			r.SessionID = "fanout"
 			r.AgentID = agent
-			s.observe(&r)
-			s.rescore(&r)
+			s.observe(tenancy.LocalTenant, &r)
+			s.rescore(tenancy.LocalTenant, &r)
 		}
 	}
 

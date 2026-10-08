@@ -219,7 +219,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if messages {
-			body = s.applyPolicy(r, &rec, body, summarized)
+			body = s.applyPolicy(r, &rec, body, summarized, tenant)
 			setBody(r, body)
 		}
 		if openai && !s.cfg.NoPolicy {
@@ -250,7 +250,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	// traffic, and released after the bookkeeping below has read it: deferred
 	// functions run last-registered-first, and the bookkeeping defer comes
 	// after this one.
-	overlapped, leaveLane := s.stats.enterLane(rec.SessionID, rec.AgentID)
+	overlapped, leaveLane := s.stats.enterLane(tenant, rec.SessionID, rec.AgentID)
 	defer leaveLane()
 
 	r, retries := withRetryCounter(r)
@@ -318,7 +318,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		if tap.rehydrate != nil {
 			s.noteRehydration(&rec, tap.rehydrate)
 		}
-		rec.Cache = s.stats.observe(&rec)
+		rec.Cache = s.stats.observe(tenant, &rec)
 		// Lane overlap means overlap at the provider, not during local
 		// bookkeeping. correlation() has already read this request's flag.
 		// Release before Append: the ledger write is local, and a client
@@ -335,9 +335,9 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		whatIf, guardrail := "", ""
 		if readable && rec.SessionID != "" && rec.Response.Usage != nil {
 			var rr analysis.ReReads
-			whatIf, rr = s.stats.rescore(&rec)
-			if edit, generated, ok := s.stats.trialSession(rec.SessionID); ok && s.cfg.Trial.breached(rr) {
-				guardrail = s.stats.noteBreach(s.cfg.Store, s.cfg.Trial, rec.SessionID, edit, rr, generated)
+			whatIf, rr = s.stats.rescore(tenant, &rec)
+			if edit, generated, ok := s.stats.trialSession(tenant, rec.SessionID); ok && s.cfg.Trial.breached(rr) {
+				guardrail = s.stats.noteBreach(s.cfg.Store, s.cfg.Trial, tenant, rec.SessionID, edit, rr, generated)
 			}
 		}
 		note := ""
@@ -398,7 +398,7 @@ func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Recor
 		}
 		s.cfg.Logger.Printf("spend cap overridden for session=%s: %s", short(rec.SessionID), override)
 	}
-	if reason := s.cfg.ErrorBudget.Check(s.stats.errorTokens(rec.SessionID)); reason != "" {
+	if reason := s.cfg.ErrorBudget.Check(s.stats.errorTokens(tenant, rec.SessionID)); reason != "" {
 		if override == "" {
 			s.refuseSession(w, rec.SessionID, rec.Model, refusalErrorBudget, reason+". Look at what is failing (replay replay on the ledger names it), start a new session, or send "+HeaderOverride+" with a reason to proceed once.", 0)
 			return false
@@ -415,7 +415,7 @@ func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Recor
 	case v.Warn:
 		w.Header().Set(HeaderWarning, fmt.Sprintf("loop: the same %s call was just made %d times in a row", v.Label, v.Repeats))
 	}
-	return s.preFlight(w, rec, override)
+	return s.preFlight(w, rec, override, tenant)
 }
 
 // isMessages reports whether a path is the Messages endpoint proper (not

@@ -1,6 +1,10 @@
 package proxy
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/RedRobotKK/Replay/internal/tenancy"
+)
 
 // The error budget divides error-content prompt tokens by the session's prompt
 // tokens. The denominator, st.tally, accumulates every request of the session
@@ -13,13 +17,13 @@ import "testing"
 // requests. Both sides have to be scoped the same way.
 func TestErrorBudgetCountsEveryLaneOfTheSession(t *testing.T) {
 	s := newStats()
-	st := s.session("sess-1")
+	st := s.session(tenancy.LocalTenant, "sess-1")
 	st.tally.PromptTokens = 1_000_000
 
-	s.setLaneErrors("sess-1", "", 40_000)
-	s.setLaneErrors("sess-1", "agent-1", 25_000)
+	s.setLaneErrors(tenancy.LocalTenant, "sess-1", "", 40_000)
+	s.setLaneErrors(tenancy.LocalTenant, "sess-1", "agent-1", 25_000)
 
-	errs, prompt := s.errorTokens("sess-1")
+	errs, prompt := s.errorTokens(tenancy.LocalTenant, "sess-1")
 	if errs != 65_000 {
 		t.Fatalf("the numerator must cover every lane the denominator covers: got %d, want 65000", errs)
 	}
@@ -33,20 +37,20 @@ func TestErrorBudgetCountsEveryLaneOfTheSession(t *testing.T) {
 // seeing the errors it exists to catch.
 func TestAQuietLaneDoesNotEraseABusyOne(t *testing.T) {
 	s := newStats()
-	st := s.session("sess-1")
+	st := s.session(tenancy.LocalTenant, "sess-1")
 	st.tally.PromptTokens = 500_000
 
-	s.setLaneErrors("sess-1", "agent-busy", 90_000)
-	s.setLaneErrors("sess-1", "agent-quiet", 0)
+	s.setLaneErrors(tenancy.LocalTenant, "sess-1", "agent-busy", 90_000)
+	s.setLaneErrors(tenancy.LocalTenant, "sess-1", "agent-quiet", 0)
 
-	if errs, _ := s.errorTokens("sess-1"); errs != 90_000 {
+	if errs, _ := s.errorTokens(tenancy.LocalTenant, "sess-1"); errs != 90_000 {
 		t.Fatalf("a later quiet lane erased an earlier busy one: got %d, want 90000", errs)
 	}
 
 	// And a lane rescoring again replaces only its own figure, because each
 	// rescore recomputes that lane's total rather than adding a delta.
-	s.setLaneErrors("sess-1", "agent-busy", 12_000)
-	if errs, _ := s.errorTokens("sess-1"); errs != 12_000 {
+	s.setLaneErrors(tenancy.LocalTenant, "sess-1", "agent-busy", 12_000)
+	if errs, _ := s.errorTokens(tenancy.LocalTenant, "sess-1"); errs != 12_000 {
 		t.Fatalf("a lane's rescore must replace its own contribution only: got %d, want 12000", errs)
 	}
 }
@@ -57,19 +61,19 @@ func TestAQuietLaneDoesNotEraseABusyOne(t *testing.T) {
 // split the spend cap per agent as well. The fix belongs in the numerator.
 func TestLanesShareOneSessionStateAndOnePolicyPin(t *testing.T) {
 	s := newStats()
-	main := s.session("sess-1")
-	s.setLaneErrors("sess-1", "agent-1", 1)
-	if got := len(s.sessions); got != 1 {
+	main := s.session(tenancy.LocalTenant, "sess-1")
+	s.setLaneErrors(tenancy.LocalTenant, "sess-1", "agent-1", 1)
+	if got := len(s.sessions[tenancy.LocalTenant]); got != 1 {
 		t.Fatalf("lanes must not create sessions: %d entries", got)
 	}
-	if s.session("sess-1") != main {
+	if s.session(tenancy.LocalTenant, "sess-1") != main {
 		t.Fatal("a lane rescore replaced the session state")
 	}
 }
 
 func TestErrorTokensOnAnUnknownSessionIsZero(t *testing.T) {
 	s := newStats()
-	if errs, prompt := s.errorTokens("nope"); errs != 0 || prompt != 0 {
+	if errs, prompt := s.errorTokens(tenancy.LocalTenant, "nope"); errs != 0 || prompt != 0 {
 		t.Fatalf("got %d/%d, want 0/0", errs, prompt)
 	}
 }

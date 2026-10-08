@@ -8,6 +8,7 @@ import (
 
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -83,8 +84,8 @@ func TestBreakCause_NamesWhatChanged(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newStats()
-			s.observe(prefixRecord("lane-a", 0, tt.prevSystem, tt.prevTools, 0))
-			out := s.observe(prefixRecord("lane-a", 1, tt.system, tt.tools, 0))
+			s.observe(tenancy.LocalTenant, prefixRecord("lane-a", 0, tt.prevSystem, tt.prevTools, 0))
+			out := s.observe(tenancy.LocalTenant, prefixRecord("lane-a", 1, tt.system, tt.tools, 0))
 
 			if out == nil || out.Outcome != "broken" {
 				t.Fatalf("the second request must break for its cause to be under test; got %+v", out)
@@ -114,10 +115,10 @@ func TestBreakCause_SameLengthPrefixRewriteIsNotASizeMove(t *testing.T) {
 	tools := []transcript.ToolDef{{Name: "Read", Bytes: 500}}
 	s := newStats()
 	first := prefixRecord("lane-a", 0, 29199, tools, 0)
-	s.observe(first)
+	s.observe(tenancy.LocalTenant, first)
 	second := prefixRecord("lane-a", 1, 29199, tools, 0)
 	second.PrefixHash = first.PrefixHash + "-rewritten"
-	out := s.observe(second)
+	out := s.observe(tenancy.LocalTenant, second)
 	if out == nil || out.Outcome != "broken" {
 		t.Fatalf("a changed prefix hash must break; got %+v", out)
 	}
@@ -160,7 +161,7 @@ func TestBreakCause_StaysABoundedVocabulary(t *testing.T) {
 	// produce a new value each time.
 	for i := 0; i < 6; i++ {
 		tools := []transcript.ToolDef{{Name: "Read", Bytes: 500 + i}}
-		out := s.observe(prefixRecord("lane-a", i, 1000+i, tools, 0))
+		out := s.observe(tenancy.LocalTenant, prefixRecord("lane-a", i, 1000+i, tools, 0))
 		if out == nil || out.Cause == "" {
 			continue
 		}

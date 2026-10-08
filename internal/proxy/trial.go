@@ -8,6 +8,7 @@ import (
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/ledger"
 	"github.com/RedRobotKK/Replay/internal/policy"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 // TrialSettings bound a live trial of a learned policy (LN-5). They
@@ -72,11 +73,11 @@ func (t TrialSettings) breached(rr analysis.ReReads) bool {
 // noteBreach records a treated session's first guardrail breach and, once
 // enough sessions have breached, reverts the policy for new sessions and
 // persists the revert. It returns the log line to print, if any.
-func (s *stats) noteBreach(store *ledger.Store, settings TrialSettings, sessionID string, edit *policy.ContextEdit, rr analysis.ReReads, generated time.Time) string {
+func (s *stats) noteBreach(store *ledger.Store, settings TrialSettings, tenant tenancy.TenantID, sessionID string, edit *policy.ContextEdit, rr analysis.ReReads, generated time.Time) string {
 	settings = settings.normalized()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st, ok := s.sessions[sessionID]
+	st, ok := s.sessions[tenant][sessionID]
 	if !ok || st.breached {
 		return ""
 	}

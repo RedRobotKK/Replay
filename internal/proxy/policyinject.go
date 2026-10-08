@@ -10,6 +10,7 @@ import (
 	"github.com/RedRobotKK/Replay/internal/learn"
 	"github.com/RedRobotKK/Replay/internal/ledger"
 	"github.com/RedRobotKK/Replay/internal/policy"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -49,16 +50,16 @@ import (
 // a session either always carries the parameter or never does. Every
 // transformation is logged with the body hashes before and after
 // (PX-10), never the bodies.
-func (s *Server) applyPolicy(r *http.Request, rec *ledger.Record, body []byte, summarized bool) []byte {
+func (s *Server) applyPolicy(r *http.Request, rec *ledger.Record, body []byte, summarized bool, tenant tenancy.TenantID) []byte {
 	if rec.SessionID == "" || !s.policyConfigured() {
 		return body
 	}
 	beta, clientSet := r.Header.Get("anthropic-beta"), rec.Prompt.ContextEdits
-	edit, decision, ok := s.stats.pinned(rec.SessionID)
+	edit, decision, ok := s.stats.pinned(tenant, rec.SessionID)
 	if !ok {
 		var generated time.Time
 		edit, decision, generated = s.decidePolicy(rec.SessionID, beta, clientSet, rec.Model, promptSize(rec.Prompt))
-		s.stats.pin(rec.SessionID, edit, decision, generated)
+		s.stats.pin(tenant, rec.SessionID, edit, decision, generated)
 	}
 	if edit == nil || decision != policy.Applied {
 		return body

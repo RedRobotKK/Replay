@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -50,7 +51,7 @@ func TestTokenCountersNeverDecreaseAcrossEviction(t *testing.T) {
 
 	// Well past maxSessions, so the map evicts many times over.
 	for i := 0; i < maxSessions*3; i++ {
-		s.observe(rec("session-" + strconv.Itoa(i)))
+		s.observe(tenancy.LocalTenant, rec("session-"+strconv.Itoa(i)))
 		out := s.metrics()
 		for _, n := range names {
 			v := metricValue(t, out, n)

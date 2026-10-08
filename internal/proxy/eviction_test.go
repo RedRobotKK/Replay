@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/policy"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 // EV1: eviction is decided by age, not by Go's map iteration order.
@@ -34,32 +35,32 @@ func TestEV1_EvictionUnderACoarseClockDropsTheOldestNotARandomOne(t *testing.T) 
 	for round := 0; round < 20; round++ {
 		s := newStats()
 		for i := 0; i < maxSessions; i++ {
-			s.pin(fmt.Sprintf("s-%d", i), nil, policy.NotConfigured, time.Time{})
+			s.pin(tenancy.LocalTenant, fmt.Sprintf("s-%d", i), nil, policy.NotConfigured, time.Time{})
 		}
-		if len(s.sessions) != maxSessions {
-			t.Fatalf("round %d: setup holds %d sessions, want %d", round, len(s.sessions), maxSessions)
+		if len(s.sessions[tenancy.LocalTenant]) != maxSessions {
+			t.Fatalf("round %d: setup holds %d sessions, want %d", round, len(s.sessions[tenancy.LocalTenant]), maxSessions)
 		}
 
 		// The coarse clock, written directly: one reading for all of them.
 		frozen := time.Date(2026, 9, 13, 20, 9, 16, 0, time.UTC)
-		for _, st := range s.sessions {
+		for _, st := range s.sessions[tenancy.LocalTenant] {
 			st.lastSeen = frozen
 		}
 
 		// One more session forces exactly one eviction.
-		s.pin("newcomer", nil, policy.NotConfigured, time.Time{})
+		s.pin(tenancy.LocalTenant, "newcomer", nil, policy.NotConfigured, time.Time{})
 
-		if _, _, ok := s.pinned("s-0"); ok {
+		if _, _, ok := s.pinned(tenancy.LocalTenant, "s-0"); ok {
 			t.Fatalf("round %d: s-0 was admitted first and survived. Eviction fell "+
 				"through to map order, so the proxy drops an arbitrary session "+
 				"rather than the least recently used.", round)
 		}
-		if _, _, ok := s.pinned("newcomer"); !ok {
+		if _, _, ok := s.pinned(tenancy.LocalTenant, "newcomer"); !ok {
 			t.Fatalf("round %d: the session that caused the eviction was itself evicted", round)
 		}
 		for i := 1; i < maxSessions; i++ {
 			id := fmt.Sprintf("s-%d", i)
-			if _, _, ok := s.pinned(id); !ok {
+			if _, _, ok := s.pinned(tenancy.LocalTenant, id); !ok {
 				t.Fatalf("round %d: %s was evicted, but only s-0 should have been", round, id)
 			}
 		}
@@ -76,22 +77,22 @@ func TestEV1_EvictionUnderACoarseClockDropsTheOldestNotARandomOne(t *testing.T) 
 func TestEV2_AGenuinelyOlderSessionIsEvictedAheadOfAnEarlierAdmittedOne(t *testing.T) {
 	s := newStats()
 	for i := 0; i < maxSessions; i++ {
-		s.pin(fmt.Sprintf("s-%d", i), nil, policy.NotConfigured, time.Time{})
+		s.pin(tenancy.LocalTenant, fmt.Sprintf("s-%d", i), nil, policy.NotConfigured, time.Time{})
 	}
 	recent := time.Date(2026, 9, 13, 20, 9, 16, 0, time.UTC)
-	for _, st := range s.sessions {
+	for _, st := range s.sessions[tenancy.LocalTenant] {
 		st.lastSeen = recent
 	}
 	// s-0 was admitted first, but the LAST one admitted went quiet an hour ago.
 	stale := fmt.Sprintf("s-%d", maxSessions-1)
-	s.sessions[stale].lastSeen = recent.Add(-time.Hour)
+	s.sessions[tenancy.LocalTenant][stale].lastSeen = recent.Add(-time.Hour)
 
-	s.pin("newcomer", nil, policy.NotConfigured, time.Time{})
+	s.pin(tenancy.LocalTenant, "newcomer", nil, policy.NotConfigured, time.Time{})
 
-	if _, _, ok := s.pinned(stale); ok {
+	if _, _, ok := s.pinned(tenancy.LocalTenant, stale); ok {
 		t.Errorf("%s had not been seen for an hour and survived eviction", stale)
 	}
-	if _, _, ok := s.pinned("s-0"); !ok {
+	if _, _, ok := s.pinned(tenancy.LocalTenant, "s-0"); !ok {
 		t.Error("s-0 was evicted on admission order alone, which would discard a " +
 			"session that is still sending in favour of one that went quiet")
 	}

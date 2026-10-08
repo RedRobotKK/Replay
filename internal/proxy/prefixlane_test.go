@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -44,10 +45,10 @@ func TestObserve_ConcurrentLanesDoNotForgeAPrefixChange(t *testing.T) {
 	}
 	for i, step := range seq {
 		rec := laneRecord(step.agent, step.prefix, i)
-		s.observe(rec)
+		s.observe(tenancy.LocalTenant, rec)
 	}
 
-	st := s.session("sess-fanout")
+	st := s.session(tenancy.LocalTenant, "sess-fanout")
 	if st.prefixChanges != 0 {
 		t.Errorf("prefixChanges = %d, want 0. Two lanes each held a stable prefix and neither "+
 			"changed one; every count here is a lane being compared against a different "+
@@ -73,10 +74,10 @@ func TestObserve_AGenuineWithinLaneChangeIsStillCaught(t *testing.T) {
 		{"lane-a", "hash-a-plus-connector"}, // the real change
 		{"lane-b", "hash-b"},
 	} {
-		s.observe(laneRecord(step.agent, step.prefix, i))
+		s.observe(tenancy.LocalTenant, laneRecord(step.agent, step.prefix, i))
 	}
 
-	st := s.session("sess-fanout")
+	st := s.session(tenancy.LocalTenant, "sess-fanout")
 	if st.prefixChanges != 1 {
 		t.Errorf("prefixChanges = %d, want exactly 1. A lane appended a connector's tool set "+
 			"to its own prefix and that must still be seen.", st.prefixChanges)
@@ -99,10 +100,10 @@ func TestObserve_OpeningALaneIsNotAChange(t *testing.T) {
 		{"lane-b", "hash-b"},
 		{"lane-c", "hash-c"},
 	} {
-		s.observe(laneRecord(step.agent, step.prefix, i))
+		s.observe(tenancy.LocalTenant, laneRecord(step.agent, step.prefix, i))
 	}
 
-	st := s.session("sess-fanout")
+	st := s.session(tenancy.LocalTenant, "sess-fanout")
 	if st.prefixChanges != 0 {
 		t.Errorf("prefixChanges = %d, want 0. Four lanes opened and none of them had a "+
 			"previous request of its own to differ from.", st.prefixChanges)

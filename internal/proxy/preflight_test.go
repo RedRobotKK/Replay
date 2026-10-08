@@ -11,6 +11,7 @@ import (
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
 	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 // preFlightFixture builds a server whose session has already established a
@@ -19,7 +20,7 @@ func preFlightFixture(t *testing.T, p analysis.PolicyState, priorHash string) (*
 	t.Helper()
 	var buf bytes.Buffer
 	s := &Server{cfg: Config{Logger: log.New(&buf, "", 0), PreFlight: p}, stats: newStats()}
-	st := s.stats.session("sess-1")
+	st := s.stats.session(tenancy.LocalTenant, "sess-1")
 	if st == nil {
 		t.Fatal("session state was not created; the fixture asserts nothing")
 	}
@@ -50,7 +51,7 @@ func TestPreFlight_RefusesAChangedPrefixOverTheCeiling(t *testing.T) {
 	s, logs := preFlightFixture(t, analysis.PolicyState{CeilingTokens: 50_000, OptInActive: true}, "hash-A")
 	w := httptest.NewRecorder()
 
-	if s.preFlight(w, preFlightRec("hash-B", 400_000, 400_000), "") {
+	if s.preFlight(w, preFlightRec("hash-B", 400_000, 400_000), "", tenancy.LocalTenant) {
 		t.Fatal("a 200,000-token prefix re-lay passed a 50,000-token ceiling")
 	}
 	if w.Code != refusalPreFlight.status {
@@ -80,7 +81,7 @@ func TestPreFlight_AMatchingPrefixIsNeverRefused(t *testing.T) {
 	s, _ := preFlightFixture(t, analysis.PolicyState{CeilingTokens: 1, OptInActive: true}, "hash-A")
 	w := httptest.NewRecorder()
 
-	if !s.preFlight(w, preFlightRec("hash-A", 400_000, 400_000), "") {
+	if !s.preFlight(w, preFlightRec("hash-A", 400_000, 400_000), "", tenancy.LocalTenant) {
 		t.Error("a request whose prefix matches the session's was refused. It reads from cache " +
 			"at any size, so refusing it spends a turn and saves nothing")
 	}
@@ -100,7 +101,7 @@ func TestPreFlight_TheFirstRequestOfASessionPasses(t *testing.T) {
 	s, _ := preFlightFixture(t, analysis.PolicyState{CeilingTokens: 1, OptInActive: true}, "")
 	w := httptest.NewRecorder()
 
-	if !s.preFlight(w, preFlightRec("hash-A", 400_000, 400_000), "") {
+	if !s.preFlight(w, preFlightRec("hash-A", 400_000, 400_000), "", tenancy.LocalTenant) {
 		t.Error("the first request of a session was refused; it establishes the prefix and has " +
 			"nothing to have diverged from")
 	}
@@ -117,7 +118,7 @@ func TestPreFlight_TheDefaultNeitherRefusesNorWarns(t *testing.T) {
 	s, logs := preFlightFixture(t, analysis.PolicyState{}, "hash-A")
 	w := httptest.NewRecorder()
 
-	if !s.preFlight(w, preFlightRec("hash-B", 400_000, 400_000), "") {
+	if !s.preFlight(w, preFlightRec("hash-B", 400_000, 400_000), "", tenancy.LocalTenant) {
 		t.Fatal("the zero PreFlight policy refused a request. A ceiling nobody set must not " +
 			"refuse anybody's request")
 	}
@@ -148,7 +149,7 @@ func TestPreFlight_AStraddledCeilingWarnsAndForwards(t *testing.T) {
 		t.Fatal("the fixture no longer produces a straddling refusal, so this test cannot fail")
 	}
 
-	if !s.preFlight(w, rec, "") {
+	if !s.preFlight(w, rec, "", tenancy.LocalTenant) {
 		t.Fatal("a refusal decided inside the estimate's own error band was enforced")
 	}
 	warn := w.Header().Get(HeaderWarning)
@@ -168,7 +169,7 @@ func TestPreFlight_OverrideProceedsOnceAndIsLogged(t *testing.T) {
 	s, logs := preFlightFixture(t, analysis.PolicyState{CeilingTokens: 50_000, OptInActive: true}, "hash-A")
 	w := httptest.NewRecorder()
 
-	if !s.preFlight(w, preFlightRec("hash-B", 400_000, 400_000), "reindexing the tool set") {
+	if !s.preFlight(w, preFlightRec("hash-B", 400_000, 400_000), "reindexing the tool set", tenancy.LocalTenant) {
 		t.Fatal("an overridden pre-flight ceiling still refused")
 	}
 	if !strings.Contains(logs.String(), "preflight ceiling overridden") ||
@@ -189,7 +190,7 @@ func TestPreFlight_OverrideProceedsOnceAndIsLogged(t *testing.T) {
 // FAIL: a sibling lane's prefix decided this lane's fate.
 func TestPreFlight_ASiblingLaneDoesNotTriggerARefusal(t *testing.T) {
 	s, _ := preFlightFixture(t, analysis.PolicyState{CeilingTokens: 1, OptInActive: true}, "hash-main")
-	st := s.stats.session("sess-1")
+	st := s.stats.session(tenancy.LocalTenant, "sess-1")
 	st.lane("lane-a").prefixHash, st.lane("lane-a").seen = "hash-a", true
 	st.lane("lane-b").prefixHash, st.lane("lane-b").seen = "hash-b", true
 
@@ -197,7 +198,7 @@ func TestPreFlight_ASiblingLaneDoesNotTriggerARefusal(t *testing.T) {
 	rec.AgentID = "lane-a"
 
 	w := httptest.NewRecorder()
-	if !s.preFlight(w, rec, "") {
+	if !s.preFlight(w, rec, "", tenancy.LocalTenant) {
 		t.Error("lane-a sent the same prefix it sent last time and was refused. Its siblings " +
 			"carry different tool sets, which is normal in a fan-out session and is not a " +
 			"divergence in this lane")
@@ -236,7 +237,7 @@ func TestPreFlight_DoesNotRaceOrCreateSessions(t *testing.T) {
 				rec := preFlightRec("hash-B", 400_000, 400_000)
 				rec.SessionID = fmt.Sprintf("sess-%d", i%3)
 				rec.AgentID = fmt.Sprintf("lane-%d", j%4)
-				s.preFlight(httptest.NewRecorder(), rec, "")
+				s.preFlight(httptest.NewRecorder(), rec, "", tenancy.LocalTenant)
 			}
 		}(i)
 	}
@@ -248,7 +249,7 @@ func TestPreFlight_DoesNotRaceOrCreateSessions(t *testing.T) {
 				rec := preFlightRec("hash-A", 1000, 1000)
 				rec.SessionID = fmt.Sprintf("sess-%d", i%3)
 				rec.AgentID = fmt.Sprintf("lane-%d", j%4)
-				s.stats.observe(rec)
+				s.stats.observe(tenancy.LocalTenant, rec)
 			}
 		}(i)
 	}
@@ -258,7 +259,7 @@ func TestPreFlight_DoesNotRaceOrCreateSessions(t *testing.T) {
 	fresh := &Server{cfg: s.cfg, stats: newStats()}
 	rec := preFlightRec("hash-B", 400_000, 400_000)
 	rec.SessionID = "never-observed"
-	if !fresh.preFlight(httptest.NewRecorder(), rec, "") {
+	if !fresh.preFlight(httptest.NewRecorder(), rec, "", tenancy.LocalTenant) {
 		t.Fatal("a request for an unobserved session was refused")
 	}
 	if len(fresh.stats.sessions) != 0 {

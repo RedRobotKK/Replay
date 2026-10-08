@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -47,14 +48,14 @@ func BenchmarkRescoreBySessionLength(b *testing.B) {
 				// like proof the walk was cheap.
 				for _, rec := range recs[:n-1] {
 					r := rec
-					s.observe(&r)
-					s.rescore(&r)
+					s.observe(tenancy.LocalTenant, &r)
+					s.rescore(tenancy.LocalTenant, &r)
 				}
 				last := recs[n-1]
-				s.observe(&last)
+				s.observe(tenancy.LocalTenant, &last)
 				b.StartTimer()
 
-				s.rescore(&last)
+				s.rescore(tenancy.LocalTenant, &last)
 			}
 			// ns/op is the cost of ONE rescore against a session of length n.
 			// Divide across n values to see the growth: flat means the walk
@@ -82,13 +83,13 @@ func BenchmarkRescoreWholeSession(b *testing.B) {
 				// what to analyse.
 				for _, rec := range recs {
 					r := rec
-					s.observe(&r)
+					s.observe(tenancy.LocalTenant, &r)
 				}
 				b.StartTimer()
 
 				for _, rec := range recs {
 					r := rec
-					s.rescore(&r)
+					s.rescore(tenancy.LocalTenant, &r)
 				}
 			}
 			b.ReportMetric(float64(n), "requests/session")
@@ -170,11 +171,11 @@ func TestRescore_SessionCostDoesNotGrowWorseThanQuadratic(t *testing.T) {
 		s := newStats()
 		recs := syntheticSession("quadratic", n)
 		for i := range recs {
-			s.observe(&recs[i])
+			s.observe(tenancy.LocalTenant, &recs[i])
 		}
 		s.analysed.Store(0)
 		for i := range recs {
-			s.rescore(&recs[i])
+			s.rescore(tenancy.LocalTenant, &recs[i])
 		}
 		return s.analysed.Load()
 	}

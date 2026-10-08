@@ -11,6 +11,7 @@ import (
 
 	"github.com/RedRobotKK/Replay/internal/ledger"
 	"github.com/RedRobotKK/Replay/internal/policy"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 // The failure arms of policy injection.
@@ -53,7 +54,7 @@ func TestPolicyInject_AnUnappliedEditReturnsTheOriginalBody(t *testing.T) {
 	}
 	req.Header.Set("anthropic-beta", policy.BetaFeature)
 
-	out := s.applyPolicy(req, rec, body, true)
+	out := s.applyPolicy(req, rec, body, true, tenancy.LocalTenant)
 
 	if !bytes.Equal(out, body) {
 		t.Fatalf("an edit that did not apply still changed the body:\n  in:  %s\n  out: %s", body, out)

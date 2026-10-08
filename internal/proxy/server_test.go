@@ -24,6 +24,7 @@ import (
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/ledger"
 	"github.com/RedRobotKK/Replay/internal/policy"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 )
 
 const secret = "sk-ant-test-secret-value"
@@ -1188,15 +1189,15 @@ func TestClientForwardingHeadersAreKept(t *testing.T) {
 func TestSessionStateIsBounded(t *testing.T) {
 	s := newStats()
 	for i := 0; i < maxSessions*2; i++ {
-		s.pin(fmt.Sprintf("s-%d", i), nil, policy.NotConfigured, time.Time{})
+		s.pin(tenancy.LocalTenant, fmt.Sprintf("s-%d", i), nil, policy.NotConfigured, time.Time{})
 	}
-	if len(s.sessions) != maxSessions {
-		t.Fatalf("sessions = %d, want %d", len(s.sessions), maxSessions)
+	if len(s.sessions[tenancy.LocalTenant]) != maxSessions {
+		t.Fatalf("sessions = %d, want %d", len(s.sessions[tenancy.LocalTenant]), maxSessions)
 	}
-	if _, _, ok := s.pinned("s-0"); ok {
+	if _, _, ok := s.pinned(tenancy.LocalTenant, "s-0"); ok {
 		t.Fatal("the oldest session must have been evicted")
 	}
-	if _, _, ok := s.pinned(fmt.Sprintf("s-%d", maxSessions*2-1)); !ok {
+	if _, _, ok := s.pinned(tenancy.LocalTenant, fmt.Sprintf("s-%d", maxSessions*2-1)); !ok {
 		t.Fatal("the newest session must remain")
 	}
 }

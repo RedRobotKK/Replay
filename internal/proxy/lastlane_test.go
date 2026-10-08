@@ -6,6 +6,7 @@ import (
 
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -46,10 +47,10 @@ func TestObserve_ConcurrentLanesDoNotForgeCacheBreaks(t *testing.T) {
 		{"lane-b", 50, 200, 5200}, // reproduces lane-b exactly
 	}
 	for i, step := range steps {
-		s.observe(usageRecord(step.agent, i, step.input, step.cacheCreation, step.cacheRead))
+		s.observe(tenancy.LocalTenant, usageRecord(step.agent, i, step.input, step.cacheCreation, step.cacheRead))
 	}
 
-	st := s.session("sess-fanout-usage")
+	st := s.session(tenancy.LocalTenant, "sess-fanout-usage")
 	if st.breaks != 0 {
 		t.Errorf("breaks = %d, want 0. Each lane reproduced its own prefix on every request "+
 			"after its first. Every break counted here is one lane's usage being measured "+
@@ -78,10 +79,10 @@ func TestObserve_AGenuineWithinLaneBreakIsStillCaught(t *testing.T) {
 		{"lane-a", 50, 200, 1200}, // reproduces
 	}
 	for i, step := range steps {
-		s.observe(usageRecord(step.agent, i, step.input, step.cacheCreation, step.cacheRead))
+		s.observe(tenancy.LocalTenant, usageRecord(step.agent, i, step.input, step.cacheCreation, step.cacheRead))
 	}
 
-	st := s.session("sess-fanout-usage")
+	st := s.session(tenancy.LocalTenant, "sess-fanout-usage")
 	if st.breaks != 1 {
 		t.Errorf("breaks = %d, want exactly 1. lane-b read nothing where it had established a "+
 			"5000-token prefix, and that is a real break that must still register.", st.breaks)
@@ -110,7 +111,7 @@ func TestObserve_ASiblingOnAnotherModelDoesNotForgeAModelChange(t *testing.T) {
 	} {
 		rec := usageRecord(step.agent, i, step.input, step.cacheCreation, step.cacheRead)
 		rec.Model = step.model
-		out := s.observe(rec)
+		out := s.observe(tenancy.LocalTenant, rec)
 		// The main loop's third request is the real break, and it is the one
 		// whose cause is under test.
 		if i == 2 {
@@ -168,16 +169,16 @@ func TestObserve_AnOpeningRequestInAnyLaneIsNotAReproduction(t *testing.T) {
 
 	// The main loop runs first, so the session already has requests when
 	// lane-a opens.
-	if out := s.observe(usageRecord("", 0, 100, 1000, 0)); out != nil {
+	if out := s.observe(tenancy.LocalTenant, usageRecord("", 0, 100, 1000, 0)); out != nil {
 		t.Fatalf("the session's very first request was classified: %+v", out)
 	}
-	if out := s.observe(usageRecord("", 1, 50, 200, 1000)); out == nil {
+	if out := s.observe(tenancy.LocalTenant, usageRecord("", 1, 50, 200, 1000)); out == nil {
 		t.Fatal("the main loop's second request was not classified, so this test cannot fail")
 	}
 
 	// lane-a now opens. It has never run, so there is nothing to compare it
 	// against and it must be exempt.
-	out := s.observe(usageRecord("lane-a", 2, 100, 5000, 0))
+	out := s.observe(tenancy.LocalTenant, usageRecord("lane-a", 2, 100, 5000, 0))
 	if out != nil {
 		t.Errorf("lane-a's opening request was classified as %q against a lane that had not "+
 			"run. An unseen lane's usage is the zero value and ExpectedRead of it is 0, so an "+

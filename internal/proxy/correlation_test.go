@@ -10,6 +10,7 @@ import (
 
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -93,7 +94,7 @@ func TestRC1_TransposedConcurrentRecordsGetTheSameAnswer(t *testing.T) {
 		for _, rec := range order {
 			// The lane's opening request has nothing before it, so it has no
 			// outcome; only the two that do are compared.
-			if oc := s.observe(rec); oc != nil {
+			if oc := s.observe(tenancy.LocalTenant, rec); oc != nil {
 				out[rec.RequestID] = oc.Cause
 			}
 		}
@@ -128,11 +129,11 @@ func TestRC1_TransposedConcurrentRecordsGetTheSameAnswer(t *testing.T) {
 func TestRC2_SerialLaneStillNamesItsCause(t *testing.T) {
 	at := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
 	s := newStats()
-	s.observe(corrRecord("req_seed", "s2", "claude-opus-5", at, ledger.CorrelationLaneSerial, seedUsage))
+	s.observe(tenancy.LocalTenant, corrRecord("req_seed", "s2", "claude-opus-5", at, ledger.CorrelationLaneSerial, seedUsage))
 	// An hour later, well past the cache TTL: a cause that does not depend on
 	// which response arrived first.
 	broke := corrRecord("req_next", "s2", "claude-opus-5", at.Add(time.Hour), ledger.CorrelationLaneSerial, usageB)
-	oc := s.observe(broke)
+	oc := s.observe(tenancy.LocalTenant, broke)
 	if oc == nil || oc.Cause == "" {
 		t.Fatalf("serial lane produced no cause: %+v", oc)
 	}

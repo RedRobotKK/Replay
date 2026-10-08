@@ -11,6 +11,7 @@ import (
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/ledger"
 	"github.com/RedRobotKK/Replay/internal/policy"
+	"github.com/RedRobotKK/Replay/internal/tenancy"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -166,8 +167,18 @@ type WhatIf struct {
 // a session; the status endpoint always has the latest figures.
 const whatIfLogEvery = 10
 
-// maxSessions bounds the in-memory session state; the least recently
-// seen sessions are dropped past it. The ledger is the durable record.
+// maxSessions bounds the in-memory session state, per tenant; the least
+// recently seen sessions within a given tenant's own table are dropped past
+// it. The ledger is the durable record.
+//
+// SP-9 (docs/requirements.md): this table is the second of the four surfaces
+// ADR-0015 names as needing a tenant dimension before any shared deployment -
+// the spend guard (guards.go, SP-5 through SP-8) was the first. s.sessions is
+// nested by tenancy.TenantID exactly like SpendGuard.session, for the same
+// reason: a session id is a client-chosen string this proxy never issues or
+// namespaces, so two tenants that happen to send the same one must not land
+// in one shared *sessionState and inherit each other's error-budget
+// accounting, policy pin, or cache-break lane history.
 const maxSessions = 256
 
 // stats is the proxy's in-memory observability state. It is derived data
@@ -181,12 +192,17 @@ type stats struct {
 	// and told nobody anything about the code.
 	analysed atomic.Int64
 
-	mu       sync.Mutex
-	now      func() time.Time
-	started  time.Time
-	sessions map[string]*sessionState
-	// admittedSeq issues sessionState.admitted. Monotonic, so it orders
-	// sessions even when the clock cannot.
+	mu      sync.Mutex
+	now     func() time.Time
+	started time.Time
+	// sessions is nested by tenant exactly like SpendGuard.session (SP-9): a
+	// tenant with no traffic costs nothing, its inner map does not exist
+	// until its first session() call, and maxSessions bounds each tenant's
+	// own inner map rather than one map shared by every tenant.
+	sessions map[tenancy.TenantID]map[string]*sessionState
+	// admittedSeq issues sessionState.admitted. Monotonic across every
+	// tenant, which is fine: it only has to order sessions within the one
+	// tenant table an eviction walks, not across tenants.
 	admittedSeq   uint64
 	requests      map[string]int // by status class: 2xx, 4xx, 5xx, refused
 	upstreamErrs  map[int]int
@@ -255,7 +271,7 @@ func newStats() *stats {
 	return &stats{
 		now:           time.Now,
 		started:       time.Now(),
-		sessions:      map[string]*sessionState{},
+		sessions:      map[tenancy.TenantID]map[string]*sessionState{},
 		requests:      map[string]int{},
 		upstreamErrs:  map[int]int{},
 		breakCauses:   map[cachemodel.BreakCause]int{},
@@ -275,7 +291,7 @@ func newStats() *stats {
 // the ledger and the log line. Causes that need the message history are
 // left to the offline diff; the live classification names what usage and
 // timing alone can settle.
-func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
+func (s *stats) observe(tenant tenancy.TenantID, rec *ledger.Record) *ledger.CacheOutcome {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.latencySum += time.Duration(rec.LatencyMS) * time.Millisecond
@@ -297,7 +313,7 @@ func (s *stats) observe(rec *ledger.Record) *ledger.CacheOutcome {
 		return nil
 	}
 	cur := *rec.Response.Usage
-	st := s.session(rec.SessionID)
+	st := s.session(tenant, rec.SessionID)
 	var out *ledger.CacheOutcome
 	// Everything below compares this lane against its own previous request,
 	// never against the session's. See sessionState.lanes.
@@ -376,10 +392,10 @@ func (st *sessionState) totalErrorTokens() (n int) {
 // denominator counts every request whatever lane it came from, so a numerator
 // from one lane would be a ratio between two different populations, and the
 // guard that reads it refuses live traffic.
-func (s *stats) errorTokens(sessionID string) (errorTokens, promptTokens int) {
+func (s *stats) errorTokens(tenant tenancy.TenantID, sessionID string) (errorTokens, promptTokens int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st, ok := s.sessions[sessionID]
+	st, ok := s.sessions[tenant][sessionID]
 	if !ok {
 		return 0, 0
 	}
@@ -390,10 +406,10 @@ func (s *stats) errorTokens(sessionID string) (errorTokens, promptTokens int) {
 // session's state: keying the session map by agent instead would give every
 // sub-agent its own policy pin, which ADR-0003 forbids, and would split the
 // spend cap per agent as well.
-func (s *stats) setLaneErrors(sessionID, agentID string, tokens int) {
+func (s *stats) setLaneErrors(tenant tenancy.TenantID, sessionID, agentID string, tokens int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st := s.session(sessionID)
+	st := s.session(tenant, sessionID)
 	if st.errorByLane == nil {
 		st.errorByLane = map[string]int{}
 	}
@@ -423,10 +439,10 @@ func (st *sessionState) lane(agentID string) *laneState {
 // here, live, because it cannot be taken anywhere else: two requests that
 // overlapped leave a ledger that looks exactly like two that did not, and
 // their client-side timestamps were taken at the other end of the wire.
-func (s *stats) enterLane(sessionID, agentID string) (*bool, func()) {
+func (s *stats) enterLane(tenant tenancy.TenantID, sessionID, agentID string) (*bool, func()) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ln := s.session(sessionID).lane(agentID)
+	ln := s.session(tenant, sessionID).lane(agentID)
 	mine := new(bool)
 	for other := range ln.open {
 		// Both sides of the pair, for the reason on laneState.open.
@@ -467,14 +483,19 @@ func (st *sessionState) whatIfFor(agentID string) []WhatIf {
 	return st.whatIf[agentID]
 }
 
-func (s *stats) session(id string) *sessionState {
-	st, ok := s.sessions[id]
+func (s *stats) session(tenant tenancy.TenantID, id string) *sessionState {
+	bucket, ok := s.sessions[tenant]
+	if !ok {
+		bucket = map[string]*sessionState{}
+		s.sessions[tenant] = bucket
+	}
+	st, ok := bucket[id]
 	if ok {
 		return st
 	}
-	for len(s.sessions) >= maxSessions {
+	for len(bucket) >= maxSessions {
 		oldest, oldestSeen, oldestAdmitted := "", time.Time{}, uint64(0)
-		for k, v := range s.sessions {
+		for k, v := range bucket {
 			switch {
 			case oldest == "":
 			case v.lastSeen.Before(oldestSeen):
@@ -487,20 +508,20 @@ func (s *stats) session(id string) *sessionState {
 			}
 			oldest, oldestSeen, oldestAdmitted = k, v.lastSeen, v.admitted
 		}
-		delete(s.sessions, oldest)
+		delete(bucket, oldest)
 	}
 	s.admittedSeq++
 	st = &sessionState{lastSeen: time.Now(), admitted: s.admittedSeq}
-	s.sessions[id] = st
+	bucket[id] = st
 	return st
 }
 
 // pinned returns a session's policy decision and parameters when one was
 // made in this process, and false otherwise.
-func (s *stats) pinned(sessionID string) (*policy.ContextEdit, policy.Decision, bool) {
+func (s *stats) pinned(tenant tenancy.TenantID, sessionID string) (*policy.ContextEdit, policy.Decision, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st, ok := s.sessions[sessionID]
+	st, ok := s.sessions[tenant][sessionID]
 	if !ok || st.policy == "" {
 		return nil, "", false
 	}
@@ -510,10 +531,10 @@ func (s *stats) pinned(sessionID string) (*policy.ContextEdit, policy.Decision, 
 // pin records a session's decision. The session is created here when its
 // first request has not completed yet, so the pin exists before any
 // usage does. A decision already made is kept.
-func (s *stats) pin(sessionID string, edit *policy.ContextEdit, decision policy.Decision, generated time.Time) {
+func (s *stats) pin(tenant tenancy.TenantID, sessionID string, edit *policy.ContextEdit, decision policy.Decision, generated time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st := s.session(sessionID)
+	st := s.session(tenant, sessionID)
 	if st.policy == "" {
 		st.policy, st.edit, st.generated = decision, edit, generated
 	}
@@ -521,10 +542,10 @@ func (s *stats) pin(sessionID string, edit *policy.ContextEdit, decision policy.
 
 // trialSession returns a treated session's policy and file generation
 // time, for the guardrail; false for controls and flag-set policies.
-func (s *stats) trialSession(sessionID string) (*policy.ContextEdit, time.Time, bool) {
+func (s *stats) trialSession(tenant tenancy.TenantID, sessionID string) (*policy.ContextEdit, time.Time, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st, ok := s.sessions[sessionID]
+	st, ok := s.sessions[tenant][sessionID]
 	if !ok || st.policy != policy.Applied || st.edit == nil || st.generated.IsZero() {
 		return nil, time.Time{}, false
 	}
@@ -574,9 +595,9 @@ func (s *stats) breakCause(ln *laneState, rec *ledger.Record, prefixChanged bool
 // and takes only the session's own lock while it walks the session, so
 // other sessions are never held up. It returns a log line every
 // whatIfLogEvery requests and an empty string otherwise.
-func (s *stats) rescore(rec *ledger.Record) (string, analysis.ReReads) {
+func (s *stats) rescore(tenant tenancy.TenantID, rec *ledger.Record) (string, analysis.ReReads) {
 	s.mu.Lock()
-	st, ok := s.sessions[rec.SessionID]
+	st, ok := s.sessions[tenant][rec.SessionID]
 	if !ok {
 		s.mu.Unlock()
 		return "", analysis.ReReads{}
@@ -832,16 +853,24 @@ func (s *stats) status() Status {
 	if s.now().UTC().Format("2006-01-02") == s.dayStamp {
 		out.DayCostUSD = s.dayCostUSD
 	}
-	for id, st := range s.sessions {
-		switch st.policy {
-		case policy.Control:
-			out.Trial.Control++
-		case policy.Applied:
-			if st.edit != nil && !st.generated.IsZero() {
-				out.Trial.Treated++
+	// Ranges every tenant's bucket: the status endpoint is a single local
+	// diagnostic surface with no per-caller tenant filtering of its own (it
+	// never resolves x-replay-tenant-id), so it reports everything this
+	// process holds exactly as it did before s.sessions gained a tenant
+	// dimension (SP-9). What changed is only that a session id collision
+	// between two tenants no longer merges their rows into one.
+	for _, bucket := range s.sessions {
+		for id, st := range bucket {
+			switch st.policy {
+			case policy.Control:
+				out.Trial.Control++
+			case policy.Applied:
+				if st.edit != nil && !st.generated.IsZero() {
+					out.Trial.Treated++
+				}
 			}
+			out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, Context: st.contextFor(""), ContextByLane: copyContextByLane(st.context), ReReads: st.reReadsFor(""), ReReadsByLane: copyReReadsByLane(st.reReads), WhatIf: st.whatIfFor(""), WhatIfRequests: st.whatIfRequests[""], WhatIfByLane: copyWhatIfByLane(st.whatIf), ErrorShare: share(st.totalErrorTokens(), st.tally.PromptTokens), Masked: st.masked, Rehydrated: st.rehydrated, RehydrationDenied: st.denied, Held: st.held, HeldMS: st.heldMS})
 		}
-		out.Sessions = append(out.Sessions, SessionSummary{Session: short(id), Model: st.model, Requests: st.tally.Requests, PromptTokens: st.tally.PromptTokens, CachedShare: st.tally.CachedShare(), Breaks: st.breaks, PrefixChanges: st.prefixChanges, ListCostUSD: st.tally.CostUSD, LastSeen: st.lastSeen, Policy: string(st.policy), PinnedPolicy: pinnedName(st.edit), PolicyApplied: st.applied, ClearedInputTokens: st.cleared, Context: st.contextFor(""), ContextByLane: copyContextByLane(st.context), ReReads: st.reReadsFor(""), ReReadsByLane: copyReReadsByLane(st.reReads), WhatIf: st.whatIfFor(""), WhatIfRequests: st.whatIfRequests[""], WhatIfByLane: copyWhatIfByLane(st.whatIf), ErrorShare: share(st.totalErrorTokens(), st.tally.PromptTokens), Masked: st.masked, Rehydrated: st.rehydrated, RehydrationDenied: st.denied, Held: st.held, HeldMS: st.heldMS})
 	}
 	sort.Slice(out.Sessions, func(i, j int) bool { return out.Sessions[i].LastSeen.After(out.Sessions[j].LastSeen) })
 	return out
@@ -1097,10 +1126,10 @@ func (s *stats) noteUnmasked(path string) bool {
 //
 // ok is false when the session or the lane has not been seen, which is the
 // same answer as "nothing to compare against".
-func (s *stats) laneSnapshot(sessionID, agentID string) (prefixHash string, ok bool) {
+func (s *stats) laneSnapshot(tenant tenancy.TenantID, sessionID, agentID string) (prefixHash string, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st, exists := s.sessions[sessionID]
+	st, exists := s.sessions[tenant][sessionID]
 	if !exists {
 		return "", false
 	}
