@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **A day-cap refusal named the session and never the tenant.** SP-7's own
+  text asked for a second look once SP-5's tenant resolution landed; nobody
+  had taken it. `SpendGuard.attributeDay`, the refusal log line and the
+  ledger record (`ledger.Record.TenantID`, new) now all name the tenant a
+  spend-cap, loop, error-budget or pre-flight refusal was fired for, except
+  for `tenancy.LocalTenant`, the default every existing single-operator
+  install already runs as, which stays exactly as it read before. No
+  mutation-ID assigned this entry; verified by RED/GREEN tests
+  (`TestSP7_DayCapNamesTheTenantOnceSP5Lands` and siblings in
+  `internal/proxy`) rather than a hand-mutation sweep.
 - **`replay purge --older-than` acted on any directory it was given.** It
   removed every `.jsonl` older than the window wherever it was pointed;
   pointed at `~/.replay` itself it took `measurements.jsonl` and
