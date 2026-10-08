@@ -3,16 +3,23 @@
 // exist before any commercial layer: a tenant dimension in the spend guard,
 // the session table, the metrics surface and the credential path.
 //
-// This package is that dimension's shape, not its wiring. Nothing here is
-// imported by cmd/replay, internal/proxy, internal/ledger or
-// internal/transcript: the live surfaces ADR-0015 names (the spend guard's
-// accumulators, the session table, the metrics listener, the credential
-// path) are untouched, and SP-5's "resolved at the proxy boundary" and
-// SP-6's per-tenant caps (docs/requirements.md) remain specified and
-// unbuilt. What exists here is the primitive those units would consume: a
-// validated, typed identity, a resolution rule that preserves today's
-// zero-configuration local default, and an ownership store whose isolation
-// is proven by mutation rather than assumed.
+// This package started as that dimension's shape, not its wiring, and
+// docs/design/UNWIRED-LOG.md's entry 18 records both states: added
+// 2026-10-07 reachable from nothing, then wired the same day. It is now
+// imported by cmd/replay (learn.go, simulate.go), internal/proxy
+// (passthrough.go resolves x-replay-tenant-id at the circuit breaker before
+// anything is counted; guards.go's SpendGuard nests its session and day
+// accumulators by tenant) and internal/ledger (store.go's Pin and policy
+// pins are keyed by tenant and session together). internal/transcript does
+// not import it and has no tenant dimension; RepositoryID there remains a
+// local filesystem grouping, not a tenant key. The metrics listener
+// (internal/proxy/metrics_listener.go) still refuses any non-loopback bind
+// outright, so ADR-0015's "authenticated metrics" entry condition has
+// nothing networked to authenticate yet. What exists here is the
+// primitive the wired units consume: a validated, typed identity, a
+// resolution rule that preserves today's zero-configuration local default,
+// and an ownership store whose isolation is proven by mutation rather than
+// assumed.
 //
 // Four identities this package is careful not to collapse into each other,
 // because ADR-0028 names them as different things without defining them
