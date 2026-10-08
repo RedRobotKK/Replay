@@ -54,7 +54,27 @@ type spend struct {
 // least recently seen sessions within a given tenant's own table are
 // dropped past it. A tenant with no traffic costs nothing: the table for it
 // does not exist until its first Record.
+//
+// "Dropped past it" no longer means discarded (SP-8, docs/requirements.md).
+// The least-recently-seen entry is demoted into g.retired instead, so a
+// session that goes quiet long enough to churn out of this table and then
+// returns is charged against its own past spend rather than handed a fresh
+// budget - the defect SP-8 names: "eviction discards that session's
+// accumulated spend... Accounting must be durable for the life of the cap
+// window, or eviction must fail closed."
 const maxSpendSessions = 1024
+
+// maxRetiredSpendSessions bounds the second, durable structure SP-8 adds:
+// sessions evicted from the live table above, remembered rather than
+// discarded. It is its own bound, nested per tenant exactly like
+// maxSpendSessions (g.retired[tenant]), rather than hiding an unbounded
+// growth path behind "durable" - see admit and tableFull. Once BOTH tables
+// are full for a tenant, a session this guard has never seen cannot be
+// admitted without discarding somebody's accounting, and Check refuses
+// that admission before the request ever reaches the provider. That is the
+// fail-closed half of SP-8's "durable, or fail closed": durability has a
+// wall, and reaching it refuses rather than discards.
+const maxRetiredSpendSessions = 1024
 
 // SpendGuard accounts tokens and dollars from provider usage and fails
 // closed before the next request once a cap is reached. It never
@@ -79,6 +99,11 @@ type SpendGuard struct {
 	limits  SpendLimits
 	mu      sync.Mutex
 	session map[tenancy.TenantID]map[string]*spend
+	// retired holds accounting for sessions evicted from session above,
+	// nested by tenant the same way (SP-8): the demotion target that
+	// replaces outright deletion, bounded by maxRetiredSpendSessions. A
+	// session id lives in at most one of session or retired at a time.
+	retired map[tenancy.TenantID]map[string]*spend
 	day     string
 	// dayUsed is tenant-scoped; g.day (the UTC date string) is not, because
 	// midnight is the same instant for every tenant and only the spend
@@ -110,6 +135,7 @@ func NewSpendGuard(limits SpendLimits) *SpendGuard {
 	return &SpendGuard{
 		limits:  limits,
 		session: map[tenancy.TenantID]map[string]*spend{},
+		retired: map[tenancy.TenantID]map[string]*spend{},
 		dayUsed: map[tenancy.TenantID]*spend{},
 		now:     time.Now,
 	}
@@ -179,19 +205,24 @@ func (g *SpendGuard) Record(tenant tenancy.TenantID, sessionID string, tokens in
 		sessions = map[string]*spend{}
 		g.session[tenant] = sessions
 	}
-	st, ok := sessions[sessionID]
-	if !ok {
-		for len(sessions) >= maxSpendSessions {
-			oldest, oldestOrder := "", uint64(0)
-			for k, v := range sessions {
-				if oldest == "" || v.order < oldestOrder {
-					oldest, oldestOrder = k, v.order
-				}
-			}
-			delete(sessions, oldest)
-		}
-		st = &spend{}
-		sessions[sessionID] = st
+	st, admitted := g.admit(tenant, sessionID, sessions)
+	if !admitted {
+		// SP-8's fail-closed wall: both the live table and its retired
+		// remembrance are full for this tenant, and sessionID has never
+		// been seen before. There is nowhere to put it without discarding
+		// an existing session's durable accounting, which this guard
+		// refuses to do - Check already refuses this admission before the
+		// request reaches the provider (see tableFull), so reaching here at
+		// all is the narrow residual race between a Check that saw room and
+		// enough concurrent new sessions landing first. Rather than force
+		// the newcomer in by discarding someone else's entry, it gets no
+		// session-level slot at all; the tenant's day total below still
+		// sees its tokens, which remains the backstop this guard's own
+		// documentation names for an ordinary developer.
+		du := g.dayAccumulator(tenant)
+		du.tokens += tokens
+		du.usd += usd
+		return
 	}
 	st.seen = g.now()
 	g.order++
@@ -206,13 +237,109 @@ func (g *SpendGuard) Record(tenant tenancy.TenantID, sessionID string, tokens in
 	st.dayUSD += usd
 	st.tokens += tokens
 	st.usd += usd
+	du := g.dayAccumulator(tenant)
+	du.tokens += tokens
+	du.usd += usd
+}
+
+// dayAccumulator returns tenant's day accumulator, creating it if absent.
+// Callers hold the lock.
+func (g *SpendGuard) dayAccumulator(tenant tenancy.TenantID) *spend {
 	du, ok := g.dayUsed[tenant]
 	if !ok {
 		du = &spend{}
 		g.dayUsed[tenant] = du
 	}
-	du.tokens += tokens
-	du.usd += usd
+	return du
+}
+
+// admit resolves sessionID to its durable record under tenant (SP-8),
+// creating one if this is genuinely the first time this guard has seen it,
+// reviving it from g.retired if it was evicted from the live table and has
+// returned, or reporting that no slot exists for a session never seen
+// before because both the live and retired tables are already full.
+//
+// sessions is g.session[tenant], already created by the caller and never
+// nil. Callers hold the lock.
+func (g *SpendGuard) admit(tenant tenancy.TenantID, sessionID string, sessions map[string]*spend) (*spend, bool) {
+	if st, ok := sessions[sessionID]; ok {
+		return st, true
+	}
+	if st, ok := g.retired[tenant][sessionID]; ok {
+		// Never moved back into sessions, and not merely as a simplification:
+		// it cannot be. retired[tenant] holds anything for this tenant only
+		// because some earlier admission found sessions already at
+		// maxSpendSessions and demoted its victim here - and that same
+		// admission refilled the slot it freed in the very same step (see
+		// below), so sessions is exactly maxSpendSessions whenever this
+		// branch can be reached. "if there is room, revive into sessions"
+		// was dead code with no test able to make it true, caught by
+		// scripts/guard-reachability/main.go rather than written in by
+		// hand; a revived session simply continues to be found here, one
+		// map lookup slower, never lost.
+		return st, true
+	}
+	// Never seen before.
+	if len(sessions) >= maxSpendSessions {
+		r := g.ensureRetired(tenant)
+		if len(r) >= maxRetiredSpendSessions {
+			return nil, false
+		}
+		oldestID, oldest := lruVictim(sessions)
+		delete(sessions, oldestID)
+		r[oldestID] = oldest
+	}
+	st := &spend{}
+	sessions[sessionID] = st
+	return st, true
+}
+
+// ensureRetired returns tenant's retired table, creating it if absent.
+// Callers hold the lock.
+func (g *SpendGuard) ensureRetired(tenant tenancy.TenantID) map[string]*spend {
+	r, ok := g.retired[tenant]
+	if !ok {
+		r = map[string]*spend{}
+		g.retired[tenant] = r
+	}
+	return r
+}
+
+// lruVictim finds sessions' least-recently-touched entry by its touch
+// counter, not wall-clock time: a coarse clock cannot always separate two
+// records (TestSpendGuard_EvictsLeastRecentlyUsedWhenTheClockCannotSeparateRecords),
+// and a counter has no resolution to run out of. Unchanged from the eviction
+// logic this replaces; SP-8 only changed where the victim goes afterward.
+func lruVictim(sessions map[string]*spend) (string, *spend) {
+	var oldestID string
+	var oldest *spend
+	for k, v := range sessions {
+		if oldest == nil || v.order < oldest.order {
+			oldestID, oldest = k, v
+		}
+	}
+	return oldestID, oldest
+}
+
+// lookupSpend returns sessionID's accounting for tenant from the live table
+// or, failing that, the retired remembrance SP-8 added, and whether either
+// held it. It never creates an entry. Callers hold the lock.
+func (g *SpendGuard) lookupSpend(tenant tenancy.TenantID, sessionID string) (spend, bool) {
+	if st, ok := g.session[tenant][sessionID]; ok {
+		return *st, true
+	}
+	if st, ok := g.retired[tenant][sessionID]; ok {
+		return *st, true
+	}
+	return spend{}, false
+}
+
+// tableFull reports that a session never seen before, under tenant, cannot
+// be admitted without discarding an existing session's durable accounting
+// from the live table or its retired remembrance (SP-8). Callers hold the
+// lock.
+func (g *SpendGuard) tableFull(tenant tenancy.TenantID) bool {
+	return len(g.session[tenant]) >= maxSpendSessions && len(g.retired[tenant]) >= maxRetiredSpendSessions
 }
 
 // Check returns a human-readable reason when the next request for the
@@ -236,11 +363,19 @@ func (g *SpendGuard) Check(tenant tenancy.TenantID, sessionID string) string {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.rollDay()
-	var used spend
-	if sessions, ok := g.session[tenant]; ok {
-		if st, ok := sessions[sessionID]; ok {
-			used = *st
-		}
+	used, found := g.lookupSpend(tenant, sessionID)
+	if !found && g.tableFull(tenant) {
+		// SP-8's fail-closed wall: sessionID has never been seen, and both
+		// the live table and its retired remembrance are already at
+		// capacity, so admitting it would require discarding an existing
+		// session's durable accounting - the exact defect this guard
+		// refuses. Refused here, before the request ever reaches the
+		// provider, rather than only noticed later in Record.
+		return fmt.Sprintf(
+			"spend guard: the session table is full (%d tracked, %d remembered) and %q has never been seen, "+
+				"so it cannot be admitted without discarding another session's accounting; "+
+				"wait for an existing session to finish or raise maxSpendSessions",
+			maxSpendSessions, maxRetiredSpendSessions, sessionID)
 	}
 	var dayUsed spend
 	if du, ok := g.dayUsed[tenant]; ok {
@@ -274,6 +409,17 @@ func (g *SpendGuard) Check(tenant tenancy.TenantID, sessionID string) string {
 // Ranging g.session[tenant] on a tenant with no table yet (a nil map) is a
 // zero-iteration range, not a nil-map panic — the same reason this never
 // needed a presence check before tenant scoping existed.
+//
+// Deliberately still ranges only the live table, not g.retired, after SP-8
+// gave evicted sessions a durable home there. A session sitting in retired
+// still does not count toward "the survivors add up to the day total" — if
+// it did, "complete" would need to reconstruct which day each retired
+// entry's total belongs to from a structure this function has no other
+// reason to touch, and SP-8 does not ask attribution to get smarter, only
+// for eviction to stop discarding. The existing disclosure already covers
+// this case correctly: an evicted (now-retired) heavy spender still makes
+// the live survivors incomplete, and the refusal still says so rather than
+// guessing.
 func (g *SpendGuard) dayLeader(tenant tenancy.TenantID, byUSD bool) (id string, tokens int, usd float64, complete bool) {
 	var accTokens int
 	var accUSD float64
