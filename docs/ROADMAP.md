@@ -205,6 +205,25 @@ one account, one operator, and the roadmap has said so in every spike row since
   none of it has been replayed against real traffic." Confirmed still true on
   a repository-wide search: no non-test caller selects `AstraRules()`. The gate
   is published rules **and** a calibration corpus; only the first half exists.
+  **Corrected 2026-10-08, same day, not deleted: the status quoted above is no
+  longer current for the "nothing yet selects `AstraRules()` at runtime" half.**
+  `cachemodel.RulesForModel` and `ClassifyBreakForModel` now dispatch to
+  `AstraRules()` for any model id containing `gpt-6-astra`, and all three
+  production call sites that classify a cache break now call the new
+  function: the live proxy (`internal/proxy/state.go`), the offline diff
+  (`internal/analysis/diff.go`), and the usage-export cost path
+  (`cmd/replay/costusage.go`). Proven RED/GREEN at both the unit level and by
+  calling the live proxy's own classification method directly and watching it
+  fail for the exact predicted reason when the wiring is reverted
+  (`internal/proxy/breakcauseprovider_test.go`). Still true, unchanged by this:
+  the MinPrefix floor is not reachable from any of the three call sites (none
+  carries the current request's prefix size at that point), and **no
+  calibration corpus against real OpenAI traffic exists.** Checked explicitly
+  2026-10-08: no `OPENAI_API_KEY`, no billing-linked account, no mechanism for
+  real OpenAI traffic anywhere in this environment. The gate is published
+  rules, production dispatch, **and** a calibration corpus; the first two now
+  exist and the third does not. See
+  [RELEASE-CRITERIA.md](../RELEASE-CRITERIA.md) for the full correction.
 - **Multi-tenant spend accounting (SP-5, SP-6, SP-8)**. This paragraph is
   stale and kept rather than silently deleted, in the same spirit as the
   correction above: it said "only if a user asks... specified, unbuilt, and

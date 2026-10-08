@@ -260,4 +260,25 @@ var ControlsFor = map[string]Controls{
 		Insufficient: "",
 		Gap:          []string{"conservation pins the total and says nothing about the split, as the repository's own test states"},
 	},
+	"RPL-C038": {
+		Basis: Reconstructed, Layer: "cachemodel.CacheRules",
+		Positive:     "a 40m gap on a gpt-6-astra entry reports TTL expiry (Astra's own published 30m), through RulesForModel, ClassifyBreakForModel, and the live proxy's own breakCause method",
+		Negative:     "a 20m gap on the same entry does NOT report TTL expiry (Anthropic's 5m default would wrongly fire it); reverting the production wiring back to the Anthropic-pinned ClassifyBreak reproduces this exact false positive and is how the fix was proven, not merely asserted",
+		Insufficient: "a model id for an OpenAI tier this package has no published CacheRules for (gpt-5.6-terra, gpt-5.4, gpt-5.4-mini) falls back to AnthropicRules() rather than failing loudly, which is a silent default rather than a refusal",
+		Assumption: []string{
+			"ASSUMPTION: the Astra tier is identified by the substring \"gpt-6-astra\" in the model id. A real OpenAI model id spelled differently would not be recognised and would silently fall back to AnthropicRules()",
+			"ASSUMPTION: the ruleset that governs a cache entry's survival is the predecessor's model (prevModel), not the current request's. A provider migration mid-lane is read under the writer's rules, which is correct for TTL/floor but untested against a real cross-provider lane",
+		},
+		Gap: []string{
+			"the MinPrefix floor is not reachable from any of the three production call sites, because none carries the current request's visible prefix size at the point of classification",
+			"no real OpenAI traffic has ever exercised this path; see RPL-C039",
+		},
+	},
+	"RPL-C039": {
+		Basis: NoBasis, Layer: "none",
+		Positive:     "the calibration-claim detector fires on a planted completion sentence (two forms), proving it can fail",
+		Negative:     "no repository surface this scan reads currently asserts the calibration happened",
+		Insufficient: "",
+		Gap:          []string{"no OPENAI_API_KEY, billing-linked account, or other mechanism for real OpenAI traffic exists in this environment; the question cannot currently be asked from here"},
+	},
 }

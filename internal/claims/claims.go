@@ -510,4 +510,55 @@ var Register = []Claim{
 		Result:     Bounded,
 		Why:        "Checkable statically. A dynamic proof would need a sandboxed run and is not attempted here.",
 	},
+
+	// ------------------------------------------------ second-provider caching
+	{
+		ID:   "RPL-C038",
+		Text: "Replay's production cache-break classification selects OpenAI's published GPT-6 Astra-tier CacheRules for an Astra-tier request, not Anthropic's.",
+		Asserted: []string{
+			"RELEASE-CRITERIA.md", "docs/ROADMAP.md", "internal/cachemodel/openai.go",
+		},
+		Scope: "model ids containing the substring \"gpt-6-astra\", at the three production call sites that classify a cache break: internal/proxy/state.go (the live proxy), internal/analysis/diff.go (the offline diff), cmd/replay/costusage.go (the usage-export cost path). TTL and effort-change dispatch only",
+		Establishes: []string{
+			"AstraRules(), typed and mutation-tested since 2026-09-15, is reachable from production rather than only from this package's own tests",
+			"an Astra-tier request's TTL expiry is read against OpenAI's documented 30 minutes, not Anthropic's 5-minute default, at all three call sites",
+		},
+		DoesNotEstablish: []string{
+			"that AstraRules()'s numbers match real OpenAI behaviour. They are read from OpenAI's prompt-caching guide on 2026-09-15 and have never been replayed against a live response; see RPL-C039",
+			"that any OpenAI-compatible request has ever been observed by this build against a live OpenAI endpoint",
+			"the MinPrefix floor (1024 tokens). None of the three call sites knows the current request's visible prefix size at the point of classification, so ClassifyBreakForModel passes 0 exactly as the Anthropic-only ClassifyBreak already did, and the floor test is skipped rather than guessed. Unreachable from these three call sites before this change and unreachable after it",
+			"any OpenAI tier other than gpt-6-astra. gpt-5.6-terra, gpt-5.4 and gpt-5.4-mini fall back to AnthropicRules(), unchanged, because this package has no published CacheRules for them",
+			"ASSUMPTION, not established: that OpenAI's real model id for the Astra tier contains the literal substring \"gpt-6-astra\", and that the writer's model (not a mid-lane provider change) is always the right ruleset to classify a read against",
+		},
+		Vocabulary: "cachemodel.CacheRules",
+		Oracle:     "reverting the production wiring at each of the three call sites in turn and watching the corresponding test (internal/proxy/breakcauseprovider_test.go for the live proxy, internal/analysis/diffprovider_test.go for the offline diff) fail for the predicted reason (a 20m Astra gap reported as TTL expiry under Anthropic's 5m rule), then re-applying the fix and watching it pass, with every pre-existing test in internal/cachemodel, internal/proxy and internal/analysis staying green throughout. A repository-wide guard-reachability sweep independently confirmed the gap this claim closes: before this change, nothing in internal/analysis's own test suite drove the usage/timing branch of diff.go's classifier at all",
+		Tests: []string{
+			"TestRulesForModel_SelectsAstraForTheGPT6AstraTier",
+			"TestRulesForModel_FallsBackToAnthropicForEverythingElse",
+			"TestClassifyBreakForModel_AstraTierUsesAstraTTLNotAnthropics",
+			"TestClassifyBreakForModel_AnthropicTierIsUnchanged",
+			"TestBreakCause_AstraTierUsesAstraTTLInProduction",
+			"TestBreakCause_AnthropicTierUnchangedInProduction",
+			"TestBreakCause_AstraTierStillExpiresPastItsOwnTTL",
+			"TestFindBreaks_AstraTierUsesAstraTTLNotAnthropics",
+			"TestFindBreaks_AnthropicTierUnchanged",
+		},
+		Result: Bounded,
+		Why:    "RED/GREEN-proven at both the unit level and against the live proxy's own classification method, with the reverted-wiring state reproducing the exact pre-existing defect on demand. Bounded to the Astra tier and to TTL/effort dispatch; the floor is a separate, unclosed gap and real-traffic calibration is a separate, unclosed claim (RPL-C039).",
+	},
+	{
+		ID:          "RPL-C039",
+		Text:        "AstraRules()'s published numbers have been calibrated against real OpenAI traffic.",
+		Asserted:    nil,
+		Scope:       "whether this claim is made anywhere a reader of this repository's own surfaces would see it",
+		Establishes: nil,
+		DoesNotEstablish: []string{
+			"anything in either direction about whether OpenAI's documented Astra-tier numbers are accurate. Nobody has checked",
+		},
+		Vocabulary: "",
+		Oracle:     "no OPENAI_API_KEY, no billing-linked OpenAI account, and no other mechanism for real, billable OpenAI traffic exists anywhere in this environment, checked explicitly on 2026-10-08 (env, common .env locations, repository-wide grep)",
+		Tests:      []string{"TestC039_NoOpenAICalibrationAgainstLiveTrafficClaimIsAsserted"},
+		Result:     NotMeasured,
+		Why:        "Not a missing feature; a missing external dependency this environment cannot supply. The harness RPL-C038 wires is ready to consume a real corpus the day one exists; none exists today.",
+	},
 }

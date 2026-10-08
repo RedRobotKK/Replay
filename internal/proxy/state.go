@@ -582,7 +582,7 @@ func (s *stats) breakCause(ln *laneState, rec *ledger.Record, prefixChanged bool
 		}
 		return d.cause(), d.detail()
 	}
-	cause, ok := cachemodel.ClassifyBreak(ln.last, *rec.Response.Usage, ln.model, rec.Model, rec.Timestamp.Sub(ln.lastSeen))
+	cause, ok := cachemodel.ClassifyBreakForModel(ln.last, *rec.Response.Usage, ln.model, rec.Model, rec.Timestamp.Sub(ln.lastSeen))
 	if !ok {
 		return cachemodel.CauseUnknown, ""
 	}

@@ -140,3 +140,95 @@ func TestAnthropic_HourEntryIsNotExpiredByAThirtyMinuteGap(t *testing.T) {
 		t.Fatalf("30m gap on a five minute entry = (%q, %v), want TTL expiry", c, ok)
 	}
 }
+
+// --- Production wiring: AstraRules() reachable outside this test package. ---
+//
+// Confirmed on 2026-10-08, by a repository-wide search and independently by
+// the unblock panel before it: AstraRules() had zero non-test callers
+// anywhere in the module. Every production site that classifies a cache
+// break (internal/proxy/state.go, internal/analysis/diff.go,
+// cmd/replay/costusage.go) called the Anthropic-pinned ClassifyBreak
+// unconditionally, so an Astra-tier request's break was always read against
+// Anthropic's 5-minute default and 0-floor rather than Astra's own 30-minute,
+// 1024-token published terms. These tests are RED until RulesForModel and
+// ClassifyBreakForModel exist and the three call sites use them.
+
+func TestRulesForModel_SelectsAstraForTheGPT6AstraTier(t *testing.T) {
+	r := RulesForModel("gpt-6-astra")
+	if r.Provider != "openai" {
+		t.Fatalf(`RulesForModel("gpt-6-astra").Provider = %q, want "openai"`, r.Provider)
+	}
+	if r.TTL != TTLAstra {
+		t.Fatalf(`RulesForModel("gpt-6-astra").TTL = %v, want the Astra TTL %v`, r.TTL, TTLAstra)
+	}
+	if r.MinPrefix != MinPrefixAstra {
+		t.Fatalf(`RulesForModel("gpt-6-astra").MinPrefix = %d, want %d`, r.MinPrefix, MinPrefixAstra)
+	}
+}
+
+// Only the Astra tier is wired. Every other id -- Anthropic's own, an older
+// or different OpenAI tier this build has no published CacheRules for, and
+// every other provider -- falls back to AnthropicRules() exactly as it does
+// today. That is a pre-existing limitation (recorded in docs/ROADMAP.md), not
+// a new claim this change makes for those models, and this test pins it so a
+// future change cannot widen AstraRules() past the tier it was actually read
+// for without this test naming the widening.
+func TestRulesForModel_FallsBackToAnthropicForEverythingElse(t *testing.T) {
+	for _, m := range []string{"claude-opus-5", "gpt-5.6-terra", "gpt-5.4", "deepseek-chat", "gemini-2.5-pro", ""} {
+		if got, want := RulesForModel(m).Provider, "anthropic"; got != want {
+			t.Errorf("RulesForModel(%q).Provider = %q, want %q (unchanged fallback)", m, got, want)
+		}
+	}
+}
+
+// The actual production defect, reproduced directly: a 20 minute idle gap
+// expires an Anthropic 5-minute entry and must not expire a 30-minute Astra
+// one, through the SAME function every production call site now uses.
+func TestClassifyBreakForModel_AstraTierUsesAstraTTLNotAnthropics(t *testing.T) {
+	prev := transcript.Usage{Input: 4000, CacheCreation: 4000}
+	cur := transcript.Usage{Input: 100, CacheRead: 4000}
+
+	cause, ok := ClassifyBreakForModel(prev, cur, "gpt-6-astra", "gpt-6-astra", 20*time.Minute)
+	if ok && cause == CauseTTLExpired {
+		t.Fatal("ClassifyBreakForModel reported a 20m Astra gap as TTL expiry; it is still applying Anthropic's 5m rule to an Astra request")
+	}
+
+	// 40 minutes: Astra's own 30 minute TTL is actually exceeded now.
+	cur2 := transcript.Usage{Input: 4000}
+	cause2, ok2 := ClassifyBreakForModel(prev, cur2, "gpt-6-astra", "gpt-6-astra", 40*time.Minute)
+	if !ok2 || cause2 != CauseTTLExpired {
+		t.Fatalf("ClassifyBreakForModel(gpt-6-astra, 40m) = (%q, %v), want TTL expiry under Astra's own 30m TTL", cause2, ok2)
+	}
+}
+
+// Regression: an Anthropic request through the new function must classify
+// exactly as it did through the old one. The production call sites are being
+// switched over; Anthropic traffic, which is everything measured so far, must
+// not move.
+func TestClassifyBreakForModel_AnthropicTierIsUnchanged(t *testing.T) {
+	prev := transcript.Usage{Input: 4000, CacheCreation: 4000}
+	cur := transcript.Usage{Input: 100, CacheRead: 4000}
+
+	got, gotOK := ClassifyBreakForModel(prev, cur, "claude-opus-5", "claude-opus-5", 20*time.Minute)
+	want, wantOK := ClassifyBreak(prev, cur, "claude-opus-5", "claude-opus-5", 20*time.Minute)
+	if got != want || gotOK != wantOK {
+		t.Fatalf("ClassifyBreakForModel(claude-opus-5) = (%q, %v), want the same answer as ClassifyBreak: (%q, %v)", got, gotOK, want, wantOK)
+	}
+	if !gotOK || got != CauseTTLExpired {
+		t.Fatalf("claude-opus-5 at a 20m gap = (%q, %v), want TTL expiry (Anthropic's 5m default)", got, gotOK)
+	}
+}
+
+// The human-readable detail line a caller builds for CauseTTLExpired has to
+// name the TTL that was actually exceeded, not Anthropic's, when the entry
+// was Astra's.
+func TestTTLForModel_ReportsAstraNotAnthropicTTL(t *testing.T) {
+	if got := TTLForModel("gpt-6-astra", transcript.Usage{}); got != TTLAstra {
+		t.Fatalf("TTLForModel(gpt-6-astra) = %v, want the Astra TTL %v", got, TTLAstra)
+	}
+	// Anthropic path unchanged: still reads the write's own TTL split.
+	hourWrite := transcript.Usage{CacheCreation: 4000, Create1h: 4000}
+	if got := TTLForModel("claude-opus-5", hourWrite); got != TTLLong {
+		t.Fatalf("TTLForModel(claude-opus-5, hour-write) = %v, want %v", got, TTLLong)
+	}
+}

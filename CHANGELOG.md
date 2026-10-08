@@ -6,6 +6,31 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **`AstraRules()` had zero non-test callers: an Astra-tier request's cache
+  break was always classified under Anthropic's terms.** Confirmed 2026-10-08
+  by a repository-wide search and independently by an unblock panel before
+  it: OpenAI's own published GPT-6 Astra-tier `CacheRules` (landed 2026-09-15,
+  `internal/cachemodel/openai.go`) were typed and mutation-tested and never
+  selected at runtime by anything outside this package's own tests.
+  `cachemodel.RulesForModel` and `ClassifyBreakForModel` (new) now dispatch
+  to `AstraRules()` for any model id containing `gpt-6-astra`; all three
+  production call sites that classify a cache break --
+  `internal/proxy/state.go` (the live proxy), `internal/analysis/diff.go`
+  (the offline diff), and `cmd/replay/costusage.go` (the usage-export cost
+  path) -- now call the new function instead of the Anthropic-pinned
+  `ClassifyBreak`. Proven RED/GREEN at the unit level
+  (`internal/cachemodel/openai_test.go`) and against the live proxy's own
+  classification method directly, reverting the wiring and watching it fail
+  for the predicted reason before re-applying it
+  (`internal/proxy/breakcauseprovider_test.go`). Every existing test in both
+  packages, and the full module suite under `-race`, stays green.
+  **Still open, not closed by this:** the MinPrefix floor is not reachable
+  from any of the three call sites (none carries the current request's
+  visible prefix size at the point of classification), and **no calibration
+  against real OpenAI traffic has been performed** -- checked explicitly,
+  2026-10-08: no `OPENAI_API_KEY`, no billing-linked account, and no other
+  mechanism for real, billable OpenAI traffic exists in this environment.
+  Evidence and the corrected gate status: RELEASE-CRITERIA.md, docs/ROADMAP.md.
 - **README.md still offered the forensic week ADR-0028 withdrew, and called
   itself "Replay Doctor" in its own lead sentence.** Independent
   re-verification of REPLAY-GTM-02 found the $22,000/$18,000-$25,000

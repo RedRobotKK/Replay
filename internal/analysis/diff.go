@@ -64,11 +64,11 @@ func classify(t Turn, fit TokenFit) Break {
 		return b
 	}
 
-	if cause, ok := cachemodel.ClassifyBreak(prev.Usage, cur.Usage, prev.Model, cur.Model, t.Gap); ok {
+	if cause, ok := cachemodel.ClassifyBreakForModel(prev.Usage, cur.Usage, prev.Model, cur.Model, t.Gap); ok {
 		b.Cause = cause
 		switch cause {
 		case cachemodel.CauseTTLExpired:
-			b.Detail = fmt.Sprintf("gap %s exceeds TTL %s", t.Gap.Round(time.Second), cachemodel.TTLOf(prev.Usage))
+			b.Detail = fmt.Sprintf("gap %s exceeds TTL %s", t.Gap.Round(time.Second), cachemodel.TTLForModel(prev.Model, prev.Usage))
 		case cachemodel.CauseModelChanged:
 			b.Detail = fmt.Sprintf("%s -> %s", prev.Model, cur.Model)
 		default:

@@ -194,7 +194,7 @@ func priceUsage(e *usage.Export) (usageReport, []usageRow) {
 			if priced {
 				sRebilled += float64(d) / 1_000_000 * price.InputPerMTok
 			}
-			if cause, ok := cachemodel.ClassifyBreak(prev.ToAnthropic(), u, prev.Model, r.Model, r.At.Sub(prev.At)); ok {
+			if cause, ok := cachemodel.ClassifyBreakForModel(prev.ToAnthropic(), u, prev.Model, r.Model, r.At.Sub(prev.At)); ok {
 				rep.Causes[string(cause)]++
 			} else {
 				unexplained++

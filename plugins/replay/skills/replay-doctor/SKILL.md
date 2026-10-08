@@ -3,9 +3,9 @@ name: replay-doctor
 description: Find the turn a prompt cache broke on, its cause, and the tokens re-billed, from the transcripts already on this machine. Use when the user asks why agent spend went up, what a session cost, whether a cache broke, what filled the context, or whether switching models would be cheaper.
 ---
 
-# Replay Doctor
+# Replay
 
-Replay reads the transcripts Claude Code and Codex already keep on disk and replays each turn against the provider's caching rules. Everything runs locally. The binary makes no network request except four commands the user types (`rules --check-prices`, `probe --execute`, `upgrade`, `rules --update`).
+Replay reads the transcripts Claude Code and Codex already keep on disk and replays each turn against the provider's caching rules. Everything runs locally. The binary makes no network request except four commands the user types (`rules --check-prices`, `probe --execute`, `upgrade`, `rules --update`). (Published to npm and at replay.doctor under the name "Replay Doctor" -- same binary, same repository; this skill's own name is Replay.)
 
 ## First, check what is here
 

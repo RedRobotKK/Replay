@@ -1,6 +1,7 @@
 package cachemodel
 
 import (
+	"strings"
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/transcript"
@@ -116,6 +117,71 @@ func AstraRules() CacheRules {
 		// report, and it is why this flag is not simply inherited.
 		EffortChangeBreaks: false,
 	}
+}
+
+// astraModelSubstring identifies OpenAI's GPT-6 Astra tier by model id.
+//
+// AstraRules() describes ONLY this tier, read from OpenAI's prompt-caching
+// guide on 2026-09-15. A different OpenAI tier -- gpt-5.6-terra, gpt-5.4,
+// gpt-5.4-mini, named in docs/rules/openai-2026-09-15.json -- is not Astra,
+// and this package has no evidence its TTL, floor or effort-change behaviour
+// match. Routing those ids to AstraRules() would widen the claim past what
+// was actually read. They fall back to AnthropicRules() through
+// RulesForModel below, exactly as every non-Anthropic id already did before
+// this file existed. That fallback is a pre-existing limitation this change
+// does not touch, not a new claim made for those tiers.
+const astraModelSubstring = "gpt-6-astra"
+
+// RulesForModel selects the published CacheRules for a model id.
+//
+// This is the dispatch AstraRules() was missing. Confirmed 2026-10-08, by a
+// repository-wide search and independently by an unblock panel before it:
+// nothing outside this package's own tests selected AstraRules(), so an
+// Astra-tier request's cache break was always classified under Anthropic's
+// terms. ClassifyBreakForModel, which every production caller of
+// ClassifyBreak now calls instead of ClassifyBreak itself, calls this.
+//
+// Matching is a substring test on the lowercased id, the same mechanism
+// anthropicFamilies (anthropic.go) and the dated rules document's ModelRule.Match
+// already use, so a reviewer checking this against either does not learn a
+// third convention.
+func RulesForModel(model string) CacheRules {
+	if strings.Contains(strings.ToLower(model), astraModelSubstring) {
+		return AstraRules()
+	}
+	return AnthropicRules()
+}
+
+// ClassifyBreakForModel is ClassifyBreakWith under the ruleset the
+// predecessor's own model id selects, rather than ClassifyBreak's permanent
+// Anthropic pin.
+//
+// prevModel, not model, decides the ruleset: the TTL and floor under test
+// describe the cache entry prevModel's request wrote, and that is the
+// provider whose published numbers answer "did it survive." A changed model
+// is still its own cause (CauseModelChanged, inside ClassifyBreakWith),
+// unaffected by which ruleset supplied the TTL compared against first.
+//
+// prefixTokens is passed as 0, exactly as ClassifyBreak already does: none
+// of this function's three production callers (internal/proxy/state.go,
+// internal/analysis/diff.go, cmd/replay/costusage.go) know the current
+// request's visible prefix size at this point, and ClassifyBreakWith's own
+// contract is to skip the floor test rather than guess when it is not known.
+// Astra's MinPrefix floor is therefore not yet reachable from those three
+// call sites; that is an existing gap this change does not close, and it
+// stays recorded in docs/ROADMAP.md rather than claimed shut here.
+func ClassifyBreakForModel(prev, cur transcript.Usage, prevModel, model string, gap time.Duration) (BreakCause, bool) {
+	return ClassifyBreakWith(RulesForModel(prevModel), prev, cur, prevModel, model, gap, 0)
+}
+
+// TTLForModel is the TTL a gap for this model's cache entry must be measured
+// against, for a caller building a human-readable detail string. It is
+// RulesForModel's TTL, evaluated against the usage that wrote the entry:
+// for Anthropic that depends on which of its two durations the write bought
+// (see TTLOf in anthropic.go), and for Astra it is the single published 30
+// minutes, which TTLFrom being nil already encodes.
+func TTLForModel(model string, u transcript.Usage) time.Duration {
+	return RulesForModel(model).ttlFor(u)
 }
 
 // CauseBelowMinPrefix joins the BreakCause vocabulary declared in anthropic.go.
