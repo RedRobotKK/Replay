@@ -86,6 +86,20 @@ Four gates in [`../RELEASE-CRITERIA.md`](../RELEASE-CRITERIA.md) are unmet. The
 releases below are the order they come off in, chosen by what unblocks what
 rather than by what is easiest.
 
+**Stale as of 2026-09-15, corrected 2026-10-07, not deleted.** All four of
+those gates (the vault key boundary, the OpenAI-compatible path, Windows, and
+the measurement rule) were closed by RELEASE-CRITERIA.md's own 2026-09-13
+update, two days before this paragraph's last edit (2810867) left it unchanged.
+That file's own words: "Every gate below is closed, and this is still not a
+1.0." The sentence below about three items the maintainer cannot close
+alone is the part of this section that is still accurate; the releases
+staged under it (v0.7 through v0.9) were sequenced against the four stale
+gates and have mostly already happened out of that order (Windows, the OpenAI
+label, and the vault TTL all shipped by 2026-09-13; multi-tenant spend
+accounting shipped 2026-10-07 under ADR-0028, not as a v0.8 "only if a user
+asks" item). The releases map below is kept as a historical record of the
+sequencing decision, not as a live plan.
+
 **These are gates, not dates.** Two of the remaining four depend on people who
 are not the maintainer: a security reviewer with a calendar, and contributors
 who do not exist until the launch produces them. Putting a date on either would
@@ -181,10 +195,30 @@ one account, one operator, and the roadmap has said so in every spike row since
 - **Caching rules for a second provider**, which 1.0 has required since this file
   was written. It needs published provider rules and a calibration corpus for
   them, so it starts here and lands when it calibrates.
-- **Multi-tenant spend accounting (SP-5, SP-6, SP-8)** only if a user asks. All
-  three are specified, unbuilt, and gated on ADR-0015 because every piece of
-  shared mutable state is scoped to one human today. Recorded here so that
-  building them stays a decision rather than drift.
+  **Partially closed, 2026-09-15 (#310), not landed.** `internal/cachemodel`
+  stopped applying Anthropic's TTL, floor and effort rules to every provider;
+  OpenAI's own published Astra-tier rules now exist as a typed, mutation-tested
+  `CacheRules` value (`internal/cachemodel/openai.go`, `AstraRules()`). That
+  commit's own words are the accurate status and still are: "nothing yet
+  selects `AstraRules()` at runtime... no dated rules document carries Astra
+  prices... every number here is read from OpenAI's published guide... and
+  none of it has been replayed against real traffic." Confirmed still true on
+  a repository-wide search: no non-test caller selects `AstraRules()`. The gate
+  is published rules **and** a calibration corpus; only the first half exists.
+- **Multi-tenant spend accounting (SP-5, SP-6, SP-8)**. This paragraph is
+  stale and kept rather than silently deleted, in the same spirit as the
+  correction above: it said "only if a user asks... specified, unbuilt, and
+  gated on ADR-0015" when written. **ADR-0028 (2026-10-03) amended ADR-0015**,
+  naming the tenant dimension "the first engineering unit" of the hosted
+  service rather than a reason to defer it, and SP-5, SP-6 and SP-8 are now
+  built: `internal/tenancy` resolves a tenant at the proxy boundary before any
+  guard runs (`internal/proxy/passthrough.go`), `SpendGuard`'s accumulators are
+  keyed by tenant (`internal/proxy/guards.go`), and eviction no longer
+  discards a tenant's accounting. SP-9 and SP-10 followed the same day,
+  scoping the session table and the persisted policy pin store to the tenant
+  as well. See `docs/design/UNWIRED-LOG.md` #18 and `docs/requirements.md`'s
+  SP-5 through SP-10 rows for the evidence; this roadmap line asked a question
+  ADR-0028 has since answered, and is left here as the record of that.
 
 **Gate:** the pool holds corpora from more than one operator, and the figures on
 the website say how many; Windows is resolved in one direction or the other.
