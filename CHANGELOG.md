@@ -180,6 +180,25 @@ All notable changes to this project are documented here. The format follows [Kee
   the decision of the twelve-role panel recorded in
   `docs/evidence/compaction-panel-2026-10-05.md`. Frozen as M139.
 
+### Added
+
+- **A naming recommendation, not a decision.** Prior passes identified that
+  "Replay" (GitHub, `go install`, the CLI binary, CITATION.cff) and "Replay
+  Doctor" (npm, PyPI, the replay.doctor domain) are both live, genuine
+  product names and declined to recommend one. This pass does:
+  `docs/evidence/naming-comparison-2026-10-08.md` compares both across nine
+  checked surfaces and recommends keeping the existing split (code identity
+  "Replay," distribution identity "Replay Doctor") rather than consolidating,
+  because renaming the already-published npm and PyPI packages is costlier
+  and less reversible than a repository/binary rename would be. Nothing is
+  renamed; the owner approval this would require was not sought.
+- **Realistic external-review commissioning options, named.**
+  `docs/evidence/security-review-scope-2026-10-08.md` gained a section
+  listing the realistic categories of external security reviewer (boutique
+  firms, OSS-focused audit funds, independent researchers, scoped bug
+  bounties) and the concrete steps to commission one, without naming a
+  vendor, requesting a quote, or spending anything.
+
 ## [0.8.0] - 2026-10-05
 
 ### Added

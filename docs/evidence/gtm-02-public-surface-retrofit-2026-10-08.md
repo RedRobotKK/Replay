@@ -92,6 +92,15 @@ strategic decision (SEO, the already-published npm package, the already-live
 domain, the GitHub org name) and is recorded here as a decision this
 repository's own evidence cannot make for him, not as a defect.
 
+**Updated 2026-10-08, later the same day:** asked for an actual
+recommendation rather than a declined one, see
+[`naming-comparison-2026-10-08.md`](naming-comparison-2026-10-08.md) for the
+full comparison and recommendation (code identity stays "Replay",
+distribution identity stays "Replay Doctor," given the migration-cost
+asymmetry of renaming three already-published package registry entries
+versus the repository and binary name). Still not a decision; still
+Daniel's to make.
+
 ## 3. The headline figures: provenance traced, not reconciled
 
 The public figures on replay.doctor and redrobot.jp/replay, re-read live on

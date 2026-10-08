@@ -147,7 +147,64 @@ exist:
    report, replacing (not deleting — this project does not delete frozen
    evidence) the current "Not commissioned" status with the new one.
 
-## 7. What this environment can and cannot do about it
+## 7. Realistic external review options, and the commissioning steps
+
+Not a recommendation of any named vendor, and not a quote: this environment
+has no mechanism to request one and no budget authorization exists at any
+amount (see RELEASE-CRITERIA.md and the standing operating constraint that
+no spend or paid commitment happens without Daniel's explicit, same-turn
+approval first). What follows is the category map and the steps, so that
+when Daniel decides to commission one, the lead time is spent choosing
+between real options rather than discovering what the options are.
+
+**Realistic categories, in rough order of cost and lead time:**
+
+1. **Boutique application-security firms that publish Go/CLI audits
+   publicly** (the kind that already appear in other open-source projects'
+   `SECURITY.md` or audit pages). Highest cost, longest lead time (the
+   RELEASE-CRITERIA.md table's own "weeks" estimate), but the clearest fit
+   for section 5's brief and the easiest to show as unambiguously
+   independent.
+2. **Open-source-focused audit programs** that specifically fund or
+   subsidize security review for OSS projects (the category the Open
+   Source Technology Improvement Fund and OpenSSF's own audit program
+   occupy). Lower or no direct cost to the project, but an application and
+   selection process with its own lead time and no guarantee of
+   acceptance; worth checking Replay's eligibility (OSS, public repository,
+   real users) before ruling it out on cost grounds.
+3. **Independent security researchers engaged directly** (a named
+   individual with a public audit track record, not an anonymous
+   marketplace listing). Faster and cheaper than a firm engagement, but the
+   independence bar in section 6.2 above still applies: the researcher must
+   have no prior relationship with Daniel Saito or RedRobot K.K., and the
+   engagement and its payment should be documented so that fact is
+   checkable later, not asserted.
+4. **A structured bug-bounty scoped narrowly to this brief** (not a
+   general-purpose bounty program), run on a platform with its own
+   reputation and payout escrow. Weakest fit: bounties reward finding
+   specific bugs, not the "tested and found nothing" negative result
+   section 6.3 asks for, so this option would need an explicit
+   deliverable (a closing report) negotiated on top of the platform's
+   default terms to satisfy the gate at all.
+
+**Commissioning steps, once Daniel selects a category:**
+
+1. Send section 5's brief as written (or narrowed, never broadened without
+   re-reviewing scope) to the selected reviewer or program.
+2. Get a written scope, price, and timeline back before any commitment;
+   stop and get Daniel's explicit approval before accepting one, per the
+   standing no-spend constraint.
+3. Confirm independence per section 6.2 in writing before work starts, not
+   after the report lands.
+4. Hold the reviewer to section 6's five criteria as the acceptance test
+   for the deliverable, not as a description written after the fact.
+5. Link the published report from RELEASE-CRITERIA.md's Security row
+   exactly as section 6.5 describes, replacing "Not commissioned" with the
+   new state without deleting the old line's history (this project's
+   evidence is corrected in place with its prior state visible, never
+   silently overwritten).
+
+## 8. What this environment can and cannot do about it
 
 This is a non-interactive coding session with no mechanism to contact,
 engage, pay, or receive a report from a third party. It can prepare exactly
