@@ -16,8 +16,10 @@ not why.
 
 ## The objection
 
-An external reviewer read the classifier and put it this way: a break is
-labelled a client re-render when the actual cache read lands within about 10%
+`docs/design/benefit-gap-analysis.md` -- the maintainer's own earlier design
+review, single-authored like this file, not an external pass -- read the
+classifier and put it this way: a break is labelled a client re-render when
+the actual cache read lands within about 10%
 of an estimated "unseen prefix" size; that estimate comes from a byte-to-token
 fit whose published error on large lanes runs ±29% to ±170%; therefore a ±10%
 band around a coarse estimate will absorb other causes, and
@@ -209,7 +211,7 @@ the corpus where the band's width is doing recognisable work.
 
 **One break in the corpus is both decided by the band and resting on a fitted
 estimate. It carries 4,045 tokens: 0.010% of everything re-billed.** That is
-the entire surface on which the reviewer's mechanism operates.
+the entire surface on which the objection's mechanism operates.
 
 ## The headline did move, and this is not the reason
 
@@ -233,8 +235,8 @@ two causes**, the same limit
 every band from 0% to ∞ the 2026-09-11 re-render share stays inside
 40.9%–49.0%, and 50.8% is outside that range at every one of them.
 
-A third reading exists and is further out still: the same design review reports
-**77.8% / 6.2%** from its own corpus run. Three readings of one classifier give
+A third reading exists and is further out still: the same self-authored
+design review reports **77.8% / 6.2%** from its own corpus run. Three readings of one classifier give
 50.8%, 42.4% and 77.8% for this share. The dispersion is between corpora, not
 between tolerances — which is what
 [break-causes](break-causes-2026-09-06.md)' own limits section predicted, in

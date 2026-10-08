@@ -102,9 +102,11 @@ client re-render and **42.6%** for TTL expiry. The corpus grew by 310
 transcripts and the engine took 234 commits between the two readings, and the
 re-run cannot separate those. The table above is its reading on its date.
 
-One thing the re-run does settle. An external reviewer put it that the
-classification rests on a ±10% band around a coarse byte-to-token estimate, so
-the headline is a story about a tolerance constant. Swept from 0% to infinity,
+One thing the re-run does settle. `docs/design/benefit-gap-analysis.md` --
+the maintainer's own earlier design review, single-authored like this file,
+not an external pass -- put the objection this way: the classification rests
+on a ±10% band around a coarse byte-to-token estimate, so the headline is a
+story about a tolerance constant. Swept from 0% to infinity,
 the re-render share moves 8.1 points in total and the shipped 10% sits 1.5
 points into that range; 589 of 597 classifications land on exact integer
 equality between two provider-reported numbers. **The tolerance is not why the
