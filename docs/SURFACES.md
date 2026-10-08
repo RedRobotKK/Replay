@@ -98,8 +98,17 @@ one line naming `replay upgrade`, and reaches nothing to do so.
 **`HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY` silently redirect every upstream request.** The transport
 is built with `Proxy: http.ProxyFromEnvironment` (`internal/proxy/server.go:170`), which reads all six
 spellings of those variables. **No Replay flag mentions this and nothing in the code or docs did until
-now.** An independent reviewer demonstrated it: with `HTTPS_PROXY` set to an unreachable host, a
+now.** Demonstrated directly: with `HTTPS_PROXY` set to an unreachable host, a
 request to `api.anthropic.com` failed at `proxyconnect tcp` and never reached the provider.
+**Provenance, corrected 2026-10-08:** the commit that added this section (`b1d04c0`, 2026-09-04)
+called this an "independent pass" and "an independent reviewer." `git log --format='%an %ae'`
+on that commit shows a single author, Daniel Saito, with no second-party identity anywhere in
+its history — the same pattern independently found and corrected in
+[`docs/evidence/security-review-scope-2026-10-08.md`](evidence/security-review-scope-2026-10-08.md)
+for `docs/evidence/security-review-2026-09-04.md`'s own "An external reviewer" opening line. The
+technical finding above is real and unchanged; what is corrected is who found it. This was not a
+review by anyone other than the maintainer, and is not evidence toward
+[RELEASE-CRITERIA.md](../RELEASE-CRITERIA.md)'s external-security-review gate.
 
 **Two consequences worth stating plainly.** For an `https://` upstream the intermediary sees CONNECT
 metadata only. But **if `REPLAY_UPSTREAM` is `http://`, the full request and its credential headers go
@@ -289,7 +298,12 @@ error as the Grok cell above, found twice in one day.
 
 ---
 
-## Weaknesses found by the independent pass, not yet fixed
+## Weaknesses found by self-review, not yet fixed
+
+Labelled "the independent pass" until 2026-10-08; corrected for the same reason as the
+`HTTPS_PROXY` finding above — `b1d04c0` is a single-author commit with no second-party
+reviewer, so these are the maintainer's own findings against his own document, not an
+independent review.
 
 - **`replay_rehydrated_total{destination=…}` and the denied counter carry model-supplied tool names**
   on `/replay/metrics`, which is unauthenticated unless `--token` is set. **Same tool-name disclosure

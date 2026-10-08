@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **A second self-authored finding wore an "independent reviewer" label.**
+  `docs/evidence/security-review-scope-2026-10-08.md` already corrected
+  `docs/evidence/security-review-2026-09-04.md`'s "An external reviewer"
+  opening line by checking `git log --follow --diff-filter=A` and finding
+  only Daniel Saito in its history. The same check, run against
+  `docs/SURFACES.md`'s `HTTPS_PROXY` finding and its "Weaknesses found by
+  the independent pass" section, found the same pattern one commit earlier
+  (`b1d04c0`, 2026-09-04): a single-author commit calling itself "an
+  independent reviewer" and "the independent pass." Both phrases are
+  corrected to say what actually happened (the maintainer's own adversarial
+  pass against his own document); the technical findings themselves are
+  unchanged and still accurate. Separately, `docs/requirements.md`'s
+  disclosure section said an external security review "is scheduled" and
+  would be published under `docs/internal/reviews/`, a path that does not
+  exist in this tree; nothing is scheduled (RELEASE-CRITERIA.md: "Not
+  commissioned"), so the sentence is corrected to say that and to point at
+  the real gate and the prepared reviewer brief. No test pinned either
+  string; verified by `go build ./...`, `go vet ./...` and
+  `go test ./... -count=1` staying green, and by checking for (and finding
+  none) markdown links anchored to the renamed heading.
 - **`AstraRules()` had zero non-test callers: an Astra-tier request's cache
   break was always classified under Anthropic's terms.** Confirmed 2026-10-08
   by a repository-wide search and independently by an unblock panel before

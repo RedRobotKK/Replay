@@ -378,7 +378,7 @@ Stores or logs credentials. Sends anything anywhere except the provider request 
 
 ### 10.4 Disclosure
 
-Coordinated disclosure per `SECURITY.md`. An external security review is scheduled before the first 1.0 release and its report is published in `docs/internal/reviews/`.
+Coordinated disclosure per `SECURITY.md`. An external security review is required before the first 1.0 release, not yet commissioned as of 2026-10-08 (no third party has been engaged; see [RELEASE-CRITERIA.md](../RELEASE-CRITERIA.md) and [docs/evidence/security-review-scope-2026-10-08.md](evidence/security-review-scope-2026-10-08.md) for the prepared scope and reviewer brief). Its report, once published, is linked from RELEASE-CRITERIA.md rather than filed under `docs/internal/reviews/`, a path that does not exist in this tree.
 
 ## 11. Privacy and data handling
 
