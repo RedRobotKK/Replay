@@ -33,11 +33,12 @@ type simResult struct {
 		MaxDayUSD     float64 `json:"maxDayUsd"`
 	} `json:"policy"`
 	Population struct {
-		Requests            int `json:"requests"`
-		Sessions            int `json:"sessions"`
-		HistoricallyRefused int `json:"historicallyRefused"`
-		WithoutUsage        int `json:"withoutUsage"`
-		Unpriced            int `json:"unpriced"`
+		Requests                int `json:"requests"`
+		Sessions                int `json:"sessions"`
+		HistoricallyRefused     int `json:"historicallyRefused"`
+		TenantAttributedHistory int `json:"tenantAttributedHistory"`
+		WithoutUsage            int `json:"withoutUsage"`
+		Unpriced                int `json:"unpriced"`
 	} `json:"population"`
 	Summary struct {
 		Admitted         int     `json:"admitted"`
@@ -411,5 +412,74 @@ func TestSimulate_ReplaysInTimestampOrderRegardlessOfFileOrder(t *testing.T) {
 		if d.Simulated != "refused" {
 			t.Errorf("%s after the day cap was reached is %q", d.RequestID, d.Simulated)
 		}
+	}
+}
+
+// Test 12: a ledger that has already seen tenant-scoped traffic says so,
+// because this command still pools every tenant into one local bucket.
+//
+// SP-6 scopes SpendGuard's caps per tenant in production. This command
+// replays every record under tenancy.LocalTenant regardless, which is the
+// right behaviour for a genuinely single-operator ledger: an ordinary,
+// admitted record carries no tenant field at all, only a refusal record
+// does, and only since SP-7 (ledger.Record.TenantID's own doc comment:
+// "Set only by the refusal path today"). But nothing told a reader when
+// that pooling might stop matching production. A ledger that has already
+// recorded one tenant-attributed refusal is exactly the ledger where a
+// pooled replay and a per-tenant production guard can disagree, and the
+// report said nothing about it.
+func TestSimulate_DisclosesTenantAttributedHistory(t *testing.T) {
+	home := t.TempDir()
+	isolateHome(t, home)
+	dir := filepath.Join(home, "ledger")
+	e2eLedger(t, dir)
+	rec := ledger.Record{Schema: ledger.SchemaVersion, Timestamp: time.Date(2026, 10, 2, 12, 5, 0, 0, time.UTC),
+		SessionID: "tenant-session", Path: "/v1/messages", Status: 400, Refusal: "spend_cap",
+		RefusalReason:  "day spend cap reached for tenant acme-co: $1.00 of $1.00 at list price",
+		TenantID:       "acme-co",
+		RequestSummary: ledger.RequestSummary{Model: "claude-opus-5"}}
+	b, _ := json.Marshal(rec)
+	if err := os.WriteFile(filepath.Join(dir, "tenant-refused.jsonl"), append(b, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	policy := writePolicy(t, dir, `{"maxSessionUsd": 1000}`)
+	r, _, err := simulateJSON(t, policy, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Population.TenantAttributedHistory != 1 {
+		t.Errorf("tenant-attributed history = %d, want 1: the ledger carries one refusal naming tenant %q",
+			r.Population.TenantAttributedHistory, "acme-co")
+	}
+	if r.Population.HistoricallyRefused != 1 {
+		t.Errorf("historically refused = %d, want 1", r.Population.HistoricallyRefused)
+	}
+
+	human, _, err := e2e(t, "simulate", "--policy", policy, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustContain(t, "simulate human", human, "tenant")
+
+	// The negative: an ordinary refusal that names no tenant (simLedger's
+	// fixture, every pre-SP-7 record, every solo install) must not trip the
+	// disclosure. Catches a guard broadened to count every refusal rather
+	// than only a tenant-named one.
+	_, plainDir := simLedger(t)
+	plain, _, err := simulateJSON(t, writePolicy(t, plainDir, `{"maxSessionUsd": 1000}`), plainDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain.Population.TenantAttributedHistory != 0 {
+		t.Errorf("tenant-attributed history = %d on a ledger whose one refusal names no tenant; want 0",
+			plain.Population.TenantAttributedHistory)
+	}
+	plainHuman, _, err := e2e(t, "simulate", "--policy", filepath.Join(plainDir, "policy.json"), plainDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(plainHuman, "named a tenant") {
+		t.Errorf("the tenant disclosure fired on a ledger with no tenant-attributed history:\n%s", plainHuman)
 	}
 }

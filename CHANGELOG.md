@@ -16,6 +16,19 @@ All notable changes to this project are documented here. The format follows [Kee
   mutation-ID assigned this entry; verified by RED/GREEN tests
   (`TestSP7_DayCapNamesTheTenantOnceSP5Lands` and siblings in
   `internal/proxy`) rather than a hand-mutation sweep.
+- **`replay simulate` pooled a tenant-scoped ledger into one bucket and said
+  nothing about it.** SP-6 scopes the production spend guard's caps per
+  tenant; `simulate` still replays every record under `tenancy.LocalTenant`,
+  which is correct for a genuinely single-operator ledger and silently
+  wrong for one that has already seen named-tenant traffic. An ordinary,
+  admitted record carries no tenant field to replay under in the first
+  place, but a historically-refused one has carried `TenantID` since SP-7.
+  The report now counts those (`Population.TenantAttributedHistory`) and
+  says, in both the JSON and the human report, that a positive count means
+  this simulation may not match what a per-tenant guard would have done.
+  No mutation-ID assigned this entry; verified by RED/GREEN tests
+  (`TestSimulate_DisclosesTenantAttributedHistory`) and two hand-mutations
+  (removed, then broadened) rather than a hand-mutation sweep.
 - **`replay purge --older-than` acted on any directory it was given.** It
   removed every `.jsonl` older than the window wherever it was pointed;
   pointed at `~/.replay` itself it took `measurements.jsonl` and

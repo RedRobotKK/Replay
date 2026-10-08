@@ -111,9 +111,21 @@ type simulateReport struct {
 		Requests            int `json:"requests"`
 		Sessions            int `json:"sessions"`
 		HistoricallyRefused int `json:"historicallyRefused"`
-		WithoutUsage        int `json:"withoutUsage"`
-		Unpriced            int `json:"unpriced"`
-		Unreadable          int `json:"unreadable"`
+		// TenantAttributedHistory counts historically-refused records that
+		// name a tenant other than the local default. An ordinary, admitted
+		// record carries no tenant field at all - only a refusal record
+		// does, and only since SP-7 (ledger.Record.TenantID's own doc
+		// comment: "Set only by the refusal path today") - so this is the
+		// only signal this command has that the ledger it is replaying ever
+		// saw non-local-tenant traffic. SP-6 scopes the production guard's
+		// caps per tenant; the loop below still pools every record into one
+		// tenancy.LocalTenant bucket regardless, so a positive count here
+		// names exactly the ledger where that pooling can disagree with
+		// what a per-tenant guard would have done.
+		TenantAttributedHistory int `json:"tenantAttributedHistory"`
+		WithoutUsage            int `json:"withoutUsage"`
+		Unpriced                int `json:"unpriced"`
+		Unreadable              int `json:"unreadable"`
 	} `json:"population"`
 	Summary struct {
 		Admitted         int     `json:"admitted"`
@@ -183,6 +195,9 @@ func runSimulate(args []string, stdout, stderr io.Writer) error {
 				switch {
 				case rec.Refusal != "":
 					rep.Population.HistoricallyRefused++
+					if rec.TenantID != "" {
+						rep.Population.TenantAttributedHistory++
+					}
 				case rec.Response.Usage == nil:
 					rep.Population.WithoutUsage++
 				default:
@@ -219,14 +234,18 @@ func runSimulate(args []string, stdout, stderr io.Writer) error {
 		sessions[m.rec.SessionID] = true
 		d := simulateDecision{Session: m.rec.SessionID, RequestID: m.rec.RequestID, TS: m.rec.Timestamp.UTC().Format(time.RFC3339Nano),
 			Model: m.rec.Model, ListUSD: m.usd, UpperBound: m.ub}
-		// SP-6 scopes the guard's caps per tenant, but the ledger this tool
-		// replays carries no tenant field (SP-5/SP-6 deliberately did not
-		// add one; see the build note) and every record in it was produced
-		// by a local, single-operator ledger directory in the first place.
-		// That is exactly tenancy.LocalTenant by construction
-		// (tenancy.ResolveTenant("")), so replaying every record under it
+		// SP-6 scopes the guard's caps per tenant, but an ordinary, admitted
+		// record carries no tenant field at all - only a refusal record
+		// does, and only since SP-7 - so this tool has no per-request
+		// tenant to replay under even when one exists. Pooling every
+		// record under tenancy.LocalTenant (tenancy.ResolveTenant(""))
 		// reproduces this tool's existing, pre-tenancy behaviour exactly
-		// rather than guessing at a tenant split the ledger does not record.
+		// for a genuinely single-operator ledger, rather than guessing at
+		// a tenant split the ledger does not record. rep.Population.TenantAttributedHistory,
+		// above, is the disclosure for when that assumption is live: a
+		// ledger that has already recorded a tenant-attributed refusal is
+		// exactly the ledger where this pooling and a real per-tenant
+		// guard can disagree.
 		if reason := guard.Check(tenancy.LocalTenant, m.rec.SessionID); reason != "" {
 			d.Simulated, d.Reason = "refused", reason
 			rep.Summary.Refused++
@@ -279,6 +298,10 @@ func writeSimulateReport(w io.Writer, rep simulateReport) error {
 	p("  not replayed: %d refused by the proxy at the time (their usage was never observed),\n", rep.Population.HistoricallyRefused)
 	p("  %d without usage, %d unreadable file(s). %d request(s) ran on a model the price\n", rep.Population.WithoutUsage, rep.Population.Unreadable, rep.Population.Unpriced)
 	p("  table does not carry and are counted at the dearest known rate, as the proxy counts them.\n")
+	if rep.Population.TenantAttributedHistory > 0 {
+		p("  %d of those historical refusals named a tenant (SP-7): this simulation still pools\n", rep.Population.TenantAttributedHistory)
+		p("  every tenant into one bucket, and may not match what a per-tenant guard would do.\n")
+	}
 	first := map[string]bool{}
 	for _, d := range rep.Decisions {
 		if d.Simulated != "refused" || first[d.Session] {
