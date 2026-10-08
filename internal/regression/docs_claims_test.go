@@ -177,3 +177,40 @@ func TestDC3_TheEvidenceImmutabilityPromiseStaysRetracted(t *testing.T) {
 		}
 	}
 }
+
+var tenantHeaderConst = regexp.MustCompile(`HeaderTenantID\s*=\s*"([^"]+)"`)
+
+// DC-4: the inbound tenant header SP-5 added at the proxy boundary is named
+// in docs/SURFACES.md.
+//
+// SP-5 (2026-10-07) made x-replay-tenant-id a live input: unresolved, it
+// refuses the request (400, replay_tenant_unresolved) before any guard runs;
+// resolved, it decides which tenant's spend cap, session table and policy
+// pin the request counts against. docs/requirements.md's SP-5 row documents
+// the mechanism, but docs/SURFACES.md — the page whose own first line's job
+// is "every surface Replay touches" — never named it, even though the page
+// already names other inbound headers by their literal spelling (Origin,
+// Sec-Fetch-Mode, Host) for the same reason this one belongs there: each can
+// change how a request is handled, not just how it is attributed.
+//
+// PASS: the header's own literal spelling, read from the constant that
+// defines it rather than retyped here, appears in docs/SURFACES.md.
+// FAIL: the constant is renamed, or the mention is deleted, and nothing
+// catches it.
+func TestDC4_InboundTenantHeaderIsDocumented(t *testing.T) {
+	server := readDoc(t, "internal/proxy/server.go")
+	m := tenantHeaderConst.FindStringSubmatch(server)
+	if m == nil {
+		t.Fatalf("internal/proxy/server.go no longer defines HeaderTenantID as a string " +
+			"literal; this guard cannot find the header it is supposed to check for")
+	}
+	header := m[1]
+
+	surfaces := readDoc(t, "docs/SURFACES.md")
+	if !strings.Contains(surfaces, header) {
+		t.Errorf("docs/SURFACES.md never names %q, the inbound header SP-5 resolves at the "+
+			"proxy boundary before any guard runs and that can refuse a request outright. "+
+			"That page's own purpose is completeness, and it already names Origin, "+
+			"Sec-Fetch-Mode and Host for the same reason this one belongs there", header)
+	}
+}
