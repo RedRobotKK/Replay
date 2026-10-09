@@ -190,7 +190,13 @@ jobs:
           cache: true
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:
-          version: v2.5
+          # v2.14, not v2.5, since the toolchain moved to go1.27.2 on
+          # 2026-10-09. v2.5 refused the tree outright on that commit's run
+          # ("can't load config: the Go language version (go1.25) used to
+          # build golangci-lint is lower than the targeted Go version
+          # (1.27.2)", job 113897438297), and go1.27 support landed in
+          # v2.13.0. v2.14.0 built with go1.27.2 reports 0 issues locally.
+          version: v2.14
       # The workflows themselves, because a workflow that will not parse fails
       # INVISIBLY: no jobs, no check run, nothing red in the pull request.
       #
@@ -232,9 +238,15 @@ jobs:
       #
       # Pinned, for the reason the release workflow spells out about cosign: an
       # action SHA pins the action, never the tool it fetches.
+      #
+      # v1.8.0, not v1.1.4, since the toolchain moved to go1.27.2 on
+      # 2026-10-09: v1.1.4 panicked inside FetchVulnerabilities on that
+      # commit's run ("panic: unexpected expr: *ast.KeyValueExpr", exit status
+      # 2, job 113897437872) and never reached a verdict. v1.8.0 requires go
+      # 1.26.0 and reports no vulnerabilities on this tree locally.
       - name: Vulnerabilities in reachable code
         run: |
-          go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+          go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
   x402-e2e:
     name: x402 end to end
