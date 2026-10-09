@@ -17,7 +17,7 @@ back to this index.
 
 | Document | What is in it |
 |---|---|
-| [Evidence](evidence/README.md) | The measurements behind the claims in the README: calibration across real sessions, the latency the proxy adds, and an adversarial security review |
+| [Evidence](evidence/README.md) | The measurements behind the claims in the README: calibration across real sessions, the latency the proxy adds, and the maintainer's own security review (self-authored; an external review is not yet commissioned) |
 | [Architecture](architecture/README.md) | How the replay engine and the proxy work, including the wire protocol |
 | [Decisions](adr/README.md) | Why the design is the way it is. One record per decision, never edited after acceptance |
 | [Surfaces](SURFACES.md) | Every file, socket and process Replay touches, each row marked verified, read, or unknown |
@@ -69,7 +69,7 @@ is the only place that says what will actually ship.
 
 ## If you are curious how it got here
 
-[Design review, 2026-09-02](design-review-2026-09-02.md) is an adversarial pass over the whole design,
+[Design review, 2026-09-02](design-review-2026-09-02.md) is the maintainer's own red-team pass over the whole design,
 kept because its findings shaped what shipped. It is a snapshot of one day, not a description of the
 system today. For that, read the architecture.
 
