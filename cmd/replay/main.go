@@ -50,7 +50,7 @@ func main() {
 //
 // It is a function rather than a few lines inside main so that the mapping can
 // be tested: main() calls os.Exit, which no test can observe.
-// The exit codes, frozen. Published in docs/CLI.md and part of the
+// The exit codes, frozen. Published in docs/guide/commands.md and part of the
 // compatibility surface the version number covers.
 //
 // Freezing them now is the point. The moment any gate runs in a stranger's
