@@ -325,3 +325,29 @@ func TestSP10_ConcurrentSetPinSurvivesReload(t *testing.T) {
 		}
 	}
 }
+
+// TenantIDOf is how Record.TenantID gets set from the registered
+// tenancy.TenantID primitive (ADR-0028). Both the empty tenant and
+// tenancy.LocalTenant omit the field, by design, so a single developer's
+// ledger gains nothing to learn to ignore; only a real hosted tenant writes
+// a non-empty value.
+//
+// PASS: "" and tenancy.LocalTenant both map to "", and a real tenant id
+// round-trips unchanged.
+// FAIL: either omitted case leaks a value, or a real tenant id is dropped
+// or altered.
+func TestTenantIDOfOmitsEmptyAndLocalButKeepsAnyOther(t *testing.T) {
+	cases := []struct {
+		tenant tenancy.TenantID
+		want   string
+	}{
+		{"", ""},
+		{tenancy.LocalTenant, ""},
+		{"acme-co", "acme-co"},
+	}
+	for _, c := range cases {
+		if got := TenantIDOf(c.tenant); got != c.want {
+			t.Errorf("TenantIDOf(%q) = %q, want %q", c.tenant, got, c.want)
+		}
+	}
+}

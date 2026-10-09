@@ -173,3 +173,21 @@ func TestRepositoryIDSurvivesJSONRoundTrip(t *testing.T) {
 		t.Fatalf("round trip RepositoryID = %q, want %q", round.RepositoryID, s.RepositoryID)
 	}
 }
+
+// A path with no directory component at all (a bare filename, or one
+// directly at the filesystem root) reduces to filepath.Base(".") or the
+// separator itself, neither of which is a real project directory name.
+// No existing test reaches repositoryIDFromPath with such a path: every
+// other test writes its fixture into a real subdirectory first.
+//
+// PASS: a bare filename and a root-level path both resolve to
+// RepositoryUnknown, never to "." or the separator itself.
+// FAIL: either is returned as if it were a legitimate repository id.
+func TestRepositoryIDUnknownWithNoDirectoryComponent(t *testing.T) {
+	if got := repositoryIDFromPath("a.jsonl"); got != RepositoryUnknown {
+		t.Errorf("repositoryIDFromPath(%q) = %q, want %q", "a.jsonl", got, RepositoryUnknown)
+	}
+	if got := repositoryIDFromPath(string(filepath.Separator) + "a.jsonl"); got != RepositoryUnknown {
+		t.Errorf("repositoryIDFromPath(%q) = %q, want %q", string(filepath.Separator)+"a.jsonl", got, RepositoryUnknown)
+	}
+}

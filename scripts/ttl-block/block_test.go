@@ -260,6 +260,30 @@ func TestFrozenRefusesWhenTheScheduleDisagreesWithAnAlreadyStartedBlock(t *testi
 	}
 }
 
+// historyAgrees bounds r.Block against the schedule it is checking before
+// indexing s.Blocks[r.Block-1]: a log record naming a block number outside
+// the schedule's range must be skipped, not used to index out of range.
+// Every other historyAgrees test drives this through startBlock/endBlock
+// with block numbers that are always in range, so this calls it directly
+// with a log record that is not.
+//
+// PASS: a BLOCK_STARTED record naming block 0 or a block past the end of
+// the schedule is skipped without panicking, and an otherwise-agreeing
+// schedule is still accepted.
+// FAIL: the bound check is removed and indexing s.Blocks[r.Block-1] panics,
+// or an out-of-range record is wrongly treated as a disagreement.
+func TestHistoryAgreesSkipsOutOfRangeBlockNumbersRatherThanIndexing(t *testing.T) {
+	s := schedule{RegisterSHA256: "x", Blocks: []string{"A", "B"}}
+	log := []blockRecord{
+		{Event: "BLOCK_STARTED", Block: 0, Arm: "A"},
+		{Event: "BLOCK_STARTED", Block: 99, Arm: "B"},
+		{Event: "BLOCK_STARTED", Block: 1, Arm: "A"},
+	}
+	if err := historyAgrees(log, s); err != nil {
+		t.Errorf("out-of-range block numbers must be skipped, not treated as a disagreement: %v", err)
+	}
+}
+
 // The same check does not fire when the schedule and the log agree, which is
 // the ordinary case for every block this study has actually run.
 func TestFrozenAllowsAScheduleThatAgreesWithHistory(t *testing.T) {

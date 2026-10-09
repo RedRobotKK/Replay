@@ -230,3 +230,124 @@ func TestContextCeilingDetailAlignsWithCompactionOrder(t *testing.T) {
 		t.Errorf("slot 2 is unsized, must be empty, got %q", lines[2])
 	}
 }
+
+// A compaction can be sized and dated and still resolve to no model: when
+// nothing in the session's non-sidechain lanes was sent at or before its
+// instant. BuildContextCeilings must not key the table on the empty string
+// in that case.
+//
+// PASS: a compaction timestamped before the session's only request
+// contributes to no model's count, and no "" key appears in the table.
+// FAIL: the unresolved compaction is pooled under the empty string.
+func TestContextCeilingSkipsACompactionWithNoResolvableModel(t *testing.T) {
+	t0 := time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
+	lane := &transcript.Lane{Requests: []*transcript.Request{
+		{Timestamp: t0.Add(time.Hour), Model: "claude-opus-5", Usage: transcript.Usage{Input: 100}},
+	}}
+	session := &transcript.Session{Lanes: []*transcript.Lane{lane}, Compactions: []transcript.Compaction{
+		{Trigger: "auto", PreTokens: 998_021, PostTokens: 30_000, At: t0}, // before the only request
+	}}
+	table := BuildContextCeilings([]*transcript.Session{session})
+	if _, ok := table[""]; ok {
+		t.Errorf("a compaction with no resolvable model must not be pooled under \"\", got %+v", table[""])
+	}
+	if len(table) != 0 {
+		t.Errorf("want an empty table, got %+v", table)
+	}
+}
+
+// modelNearCompaction is the walk-backward search BuildContextCeilings and
+// ContextCeilingDetail both guard with their own Sized()/IsZero() checks
+// before calling it; this exercises the function's own internal guards
+// directly, at the unit a caller cannot reach once its own guard has
+// already filtered the input.
+//
+// PASS: a zero instant, a sidechain-only lane, and a request strictly
+// after the given instant are each refused a match on their own.
+// FAIL: any of the three is matched anyway.
+func TestModelNearCompactionRefusesZeroSidechainAndFutureRequests(t *testing.T) {
+	t0 := time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
+
+	t.Run("zero instant", func(t *testing.T) {
+		session := &transcript.Session{Lanes: []*transcript.Lane{
+			{Requests: []*transcript.Request{{Timestamp: t0, Model: "claude-opus-5"}}},
+		}}
+		if got := modelNearCompaction(session, time.Time{}); got != "" {
+			t.Errorf("want \"\" for a zero instant, got %q", got)
+		}
+	})
+
+	// A request whose own Timestamp is also the zero value is not After a
+	// zero at (two equal zero values are not "after" each other), so the
+	// forward loop's own After(at) check alone would let this request
+	// through. Only the explicit at.IsZero() guard at the top refuses it.
+	t.Run("zero instant with a zero-timestamp request present", func(t *testing.T) {
+		session := &transcript.Session{Lanes: []*transcript.Lane{
+			{Requests: []*transcript.Request{{Model: "claude-opus-5"}}}, // Timestamp is the zero value
+		}}
+		if got := modelNearCompaction(session, time.Time{}); got != "" {
+			t.Errorf("want \"\" for a zero instant even when a request's own timestamp is also zero, got %q", got)
+		}
+	})
+
+	t.Run("sidechain lane is skipped", func(t *testing.T) {
+		session := &transcript.Session{Lanes: []*transcript.Lane{
+			{Sidechain: true, Requests: []*transcript.Request{{Timestamp: t0, Model: "claude-opus-5"}}},
+		}}
+		if got := modelNearCompaction(session, t0.Add(time.Minute)); got != "" {
+			t.Errorf("want \"\" when the only request is on a sidechain lane, got %q", got)
+		}
+	})
+
+	t.Run("a request after the instant is not a candidate", func(t *testing.T) {
+		session := &transcript.Session{Lanes: []*transcript.Lane{
+			{Requests: []*transcript.Request{{Timestamp: t0.Add(time.Hour), Model: "claude-opus-5"}}},
+		}}
+		if got := modelNearCompaction(session, t0); got != "" {
+			t.Errorf("want \"\" when the only request is after the instant, got %q", got)
+		}
+	})
+}
+
+// ContextCeilingDetail shares BuildContextCeilings' "no resolvable model"
+// case, at its own call site: a compaction can be sized and dated and still
+// resolve to no model, and the slot for it must be empty, not a line about
+// a model this session never attributes anything to.
+//
+// PASS: a compaction before the session's only request produces an empty
+// slot.
+// FAIL: the slot renders a line anyway.
+func TestContextCeilingDetailEmptyWhenModelUnresolved(t *testing.T) {
+	t0 := time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
+	lane := &transcript.Lane{Requests: []*transcript.Request{
+		{Timestamp: t0.Add(time.Hour), Model: "claude-opus-5"},
+	}}
+	session := &transcript.Session{Lanes: []*transcript.Lane{lane}, Compactions: []transcript.Compaction{
+		{Trigger: "auto", PreTokens: 998_021, PostTokens: 30_000, At: t0},
+	}}
+	// A ceilings table that happens to carry a "" key (BuildContextCeilings
+	// never creates one, but this guard must not rely on that fact to look
+	// right) would otherwise let ContextCeilingLine's own table-miss return
+	// mask a removed guard here: both return "", for different reasons.
+	ceilings := map[string]ContextCeiling{"": {Status: ContextCeilingAvailable, Max: 1, N: minContextCeilingRecords}}
+	lines := ContextCeilingDetail(session, ceilings)
+	if len(lines) != 1 || lines[0] != "" {
+		t.Errorf("want one empty slot for an unresolved model, got %+v", lines)
+	}
+}
+
+// formatCount's negative branch is only reachable with a negative n; every
+// existing test uses a positive count, so this is the only test that
+// exercises it.
+//
+// PASS: a negative count keeps its sign and groups the digits of its
+// magnitude.
+// FAIL: the sign is dropped, misplaced, or the grouping ignores it.
+func TestFormatCountNegative(t *testing.T) {
+	if got := formatCount(-998021); got != "-998,021" {
+		t.Errorf("formatCount(-998021) = %q, want %q", got, "-998,021")
+	}
+	if got := formatCount(-7); got != "-7" {
+		t.Errorf("formatCount(-7) = %q, want %q", got, "-7")
+	}
+}

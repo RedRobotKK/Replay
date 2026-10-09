@@ -2,6 +2,7 @@ package tenancy
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -74,5 +75,32 @@ func TestTenancy_SerializationRefusesCorruptedAccount(t *testing.T) {
 	doc := `{"tenant_id":"acme-co","account_id":"ACCOUNT_UNKNOWN"}`
 	if err := json.Unmarshal([]byte(doc), &got); err == nil {
 		t.Errorf("Unmarshal(%s) succeeded; a reserved account sentinel must be refused when carried", doc)
+	}
+}
+
+// A document that is not well-formed JSON at all (top-level syntax error)
+// never reaches UnmarshalJSON: encoding/json validates the whole input
+// before dispatching to a custom unmarshaler, so this case is refused by
+// the standard library's own scanner, not by this method's wire-decode
+// check. The wire-decode check at the top of UnmarshalJSON is reached only
+// when the input is syntactically valid JSON but the wrong shape for the
+// wire struct, such as a number where tenant_id must be a string.
+//
+// PASS: a syntactically-invalid document is refused, and a syntactically
+// valid document with a type-mismatched tenant_id is refused by the
+// wire-decode error specifically.
+// FAIL: either case is accepted, or the wire-decode error is swallowed.
+func TestTenancy_SerializationRefusesMalformedJSON(t *testing.T) {
+	var got Tenant
+	if err := json.Unmarshal([]byte(`{"tenant_id":`), &got); err == nil {
+		t.Error(`Unmarshal({"tenant_id":) succeeded; a top-level syntax error must be refused`)
+	}
+	got = Tenant{}
+	err := json.Unmarshal([]byte(`{"tenant_id":123}`), &got)
+	if err == nil {
+		t.Fatal(`Unmarshal({"tenant_id":123}) succeeded; a non-string tenant_id must be refused`)
+	}
+	if !strings.Contains(err.Error(), "cannot unmarshal number") {
+		t.Errorf("want the wire-decode error naming the type mismatch, got %q", err.Error())
 	}
 }

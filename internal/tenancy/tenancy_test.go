@@ -1,6 +1,9 @@
 package tenancy
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // Local/free compatibility (README's "no account, no telemetry" promise;
 // ADR-0023's local binary posture, kept for the binary by ADR-0028
@@ -113,4 +116,41 @@ func stringOfLength(n int) string {
 		b[i] = 'a'
 	}
 	return string(b)
+}
+
+// ValidateTenantID's empty-string check is its own guard, distinct from the
+// pattern check below it: idPattern also refuses "" (it requires at least
+// one character), so a test that only checked err != nil could not tell the
+// two apart. This asserts the specific message the empty-string branch
+// produces, which the pattern branch does not.
+//
+// PASS: an empty raw value is refused with "tenant id is empty", not the
+// pattern message.
+// FAIL: the empty-string branch is removed and the pattern branch's message
+// ("not a legal identity") is returned instead, undetected.
+func TestTenancy_ValidateTenantIDRefusesEmptyByName(t *testing.T) {
+	err := ValidateTenantID("")
+	if err == nil {
+		t.Fatal("empty tenant id must be refused")
+	}
+	if err.Error() != "tenant id is empty" {
+		t.Fatalf("want the empty-string branch's own message %q, got %q", "tenant id is empty", err.Error())
+	}
+}
+
+// ValidateAccountID's pattern check refuses an account id that is non-empty,
+// not reserved, and still illegal (contains a character idPattern excludes).
+// Only this branch, not the empty-string or reserved checks above it, can
+// produce this refusal.
+//
+// PASS: "has space" is refused with the pattern message naming it illegal.
+// FAIL: the pattern branch is removed and the value is silently accepted.
+func TestTenancy_ValidateAccountIDRefusesIllegalCharacters(t *testing.T) {
+	err := ValidateAccountID("has space")
+	if err == nil {
+		t.Fatal("an account id containing a space must be refused")
+	}
+	if !strings.Contains(err.Error(), "is not a legal identity") {
+		t.Fatalf("want the pattern branch's message naming it illegal, got %q", err.Error())
+	}
 }
