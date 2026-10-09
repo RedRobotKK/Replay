@@ -13,6 +13,7 @@ abstract: >-
   A local tool that reproduces an LLM provider's prompt caching turn by turn,
   shows which turn broke the cache and what it cost, and scores alternative
   context layouts against what actually ran. Runs entirely on the user's machine.
+  Distributed as replay-doctor on npm and PyPI and at replay.doctor; same binary.
 keywords:
   - llm
   - prompt-caching
