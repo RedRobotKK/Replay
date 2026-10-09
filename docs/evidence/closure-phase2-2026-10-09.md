@@ -426,3 +426,77 @@ Nothing here was merged, tagged, published, deployed or paid for.
 
 **Frozen mutants on run 3, appended when the job reached a terminal
 state:** still running when this record was last written (started 2026-10-09T15:46:57Z, job 113900673640); the terminal result is to be appended by whoever reads it, and the four local commits of this pass are not pushed until then, because a push to this branch cancels the in-flight run.
+
+## 13. Addendum, same day, 16:40 UTC: the adjacent items and a second sweep
+
+Written by the orchestrating session after the handback above, from its own
+verification rather than the agent's narrative. Everything below is on a
+feature branch; nothing was merged, tagged, published, deployed, sent or
+paid for.
+
+### 13.1 Replay: one more self-authored review wearing a label
+
+`docs/README.md` still promised "an adversarial security review" in its
+evidence row and called the 2026-09-02 design review "an adversarial pass";
+both files are the maintainer's own (`2e6a061`, `5db1382`). Fixed in
+`ef88b40` (local, held with the others): the row names whose review it is
+and that no external one exists yet, the note names the design review as
+the maintainer's own red-team pass. Markdown lint 0 issues;
+`internal/regression` doc tests ok. replay.doctor's docs index is generated
+from this file at the pinned commit, so the public copy clears when a
+commit carrying this line is pinned there (13.4).
+
+### 13.2 replay.doctor, three more commits on `fix/withdrawn-offer-and-corpus-0.8.0`
+
+| Commit | Item | What | Evidence |
+|---|---|---|---|
+| `7ea203c` | B-17, and a missed public remnant | the list lede still read "when a forensics week opens up"; `functions/_lib/hubspot.js` still opened a HubSpot deal at the withdrawn quote for any confirmation carrying `forensics: true` (the checkbox left the form 2026-09-13; the API field did not). Lede names one purpose; `syncForensicsLead` keeps its name, callers and return shape and makes no call, reporting the withdrawal as its reason; the quote is gone from the tree | new tests red first: landing page may name the week only in a sentence containing "withdrawn"; a configured token produces zero network calls and the source carries none of `22000`, `22,000`, `18,000`, `25,000`, `objects/deals`. Seven tests that asserted the pricing retired |
+| `63467bb` | B-18 | `replay.ref` 48c9974 (0.6.2) to 5c87562 (0.8.0); `check:docs` "pinned docs are current (5c87562, 239 files)"; 33 command pages; installer pin moved with it (bytes identical, sha256 `74a13afd`, `check:installer` current) | two undated generated matrices under `docs/evidence` at 5c87562 would have been published as dated readings; the pull now excludes undated files by name, logs each, leaves them to their GitHub links on the evidence index; new test goes red when the exclusion is removed (mutation run, then restored) |
+| `092ce39` | release-surface gate LAGGING; two more "external" labels | `release-narrative` was `/release-0-6-2/` against a 0.8.0 corpus; the sidebar said "Replay 0.6.2" on 184 pages and the footer "What shipped in 0.6.2". A 0.8.0 page written from the changelog at 5c87562 (covers 0.7.0 too; every figure is the changelog's); inventory, sidebar, footer, discoverability list and the gate's own fixtures moved to 0.8.0; the 0.6.2 page stays published and inventoried as history. `why-caches-break` called the sweep's framing "an external reviewer" and the design review "an external design review"; both now say they are the maintainer's own | `npm run check:surfaces` exit 0, no LAGGING row (the one that appeared when the 0.6.2 page fell out of the inventory was the gate working); `npm test` 308 of 308 (313 before: 7 pricing tests retired, 2 added) with `REPLAY_REPO` set as CI sets it; build 128 pages |
+
+Remote `origin/fix/withdrawn-offer-and-corpus-0.8.0` = `092ce39`;
+`origin/main` = `419ad32`, untouched. Built-output sweep after the three
+commits: zero pages carrying `$22,000`, "Talk to Daniel" or "forensics
+week opens"; the one page matching "external reviewer" is the correction
+sentence itself ("no external reviewer was involved"); the frozen
+2026-09-14 launch-prediction record quotes the then-price as history.
+
+### 13.3 redrobot-jp, re-verified on `aff1ef5`
+
+Rebuilt; `vitest` 404 of 404; Playwright e2e 93 passed (54.6s), which the
+handback had left unrun. Built-output sweep: the only "external review"
+match is "an external review is not yet commissioned" and the only
+"forensic week" match is the withdrawal sentence; the remaining `0.6.2`
+strings are the dated control reading and the "two verbs arrived after
+0.6.2" sentence. Remote = `aff1ef5`; `origin/main` = `63cf4d6`, untouched.
+
+### 13.4 A dependency the handback did not name
+
+Six pages under replay.doctor's `/docs/` (the docs index, the changelog,
+the evidence index, and the break-causes, rerender-band-sensitivity and
+security-review records) carry the upstream wording from 5c87562, where
+the provenance corrections of 2026-10-08 and 13.1 had not yet landed on
+`main`. They are generated from the pinned commit; they clear when the
+Replay branch is merged and `replay.ref` moves to the merge commit, and
+not by any site edit. Pinning the site to a branch commit was not done.
+
+### 13.5 Funding programmes, re-read from the live pages, 16:37 UTC
+
+| Programme | Page read | Verbatim | Fit |
+|---|---|---|---|
+| OSTIF | ostif.org/get-an-audit/ (the `/apply/` route the earlier record implied is a 404; intake is the "TALK TO OSTIF" ClickUp form linked from the home page) | "The most critical step of any audit is reaching out to talk to us"; "initial audits could range anywhere from $30k to $200k, we have helped many projects raise funds and source sponsors"; "Google Project Zero disclosure policy of 90 days"; no licence or size criterion on either page | the one programme route; licence is the first question to ask, in writing |
+| Sovereign Tech Fund | sovereign.tech/programs/fund | "OSI-approved or FSF Free/Libre licenses are acceptable for code"; cost of proposed work must exceed EUR 50,000; about six months to contract | not eligible: BUSL-1.1 |
+| GitHub Secure Open Source Fund | github.com/open-source/github-secure-open-source-fund | "Clear open source license"; "demonstrated community traction and adoption"; "$10,000 per project"; "3 Week Security Education Program"; "Applications are open on a rolling basis" | not eligible on traction (zero external users observed); it funds education, not an audit |
+| Alpha-Omega | alpha-omega.dev and github.com/ossf/alpha-omega | no application process published; "Let us know you'd like to get involved" via a membership-inquiries page; funds named engagements | no route for an unsolicited single project |
+
+No form was opened past reading, no message sent.
+
+### 13.6 Blocker board, changes only
+
+| ID | Change |
+|---|---|
+| B-17 | CLOSED on the site branch (`7ea203c`); decision 7 of section 11 is answered by removal, reversible in one commit, and flagged for Daniel's read before deploy |
+| B-18 | CLOSED on the site branch (`63467bb`) |
+| B-19 (new) | Replay `docs/README.md` carried the C-7 claim; fixed `ef88b40`, local until the mutants run ends |
+| B-20 (new, dependency) | six replay.doctor `/docs/` pages carry 5c87562 wording until merge and re-pin (13.4); not closable on the site |
+| B-21 (new) | replay.doctor release narrative and chrome named 0.6.2 as the release; fixed `092ce39`; the 0.8.0 page is site-authored prose derived from the changelog and should be read by Daniel before deploy |
