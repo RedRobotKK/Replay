@@ -157,7 +157,7 @@ Cloudflare Pages projects in private repositories (`RedRobotKK/replay.doctor`,
 project `replay-doctor`, `npm run deploy`; `RedRobotKK/redrobot-jp`, project
 `redrobot-jp`, `npm run deploy:cf`), each vendoring `install.sh` at a pinned
 commit with a metadata file and a freshness check. Smallest path for the
-installer: make `redrobot.jp/replay.sh` and `/Replay/install.sh` 301 to
+installer: make the `/replay.sh` and `/Replay/install.sh` paths on redrobot.jp 301 to
 `replay.doctor/replay.sh`, which the replay.doctor repository already calls
 "the canonical origin for its installer"; one vendoring instead of two.
 Defer: nothing else. Counter: a redirect changes the URL printed in old
@@ -208,7 +208,7 @@ dated amendment by Daniel, recorded as a dissent.
 
 **11. External customer advocate.** NO-GO; a stranger sees a $22,000 offer
 with "Talk to Daniel" on the product site and "nothing is for sale" in the
-README, and a Windows user who runs `redrobot.jp/replay.sh` is told about an
+README, and a Windows user who runs the `/replay.sh` path on redrobot.jp is told about an
 archive that does not exist. Top blocker: C-6 and C-7, because the second is
 worse than the first: it claims a check that is the definition of 1.0. Smallest
 path: the two deployments. Defer: naming, which confuses nobody who reads the
@@ -337,7 +337,7 @@ nothing here can change them. Each row names the file a deployer edits.
 | G-4 | redrobot.jp/replay-doctor/ | `RedRobotKK/redrobot-jp` `src/pages/replay-doctor.astro:56` | "The one thing for sale is a week of one operator reading a team's corpus with them" | "Running the tool costs nothing and no entitlement check will enter the binary. Nothing is for sale today." | Daniel (deploy) | re-fetch; "week" absent |
 | G-5 | redrobot.jp/replay | `src/pages/Replay/index.astro:134` | "v0.6.2 is tagged" from `CORPUS.version` | Re-vendor (G-3) or read the version from the release feed | Daniel | page shows the current tag |
 | G-6 | redrobot.jp/replay | `src/pages/Replay/index.astro:477` and `:608` | "checked by an adversarial reviewer who ran the proxy against a fake upstream... The findings are published"; "The adversarial security review" | "checked by the maintainer against a fake upstream; the findings are published and the review is self-authored (an external review is not yet commissioned)"; list label "The maintainer's security review (self-authored)" | Daniel (deploy) | re-fetch; "adversarial reviewer" absent |
-| G-7 | redrobot.jp/replay.sh and /Replay/install.sh | `src/pages/Replay/install.sh.ts`, `src/vendor/replay-install.sh` (commit `8946b63`, sha256 `4b04bd28...`) | Installer with the superseded Windows message (names an archive that does not exist and a `go install` the binary refuses) | Preferred: 301 both paths to `https://replay.doctor/replay.sh`. Alternative: `npm run vendor:installer` and deploy | Daniel (deploy) | `curl -fsSL` of both URLs hashes to `74a13afd...` (equal to repository `install.sh`) |
+| G-7 | the `/replay.sh` and `/Replay/install.sh` paths on redrobot.jp | `src/pages/Replay/install.sh.ts`, `src/vendor/replay-install.sh` (commit `8946b63`, sha256 `4b04bd28...`) | Installer with the superseded Windows message (names an archive that does not exist and a `go install` the binary refuses) | Preferred: 301 both paths to `https://replay.doctor/replay.sh`. Alternative: `npm run vendor:installer` and deploy | Daniel (deploy) | `curl -fsSL` of both URLs hashes to `74a13afd...` (equal to repository `install.sh`) |
 | G-8 | GitHub About | repository settings | "Replay Doctor names the turn..." with no note | Append: "(Replay on GitHub and as the CLI; Replay Doctor on npm, PyPI and replay.doctor; one binary.)" | Daniel (settings) | API `description` |
 | G-9 | CITATION.cff | this repository | no note | Add to `abstract`: "Distributed as replay-doctor on npm and PyPI and at replay.doctor; same binary." | Daniel (naming decision, one line) | file |
 | G-10 | .claude-plugin/marketplace.json | this repository | "Replay Doctor for Claude Code..." with no split stated | Prefix the metadata description with "Replay (published as Replay Doctor on npm, PyPI and replay.doctor; same binary): " | Daniel (naming decision) | file |
@@ -464,6 +464,17 @@ does the verdict.
 - Verified locally: `gofmt -l .` empty; `go vet ./...` and
   `go vet -tags mutation ./internal/blackbox` clean; `golangci-lint run`
   0 issues; full suite result recorded in the commit message of this pass.
+
+**A false green, corrected the same hour.** The commit message of `b01354e`
+cites `go test -count=1 ./...` 40 packages ok. That run started before this
+record existed and so never saw it; the first push (`a921240`) failed all four
+Go legs on `TestFCIH_EveryDocumentedInstallCommandNamesOneHost`, which flags
+any published document that spells out the install path on redrobot.jp, and
+this record spelled it out three times. The three mentions now follow the
+prior gate's phrasing ("the `/replay.sh` path on redrobot.jp"); the test was
+not touched; `internal/regression` was re-run after the edit. The lesson is
+the one this repository already states: a check that did not see the thing
+is not evidence about the thing.
 
 **Not done, by rule:** the toolchain line; any site change; any spend; any
 merge, tag, publish or announcement; any edit to the five TTL files or
