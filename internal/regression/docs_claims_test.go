@@ -214,3 +214,36 @@ func TestDC4_InboundTenantHeaderIsDocumented(t *testing.T) {
 			"Sec-Fetch-Mode and Host for the same reason this one belongs there", header)
 	}
 }
+
+// DC5. The 2026-09-04 security review says who wrote it.
+//
+// Its first sentence has read "An external reviewer read the code" since the
+// day it was committed, and `git log --follow --diff-filter=A` on the file
+// shows one author, Daniel Saito, and no second party anywhere in its history
+// (docs/evidence/security-review-scope-2026-10-08.md, section 1, re-checked
+// 2026-10-09). The README links it as "the security review" and
+// redrobot.jp/replay links it as "Security review", so a reader meets the
+// claim before they meet the correction. RELEASE-CRITERIA.md's external-review
+// gate reads "Not commissioned", and this file is not evidence toward it.
+//
+// The sentence is not deleted: this project corrects evidence in place with
+// the prior wording visible (DC3 above holds that promise). What this guard
+// pins is that the correction sits in the file itself, where the claim is,
+// and not only in a second file a reader has to know to open.
+//
+// PASS: the review carries its own dated provenance correction.
+// FAIL: the correction was dropped, or moved out of the file that needs it.
+func TestDC5_TheSelfAuthoredReviewCarriesItsProvenanceCorrection(t *testing.T) {
+	doc := readDoc(t, "docs/evidence/security-review-2026-09-04.md")
+	for _, want := range []string{
+		"Provenance correction",
+		"authored and committed by Daniel Saito",
+		"not external security review evidence",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("docs/evidence/security-review-2026-09-04.md does not say %q; "+
+				"its opening line still claims an external reviewer and nothing in "+
+				"the file corrects it", want)
+		}
+	}
+}

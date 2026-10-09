@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **The README's govulncheck badge said "no known vulnerabilities" while the
+  govulncheck job was red.** Nine Go advisories published 2026-10-08
+  (GO-2026-6617, 6613, 6612, 6611, 6610, 6608, 6607, 6605, 6603) reach this
+  module from the pinned go1.25.13 standard library, and the job failed on the
+  same tree the green shield sat on; the shield is a static image and cannot
+  follow an advisory database that moves between commits. The badge now names
+  the check (it runs, it blocks) and leaves the result to the job, pinned by
+  `TestFCGV2_TheGovulncheckBadgeClaimsTheCheckNotTheResult`. The findings
+  themselves are not fixed here: every one is fixed in go1.26.9 and go1.27.2,
+  both of which build, vet and pass the full suite on this tree with zero
+  govulncheck findings, and the toolchain change is a separate decision
+  recorded in `docs/evidence/release-gate-1.0-2026-10-09.md`. Separately,
+  `docs/evidence/security-review-2026-09-04.md` opened with "An external
+  reviewer" and carried no correction in the file itself, although
+  `security-review-scope-2026-10-08.md` had already established from
+  `git log` that it has one author, the maintainer; the file now carries the
+  dated provenance correction beside the sentence it corrects, pinned by
+  `TestDC5_TheSelfAuthoredReviewCarriesItsProvenanceCorrection`. The duplicate
+  `### Added` heading under Unreleased is merged into the one above it.
+
 - **A second self-authored finding wore an "independent reviewer" label.**
   `docs/evidence/security-review-scope-2026-10-08.md` already corrected
   `docs/evidence/security-review-2026-09-04.md`'s "An external reviewer"
@@ -179,9 +199,6 @@ All notable changes to this project are documented here. The format follows [Kee
   forward-looking: the line appears after the client records a compaction, by
   the decision of the twelve-role panel recorded in
   `docs/evidence/compaction-panel-2026-10-05.md`. Frozen as M139.
-
-### Added
-
 - **A naming recommendation, not a decision.** Prior passes identified that
   "Replay" (GitHub, `go install`, the CLI binary, CITATION.cff) and "Replay
   Doctor" (npm, PyPI, the replay.doctor domain) are both live, genuine

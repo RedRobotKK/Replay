@@ -5,7 +5,7 @@
 [![Go](https://img.shields.io/badge/go-1.24-00ADD8?logo=go&logoColor=white)](go.mod)
 [![Dependencies](https://img.shields.io/badge/third--party%20dependencies-0-success)](cmd/replay/x402_test.go)
 [![Coverage](https://img.shields.io/badge/coverage-%E2%89%A585%25-success)](scripts/coverage-gate.sh)
-[![govulncheck](https://img.shields.io/badge/govulncheck-no%20known%20vulnerabilities-success)](.github/workflows/ci.yml)
+[![govulncheck](https://img.shields.io/badge/govulncheck-blocking%20in%20CI-blue)](.github/workflows/ci.yml)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)](#platform-support-macos-and-linux-only)
 [![License](https://img.shields.io/badge/licence-BUSL--1.1-blue)](LICENSE)
 [![Go Reference](https://pkg.go.dev/badge/github.com/RedRobotKK/Replay.svg)](https://pkg.go.dev/github.com/RedRobotKK/Replay)

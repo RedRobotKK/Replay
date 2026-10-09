@@ -9,7 +9,8 @@ import (
 
 // FC-GV. The govulncheck badge is a claim, and this is what enforces it.
 //
-// The badge says "no known vulnerabilities". That is a strong sentence to put at
+// The badge said "no known vulnerabilities" until 2026-10-09 (it now names the
+// check instead; see FC-GV2 below for why). That is a strong sentence to put at
 // the top of a README for a binary people pipe from `curl` onto machines holding
 // provider credentials, and it is true only while three things hold at once:
 // the job exists, it actually runs govulncheck, and it is allowed to fail the
@@ -135,4 +136,41 @@ func jobHasKey(ci, jobHeader, key string) bool {
 		}
 	}
 	return false
+}
+
+// FC-GV2. The badge names the check, not the check's result.
+//
+// Added 2026-10-09. The badge above read "no known vulnerabilities" from the
+// day it was added until this date, and on 2026-10-08 it became false without
+// any commit: Go published nine advisories (GO-2026-6617, 6613, 6612, 6611,
+// 6610, 6608, 6607, 6605, 6603) against the pinned go1.25.13 standard library,
+// every one reachable from this module's call graph, and the govulncheck job
+// went red on the same tree the green shield sat on. FC-GV above guarantees
+// the job exists and can fail; it cannot guarantee the job is currently
+// passing, because that depends on an advisory database that moves between
+// commits. A static image cannot carry a result that changes without a commit.
+//
+// So the badge claims what the repository can keep true by itself: that the
+// check runs and blocks. The result lives in the job, where it can be red.
+//
+// PASS: the govulncheck badge makes no claim about the scan's result.
+// FAIL: it says "no known vulnerabilities" (or any "no ... vulnerabilities")
+// again, which is a claim the README cannot keep.
+func TestFCGV2_TheGovulncheckBadgeClaimsTheCheckNotTheResult(t *testing.T) {
+	root := repoRoot(t)
+	readme, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil {
+		t.Fatalf("reading README.md: %v", err)
+	}
+	for _, line := range strings.Split(string(readme), "\n") {
+		if !strings.Contains(line, "img.shields.io/badge/govulncheck-") {
+			continue
+		}
+		label := strings.ToLower(strings.ReplaceAll(line, "%20", " "))
+		if strings.Contains(label, "no known") || strings.Contains(label, "no vulnerabilit") {
+			t.Errorf("the govulncheck badge asserts a scan result the README cannot keep true "+
+				"between commits:\n  %s\nName the check (it runs, it blocks); leave the "+
+				"result to the job.", strings.TrimSpace(line))
+		}
+	}
 }

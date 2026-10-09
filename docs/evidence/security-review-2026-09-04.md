@@ -1,5 +1,22 @@
 # Adversarial security review, 2026-09-04
 
+**Provenance correction, 2026-10-09, not deleted.** The sentence below has read
+"An external reviewer" since this file was committed. Re-checked rather than
+taken on its own word: `git log --follow --diff-filter=A --format='%h %an %ad'
+-- docs/evidence/security-review-2026-09-04.md` returns one commit, `2e6a061
+Daniel Saito 2026-09-04`, and no second author, reviewer identity or engagement
+record appears anywhere in the file's history. This file was
+authored and committed by Daniel Saito, the maintainer, and records his own
+adversarial pass against his own code. Every finding and fix below is real and
+unchanged; what was wrong is who it said found them. It is
+**not external security review evidence**:
+[RELEASE-CRITERIA.md](../../RELEASE-CRITERIA.md)'s external-review
+gate reads "Not commissioned", and the scope, reviewer brief and closing
+criteria for the review that would close it are in
+[security-review-scope-2026-10-08.md](security-review-scope-2026-10-08.md). The
+sentence is left standing beneath this note so the correction can be checked
+against what it corrects.
+
 An external reviewer read the code and then **ran the proxy end-to-end against a fake upstream**,
 confirming each finding empirically rather than inferring it from documentation. This file records
 what was verified to hold and what was found, before the repository was made public.
