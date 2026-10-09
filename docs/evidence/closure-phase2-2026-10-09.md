@@ -425,7 +425,15 @@ conditions, each with its evidence:
 Nothing here was merged, tagged, published, deployed or paid for.
 
 **Frozen mutants on run 3, appended when the job reached a terminal
-state:** still running when this record was last written (started 2026-10-09T15:46:57Z, job 113900673640); the terminal result is to be appended by whoever reads it, and the four local commits of this pass are not pushed until then, because a push to this branch cancels the in-flight run.
+state:** success, 2026-10-09 at 16:41 UTC, job 113900673640. The job ran
+`go test -tags mutation -timeout 90m -count=1 ./internal/mutation/` and the
+same for `./internal/blackbox/` (no `-short`, which is the package's only
+skip path): `ok internal/mutation 3171.258s`, `ok internal/blackbox
+74.443s`, against the 144-entry catalogue in
+`internal/mutation/testdata/mutants.json`, beside the 3192s and 70s the
+same job took on the go1.25.13 baseline `0ea7370`. With it, run 3 on
+`8d79db9` is 16 of 16 success under go1.27.2, and the commits held behind
+it were pushed after this line was written.
 
 ## 13. Addendum, same day, 16:40 UTC: the adjacent items and a second sweep
 
