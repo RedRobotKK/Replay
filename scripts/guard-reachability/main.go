@@ -556,9 +556,33 @@ func baseSurvivorCounts(base string, survivors []guardcheck.Guard, limit time.Du
 	pkgs := pkgsOf(survivors)
 	fmt.Printf("\nguard-reachability: %d survived; asking %s whether it had them too\n",
 		len(survivors), base)
-	if out, ok := runTests(root, pkgs, limit, false); !ok {
-		return nil, fmt.Errorf("the base tree's own suite is red, so nothing there "+
-			"can certify anything:\n%s", lastLines(out, 15))
+
+	// A package this change adds has no base counterpart, and running the
+	// batch's go test with that package named gives `go test` a target that
+	// does not exist on disk — "FAIL ./internal/tenancy [setup failed]" — which
+	// fails the WHOLE batch, including packages that do exist on base and
+	// whose own answer has nothing to do with the new one. Routed out here
+	// before the batch runs, instead of after reading its combined exit code,
+	// so one new package cannot poison the answer for every other package
+	// asked about in the same run. See guardcheck.ClassifyAbsentPackages.
+	present, absent := guardcheck.ClassifyAbsentPackages(pkgs, onDiskIn(root, pkgs), inBaseRef(base, pkgs))
+	for _, a := range absent {
+		if a.CheckoutBroken {
+			// git says base has this path; the checkout does not. That is a
+			// broken checkout or a misconfigured ref, not a new package, and
+			// it must fail the same way a red base suite does: the base has
+			// certified nothing, so nothing here is exempted.
+			return nil, fmt.Errorf("the checkout of %s is missing %s, which %s's own "+
+				"tree has: the base tree could not be asked about it", base, a.Pkg, base)
+		}
+		fmt.Printf("  %s has no %s at all: nothing to compare, every survivor there is introduced\n",
+			base, a.Pkg)
+	}
+	if len(present) > 0 {
+		if out, ok := runTests(root, present, limit, false); !ok {
+			return nil, fmt.Errorf("the base tree's own suite is red, so nothing there "+
+				"can certify anything:\n%s", lastLines(out, 15))
+		}
 	}
 	index, err := baseConditionals(root, pkgs)
 	if err != nil {
@@ -595,6 +619,43 @@ func baseSurvivorCounts(base string, survivors []guardcheck.Guard, limit time.Du
 		}
 	}
 	return baseSurvivors, nil
+}
+
+// onDiskIn reports, for each package, whether the base worktree checkout
+// materialised it.
+//
+// This is the checkout's own answer, which is all baseConditionals needs: an
+// unreadable directory there already degrades to an empty index and reads as
+// "introduced" downstream. It is not, on its own, enough to tell a new
+// package from a broken checkout — see inBaseRef, asked separately, for that.
+func onDiskIn(root string, pkgs []string) map[string]bool {
+	out := make(map[string]bool, len(pkgs))
+	for _, pkg := range pkgs {
+		dir := filepath.Join(root, filepath.FromSlash(strings.TrimPrefix(pkg, "./")))
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			out[pkg] = true
+		}
+	}
+	return out
+}
+
+// inBaseRef reports, for each package, whether the base ref's own git tree has
+// it, asked of git directly rather than inferred from the worktree checkout.
+//
+// Asking git separately from stat-ing the checkout is the whole point: the
+// two usually agree, and when they do not — git says the ref has a path the
+// checkout does not — the checkout is broken or the wrong ref was named, and
+// that is a different failure from a package that is simply new. Only by
+// asking both can ClassifyAbsentPackages tell them apart.
+func inBaseRef(base string, pkgs []string) map[string]bool {
+	out := make(map[string]bool, len(pkgs))
+	for _, pkg := range pkgs {
+		path := strings.TrimPrefix(pkg, "./")
+		if err := exec.Command("git", "cat-file", "-e", base+":"+path).Run(); err == nil {
+			out[pkg] = true
+		}
+	}
+	return out
 }
 
 // idFunc names an identity's function for a message, or says it has none.
