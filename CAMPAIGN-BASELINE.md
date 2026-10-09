@@ -29,7 +29,7 @@ sequence was: fix, campaign, then provenance.
 **Created by this session's own earlier work. Not pre-existing, not another
 agent.**
 
-```
+```text
 commit 436276e
 author RedRobot <git@redrobot.jp>
 date   2026-09-30 17:17:54 -0700

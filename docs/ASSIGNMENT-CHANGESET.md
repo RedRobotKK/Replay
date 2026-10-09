@@ -1,4 +1,4 @@
-# Prepared changeset: RedRobot KK to Uncanny Valley Inc.
+# Prepared changeset: RedRobot KK to Uncanny Valley Inc
 
 **NOT APPLIED. Apply on the day the assignment executes, not before.**
 
@@ -161,7 +161,6 @@ it should be asked before the assignment executes rather than at the first
 filing deadline after it. The corporate steps in sections 1 to 6 are unaffected
 and can be prepared in parallel.
 
-
 ---
 
 ## 1. `LICENSE`
@@ -275,7 +274,7 @@ repository's own standard forbids it.
 
 ---
 
-## 6. The module path. A decision, not an edit.
+## 6. The module path. A decision, not an edit
 
 `go.mod:1` is `module github.com/RedRobotKK/Replay`, and that path appears in
 **233 Go files**.

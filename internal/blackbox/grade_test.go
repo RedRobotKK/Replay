@@ -76,7 +76,7 @@ func TestBB_ProductionGrade(t *testing.T) {
 			r.Dispatch = fmt.Sprintf("main.go:%d → %s", s.Line, s.Entry)
 			r.Caller = s.Entry
 			home, checks := sp.Setup(t, bin.Path)
-			r.Entry = "replay " + strings.Join(relativise(home, checks[0].Args), " ")
+			r.Entry = entryLine(home, checks[0].Args)
 
 			// 1. the real binary passes every check
 			var failures []string
@@ -183,6 +183,20 @@ func status(r *row) string {
 
 // relativise strips the two paths that name the generating machine, the
 // repository root first because on a laptop it sits under the home directory.
+// entryLine renders the argv the black box handed the binary as the one
+// line a reader could paste. An empty argument is written as "" so that it is
+// visible at all: joined bare, it is a trailing space that the eye, and
+// Markdown lint, both read as nothing.
+func entryLine(home string, args []string) string {
+	parts := relativise(home, args)
+	for i, a := range parts {
+		if a == "" {
+			parts[i] = `""`
+		}
+	}
+	return "replay " + strings.Join(parts, " ")
+}
+
 func relativise(home string, args []string) []string {
 	repo, _ := filepath.Abs(filepath.Join("..", ".."))
 	out := make([]string, len(args))

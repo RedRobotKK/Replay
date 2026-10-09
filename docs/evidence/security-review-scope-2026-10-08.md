@@ -13,7 +13,7 @@ opens: "An external reviewer read the code and then ran the proxy end-to-end
 against a fake upstream." Re-checked today rather than taken on the strength
 of its own first sentence:
 
-```
+```text
 $ git log --follow --diff-filter=A --format='%H %an %ae %ad' -- docs/evidence/security-review-2026-09-04.md
 2e6a0615e9daa311055a5d5919074e90ddd9f128 Daniel Saito 1215165+saitodaniel@users.noreply.github.com Fri Sep 4 15:17:28 2026 -0700
 ```

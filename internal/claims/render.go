@@ -66,7 +66,10 @@ func Render() string {
 		b.WriteString(renderList("Tests", c.Tests))
 		fmt.Fprintf(&b, "\n**Why this result:** %s\n\n---\n\n", c.Why)
 	}
-	return b.String()
+	// The last claim's trailing rule is followed by nothing, so the blank
+	// line after it is a blank line at the end of the file: one newline
+	// closes the file, a second is MD012 in the generated register.
+	return strings.TrimRight(b.String(), "\n") + "\n"
 }
 
 // renderList formats one labelled bullet list inside a claim's rendered

@@ -10,3 +10,47 @@ ignores:
   # the same rules as a published page produced 104 of the 106 findings in this
   # repository without improving anything a reader sees.
   - AGENTS_STATE.md
+  # Dated evidence and research records, frozen on the day they were written.
+  # This repository corrects a dated record by appending to it and never by
+  # rewriting it (docs/evidence/README.md says so, and git log -p is the
+  # record of where that promise was broken). The findings these files carry
+  # are blank lines around headings, emphasis markers and fence languages:
+  # nothing a reader of the record is misled by, and nothing worth a diff
+  # across 34 frozen files to repair. Listed by name and not by glob, so a
+  # record written tomorrow is still linted on the day it is written, and so
+  # this list cannot grow without a reviewed change to this file. Added
+  # 2026-10-09; the full disposition is in
+  # docs/evidence/closure-council-1.0-2026-10-09.md.
+  - docs/evidence/c004-prediction-2026-09-30.md
+  - docs/evidence/c004-tier-mechanism-2026-09-30.md
+  - docs/evidence/c005-refusal-matrix-2026-09-30.md
+  - docs/evidence/c005-unpriced-granularity-2026-09-30.md
+  - docs/evidence/c035-partial-coverage-2026-10-01.md
+  - docs/evidence/c037-break-coverage-2026-10-01.md
+  - docs/evidence/control-panel-2026-10-05.md
+  - docs/evidence/e4-01-state-representability-2026-10-02.md
+  - docs/evidence/ec00-closeout-2026-10-01.md
+  - docs/evidence/ec00-rebilled-tokens-2026-09-30.md
+  - docs/evidence/ec00-repair-attempt-2026-10-01.md
+  - docs/evidence/frozen-mutant-sweep-2026-10-08.md
+  - docs/evidence/p3-canonical-event-kind-2026-10-02.md
+  - docs/evidence/panel-denominator-integrity-2026-10-02.md
+  - docs/evidence/panel-independent-reconstruction-2026-10-02.md
+  - docs/evidence/panel-negative-knowledge-continuity-2026-10-02.md
+  - docs/evidence/panel-population-claims-retry-2026-10-02.md
+  - docs/evidence/panel-reader-discipline-2026-10-02.md
+  - docs/evidence/panel-work-continuity-2026-10-02.md
+  - docs/evidence/panel-work-continuity-closeout-2026-10-02.md
+  - docs/evidence/production-grade-wiring-2026-10-03.md
+  - docs/evidence/qt7a-no-usage-signal-2026-10-03.md
+  - docs/evidence/release-1.0-production-surface-gate-2026-10-02.md
+  - docs/evidence/simulate-experiment-day0-2026-10-04.md
+  - docs/evidence/sp-01-gate-claim-conservation-2026-10-02.md
+  - docs/evidence/surface-evidence-loop-2026-09-29.md
+  - docs/evidence/v1-verify-false-zero-2026-10-02.md
+  - docs/research/DURABLE_WORK_STATE_RESEARCH.md
+  - docs/research/EXPERIMENT_MATRIX.md
+  - docs/research/FINAL-CLOSEOUT.md
+  - docs/research/MECHANISM_AND_DATA_MODEL.md
+  - docs/research/a2/A2_GATE_REVIEW.md
+  - docs/research/a2/A2_PROTOCOL.md

@@ -3,6 +3,7 @@ package claims
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -36,5 +37,23 @@ func TestRegisterMatchesRenderedSource(t *testing.T) {
 			"generated projection of internal/claims (scripts/claim-register/main.go): "+
 			"run `go run scripts/claim-register/main.go` from the repository root and "+
 			"commit the result, rather than hand-editing %s.", path)
+	}
+}
+
+// The rendered register ended "---\n\n": a horizontal rule and then a blank
+// line that nothing follows. Markdown lint reads that as a second consecutive
+// blank line at the end of the file (MD012 at CLAIM-REGISTER.md:939, the line
+// after the last one), and the only honest fix is in the generator, because
+// the file itself is regenerated rather than edited.
+//
+// PASS: Render() ends with exactly one newline.
+// FAIL: the generator leaves a trailing blank line in the file it writes.
+func TestRenderEndsWithExactlyOneNewline(t *testing.T) {
+	out := Render()
+	if !strings.HasSuffix(out, "\n") {
+		t.Fatalf("Render() does not end with a newline")
+	}
+	if strings.HasSuffix(out, "\n\n") {
+		t.Fatalf("Render() ends with a blank line after the final rule; the generated file carries it as MD012")
 	}
 }

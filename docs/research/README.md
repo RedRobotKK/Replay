@@ -2,7 +2,7 @@
 
 ## START HERE
 
-> ### [FINAL-CLOSEOUT.md](FINAL-CLOSEOUT.md) is the authoritative research closeout.
+> ### [FINAL-CLOSEOUT.md](FINAL-CLOSEOUT.md) is the authoritative research closeout
 >
 > It is the one auditable answer to what was discovered, what was ruled out, and
 > whether any concrete technical mechanism warrants dedicated prior-art

@@ -108,7 +108,7 @@ where the claim that needs them lives.** Nothing was weakened to reach this.
 
 ## How to reproduce
 
-```
+```sh
 go test ./...                 # 37 packages
 go test -race ./cmd/replay/   # concurrency
 go test ./internal/claims/    # register guards: boundaries, controls, test existence

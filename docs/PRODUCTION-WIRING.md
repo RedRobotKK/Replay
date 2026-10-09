@@ -111,7 +111,7 @@ reading the corpus twice.
 
 ### Anthropic / Claude Code / `~/.claude/projects/**/*.jsonl`
 
-```
+```text
 IDENTITY                PASS   vendor, product and store path identified; JSONL schema versioned by the records themselves
 PRODUCTION REACHABILITY PASS   bare `replay`, `replay burn`, `replay advise`, `replay cost`
 INGESTION               PASS   transcript.ParseClaudeCodeFile over automatically discovered paths
@@ -129,7 +129,7 @@ FINAL: PRODUCTION-WIRED
 
 ### DeepSeek / CLI and OpenAI-compatible clients / `openai:/v1/chat/completions`
 
-```
+```text
 IDENTITY                PASS   vendor, wire and endpoint identified
 PRODUCTION REACHABILITY PASS   `replay serve`, the shipped proxy; no developer-only route
 INGESTION               PASS   real bytes captured from api.deepseek.com 2026-09-05
@@ -150,7 +150,7 @@ generic OpenAI-compatible CLI has been pointed at `replay serve` and captured.
 
 ### xAI / Grok CLI / `~/.grok/sessions` local store
 
-```
+```text
 IDENTITY                PASS   vendor, product, store layout; Grok 1.0.41 guide names the tick scale
 PRODUCTION REACHABILITY PASS   `replay grok`, and since this pass `replay burn`; `replay doctor` discovers the store
 INGESTION               PASS   real session artifacts; fixtures carry the authentic params.update.usage envelope
@@ -168,7 +168,7 @@ FINAL: PRODUCTION-WIRED
 
 ### OpenAI / Codex CLI / `~/.codex/sessions` and `archived_sessions`
 
-```
+```text
 IDENTITY                PASS   vendor, product, both roots. `codex archive` moves a session between them without changing its format, and both are scanned
 PRODUCTION REACHABILITY PASS   `replay codex`, `replay burn`, `replay doctor`
 INGESTION               PASS   real rollout JSONL; fixtures cover break, compaction, absent breakdown and impossible counters
@@ -186,7 +186,7 @@ FINAL: PRODUCTION-WIRED
 
 ### Ollama / Ollama server / `~/.ollama/logs/server*.log`
 
-```
+```text
 IDENTITY                PASS   product and log glob; `server*.log` matches the reader, `app*.log` carries no usage and is excluded
 PRODUCTION REACHABILITY PASS   `replay burn`, `replay advise`, `replay doctor`
 INGESTION               PASS   real server logs; ollamadata/server.log fixture
@@ -204,7 +204,7 @@ FINAL: PRODUCTION-WIRED
 
 ### xAI / Grok CLI / `openai:/responses` via the proxy
 
-```
+```text
 IDENTITY                PASS   endpoint captured off the wire
 PRODUCTION REACHABILITY PASS   traffic does reach `replay serve`
 INGESTION               FAIL   /responses is not parsed. The proxy forwards it unchanged and warns
@@ -257,7 +257,7 @@ and carries the usage this path does not expose.
 
 ### Anysphere / Cursor / `state.vscdb` and agent transcripts
 
-```
+```text
 IDENTITY                PASS   both stores located and enumerated
 PRODUCTION REACHABILITY PASS   detected by knownSurfaces and named in the empty-state report
 INGESTION               FAIL   there is no usage evidence to ingest

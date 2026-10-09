@@ -244,17 +244,6 @@ consumer, and `docs/evidence/e4-01-state-representability-2026-10-02.md`
 records why none is built: the carrier is gated on an outcome signal no corpus
 carries.
 
-## Audit in flight
-
-Three agents, launched 2026-09-09, each using a different detection method because
-the confirmed cases were found four different ways: exported symbols with no
-non-test caller; config fields, flags and env vars nothing sets; unreachable
-branches and documentation promising what the code cannot do. Results land here.
-
----
-
-[Design](README.md) · [Documentation index](../README.md) · [Repository README](../../README.md)
-
 ## 16. internal/claims, the claim surface rather than the code
 
 Added 2026-09-30. Not reachable from `cmd/replay`, and deliberately so.
