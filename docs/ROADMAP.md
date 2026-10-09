@@ -302,17 +302,49 @@ The release that costs the most is the one after the promise. These are standing
 obligations rather than features, and none of them are optional once the number
 has a 1 in front of it.
 
-- **Compatibility surfaces, named.** Before 1.0 ships, this file has to say which
-  things are covered by the version number. The candidates are the corpus
-  submission schema (`replay.corpus.v2`), the pool document
-  (`replay.pool.v2`), the ledger format, the policy file, the budget artefact
-  (`schema 2`), **the exit codes**, and every `--json` output the 0.7 work adds.
-  The exit codes were frozen and published on 2026-09-13, which makes them the
-  first compatibility surface here written down before it had users rather than
-  after. The corpus schema has already survived two additive
-  changes without moving, which is the behaviour a contract should have; the
-  others have never been tested by a change. An unnamed compatibility surface is
-  one you break by accident and find out about from a user.
+- **Compatibility surfaces, named.** Written down on 2026-10-09 from the tree
+  rather than from memory, after this bullet had carried a candidate list
+  since 2026-09-13. [ADR-0024](adr/0024-deprecation-is-a-promise-made-before-1-0.md)'s
+  Decision section carries the same list in five lines and is still
+  **Status: Proposed**; moving it to Accepted is the decision that remains
+  before the tag, and it is the maintainer's, not this file's. What the
+  version number covers, each line verified against the source on that date:
+  - **The dispatch verbs and their flags.** 34 surfaces, as the production-grade
+    gate discovers them from `dispatch()` in `cmd/replay/main.go` and records
+    them in [production-grade-matrix.md](evidence/production-grade-matrix.md);
+    every one carries a section in the command guide
+    (`cmd/replay/command_table_test.go`).
+  - **The exit codes.** Frozen 2026-09-13, published as "Exit codes, frozen"
+    in [the command guide](guide/commands.md) and restated above the table in
+    `cmd/replay/main.go`.
+  - **Every `--json` output shape, by its schema string.** `replay.cost.v2`,
+    `replay.usage.v1`, `replay.rules.v1`, `replay.prefix.v1`,
+    `replay.simulate.v1`, `replay.intervention.v1`, `replay.route.v1`,
+    `replay.context.v1`, `replay.trim.v1`, `replay.ceiling.v1`,
+    `replay.apply.v1`, `replay.calibration.v1`, `replay.observation.v1` and
+    `replay.mutants.v1`, which is every `replay.*.v*` literal in non-test Go
+    on 2026-10-09 other than the three record schemas below. A field may be
+    added at any time and may not be removed or repurposed without ADR-0024's
+    clock.
+  - **The three records a machine can send or publish.** The corpus
+    submission `replay.corpus.v2`, the pool document `replay.pool.v2` and the
+    watch record `replay.watch.v1`. The corpus schema has survived two
+    additive changes without moving, which is the behaviour a contract should
+    have; the other two have not yet been tested by a change.
+  - **The two on-disk artefacts with a schema number.** The ledger record
+    (`internal/ledger/record.go`, `SchemaVersion = 2`) and the budget artefact
+    (`cmd/replay/budget.go`, `BudgetSchema = 2`).
+  - **The policy file.** The JSON cap document `replay simulate --policy` and
+    the proxy's guards read (`maxSessionUsd` and its siblings,
+    `cmd/replay/simulate.go`). It carries no schema string today; it is named
+    here so that the absence is written down before a user depends on it, and
+    adding one is the kind of additive change the clock allows.
+
+  Not covered, as ADR-0024 already says: unreleased flags, internal packages,
+  anything behind a build tag, and the OpenAI-compatible path marked
+  `EXPERIMENTAL, UNMASKED`. An unnamed compatibility surface is one you break
+  by accident and find out about from a user; the list above is the one this
+  file said it had to carry before 1.0 ships.
 - **A deprecation policy, written 2026-09-13 as [ADR-0024](adr/0024-deprecation-is-a-promise-made-before-1-0.md), because after 1.0 it cannot be: whatever it says, somebody's script is already relying on the absence of it. A surface gets a full minor release working and warning on stderr before it is removed, and the rule that makes that affordable is that adding a verb is the expensive decision rather than removing one. The 31 verbs should be reduced before 1.0, while removal is still free.** The original gap, as it read: There are 30 verbs and no
   stated procedure for retiring one. The cheapest version is a sentence: what
   warning a command prints, for how many minor releases, before it is removed.

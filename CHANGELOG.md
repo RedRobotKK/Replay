@@ -22,6 +22,25 @@ All notable changes to this project are documented here. The format follows [Kee
   1.27.2 with `-race` before the line moved. Decision record:
   `docs/evidence/closure-council-1.0-2026-10-09.md` section 5.
 
+### Changed
+
+- **The compatibility surfaces are named, from the tree.** `docs/ROADMAP.md`
+  had said since 2026-09-13 that before 1.0 ships it has to say which things
+  the version number covers, and carried candidates. It now carries the list,
+  each line verified against the source on 2026-10-09: the 34 dispatch
+  surfaces, the frozen exit codes, fourteen `--json` schema strings, the
+  corpus, pool and watch records, the ledger record and budget artefact (both
+  schema 2), and the policy file, which carries no schema string and is named
+  so that the absence is written down. ADR-0024 carries the same list and
+  stays Proposed; accepting it is the decision that remains before the tag.
+- **CITATION.cff and `.claude-plugin/marketplace.json` state the split
+  between the two names.** The README, the plugin manifest and the skill
+  already said that Replay on GitHub and as the CLI is the same binary
+  published as Replay Doctor on npm, PyPI and replay.doctor; the citation
+  named only one and the marketplace description only the other. Both now
+  carry the one-line note. This records a fact and decides nothing about the
+  name; the GitHub About text is a repository setting and is untouched.
+
 ### Fixed
 
 - **Markdown lint was red on 237 findings and none of them was a defect a
