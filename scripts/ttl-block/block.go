@@ -87,10 +87,23 @@ type blockRecord struct {
 // disagree with the write. marshalJSON and marshalIndent are the encoder
 // behind variables for the same reason: nothing in this program can hand
 // them a value they refuse, and the refusal paths still have to be seen.
+//
+// readLogForFrozen and readLogAgain are readLog behind two further
+// variables, one for frozen's own read of the log (the one historyAgrees
+// checks against) and one for startBlock's and endBlock's later read of the
+// same file, to get the records they act on. Nothing in this program
+// writes to the log between those two reads, so in production the two
+// variables are both readLog and always agree with each other; a test can
+// set either one apart from the other to drive the read-failure path on
+// just one of them, standing in for the log becoming unreadable (or
+// readable again) in the window between the two reads, without needing an
+// actual race.
 var (
-	readBack      = readSetting
-	marshalJSON   = json.Marshal
-	marshalIndent = json.MarshalIndent
+	readBack         = readSetting
+	marshalJSON      = json.Marshal
+	marshalIndent    = json.MarshalIndent
+	readLogForFrozen = readLog
+	readLogAgain     = readLog
 )
 
 // readSetting opens the settings file again and reports the value it holds,
@@ -312,7 +325,7 @@ func startBlock(p paths, block int, arm string, now time.Time) (blockRecord, err
 	if sched.Blocks[block-1] != arm {
 		return blockRecord{}, fmt.Errorf("the schedule names block %d as %s, not %s; the order was fixed before block 1 and is not chosen now", block, sched.Blocks[block-1], arm)
 	}
-	log, err := readLog(p.log)
+	log, err := readLogAgain(p.log)
 	if err != nil {
 		return blockRecord{}, err
 	}
@@ -420,7 +433,7 @@ func endBlock(p paths, block int, now time.Time) (blockRecord, error) {
 	if err != nil {
 		return blockRecord{}, err
 	}
-	log, err := readLog(p.log)
+	log, err := readLogAgain(p.log)
 	if err != nil {
 		return blockRecord{}, err
 	}
@@ -487,7 +500,7 @@ func frozen(p paths) (schedule, string, string, error) {
 	if s.RegisterSHA256 != regSHA {
 		return schedule{}, "", "", fmt.Errorf("the schedule was derived from register %s but the register now hashes to %s; nothing runs against an amended register until the schedule is re-derived and refrozen", short(s.RegisterSHA256), short(regSHA))
 	}
-	log, err := readLog(p.log)
+	log, err := readLogForFrozen(p.log)
 	if err != nil {
 		return schedule{}, "", "", err
 	}

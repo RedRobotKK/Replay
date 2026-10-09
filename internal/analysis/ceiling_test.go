@@ -47,6 +47,83 @@ func TestContextCeilingAvailableAtTenTightlyClusteredRecordings(t *testing.T) {
 	}
 }
 
+// Every existing fixture for BuildContextCeilings lists its pre-compaction
+// sizes in increasing order, so the running minimum in its min/max scan
+// never actually has to move off the first element: guard reachability
+// flagged the s < min branch (ceiling.go:97) as run (the comparison
+// executes every pass) but not depended on by any test, and a coverage
+// profile confirms the assignment under it (min = s) is never taken by the
+// existing suite. This puts the smallest recording in the middle of the
+// list, where only a correctly tracked running minimum catches it.
+//
+// The min/max ratio gate (ambiguousTierRatio) is what makes a stuck
+// minimum observable: the first element here (700000) is not the list's
+// smallest, so a min that never moves off it computes a ratio against the
+// true max comfortably under the gate (Available, wrongly); the true
+// minimum (165514), reached only if the running minimum is actually
+// tracked, pushes that same ratio over the gate (AmbiguousTier, correctly:
+// this model's recordings do not cluster into one tier).
+//
+// PASS: Status is AmbiguousTier, from the true min/max ratio of about 5.8.
+// FAIL: Status is Available, because the running minimum stopped moving
+// after the first element (980... here, 700000) and the stuck ratio
+// against that element understates the real spread.
+func TestContextCeilingMinTracksTheSmallestValueNotJustTheFirst(t *testing.T) {
+	pre := []int{700_000, 710_000, 165_514, 960_000, 965_000, 720_000, 730_000, 740_000, 750_000, 760_000}
+	sessions := []*transcript.Session{sessionWithCompactions("claude-opus-5", pre...)}
+	table := BuildContextCeilings(sessions)
+	c, ok := table["claude-opus-5"]
+	if !ok {
+		t.Fatalf("want an entry for claude-opus-5, got none: %+v", table)
+	}
+	if c.Status != ContextCeilingAmbiguousTier {
+		t.Fatalf("want AmbiguousTier from the true min (165514) against the max (965000), got status %v", c.Status)
+	}
+}
+
+// An unsized compaction (PreTokens <= 0) must not be pooled into a model's
+// count even when it is dated: Sized() and IsZero() are independent halves
+// of the same guard (ceiling.go:79), and the existing undated-compaction
+// test (TestContextCeilingSkipsAnUndatedCompaction, below) only exercises
+// the IsZero half, which modelNearCompaction's own guard happens to
+// dominate for that one case. This exercises the Sized half on its own: a
+// dated compaction with no PreTokens, pooled alongside ten real recordings
+// for the same model.
+//
+// PASS: the unsized compaction does not count: N stays 10, and the status
+// and Max come from the ten real recordings alone.
+// FAIL: the unsized compaction is pooled too (N becomes 11, and its
+// PreTokens of 0 pulls min to 0, turning a tight cluster into a reported
+// AmbiguousTier or a wrong Max).
+func TestContextCeilingExcludesAnUnsizedButDatedCompaction(t *testing.T) {
+	t0 := time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
+	lane := &transcript.Lane{Requests: []*transcript.Request{
+		{Timestamp: t0, Model: "claude-opus-5", Usage: transcript.Usage{Input: 100}},
+	}}
+	pre := []int{963_705, 964_000, 965_000, 966_870, 970_000, 980_000, 990_000, 995_000, 996_000, 998_021}
+	var comps []transcript.Compaction
+	for i, p := range pre {
+		comps = append(comps, transcript.Compaction{Trigger: "auto", PreTokens: p, PostTokens: p / 30, At: t0.Add(time.Duration(i+1) * time.Minute)})
+	}
+	// Dated (not the zero value) but unsized: PreTokens is left at 0.
+	comps = append(comps, transcript.Compaction{Trigger: "auto", PostTokens: 0, At: t0.Add(time.Hour)})
+	session := &transcript.Session{Lanes: []*transcript.Lane{lane}, Compactions: comps}
+	table := BuildContextCeilings([]*transcript.Session{session})
+	c, ok := table["claude-opus-5"]
+	if !ok {
+		t.Fatalf("want an entry for claude-opus-5, got none: %+v", table)
+	}
+	if c.N != 10 {
+		t.Errorf("want N=10, the unsized compaction must not be counted, got %d", c.N)
+	}
+	if c.Status != ContextCeilingAvailable {
+		t.Errorf("want Available from the ten real recordings, got %v", c.Status)
+	}
+	if c.Max != 998_021 {
+		t.Errorf("want Max=998021 from the ten real recordings, got %d", c.Max)
+	}
+}
+
 // Nine recordings is not enough, even tightly clustered.
 //
 // PASS: a model with 9 compactions reports TooFewRecords, not a ceiling.
@@ -258,9 +335,9 @@ func TestContextCeilingSkipsACompactionWithNoResolvableModel(t *testing.T) {
 
 // modelNearCompaction is the walk-backward search BuildContextCeilings and
 // ContextCeilingDetail both guard with their own Sized()/IsZero() checks
-// before calling it; this exercises the function's own internal guards
-// directly, at the unit a caller cannot reach once its own guard has
-// already filtered the input.
+// before calling it; this exercises the function's own behavior directly,
+// at the unit a caller cannot reach once its own guard has already
+// filtered the input.
 //
 // PASS: a zero instant, a sidechain-only lane, and a request strictly
 // after the given instant are each refused a match on their own.
@@ -268,6 +345,13 @@ func TestContextCeilingSkipsACompactionWithNoResolvableModel(t *testing.T) {
 func TestModelNearCompactionRefusesZeroSidechainAndFutureRequests(t *testing.T) {
 	t0 := time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
 
+	// A zero at is never After by any realistic (non-zero) Timestamp's own
+	// walk check, so every ordinary request is already excluded by the
+	// forward loop itself; there was an explicit at.IsZero() early return
+	// here too, removed 2026-10-09 (see modelNearCompaction's own comment)
+	// once mutation testing showed no input made it change this or any
+	// other test's result, including the zero-timestamp case directly
+	// below.
 	t.Run("zero instant", func(t *testing.T) {
 		session := &transcript.Session{Lanes: []*transcript.Lane{
 			{Requests: []*transcript.Request{{Timestamp: t0, Model: "claude-opus-5"}}},
@@ -279,8 +363,12 @@ func TestModelNearCompactionRefusesZeroSidechainAndFutureRequests(t *testing.T) 
 
 	// A request whose own Timestamp is also the zero value is not After a
 	// zero at (two equal zero values are not "after" each other), so the
-	// forward loop's own After(at) check alone would let this request
-	// through. Only the explicit at.IsZero() guard at the top refuses it.
+	// forward loop's own After(at) check alone lets this request past that
+	// first test. It is still refused: best also starts at the zero value,
+	// and a zero Timestamp is never After a zero best either, so model is
+	// never assigned. (An earlier version of this comment credited an
+	// explicit at.IsZero() guard for this; mutation testing showed the
+	// guard was not what did it, which is why it is gone.)
 	t.Run("zero instant with a zero-timestamp request present", func(t *testing.T) {
 		session := &transcript.Session{Lanes: []*transcript.Lane{
 			{Requests: []*transcript.Request{{Model: "claude-opus-5"}}}, // Timestamp is the zero value

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -110,6 +111,71 @@ func TestToolTreeSHA256FailsExplicitlyOnUnreadableFile(t *testing.T) {
 	defer func() { _ = os.Chmod(path, 0o600) }()
 	if _, _, err := toolTreeSHA256(root); err == nil {
 		t.Fatal("an unreadable file must produce an explicit error, not a hash that silently omits it")
+	}
+}
+
+// A root that cannot be walked at all (it does not exist, or a directory in
+// it cannot be listed) must fail the hash explicitly, the same as an
+// unreadable tracked file does, rather than silently hashing whatever part
+// of the tree the walk did manage to see.
+//
+// Guard reachability flagged this error path (tooltree.go:38 and :82) as
+// run but not depended on by any test, in a program run whose coverage
+// shows it; the only test run that reached it did so by accident, through
+// TestRunDispatchesAndExitsByOutcome's use of the CLI's own default
+// -tool-tree-roots (the real "scripts/ttl-block" and "internal/transcript"
+// paths, which do not resolve under go test's per-package working
+// directory). This drives it directly and on purpose.
+//
+// PASS: the walk error is returned, naming the path, and no partial hash
+// or files map is produced.
+// FAIL: the error is swallowed, or a hash is produced from whatever the
+// walk saw before failing.
+func TestToolTreeSHA256FailsExplicitlyWhenTheRootCannotBeWalked(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "does-not-exist")
+	sum, files, err := toolTreeSHA256(root)
+	if err == nil {
+		t.Fatal("a root that cannot be walked must produce an explicit error, not a hash that silently omits what it could not see")
+	}
+	if !strings.Contains(err.Error(), root) {
+		t.Errorf("the error must name the path that could not be walked: %v", err)
+	}
+	if sum != "" || files != nil {
+		t.Errorf("a failed walk must not produce a partial sum or files map, got sum=%q files=%v", sum, files)
+	}
+}
+
+// d.IsDir() is checked before the .go extension filter, so a directory
+// whose own name happens to end in .go is still skipped as a directory and
+// never handed to os.ReadFile, which would fail on it. Every other fixture
+// in this file names its directories without a .go suffix, so the
+// extension filter alone would dominate the IsDir check for them; guard
+// reachability flagged exactly this (tooltree.go:73) as run (every walk
+// visits at least the root directory) but not depended on by any existing
+// test. This constructs the one case where the two checks diverge.
+//
+// PASS: a directory named *.go is skipped like any other directory, and
+// the files actually inside it are still hashed.
+// FAIL: os.ReadFile is called on the directory (an explicit error, since
+// reading a directory as a file fails), or the directory's own path is
+// hashed as if it were a file.
+func TestToolTreeSHA256SkipsADirectoryNamedWithAGoSuffix(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "sub.go")
+	inner := filepath.Join(dir, "a.go")
+	writeFile(t, inner, "package a\n")
+	sum, files, err := toolTreeSHA256(root)
+	if err != nil {
+		t.Fatalf("a directory named *.go must not be read as a file: %v", err)
+	}
+	if _, ok := files[dir]; ok {
+		t.Errorf("the directory's own path must not appear in the files map: %v", files)
+	}
+	if _, ok := files[inner]; !ok {
+		t.Errorf("the file inside the *.go-named directory must still be hashed: %v", files)
+	}
+	if sum == "" {
+		t.Error("want a non-empty sum from the one real file inside")
 	}
 }
 

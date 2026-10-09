@@ -154,3 +154,26 @@ func TestTenancy_ValidateAccountIDRefusesIllegalCharacters(t *testing.T) {
 		t.Fatalf("want the pattern branch's message naming it illegal, got %q", err.Error())
 	}
 }
+
+// ValidateAccountID's empty-string check is its own guard, the same way
+// ValidateTenantID's is (TestTenancy_ValidateTenantIDRefusesEmptyByName,
+// above): idPattern also refuses "" on its own (the pattern requires at
+// least one character), so TestTenancy_AccountHasNoLocalDefault's plain
+// err == nil check cannot tell the empty-string branch apart from the
+// pattern branch firing on the same input. Guard reachability flagged
+// exactly this (tenancy.go:140) as run but not depended on by any test.
+// This asserts the specific message only the empty-string branch produces.
+//
+// PASS: an empty raw value is refused with "account id is empty", not the
+// pattern message.
+// FAIL: the empty-string branch is removed and the pattern branch's
+// message ("not a legal identity") is returned instead, undetected.
+func TestTenancy_ValidateAccountIDRefusesEmptyByName(t *testing.T) {
+	err := ValidateAccountID("")
+	if err == nil {
+		t.Fatal("empty account id must be refused")
+	}
+	if err.Error() != "account id is empty" {
+		t.Fatalf("want the empty-string branch's own message %q, got %q", "account id is empty", err.Error())
+	}
+}

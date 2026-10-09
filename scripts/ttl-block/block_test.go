@@ -482,6 +482,124 @@ func TestStartNamesEveryStorageFailureAndStartsNothing(t *testing.T) {
 	}
 }
 
+// frozen reads the log once, to check history before anything starts or
+// ends; startBlock then reads it again, moments later, to get the records
+// mayStart acts on. Nothing in this program writes to the log between those
+// two reads, so in production they always agree and this second read's own
+// error path is never entered by the ordinary test suite (guard
+// reachability flagged scripts/ttl-block/block.go:315 as such). This drives
+// it directly, through the readLogAgain seam, standing in for the log
+// becoming unreadable in the narrow window between frozen's read and this
+// one (truncated or removed by something outside this program, say),
+// without needing an actual race.
+//
+// PASS: the second read's own error is returned as-is, and nothing is
+// written: no settings change, no backup, no block record.
+// FAIL: the error is swallowed, or the settings file or log is touched
+// before it is seen.
+func TestStartRefusesWhenItsOwnLogReadDisagreesWithFrozens(t *testing.T) {
+	now := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
+	p := fixture(t, map[string]any{"promptCacheTtl": "1h"})
+	s := readSched(t, p)
+	old := readLogAgain
+	t.Cleanup(func() { readLogAgain = old })
+	wantErr := errors.New("the block log vanished between frozen's read and this one")
+	readLogAgain = func(_ string) ([]blockRecord, error) { return nil, wantErr }
+	if _, err := startBlock(p, 1, s.Blocks[0], now); !errors.Is(err, wantErr) {
+		t.Errorf("want the second read's own error, got %v", err)
+	}
+	if got, _ := readBack(p.settings); got != "1h" {
+		t.Errorf("the settings file was touched although the second log read failed: %q", got)
+	}
+	if _, err := os.Stat(p.log); !os.IsNotExist(err) {
+		t.Error("a block record was written although the second log read failed")
+	}
+}
+
+// The same seam, driving endBlock's own second read of the log
+// (scripts/ttl-block/block.go:423, also flagged as never entered).
+//
+// PASS: the second read's own error is returned, and the log is not
+// appended beyond what startBlock already wrote.
+// FAIL: the error is swallowed, or a BLOCK_ENDED record is written anyway.
+func TestEndRefusesWhenItsOwnLogReadDisagreesWithFrozens(t *testing.T) {
+	now := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
+	p := fixture(t, map[string]any{})
+	s := readSched(t, p)
+	if _, err := startBlock(p, 1, s.Blocks[0], now); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(p.log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := readLogAgain
+	t.Cleanup(func() { readLogAgain = old })
+	wantErr := errors.New("the block log vanished between frozen's read and this one")
+	readLogAgain = func(_ string) ([]blockRecord, error) { return nil, wantErr }
+	if _, err := endBlock(p, 1, now.Add(time.Hour)); !errors.Is(err, wantErr) {
+		t.Errorf("want the second read's own error, got %v", err)
+	}
+	after, err := os.ReadFile(p.log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Error("the log was appended although the second read failed")
+	}
+}
+
+// frozen's own read of the log (scripts/ttl-block/block.go:490-491) is a
+// distinct check from startBlock's and endBlock's second read of it: this
+// one is what historyAgrees runs against, before either function's own
+// read. Guard reachability found it entered but undominated, and flagged
+// it for a design read rather than a mechanical fix: this test is that
+// read's evidence. It decouples frozen's own read (via readLogForFrozen)
+// from the later, real read of the same file, the way a transient read
+// failure during frozen's check, that resolves before the later read,
+// would: if frozen silently proceeded on that failure instead of refusing,
+// historyAgrees would run against an empty log and wrongly wave through a
+// schedule that disagrees with a block already on record, because the
+// record that would have caught it was the one the failed read could not
+// see.
+//
+// PASS: frozen's own read failing refuses the operation outright; the
+// later, real read of the (fully intact) log is never reached.
+// FAIL: the read failure is swallowed and the operation proceeds as though
+// the log were empty.
+func TestFrozenRefusesWhenItsOwnLogReadFailsEvenIfTheLogIsFine(t *testing.T) {
+	now := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
+	p := fixture(t, map[string]any{})
+	s := readSched(t, p)
+	if _, err := startBlock(p, 1, s.Blocks[0], now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := endBlock(p, 1, now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	// Re-derive a schedule that disagrees with block 1's own history, as
+	// TestFrozenRefusesWhenTheScheduleDisagreesWithAnAlreadyStartedBlock
+	// does, so a frozen that wrongly treats a failed read as an empty log
+	// would wave this through instead of refusing it.
+	disagreeing := s
+	disagreeing.Blocks = append([]string(nil), s.Blocks...)
+	disagreeing.Blocks[0] = other(s.Blocks[0])
+	b, err := json.Marshal(disagreeing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p.schedule, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := readLogForFrozen
+	t.Cleanup(func() { readLogForFrozen = old })
+	wantErr := errors.New("the block log could not be read for frozen's own check")
+	readLogForFrozen = func(_ string) ([]blockRecord, error) { return nil, wantErr }
+	if _, err := startBlock(p, 2, disagreeing.Blocks[1], now.Add(2*time.Hour)); !errors.Is(err, wantErr) {
+		t.Errorf("a failed read during frozen's own check must refuse, not proceed as though the log were empty: %v", err)
+	}
+}
+
 // Ending a block is refused for the frozen artefacts' sake before anything
 // is written, and a log that cannot be read at the end is an error.
 func TestEndRefusesBeforeWritingWhenTheArtefactsAreGone(t *testing.T) {

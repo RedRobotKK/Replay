@@ -92,20 +92,20 @@ func BuildContextCeilings(sessions []*transcript.Session) map[string]ContextCeil
 			table[model] = ContextCeiling{Status: ContextCeilingTooFewRecords, N: len(sizes)}
 			continue
 		}
-		min, max := sizes[0], sizes[0]
+		lo, hi := sizes[0], sizes[0]
 		for _, s := range sizes[1:] {
-			if s < min {
-				min = s
+			if s < lo {
+				lo = s
 			}
-			if s > max {
-				max = s
+			if s > hi {
+				hi = s
 			}
 		}
-		if min <= 0 || float64(max)/float64(min) > ambiguousTierRatio {
+		if lo <= 0 || float64(hi)/float64(lo) > ambiguousTierRatio {
 			table[model] = ContextCeiling{Status: ContextCeilingAmbiguousTier, N: len(sizes)}
 			continue
 		}
-		table[model] = ContextCeiling{Status: ContextCeilingAvailable, Max: max, N: len(sizes)}
+		table[model] = ContextCeiling{Status: ContextCeilingAvailable, Max: hi, N: len(sizes)}
 	}
 	return table
 }
@@ -115,10 +115,19 @@ func BuildContextCeilings(sessions []*transcript.Session) map[string]ContextCeil
 // no model of its own, so this is the only way to attribute a boundary to
 // the model that produced it: the same lane-walk firstPromptAfter already
 // uses to search forward, run backward instead.
+//
+// at.IsZero() needs no guard of its own here, and one was removed
+// 2026-10-09 after guard reachability flagged it as run but depended on by
+// no test (internal/analysis/ceiling.go:119) and mutation testing showed
+// why: best starts at the zero value, and the loop below only ever adopts
+// a request whose Timestamp is strictly After best. A zero at admits only
+// a zero-Timestamp request past the first check (every non-zero Timestamp
+// is After a zero at, so the loop's own at check already excludes it); a
+// zero Timestamp is never After a zero best either, so model is never
+// assigned. No input makes a zero at resolve to a non-empty model with or
+// without the explicit early return; it was provably redundant, not merely
+// hard to reach, which is why it is gone rather than asserted on.
 func modelNearCompaction(session *transcript.Session, at time.Time) string {
-	if at.IsZero() {
-		return ""
-	}
 	best := time.Time{}
 	model := ""
 	for _, lane := range session.Lanes {

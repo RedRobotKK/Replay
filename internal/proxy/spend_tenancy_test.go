@@ -453,7 +453,7 @@ func TestSP5_HTTPRequestWithNoTenantHeaderRunsAsLocalDefault(t *testing.T) {
 	up := &upstream{t: t}
 	base, dir, _ := startProxyWith(t, up, Config{Spend: NewSpendGuard(SpendLimits{DayTokens: 1_000_000})})
 	resp := post(t, base, "/v1/messages", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		t.Fatalf("a request with no tenant header must be forwarded as before: status %d", resp.StatusCode)
 	}
@@ -474,7 +474,7 @@ func TestSP5_HTTPRequestWithAnUnresolvableTenantIsRefused(t *testing.T) {
 	base, dir, _ := startProxyWith(t, up, Config{Spend: NewSpendGuard(SpendLimits{DayTokens: 1_000_000})})
 
 	resp := post(t, base, "/v1/messages", map[string]string{HeaderTenantID: "TENANT_UNKNOWN"})
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 400 {
 		t.Fatalf("an unresolvable tenant must be refused with 400, got %d", resp.StatusCode)
 	}
@@ -517,17 +517,17 @@ func TestSP5_HTTPTwoTenantsDoNotShareADayCapAcrossRealRequests(t *testing.T) {
 	if respA1.StatusCode != 200 {
 		t.Fatalf("tenant A's first request should be under its own fresh cap: status %d", respA1.StatusCode)
 	}
-	respA1.Body.Close()
+	_ = respA1.Body.Close()
 	waitLedger(t, dir, 1)
 
 	respA2 := post(t, base, "/v1/messages", map[string]string{HeaderTenantID: "acme-co", HeaderSessionID: "session-a-2"})
-	defer respA2.Body.Close()
+	defer func() { _ = respA2.Body.Close() }()
 	if respA2.StatusCode == 200 {
 		t.Fatal("tenant A exhausted its own day cap and the next request must be refused")
 	}
 
 	respB := post(t, base, "/v1/messages", map[string]string{HeaderTenantID: "widget-co", HeaderSessionID: "session-b-1"})
-	defer respB.Body.Close()
+	defer func() { _ = respB.Body.Close() }()
 	if respB.StatusCode != 200 {
 		body := readAll(t, respB)
 		t.Fatalf("tenant B spent nothing under its own identical day cap and must be forwarded: status %d, body %s", respB.StatusCode, body)
