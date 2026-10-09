@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Security
+
+- **The toolchain floor is now go1.27.2; it was go1.25.13.** Thirteen Go
+  advisories published 2026-10-08 (GO-2026-6599 to GO-2026-6617) are fixed in
+  go1.26.9 and go1.27.2 and in no 1.25.x, because 1.25 left upstream support
+  when 1.27.0 shipped. Nine of them reached this module, through the proxy's
+  upstream leg, the self-update client and the TLS peers an operator chooses
+  for `upgrade`, `rules --check-prices` and `probe --execute`, and the
+  govulncheck job had been red on them since they were published. The one
+  line in `go.mod` moves; the language floor stays at `go 1.24`. Because
+  `release.yml` reads the compiler from `go.mod`, the next release is built
+  by go1.27.2, and the reproducible-build procedure in
+  `scripts/reproduce-release.sh` follows the same line. Under go1.27.2 the
+  module builds, vets, formats and passes all 40 packages with govulncheck
+  reporting no vulnerabilities; the go-latest job had already been green on
+  1.27.2 with `-race` before the line moved. Decision record:
+  `docs/evidence/closure-council-1.0-2026-10-09.md` section 5.
+
 ### Fixed
 
 - **Markdown lint was red on 237 findings and none of them was a defect a
