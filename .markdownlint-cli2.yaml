@@ -16,10 +16,16 @@ ignores:
   # record of where that promise was broken). The findings these files carry
   # are blank lines around headings, emphasis markers and fence languages:
   # nothing a reader of the record is misled by, and nothing worth a diff
-  # across 34 frozen files to repair. Listed by name and not by glob, so a
-  # record written tomorrow is still linted on the day it is written, and so
-  # this list cannot grow without a reviewed change to this file. Added
-  # 2026-10-09; the full disposition is in
+  # across the frozen files listed below to repair. Every entry is a record
+  # dated on or before 2026-10-09, the day this list was made (the six under
+  # docs/research/ carry their 2026-09-29 freeze in their own first lines),
+  # and every entry still has at least one finding; an entry that lints
+  # clean has no reason to stay here. Listed by name and not by glob, so a
+  # record written after that day is linted on the day it is written, and so
+  # this list cannot grow without a reviewed change to this file. The five
+  # TTL files (ttl-*-2026-10-05 and ttl-amendment-2-2026-10-07) are not
+  # listed: they lint clean and are protected by their own register, not by
+  # this file. Added 2026-10-09, 33 entries; the full disposition is in
   # docs/evidence/closure-council-1.0-2026-10-09.md.
   - docs/evidence/c004-prediction-2026-09-30.md
   - docs/evidence/c004-tier-mechanism-2026-09-30.md
