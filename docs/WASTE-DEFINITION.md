@@ -34,6 +34,15 @@ I had five and called them all waste. **Only two survive.**
 
 - **Re-billed** — cache breaks, true duplicate re-reads, identical repeated calls. Strictly better if
   removed. **This is the only tier that should ever be called waste.**
+
+  **Corrected 2026-09-13.** The tier and the wire field are not the same width. `rebilledUsd`
+  (renamed from `avoidableUsd` in v0.6.0; the schema moved to v2 and now refuses a document
+  carrying the retired name rather than reading the figure as zero) prices only the cache-break
+  member of this tier: `cmd/replay/cost.go` sums a break's deficit alone into the dollar figure,
+  while true duplicate re-reads and identical repeated calls are counted separately, as
+  `Repeated` and `Errored`, and never folded into it. So "rebilled measures only the cache-break
+  member" is the claim a payload actually supports today; the other two members of this tier are
+  real, named, and unpriced, not measured by this field.
 - **Priced trades** — fan-out, unused tools, retries. Cost bought something: latency, flexibility,
   resilience. Report the price, never the verdict.
 - **Unknowable** — whether an exploration was worth it. Replay must not have an opinion, and today it
