@@ -7,17 +7,18 @@
 #   1. The advise screen is a triage tool. j/k moves a cursor, enter opens the
 #      evidence, `a` marks a finding applied and it persists to the advice file
 #      `replay advise` already keeps.
-#   2. It sizes itself to the terminal. This tape runs at 40 rows deliberately;
-#      the same screen on 24 shows fewer findings and still fits, because the
+#   2. It sizes itself to the terminal. This tape runs at 24 rows deliberately;
+#      the same screen at 40 rows shows five findings; at 24 it shows two and
+#      still fits, because the
 #      height is now read rather than assumed.
 #
-# The corpus is this machine's own. Nothing here is a mock, which is why the
-# figures move between recordings — 1,691 transcripts to 1,738 in one day.
+# The corpus is the repository's redacted fixture, placed under a throwaway HOME
+# by docs/demo/render.sh, so the figures do not move between recordings and no
+# transcript on the recording machine is read. The binary is a built or
+# downloaded `replay`; render.sh prints its version line and sha256 so the
+# recording's provenance is checkable.
 
-# RENDER IN TWO STEPS, and the second one is not optional:
-#
-#   vhs docs/demo/triage.tape
-#   ffmpeg -i docs/demo/triage.gif -vf "select=gte(n\,55)" ... docs/demo/triage.gif
+# RENDER WITH docs/demo/render.sh, not vhs alone: the script trims the lead-in.
 #
 # GitHub does not autoplay a GIF for every visitor, so frame one is the poster
 # frame and is all a reader may ever see. Recorded straight through, frame one
@@ -29,9 +30,8 @@
 # captures a screen that nothing has redrawn and the first forty frames come
 # out blank. That was tried on 2026-09-15 and is why the trim exists instead.
 #
-# Trimming the lead-in is deterministic and checkable: the poster frame is a
-# populated advise screen, and `a reader who never sees it animate` still sees
-# findings.
+# render.sh drops the first 150 frames (the shell typing and the TUI launch), so
+# the poster frame is a populated advise screen. DEMO_LEADIN_FRAMES overrides it.
 
 Output docs/demo/triage.gif
 
@@ -45,7 +45,7 @@ Set Height 900
 Set Padding 18
 Set Theme "Catppuccin Mocha"
 Set TypingSpeed 55ms
-# A real terminal size, and the point of the recording: 40 rows, not 24.
+# A real terminal size: LINES=24 is pinned in the typed export below.
 Set WindowBar Colorful
 
 # The binary built from this tree, not whatever is on PATH. The first
@@ -62,7 +62,7 @@ Set WindowBar Colorful
 #
 # Setting it here makes the terminal and the layout agree on one number, which
 # is the only way a recording is reproducible.
-Type "export LINES=24 COLUMNS=100"
+Type "export HOME=$PWD/docs/demo/.home LINES=24 COLUMNS=100"
 Enter
 Sleep 300ms
 Type "./docs/demo/.replay-demo-bin tui --screen advise"
