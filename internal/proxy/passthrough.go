@@ -103,11 +103,15 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	// that fails to resolve is refused here, before the circuit breaker,
 	// before the body is read, and before anything is counted: SP-5's own
 	// words are "refused, never pooled into a shared bucket."
-	tenant, tenantErr := tenancy.ResolveTenant(r.Header.Get(HeaderTenantID))
+	//
+	// The refusal says which class of failure and how many bytes, never
+	// the bytes: tenantErr quotes the raw header, and the message reaches
+	// the ledger (refusal.go, tenantUnresolvedMessage).
+	tenantHeader := r.Header.Get(HeaderTenantID)
+	tenant, tenantErr := tenancy.ResolveTenant(tenantHeader)
 	if tenantErr != nil {
 		s.refuseSession(w, tenancy.TenantUnknown, rec.SessionID, "", refusalTenantUnresolved,
-			"tenant identity could not be resolved: "+tenantErr.Error()+
-				"; omit "+HeaderTenantID+" to run as the local default, or send a valid identity", 0)
+			tenantUnresolvedMessage(len(tenantHeader), tenantErr), 0)
 		return
 	}
 

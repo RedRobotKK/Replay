@@ -106,6 +106,27 @@ var reservedAccountIDs = map[AccountID]bool{
 	AccountUnknown: true,
 }
 
+// The three ways an identity fails validation, as sentinels every branch of
+// ValidateTenantID and ValidateAccountID wraps with %w. The error text still
+// quotes the offending input, because a person debugging a flag or a config
+// file needs to see it; the sentinels exist so that a caller which must NOT
+// repeat that text (the proxy boundary, whose refusal reaches the ledger and
+// the ledger's contract is counts and thresholds, never content) can classify
+// the failure with errors.Is and never read the message. Classifying by
+// substring would be the same leak with an extra step.
+var (
+	// ErrIdentityEmpty: the input was the empty string. ResolveTenant never
+	// returns it (empty resolves to LocalTenant); the validators do.
+	ErrIdentityEmpty = errors.New("is empty")
+	// ErrIdentityReserved: the input spelled a sentinel (TenantUnknown,
+	// LocalTenant, AccountUnknown) a caller may not claim as an identity.
+	ErrIdentityReserved = errors.New("is reserved")
+	// ErrIdentityIllegal: the input failed idPattern, whether by character
+	// set, by length or by its first character.
+	ErrIdentityIllegal = errors.New("is not a legal identity " +
+		"(ASCII letters, digits, -._: only, 1-128 chars, first character alphanumeric)")
+)
+
 // idPattern bounds what an identity may contain: ASCII letters, digits, and
 // a small separator set (- _ . :) wide enough for a future namespaced key
 // ("org:repo") without this package changing shape. No case folding and no
@@ -120,14 +141,13 @@ var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 // explicit value that must not be defaulted.
 func ValidateTenantID(raw string) error {
 	if raw == "" {
-		return errors.New("tenant id is empty")
+		return fmt.Errorf("tenant id %w", ErrIdentityEmpty)
 	}
 	if reservedTenantIDs[TenantID(raw)] {
-		return fmt.Errorf("tenant id %q is reserved", raw)
+		return fmt.Errorf("tenant id %q %w", raw, ErrIdentityReserved)
 	}
 	if !idPattern.MatchString(raw) {
-		return fmt.Errorf("tenant id %q is not a legal identity "+
-			"(ASCII letters, digits, -._: only, 1-128 chars, first character alphanumeric)", raw)
+		return fmt.Errorf("tenant id %q %w", raw, ErrIdentityIllegal)
 	}
 	return nil
 }
@@ -138,14 +158,13 @@ func ValidateTenantID(raw string) error {
 // gives AccountID a shape TenantID does not share.
 func ValidateAccountID(raw string) error {
 	if raw == "" {
-		return errors.New("account id is empty")
+		return fmt.Errorf("account id %w", ErrIdentityEmpty)
 	}
 	if reservedAccountIDs[AccountID(raw)] {
-		return fmt.Errorf("account id %q is reserved", raw)
+		return fmt.Errorf("account id %q %w", raw, ErrIdentityReserved)
 	}
 	if !idPattern.MatchString(raw) {
-		return fmt.Errorf("account id %q is not a legal identity "+
-			"(ASCII letters, digits, -._: only, 1-128 chars, first character alphanumeric)", raw)
+		return fmt.Errorf("account id %q %w", raw, ErrIdentityIllegal)
 	}
 	return nil
 }

@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -55,6 +56,34 @@ var (
 	// accumulators pooled under any identity at all.
 	refusalTenantUnresolved = refusal{http.StatusBadRequest, "replay_tenant_unresolved", "tenant_unresolved"}
 )
+
+// tenantUnresolvedMessage is everything a tenant refusal may say about the
+// header that failed to resolve: which class of failure, and how many bytes
+// were sent. It takes the length and not the value on purpose. The message
+// it builds reaches three places (the REFUSED log line, the HTTP error body
+// and ledger.Record.RefusalReason), and the ledger's contract for that field
+// is counts and thresholds, never content. The first version pasted
+// tenancy's own error, which quotes the raw header with %q, so a client
+// could write any string into the operator's ledger by sending it as a
+// tenant id that does not validate (R1, PR #336 review). A function that is
+// never handed the bytes cannot leak them.
+//
+// The class comes from errors.Is against tenancy's sentinels, not from the
+// error text. An error neither sentinel matches is still refused and still
+// bounded; it is only described less precisely.
+func tenantUnresolvedMessage(headerLen int, err error) string {
+	class := "not a recognised identity"
+	switch {
+	case errors.Is(err, tenancy.ErrIdentityReserved):
+		class = "a reserved word"
+	case errors.Is(err, tenancy.ErrIdentityIllegal):
+		class = "not a legal identity"
+	}
+	return fmt.Sprintf("tenant identity could not be resolved: %s is %s (%d bytes); "+
+		"omit it to run as the local default, or send a valid identity "+
+		"(ASCII letters, digits, -._: only, 1-128 chars, first character alphanumeric)",
+		HeaderTenantID, class, headerLen)
+}
 
 // refuse answers a request locally in the provider's error shape so any
 // client that understands provider errors shows the message to the user.
