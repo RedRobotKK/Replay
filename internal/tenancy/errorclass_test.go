@@ -2,6 +2,7 @@ package tenancy
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -26,7 +27,7 @@ func TestTenancy_ValidationErrorsCarryTheirClass(t *testing.T) {
 		{"tenant reserved local", ValidateTenantID(string(LocalTenant)), ErrIdentityReserved},
 		{"tenant reserved unknown", ValidateTenantID(string(TenantUnknown)), ErrIdentityReserved},
 		{"tenant illegal", ValidateTenantID("has space"), ErrIdentityIllegal},
-		{"tenant overlong", ValidateTenantID(string(make([]byte, 129, 129)) + "a"), ErrIdentityIllegal},
+		{"tenant overlong", ValidateTenantID(strings.Repeat("a", 129)), ErrIdentityIllegal},
 		{"account empty", ValidateAccountID(""), ErrIdentityEmpty},
 		{"account reserved", ValidateAccountID(string(AccountUnknown)), ErrIdentityReserved},
 		{"account illegal", ValidateAccountID("has space"), ErrIdentityIllegal},
