@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-10
+
 ### Security
 
 - **The toolchain floor is now go1.27.2; it was go1.25.13.** Thirteen Go
