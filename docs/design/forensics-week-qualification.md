@@ -1,5 +1,7 @@
 # Qualifying a forensics week, before anyone pays
 
+> **Withdrawn 2026-10-05.** [ADR-0028](../adr/0028-replay-is-a-product-with-a-hosted-service.md) records that the fixed-fee forensic engagement is not offered and is not to be proposed again. Nothing in this document is for sale. It stays as the dated record of the question, unedited below.
+
 **2026-09-12.** Companion to
 [the deliverable](forensics-week-deliverable.md), which describes what a paid
 week hands over. This describes what has to be true before the week is worth

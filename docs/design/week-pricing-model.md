@@ -1,5 +1,7 @@
 # What the forensics week costs to produce, and what that makes it worth
 
+> **Withdrawn 2026-10-05.** [ADR-0028](../adr/0028-replay-is-a-product-with-a-hosted-service.md) records that the fixed-fee forensic engagement is not offered and is not to be proposed again. Nothing in this document is for sale. It stays as the dated record of the question, unedited below.
+
 **2026-09-13.** Built bottom-up because the existing band, $8,000 to $18,000,
 has no derivation written down anywhere. A price with no arithmetic behind it
 cannot be defended in the room where somebody asks why, and this is the one

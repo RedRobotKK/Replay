@@ -1,5 +1,7 @@
 # The forensics week: what the customer actually receives
 
+> **Withdrawn 2026-10-05.** [ADR-0028](../adr/0028-replay-is-a-product-with-a-hosted-service.md) records that the fixed-fee forensic engagement is not offered and is not to be proposed again. Nothing in this document is for sale. It stays as the dated record of the question, unedited below.
+
 **2026-09-12.** The week is the first thing Replay sells
 ([`MONEY-PATH.md`](../MONEY-PATH.md) rules out the per-seat subscription; the unit
 is a repository). Nobody has bought one yet, so this is the shape proposed before
