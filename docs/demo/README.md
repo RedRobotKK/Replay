@@ -8,7 +8,8 @@ applied.
 ### Provenance
 
 `triage.gif` was rendered by `docs/demo/render.sh` from the released **v0.9.0**
-binary (`replay version` prints `replay v0.9.0`; binary sha256
+binary (`replay version` prints
+`replay 0.9.0 (06de1b2, built 2026-10-10T05:54:31Z)`; binary sha256
 `aa2d0a800c5b4c23f8562c62fcf2e0efc05f8f0e81104887ea6d91c86781d0a5`, the
 darwin/arm64 build from the signed release archive) against the repository's
 redacted fixture `internal/transcript/testdata/session-redacted.jsonl` (sha256
@@ -27,6 +28,22 @@ The script prints the fixture hash, the binary hash and the binary's version
 line before it records, so the recording's provenance is checkable. The binary
 is copied to `docs/demo/.replay-demo-bin` and the throwaway home to
 `docs/demo/.home`; neither is committed.
+
+GitHub may show only the first frame of a GIF, so that frame has to be the
+advise screen and not the shell typing the command. VHS records the typing and
+the launch before the TUI first draws, and how many frames that takes varies
+from run to run (156 and 165 in two consecutive re-renders). `render.sh`
+therefore finds the first frame whose content area is populated and drops
+everything before it, rather than dropping a fixed count. If it finds none it
+exits non-zero. `DEMO_LEADIN_FRAMES=N` forces a count.
+
+### Reproducibility
+
+Re-rendering does not give a byte-identical file: the frame count and the
+timing differ between runs (249 and 250 frames in two re-renders from a clean
+clone, against 258 committed), and the screen's "as of" line carries the render
+time. What is reproducible is the inputs (binary hash, fixture hash, tape) and
+the screens shown. The commands the tape types are the ones in the list below.
 
 ### What the recording shows
 

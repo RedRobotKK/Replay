@@ -30,8 +30,9 @@
 # captures a screen that nothing has redrawn and the first forty frames come
 # out blank. That was tried on 2026-09-15 and is why the trim exists instead.
 #
-# render.sh drops the first 150 frames (the shell typing and the TUI launch), so
-# the poster frame is a populated advise screen. DEMO_LEADIN_FRAMES overrides it.
+# render.sh drops every frame before the first populated advise screen (the shell
+# typing and the TUI launch; the count varies per run), so the poster frame is
+# that screen. DEMO_LEADIN_FRAMES overrides the detected count.
 
 Output docs/demo/triage.gif
 
