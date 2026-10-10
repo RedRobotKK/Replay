@@ -56,3 +56,4 @@ docs/demo/.replay-demo-bin
 # Python bytecode from the packaging test scripts.
 __pycache__/
 *.pyc
+docs/demo/.home

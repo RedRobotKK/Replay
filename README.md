@@ -16,7 +16,9 @@ re-billed at write prices. (Published to npm and at replay.doctor under the name
 Doctor" — same binary, same repository, two names in use across different surfaces; this
 repository's own name is Replay.)
 
-![A triage session: pick a finding, open the evidence behind it, mark it applied](docs/demo/triage.gif)
+![A triage session: pick a finding, open the evidence behind it, mark it applied. Recorded from the v0.9.0 release binary on the repository's redacted fixture](docs/demo/triage.gif)
+
+*The recording is `replay` v0.9.0 reading the redacted fixture in this repository, not anyone's own transcripts; [how it was made and how to re-render it](docs/demo/README.md). It opens on the advise screen, moves between findings, opens the evidence behind "Bash inputs are 28% of prompt tokens" and marks a finding applied.*
 
 GitHub labels this repository 'Other' because its licence detector does not know BUSL-1.1; the licence is the Business Source License 1.1, converting to the Apache License 2.0 on 2029-09-06, and the text is in LICENSE.
 
