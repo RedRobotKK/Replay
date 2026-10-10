@@ -1,0 +1,77 @@
+name: Reproduce the release
+
+# RELEASE-CRITERIA.md's second 1.0 gate used to read "Reproducible is
+# unverified." scripts/reproduce-release.sh closed that by hand, once, on
+# v0.5.4, on all four published platforms. This wires the same script to run
+# automatically after every release, so the gate is a property of releases
+# and not a fact about one tag someone happened to check.
+#
+# Trigger mirrors publish-shims.yml exactly, for the same reason: workflow_run
+# waits for the whole Release workflow to complete, so the assets and
+# checksums.txt actually exist before the script tries to download them.
+# `release: published` fires before goreleaser finishes uploading and would
+# race an empty release.
+#
+# THE LANDMINE THIS JOB MUST NOT STEP ON: scripts/reproduce-release.sh clones
+# a fresh checkout of the tag deliberately, because a linked git worktree
+# stamps the main module as (devel) under go1.24 and the bytes differ while
+# the compiled code does not. actions/checkout below produces an ordinary
+# clone, not a linked worktree, so this outer checkout is safe; it exists
+# only so the script itself is present at the version that shipped. The
+# script's own clone, inside its temp directory, is the one that is actually
+# compared.
+#
+# The matrix is the four platforms already verified by hand: darwin and linux,
+# amd64 and arm64. darwin legs run on macos-latest rather than cross-compiled
+# from Linux, matching how the manual verification was actually done, so a
+# result here is evidence about the same thing the manual run was evidence
+# about.
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: release tag to reproduce, e.g. v0.6.0
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  # head_branch is the tag name when the Release run was started by a tag push.
+  TAG: ${{ github.event.workflow_run.head_branch || inputs.tag }}
+
+jobs:
+  reproduce:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.24"
+      - name: Reproduce ${{ env.TAG }} ${{ matrix.goos }}/${{ matrix.goarch }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/reproduce-release.sh "$TAG" "${{ matrix.goos }}" "${{ matrix.goarch }}"
