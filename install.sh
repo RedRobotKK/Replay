@@ -411,14 +411,14 @@ fi
 on_path=0
 case ":$PATH:" in *":$BIN_DIR:"*) on_path=1 ;; esac
 if [ "$on_path" -eq 0 ] && [ "$MODIFY_PATH" -eq 1 ]; then
-  case "${SHELL##*/}" in
+  case "${SHELL:+${SHELL##*/}}" in
     zsh)  rc="~/.zshrc" ;;
     bash) rc="~/.bashrc" ;;
     fish) rc="~/.config/fish/config.fish" ;;
     *)    rc="your shell profile" ;;
   esac
   warn "${BIN_DIR} is not on your PATH, so the ${BIN} command will not be found yet."
-  if [ "${SHELL##*/}" = fish ]; then
+  if [ "${SHELL:+${SHELL##*/}}" = fish ]; then
     printf '  %sfish_add_path %s%s\n' "$C_B" "$BIN_DIR" "$C_0" >&2
   else
     printf '  %secho '\''export PATH="%s:$PATH"'\'' >> %s%s\n' "$C_B" "$BIN_DIR" "$rc" "$C_0" >&2
