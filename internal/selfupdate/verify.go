@@ -95,8 +95,8 @@ const (
 	// would strand everyone who installed the documented way.
 	SignatureUnchecked SignatureStatus = iota
 	// SignatureVerified means cosign confirmed checksums.txt was signed by this
-	// project's CI, with the identity pinned to the repository and to GitHub's
-	// OIDC issuer.
+	// project's release workflow at the tag being installed, as issued by
+	// GitHub's OIDC issuer.
 	SignatureVerified
 )
 
@@ -105,6 +105,17 @@ func (s SignatureStatus) String() string {
 		return "signature verified (Sigstore, built by CI from the tag)"
 	}
 	return "cosign not installed, so the signature was not checked; checksums only"
+}
+
+// SignerIdentity is the only certificate identity a release of this project is
+// accepted from: the release workflow, at the tag being installed.
+//
+// It is built from the same tag string the assets were downloaded from, so the
+// signature and the download cannot name different releases. cosign compares
+// it with == against the certificate's subject alternative name. install.sh
+// passes the same value; the v0.9.0 certificate carries exactly this shape.
+func SignerIdentity(tag string) string {
+	return "https://github.com/" + Repo + "/.github/workflows/release.yml@refs/tags/" + tag
 }
 
 // verifyChecksumSignature checks the Sigstore signature on checksums.txt.
@@ -131,7 +142,7 @@ func (s SignatureStatus) String() string {
 // NO COSIGN MEANS CHECKSUMS ONLY, and that is deliberate rather than lax: it is
 // exactly what install.sh does, and refusing to upgrade a machine that has no
 // cosign would strand every user who installed the documented way.
-func (c *Client) verifyChecksumSignature(ctx context.Context, base string, sums []byte) (SignatureStatus, error) {
+func (c *Client) verifyChecksumSignature(ctx context.Context, base, tag string, sums []byte) (SignatureStatus, error) {
 	bin, err := LookCosign()
 	if err != nil {
 		// Same posture as install.sh: verify what can be verified, leave the
@@ -185,13 +196,17 @@ func (c *Client) verifyChecksumSignature(ctx context.Context, base string, sums 
 
 	// The two identity flags are not optional. Without them cosign confirms that
 	// the blob was signed by somebody, which is not the question being asked.
-	// These pin the signer to this repository's workflows and to GitHub's OIDC
-	// issuer, and they are the same two install.sh passes.
+	// These pin the signer to the release workflow at this tag and to GitHub's
+	// OIDC issuer, and they are the same two install.sh passes.
+	//
+	// The identity is exact, not a regexp. It was "https://github.com/<repo>/.*",
+	// which cosign matches unanchored: any workflow in the repository on any ref
+	// passed, and so did any identity that merely contained the URL.
 	if err := runCosign(ctx, bin,
 		"verify-blob",
 		"--certificate", filepath.Join(dir, "checksums.txt.pem"),
 		"--signature", filepath.Join(dir, "checksums.txt.sig"),
-		"--certificate-identity-regexp", "https://github.com/"+Repo+"/.*",
+		"--certificate-identity", SignerIdentity(tag),
 		"--certificate-oidc-issuer", "https://token.actions.githubusercontent.com",
 		filepath.Join(dir, "checksums.txt"),
 	); err != nil {

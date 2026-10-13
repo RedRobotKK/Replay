@@ -146,7 +146,7 @@ func (c *Client) Fetch(ctx context.Context, tag, goos, goarch string) ([]byte, S
 
 	// The hash proves the archive matches checksums.txt. This proves
 	// checksums.txt is the one this project's CI signed.
-	sig, err := c.verifyChecksumSignature(ctx, base, sums)
+	sig, err := c.verifyChecksumSignature(ctx, base, tag, sums)
 	if err != nil {
 		return nil, SignatureUnchecked, err
 	}

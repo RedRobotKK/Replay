@@ -39,6 +39,12 @@ MODIFY_PATH=1
 NO_OPEN="${REPLAY_NO_OPEN:-0}"
 CORPUS_OPT_IN=0
 ALLOW_UNVERIFIED=0
+# What the closing screen says about where the binary came from. Set once, by
+# the branch of the verification below that actually ran, and printed last,
+# because a verdict reported only in the middle of the download step is one a
+# reader scrolls past: verified, checksum (cosign absent), unverified
+# (--no-verify past a failure), source (no release), or none.
+PROVENANCE=none
 
 # ---------------------------------------------------------------- presentation
 # Colour only when stdout is a terminal that wants it. Piped into a file or a
@@ -242,6 +248,7 @@ if [ -z "${VERSION:-}" ]; then
     if [ "$DRY_RUN" -eq 0 ]; then
       GOBIN="$BIN_DIR" go install "github.com/$REPO/cmd/$BIN@latest" \
         || die "go install failed. The error above is from Go, not from this script."
+      PROVENANCE=source
       ok "Built and installed to ${BIN_DIR}/${BIN}"
     else
       info "would run: GOBIN=$BIN_DIR go install github.com/$REPO/cmd/$BIN@latest"
@@ -290,23 +297,33 @@ else
         # The release signs checksums.txt with Sigstore keyless signing. If
         # cosign is here, check it: a checksum fetched from the same origin as
         # the archive proves the download is intact, not that it is genuine.
+        #
+        # The identity is the release workflow at the tag being installed, and
+        # nothing wider. It was a regexp over the repository, which accepts a
+        # certificate from any workflow in it on any ref: a CI job on a branch
+        # could sign a checksums file this check would call "built by CI from
+        # the tag". The exact value is what the v0.9.0 certificate carries.
+        signer="https://github.com/$REPO/.github/workflows/release.yml@refs/tags/$VERSION"
         if command -v cosign >/dev/null 2>&1; then
           if save "$base/checksums.txt.pem" "$tmp/checksums.txt.pem" 2>/dev/null &&
              save "$base/checksums.txt.sig" "$tmp/checksums.txt.sig" 2>/dev/null; then
             if cosign verify-blob \
                  --certificate "$tmp/checksums.txt.pem" \
                  --signature "$tmp/checksums.txt.sig" \
-                 --certificate-identity-regexp "https://github.com/$REPO/.*" \
+                 --certificate-identity "$signer" \
                  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
                  "$tmp/checksums.txt" >/dev/null 2>&1; then
+              PROVENANCE=verified
               ok "Signature verified (Sigstore, built by CI from the tag)"
             elif [ "$ALLOW_UNVERIFIED" -eq 1 ]; then
+              PROVENANCE=unverified
               warn "Signature did NOT verify. Continuing because --no-verify was passed."
             else
               die "Signature verification FAILED for checksums.txt. Nothing was installed.
    The checksums may be intact but they were not signed by this project's CI."
             fi
           elif [ "$ALLOW_UNVERIFIED" -eq 1 ]; then
+            PROVENANCE=unverified
             warn "No signature published for ${VERSION}. Continuing because --no-verify was passed."
           else
             die "No Sigstore signature was published for ${VERSION}, and cosign is
@@ -315,16 +332,19 @@ else
      Nothing was installed. Pass --no-verify to install without this check."
           fi
         else
+          PROVENANCE=checksum
           info "cosign not installed, so the signature was not checked. Checksums only."
           info "To verify provenance: https://github.com/${REPO}#install"
         fi
       elif [ "$ALLOW_UNVERIFIED" -eq 1 ]; then
+        PROVENANCE=unverified
         warn "No sha256 tool found. Installing unverified because --no-verify was passed."
       else
         die "No sha256 tool (sha256sum or shasum) was found, so the download cannot be
    verified. Install one, or re-run with --no-verify to accept an unverified binary."
       fi
     elif [ "$ALLOW_UNVERIFIED" -eq 1 ]; then
+      PROVENANCE=unverified
       warn "checksums.txt could not be fetched. Installing unverified because --no-verify was passed."
     else
       die "checksums.txt could not be fetched from ${base}, so the download cannot be verified.
@@ -465,6 +485,20 @@ printf '\n' >&2
 if [ -n "$previous" ]; then
   info "replaced  ${previous}"
 fi
+# The provenance verdict, last and in the same column as the line above, so the
+# one fact a careful installer exists to establish is not left to be inferred
+# from which lines did or did not appear further up.
+case "$PROVENANCE" in
+  verified)
+    ok "provenance  VERIFIED: signed by ${REPO} release.yml at ${VERSION} (Sigstore)" ;;
+  checksum)
+    warn "provenance  NOT CHECKED: the checksum matched, but cosign is not installed, so
+   the signature was not checked. Install cosign and re-run to check it." ;;
+  unverified)
+    warn "provenance  NOT VERIFIED: installed past a failed check because --no-verify was passed." ;;
+  source)
+    warn "provenance  NOT CHECKED: built from source with go install; there is no signed release to check." ;;
+esac
 if [ -n "$shadowed" ]; then
   # Nothing was replaced, and the copy that answers `replay` is still the other
   # one. Saying so here costs a line; not saying it costs a confused user who

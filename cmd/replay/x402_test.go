@@ -1234,7 +1234,8 @@ func TestX402_CosignExecIsNotArbitrary(t *testing.T) {
 	joined := strings.Join(literals, " ")
 	for _, want := range []string{
 		`"verify-blob"`,
-		`"--certificate-identity-regexp"`,
+		`"--certificate-identity"`,
+		`"/.github/workflows/release.yml@refs/tags/"`,
 		`"--certificate-oidc-issuer"`,
 		`"https://token.actions.githubusercontent.com"`,
 	} {
@@ -1242,5 +1243,11 @@ func TestX402_CosignExecIsNotArbitrary(t *testing.T) {
 			t.Errorf("verify.go does not pass %s, so the signature check does not pin "+
 				"who signed it", want)
 		}
+	}
+	// The exact identity, never the regexp: cosign matches the regexp unanchored,
+	// so "https://github.com/<repo>/.*" accepted any workflow on any ref.
+	if strings.Contains(joined, `"--certificate-identity-regexp"`) {
+		t.Error("verify.go passes --certificate-identity-regexp; the signer must be the exact " +
+			"release workflow identity at the tag")
 	}
 }
