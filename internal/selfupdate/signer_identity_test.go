@@ -3,6 +3,8 @@ package selfupdate
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -119,6 +121,26 @@ func TestSIG7_SignerIdentityIsTheReleaseWorkflowAtTheTag(t *testing.T) {
 	} {
 		if got := SignerIdentity(tag); got != want {
 			t.Errorf("SignerIdentity(%q) = %q, want %q", tag, got, want)
+		}
+	}
+}
+
+// SIGR0: neither verifier skips the transparency log or the SCT.
+//
+// The real-cosign test (SIGR, mutation tag) passes both flags because its trust
+// root is its own and cannot satisfy them. Production must never pass them:
+// either flag accepts a signature nobody can audit. This runs in every build,
+// unlike SIGR, so CI watches it.
+func TestSIGR0_ProductionNeverSkipsTransparencyOrSCT(t *testing.T) {
+	for _, rel := range []string{"verify.go", "fetch.go", filepath.Join("..", "..", "install.sh")} {
+		body, err := os.ReadFile(rel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, flag := range []string{"--insecure-ignore-tlog", "--insecure-ignore-sct", "--offline"} {
+			if strings.Contains(string(body), flag) {
+				t.Errorf("%s passes %s to cosign", rel, flag)
+			}
 		}
 	}
 }
