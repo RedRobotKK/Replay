@@ -168,6 +168,7 @@ func TestANonCanonicalHeaderEncodingIsRefused(t *testing.T) {
 		"uname with bytes after its NUL":  cmSetField(tb, r, 265, []byte("\x00zzz")),
 		"ustar version xx":                cmSetField(tb, r, 263, []byte("xx")),
 		"ustar version NUL NUL":           cmSetField(tb, r, 263, []byte{0, 0}),
+		"GNU magic and version":           cmSetField(tb, r, 257, []byte("ustar  \x00")),
 		"star trailer after the prefix":   cmSetField(tb, r, 508, []byte("tar\x00")),
 		"non-zero header padding":         cmSetField(tb, r, 500, []byte{'x'}),
 	}
@@ -512,6 +513,110 @@ func TestRunRefusesAndWritesNoMember(t *testing.T) {
 			}
 			if got.outOK != c.outOK || got.membersOK {
 				t.Fatalf("member written %v (want %v), names written %v (want false)", got.outOK, c.outOK, got.membersOK)
+			}
+		})
+	}
+}
+
+// extBlock is an extension header of the given type and its record, as two
+// blocks: a plain ustar header with the typeflag replaced, and GNU magic for
+// 'L', as GNU tar writes it.
+func extBlock(typeflag byte, name, data string) []byte {
+	var b bytes.Buffer
+	tw := tar.NewWriter(&b)
+	_ = tw.WriteHeader(&tar.Header{Name: name, Mode: 0o644, Size: int64(len(data)), ModTime: time.Unix(1757378973, 0),
+		Typeflag: tar.TypeReg, Format: tar.FormatUSTAR})
+	_, _ = tw.Write([]byte(data))
+	_ = tw.Flush()
+	out := b.Bytes()
+	out[156] = typeflag
+	if typeflag == tar.TypeGNULongName {
+		copy(out[257:265], "ustar  \x00")
+	}
+	cmFixSum(out[:512])
+	return out
+}
+
+// An extension header before a member is the form two readers resolve
+// differently: a record one reader honours and another ignores changes the
+// member's name or size for one of them. Each archive here holds a PAX 'x',
+// a PAX global 'g' or a GNU 'L' header, then a canonical "replay" block,
+// and Go reads it. replay's content ends in 1024 zero bytes, the length of
+// the extension header and its record, so a walk that let the member through
+// would also find zero padding and a zero end-of-archive: the archive is
+// refused because of the extension header or not at all. A check that skipped
+// the comparison for PAX members survived every other test (2026-10-14).
+func TestAMemberAfterAnExtensionHeaderIsRefused(t *testing.T) {
+	body := make([]byte, 512+1024)
+	copy(body[:512], bytes.Repeat([]byte("GENUINE-BINARY\n"), 35))
+	if bytes.IndexByte(body[:512], 0) >= 0 || bytes.Count(body[512:], []byte{0}) != 1024 {
+		t.Fatal("precondition: replay's content is 512 non-zero bytes, then 1024 zero bytes")
+	}
+	var b bytes.Buffer
+	tw := tar.NewWriter(&b)
+	for _, m := range []struct {
+		name string
+		body []byte
+	}{{"LICENSE", cmMembers[0].body}, {"replay", body}} {
+		if err := tw.WriteHeader(&tar.Header{Name: m.name, Mode: 0o755, Size: int64(len(m.body)), ModTime: time.Unix(1757378973, 0),
+			Typeflag: tar.TypeReg, Format: tar.FormatUSTAR}); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = tw.Write(m.body)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	control := b.Bytes()
+	at := 512 + (len(cmMembers[0].body)+511)/512*512 // replay's header
+	if names, err := plain(cmGzip(control)); err != nil || len(names) != 2 {
+		t.Fatalf("precondition: the archive without an extension header is plain: %v %v", names, err)
+	}
+	cases := []struct {
+		name string
+		ext  []byte
+		// read is what Go's reader must report, so the extension header is
+		// the one under test and not bytes Go happens to skip.
+		read func(hs []*tar.Header) bool
+	}{
+		{"PAX x", extBlock(tar.TypeXHeader, "PaxHeaders/replay", "13 comment=x\n"), func(hs []*tar.Header) bool {
+			return len(hs) == 2 && hs[1].Name == "replay" && hs[1].Format == tar.FormatPAX && hs[1].PAXRecords["comment"] == "x"
+		}},
+		{"PAX global g", extBlock(tar.TypeXGlobalHeader, "GlobalHead.0.0", "13 comment=x\n"), func(hs []*tar.Header) bool {
+			return len(hs) == 3 && hs[1].Typeflag == tar.TypeXGlobalHeader && hs[1].PAXRecords["comment"] == "x" && hs[2].Name == "replay"
+		}},
+		{"GNU L", extBlock(tar.TypeGNULongName, "././@LongLink", "replay\x00"), func(hs []*tar.Header) bool {
+			// Go consumes the 'L' header and, the block after it being ustar,
+			// reports no format at all rather than USTAR.
+			return len(hs) == 2 && hs[1].Name == "replay" && hs[1].Format != tar.FormatUSTAR
+		}},
+	}
+	for _, c := range cases {
+		t.Run(strings.ReplaceAll(c.name, " ", "_"), func(t *testing.T) {
+			if len(c.ext) != 1024 {
+				t.Fatalf("precondition: the header and its record are two blocks, got %d bytes", len(c.ext))
+			}
+			tb := append(append(append([]byte(nil), control[:at]...), c.ext...), control[at:]...)
+			var hs []*tar.Header
+			tr := tar.NewReader(bytes.NewReader(tb))
+			for {
+				h, err := tr.Next()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					t.Fatalf("precondition: Go reads the archive: %v", err)
+				}
+				hs = append(hs, h)
+			}
+			if !c.read(hs) {
+				t.Fatalf("precondition: Go did not read the extension header as intended: %d headers", len(hs))
+			}
+			if names, err := plain(cmGzip(tb)); err == nil || names != nil {
+				t.Fatalf("accepted: names %v", names)
+			}
+			if r := cmRun(t, cmGzip(tb), nil); r.code != 3 || r.outOK || r.membersOK {
+				t.Fatalf("exit %d (want 3), member written %v, names written %v", r.code, r.outOK, r.membersOK)
 			}
 		})
 	}
