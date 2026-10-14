@@ -155,6 +155,13 @@ func (c *Client) Fetch(ctx context.Context, tag, goos, goarch string) ([]byte, S
 	return bin, sig, err
 }
 
+// Unpack is unpack, exported for scripts/archive-member, so the release
+// reproduction gate selects the member with this code rather than with its own
+// reading of the archive. A gate that read the archive differently judged one
+// member while `replay upgrade` installed another (2026-10-13: a planted
+// member whose PAX path said "zzz" and whose GNU long name said "replay").
+func Unpack(archive []byte) ([]byte, error) { return unpack(archive) }
+
 // unpack pulls the single binary out of the release tarball.
 //
 // A member that is a symlink named `replay` would otherwise be followed and

@@ -43,6 +43,7 @@ func TestNoNewlyUnwiredPackages(t *testing.T) {
 	// long as it is written down and linked. UNWIRED-LOG.md tracks the fix.
 	known := map[string]string{
 		"internal/regression":          "this package. Test-only by design, and correctly absent.",
+		"scripts/archive-member":       "the release reproduction gate's member selector: scripts/reproduce-release.sh runs it to pick the archive member with selfupdate.Unpack, the code `replay upgrade` runs. Correctly absent from the binary: it is release tooling, and its whole value is calling the same function upgrade calls rather than a copy.",
 		"scripts/x402-e2e":             "an end-to-end tool built separately, not part of the binary.",
 		"scripts/simexp":               "the counter for the pre-registered simulate experiment (docs/evidence/simulate-experiment-prereg-2026-10-03.md), run by hand once over a frozen ten-row dataset. Correctly absent: it is an experiment measurement, not a product primitive, and the gatekeeper's Decision 2 forbids a cap-state system in the binary.",
 		"scripts/ttl-block":            "the block starter for the pre-registered cache-TTL field study (docs/evidence/ttl-register-2026-10-05.md), run by hand at each block boundary. Correctly absent: it writes the operator's own settings file under a frozen schedule and records the block, which is experiment procedure, not product behaviour; `replay advise --apply` cannot start the treatment arm on that corpus, and the register says Replay does not write the setting on its own.",

@@ -83,3 +83,66 @@ jobs:
           bin="$(find dist -type f -path '*linux_amd64*' -name replay | head -1)"
           [ -n "$bin" ] || { echo "no linux/amd64 binary under dist/" >&2; find dist -type f -name replay >&2; exit 1; }
           ./scripts/release-check.sh "$bin"
+
+  # Rebuild what was just published and compare the bytes, every platform,
+  # every tag.
+  #
+  # scripts/reproduce-release.sh reproduced v0.5.4 and v0.8.0 because somebody
+  # ran it by hand, and RELEASE-CRITERIA.md recorded both as "not yet enforced":
+  # a fact about two releases, not a property of releases. This makes it one.
+  #
+  # A separate job on a fresh runner, so the rebuild shares no build cache,
+  # workspace or dist/ with the build it checks, and reads only: it compares a
+  # release and has no reason to be able to change one. It runs after
+  # publication for the same reason the published-binary check does: the
+  # artifact is what has to be right. A failure here means the release is
+  # already public and must be pulled or superseded. It detects; it does not
+  # prevent.
+  #
+  # It compares the binary inside each archive. The archives' own bytes, the
+  # Linux packages and the SBOMs are not compared, and the signature on
+  # checksums.txt is not what this checks: the script binds each archive to
+  # checksums.txt, and the signature on that file is a separate gate.
+  reproduce:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64, darwin/amd64, darwin/arm64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # Only to have a go command. The script sets GOTOOLCHAIN to the toolchain
+      # go.mod names at the tag, which is the one release used.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Rebuild ${{ matrix.platform }} and compare the bytes
+        # Pinned so a workflow-level `defaults: run: shell:` cannot choose the
+        # shell that runs this step.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLATFORM: ${{ matrix.platform }}
+        # The script's status is the step's status. Writing the summary must
+        # not be able to replace the verdict, which a pipe into tee does. The
+        # log is echoed between stop-commands markers: on a mismatch it holds
+        # the published binary's build info, which the runner must not read as
+        # workflow commands.
+        run: |
+          rc=0
+          ./scripts/reproduce-release.sh "$GITHUB_REF_NAME" "${PLATFORM%/*}" "${PLATFORM#*/}" > reproduce.log 2>&1 || rc=$?
+          stop="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+          echo "::stop-commands::$stop"
+          cat reproduce.log
+          echo "::$stop::"
+          { echo "### $PLATFORM: exit $rc"; echo '```'; cat reproduce.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$rc" != 0 ]; then
+            echo "This release is already public. This check ran after publication and did not prevent it: pull or supersede ${GITHUB_REF_NAME}." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$rc"

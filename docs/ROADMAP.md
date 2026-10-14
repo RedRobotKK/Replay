@@ -288,6 +288,11 @@ cannot be smuggled in later as blockers.
 What 1.0 does mean is that the tool's claims about itself have all been
 checked by somebody other than the person who wrote them.
 
+**Stale as of 2026-10-13, not deleted.** The four gates restated above were
+all closed on 2026-09-13. What remains is the three unticked lines under
+"Named in the preamble, not yet met" in RELEASE-CRITERIA.md, which is the one
+gate list.
+
 ---
 
 ## After 1.0
