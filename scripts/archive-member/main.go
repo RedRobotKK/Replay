@@ -54,15 +54,18 @@ const maxTar = 256 << 20
 // values Go's reader returned. Only the fields a plain release member uses
 // are carried, so a link name, device numbers or a name prefix the writer
 // would not produce for these values make the block differ.
+//
+// With Format fixed to FormatUSTAR the writer either refuses the header or
+// writes exactly one 512-byte block (archive/tar writer.go, WriteHeader and
+// writeRawHeader, go1.27.1 and go1.27.2). There is no length check here: a
+// block of any other length could not equal the 512 archive bytes plain
+// compares it with, so it would be refused there.
 func canonical(h *tar.Header) ([]byte, error) {
 	c := &tar.Header{Typeflag: h.Typeflag, Name: h.Name, Mode: h.Mode, Uid: h.Uid, Gid: h.Gid,
 		Size: h.Size, ModTime: h.ModTime, Uname: h.Uname, Gname: h.Gname, Format: tar.FormatUSTAR}
 	var b bytes.Buffer
 	if err := tar.NewWriter(&b).WriteHeader(c); err != nil {
 		return nil, err
-	}
-	if b.Len() != 512 {
-		return nil, fmt.Errorf("the writer produced %d header bytes, not one block", b.Len())
 	}
 	return b.Bytes(), nil
 }
@@ -115,12 +118,11 @@ func plain(archive []byte) ([]string, error) {
 		if off+512 > len(raw) || !bytes.Equal(raw[off:off+512], want) {
 			return nil, fmt.Errorf("member %q: header is not the canonical ustar encoding of its fields", hdr.Name)
 		}
-		switch {
-		// With the block canonical this cannot differ; it stays as the rule
-		// the plain form states.
-		case hdr.Format != tar.FormatUSTAR:
-			return nil, fmt.Errorf("member %q is %v, not plain ustar", hdr.Name, hdr.Format)
-		case seen[hdr.Name]:
+		// There is no check of hdr.Format. It is Go's guess at the encoding,
+		// and plain is a property of the bytes: the block at off is the
+		// writer's ustar block for these values, typeflag '0', so no extension
+		// header came before it and Go reads it as FormatUSTAR.
+		if seen[hdr.Name] {
 			return nil, fmt.Errorf("member %q appears twice", hdr.Name)
 		}
 		for _, c := range strings.Split(hdr.Name, "/") {
@@ -153,32 +155,37 @@ func plain(archive []byte) ([]string, error) {
 	return names, nil
 }
 
-func main() {
-	if len(os.Args) != 4 {
-		fmt.Fprintln(os.Stderr, "usage: archive-member <archive.tar.gz> <out> <members-out>")
-		os.Exit(2)
+func main() { os.Exit(run(os.Args, os.Stderr)) }
+
+// run is main with its exit status returned, so each refusal can be tested
+// in process: 2 usage, 1 unreadable or not installable, 3 not plain, 0 done.
+func run(args []string, stderr io.Writer) int {
+	if len(args) != 4 {
+		_, _ = fmt.Fprintln(stderr, "usage: archive-member <archive.tar.gz> <out> <members-out>")
+		return 2
 	}
-	archive, err := os.ReadFile(os.Args[1])
+	archive, err := os.ReadFile(args[1])
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		_, _ = fmt.Fprintln(stderr, err)
+		return 1
 	}
 	names, err := plain(archive)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "the archive is not in the plain form goreleaser writes:", err)
-		os.Exit(3)
+		_, _ = fmt.Fprintln(stderr, "the archive is not in the plain form goreleaser writes:", err)
+		return 3
 	}
 	bin, err := selfupdate.Unpack(archive)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		_, _ = fmt.Fprintln(stderr, err)
+		return 1
 	}
-	if err := os.WriteFile(os.Args[2], bin, 0o600); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	if err := os.WriteFile(args[2], bin, 0o600); err != nil {
+		_, _ = fmt.Fprintln(stderr, err)
+		return 1
 	}
-	if err := os.WriteFile(os.Args[3], []byte(strings.Join(names, "\n")+"\n"), 0o600); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	if err := os.WriteFile(args[3], []byte(strings.Join(names, "\n")+"\n"), 0o600); err != nil {
+		_, _ = fmt.Fprintln(stderr, err)
+		return 1
 	}
+	return 0
 }

@@ -4,8 +4,11 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -305,5 +308,211 @@ func TestAnArchiveThatDecompressesPastTheBoundIsRefused(t *testing.T) {
 	_, err := plain(z.Bytes())
 	if err == nil || !strings.Contains(err.Error(), "decompresses to more than") {
 		t.Fatalf("want the size bound to refuse, got %v", err)
+	}
+}
+
+// The writer's refusal is canonical's answer: a header plain ustar cannot
+// encode has no canonical block, and none is returned.
+func TestCanonicalReturnsNoBlockForAHeaderTheWriterCannotEncode(t *testing.T) {
+	h := &tar.Header{Name: "replay", Mode: 0o755, Size: 1, ModTime: time.Unix(1757378973, 0),
+		Typeflag: tar.TypeReg, Uname: "r\xc3\xa9"}
+	b, err := canonical(h)
+	if err == nil || b != nil {
+		t.Fatalf("want the writer's refusal and no block, got %d bytes, err %v", len(b), err)
+	}
+	h.Uname = "replay"
+	if b, err := canonical(h); err != nil || len(b) != 512 {
+		t.Fatalf("control: an encodable header gives one block, got %d bytes, err %v", len(b), err)
+	}
+}
+
+// The refusal says the writer could not encode the header, not only that the
+// bytes differ, so a reader of the refusal can tell the two apart.
+func TestARefusedHeaderNamesTheWritersReason(t *testing.T) {
+	a := cmSetField(cmTar(t), 2, 265, []byte("r\xc3\xa9"))
+	tr := tar.NewReader(bytes.NewReader(a))
+	var hdr *tar.Header
+	for i := 0; i < 3; i++ {
+		h, err := tr.Next()
+		if err != nil {
+			t.Fatalf("precondition: Go reads member %d: %v", i, err)
+		}
+		hdr = h
+	}
+	_, werr := canonical(hdr)
+	if werr == nil {
+		t.Fatal("precondition: the writer encodes this header, so it is not under test")
+	}
+	_, err := plain(cmGzip(a))
+	if err == nil || !strings.Contains(err.Error(), werr.Error()) {
+		t.Fatalf("want a refusal carrying %q, got %v", werr, err)
+	}
+}
+
+// Bytes that are not gzip are refused before anything is read.
+func TestAnArchiveThatIsNotGzipIsRefused(t *testing.T) {
+	_, err := plain(cmTar(t))
+	if !errors.Is(err, gzip.ErrHeader) {
+		t.Fatalf("want gzip.ErrHeader, got %v", err)
+	}
+}
+
+// A gzip member whose content is a canonical archive but whose checksum or
+// length is wrong is refused: the bytes were not the ones the release wrote.
+func TestAGzipMemberThatDoesNotVerifyIsRefused(t *testing.T) {
+	z := cmGzip(cmTar(t))
+	badSum := append([]byte(nil), z...)
+	badSum[len(badSum)-8] ^= 0xff // the CRC-32 in the gzip trailer
+	cases := map[string]struct {
+		archive []byte
+		want    error
+	}{
+		"a wrong checksum":   {badSum, gzip.ErrChecksum},
+		"a truncated member": {z[:len(z)-4], io.ErrUnexpectedEOF},
+	}
+	for name, c := range cases {
+		t.Run(strings.ReplaceAll(name, " ", "_"), func(t *testing.T) {
+			_, err := plain(c.archive)
+			if !errors.Is(err, c.want) {
+				t.Fatalf("want %v, got %v", c.want, err)
+			}
+		})
+	}
+}
+
+// A header Go's reader refuses is refused: here its checksum is wrong.
+func TestATarHeaderGoCannotReadIsRefused(t *testing.T) {
+	tb := cmTar(t)
+	copy(tb[148:156], "0000000\x00")
+	if goReads(tb) != nil {
+		t.Fatal("precondition: Go reads the header, so it is not under test")
+	}
+	_, err := plain(cmGzip(tb))
+	if !errors.Is(err, tar.ErrHeader) {
+		t.Fatalf("want tar.ErrHeader, got %v", err)
+	}
+}
+
+// Two canonical members with one name are refused: which one a reader keeps
+// is that reader's choice.
+func TestAMemberThatAppearsTwiceIsRefused(t *testing.T) {
+	var b bytes.Buffer
+	tw := tar.NewWriter(&b)
+	for _, body := range []string{"GENUINE", "PLANTED"} {
+		if err := tw.WriteHeader(&tar.Header{Name: "replay", Mode: 0o755, Size: int64(len(body)),
+			ModTime: time.Unix(1757378973, 0), Typeflag: tar.TypeReg, Format: tar.FormatUSTAR}); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = tw.Write([]byte(body))
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_, err := plain(cmGzip(b.Bytes()))
+	if err == nil || !strings.Contains(err.Error(), "appears twice") {
+		t.Fatalf("want the duplicate refused, got %v", err)
+	}
+}
+
+// cmRun runs the command with paths in a fresh directory and reports its
+// status and whether each output file exists.
+type cmResult struct {
+	code             int
+	out, members     []byte
+	outOK, membersOK bool
+}
+
+func cmRun(t *testing.T, archive []byte, mutate func(dir string, args []string) []string) cmResult {
+	t.Helper()
+	dir := t.TempDir()
+	in := filepath.Join(dir, "replay.tar.gz")
+	if archive != nil {
+		if err := os.WriteFile(in, archive, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	args := []string{"archive-member", in, filepath.Join(dir, "out"), filepath.Join(dir, "members")}
+	if mutate != nil {
+		args = mutate(dir, args)
+	}
+	var stderr bytes.Buffer
+	r := cmResult{code: run(args, &stderr)}
+	var err error
+	r.out, err = os.ReadFile(filepath.Join(dir, "out"))
+	r.outOK = err == nil
+	r.members, err = os.ReadFile(filepath.Join(dir, "members"))
+	r.membersOK = err == nil
+	return r
+}
+
+func TestRunWritesTheSelectedMemberAndTheNames(t *testing.T) {
+	r := cmRun(t, cmGzip(cmTar(t)), nil)
+	if r.code != 0 || !bytes.Equal(r.out, cmMembers[2].body) || string(r.members) != "LICENSE\nREADME.md\nreplay\n" {
+		t.Fatalf("got code %d, out %q, members %q", r.code, r.out, r.members)
+	}
+}
+
+// Every refusal exits with its status and writes no selected member, so a
+// caller that ignored the status would still have nothing to compare.
+func TestRunRefusesAndWritesNoMember(t *testing.T) {
+	good := cmGzip(cmTar(t))
+	r := 2
+	size := int64(len(cmMembers[r].body))
+	// F1's archive: Go's reader, which upgrade uses, reads the canonical
+	// values from it, so only the plain check stops it. This file does not
+	// import selfupdate, which would oblige it to pin cosign (FC-COSIGN).
+	f1tar := cmSetField(cmTar(t), r, 124, []byte(fmt.Sprintf("\x00%010o\x00", size)))
+	if strings.Join(goReads(f1tar), ",") != strings.Join(goReads(cmTar(t)), ",") {
+		t.Fatal("precondition: Go reads the F1 archive as the canonical one")
+	}
+	f1 := cmGzip(f1tar)
+	// No replay member: plain, and upgrade refuses it.
+	var nb bytes.Buffer
+	tw := tar.NewWriter(&nb)
+	_ = tw.WriteHeader(&tar.Header{Name: "LICENSE", Mode: 0o644, Size: 1, ModTime: time.Unix(1757378973, 0),
+		Typeflag: tar.TypeReg, Format: tar.FormatUSTAR})
+	_, _ = tw.Write([]byte("x"))
+	_ = tw.Close()
+	noBinary := cmGzip(nb.Bytes())
+	if _, err := plain(noBinary); err != nil {
+		t.Fatalf("precondition: the archive with no replay member is plain: %v", err)
+	}
+	missing := func(name string) func(string, []string) []string {
+		return func(dir string, args []string) []string {
+			for i, a := range args {
+				if a == filepath.Join(dir, name) {
+					args[i] = filepath.Join(dir, "no-such-dir", name)
+				}
+			}
+			return args
+		}
+	}
+	cases := []struct {
+		name    string
+		archive []byte
+		mutate  func(string, []string) []string
+		code    int
+		// outOK is whether the member file may exist: only the names file
+		// fails after the member was written.
+		outOK bool
+	}{
+		{"no arguments", good, func(_ string, a []string) []string { return a[:1] }, 2, false},
+		{"one argument too many", good, func(_ string, a []string) []string { return append(a, "extra") }, 2, false},
+		{"an archive that cannot be read", nil, nil, 1, false},
+		{"an archive that is not plain", f1, nil, 3, false},
+		{"an archive upgrade would not install from", noBinary, nil, 1, false},
+		{"an output that cannot be written", good, missing("out"), 1, false},
+		{"a names file that cannot be written", good, missing("members"), 1, true},
+	}
+	for _, c := range cases {
+		t.Run(strings.ReplaceAll(c.name, " ", "_"), func(t *testing.T) {
+			got := cmRun(t, c.archive, c.mutate)
+			if got.code != c.code {
+				t.Fatalf("exit %d, want %d", got.code, c.code)
+			}
+			if got.outOK != c.outOK || got.membersOK {
+				t.Fatalf("member written %v (want %v), names written %v (want false)", got.outOK, c.outOK, got.membersOK)
+			}
+		})
 	}
 }
