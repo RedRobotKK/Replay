@@ -103,8 +103,17 @@ jobs:
   # Linux packages and the SBOMs are not compared, and the signature on
   # checksums.txt is not what this checks: the script binds each archive to
   # checksums.txt, and the signature on that file is a separate gate.
+  #
+  # It runs when the release job fails as well as when it succeeds. `needs`
+  # alone skips it whenever release fails, and release fails after publishing
+  # when the published-binary check refuses, so that tag got no verdict and a
+  # re-run of release cannot give it one. `!cancelled()` replaces the default
+  # success() condition; a cancelled run still skips it. When release did not
+  # succeed there may be nothing published, so only a comparison that ran
+  # (exit 1) or a release that succeeded is reported as public.
   reproduce:
     needs: release
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -129,6 +138,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PLATFORM: ${{ matrix.platform }}
+          RELEASE_RESULT: ${{ needs.release.result }}
         # The script's status is the step's status. Writing the summary must
         # not be able to replace the verdict, which a pipe into tee does. The
         # log is echoed between stop-commands markers: on a mismatch it holds
@@ -142,7 +152,9 @@ jobs:
           cat reproduce.log
           echo "::$stop::"
           { echo "### $PLATFORM: exit $rc"; echo '```'; cat reproduce.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-          if [ "$rc" != 0 ]; then
+          if [ "$rc" = 1 ] || { [ "$rc" != 0 ] && [ "$RELEASE_RESULT" = success ]; }; then
             echo "This release is already public. This check ran after publication and did not prevent it: pull or supersede ${GITHUB_REF_NAME}." | tee -a "$GITHUB_STEP_SUMMARY"
+          elif [ "$rc" != 0 ]; then
+            echo "The release job ended ${RELEASE_RESULT} and this check compared nothing (exit $rc), so it cannot say whether ${GITHUB_REF_NAME} was published. Read the release job's log and the release page." | tee -a "$GITHUB_STEP_SUMMARY"
           fi
           exit "$rc"

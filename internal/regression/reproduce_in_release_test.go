@@ -87,12 +87,18 @@ func goreleaserPlatforms(t *testing.T) []string {
 // RR1: the job exists, runs after the release, reads only, and runs the script.
 func TestRR1_EveryTagIsRebuiltAfterRelease(t *testing.T) {
 	job := reproduceJob(t)
-	var needs, readOnly, runs, noCreds bool
+	var needs, afterFailure, readOnly, runs, noCreds bool
 	for _, line := range job {
 		s := strings.TrimSpace(line)
 		switch {
 		case s == "needs: release":
 			needs = true
+		// The one condition allowed, at job level only: it lets the job run
+		// when release fails after publishing, and skips it only when the run
+		// is cancelled (F2, 2026-10-14). always() would also run it in a
+		// cancelled run; any other expression can skip a published tag.
+		case line == "    if: ${{ !cancelled() }}":
+			afterFailure = true
 		case s == "contents: read":
 			readOnly = true
 		case s == "persist-credentials: false":
@@ -122,6 +128,10 @@ func TestRR1_EveryTagIsRebuiltAfterRelease(t *testing.T) {
 	if !needs {
 		t.Error("the reproduce job does not `needs: release`. It has to compare against the " +
 			"assets that release published, which do not exist before that job ends.")
+	}
+	if !afterFailure {
+		t.Error("the reproduce job has no job-level `if: ${{ !cancelled() }}`, so `needs` skips it " +
+			"whenever release fails, including after release has published, and that tag gets no verdict")
 	}
 	if !readOnly {
 		t.Error("the reproduce job does not set `contents: read`. It inherits the workflow's " +
@@ -169,6 +179,7 @@ func TestRR2_EveryBuiltPlatformIsCompared(t *testing.T) {
 // Changing this job means changing this text too. That is the point.
 const reviewedReproduceJob = `  reproduce:
     needs: release
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -189,6 +200,7 @@ const reviewedReproduceJob = `  reproduce:
         env:
           GH_TOKEN: ${{ github.token }}
           PLATFORM: ${{ matrix.platform }}
+          RELEASE_RESULT: ${{ needs.release.result }}
         run: |
           rc=0
           ./scripts/reproduce-release.sh "$GITHUB_REF_NAME" "${PLATFORM%/*}" "${PLATFORM#*/}" > reproduce.log 2>&1 || rc=$?
@@ -197,8 +209,10 @@ const reviewedReproduceJob = `  reproduce:
           cat reproduce.log
           echo "::$stop::"
           { echo "### $PLATFORM: exit $rc"; echo '` + "`" + `` + "`" + `` + "`" + `'; cat reproduce.log; echo '` + "`" + `` + "`" + `` + "`" + `'; } >> "$GITHUB_STEP_SUMMARY"
-          if [ "$rc" != 0 ]; then
+          if [ "$rc" = 1 ] || { [ "$rc" != 0 ] && [ "$RELEASE_RESULT" = success ]; }; then
             echo "This release is already public. This check ran after publication and did not prevent it: pull or supersede ${GITHUB_REF_NAME}." | tee -a "$GITHUB_STEP_SUMMARY"
+          elif [ "$rc" != 0 ]; then
+            echo "The release job ended ${RELEASE_RESULT} and this check compared nothing (exit $rc), so it cannot say whether ${GITHUB_REF_NAME} was published. Read the release job's log and the release page." | tee -a "$GITHUB_STEP_SUMMARY"
           fi
           exit "$rc"`
 
