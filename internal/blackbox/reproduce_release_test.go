@@ -347,6 +347,24 @@ func TestRR_AMissingArchiveFails(t *testing.T) {
 	rrMustFail(t, out, err, 2, "could not download")
 }
 
+// Exit 1 means the bytes were compared and differ, and release.yml's step
+// reports a release as public on exit 1 even when the release job failed.
+// mktemp ran under set -e without a refusal, so a full or unwritable /tmp
+// exited 1 before anything was downloaded, and the step said "already public"
+// about a tag nothing had checked (2026-10-14).
+func TestRR_AWorkingDirectoryThatCannotBeMadeComparesNothing(t *testing.T) {
+	f := rrNewFixture(t, rrOpts{toolchain: runtime.Version()})
+	fake := "#!/bin/sh\necho 'mktemp: No space left on device' >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(f.bin, "mktemp"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out, err := f.run(t)
+	rrMustFail(t, out, err, 2, "nothing was compared")
+	if strings.Contains(out, "Downloading") {
+		t.Fatalf("the script went on to the download without a working directory:\n%s", out)
+	}
+}
+
 func TestRR_AMissingChecksumsFileFails(t *testing.T) {
 	f := rrNewFixture(t, rrOpts{toolchain: runtime.Version()})
 	if err := os.Remove(filepath.Join(f.assets, "checksums.txt")); err != nil {

@@ -135,7 +135,9 @@ printf '%s\n' "$TAG" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?' ||
 printf '%s\n' "$GOOS_IN" | grep -Eqx '[a-z0-9]+' || refuse "$GOOS_IN is not a GOOS"
 printf '%s\n' "$GOARCH_IN" | grep -Eqx '[a-z0-9]+' || refuse "$GOARCH_IN is not a GOARCH"
 
-work=$(mktemp -d)
+# Refused, not left to set -e: set -e would exit 1, which means the bytes
+# differ, and release.yml reports exit 1 as a public release.
+work=$(mktemp -d) || refuse "could not create a working directory, so nothing was compared"
 # The module cache under $work is written read-only by go; make it removable.
 trap 'chmod -R u+w "$work" 2>/dev/null; rm -rf "$work"' EXIT
 
