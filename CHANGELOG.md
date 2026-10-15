@@ -4,6 +4,48 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Security
+
+- **`install.sh` and `replay upgrade` accept a release signature only from
+  `release.yml` at the tag being installed.** Both passed cosign
+  `--certificate-identity-regexp 'https://github.com/RedRobotKK/Replay/.*'`,
+  which cosign matches unanchored, so a `checksums.txt` signed by the
+  repository's `ci.yml` was accepted as readily as one from the release
+  workflow. Both now pass the exact `--certificate-identity
+  https://github.com/RedRobotKK/Replay/.github/workflows/release.yml@refs/tags/<tag>`,
+  built from the same tag the download comes from, and `install.sh` ends with
+  a provenance line: `VERIFIED`, `NOT CHECKED` or `NOT VERIFIED`. The release
+  footer, the README's verify command and `distribution/channels.json` give
+  the same exact identity. (#339)
+- **A version that is not a release tag is refused before any download.**
+  `install.sh` (`--version`, `REPLAY_VERSION`, the API's `tag_name`) and
+  `replay upgrade --version` built every URL from the value as given, so
+  `../../x/y/releases/download/v1` moved the download to another repository,
+  where, without cosign, the checksums came from too. Both now require
+  `vMAJOR.MINOR.PATCH` with an optional `-prerelease`, the form of every
+  published tag. (#342)
+
+### Fixed
+
+- **`replay cost`'s p90 is the nearest rank.** It took index `int(p*(n-1))`,
+  one rank low whenever n mod 10 was 2 to 9, so over the costs [1, 100] the
+  p90 was 1, below a median of 50.5, on the report and the share card. The
+  median is unchanged. (#341)
+- **`summary.lanes` counts the lanes behind priced rows.** A session on a
+  model no table prices added a lane anyway, so one priced session beside an
+  unpriced one printed "1 sessions (2 agent lanes)". (#341)
+
+### Added
+
+- **Every release tag is rebuilt from source and compared, byte for byte, on
+  all four platforms.** `release.yml`'s `reproduce` job runs
+  `scripts/reproduce-release.sh` after publication, takes every build input
+  from the tag, and refuses an archive that is not in the plain form
+  goreleaser writes. It also runs when the release job fails, and says a
+  release is public only when that is known. It detects a release that does
+  not reproduce; it does not prevent one, and it has not yet run on a tag.
+  (#340)
+
 ## [0.9.0] - 2026-10-10
 
 ### Security
