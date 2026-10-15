@@ -120,6 +120,12 @@ func (c *Client) get(ctx context.Context, url string) ([]byte, error) {
 // therefore could not report it, which is why `replay upgrade` printed
 // "Checksum verified" whether or not a signature had been checked.
 func (c *Client) Fetch(ctx context.Context, tag, goos, goarch string) ([]byte, SignatureStatus, error) {
+	// The tag becomes part of every URL below and of the signer identity, so it
+	// is checked first. `replay upgrade --version ../../x/y/releases/download/v1`
+	// moved the download to another repository (2026-10-15).
+	if !ValidTag(tag) {
+		return nil, SignatureUnchecked, fmt.Errorf("%q is not a release tag of the form vMAJOR.MINOR.PATCH. Nothing was installed", tag)
+	}
 	name := ArchiveName(tag, goos, goarch)
 	base := c.base() + "/releases/download/" + tag
 

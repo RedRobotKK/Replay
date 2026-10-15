@@ -397,7 +397,7 @@ func TestSIG4_TheIdentityIsCheckedAgainstThisRepoAndCIsIssuer(t *testing.T) {
 	// Without an identity check, cosign proves only that SOMEBODY signed it.
 	// install.sh pins both and this must pin the same two or the convenient
 	// route is the weaker one again. The identity is exact: the release
-	// workflow at the tag being installed (SIG6 tests what that excludes).
+	// workflow at the tag being installed (SIG8 tests what that excludes).
 	for _, want := range []string{
 		"verify-blob",
 		"--certificate-identity https://github.com/" + Repo + "/.github/workflows/release.yml@refs/tags/v9.9.9",

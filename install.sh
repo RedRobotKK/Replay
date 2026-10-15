@@ -232,6 +232,21 @@ if [ -z "$VERSION" ]; then
   fi
 fi
 
+# A tag becomes part of every URL below, so it is checked before any of them:
+# the form every release has, vMAJOR.MINOR.PATCH with an optional -prerelease,
+# the rule scripts/reproduce-release.sh applies. A --version of
+# "../../x/y/releases/download/v1" moved the download to another repository,
+# and without cosign the checksums came from there too (2026-10-15). grep reads
+# line by line, so a value holding a newline is refused before it is asked.
+if [ -n "${VERSION:-}" ]; then
+  case $VERSION in
+    *"
+"*) die "The version holds a newline, so it is not a release tag. Nothing was downloaded." ;;
+  esac
+  printf '%s\n' "$VERSION" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?' ||
+    die "$VERSION is not a release tag of the form vMAJOR.MINOR.PATCH. Nothing was downloaded."
+fi
+
 # ----------------------------------------------------- no release yet: source
 if [ -z "${VERSION:-}" ] && [ "$RESOLVED" = failed ]; then
   die "Could not reach the GitHub releases API, so the latest version is unknown.

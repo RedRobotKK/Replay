@@ -4,7 +4,7 @@ package selfupdate
 
 // SIGR: the signer identity, decided by the real cosign binary.
 //
-// SIG6 models cosign's matching rules and SIG4 pins the arguments, so both
+// SIG8 models cosign's matching rules and SIG4 pins the arguments, so both
 // pass whether or not cosign actually rejects an impostor. This runs the real
 // executable. It is behind the mutation tag because it executes a program, and
 // it skips unless REPLAY_REAL_COSIGN names one, because no CI runner has cosign.

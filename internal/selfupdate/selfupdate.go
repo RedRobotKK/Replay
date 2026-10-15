@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -179,6 +180,15 @@ func DigestFor(checksums []byte, name string) (string, error) {
 	}
 	return "", ErrNoDigest
 }
+
+// releaseTag is the form of every tag release.yml has published: v, then
+// MAJOR.MINOR.PATCH, then an optional -prerelease. scripts/reproduce-release.sh
+// applies the same rule. Go's $ is the end of the text, so a trailing newline
+// does not match.
+var releaseTag = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$`)
+
+// ValidTag reports whether tag has the form of a published release tag.
+func ValidTag(tag string) bool { return releaseTag.MatchString(tag) }
 
 // TagFromLocation extracts the release tag from the Location header of
 // https://github.com/<repo>/releases/latest.
