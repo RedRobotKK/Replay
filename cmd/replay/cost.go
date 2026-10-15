@@ -333,10 +333,12 @@ type costSummary struct {
 	// they were not told.
 	Tasks int    `json:"tasks"`
 	Unit  string `json:"unit"`
-	// Lanes is the agent-lane count behind those rows — the transcript files
-	// actually read and priced. On a session-unit report it is the larger
-	// number and printing both is what stops either being mistaken for the
-	// other. On a lane-unit report it equals Tasks.
+	// Lanes is the agent-lane count behind those rows: on a session-unit
+	// report every lane folded into a priced session, including a lane of
+	// its own whose model nothing prices, and on a lane-unit report each
+	// priced lane, so it equals Tasks. A session nothing prices adds none.
+	// On a session-unit report it is the larger number and printing both is
+	// what stops either being mistaken for the other.
 	Lanes         int     `json:"lanes"`
 	TotalUSD      float64 `json:"totalUsd"`
 	UncachedUSD   float64 `json:"uncachedUsd,omitempty"`
@@ -507,7 +509,13 @@ func percentile(sorted []float64, p float64) float64 {
 		m := len(sorted) / 2
 		return (sorted[m-1] + sorted[m]) / 2
 	}
-	i := int(p * float64(len(sorted)-1))
+	// Nearest rank: the smallest value with at least p of the sample at or
+	// below it. int(p*(n-1)) was one rank low whenever n mod 10 was 2 to 9,
+	// and put the p90 of [1, 100] at 1, beneath its median (2026-10-14).
+	i := int(math.Ceil(p*float64(len(sorted)))) - 1
+	if i < 0 {
+		i = 0
+	}
 	return sorted[i]
 }
 
@@ -943,7 +951,6 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 	// --per-lane moves that single unit down to the agent lane. It does not
 	// add a second unit alongside the first: whichever one is in force, every
 	// figure below is in it.
-	lanesRead := len(units)
 	laneUnits := units
 	unit := unitSession
 	if *perLane {
@@ -967,7 +974,22 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 
 	s := summarise(units)
 	gateCeiling := *maxRebilled
-	s.Unit, s.Lanes = unit, lanesRead
+	// Lanes are the lanes behind the rows Tasks counts: a session on a model
+	// no table prices is excluded from the tasks and was still counted here,
+	// so one priced session beside an unpriced one printed "1 sessions (2
+	// agent lanes)" (2026-10-14). A session is unpriced only when every lane
+	// is, so a priced session keeps all of its lanes.
+	pricedLanes := 0
+	for _, u := range units {
+		switch {
+		case u.Unpriced:
+		case unit == unitLane:
+			pricedLanes++
+		default:
+			pricedLanes += u.Lanes
+		}
+	}
+	s.Unit, s.Lanes = unit, pricedLanes
 	// The route is the one summary field that must not be derived from the
 	// rows.
 	//
