@@ -45,7 +45,7 @@
       "id": "github-releases",
       "group": "own",
       "name": "GitHub Releases (signed tarballs, SBOMs)",
-      "command": "cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig --certificate-identity-regexp 'https://github.com/RedRobotKK/Replay/.*' --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt",
+      "command": "TAG=vX.Y.Z; cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig --certificate-identity \"https://github.com/RedRobotKK/Replay/.github/workflows/release.yml@refs/tags/$TAG\" --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt",
       "verify": "sha256sum --check --ignore-missing checksums.txt",
       "status": "live",
       "automation": "goreleaser",
