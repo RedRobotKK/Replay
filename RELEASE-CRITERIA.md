@@ -22,7 +22,7 @@ names three things none of which are ticked anywhere:
 | | State, 2026-09-13 |
 |---|---|
 | An external security review, published | **Not commissioned.** Needs a third party and has weeks of lead time |
-| Signed, reproducible releases | Signed, yes: Sigstore keyless bound to the workflow and tag, an SBOM per ARCHIVE (the ten Linux packages get none; `artifacts: archive` in .goreleaser.yaml). **Reproducible: verified once, on 2026-09-13, not yet enforced.** All four published platforms of v0.5.4 rebuild to identical bytes, by a script anybody can run ([evidence](docs/evidence/reproducible-build-2026-09-13.md), [script](scripts/reproduce-release.sh)). Nothing runs it on a new tag, so this is a fact about v0.5.4 rather than a property of releases. **Corrected 2026-10-08, not deleted: verified a second time**, against v0.8.0 on all four platforms ([evidence](docs/evidence/reproducible-build-2026-10-08.md)), confirming the procedure still works and the 2026-09-13 result was not a one-off. Still not wired into CI, and still not a fact about any v1.0 tag, because none exists yet |
+| Signed, reproducible releases | Signed, yes: Sigstore keyless bound to the workflow and tag, an SBOM per ARCHIVE (the ten Linux packages get none; `artifacts: archive` in .goreleaser.yaml). **Reproducible: verified once, on 2026-09-13, not yet enforced.** All four published platforms of v0.5.4 rebuild to identical bytes, by a script anybody can run ([evidence](docs/evidence/reproducible-build-2026-09-13.md), [script](scripts/reproduce-release.sh)). Nothing runs it on a new tag, so this is a fact about v0.5.4 rather than a property of releases. **Corrected 2026-10-08, not deleted: verified a second time**, against v0.8.0 on all four platforms ([evidence](docs/evidence/reproducible-build-2026-10-08.md)), confirming the procedure still works and the 2026-09-13 result was not a one-off. Still not wired into CI, and still not a fact about any v1.0 tag, because none exists yet. **Corrected 2026-10-13, not deleted: wired into the release workflow, not yet run on a tag.** `release.yml`'s `reproduce` job rebuilds the binary in each of the four published archives after publication and compares it, byte for byte, with the bytes `replay upgrade` would install. It runs after publication: it detects a release that does not reproduce and does not prevent one. What it checks, what it does not, and the states below are in "The reproduce gate" under the v1.0 bar. State, kept separate: implemented and reviewed locally 2026-10-13 (one reviewer, the same model throughout); CI-verified: no; verified against a real tag: v0.9.0 on all four platforms by hand, 2026-10-13, and no tag has run the job; production Sigstore trust: not part of this gate |
 | Caching rules for a second provider | **Not started** (as of 2026-09-13). **Corrected 2026-10-08, not deleted:** typed, mutation-tested `CacheRules` for OpenAI's published Astra-tier pricing landed 2026-09-15 as `AstraRules()` (`internal/cachemodel/openai.go`, see [`docs/ROADMAP.md`](docs/ROADMAP.md)'s v0.8 section). Confirmed again today by a repository-wide search: no non-test caller selects it. "Not started" undersold the code that exists; "calibrated" would oversell it. The gate is published rules **and** a calibration corpus against real traffic, and only the first half exists. Second-provider production calibration remains outstanding. **Corrected again 2026-10-08, same day, not deleted: the first half moved too.** `cachemodel.RulesForModel` and `ClassifyBreakForModel` now exist, and all three production call sites that classify a cache break (`internal/proxy/state.go`, the live proxy; `internal/analysis/diff.go`, the offline diff; `cmd/replay/costusage.go`, the usage-export cost path) call the new function instead of the Anthropic-pinned `ClassifyBreak`. `AstraRules()` is reachable in production for any model id containing `gpt-6-astra`, proven by RED/GREEN at both the unit level (`internal/cachemodel`) and by calling the live proxy's own `(*stats).breakCause` directly (`internal/proxy/breakcauseprovider_test.go`): reverting the wiring reproduces the exact defect (a 20-minute Astra gap reported as TTL expiry under Anthropic's 5-minute rule) and the fix removes it, with every pre-existing test in both packages staying green throughout. Two things this does NOT close, stated so neither is mistaken for done: (1) Astra's MinPrefix floor (1024 tokens) is not reachable from any of the three call sites, because none of them knows the current request's visible prefix size at the point of classification, and `ClassifyBreakWith`'s own contract is to skip the floor test rather than guess — this is an existing gap, unchanged by this pass; (2) **no calibration against real OpenAI traffic has been performed.** `AstraRules()`'s numbers are still exactly what they were: read from OpenAI's published documentation on 2026-09-15, never replayed against a live response. Checked explicitly on 2026-10-08: no `OPENAI_API_KEY`, no billing-linked account, and no other mechanism for real, billable OpenAI traffic exists anywhere in this environment. The gate is published rules, production dispatch, **and** a calibration corpus against real traffic; the first two now exist and the third does not, and does not become closer to existing by the first two landing. |
 
 Two of those three cannot be done alone. The review needs a reviewer, and the
@@ -212,6 +212,186 @@ currently obeying them.
       expensive" below $99, the section is corrected rather than defended.
       **A number nobody has tried to falsify does not become exempt by being
       about money.**
+
+### The reproduce gate: what it checks and what it does not
+
+Added 2026-10-13 with `scripts/reproduce-release.sh` as release.yml runs it.
+It is a check after publication. A release that fails it is already public and
+must be pulled or superseded; nothing here stops a bad release from going out.
+
+**What it compares.** For each of linux/amd64, linux/arm64, darwin/amd64 and
+darwin/arm64:
+
+- The tag is peeled to its commit in a fresh clone of github.com/RedRobotKK/Replay.
+  The commit time and the go.mod `toolchain` line come from that commit. A tag
+  whose go.mod has no toolchain line, which is every tag before v0.6.0, is
+  refused as ambiguous.
+- The archive must match its own `checksums.txt` entry, listed exactly once.
+- The archive must be in the plain form goreleaser writes: one gzip member
+  holding ustar regular files with plain relative names, no PAX, GNU or global
+  headers, no duplicates, and nothing but padding after end-of-archive. Every
+  release archive is in that form (v0.9.0, all four platforms, read
+  2026-10-14). An archive outside it can mean different things to different tar
+  readers, and the gate can only check agreement with the tar on its own
+  machine, so it refuses the form rather than trusting the agreement. tar and
+  Go must also list exactly the same members.
+  **Corrected 2026-10-14, not deleted: plain is a property of the bytes, not
+  of the values a reader returns.** The check above read each header with Go's
+  reader and judged what it returned, and Go's reader normalizes. A size field
+  written with a leading NUL read as the full size to Go and as 0 to bsdtar, so
+  one archive listed the same names to both while bsdtar extracted a planted
+  replay hidden inside another member's content (found by the v3.5 review).
+  Every header must now be, byte for byte, the block Go's writer, which
+  goreleaser uses, produces for the values Go read; each member's content must
+  sit where Go read it, with zero padding; and the archive must end in two zero
+  blocks followed only by zeros. 23 single-field re-encodings that Go reads as
+  the canonical values are each refused (scripts/archive-member/main_test.go).
+- The member compared is the one `replay upgrade` installs.
+  `scripts/archive-member` calls `selfupdate.Unpack`, the function upgrade
+  runs, so the gate does not have its own reading of the archive. tar must also
+  list exactly one member whose base name is `replay`, named exactly `replay`,
+  and extract the same bytes, because install.sh uses tar. Two readers agreeing
+  on the bytes is the condition; either one alone is not.
+- That binary's build stamps (commit, commit time, toolchain, unmodified tree)
+  must agree with the tag before anything is built.
+- The rebuild uses goreleaser's flags, under a stated Go environment and a new
+  build cache, with the tag's toolchain. REPRODUCES means the two binaries are
+  byte-identical.
+
+**Exit codes.** 0 means the bytes match. 1 means they differ, and the
+difference is printed. 2 means nothing was compared, because an input was
+missing, malformed, ambiguous or disagreed with the tag. 2 is never a pass, and
+any other non-zero exit is a failure.
+**Corrected 2026-10-14, not deleted.** A pass is exit 0 together with the
+`REPRODUCES:` line, not exit 0 alone: under bash as sh, a caller's
+`SHELLOPTS=noexec` or `onecmd` makes the shell exit 0 before any check runs
+(below). Exit 1
+also comes from a missing argument and from a command that fails under `set -e`;
+neither is ever a pass.
+
+**The environment.** The script runs itself again under an allow-list if its
+environment holds anything else. What is kept, and why:
+
+- `PATH` finds sh, git, gh, tar and go. It is not narrowed: whoever controls
+  PATH controls every tool the gate runs. In CI the runner sets it.
+- `HOME` holds gh's stored login when the script is run by hand. git reads no
+  user or system configuration (`GIT_CONFIG_GLOBAL=/dev/null`,
+  `GIT_CONFIG_NOSYSTEM=1`), and go runs under its own allow-list.
+- `GH_TOKEN` is the read-only token release.yml passes for the download.
+- `LC_ALL=C` makes grep and awk match bytes, whatever the caller's locale.
+
+Everything else is dropped, including the `GIT_*`, `GH_*`, `TAR_OPTIONS`,
+`GREP_OPTIONS` and Go variables that were each shown on 2026-10-13 to change
+what the gate fetched, read or built. gh is given an explicit `github.com` host.
+
+**Corrected 2026-10-14, not deleted: exported shell functions.** Where sh is
+bash (macOS `/bin/sh` is bash 3.2), bash imports the functions a caller
+exports, and a function shadows any command or regular builtin of its name. A
+function named `env` answered the allow-list check with a clean listing, and
+`read` or `[` could end it early, so the re-run was skipped and a hostile
+`GIT_CONFIG_*` reached gh and git (found by the v3.5 review). Until the re-run
+the script now uses only reserved words, special builtins and `/usr/bin/env` by
+path: bash cannot import a function whose name holds a slash, and when it runs
+as sh a function does not replace a special builtin. The re-run starts under
+`env -i`, with no functions. dash imports none.
+
+**The caller's shell options.** bash as sh also enables what a caller's
+`SHELLOPTS` lists before the first line runs, and with `xtrace` it expanded
+the caller's `PS4` before every command: `PS4='$((clean=1,path_seen=1))'`
+rewrote the allow-list verdict and the run printed REPRODUCES with a hostile
+`GIT_CONFIG_*` reaching gh and git, and the trace printed `GH_TOKEN` (found by
+the v3.6 review). The first line now turns tracing off with `set +vx`, and a
+`SHELLOPTS` or `BASHOPTS` in the environment is refused with exit 2 instead of
+re-run, because `PS4` is still expanded once, for that first line, and a
+refusal is the only outcome that one expansion cannot turn into a pass. What
+remains, stated rather than implied:
+
+- `SHELLOPTS=noexec` and `SHELLOPTS=onecmd` make bash as sh exit 0 having run
+  nothing: noexec runs no line, and onecmd reads one line, the `#!` line, which
+  is a comment. Both act before any line can refuse (dash ignores both; the
+  other 25 of the 27 options bash 3.2 accepts there are refused). That is why a pass is exit 0 together
+  with the REPRODUCES line. release.yml's step still decides on the exit status
+  alone; it runs on Ubuntu, whose sh is dash, so neither option reaches it.
+- The one `PS4` expansion runs as the caller, before the gate starts. It cannot
+  make this run pass, but anything it starts in the background runs with the
+  caller's own rights, as anything on PATH does.
+- Run as `bash scripts/reproduce-release.sh`, outside posix mode, a function
+  can replace even `set` and `exit`, and no script can defend itself from that.
+  It is run as sh: by release.yml, by its own re-run, and in these documents.
+- When run by hand, gh reads its configuration under `HOME`.
+
+**The workflow guard.** `internal/regression` pins the `reproduce` job line for
+line (RR3), requires one comparison per platform goreleaser builds (RR2), and
+holds release.yml to a canonical form it can read completely (RR6). RR6 is not
+a YAML parser: this module has no YAML library. Outside `run:` script bodies it
+refuses tabs, explicit keys, merge keys, anchors and aliases, flow mappings,
+quoted keys and keys with a space before the colon, and it requires exactly
+the top-level keys `name`, `on`, `permissions` and `jobs` and exactly the jobs
+`release` and `reproduce`, each once. It does not check what GitHub's own
+parser would accept, which was not run.
+
+**Required CI.** A pull request that changes the gate is accepted only when
+every required check finished successfully on the exact head commit, including
+the blackbox job that runs the crafted-archive corpus and the hostile
+environment tests under the runner's GNU tar. A skipped, cancelled or neutral
+check is not a pass. A cancelled release run shows grey, not red, and nothing
+here turns that into a failure.
+
+**Not covered, stated rather than implied.**
+
+- GNU tar has not run the archive corpus: no machine this was written on had
+  it. By construction a disagreement with Go can only refuse, because tar's
+  bytes and member list must equal Go's, but that has not been observed on GNU
+  tar. The gate's shell has: the corpus, gate and hostile-environment tests
+  pass with dash as sh, as on the Ubuntu runner (2026-10-14).
+  **Corrected 2026-10-14, not deleted.** "Can only refuse" held only for the
+  tar on the gate's own machine. release.yml checks all four platforms on
+  Ubuntu with GNU tar, while install.sh on macOS extracts with bsdtar, so an
+  archive the two tars read differently could pass there and install other
+  bytes here. What closes that is the byte form above, not the agreement
+  checks: an archive whose every header is the canonical ustar block leaves a
+  conforming reader nothing to resolve its own way. That GNU tar and bsdtar
+  read every such archive alike is reasoned from the ustar format, not
+  observed; bsdtar was run, GNU tar was not.
+- The corpus is 36 crafted archives, plus a seeded differential fuzz
+  (TestPDF_ in internal/blackbox) that generates archives from the same
+  constructs. On 2026-10-13 it ran 1,500 archives on seed 20261013 and 8,000 on
+  seed 7 with no violation, and found the two reintroduced defects it was
+  checked against. It is evidence about the archives those seeds produce on
+  bsdtar, not a proof that the readers agree on every archive.
+- The script that checks a tag is the one in that tag's checkout.
+- Release assets can still be replaced after the check runs.
+- The archives' other bytes, the Linux packages, which carry the same binary,
+  and the SBOMs are not compared. The signature on `checksums.txt` is the
+  separate signing gate and is not checked here.
+
+### Named in the preamble, not yet met
+
+Added 2026-10-13 so that counting the boxes in this file gives the right
+answer. These are the three items the 1.0 definition in docs/ROADMAP.md names,
+whose state is the table at the top of this file.
+
+- [ ] **An external security review, published.** Not commissioned.
+- [ ] **Signed, reproducible releases.** Signed: yes. Reproducible: checked by
+      the release workflow on every tag from 2026-10-13, not yet run on a tag.
+- [ ] **Caching rules for a second provider, calibrated against real traffic.**
+      Rules and dispatch exist; no calibration corpus.
+
+### Dated evidence this supersedes, left as recorded
+
+Added 2026-10-13. Two dated files describe `scripts/reproduce-release.sh` as it
+was before the release workflow ran it, and are not edited:
+
+- `docs/evidence/reproducible-build-2026-09-13.md` says to repeat its result
+  with `./scripts/reproduce-release.sh v0.5.4 darwin arm64`. The script now
+  takes the toolchain from go.mod at the tag and refuses a tag with no
+  toolchain line, v0.5.4 among them, so that command exits 2. The result stands
+  as recorded; repeating it needs the script at its 2026-09-13 version.
+- `docs/evidence/release-runbook-1.0-2026-10-09.md` says the script reads the
+  toolchain from the published binary. It now reads the toolchain from go.mod
+  and the commit from the tag, requires the published binary to agree, and runs
+  in `release.yml`'s `reproduce` job after publication. The runbook's step 4.5
+  loop is unchanged.
 
 ## Deliberately NOT gates
 
