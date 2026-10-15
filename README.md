@@ -75,7 +75,7 @@ Check: `replay version`
 ### GitHub Releases (signed tarballs, SBOMs)
 
 ```sh
-cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig --certificate-identity-regexp 'https://github.com/RedRobotKK/Replay/.*' --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
+TAG=vX.Y.Z; cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig --certificate-identity "https://github.com/RedRobotKK/Replay/.github/workflows/release.yml@refs/tags/$TAG" --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
 ```
 
 Check: `sha256sum --check --ignore-missing checksums.txt`

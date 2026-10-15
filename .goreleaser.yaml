@@ -159,7 +159,9 @@ release:
 
     ```sh
     cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
-      --certificate-identity-regexp 'https://github.com/RedRobotKK/Replay/.*' \
+      --certificate-identity 'https://github.com/RedRobotKK/Replay/.github/workflows/release.yml@refs/tags/{{ .Tag }}' \
       --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
     sha256sum --check --ignore-missing checksums.txt
     ```
+
+    The identity is exact: the release workflow at this tag and nothing else. `sha256sum` alone shows the files match `checksums.txt`; only the `cosign` step shows who published `checksums.txt`.

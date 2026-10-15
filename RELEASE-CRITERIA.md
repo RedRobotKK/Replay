@@ -392,6 +392,14 @@ was before the release workflow ran it, and are not edited:
   and the commit from the tag, requires the published binary to agree, and runs
   in `release.yml`'s `reproduce` job after publication. The runbook's step 4.5
   loop is unchanged.
+- Added 2026-10-15. The same runbook's step 4.5 verifies `checksums.txt` with
+  `--certificate-identity-regexp 'https://github.com/RedRobotKK/Replay/.*'`.
+  cosign matches that pattern unanchored, and it accepts a certificate from the
+  repository's `ci.yml` as readily as one from `release.yml` (PR #339, which
+  replaces it in `install.sh` and `replay upgrade`). Verify with the exact
+  identity the release footer gives instead:
+  `--certificate-identity 'https://github.com/RedRobotKK/Replay/.github/workflows/release.yml@refs/tags/<tag>'`
+  and the same `--certificate-oidc-issuer`. The rest of step 4.5 is unchanged.
 
 ## Deliberately NOT gates
 

@@ -396,11 +396,11 @@ func TestSIG4_TheIdentityIsCheckedAgainstThisRepoAndCIsIssuer(t *testing.T) {
 	joined := strings.Join(seen, " ")
 	// Without an identity check, cosign proves only that SOMEBODY signed it.
 	// install.sh pins both and this must pin the same two or the convenient
-	// route is the weaker one again.
+	// route is the weaker one again. The identity is exact: the release
+	// workflow at the tag being installed (SIG6 tests what that excludes).
 	for _, want := range []string{
 		"verify-blob",
-		"--certificate-identity-regexp",
-		"https://github.com/" + Repo + "/.*",
+		"--certificate-identity https://github.com/" + Repo + "/.github/workflows/release.yml@refs/tags/v9.9.9",
 		"--certificate-oidc-issuer",
 		"https://token.actions.githubusercontent.com",
 	} {
@@ -408,6 +408,10 @@ func TestSIG4_TheIdentityIsCheckedAgainstThisRepoAndCIsIssuer(t *testing.T) {
 			t.Errorf("cosign was run without %q, so it proves only that somebody signed "+
 				"something:\n  %s", want, joined)
 		}
+	}
+	if strings.Contains(joined, "--certificate-identity-regexp") {
+		t.Errorf("cosign was given an identity regexp, which accepts any workflow in the "+
+			"repository on any ref:\n  %s", joined)
 	}
 }
 
