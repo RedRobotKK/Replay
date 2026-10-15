@@ -44,6 +44,8 @@ type ipRun struct {
 	err        error
 	cosignArgs []string
 	binDir     string
+	// curlURLs is every URL the installer asked curl for, in order.
+	curlURLs []string
 }
 
 // installed reports whether a binary reached the destination.
@@ -113,6 +115,7 @@ while [ $# -gt 0 ]; do
     *) url="$1"; shift ;;
   esac
 done
+printf '%s\n' "$url" >> "$IP_CURL_LOG"
 prefix="https://github.com/RedRobotKK/Replay/releases/download/`+ipVersion+`/"
 case "$url" in "$prefix"*) ;; *) echo "fake curl: no route for $url" >&2; exit 6 ;; esac
 f="$IP_ASSETS/${url#"$prefix"}"
@@ -121,6 +124,7 @@ if [ -n "$out" ]; then cp "$f" "$out"; else cat "$f"; fi
 `), 0o755)
 
 	cosignLog := filepath.Join(root, "cosign.args")
+	curlLog := filepath.Join(root, "curl.urls")
 	switch cosign {
 	case cosignAccepts, cosignRejects:
 		code := "0"
@@ -159,6 +163,7 @@ if [ -n "$out" ]; then cp "$f" "$out"; else cat "$f"; fi
 		"TERM=dumb",
 		"IP_ASSETS=" + assets,
 		"IP_COSIGN_LOG=" + cosignLog,
+		"IP_CURL_LOG=" + curlLog,
 	}
 	var buf bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &buf, &buf
@@ -167,6 +172,9 @@ if [ -n "$out" ]; then cp "$f" "$out"; else cat "$f"; fi
 	run := ipRun{out: buf.String(), err: err, binDir: binDir}
 	if b, rerr := os.ReadFile(cosignLog); rerr == nil {
 		run.cosignArgs = strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+	}
+	if b, rerr := os.ReadFile(curlLog); rerr == nil {
+		run.curlURLs = strings.Split(strings.TrimRight(string(b), "\n"), "\n")
 	}
 	return run
 }
@@ -298,5 +306,39 @@ func TestIPC1_RejectedSignatureInstallsNothing(t *testing.T) {
 	}
 	if r.installed() {
 		t.Errorf("a binary reached %s after a rejected signature", r.binDir)
+	}
+}
+
+// IPV1: a --version that is not a release tag is refused before any download.
+//
+// install.sh built every URL from $VERSION as given, by --version,
+// REPLAY_VERSION or the API's tag_name. A value of "../../x/y/releases/download/v1"
+// moved the download to another repository, and with cosign absent the
+// checksums came from there too (2026-10-15). The rule is the one every
+// published tag meets and scripts/reproduce-release.sh applies:
+// vMAJOR.MINOR.PATCH with an optional -prerelease.
+func TestIPV1_AVersionThatIsNotAReleaseTagDownloadsNothing(t *testing.T) {
+	for _, bad := range []string{
+		"../../x/y/releases/download/v1", "v1.0", "1.0.0", "v9.9.9/../x",
+		"v9.9.9 x", "v9.9.9\nv9.9.9", "v9.9.9?x=1", "-v9.9.9",
+	} {
+		t.Run(strings.NewReplacer("/", "_", " ", "_", "\n", "_nl_").Replace(bad), func(t *testing.T) {
+			r := runInstaller(t, cosignAbsent, "--version", bad)
+			if r.err == nil {
+				t.Fatalf("install succeeded with --version %q:\n%s", bad, r.out)
+			}
+			if r.installed() {
+				t.Errorf("a binary reached %s for --version %q", r.binDir, bad)
+			}
+			if len(r.curlURLs) != 0 {
+				t.Errorf("curl was asked for %q before the version was refused", r.curlURLs)
+			}
+		})
+	}
+	// The control: the release tag this harness serves still installs, and is
+	// fetched, so the refusal above is about the tag and not the harness.
+	ok := runInstaller(t, cosignAbsent)
+	if ok.err != nil || !ok.installed() || len(ok.curlURLs) == 0 {
+		t.Fatalf("the control install of %s failed (err %v, %d curl calls):\n%s", ipVersion, ok.err, len(ok.curlURLs), ok.out)
 	}
 }
