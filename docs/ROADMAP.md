@@ -312,7 +312,9 @@ has a 1 in front of it.
   since 2026-09-13. [ADR-0024](adr/0024-deprecation-is-a-promise-made-before-1-0.md)'s
   Decision section carries the same list in five lines and is still
   **Status: Proposed**; moving it to Accepted is the decision that remains
-  before the tag, and it is the maintainer's, not this file's. What the
+  before the tag, and it is the maintainer's, not this file's.
+  **Corrected 2026-10-15, not deleted:** the maintainer accepted it, with its
+  count corrected from 31 verbs to the 34 surfaces listed here. What the
   version number covers, each line verified against the source on that date:
   - **The dispatch verbs and their flags.** 34 surfaces, as the production-grade
     gate discovers them from `dispatch()` in `cmd/replay/main.go` and records
