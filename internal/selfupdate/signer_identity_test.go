@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// SIG6, SIG7: who is allowed to have signed checksums.txt.
+// SIG8, SIG7: who is allowed to have signed checksums.txt.
 //
 // The check passed --certificate-identity-regexp "https://github.com/<repo>/.*",
 // which cosign applies UNANCHORED to the certificate's subject alternative name
@@ -55,7 +55,7 @@ func cosignDecides(san string, calls *int) func(context.Context, string, ...stri
 
 const sigTestTag = "v9.9.9" // the tag signedRelease publishes
 
-func TestSIG6_OnlyTheReleaseWorkflowAtTheRequestedTagIsAccepted(t *testing.T) {
+func TestSIG8_OnlyTheReleaseWorkflowAtTheRequestedTagIsAccepted(t *testing.T) {
 	const repo = "https://github.com/" + Repo
 	cases := []struct {
 		name   string
