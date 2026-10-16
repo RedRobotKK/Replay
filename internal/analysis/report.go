@@ -182,7 +182,11 @@ func (r *LaneReport) header(p *Printer) {
 	if !r.Fit.ErrorMeasured() {
 		spread = "spread not measured"
 	}
-	p.Printf("Rules: %s; user-content fit %.3f tokens/byte %s from %d turns; system prefix %s (%s)\n", cachemodel.RulesVersionInEffect(), r.Fit.TokensPerByte, spread, r.Fit.Turns, formatTokens(r.Fit.UnseenPrefix.Total()), prefix)
+	models := make([]string, 0, len(r.Lane.Requests))
+	for _, req := range r.Lane.Requests {
+		models = append(models, req.Model)
+	}
+	p.Printf("Rules: %s; user-content fit %.3f tokens/byte %s from %d turns; system prefix %s (%s)\n", cachemodel.RulesLabel(models), r.Fit.TokensPerByte, spread, r.Fit.Turns, formatTokens(r.Fit.UnseenPrefix.Total()), prefix)
 	if r.Session.Skipped > 0 {
 		p.Printf("Note: %d transcript lines were not conversation content and were skipped\n", r.Session.Skipped)
 	}
