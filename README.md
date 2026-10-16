@@ -242,6 +242,14 @@ binary reads 27,067 more requests out of the same files and prices six models th
 price ([two builds, one corpus](docs/evidence/two-builds-one-corpus-2026-09-13.md)). Point it
 at yours, or give it a directory of your own.
 
+**Corrected 2026-10-15, not deleted:** the block above predates #341. That
+change made the p90 the nearest rank (it had been one rank low whenever the
+count mod 10 was 2 to 9) and made the lane count leave out the lanes of
+sessions nothing prices. So a current build reading the same files prints a
+p90 at or above $5.62 and a lane count at or below 1957; the totals, the
+median and the re-billed share are unchanged by it. The block stays as it was
+read on that date.
+
 **The re-billed figure is stated twice on purpose.** Most of the people who run this hold a flat seat,
 and a dollar figure addressed to someone else reads as a number that does not apply — which is how a
 real finding gets dismissed. The tokens apply to everyone: a re-billed token is context the work did
