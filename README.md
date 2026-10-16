@@ -417,10 +417,12 @@ worth declaring.
 ## Footprint
 
 - **No account, no telemetry, no first-run prompt.** Nothing to opt out of.
-- **One ask, at most once every thirty days.** If `cost` has just found more than $5 you paid
-  twice, it prints one line about the tip jar. That is the only time this tool asks you for
-  anything. It opens no browser and sends nothing: `~/.replay/tip.json` holds the date it last
-  asked and a random local seed, and the seed only picks which of two wordings you see. Once a
+- **One ask, at most once every thirty days, unless the finding triples.** If `cost` has just
+  found $5 or more you paid twice, it prints one line about the tip jar. That is the only time
+  this tool asks you for anything. It opens no browser and sends nothing: `~/.replay/tip.json`
+  holds the date it last asked, the amount it had found then, and a random local seed, and the
+  seed only picks which of two wordings you see. A finding at least three times that amount
+  asks again inside the thirty days, because a number that has tripled is new. Otherwise once a
   month, because asking every run would train you to skip the last paragraph, and the last
   paragraph is often where the caveat is.
 - **The binary originates four network requests, each of which you type**: `rules --check-prices`
