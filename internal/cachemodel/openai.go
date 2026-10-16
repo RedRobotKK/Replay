@@ -1,6 +1,7 @@
 package cachemodel
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -195,6 +196,48 @@ func ClassifyBreakForModel(prev, cur transcript.Usage, prevModel, model string, 
 // record with no model field arrives.
 func HasRulesForModel(model string) bool {
 	return strings.Contains(strings.ToLower(model), astraModelSubstring) || !foreignModel(model)
+}
+
+// AstraRulesLabel names AstraRules() on a report: OpenAI's prompt-caching
+// guide for the Astra tier, as read on 2026-09-15 (docs/rules/openai-2026-09-15.json).
+// The rules carry no version string of their own, so this is the date they
+// were read, not a version OpenAI published.
+const AstraRulesLabel = "OpenAI Astra rules read 2026-09-15"
+
+// RulesLabel names the cache rules that classified these models' requests,
+// for a report's header. RulesVersionInEffect() alone named Anthropic's rules
+// on every report, including one whose breaks were classified under Astra's
+// or, since a model with no rules here stopped borrowing Anthropic's, under
+// none (2026-10-16). Models with no rules are named, because their break
+// causes are the ones not measured. A set of Anthropic models alone, or no
+// models, keeps the label it always had.
+func RulesLabel(models []string) string {
+	anthropic, astra := false, false
+	var none []string
+	seen := map[string]bool{}
+	for _, m := range models {
+		switch {
+		case strings.Contains(strings.ToLower(m), astraModelSubstring):
+			astra = true
+		case HasRulesForModel(m):
+			anthropic = true
+		case !seen[m]:
+			seen[m] = true
+			none = append(none, m)
+		}
+	}
+	var parts []string
+	if anthropic || (!astra && len(none) == 0) {
+		parts = append(parts, RulesVersionInEffect())
+	}
+	if astra {
+		parts = append(parts, AstraRulesLabel)
+	}
+	if len(none) > 0 {
+		sort.Strings(none)
+		parts = append(parts, "no published cache rules for "+strings.Join(none, ", ")+" (their break causes are not measured)")
+	}
+	return strings.Join(parts, " and ")
 }
 
 // TTLForModel is the TTL a gap for this model's cache entry must be measured

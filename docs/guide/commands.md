@@ -333,6 +333,14 @@ at all. Any other break is counted with its deficit and its cause marked NOT MEA
 transcript path's fourth answer, which locates the divergence with the byte-to-token fit, is not
 borrowed here: there is no fit, because there are no bytes.
 
+The first of those three needs the provider's TTL, and this repository holds published cache rules
+only for Anthropic's models and OpenAI's GPT-6 Astra tier. For any other model (gpt-5 or o4-mini,
+say) a request that read nothing is counted as a break with its cause NOT MEASURED, because an
+expired entry and a changed prefix look the same from the usage fields. A model change is still
+named, since that needs no rules. The header's `caching rules` names what was applied: the
+Anthropic version, `OpenAI Astra rules read 2026-09-15`, or `no published cache rules for <models>`.
+A session with no priced record is not a row, and neither its breaks nor their causes are counted.
+
 Five figures a transcript run prints are structurally absent, and the report names all five rather
 than omitting them: repeated tool results, tool errors, per-block blame, alternative layouts, and
 agent-lane fan-out. In `--json` they are `null`, never `0`.
@@ -663,6 +671,12 @@ replay corpus ~/.claude/projects > corpus-report.md     # or a directory you nam
 Open it and check that nothing in it identifies your projects before you share it. It judges
 calibration per model with the newest sessions separated, so a provider changing its behaviour shows
 up as a provider change rather than as silent drift.
+
+A model with no published cache rules in this repository (every OpenAI id except the Astra tier) is
+never marked `calibrated`, whatever its match rate: its verdict reads `not calibrated: no published
+cache rules for this model`, and its rates are still printed. A high match rate there says the
+engine's arithmetic predicted the reads; it does not test any provider rule, and it is not the
+second-provider calibration the release criteria ask for.
 
 | Flag | What it does |
 |------|--------------|
