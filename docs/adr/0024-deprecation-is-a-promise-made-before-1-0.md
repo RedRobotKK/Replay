@@ -1,7 +1,14 @@
 # 24. Deprecation is a promise that has to be made before 1.0
 
-**Status:** Proposed
+**Status:** Accepted 2026-10-15
 **Date:** 2026-09-13
+
+**Amended 2026-10-15, on acceptance.** The count below, 31 dispatch verbs, was
+right on 2026-09-13 and is not now: `dispatch()` in `cmd/replay/main.go` has 34
+surfaces, the 34 the production-grade gate records in
+[production-grade-matrix.md](../evidence/production-grade-matrix.md). The
+surfaces this decision covers are the list in [docs/ROADMAP.md](../ROADMAP.md),
+"Compatibility surfaces, named". The text below is left as written.
 
 ## Context
 
