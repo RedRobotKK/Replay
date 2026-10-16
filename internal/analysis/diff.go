@@ -71,6 +71,8 @@ func classify(t Turn, fit TokenFit) Break {
 			b.Detail = fmt.Sprintf("gap %s exceeds TTL %s", t.Gap.Round(time.Second), cachemodel.TTLForModel(prev.Model, prev.Usage))
 		case cachemodel.CauseModelChanged:
 			b.Detail = fmt.Sprintf("%s -> %s", prev.Model, cur.Model)
+		case cachemodel.CauseNoRules:
+			b.Detail = fmt.Sprintf("nothing was read; %s has no published cache rules here, so an expiry and a prefix change look the same", prev.Model)
 		default:
 			b.Detail = "nothing was read; the divergence is before the first message"
 		}

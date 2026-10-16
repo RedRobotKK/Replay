@@ -171,7 +171,30 @@ func RulesForModel(model string) CacheRules {
 // call sites; that is an existing gap this change does not close, and it
 // stays recorded in docs/ROADMAP.md rather than claimed shut here.
 func ClassifyBreakForModel(prev, cur transcript.Usage, prevModel, model string, gap time.Duration) (BreakCause, bool) {
+	// A model with no rules here gets no TTL or prefix-floor inference: it
+	// used to get Anthropic's, so a gpt-5 request ten minutes after the last
+	// was "cache expired" by Anthropic's five-minute TTL (2026-10-15). A model
+	// change is still a fact, a cold read is reported as not measured, and a
+	// partial read is left to the caller's history diff, which needs no rules.
+	if !HasRulesForModel(prevModel) {
+		switch {
+		case prevModel != model:
+			return CauseModelChanged, true
+		case cur.CacheRead == 0:
+			return CauseNoRules, true
+		default:
+			return "", false
+		}
+	}
 	return ClassifyBreakWith(RulesForModel(prevModel), prev, cur, prevModel, model, gap, 0)
+}
+
+// HasRulesForModel reports whether this repository holds cache rules for the
+// model: an Anthropic family the compiled table answers for, or OpenAI's Astra
+// tier. An empty id keeps Anthropic's, as it always has, because it is how a
+// record with no model field arrives.
+func HasRulesForModel(model string) bool {
+	return strings.Contains(strings.ToLower(model), astraModelSubstring) || !foreignModel(model)
 }
 
 // TTLForModel is the TTL a gap for this model's cache entry must be measured
