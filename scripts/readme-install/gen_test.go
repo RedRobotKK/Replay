@@ -154,9 +154,12 @@ func TestGeneratedVocabulary(t *testing.T) {
 			t.Errorf("the generated block contains %q", w)
 		}
 	}
-	const opening = "Every route below ends at the same signed release; verify any download with cosign as shown in the Releases footer."
+	// go install builds from module source: nothing signed is involved, and
+	// install.sh says so itself. The opening said every route ends at the
+	// signed release until 2026-10-16, so it names the exception.
+	const opening = "Every route below except `go install` ends at the same signed release; verify any download with cosign as shown in the Releases footer. `go install` builds from source, so there is no signed artifact to check."
 	if !strings.Contains(block, opening) {
-		t.Error("the generated block does not open with the sentence that ties every route to one signed release")
+		t.Error("the generated block does not open with the sentence that ties the release routes to one signed release and names go install as the exception")
 	}
 }
 
