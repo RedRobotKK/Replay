@@ -70,55 +70,139 @@ env:
   # head_branch is the tag name when the Release run was started by a tag push.
   TAG: ${{ github.event.workflow_run.head_branch || inputs.tag }}
 
+# PRERELEASE TAGS NEVER REACH A REGISTRY.
+#
+# release.yml runs on every v* tag and goreleaser marks v1.0.0-rc.1 as a GitHub
+# prerelease, so this workflow ran for it too and published to npm and PyPI
+# like any other tag. npm publish without --tag puts the version under the
+# dist-tag `latest`: the rc would have become what `npx replay-doctor`
+# installs. There is no prerelease opt-in. Adding one means an explicit
+# non-latest dist-tag (npm --tag next), never latest.
+#
+# scripts/release-channel.sh decides, in three places, each enough alone:
+#   1. the `channel` job, whose output gates the npm and pypi jobs (`if:`);
+#   2. a guard step in each publishing job, before any publishing command;
+#   3. an `if:` on every step after that guard.
+# A malformed tag (anything outside ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$,
+# the grammar selfupdate.ValidTag and install.sh apply) fails the guard and
+# the run, loudly, before anything is downloaded or published.
+#
+# The guard runs from this workflow's own commit (a sparse checkout with no
+# ref), not from the tag: a tag cut before the script existed would otherwise
+# fail on a missing file, and the policy that judges a tag should not be read
+# from the tag. TAG reaches the script through env, never through a ${{ }}
+# expression in the shell text, because 'v1.0.0;x' is a tag somebody can push.
+#
+# internal/regression/release_channel_test.go holds this shape, and runs the
+# two jobs against shims for stable, prerelease and malformed tags.
 jobs:
+  channel:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      channel: ${{ steps.channel.outputs.channel }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: .release-guard
+          sparse-checkout: scripts/release-channel.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Classify the tag as stable or prerelease, or refuse it
+        id: channel
+        run: |
+          channel="$(./.release-guard/scripts/release-channel.sh "$TAG")" || exit 1
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "$TAG is $channel"
+
   npm:
     runs-on: ubuntu-latest
+    needs: channel
     # A failed or cancelled Release must not publish shims pointing at assets
-    # that were never uploaded.
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    # that were never uploaded, and a prerelease must not publish at all.
+    if: needs.channel.outputs.channel == 'stable' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: .release-guard
+          sparse-checkout: scripts/release-channel.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Refuse anything but a stable tag before publishing
+        id: channel
+        run: |
+          channel="$(./.release-guard/scripts/release-channel.sh "$TAG")" || exit 1
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "$TAG is $channel"
       # ref: the TAG. A bare checkout takes the default branch, which on a
       # workflow_dispatch is whatever main has moved to, and would publish shim
       # code from main under the tag's version number.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: steps.channel.outputs.channel == 'stable'
         with: { ref: "${{ env.TAG }}" }
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.channel.outputs.channel == 'stable'
         with: { node-version: '22', registry-url: 'https://registry.npmjs.org' }
       - name: Unit tests for the shim
+        if: steps.channel.outputs.channel == 'stable'
         run: cd packaging/npm && npm test
       - name: Download the release assets
+        if: steps.channel.outputs.channel == 'stable'
         env: { GH_TOKEN: "${{ github.token }}" }
         run: gh release download "$TAG" -p 'replay_*_*.tar.gz' -p 'checksums.txt' -D dist-release
       - name: Build the four platform packages, verified against checksums.txt
+        if: steps.channel.outputs.channel == 'stable'
         run: node packaging/npm/scripts/build-platform-packages.mjs --version "${TAG#v}" --dist dist-release
       # Platform packages first, then the main package that depends on them,
       # so there is never a published main package whose optional dependency
       # does not exist yet.
       - name: Publish the platform packages with provenance
+        if: steps.channel.outputs.channel == 'stable'
         run: for d in packaging/npm/build/*/; do (cd "$d" && npm publish --provenance --access public); done
         env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
       - name: Publish replay-doctor with provenance
+        if: steps.channel.outputs.channel == 'stable'
         run: cd packaging/npm && npm publish --provenance --access public
         env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
 
   pypi:
     runs-on: ubuntu-latest
     environment: pypi
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    needs: channel
+    if: needs.channel.outputs.channel == 'stable' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: .release-guard
+          sparse-checkout: scripts/release-channel.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Refuse anything but a stable tag before publishing
+        id: channel
+        run: |
+          channel="$(./.release-guard/scripts/release-channel.sh "$TAG")" || exit 1
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "$TAG is $channel"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: steps.channel.outputs.channel == 'stable'
         with: { ref: "${{ env.TAG }}" }
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        if: steps.channel.outputs.channel == 'stable'
         with: { python-version: '3.12' }
       - name: Unit tests for the wheel builder
+        if: steps.channel.outputs.channel == 'stable'
         # By path, not -m unittest: `packaging` is also an installed PyPI
         # library on the runner, and the module form imports that one instead.
         run: python3 packaging/pypi/test_build_wheels.py
       - name: Download the release assets
+        if: steps.channel.outputs.channel == 'stable'
         env: { GH_TOKEN: "${{ github.token }}" }
         run: gh release download "$TAG" -p 'replay_*_*.tar.gz' -p 'checksums.txt' -D dist-release
       - name: Build one wheel per platform, verified against checksums.txt
+        if: steps.channel.outputs.channel == 'stable'
         run: python3 packaging/pypi/build_wheels.py --version "${TAG#v}" --dist dist-release --out wheelhouse
       - name: Publish with Trusted Publishing
+        if: steps.channel.outputs.channel == 'stable'
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with: { packages-dir: wheelhouse/ }
