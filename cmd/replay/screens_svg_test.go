@@ -7,6 +7,8 @@ import (
 	"html"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -172,7 +174,9 @@ func svgFor(name, frame string) string {
 		fgPlain = "#d9dce1"
 	)
 	lines := strings.Split(strings.TrimRight(frame, "\n"), "\n")
-	w := padX*2 + cw*80
+	// Sized for a 0.65em font rather than the grid's 0.6em, because the reader's
+	// machine picks the font (TestScreenSVGsLeaveRoomForAWiderFont).
+	w := padX*2 + 80*0.65*14
 	h := padY + lh*float64(len(lines)) + padX
 
 	var b strings.Builder
@@ -262,6 +266,41 @@ func TestScreenSVGsAreNotEmpty(t *testing.T) {
 		}
 		if !bytes.Contains(b, []byte("<text")) {
 			t.Errorf("%s.svg carries no text, so it is an image of nothing", name)
+		}
+	}
+}
+
+// TestScreenSVGsLeaveRoomForAWiderFont keeps the right edge of every line
+// inside the image when the reader's monospace font is wider than the 0.6em
+// the grid assumes (2026-10-16).
+//
+// The font is chosen by the reader's machine. macOS Quick Look, which is
+// WebKit, drew these at about 8.6px a cell rather than 8.4, so an 80-column
+// line ran past a width sized for exactly 80 cells of 8.4 and the header's
+// last word was cut off ("dev" read "de"). Fitting each line with textLength
+// was tried and is worse: WebKit spreads the adjustment unevenly, so table
+// columns stopped lining up. Room for a 0.65em font keeps alignment to the
+// renderer's own uniform advance and costs a wider right margin at 0.6em.
+func TestScreenSVGsLeaveRoomForAWiderFont(t *testing.T) {
+	const minWidth = 16*2 + 80*0.65*14 // padding, 80 columns of a 0.65em 14px font
+	size := regexp.MustCompile(`^<svg [^>]*width="([0-9.]+)"`)
+	for _, name := range tuiScreens {
+		if unpinnable[name] {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(screenDir, name+".svg"))
+		if err != nil {
+			t.Errorf("%s has no committed image: %v", name, err)
+			continue
+		}
+		m := size.FindSubmatch(b)
+		if m == nil {
+			t.Errorf("%s: no width on the svg element", name)
+			continue
+		}
+		w, err := strconv.ParseFloat(string(m[1]), 64)
+		if err != nil || w < minWidth {
+			t.Errorf("%s is %s wide; an 80-column line in a 0.65em font needs %.0f", name, m[1], minWidth)
 		}
 	}
 }
