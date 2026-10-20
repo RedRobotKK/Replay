@@ -107,6 +107,10 @@ type usageReport struct {
 	// NotMeasuredWhy is the reason the break figures are absent, empty when
 	// they are present.
 	NotMeasuredWhy string `json:"notMeasuredWhy,omitempty"`
+
+	// models are the models of the sessions that are rows, for the header's
+	// rules label.
+	models []string
 }
 
 // usageNotMeasured lists what token counts can never report, with the reason.
@@ -146,13 +150,20 @@ func priceUsage(e *usage.Export) (usageReport, []usageRow) {
 		// same walk. Re-deriving them for the row afterwards was the obvious
 		// alternative and it is a second implementation of the same
 		// arithmetic, free to disagree with the summary above it.
-		sBreaks, sDeficit := 0, 0
+		sBreaks, sDeficit, sUnexplained := 0, 0, 0
 		var sRebilled float64
+		// Causes are held per session for the same reason as the figures
+		// above: a session that is not a row has its breaks left out of the
+		// count, and adding its causes anyway made the cause block sum past
+		// the breaks it explains (2026-10-16).
+		sCauses := map[string]int{}
+		var sModels []string
 		// The model column names the model that ran the largest share of the
 		// money, which is the one a routing decision is about. A session is not
 		// one model and this is a label, not a key.
 		dominant := 0.0
 		for i, r := range g.Records {
+			sModels = append(sModels, r.Model)
 			u := r.ToAnthropic()
 			price, priced := cachemodel.PriceForAt(r.Model, r.At)
 			if !priced {
@@ -195,9 +206,9 @@ func priceUsage(e *usage.Export) (usageReport, []usageRow) {
 				sRebilled += float64(d) / 1_000_000 * price.InputPerMTok
 			}
 			if cause, ok := cachemodel.ClassifyBreakForModel(prev.ToAnthropic(), u, prev.Model, r.Model, r.At.Sub(prev.At)); ok {
-				rep.Causes[string(cause)]++
+				sCauses[string(cause)]++
 			} else {
-				unexplained++
+				sUnexplained++
 			}
 		}
 		if row.Requests == 0 {
@@ -215,6 +226,11 @@ func priceUsage(e *usage.Export) (usageReport, []usageRow) {
 		}
 		breaks += sBreaks
 		deficit += sDeficit
+		unexplained += sUnexplained
+		for c, n := range sCauses {
+			rep.Causes[c] += n
+		}
+		rep.models = append(rep.models, sModels...)
 		rebilled += sRebilled
 		rows = append(rows, row)
 		costs = append(costs, row.CostUSD)
@@ -249,7 +265,7 @@ func renderUsageCost(rep usageReport, rows []usageRow, perTask bool) string {
 		return b.String()
 	}
 	fmt.Fprintf(&b, "Cost per task, across %d session(s) and %d request(s) priced from usage records\nalone, at list prices dated %s (caching rules %s).%s\n\n",
-		rep.Sessions, rep.Requests, cachemodel.PriceTableVersion, cachemodel.RulesVersionInEffect(),
+		rep.Sessions, rep.Requests, cachemodel.PriceTableVersion, cachemodel.RulesLabel(rep.models),
 		cachemodel.PriceTableAgeNote(time.Now()))
 
 	fx := money.Detect(os.LookupEnv, time.Now())

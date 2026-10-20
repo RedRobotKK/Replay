@@ -1,6 +1,7 @@
 package cachemodel
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -171,7 +172,72 @@ func RulesForModel(model string) CacheRules {
 // call sites; that is an existing gap this change does not close, and it
 // stays recorded in docs/ROADMAP.md rather than claimed shut here.
 func ClassifyBreakForModel(prev, cur transcript.Usage, prevModel, model string, gap time.Duration) (BreakCause, bool) {
+	// A model with no rules here gets no TTL or prefix-floor inference: it
+	// used to get Anthropic's, so a gpt-5 request ten minutes after the last
+	// was "cache expired" by Anthropic's five-minute TTL (2026-10-15). A model
+	// change is still a fact, a cold read is reported as not measured, and a
+	// partial read is left to the caller's history diff, which needs no rules.
+	if !HasRulesForModel(prevModel) {
+		switch {
+		case prevModel != model:
+			return CauseModelChanged, true
+		case cur.CacheRead == 0:
+			return CauseNoRules, true
+		default:
+			return "", false
+		}
+	}
 	return ClassifyBreakWith(RulesForModel(prevModel), prev, cur, prevModel, model, gap, 0)
+}
+
+// HasRulesForModel reports whether this repository holds cache rules for the
+// model: an Anthropic family the compiled table answers for, or OpenAI's Astra
+// tier. An empty id keeps Anthropic's, as it always has, because it is how a
+// record with no model field arrives.
+func HasRulesForModel(model string) bool {
+	return strings.Contains(strings.ToLower(model), astraModelSubstring) || !foreignModel(model)
+}
+
+// AstraRulesLabel names AstraRules() on a report: OpenAI's prompt-caching
+// guide for the Astra tier, as read on 2026-09-15 (docs/rules/openai-2026-09-15.json).
+// The rules carry no version string of their own, so this is the date they
+// were read, not a version OpenAI published.
+const AstraRulesLabel = "OpenAI Astra rules read 2026-09-15"
+
+// RulesLabel names the cache rules that classified these models' requests,
+// for a report's header. RulesVersionInEffect() alone named Anthropic's rules
+// on every report, including one whose breaks were classified under Astra's
+// or, since a model with no rules here stopped borrowing Anthropic's, under
+// none (2026-10-16). Models with no rules are named, because their break
+// causes are the ones not measured. A set of Anthropic models alone, or no
+// models, keeps the label it always had.
+func RulesLabel(models []string) string {
+	anthropic, astra := false, false
+	var none []string
+	seen := map[string]bool{}
+	for _, m := range models {
+		switch {
+		case strings.Contains(strings.ToLower(m), astraModelSubstring):
+			astra = true
+		case HasRulesForModel(m):
+			anthropic = true
+		case !seen[m]:
+			seen[m] = true
+			none = append(none, m)
+		}
+	}
+	var parts []string
+	if anthropic || (!astra && len(none) == 0) {
+		parts = append(parts, RulesVersionInEffect())
+	}
+	if astra {
+		parts = append(parts, AstraRulesLabel)
+	}
+	if len(none) > 0 {
+		sort.Strings(none)
+		parts = append(parts, "no published cache rules for "+strings.Join(none, ", ")+" (their break causes are not measured)")
+	}
+	return strings.Join(parts, " and ")
 }
 
 // TTLForModel is the TTL a gap for this model's cache entry must be measured
