@@ -424,6 +424,12 @@ const (
 	// CauseUnknown is the wrong word for that: it says the divergence is
 	// somewhere in the history, which is already an answer.
 	CauseNotMeasured BreakCause = "NOT MEASURED (requests overlapped in this lane; the predecessor is not determined)"
+
+	// CauseNoRules is a request that read nothing from the cache, made by a
+	// model whose provider's cache rules are not in this repository. An expired
+	// entry and a changed prefix look the same from the usage fields; only the
+	// provider's TTL tells them apart, and Anthropic's TTL is not that.
+	CauseNoRules BreakCause = "NOT MEASURED (no published cache rules for this model; expiry and a prefix change cannot be told apart)"
 )
 
 // ClassifyBreak decides the causes that usage and timing alone can settle.

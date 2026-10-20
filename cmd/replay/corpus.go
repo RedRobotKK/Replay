@@ -276,6 +276,13 @@ func writeCorpus(w io.Writer, rows []corpusRow, models []analysis.ModelCalibrati
 		switch {
 		case m.Compared == 0:
 			verdict = "not measured: no turn to compare"
+		case !cachemodel.HasRulesForModel(m.Model):
+			// The reads can match the engine's prediction, but no provider
+			// rules were under test: this repository has none for the model,
+			// and its breaks are classified with none. "calibrated" here read
+			// as the second-provider calibration the release criteria name,
+			// which is a protocol this table is not (2026-10-16).
+			verdict = "not calibrated: no published cache rules for this model"
 		case m.Stale:
 			verdict = "stale: provider behavior changed"
 		case m.MatchRate() < analysis.CalibrationThreshold:
