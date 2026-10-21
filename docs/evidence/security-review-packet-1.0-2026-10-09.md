@@ -1,5 +1,7 @@
 # External security review packet for the v1.0 candidate, 2026-10-09
 
+**Superseded 2026-10-20** by [security-review-packet-1.0-2026-10-20.md](security-review-packet-1.0-2026-10-20.md), which adds the x402 path, the release pipeline and what leaves the machine, and corrects section 4's contribution-path sentence. This file is left as written below.
+
 **What this is.** The reviewer-ready packet for condition C-1 of the v1.0
 closure ledger: everything an independent reviewer needs to start, bound
 to one commit, with the internal work and the unperformed external work
