@@ -24,6 +24,16 @@ All notable changes to this project are documented here. The format follows [Kee
   where, without cosign, the checksums came from too. Both now require
   `vMAJOR.MINOR.PATCH` with an optional `-prerelease`, the form of every
   published tag. (#342)
+- **The toolchain is now go1.27.3; it was go1.27.2.** GO-2026-6809
+  (CVE-2026-111943), published 2026-10-21, adds a denylist of distrusted
+  intermediate certificates to `crypto/x509` `Certificate.Verify`, for
+  systems whose trust store has not dropped them. Every TLS connection the
+  proxy makes upstream verifies through it, and govulncheck reported it
+  reachable on main. Its fix is in go1.26.10 and go1.27.3. The one line in
+  `go.mod` moves, and the release and reproduce jobs follow it; a new test
+  holds every workflow's `setup-go` to that line, except the go-latest job,
+  which runs `stable` on purpose. This does not help a binary already
+  installed: v0.9.0 and earlier were built by go1.27.2 or older.
 
 ### Fixed
 
