@@ -318,3 +318,42 @@ func TestSpendGuardEvictsLeastRecentlyUsedUnderAFrozenClock(t *testing.T) {
 		}
 	}
 }
+
+// Eviction follows touch order even when the clock runs backwards.
+//
+// The frozen-clock test above is the right statement of the property and a
+// poor instrument for M70: against seen-ordering every timestamp ties, the
+// victim is whichever key the map yields first, and about one run in five
+// hundred that happens to be the right one (4 survivals in 2000, measured
+// 2026-10-21), which once failed a required check on a pull request that
+// changed no Go code. Here the clock steps back one second per touch, as an
+// NTP correction can, so touch order and wall-clock order disagree on every
+// pair: the counter evicts the first session touched, the clock would evict
+// the last, and no iteration order can make the two agree.
+func TestSpendGuardEvictsByTouchOrderWhenTheClockStepsBack(t *testing.T) {
+	g := NewSpendGuard(SpendLimits{SessionTokens: 1 << 30})
+	clock := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
+	g.now = func() time.Time { return clock }
+
+	ids := make([]string, maxSpendSessions)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("s%04d", i)
+		g.Record(tenancy.LocalTenant, ids[i], 1, 0, false)
+		clock = clock.Add(-time.Second)
+	}
+	g.Record(tenancy.LocalTenant, "newcomer", 1, 0, false)
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	live := g.session[tenancy.LocalTenant]
+	if _, ok := live[ids[0]]; ok {
+		t.Errorf("%s was touched first and survived eviction", ids[0])
+	}
+	if _, ok := live[ids[len(ids)-1]]; !ok {
+		t.Errorf("%s, touched last but stamped earliest, was evicted: the victim was chosen by "+
+			"wall-clock time, which a clock stepping back makes disagree with touch order", ids[len(ids)-1])
+	}
+	if len(live) != maxSpendSessions {
+		t.Errorf("live table holds %d sessions, want %d", len(live), maxSpendSessions)
+	}
+}
