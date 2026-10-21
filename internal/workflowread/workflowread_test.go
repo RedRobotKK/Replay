@@ -105,3 +105,90 @@ func TestDownloadIsNotPublishing(t *testing.T) {
 		}
 	}
 }
+
+// shape renders what the reader found as one comparable string: each job's
+// name and its steps' names, in order. The tests below compare it whole, so a
+// job or step that appears, disappears or moves is a failure, not a count that
+// happens to match.
+func shape(jobs []WorkflowJob) string {
+	var b strings.Builder
+	for _, j := range jobs {
+		b.WriteString(j.Name + "[")
+		for i, s := range j.Steps {
+			if i > 0 {
+				b.WriteString(",")
+			}
+			b.WriteString(s.Name)
+		}
+		b.WriteString("] ")
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// A comment or blank line at column zero inside jobs: is not a top-level key.
+// If the reader took it for one it would leave jobs: there, and every job after
+// it, a publishing job included, would be invisible to FC-RC, which would then
+// pass on a workflow it never read.
+func TestColumnZeroCommentInsideJobsHidesNoJob(t *testing.T) {
+	src := "on: push\njobs:\n  channel:\n    steps:\n      - name: guard\n        run: echo\n" +
+		"# a column-zero comment between jobs\n\n" +
+		"  npm:\n    steps:\n      - name: Publish\n        run: npm publish\n"
+	jobs := ParseWorkflow(src)
+	if got, want := shape(jobs), "channel[guard] npm[Publish]"; got != want {
+		t.Fatalf("jobs = %q, want %q", got, want)
+	}
+	if !PublishesToRegistry(jobs[1].Steps[0]) {
+		t.Errorf("publish step not seen: %+v", jobs[1].Steps[0])
+	}
+}
+
+// Keys under on: sit at two spaces and end in a colon, exactly like jobs. Only
+// the jobs: section holds jobs.
+func TestKeysUnderOnAreNotJobs(t *testing.T) {
+	src := "on:\n  push:\n    tags:\n      - 'v*'\n  workflow_dispatch:\n" +
+		"permissions:\n  contents:\n" +
+		"jobs:\n  release:\n    steps:\n      - name: Build\n        run: make\n"
+	if got, want := shape(ParseWorkflow(src)), "release[Build]"; got != want {
+		t.Fatalf("jobs = %q, want %q", got, want)
+	}
+}
+
+// A line deeper than a job key before any job has been opened belongs to no
+// job. It is dropped, not attached to a job that does not exist yet.
+func TestLineBeforeTheFirstJobBelongsToNoJob(t *testing.T) {
+	src := "jobs:\n    if: stray\n  a:\n    if: real\n    steps:\n      - name: s\n        run: x\n"
+	jobs := ParseWorkflow(src)
+	if got, want := shape(jobs), "a[s]"; got != want {
+		t.Fatalf("jobs = %q, want %q", got, want)
+	}
+	if jobs[0].If != "real" {
+		t.Errorf("job a if = %q, want %q", jobs[0].If, "real")
+	}
+}
+
+// List items under a job key other than steps: (a block-form needs:, here) are
+// not steps. A phantom step would be one FC-RC checks and the runner never
+// runs.
+func TestListItemsOutsideStepsAreNotSteps(t *testing.T) {
+	src := "jobs:\n  npm:\n    needs:\n      - channel\n      - build\n" +
+		"    steps:\n      - name: Publish\n        run: npm publish\n"
+	if got, want := shape(ParseWorkflow(src)), "npm[Publish]"; got != want {
+		t.Fatalf("jobs = %q, want %q", got, want)
+	}
+}
+
+// Only keys at a step's own indent are the step's keys. A key nested deeper
+// (an env: mapping's entry) must not overwrite the step's name or if, and a
+// step-depth line before the first "- " item belongs to no step.
+func TestOnlyStepDepthKeysAreStepKeys(t *testing.T) {
+	src := "jobs:\n  npm:\n    steps:\n        name: stray\n" +
+		"      - name: Publish\n        if: steps.channel.outputs.channel == 'stable'\n" +
+		"        env:\n          name: nested\n          if: always()\n        run: npm publish\n"
+	jobs := ParseWorkflow(src)
+	if got, want := shape(jobs), "npm[Publish]"; got != want {
+		t.Fatalf("jobs = %q, want %q", got, want)
+	}
+	if s := jobs[0].Steps[0]; s.If != StableStepCond {
+		t.Errorf("step if = %q, want %q", s.If, StableStepCond)
+	}
+}
