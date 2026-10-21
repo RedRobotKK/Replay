@@ -31,4 +31,11 @@ go 1.24
 // already been green on 1.27.2 with -race before this line moved. The
 // language floor above stays at 1.24 on purpose: nothing in the tree needs
 // a newer language, and raising it would be a separate decision.
-toolchain go1.27.2
+//
+// Raised to 1.27.3 on 2026-10-21 for GO-2026-6809 (CVE-2026-111943), a
+// denylist of distrusted intermediate certificates added to crypto/x509
+// Certificate.Verify, reached through every TLS connection the proxy makes
+// upstream. Its OSV record reads fixed 1.26.10 and fixed 1.27.3; 1.27.3 is the
+// one-patch step on the line already chosen above.
+// internal/regression/toolchain_pin_test.go holds every workflow to this line.
+toolchain go1.27.3
