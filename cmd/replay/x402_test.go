@@ -327,6 +327,14 @@ var execExempt = map[string]bool{
 	// or revision reaches it from outside — both commits are constants in
 	// the file.
 	"internal/mergeguard/mergeguard_test.go": true,
+	// internal/outcome's git test, on the mergeguard test's argument. It is a
+	// _test.go, never linked into a binary. It runs git against this
+	// repository's own history at one constant commit (git archive of the
+	// pinned outcome substrate) and runs git write-tree and cp inside
+	// directories it created with t.TempDir, because git itself is the only
+	// trustworthy oracle for a git tree id. No path or revision reaches it
+	// from outside.
+	"internal/outcome/outcome_git_test.go": true,
 }
 
 var allowedImports = map[string]bool{
@@ -446,6 +454,12 @@ var allowedImports = map[string]bool{
 	// force.
 	"crypto/aes": true, "crypto/cipher": true, "crypto/hmac": true,
 	"crypto/rand": true, "crypto/sha256": true,
+
+	// crypto/sha1, for git object ids only. internal/outcome recomputes the
+	// git tree id of a result tree to prove it equals a pinned commit's, and
+	// git names objects by SHA-1. A hash cannot sign; nothing here relies on
+	// SHA-1 for integrity against an adversary choosing collisions.
+	"crypto/sha1": true,
 
 	// Used by this test to read the imports of every other file. It caught
 	// itself on the first run, which is the cheapest possible demonstration

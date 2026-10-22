@@ -268,5 +268,50 @@
     "category": "dominated",
     "justification": "Dropping this error leaves f a nil *os.File. (*os.File).Write checks its receiver first and returns os.ErrInvalid on nil, and (*os.File).Close does the same, so errors.Join on the next line is non-nil and the caller reports the record as not written exactly as before. No partial record can be produced because nothing is written through a nil file.",
     "evidence": "Neutralised as `false && (err != nil)` on 2026-10-05 and re-run: TestApplyRecordNamesTheEdgesOfItsOwnStorage (log path that is a directory) still fails the write with \"its record was not\"; the nil-receiver behaviour of os.File is documented in the standard library."
+  },
+  {
+    "pkg": "./internal/outcome",
+    "func": "TreeID",
+    "cond": "runtime.GOOS == \"windows\"",
+    "producer": "",
+    "category": "structurally-unreachable",
+    "justification": "True only when the binary runs on Windows, where executable bits cannot be observed and a computed tree id would silently disagree with git's. The gate runs on Linux, where the condition is false by construction.",
+    "evidence": "guard-reachability on 2026-10-22, run against fee2e89 over this change in a throwaway local clone: neutralised as false, the suite stayed green, verdict UNREACHED. On Windows the branch is asserted by TestTreeIDRefusesOnWindows, which the Go (windows-latest) job runs."
+  },
+  {
+    "pkg": "./internal/outcome",
+    "func": "treeOf",
+    "cond": "err != nil",
+    "producer": "info, err := os.Lstat(p)",
+    "category": "structurally-unreachable",
+    "justification": "The name came from os.ReadDir of the same directory one statement earlier, and a read failure of that directory is already refused there (covered by TestUnreadableEntriesAreRefused). Lstat can fail only if the entry is removed between the two calls, a race no single-threaded test can produce without fault injection.",
+    "evidence": "guard-reachability on 2026-10-22, run against fee2e89 over this change in a throwaway local clone: neutralised as false, the suite stayed green, verdict UNREACHED."
+  },
+  {
+    "pkg": "./internal/outcome",
+    "func": "treeOf",
+    "cond": "err != nil",
+    "producer": "target, err := os.Readlink(p)",
+    "category": "structurally-unreachable",
+    "justification": "Reached only after Lstat reported this path as a symlink. Readlink then fails only if the link is replaced or removed in between, a race no single-threaded test can produce without fault injection.",
+    "evidence": "guard-reachability on 2026-10-22, run against fee2e89 over this change in a throwaway local clone: neutralised as false, the suite stayed green, verdict UNREACHED."
+  },
+  {
+    "pkg": "./internal/outcome",
+    "func": "DeriveAnswer",
+    "cond": "err != nil",
+    "producer": "rel, err := filepath.Rel(root, p)",
+    "category": "structurally-unreachable",
+    "justification": "p is a path filepath.WalkDir produced by joining under root, so it is always relative-resolvable against root; filepath.Rel errors only for paths that cannot be made relative to each other, which WalkDir never yields here.",
+    "evidence": "guard-reachability on 2026-10-22, run against fee2e89 over this change in a throwaway local clone: neutralised as false, the suite stayed green, verdict UNREACHED."
+  },
+  {
+    "pkg": "./internal/outcome",
+    "func": "Score",
+    "cond": "err != nil",
+    "producer": "truth, err := DeriveAnswer(tree, m.Glob)",
+    "category": "structurally-unreachable",
+    "justification": "Score reaches this only after TreeID has read every file and directory in the same tree without error and matched the pinned id. DeriveAnswer reads a subset of those bytes, so it fails only if the tree changes between the two reads, a race outside a single-threaded test. Its own read failures are covered directly by TestUnreadableEntriesAreRefused.",
+    "evidence": "guard-reachability on 2026-10-22, run against fee2e89 over this change in a throwaway local clone: neutralised as false, the suite stayed green, verdict UNREACHED."
   }
 ]

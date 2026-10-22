@@ -1916,6 +1916,124 @@
         "TestPG10_OlderThanRefusesADirectoryTheRegistryDoesNotNameAsALedger"
       ],
       "note": "purge --older-than enumerated whatever directory it was given and removed every .jsonl older than the window, registry or not. Pointed at ~/.replay itself it removed measurements.jsonl, what a model billed for a known request, and interventions.jsonl, the record of every change Replay made to the reader's settings, both marked by the registry as evidence no retention window removes. It now refuses by name, before anything is read, any directory the registry does not name as a ledger store: the ledger, a ledger-<name> sibling, or the archive. This mutant removes the refusal."
+    },
+    {
+      "id": "M146",
+      "name": "truth-from-the-manifest",
+      "class": "provenance",
+      "discovered": "2026-10-22",
+      "file": "internal/outcome/outcome.go",
+      "anchor": "truth, err := DeriveAnswer(tree, m.Glob)",
+      "replacement": "truth, err := m.ExpectedAnswer, error(nil)",
+      "killedBy": [
+        "TestTheProducerCannotSupplyTruthOrVerdict"
+      ],
+      "note": "The oracle takes the manifest's stated answer instead of counting the verified tree. A manifest stating 4 over a tree holding 3 is then scored, and a reply of 4 passes."
+    },
+    {
+      "id": "M147",
+      "name": "producer-fields-accepted",
+      "class": "provenance",
+      "discovered": "2026-10-22",
+      "file": "internal/outcome/outcome.go",
+      "anchor": "\tdec.DisallowUnknownFields()\n\tif err := dec.Decode(&run); err != nil {",
+      "replacement": "\tif err := dec.Decode(&run); err != nil {",
+      "killedBy": [
+        "TestTheProducerCannotSupplyTruthOrVerdict"
+      ],
+      "note": "run.json stops refusing fields its schema lacks, so a producer's expected_answer, truth or verdict is silently ignored instead of making the run inadmissible."
+    },
+    {
+      "id": "M148",
+      "name": "wrong-answer-passes",
+      "class": "guard-removed",
+      "discovered": "2026-10-22",
+      "file": "internal/outcome/outcome.go",
+      "anchor": "if answer != truth {",
+      "replacement": "if false && answer != truth {",
+      "killedBy": [
+        "TestWrongOrUnreadableAnswerFails"
+      ],
+      "note": "The answer is never compared with the derived truth, so any number passes."
+    },
+    {
+      "id": "M149",
+      "name": "modified-tree-passes",
+      "class": "guard-removed",
+      "discovered": "2026-10-22",
+      "file": "internal/outcome/outcome.go",
+      "anchor": "if id != m.SubstrateTree {",
+      "replacement": "if false && id != m.SubstrateTree {",
+      "killedBy": [
+        "TestATamperedTreeFailsEvenWithTheCorrectAnswer"
+      ],
+      "note": "The result tree's id is never compared with the pinned substrate, so a tampered working copy passes with the right number."
+    },
+    {
+      "id": "M150",
+      "name": "failed-execution-admissible",
+      "class": "evidence",
+      "discovered": "2026-10-22",
+      "file": "internal/outcome/outcome.go",
+      "anchor": "} else if *run.ExitCode != 0 {",
+      "replacement": "} else if false {",
+      "killedBy": [
+        "TestMissingOrInsufficientEvidenceIsUnavailable"
+      ],
+      "note": "A run that exited non-zero is admitted and scored, so a failed execution can PASS."
+    },
+    {
+      "id": "M151",
+      "name": "blank-reply-scored-as-failure",
+      "class": "evidence",
+      "discovered": "2026-10-22",
+      "file": "internal/outcome/outcome.go",
+      "anchor": "if run.Reply == nil || strings.TrimSpace(*run.Reply) == \"\" {",
+      "replacement": "if run.Reply == nil {",
+      "killedBy": [
+        "TestMissingOrInsufficientEvidenceIsUnavailable"
+      ],
+      "note": "A blank reply is admitted and scored FAIL answer_not_a_number: missing evidence reported as a task failure instead of UNAVAILABLE."
+    },
+    {
+      "id": "M152",
+      "name": "ceiling-compared",
+      "class": "claim-outruns-evidence",
+      "discovered": "2026-10-22",
+      "file": "internal/outcome/outcome.go",
+      "anchor": "case c.Control.Pass == 0 || c.Control.Pass == c.Control.N:",
+      "replacement": "case false:",
+      "killedBy": [
+        "TestCompareRefusesACeiling"
+      ],
+      "note": "A control arm at 0/n or n/n is reported COMPARABLE, so a ceiling, which cannot show an effect either way, is offered as a comparison."
+    },
+    {
+      "id": "M153",
+      "name": "executable-bit-ignored",
+      "class": "attribution-loss",
+      "discovered": "2026-10-22",
+      "file": "internal/outcome/outcome.go",
+      "anchor": "if info.Mode().Perm()&0o100 != 0 {",
+      "replacement": "if false {",
+      "killedBy": [
+        "TestTreeIDMatchesGitWriteTree",
+        "TestTreeIDMatchesGitOnEdgeCases"
+      ],
+      "note": "Every file hashes as 100644, so TreeID stops being git's tree id wherever an executable exists; the substrate holds 20."
+    },
+    {
+      "id": "M154",
+      "name": "tree-entries-sorted-by-name",
+      "class": "attribution-loss",
+      "discovered": "2026-10-22",
+      "file": "internal/outcome/outcome.go",
+      "anchor": "mode, id, key = \"40000\", sub, name+\"/\"",
+      "replacement": "mode, id, key = \"40000\", sub, name",
+      "killedBy": [
+        "TestTreeIDMatchesGitWriteTree"
+      ],
+      "note": "Directories sort by bare name instead of name plus slash, git's rule, so a tree holding a.b beside a/ hashes differently from git."
     }
   ],
   "knownSurvivors": [

@@ -1,0 +1,22 @@
+{
+  "schema": "replay.outcome.manifest.v1",
+  "task_id": "count-b-tests-v1",
+  "prompt": "How many Go test functions (lines starting with `func Test`) are defined across the files matching `cmd/replay/b*_test.go`? Reply with only the number.",
+  "substrate_commit": "6871022744cf99e5bd9a8090706f2f369ca29f16",
+  "substrate_tree": "188abd59a95d7c68e7f5ba4ba1fb14ee88039dec",
+  "glob": "cmd/replay/b*_test.go",
+  "expected_answer": 60,
+  "answer_rule": "leading_integer",
+  "required_evidence": [
+    "run.json schema replay.outcome.run.v1",
+    "run.json task_id",
+    "run.json manifest_sha256",
+    "run.json substrate_commit",
+    "run.json reply",
+    "run.json exit_code",
+    "run.json usage.input_tokens",
+    "run.json usage.output_tokens",
+    "tree/ (the working copy after the run)"
+  ],
+  "source": "docs/evidence/output-discipline-2026-09-25.md"
+}
