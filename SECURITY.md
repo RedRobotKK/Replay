@@ -19,11 +19,57 @@ In scope: anything in this repository, including the daemon, its build and relea
 
 Out of scope: vulnerabilities in the model providers, IDEs, or agents Replay talks to. Report those upstream.
 
+## What leaves the machine
+
+**Correction, 2026-10-20.** This section used to open "Replay runs on your machine and sends
+nothing anywhere." That was false for as long as it was here: `replay serve` forwards your traffic
+to a provider by design, and four typed commands reach other hosts. The list below is derived from
+the code and held to it by `internal/regression/security_outbound_test.go` (SEC1 to SEC3), which
+fails when a new sender appears in the binary without a line here.
+
+**Nothing is sent automatically.** The binary has no telemetry, no account, no background or
+startup update check, and no request that starts without a command you typed. Reading transcripts
+(`cost`, `diff`, `blame`, `context`, `corpus` and the other offline readers) opens no
+connection to another host; `burn` is the one reader that touches loopback, below. The `--contribute` flags write a file for you to submit yourself; they send nothing.
+
+**The proxy forwards what your client sends it.** Once you run `replay serve`, every request your
+agent sends to the loopback listener goes on to the upstream without a per-request prompt: by
+default `https://api.anthropic.com`, or whatever `--upstream` / `REPLAY_UPSTREAM` names (an
+`http://` upstream is accepted and is then cleartext). What is forwarded is your client's request:
+its headers, including your provider API key, and its body. Replay removes its own
+`x-replay-token` and `x-replay-tenant-id` headers first. With `--mask`, detected secrets in
+`/v1/messages` and `/v1/responses` bodies are replaced by placeholders before egress
+(`maskable`, internal/proxy/passthrough.go); `/v1/chat/completions` is forwarded UNMASKED, and
+other POST paths are forwarded unread. `HTTPS_PROXY`, `HTTP_PROXY` and
+`NO_PROXY` in the environment redirect this leg. The proxy itself originates nothing: no ping and
+no health check of the upstream.
+
+**Four typed commands reach a host off this machine:**
+
+| Command | Host | What is sent |
+|---|---|---|
+| `replay rules --check-prices` | `raw.githubusercontent.com` (the LiteLLM price table) | one GET, no identifier; nothing is installed from it |
+| `replay rules --update <url>` | the host you name; `https` only, a redirect to `http` is refused | one GET; a `402` payment demand (x402) is reported and never paid, and this binary holds no wallet and cannot sign |
+| `replay probe --execute` | `$ANTHROPIC_BASE_URL` or `api.anthropic.com` | synthetic billable requests on `ANTHROPIC_API_KEY`, after printing the plan and asking unless `--yes` |
+| `replay upgrade` | `github.com/RedRobotKK/Replay/releases` | GETs for the latest-tag redirect, the archive, `checksums.txt` and its signature; no identifier. The archive is checked against `checksums.txt`, and `checksums.txt` against its Sigstore signature when `cosign` is installed (`cosign` is a separate program and, by its own defaults, consults the Sigstore transparency log; that traffic is cosign's, and it has not been measured here). The staged binary is run once before it replaces this one |
+
+**Two typed commands and one automatic step touch loopback only.** `replay doctor` and `replay tui`
+GET `/replay/healthz` or `/replay/status` at `$ANTHROPIC_BASE_URL`, and refuse to send when that
+address is not loopback. `replay burn` asks `127.0.0.1:11434` for a local Ollama version on every
+run. None of these leaves the machine.
+
+**Compiled in, not reachable.** `internal/feed` can fetch a signed rules bundle and its signature;
+no command calls it today.
+
+Outside the binary: `install.sh` fetches from `api.github.com` and `github.com` over https only, and
+the npm launcher fetches a release archive only when its platform package is missing and
+`REPLAY_DOCTOR_ALLOW_FETCH=1`. The full table, with every surface and its tests, is
+[`docs/SURFACES.md`](docs/SURFACES.md).
+
 ## What Replay keeps, and for how long
 
-Replay runs on your machine and sends nothing anywhere. Everything it keeps lives under
-`~/.replay`, and `replay privacy` lists all of it — every store, its size, and what it holds in
-plain terms.
+Everything Replay keeps lives under `~/.replay`, and `replay privacy` lists all of it: every
+store, its size, and what it holds in plain terms.
 
 **The ledger holds counts and timings, never message content.** Per request: a timestamp, a session
 id, the request path, the status, token counts and cache outcomes. No prompts, no responses, no

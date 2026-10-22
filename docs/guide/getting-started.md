@@ -3,7 +3,7 @@
 This walks through the first ten minutes with Replay: what it can see on your machine, what your
 existing sessions already cost, and how to start measuring instead of estimating.
 
-You do not need to change how your agent works, and nothing leaves your machine.
+You do not need to change how your agent works. Reading your sessions sends nothing off this machine; the few commands that do reach a host, and the proxy that forwards your own traffic to your provider, are listed in [SECURITY.md](https://github.com/RedRobotKK/Replay/blob/main/SECURITY.md#what-leaves-the-machine).
 
 ## Install
 
