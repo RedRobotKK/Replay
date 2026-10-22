@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/RedRobotKK/Replay/internal/ledger"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // The loop guard on the OpenAI chat path. A chat/completions assistant message
@@ -191,5 +192,25 @@ func TestOpenAINoToolCallsGivesThePromptVerdict(t *testing.T) {
 	}
 	if got, want := loopVerdict(sum.Prompt, calls, limits), DetectLoop(sum.Prompt, limits); got != want || got.Repeats != 0 {
 		t.Errorf("verdict %+v, prompt verdict %+v: want both empty", got, want)
+	}
+}
+
+// A tool call with no key is not a call the guard can compare, and skipping it
+// must not break a run: main's DetectLoop skipped unkeyed tool_use blocks, and
+// detectLoopCalls keeps that. Two identical keyed calls either side of an
+// unkeyed one are a run of two, on the prompt path and on the call-list path.
+func TestLoopGuardSkipsAnUnkeyedCallWithoutBreakingTheRun(t *testing.T) {
+	limits := LoopLimits{Warn: 2}
+	prompt := ledger.Prompt{Messages: []ledger.Message{{Role: "assistant", Blocks: []ledger.Block{
+		{Kind: "tool_use", ToolName: "Bash", CallKey: "k-ls"},
+		{Kind: "tool_use", ToolName: "Unkeyed"},
+		{Kind: "tool_use", ToolName: "Bash", CallKey: "k-ls"},
+	}}}}
+	if v := DetectLoop(prompt, limits); v.Repeats != 2 || !v.Warn || v.Label != "Bash" {
+		t.Errorf("prompt path: verdict %+v, want a run of 2 Bash calls through the unkeyed one", v)
+	}
+	calls := []transcript.OpenAIToolCall{{Name: "Bash", CallKey: "k-ls"}, {Name: "Unkeyed"}, {Name: "Bash", CallKey: "k-ls"}}
+	if v := loopVerdict(ledger.Prompt{}, calls, limits); v.Repeats != 2 || !v.Warn || v.Label != "Bash" {
+		t.Errorf("call-list path: verdict %+v, want a run of 2 Bash calls through the unkeyed one", v)
 	}
 }
