@@ -83,6 +83,18 @@ type OpenAIRequest struct {
 	// content is not written, and the cheapest way to keep a promise is to
 	// never hold the thing.
 	Blocks []Block
+	// Calls is every tool call the conversation's messages carry, in order,
+	// as name and content-free key. Blocks keys only the first call of each
+	// message, and that is the shape the ledger persists and the analysis
+	// reads; Calls exists for the live loop guard, which has to see a repeat
+	// wherever it sits in a message. Never persisted.
+	Calls []OpenAIToolCall
+}
+
+// OpenAIToolCall is one tool call: the tool's name and its CallKey.
+type OpenAIToolCall struct {
+	Name    string
+	CallKey string
 }
 
 // oaiMessage is one message, decoded only as far as the guards need.
@@ -123,9 +135,10 @@ func ParseOpenAIRequest(body []byte) (*OpenAIRequest, error) {
 		b := Block{Kind: kindForRole(m.Role), Bytes: ContentBytes(m.Content)}
 		switch {
 		case len(m.ToolCalls) > 0:
-			// A message can carry several calls; the first names the block,
-			// and each contributes a CallKey so a repeated call is visible to
-			// the loop detector.
+			// A message can carry several calls. The first names the block
+			// and keys it; every call, the first included, goes to Calls for
+			// the loop guard. The block shape is what the ledger has always
+			// written, so it does not grow a block per call.
 			c := m.ToolCalls[0]
 			b.Kind = KindToolUse
 			b.ToolName = c.Function.Name
@@ -141,6 +154,9 @@ func ParseOpenAIRequest(body []byte) (*OpenAIRequest, error) {
 			b.Label = TextLabel(m.Role)
 		}
 		out.Blocks = append(out.Blocks, b)
+		for _, c := range m.ToolCalls {
+			out.Calls = append(out.Calls, OpenAIToolCall{Name: c.Function.Name, CallKey: CallKey(c.Function.Name, c.Function.Arguments)})
+		}
 	}
 	return out, nil
 }
