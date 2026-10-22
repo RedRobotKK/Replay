@@ -48,6 +48,16 @@ jobs:
       - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           syft-version: v1.42.3
+      # `tags: ["v*"]` admits v1.0, V1.0.0 does not, but v1.0.0+meta and
+      # vanything do, and goreleaser would publish some of them. This refuses
+      # every tag outside the release grammar (the one selfupdate.ValidTag and
+      # install.sh apply) before anything is built, signed or uploaded, so a
+      # malformed tag fails Release and publish-shims never sees it succeed.
+      # A prerelease passes: goreleaser publishes it as a GitHub prerelease
+      # (`prerelease: auto`), which /releases/latest does not return, and
+      # publish-shims.yml keeps it off npm and PyPI.
+      - name: Refuse a tag that is not a release tag
+        run: ./scripts/release-channel.sh "$GITHUB_REF_NAME"
       - name: Verify the tag is on main
         run: |
           git fetch origin main
