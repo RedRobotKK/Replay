@@ -349,3 +349,32 @@ a pre-SP-6 flat file landing under `tenancy.LocalTenant`.
 `TestSP6_DayCapDoesNotCrossTenants` is SP-6's row's own acceptance
 criterion verbatim. `internal/quota` is untouched and remains its own,
 separate, unwired entry below.
+
+## 19. internal/outcome, the task-outcome signal before any command that uses it
+
+Added 2026-10-22. **OPEN**, deliberately: nothing in `cmd/replay` imports
+it, because the authorized slice is the scorer and its pinned manifest, not
+a command.
+
+ADR-0028 says the first unit of prompt and context optimisation is a
+task-outcome signal, captured locally, and that shipping an optimisation
+before it "repeats the refuted experiment". This package is that signal for
+one fixed task: the count of `func Test` lines in `cmd/replay/b*_test.go`
+at commit `6871022`, the substrate the 2026-09-25 output-discipline runs read
+(`docs/evidence/output-discipline-2026-09-25.md`). The manifest pins the
+prompt, the commit, its tree `188abd59a95d7c68e7f5ba4ba1fb14ee88039dec`, the
+glob and the answer rule. `Score` accepts a result tree only if its git tree
+id, computed from the bytes on disk, equals the pinned tree, counts the
+answer from those verified bytes, and refuses a run record that carries any
+field the schema lacks, so a producer cannot supply a truth or a verdict.
+Missing reply, exit code, usage, tree or provenance is `UNAVAILABLE`, never
+`PASS`. `Compare` refuses a control arm at 0/n or n/n, R10's preregistered
+stop rule, and never estimates an effect.
+
+It runs no agent. Whether the task has headroom is not established: the one
+cell below ceiling in the 2026-09-25 runs (haiku, verbose, 6 of 10) is one
+machine and ten runs.
+
+**What would wire it:** a `replay outcome` command, with its own end-to-end
+test under the wiring gate, and an authorized pilot of control runs to show
+the task is not at a ceiling. Neither is built here.
