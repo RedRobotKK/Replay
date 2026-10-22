@@ -184,6 +184,12 @@ func gatherByModel(files []string) (modelCorpus, error) {
 			}
 			u.Input += req.Usage.Input
 			u.CacheCreation += req.Usage.CacheCreation
+			// The TTL split is summed with its total. buildRoute prices the
+			// switch write at the proportion the source wrote, and without
+			// these it saw no split on any real transcript and fell back to
+			// the five-minute multiplier.
+			u.Create5m += req.Usage.Create5m
+			u.Create1h += req.Usage.Create1h
 			u.CacheRead += req.Usage.CacheRead
 			u.Output += req.Usage.Output
 			c.byTurn[model] = append(c.byTurn[model], usageAt{Usage: req.Usage, At: req.Timestamp})
@@ -229,7 +235,10 @@ type routeReport struct {
 	// under the same rule as the dollar figures - no measured sigma, no
 	// number.
 	Switch *analysis.Switch `json:"switch,omitempty"`
-	Notes  []string         `json:"notes,omitempty"`
+	// switchTurns is the source model's request count, the one Switch was
+	// judged against. Turns counts every model in the corpus.
+	switchTurns int
+	Notes       []string `json:"notes,omitempty"`
 }
 
 func buildRoute(from, to string, c modelCorpus) routeReport {
@@ -267,7 +276,14 @@ func buildRoute(from, to string, c modelCorpus) routeReport {
 	if r.Dilation.Measured && r.From.Known && r.To.Known {
 		u := c.usage[from]
 		turns := c.byTurn[from]
+		// The source model's own request count. c.total counts every model
+		// in the corpus, and dividing this model's usage by it shrank the
+		// prefix and the per-turn saving whenever another model's sessions
+		// were present, and judged the payback against turns this model
+		// never ran.
+		n := len(turns)
 		if len(turns) == 0 {
+			n = c.total
 			// Fixtures that only set the summed usage have no per-request
 			// clock. PriceForAt at zero time is PriceFor.
 			turns = []usageAt{{Usage: u}}
@@ -306,8 +322,8 @@ func buildRoute(from, to string, c modelCorpus) routeReport {
 			// The prefix the destination has to write once before it reads
 			// anything: what the source was being served warm, per turn,
 			// counted by the destination's tokenizer.
-			if c.total > 0 {
-				prefix := scaleTokens(u.CacheRead/c.total, r.Dilation.Sigma)
+			if n > 0 {
+				prefix := scaleTokens(u.CacheRead/n, r.Dilation.Sigma)
 				// At the TTL this session actually wrote. A bare
 				// CacheCreation carries no TTL, so it was priced at the
 				// short multiplier regardless of what the source was doing
@@ -321,8 +337,8 @@ func buildRoute(from, to string, c modelCorpus) routeReport {
 					write.Create5m = prefix - write.Create1h
 				}
 				cost := cachemodel.CostUSD(write, lastTo)
-				sw := analysis.Payback(cost, observed, projected, c.total)
-				r.Switch = &sw
+				sw := analysis.Payback(cost, observed, projected, n)
+				r.Switch, r.switchTurns = &sw, n
 			}
 		}
 	}
@@ -373,11 +389,11 @@ func (r routeReport) write(w io.Writer) error {
 				p.printf("It never earns that back, because %s is not cheaper per turn here.\n", r.To.Model)
 			case sw.WithinObserved:
 				p.printf("At $%.4f saved per turn it repays on turn %d, inside the %d turns\n",
-					sw.SavingPerTurnUSD, sw.PaybackTurns, r.Turns)
+					sw.SavingPerTurnUSD, sw.PaybackTurns, r.switchTurns)
 				p.printf("measured. Switching is worth it for work this long or longer.\n")
 			default:
 				p.printf("At $%.4f saved per turn it repays on turn %d - beyond the %d turns\n",
-					sw.SavingPerTurnUSD, sw.PaybackTurns, r.Turns)
+					sw.SavingPerTurnUSD, sw.PaybackTurns, r.switchTurns)
 				p.printf("measured here. Cheaper per turn and still the wrong move for sessions\n")
 				p.printf("this short, which is what a price-only comparison hides.\n")
 			}
