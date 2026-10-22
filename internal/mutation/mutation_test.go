@@ -100,44 +100,10 @@ func repoRoot(t *testing.T) string {
 	return abs
 }
 
-// thaw copies the tree somewhere writable, so a mutant is never applied to the
-// working copy. A harness that edits the repository leaves it mutated whenever
-// it is interrupted, and the interruption is exactly when nobody is looking.
-func thaw(t *testing.T, root string) string {
-	t.Helper()
-	dst := t.TempDir()
-	// Cached AND untracked-but-not-ignored: a mutant must be run against the
-	// tree as it is now, including work that has not been committed yet. That
-	// is exactly when a guard is most likely to be missing.
-	cmd := exec.Command("git", "ls-files", "-z", "--cached", "--others", "--exclude-standard")
-	cmd.Dir = root
-	out, err := cmd.Output()
-	if err != nil {
-		// Not a skip. ADR-0014 lists "a skip reported as a pass" among the
-		// twenty defects it exists to stop, and a harness that goes green
-		// having asserted nothing — in a source tarball, say — is that
-		// defect wearing this tool's name.
-		t.Fatalf("cannot enumerate the tree, so no mutant can be applied and nothing here "+
-			"asserts anything: %v", err)
-	}
-	for _, name := range strings.Split(strings.TrimRight(string(out), "\x00"), "\x00") {
-		if name == "" {
-			continue
-		}
-		body, err := os.ReadFile(filepath.Join(root, name))
-		if err != nil {
-			continue // a tracked file that is not on disk right now
-		}
-		target := filepath.Join(dst, name)
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(target, body, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return dst
-}
+// A mutant is never applied to the working copy: each runs in a worker
+// directory refilled from a snapshot of the tree (pool_test.go). A harness
+// that edits the repository leaves it mutated whenever it is interrupted, and
+// the interruption is exactly when nobody is looking.
 
 // outcome is what happened to a mutant. The three are not interchangeable and
 // collapsing any two of them is how a mutation score stops meaning anything.
@@ -325,20 +291,45 @@ func runTests(t *testing.T, dir, name string) (bool, string) {
 // TestFrozenMutantsStillDie is the score, recomputed.
 func TestFrozenMutantsStillDie(t *testing.T) {
 	c := load(t)
-	root := repoRoot(t)
+	files := snapshot(t, repoRoot(t))
+	p := newPool(t, files, poolWorkers(t))
 
 	// The baseline first. Every killer test must pass before any mutant is
-	// applied, or a red result proves nothing about the mutant.
-	base := thaw(t, root)
-	o, _, out := runNamed(t, base, killerNames(c))
-	if o != survived {
+	// applied, or a red result proves nothing about the mutant. It runs in a
+	// worker directory, so the compile it pays for is the cache every mutant
+	// after it reads from.
+	if o, out := p.baseline(t, killerNames(c)); o != survived {
 		t.Fatalf("baseline is %s: the named tests do not all pass before any mutant is applied. "+
 			"A mutant caught by an already-failing suite has been caught by nothing.\n%s", o, tail(out))
 	}
 
-	var v verdict
+	r := newResults()
+	// The score, and then the one number that decides whether it is a score at
+	// all. It runs when every mutant subtest has finished, which with parallel
+	// subtests is after this function returns. t.Logf prints only under -v, so
+	// on its own it is a claim nobody reads on a green run; evidence() is what
+	// makes a non-zero stillborn count fail here, rather than only inside
+	// whichever subtest hit it.
+	//
+	// Both the catalogue size and the verdict's own total, because they can
+	// differ: a mutant rejected below for naming no killer or no class never
+	// reaches an outcome, and a denominator that quietly shrinks to the
+	// mutants which ran is the same inflation one step removed. accounted()
+	// names each one, since completion order no longer says which is missing.
+	t.Cleanup(func() {
+		r.stillbornSorted(r.started)
+		t.Logf("%d catalogued, %d run — %s", len(c.Mutants), len(r.started), r.v)
+		if err := r.accounted(); err != nil {
+			t.Error(err)
+		}
+		if err := r.v.evidence(); err != nil {
+			t.Error(err)
+		}
+	})
 	for _, m := range c.Mutants {
 		t.Run(m.ID+"_"+m.Name, func(t *testing.T) {
+			t.Parallel()
+			r.start(m.ID)
 			if c.Classes[m.Class] == "" {
 				t.Fatalf("%s has class %q, which the catalogue does not define", m.ID, m.Class)
 			}
@@ -349,23 +340,21 @@ func TestFrozenMutantsStillDie(t *testing.T) {
 				t.Fatalf("%s records neither when it was found nor what it changes; both are the "+
 					"reason to keep it rather than a random operator mutation", m.ID)
 			}
-			dir := thaw(t, root)
+			dir := p.take(t)
 			apply(t, dir, m)
 
 			o, failed, out := runNamed(t, dir, m.KilledBy)
+			r.record(m.ID, m.Name, o, failed, out)
 			switch o {
 			case stillborn:
-				v.stillborn = append(v.stillborn, stillbirth{id: m.ID, name: m.Name, out: out})
 				t.Fatalf("%s (%s) did not compile, so no test was ever asked about it. "+
 					"A mutant the compiler refuses is not evidence about the suite; "+
 					"rewrite it so it builds.\n%s", m.ID, m.Name, tail(out))
 			case survived:
-				v.survived++
 				t.Errorf("%s (%s) SURVIVED %s.\n\n%s\n\nEither the defect this represents can "+
 					"ship again, or the mutant is equivalent and changes nothing observable — "+
 					"say which, in the catalogue.", m.ID, m.Name, strings.Join(m.KilledBy, ", "), m.Note)
 			default:
-				v.killed++
 				for _, name := range m.KilledBy {
 					if !failed[name] {
 						t.Errorf("%s names %s as a killer, but %s passed with the mutant applied. "+
@@ -375,19 +364,6 @@ func TestFrozenMutantsStillDie(t *testing.T) {
 				}
 			}
 		})
-	}
-	// The score, and then the one number that decides whether it is a score at
-	// all. t.Logf prints only under -v, so on its own it is a claim nobody
-	// reads on a green run; evidence() is what makes a non-zero stillborn
-	// count fail here, rather than only inside whichever subtest hit it.
-	//
-	// Both the catalogue size and the verdict's own total, because they can
-	// differ: a mutant rejected above for naming no killer or no class never
-	// reaches an outcome, and a denominator that quietly shrinks to the
-	// mutants which ran is the same inflation one step removed.
-	t.Logf("%d catalogued — %s", len(c.Mutants), v)
-	if err := v.evidence(); err != nil {
-		t.Error(err)
 	}
 }
 
@@ -405,39 +381,48 @@ func TestKillMatrix(t *testing.T) {
 		t.Skip("the matrix compiles the tree once per mutant")
 	}
 	c := load(t)
-	root := repoRoot(t)
+	files := snapshot(t, repoRoot(t))
+	p := newPool(t, files, poolWorkers(t))
 	all := killerNames(c)
 
 	// The baseline rule is per experiment, not per file. Without it, a tree
 	// where one killer test is already red reports every mutant as killed by
 	// that test — a fully fictitious matrix, produced by the instrument built
 	// to find which checks are load-bearing.
-	if o, _, out := runNamed(t, thaw(t, root), all); o != survived {
+	if o, out := p.baseline(t, all); o != survived {
 		t.Fatalf("baseline is %s; the matrix would attribute that failure to every mutant.\n%s", o, tail(out))
 	}
 
-	var v verdict
-	kills := map[string]map[string]bool{} // mutant id -> tests that killed it
+	r := newResults()
+	// The matrix is read when every mutant subtest has finished, which with
+	// parallel subtests is after this function returns; its rows are printed
+	// in catalogue order whatever order the mutants completed in.
+	t.Cleanup(func() { killMatrixReport(t, c, all, r) })
 	for _, m := range c.Mutants {
-		dir := thaw(t, root)
-		apply(t, dir, m)
-		o, failed, out := runNamed(t, dir, all)
-		switch o {
-		case stillborn:
-			// Kept with its compiler output, and kept OUT of the matrix rows
-			// below. Reporting it there as well produced "M70 is detected by
-			// no test in the catalogue", which is a confident diagnosis of a
-			// hole in the suite for a mutant the suite was never shown — and
-			// the reader who acts on it goes looking for a missing test
-			// instead of a mutant that does not build.
-			v.stillborn = append(v.stillborn, stillbirth{id: m.ID, name: m.Name, out: out})
-			continue
-		case survived:
-			v.survived++
-		default:
-			v.killed++
-		}
-		kills[m.ID] = failed
+		t.Run(m.ID+"_"+m.Name, func(t *testing.T) {
+			t.Parallel()
+			r.start(m.ID)
+			dir := p.take(t)
+			apply(t, dir, m)
+			// A stillborn mutant is kept with its compiler output, and kept OUT
+			// of the matrix rows. Reporting it there as well produced "M70 is
+			// detected by no test in the catalogue", which is a confident
+			// diagnosis of a hole in the suite for a mutant the suite was never
+			// shown — and the reader who acts on it goes looking for a missing
+			// test instead of a mutant that does not build. record() files it
+			// under v.stillborn and not under kills.
+			o, failed, out := runNamed(t, dir, all)
+			r.record(m.ID, m.Name, o, failed, out)
+		})
+	}
+}
+
+// killMatrixReport prints the matrix and fails on what it finds.
+func killMatrixReport(t *testing.T, c catalogue, all []string, r *results) {
+	r.stillbornSorted(r.started)
+	kills, v := r.kills, r.v
+	if err := r.accounted(); err != nil {
+		t.Error(err)
 	}
 
 	t.Log("kill matrix — mutant: tests that detect it")

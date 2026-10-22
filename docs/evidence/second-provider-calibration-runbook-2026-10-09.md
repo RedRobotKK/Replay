@@ -91,11 +91,12 @@ Procedure:
 ```sh
 # on the independent machine, with the release binary (never a local build)
 replay version                                 # record the stamped version and commit
-replay serve -upstream https://api.openai.com -mask   # loopback proxy; masking on
+replay serve -upstream https://api.openai.com -mask   # loopback proxy; -mask covers /v1/responses only (see the 2026-10-20 correction below)
 # point the client at the proxy (Codex: the base URL for /v1/responses)
 # run at least 20 real sessions of ordinary work, across at least two days,
 # so that TTL expiry and prefix growth both occur naturally
-replay corpus ~/.replay/ledger --json > corpus-openai-<date>.json
+replay corpus ~/.replay/ledger > corpus-openai-<date>.md      # Markdown report on stdout; corpus defines no --json
+replay corpus ~/.replay/ledger --contribute openai-<date> --contribute-dir .   # optional: also writes a replay.calibration.v1 file
 replay cost --json ~/.replay/ledger > cost-openai-<date>.json
 replay rules --check-prices                     # the price table date in force
 ```
@@ -125,6 +126,35 @@ end and a second with rules, dispatch and a labelled experimental path,
 and that calibration is the first 1.x gate. The runtime already states
 this limitation on the labelled path. The choice between A and B is
 Daniel's; no amendment was written and no claim was narrowed in this pass.
+
+**Correction, 2026-10-20.** Two statements in the procedure above were wrong
+as first written, and are left in place here with their fixes so the change is
+auditable.
+
+1. The step `replay corpus ~/.replay/ledger --json > corpus-openai-<date>.json`
+   is refused: `corpus` defines only `--contribute` and `--contribute-dir`
+   (cmd/replay/corpus.go), so it exits 1 with `flag provided but not defined:
+   -json`. The report is Markdown on stdout, so it is now redirected to a
+   `.md` file. `--contribute <campaign>` additionally writes a
+   `replay.calibration.v1` file (per-model counts, prefix bounds, break-cause
+   counts, a per-campaign tag; no spend, paths, session ids or content). It
+   refuses to write until `corpus_opt_in = true` is set in the consent file.
+   Nothing is transmitted either way. The Markdown report and the contribution
+   file are not the turn-by-turn reconciliation the evidence table asks for;
+   that artifact is not produced by either command and remains to be defined.
+2. The `-mask` comment said "masking on" without a scope. `-mask` masks
+   `/v1/responses` (the Codex path; internal/proxy/responses_test.go
+   TestRES1) and `/v1/messages`. It does NOT mask `/v1/chat/completions`, which
+   is EXPERIMENTAL and UNMASKED: a key in such a request reaches the provider
+   in clear (cmd/replay/serve.go prints this at startup). The procedure's
+   "any OpenAI-compatible client" fallback therefore has no masking
+   protection, and the masking-off contrast in the Controls row only means
+   something on the Responses path. The `-upstream` help text in serve.go
+   still says Messages is the only masked shape; that text is stale against
+   TestRES1 and was not changed here.
+
+No calibration has been run against OpenAI traffic; this correction changes
+the documented commands only.
 
 ---
 
