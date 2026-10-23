@@ -381,9 +381,16 @@ Missing reply, exit code, usage, tree or provenance is `UNAVAILABLE`, never
 `PASS`. `Compare` refuses a control arm at 0/n or n/n, R10's preregistered
 stop rule, and never estimates an effect.
 
-It runs no agent. Whether the task has headroom is not established: the one
-cell below ceiling in the 2026-09-25 runs (haiku, verbose, 6 of 10) is one
-machine and ten runs.
+It runs no agent. Whether the task has headroom is not established. Read by
+the answer rule `Score` applies, the 2026-09-25 n=10 runs have two cells below
+ceiling, haiku, verbose, 5 of 10, and sonnet, verbose, 6 of 10, on one machine
+and ten runs each. Numerically, sonnet verbose states 60 in all ten; its four
+misses are bold answers the rule cannot read.
+
+Corrected 2026-10-23: this paragraph said "the one cell below ceiling in the
+2026-09-25 runs (haiku, verbose, 6 of 10)", which is the numeric reading
+(6 replies stating 60) given under the rule's name. The rule reads 5, and it
+puts sonnet verbose below ceiling as well (`TestN10UnderTheShippedAnswerRule`).
 
 **What would wire it:** a `replay outcome` command, with its own end-to-end
 test under the wiring gate, and an authorized pilot of control runs to show
