@@ -27,7 +27,7 @@ import (
 var numberWords = map[string]int{
 	"twenty-five": 25, "twenty-six": 26, "twenty-seven": 27, "twenty-eight": 28,
 	"twenty-nine": 29, "thirty": 30, "thirty-one": 31, "thirty-two": 32,
-	"thirty-three": 33, "thirty-four": 34, "thirty-five": 35,
+	"thirty-three": 33, "thirty-four": 34, "thirty-five": 35, "thirty-six": 36,
 	"eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
 }
 

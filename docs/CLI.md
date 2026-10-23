@@ -17,7 +17,7 @@ reach the network, and does it write. Both are answered per command below, and
 summarised here.
 
 **Opens no socket and writes nothing** — safe to run at will:
-`ceiling`, `diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `grok`, `mcp`, `statusline`, `redact`, `version`, `prefix`, `budget`, `jev`, `pool`, `simulate`, `outcome`.
+`ceiling`, `diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `grok`, `mcp`, `statusline`, `redact`, `version`, `prefix`, `budget`, `jev`, `pool`, `simulate`, `outcome`, `outcome-compare`.
 
 **Leaves the machine:** `serve` proxies every request to the provider.
 `probe --execute` sends billable requests, and without `--execute` it prints a
@@ -75,6 +75,7 @@ to test whether `~/.replay` is writable.
 | [`simulate`](#simulate) | Which recorded requests a spend cap would have refused, replayed through the proxy's own guard; SIMULATED, never a forecast | none | none |
 | [`outcome`](#outcome) | Score run directories against the task pinned in this binary: PASS, FAIL or UNAVAILABLE, the truth derived only from a verified tree | none | none |
 | [`outcome-record`](#outcome-record) | Write a run directory `replay outcome` can score from operator-supplied values, every one labelled as attested; a PASS from it does not prove an agent produced the answer | none | writes only the new --out directory |
+| [`outcome-compare`](#outcome-compare) | Compare two arms of scored run directories by PASS count, at least 5 eligible runs an arm; no effect is estimated and cost, time and tokens are not compared | none | none |
 
 ### cost
 
@@ -435,6 +436,16 @@ Write a run directory `replay outcome` can score from operator-supplied values, 
 | `-usage-in` | string | input tokens the run reported |
 | `-usage-out` | string | output tokens the run reported |
 
+### outcome-compare
+
+Compare two arms of scored run directories by PASS count, at least 5 eligible runs an arm; no effect is estimated and cost, time and tokens are not compared.
+
+| Flag | Type | What it does |
+|---|---|---|
+| `-control` | string | the arm label of the baseline runs, as their run.json names it |
+| `-json` | bool | print the comparison as JSON |
+| `-treatment` | string | the arm label of the runs compared with the baseline |
+
 ## The TUI covers the same ground
 
 `replay tui` opens the same answers as movable screens. `--screen <name>` opens
@@ -475,4 +486,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-35 commands, 122 flags, read from the binary.
+36 commands, 125 flags, read from the binary.

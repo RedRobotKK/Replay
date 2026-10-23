@@ -241,6 +241,8 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 		return runOutcome(args[1:], stdout, stderr)
 	case "outcome-record":
 		return runOutcomeRecord(args[1:], stdout, stderr)
+	case "outcome-compare":
+		return runOutcomeCompare(args[1:], stdout, stderr)
 	default:
 		// The tool is named for its own first command, so "replay replay
 		// <path>" would be the common invocation. A first argument that
@@ -684,6 +686,7 @@ Setup and maintenance:
   replay simulate --policy F <ledger>  which recorded requests a cap would have refused (SIMULATED)
   replay outcome <run-dir...>      score runs of the pinned task: PASS, FAIL or UNAVAILABLE
   replay outcome-record --out <dir> ...  write a run directory from values you supply, for outcome to score
+  replay outcome-compare --control <arm> --treatment <arm> <run-dir...>  compare two arms by PASS count, 5 runs an arm at least
   replay prefix --before F --after F  does this change void the cached prefix (exit 1 if so)
   replay budget <ledger-dir>       what this setup costs on every request, as a committable file
   replay redact <transcript>       strip content, keep structure and usage (for bug reports)

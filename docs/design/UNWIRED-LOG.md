@@ -404,3 +404,11 @@ by path that does not guard against a concurrent change. `Compare` is still call
 nothing in the binary: the command scores runs and does not compare arms.
 The pilot is not run, so whether the task has headroom is still not
 established.
+
+**`Compare` WIRED 2026-10-23** by `replay outcome-compare`, once the owner set
+the minimum it lacked: five eligible runs an arm, an operational floor and not
+a significance threshold. It counts PASS over PASS-or-FAIL runs, keeps
+UNAVAILABLE apart, excludes runs of any other arm with a reason, refuses a
+control at a ceiling, and estimates no effect (M166, M167). The pilot is still
+not run: a comparison can now be described, and whether the pinned task has
+headroom is still not established.

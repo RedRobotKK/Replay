@@ -361,14 +361,16 @@ func results(verdicts ...Verdict) []Result {
 }
 
 func TestCompareRefusesACeiling(t *testing.T) {
-	treat := results(Pass, Fail, Pass)
+	// Five eligible runs an arm, the declared minimum, so that the ceiling is
+	// what decides each case.
+	treat := results(Pass, Fail, Pass, Pass, Fail)
 	for name, c := range map[string]struct {
 		control []Result
 		want    ComparisonStatus
 	}{
-		"0/n":                {results(Fail, Fail, Fail, Unavailable), RefusedCeiling},
-		"n/n":                {results(Pass, Pass, Pass, Pass), RefusedCeiling},
-		"not a ceiling":      {results(Pass, Fail, Pass, Unavailable), Comparable},
+		"0/n":                {results(Fail, Fail, Fail, Fail, Fail, Unavailable), RefusedCeiling},
+		"n/n":                {results(Pass, Pass, Pass, Pass, Pass), RefusedCeiling},
+		"not a ceiling":      {results(Pass, Fail, Pass, Fail, Pass, Unavailable), Comparable},
 		"nothing admissible": {results(Unavailable, Unavailable), Insufficient},
 	} {
 		got := Compare(c.control, treat)
@@ -380,11 +382,39 @@ func TestCompareRefusesACeiling(t *testing.T) {
 		}
 	}
 	got := Compare(results(Pass, Fail, Unavailable), treat)
-	if got.Control != (ArmCount{Pass: 1, N: 2, Unavailable: 1}) || got.Treatment != (ArmCount{Pass: 2, N: 3}) {
+	if got.Control != (ArmCount{Pass: 1, N: 2, Unavailable: 1}) || got.Treatment != (ArmCount{Pass: 3, N: 5}) {
 		t.Errorf("counts %+v / %+v: UNAVAILABLE runs are counted apart, never in n", got.Control, got.Treatment)
 	}
 	if Compare(results(Pass, Fail), nil).Status != Insufficient {
 		t.Error("an empty treatment arm was compared")
+	}
+}
+
+// Five eligible runs an arm is the owner's predeclared operational minimum
+// (2026-10-23), not a significance threshold. Below it nothing is compared,
+// and UNAVAILABLE runs never make up the number.
+func TestCompareNeedsFiveEligibleRunsPerArm(t *testing.T) {
+	if MinEligiblePerArm != 5 {
+		t.Fatalf("MinEligiblePerArm = %d; the declared minimum is 5", MinEligiblePerArm)
+	}
+	five := results(Pass, Fail, Pass, Fail, Pass)
+	for name, c := range map[string]struct {
+		control, treatment []Result
+		want               ComparisonStatus
+	}{
+		"four control":                {results(Pass, Fail, Pass, Fail), five, Insufficient},
+		"four treatment":              {five, results(Pass, Fail, Pass, Fail), Insufficient},
+		"unavailable does not count":  {results(Pass, Fail, Pass, Fail, Unavailable, Unavailable, Unavailable), five, Insufficient},
+		"a ceiling below the minimum": {results(Fail, Fail, Fail), five, Insufficient},
+		"five each":                   {five, five, Comparable},
+	} {
+		got := Compare(c.control, c.treatment)
+		if got.Status != c.want {
+			t.Errorf("%s: %s %+v, want %s", name, got.Status, got, c.want)
+		}
+		if got.Status == Insufficient && !strings.Contains(got.Note, "5 eligible") {
+			t.Errorf("%s: note %q does not name the minimum", name, got.Note)
+		}
 	}
 }
 

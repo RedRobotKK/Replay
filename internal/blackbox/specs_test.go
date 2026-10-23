@@ -633,6 +633,72 @@ var specs = map[string]spec{
 			return [][]string{{"outcome", "--json", filepath.Join(home, "runs", "absent"), filepath.Join(home, "runs", "tampered")}}
 		},
 	},
+	"outcome-compare": {
+		Setup: func(t *testing.T, _ string) (string, []check) {
+			// Run records against the embedded manifest whose trees are not the
+			// pinned substrate, so every run is an admissible FAIL. That is
+			// enough to separate a sample below the minimum from a ceiling, and
+			// to see that a third arm is never counted.
+			home := t.TempDir()
+			m, raw, err := outcome.Pinned()
+			if err != nil {
+				t.Fatal(err)
+			}
+			write := func(name, arm string) string {
+				dir := filepath.Join(home, "runs", name)
+				mustWrite(t, filepath.Join(dir, "tree", "README.md"), []byte("not the substrate\n"))
+				rec, err := json.Marshal(map[string]any{
+					"schema": outcome.RunSchema, "task_id": m.TaskID, "manifest_sha256": outcome.ManifestDigest(raw),
+					"substrate_commit": m.SubstrateCommit, "arm": arm, "reply": "60", "exit_code": 0,
+					"usage": map[string]any{"input_tokens": 1200, "output_tokens": 4},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				mustWrite(t, filepath.Join(dir, "run.json"), rec)
+				return dir
+			}
+			var five, four, treat []string
+			for i := 0; i < 5; i++ {
+				five = append(five, write(fmt.Sprintf("c%d", i), "control"))
+				treat = append(treat, write(fmt.Sprintf("t%d", i), "terse"))
+			}
+			four = five[:4]
+			other := write("v0", "verbose")
+			short := append(append([]string{"outcome-compare", "--json", "--control", "control", "--treatment", "terse"}, four...), treat...)
+			full := append(append(append([]string{"outcome-compare", "--json", "--control", "control", "--treatment", "terse"}, five...), treat...), other)
+			human := append(append([]string{"outcome-compare", "--control", "control", "--treatment", "terse"}, five...), treat...)
+			return home, []check{
+				{Label: "four control runs are below the minimum", Args: short, Exit: 0, JSON: func(d map[string]any) error {
+					if d["status"] != "INSUFFICIENT" {
+						return fmt.Errorf("status %v, want INSUFFICIENT", d["status"])
+					}
+					return nil
+				}},
+				{Label: "a third arm is excluded, never counted", Args: full, Exit: 0, JSON: func(d map[string]any) error {
+					if e, _ := num(d, "control", "eligible"); e != 5 {
+						return fmt.Errorf("control eligible %v, want 5", e)
+					}
+					if d["status"] != "REFUSED_CEILING" {
+						return fmt.Errorf("status %v, want REFUSED_CEILING for a control at 0 of 5", d["status"])
+					}
+					runs, _ := d["runs"].([]any)
+					last, _ := runs[len(runs)-1].(map[string]any)
+					if last["exclusion"] != "arm_not_compared" {
+						return fmt.Errorf("the verbose run was %v / %v, want excluded arm_not_compared", last["role"], last["exclusion"])
+					}
+					return nil
+				}},
+				{Label: "the report says what it does not measure", Args: human, Exit: 0, Stdout: []string{"REFUSED_CEILING", "not a statistical test", "cost: NOT MEASURED", "tokens: NOT MEASURED"}},
+			}
+		},
+		Invalid: func(string) check {
+			return check{Label: "no arms refused", Args: []string{"outcome-compare"}, Exit: 1}
+		},
+		JSONOut: func(home string) [][]string {
+			return [][]string{{"outcome-compare", "--json", "--control", "control", "--treatment", "terse", filepath.Join(home, "runs", "c0")}}
+		},
+	},
 	"outcome-record": {
 		Setup: func(t *testing.T, _ string) (string, []check) {
 			// A working copy that is not the pinned substrate, so nothing here

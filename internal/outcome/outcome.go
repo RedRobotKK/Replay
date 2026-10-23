@@ -103,6 +103,11 @@ const (
 	Insufficient   ComparisonStatus = "INSUFFICIENT"
 )
 
+// MinEligiblePerArm is the fewest PASS or FAIL runs an arm must have before
+// two arms are compared. Decided by the owner on 2026-10-23 as a predeclared
+// operational minimum; it is not a significance threshold.
+const MinEligiblePerArm = 5
+
 // ArmCount counts PASS among admissible runs; UNAVAILABLE runs are kept apart.
 type ArmCount struct{ Pass, N, Unavailable int }
 
@@ -395,14 +400,16 @@ func Score(m Manifest, manifestRaw []byte, runDir string) Result {
 	return r
 }
 
-// Compare reports whether two arms may be compared, under the preregistered
-// R10 stop rule: a control arm at 0/n or n/n is a ceiling, which cannot show
-// an effect in either direction. It never estimates an effect.
+// Compare reports whether two arms may be compared. Each arm needs
+// MinEligiblePerArm eligible runs first; then the preregistered R10 stop rule
+// applies: a control arm at 0/n or n/n is a ceiling, which cannot show an
+// effect in either direction. It never estimates an effect.
 func Compare(control, treatment []Result) Comparison {
 	c := Comparison{Control: count(control), Treatment: count(treatment)}
 	switch {
-	case c.Control.N == 0 || c.Treatment.N == 0:
-		c.Status, c.Note = Insufficient, "an arm has no admissible run"
+	case c.Control.N < MinEligiblePerArm || c.Treatment.N < MinEligiblePerArm:
+		c.Status = Insufficient
+		c.Note = fmt.Sprintf("an arm has fewer than %d eligible (PASS or FAIL) runs, the predeclared minimum; nothing is compared", MinEligiblePerArm)
 	case c.Control.Pass == 0 || c.Control.Pass == c.Control.N:
 		c.Status = RefusedCeiling
 		c.Note = "control is at a ceiling (0/n or n/n); no comparison is valid, and this is not evidence of no effect"

@@ -45,7 +45,8 @@ killer each surface is held to.
 | `upgrade` | yes | `dispatch main.go:238 → runUpgrade` | `cmd/replay/upgrade.go @ "bin, sig, err := client.Fetch(ctx, target, runtime.GOOS, …"` | `TestE2E_Upgrade` | `TestE2E_Upgrade` | `M111` | `TestE2E_Upgrade` | PASS |
 | `outcome` | yes | `dispatch main.go:240 → runOutcome` | `cmd/replay/outcome.go @ "Arm: r.Arm, Answer: r.Answer, Truth: r.Truth, TreeID: r.T…"; cmd/replay/outcome.go @ "default: …"; cmd/replay/outcome.go @ "if first, ok := seen[key]; ok {"` | `TestE2E_Outcome` | `TestE2E_Outcome, TestOutcomeRefusesARunDirectoryNamedTwice` | `M155, M156, M165` | `TestE2E_Outcome` | PASS |
 | `outcome-record` | yes | `dispatch main.go:242 → runOutcomeRecord` | `cmd/replay/outcome_record.go @ "if before != m.SubstrateTree && !*allowModified {"; cmd/replay/outcome_record.go @ "exitCode := fs.String(\"exit-code\", \"\","` | `TestE2E_OutcomeRecord` | `TestE2E_OutcomeRecord, TestOutcomeRecordModifiedTreeNeedsTheFlag, TestOutcomeRecordRequiresEveryFlag` | `M159, M160` | `TestE2E_OutcomeRecord` | PASS |
+| `outcome-compare` | yes | `dispatch main.go:244 → runOutcomeCompare` | `internal/outcome/outcome.go @ "case c.Control.N < MinEligiblePerArm \|\| c.Treatment.N < M…"; cmd/replay/outcome_compare.go @ "row.Role, row.Exclusion = \"excluded\", \"arm_not_compared\""` | `TestE2E_OutcomeCompare` | `TestCompareNeedsFiveEligibleRunsPerArm, TestE2E_OutcomeCompare, TestOutcomeCompareUnavailableNeverMakesUpTheMinimum` | `M166, M167` | `TestE2E_OutcomeCompare` | PASS |
 
-**36 surfaces discovered: 36 PASS, 0 FAIL.**
+**37 surfaces discovered: 37 PASS, 0 FAIL.**
 
 PRODUCTION SURFACE GATE: PASS

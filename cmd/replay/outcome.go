@@ -82,13 +82,8 @@ func runOutcome(args []string, stdout, stderr io.Writer) error {
 	if fs.NArg() == 0 {
 		return fmt.Errorf("at least one run directory is required: %w", errUsage)
 	}
-	seen := map[string]string{}
-	for _, dir := range fs.Args() {
-		key := outcomeRunKey(dir)
-		if first, ok := seen[key]; ok {
-			return fmt.Errorf("%s and %s name the same run directory, which would be scored and counted twice: %w", first, dir, errUsage)
-		}
-		seen[key] = dir
+	if err := refuseRepeatedRunDirs(fs.Args()); err != nil {
+		return err
 	}
 	m, raw, err := outcomeManifest()
 	if err != nil {
@@ -148,6 +143,20 @@ func outcomeDetail(r outcomeRun) string {
 		parts = append(parts, "no truth derived")
 	}
 	return strings.Join(parts, ": ")
+}
+
+// refuseRepeatedRunDirs refuses a list that names one run directory twice,
+// which would score it twice and count it twice.
+func refuseRepeatedRunDirs(dirs []string) error {
+	seen := map[string]string{}
+	for _, dir := range dirs {
+		key := outcomeRunKey(dir)
+		if first, ok := seen[key]; ok {
+			return fmt.Errorf("%s and %s name the same run directory, which would be scored and counted twice: %w", first, dir, errUsage)
+		}
+		seen[key] = dir
+	}
+	return nil
 }
 
 // outcomeRunKey is where dir points: its absolute path with symbolic links
