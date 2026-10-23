@@ -74,6 +74,7 @@ to test whether `~/.replay` is writable.
 | [`pool`](#pool) | Aggregate corpus submissions into one figure, with its roster | none | none |
 | [`simulate`](#simulate) | Which recorded requests a spend cap would have refused, replayed through the proxy's own guard; SIMULATED, never a forecast | none | none |
 | [`outcome`](#outcome) | Score run directories against the task pinned in this binary: PASS, FAIL or UNAVAILABLE, the truth derived only from a verified tree | none | none |
+| [`outcome-record`](#outcome-record) | Write a run directory `replay outcome` can score from operator-supplied values, every one labelled as attested; a PASS from it does not prove an agent produced the answer | none | writes only the new --out directory |
 
 ### cost
 
@@ -418,6 +419,22 @@ Score run directories against the task pinned in this binary: PASS, FAIL or UNAV
 |---|---|---|
 | `-json` | bool | print the report as JSON |
 
+### outcome-record
+
+Write a run directory `replay outcome` can score from operator-supplied values, every one labelled as attested; a PASS from it does not prove an agent produced the answer.
+
+| Flag | Type | What it does |
+|---|---|---|
+| `-allow-modified-tree` | bool | record a tree that is not the pinned substrate, which the scorer will FAIL; it says nothing about who changed it or why |
+| `-arm` | string | a label for the arm this run belongs to: 1 to 64 of A-Z a-z 0-9 . _ - |
+| `-exit-code` | string | the exit status of the run, 0 to 255; never assumed |
+| `-out` | string | the run directory to create; it must not exist |
+| `-reply-file` | string | a file holding the agent's reply, verbatim |
+| `-task` | string | the task id of the manifest embedded in this binary |
+| `-tree` | string | the working copy the run left |
+| `-usage-in` | string | input tokens the run reported |
+| `-usage-out` | string | output tokens the run reported |
+
 ## The TUI covers the same ground
 
 `replay tui` opens the same answers as movable screens. `--screen <name>` opens
@@ -458,4 +475,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-34 commands, 113 flags, read from the binary.
+35 commands, 122 flags, read from the binary.

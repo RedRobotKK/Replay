@@ -143,9 +143,15 @@ type surface struct {
 }
 
 func (s surface) Canon() string { return strings.TrimLeft(s.Names[0], "-") }
+
+// E2E is the surface's end-to-end test, named as the wiring gate requires:
+// each hyphenated part capitalised and the hyphens dropped.
 func (s surface) E2E() string {
-	c := s.Canon()
-	return "TestE2E_" + strings.ToUpper(c[:1]) + c[1:]
+	name := "TestE2E_"
+	for _, part := range strings.Split(s.Canon(), "-") {
+		name += strings.ToUpper(part[:1]) + part[1:]
+	}
+	return name
 }
 
 func discoverSurfaces(t *testing.T) []surface {

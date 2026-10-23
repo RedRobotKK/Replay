@@ -71,10 +71,16 @@ type wiredSurface struct {
 
 func (s wiredSurface) Canon() string { return strings.TrimLeft(s.Names[0], "-") }
 
-// TestName is the end-to-end test this surface must have.
+// TestName is the end-to-end test this surface must have. Each hyphenated
+// part is capitalised and the hyphens dropped, so `outcome-record` must have
+// TestE2E_OutcomeRecord: a name kept with its hyphen is one no test can
+// declare.
 func (s wiredSurface) TestName() string {
-	c := s.Canon()
-	return "TestE2E_" + strings.ToUpper(c[:1]) + c[1:]
+	name := "TestE2E_"
+	for _, part := range strings.Split(s.Canon(), "-") {
+		name += strings.ToUpper(part[:1]) + part[1:]
+	}
+	return name
 }
 
 func wiringRepoRoot(t *testing.T) string {

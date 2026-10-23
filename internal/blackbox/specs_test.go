@@ -632,4 +632,48 @@ var specs = map[string]spec{
 			return [][]string{{"outcome", "--json", filepath.Join(home, "runs", "absent"), filepath.Join(home, "runs", "tampered")}}
 		},
 	},
+	"outcome-record": {
+		Setup: func(t *testing.T, _ string) (string, []check) {
+			// A working copy that is not the pinned substrate, so nothing here
+			// can PASS: the binary carries the real manifest, and the real
+			// substrate is not in this tree. What it can show is the two
+			// refusals that keep a recording honest and that a refusal leaves
+			// nothing the scorer admits.
+			home := t.TempDir()
+			tree := filepath.Join(home, "work")
+			mustWrite(t, filepath.Join(tree, "README.md"), []byte("not the substrate\n"))
+			reply := filepath.Join(home, "reply.txt")
+			mustWrite(t, reply, []byte("60\n"))
+			args := func(out string, extra ...string) []string {
+				a := []string{"outcome-record", "--task", "count-b-tests-v1", "--reply-file", reply,
+					"--usage-in", "1200", "--usage-out", "4", "--arm", "control", "--tree", tree, "--out", filepath.Join(home, "runs", out)}
+				return append(a, extra...)
+			}
+			if err := os.MkdirAll(filepath.Join(home, "runs"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			return home, []check{
+				{Label: "a modified tree is refused by default", Args: args("refused", "--exit-code", "0"), Exit: 1, Stderr: []string{"tree_differs_from_substrate"}},
+				{Label: "no exit code is never exit code 0", Args: args("no-exit", "--allow-modified-tree"), Exit: 1, Stderr: []string{"flag_missing:exit-code"}},
+				{Label: "an opted-in modified tree is recorded", Args: args("modified", "--exit-code", "0", "--allow-modified-tree"), Exit: 0, Stdout: []string{"recorded", "differs from the substrate", "does not prove"}},
+				{Label: "the scorer FAILs it and admits nothing a refusal left", Args: []string{"outcome", "--json", filepath.Join(home, "runs", "modified"), filepath.Join(home, "runs", "refused"), filepath.Join(home, "runs", "no-exit")}, Exit: 0, JSON: func(d map[string]any) error {
+					p, _ := num(d, "summary", "pass")
+					f, _ := num(d, "summary", "fail")
+					u, _ := num(d, "summary", "unavailable")
+					if p != 0 || f != 1 || u != 2 {
+						return fmt.Errorf("summary pass=%v fail=%v unavailable=%v, want 0 1 2", p, f, u)
+					}
+					runs, _ := d["runs"].([]any)
+					first, _ := runs[0].(map[string]any)
+					if why, _ := first["reasons"].([]any); len(why) != 1 || why[0] != "result_tree_modified" {
+						return fmt.Errorf("the recorded run's reasons are %v, want [result_tree_modified]", first["reasons"])
+					}
+					return nil
+				}},
+			}
+		},
+		Invalid: func(string) check {
+			return check{Label: "no flags refused", Args: []string{"outcome-record"}, Exit: 1, Stderr: []string{"flag_missing:task"}}
+		},
+	},
 }

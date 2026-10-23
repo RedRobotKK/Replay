@@ -2087,6 +2087,87 @@
         "TestSymlinkedEvidenceIsNotFollowed"
       ],
       "note": "A run.json that is a symlink is followed, so one run directory can borrow another run's valid record and PASS on evidence it did not produce."
+    },
+    {
+      "id": "M159",
+      "name": "outcome-record-modified-tree-accepted",
+      "class": "guard-removed",
+      "discovered": "2026-10-22",
+      "file": "cmd/replay/outcome_record.go",
+      "anchor": "if before != m.SubstrateTree && !*allowModified {",
+      "replacement": "if false && before != m.SubstrateTree && !*allowModified {",
+      "killedBy": [
+        "TestE2E_OutcomeRecord",
+        "TestOutcomeRecordModifiedTreeNeedsTheFlag"
+      ],
+      "note": "A tree that is not the pinned substrate is recorded without --allow-modified-tree, so a working copy holding anything the operator did not mean to hand over, an .env file or build output, is copied into the run directory by default."
+    },
+    {
+      "id": "M160",
+      "name": "outcome-record-exit-code-defaulted",
+      "class": "evidence",
+      "discovered": "2026-10-22",
+      "file": "cmd/replay/outcome_record.go",
+      "anchor": "exitCode := fs.String(\"exit-code\", \"\", ",
+      "replacement": "exitCode := fs.String(\"exit-code\", \"0\", ",
+      "killedBy": [
+        "TestE2E_OutcomeRecord",
+        "TestOutcomeRecordRequiresEveryFlag"
+      ],
+      "note": "An exit status nobody supplied is recorded as 0, so a run whose process failed, or whose status was never observed, is admitted by the scorer as an execution that succeeded."
+    },
+    {
+      "id": "M161",
+      "name": "outcome-record-symlink-followed",
+      "class": "provenance",
+      "discovered": "2026-10-22",
+      "file": "cmd/replay/outcome_record.go",
+      "anchor": "case d.Type()&fs.ModeSymlink != 0:\n",
+      "replacement": "case false && d.Type()&fs.ModeSymlink != 0:\n",
+      "killedBy": [
+        "TestOutcomeRecordCopiesLinksAndSkipsTopGit"
+      ],
+      "note": "A symbolic link in the tree is followed and its target's bytes copied as a regular file, so the recorded tree holds content from outside the working copy and no longer hashes as the source did."
+    },
+    {
+      "id": "M162",
+      "name": "outcome-record-stability-check-removed",
+      "class": "evidence",
+      "discovered": "2026-10-22",
+      "file": "cmd/replay/outcome_record.go",
+      "anchor": "if e1 != nil || e2 != nil || copyID != before || after != before {",
+      "replacement": "if false && (e1 != nil || e2 != nil || copyID != before || after != before) {",
+      "killedBy": [
+        "TestOutcomeRecordDetectsAChangeDuringTheCopy"
+      ],
+      "note": "The three tree ids are no longer compared, so a source changed while it was being copied is recorded as if the copy were the tree that was hashed first, and the sidecar states ids that disagree."
+    },
+    {
+      "id": "M163",
+      "name": "outcome-record-out-exists-check-removed",
+      "class": "guard-removed",
+      "discovered": "2026-10-22",
+      "file": "cmd/replay/outcome_record.go",
+      "anchor": "if _, err := os.Lstat(out); !errors.Is(err, fs.ErrNotExist) {",
+      "replacement": "if _, err := os.Lstat(out); false && !errors.Is(err, fs.ErrNotExist) {",
+      "killedBy": [
+        "TestOutcomeRecordNeverOverwrites"
+      ],
+      "note": "An existing output path is no longer refused by name. Mkdir still fails on it, but the refusal no longer says the path exists, and nothing then stands between a dangling link at --out and the directory it names."
+    },
+    {
+      "id": "M164",
+      "name": "outcome-record-partial-output-kept",
+      "class": "evidence",
+      "discovered": "2026-10-22",
+      "file": "cmd/replay/outcome_record.go",
+      "anchor": "if !done {",
+      "replacement": "if false && !done {",
+      "killedBy": [
+        "TestOutcomeRecordDetectsAChangeDuringTheCopy",
+        "TestOutcomeRecordCleansUpAfterAWriteFailure"
+      ],
+      "note": "A refusal after the output directory exists leaves it behind with a partial tree/ and possibly provenance.json, a directory that looks like a recording and is not one."
     }
   ],
   "knownSurvivors": [

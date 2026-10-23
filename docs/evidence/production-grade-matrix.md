@@ -46,7 +46,8 @@ Statuses are PRODUCTION-GRADE, NOT WIRED, BLOCKED or UNMEASURED and nothing else
 | `serve` | `replay serve --preflight -5 --upstream ""` | `main.go:236 → runServe` | `cmd/replay/serve.go @ case ceiling < 0:` | `runServe` | PASS (1 checks); invalid: PASS: a non-numeric ceiling refused; JSON: n/a | `TestE2E_Serve` | M110 | PASS (1/1 killed) | **PRODUCTION-GRADE** |
 | `upgrade` | `replay upgrade --version v9.9.9 --dry-run` | `main.go:238 → runUpgrade` | `cmd/replay/upgrade.go @ bin, sig, err := client.Fetch(ctx, target, runtime.GO…` | `runUpgrade` | PASS (1 checks); invalid: PASS: unknown flag refused; JSON: n/a | `TestE2E_Upgrade` | M111 | PASS (1/1 killed) | **PRODUCTION-GRADE** |
 | `outcome` | `replay outcome --json $HOME/runs/absent $HOME/runs/tampered` | `main.go:240 → runOutcome` | `cmd/replay/outcome.go @ Arm: r.Arm, Answer: r.Answer, Truth: r.Truth, TreeID:…; cmd/replay/outcome.go @ default: …` | `runOutcome` | PASS (2 checks); invalid: PASS: no run directory refused; JSON: PASS (1 invocations) | `TestE2E_Outcome` | M155, M156 | PASS (2/2 killed) | **PRODUCTION-GRADE** |
+| `outcome-record` | `replay outcome-record --task count-b-tests-v1 --reply-file $HOME/reply.txt --usage-in 1200 --usage-out 4 --arm control --tree $HOME/work --out $HOME/runs/refused --exit-code 0` | `main.go:242 → runOutcomeRecord` | `cmd/replay/outcome_record.go @ if before != m.SubstrateTree && !*allowModified {; cmd/replay/outcome_record.go @ exitCode := fs.String("exit-code", "",` | `runOutcomeRecord` | PASS (4 checks); invalid: PASS: no flags refused; JSON: n/a | `TestE2E_OutcomeRecord` | M159, M160 | PASS (2/2 killed) | **PRODUCTION-GRADE** |
 
-**35 surfaces: 35 PRODUCTION-GRADE, 0 NOT WIRED, 0 BLOCKED, 0 UNMEASURED.**
+**36 surfaces: 36 PRODUCTION-GRADE, 0 NOT WIRED, 0 BLOCKED, 0 UNMEASURED.**
 
 ALL WIRED SURFACES PRODUCTION-GRADE

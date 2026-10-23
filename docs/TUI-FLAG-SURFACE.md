@@ -29,10 +29,10 @@ a flag is defined in `cmd/replay` and appears in no table here.
 | Archetype | Flags | What it looks like |
 |---|---|---|
 | Replaces the surface | 14 | There is no TUI. `--json` means a machine is reading, and drawing a frame for it is wrong |
-| Plumbing, shown once | 21 | A header line, never interactive. Where it listens, where it writes, what it talks to |
+| Plumbing, shown once | 26 | A header line, never interactive. Where it listens, where it writes, what it talks to |
 | Threshold that can fire | 22 | A meter with **four** states: unset, armed, approaching, fired |
-| Posture, on or not covered | 16 | A line saying what is on, and more importantly what it does **not** reach |
-| Scope of the question | 12 | The query line. What this screen is about, and what it excludes |
+| Posture, on or not covered | 17 | A line saying what is on, and more importantly what it does **not** reach |
+| Scope of the question | 14 | The query line. What this screen is about, and what it excludes |
 | Action with a consequence | 16 | A confirmation, with the consequence named before the key |
 
 ## Why a threshold needs four screens, not one
@@ -136,10 +136,15 @@ replaces the act of upgrading with a report about it, and `--version` replaces
 produces rather than tuning how it behaves. `--dry-run` is already classified
 elsewhere in this file. -->
 
-### Plumbing, shown once (21)
+### Plumbing, shown once (26)
 
 | Flag | Command | Type |
 |---|---|---|
+| `--exit-code` | `outcome-record` | string |
+| `--reply-file` | `outcome-record` | string |
+| `--tree` | `outcome-record` | string |
+| `--usage-in` | `outcome-record` | string |
+| `--usage-out` | `outcome-record` | string |
 | `--max-rebilled-usd` | `cost` | float |
 | `--peek` | `since` | bool |
 | `--before` | `prefix` | string |
@@ -189,10 +194,11 @@ elsewhere in this file. -->
 | `--revert-after` | `serve` | int |
 | `--trial-share` | `serve` | float64 |
 
-### Posture, on or not covered (16)
+### Posture, on or not covered (17)
 
 | Flag | Command | Type |
 |---|---|---|
+| `--allow-modified-tree` | `outcome-record` | bool |
 | `--compare` | `cost` | string |
 | `--dir` | `burn` | string |
 | `--write` | `agents` | string |
@@ -210,10 +216,12 @@ elsewhere in this file. -->
 | `--share` | `cost` | bool |
 | `--trend` | `probe` | bool |
 
-### Scope of the question (12)
+### Scope of the question (14)
 
 | Flag | Command | Type |
 |---|---|---|
+| `--task` | `outcome-record` | string |
+| `--arm` | `outcome-record` | string |
 | `--pooled-at` | `pool` | string |
 | `--candidates` | `probe` | string |
 | `--dollars` | `main` | bool |
