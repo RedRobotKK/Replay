@@ -2034,6 +2034,59 @@
         "TestTreeIDMatchesGitWriteTree"
       ],
       "note": "Directories sort by bare name instead of name plus slash, git's rule, so a tree holding a.b beside a/ hashes differently from git."
+    },
+    {
+      "id": "M155",
+      "name": "outcome-truth-from-the-manifest",
+      "class": "claim-outruns-evidence",
+      "discovered": "2026-10-22",
+      "file": "cmd/replay/outcome.go",
+      "anchor": "Arm: r.Arm, Answer: r.Answer, Truth: r.Truth, TreeID: r.TreeID,",
+      "replacement": "Arm: r.Arm, Answer: r.Answer, Truth: &m.ExpectedAnswer, TreeID: r.TreeID,",
+      "killedBy": [
+        "TestE2E_Outcome"
+      ],
+      "note": "The command reports the manifest's stated answer as the truth for every run, so a run directory that does not exist, or whose tree was never verified, is printed with a truth of 60 that nothing derived."
+    },
+    {
+      "id": "M156",
+      "name": "outcome-unavailable-counted-as-fail",
+      "class": "evidence",
+      "discovered": "2026-10-22",
+      "file": "cmd/replay/outcome.go",
+      "anchor": "\t\tdefault:\n\t\t\trep.Summary.Unavailable++",
+      "replacement": "\t\tdefault:\n\t\t\trep.Summary.Fail++",
+      "killedBy": [
+        "TestE2E_Outcome"
+      ],
+      "note": "The summary counts an UNAVAILABLE run as a FAIL, so missing or unverifiable evidence becomes a negative result in the one line a reader takes away."
+    },
+    {
+      "id": "M157",
+      "name": "outcome-symlinked-tree-followed",
+      "class": "provenance",
+      "discovered": "2026-10-22",
+      "file": "internal/outcome/outcome.go",
+      "anchor": "if info, err := os.Lstat(tree); err == nil && info.Mode()&os.ModeSymlink != 0 {",
+      "replacement": "if info, err := os.Lstat(tree); false && err == nil && info.Mode()&os.ModeSymlink != 0 {",
+      "killedBy": [
+        "TestSymlinkedEvidenceIsNotFollowed",
+        "TestOutcomeDoesNotFollowASymlinkedTree"
+      ],
+      "note": "A tree/ that is a symlink is followed: its target, a clean copy the run never touched, is hashed as the run's working copy and matches the pinned tree, so the run is judged on bytes from outside its own directory."
+    },
+    {
+      "id": "M158",
+      "name": "outcome-symlinked-record-followed",
+      "class": "provenance",
+      "discovered": "2026-10-22",
+      "file": "internal/outcome/outcome.go",
+      "anchor": "if info, err := os.Lstat(record); err == nil && info.Mode()&os.ModeSymlink != 0 {",
+      "replacement": "if info, err := os.Lstat(record); false && err == nil && info.Mode()&os.ModeSymlink != 0 {",
+      "killedBy": [
+        "TestSymlinkedEvidenceIsNotFollowed"
+      ],
+      "note": "A run.json that is a symlink is followed, so one run directory can borrow another run's valid record and PASS on evidence it did not produce."
     }
   ],
   "knownSurvivors": [

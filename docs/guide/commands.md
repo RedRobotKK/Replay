@@ -895,6 +895,52 @@ that produced it without any registry.
 
 Reads the ledger and the policy file. Writes nothing and reaches no network.
 
+### `replay outcome <run-dir...> [--json]`
+
+Scores run directories against the one task this binary pins, `count-b-tests-v1`: how many
+lines start with `func Test` across `cmd/replay/b*_test.go` at commit `6871022`. A run
+directory holds `run.json`, the run's record, and `tree/`, the working copy the run left:
+
+```sh
+replay outcome runs/control-01 runs/control-02
+replay outcome runs/* --json > scored.json
+```
+
+```text
+replay outcome: task count-b-tests-v1, manifest sha256 9e16facfe421
+substrate 6871022, tree 188abd5
+
+  PASS         runs/control-01  answer 60, truth 60 derived from the verified tree
+  UNAVAILABLE  runs/control-02  usage_missing: no truth derived
+
+1 PASS, 0 FAIL, 1 UNAVAILABLE
+UNAVAILABLE is missing or unverifiable evidence, not a failed run.
+```
+
+| Flag | What it does |
+|---|---|
+| `--json` | The manifest's task id, digest, commit and tree, then each run's directory, verdict, reasons, arm, answer, truth and tree id. `answer` and `truth` are `null` when none was read or derived |
+
+**The truth comes from the tree, never from the run record.** `tree/` is accepted only if
+its git tree id, computed from the bytes on disk, equals the pinned tree; the answer is then
+counted from those bytes. A run record carrying any field the schema lacks, such as a
+verdict or a truth, is refused. A tree that differs from the substrate is a `FAIL`
+(`result_tree_modified`) whatever the reply said. `run.json` and `tree/` must be the run
+directory's own: either one being a symlink is `UNAVAILABLE` (`run_record_symlink`,
+`result_tree_symlink`) and is not followed. A symlink inside `tree/` is content, hashed the way
+git hashes a link. These are checks made once by path; they do not protect a run directory
+that is changed while it is being scored.
+
+**Missing evidence is `UNAVAILABLE`, never `FAIL`.** A missing or malformed `run.json`, a
+missing exit code, usage, reply or tree, a nonzero exit, or provenance naming another task,
+manifest or commit, is reported with every reason that applies and is not scored.
+
+The manifest is embedded in the binary and nothing replaces it. The exit status is 0
+whenever every directory was scored, whatever the verdicts, so read the verdicts from the
+output. It does not compare arms or estimate any effect.
+
+Reads the run directories. Writes nothing, runs no agent and reaches no network.
+
 ### `replay privacy [--json]`
 
 Everything Replay has written to this machine, and what each store holds.

@@ -13,6 +13,7 @@ import (
 
 	"github.com/RedRobotKK/Replay/internal/ledger"
 	"github.com/RedRobotKK/Replay/internal/observation"
+	"github.com/RedRobotKK/Replay/internal/outcome"
 	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
@@ -582,5 +583,53 @@ var specs = map[string]spec{
 			return t.TempDir(), []check{{Label: "a failed fetch is not reported as verified", Args: []string{"upgrade", "--version", "v9.9.9", "--dry-run"}, Env: []string{"HTTPS_PROXY=http://127.0.0.1:9", "HTTP_PROXY=http://127.0.0.1:9"}, Exit: 1, Forbid: []string{"Checksum verified", "Verified v9.9.9"}}}
 		},
 		Invalid: unknownFlag("upgrade"),
+	},
+	"outcome": {
+		Setup: func(t *testing.T, bin string) (string, []check) {
+			// Two run directories against the embedded manifest: one absent,
+			// and one with admissible evidence whose tree is not the pinned
+			// substrate. Only the second may be a FAIL, and neither has a
+			// truth, because no tree was verified.
+			home := t.TempDir()
+			m, raw, err := outcome.Pinned()
+			if err != nil {
+				t.Fatal(err)
+			}
+			run := filepath.Join(home, "runs", "tampered")
+			mustWrite(t, filepath.Join(run, "tree", "README.md"), []byte("not the substrate\n"))
+			rec, err := json.Marshal(map[string]any{
+				"schema": outcome.RunSchema, "task_id": m.TaskID, "manifest_sha256": outcome.ManifestDigest(raw),
+				"substrate_commit": m.SubstrateCommit, "arm": "control", "reply": "60", "exit_code": 0,
+				"usage": map[string]any{"input_tokens": 1200, "output_tokens": 4},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			mustWrite(t, filepath.Join(run, "run.json"), rec)
+			missing := filepath.Join(home, "runs", "absent")
+			return home, []check{
+				{Label: "absent is UNAVAILABLE, a foreign tree is FAIL", Args: []string{"outcome", "--json", missing, run}, Exit: 0, JSON: func(d map[string]any) error {
+					f, _ := num(d, "summary", "fail")
+					u, _ := num(d, "summary", "unavailable")
+					if f != 1 || u != 1 {
+						return fmt.Errorf("summary fail=%v unavailable=%v, want 1 1", f, u)
+					}
+					runs, _ := d["runs"].([]any)
+					for _, r := range runs {
+						if row, _ := r.(map[string]any); row["truth"] != nil {
+							return fmt.Errorf("truth %v reported for %v, but no tree was verified", row["truth"], row["run_dir"])
+						}
+					}
+					return nil
+				}},
+				{Label: "human report keeps UNAVAILABLE apart", Args: []string{"outcome", missing, run}, Exit: 0, Stdout: []string{"count-b-tests-v1", "run_record_missing", "result_tree_modified", "0 PASS, 1 FAIL, 1 UNAVAILABLE"}, Forbid: []string{"truth 60"}},
+			}
+		},
+		Invalid: func(string) check {
+			return check{Label: "no run directory refused", Args: []string{"outcome"}, Exit: 1}
+		},
+		JSONOut: func(home string) [][]string {
+			return [][]string{{"outcome", "--json", filepath.Join(home, "runs", "absent"), filepath.Join(home, "runs", "tampered")}}
+		},
 	},
 }

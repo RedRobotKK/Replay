@@ -237,6 +237,8 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 		return runServe(args[1:], stdout, stderr)
 	case "upgrade":
 		return runUpgrade(args[1:], stdout, stderr)
+	case "outcome":
+		return runOutcome(args[1:], stdout, stderr)
 	default:
 		// The tool is named for its own first command, so "replay replay
 		// <path>" would be the common invocation. A first argument that
@@ -678,6 +680,7 @@ Setup and maintenance:
   replay statusline                live spend and cache-miss cost, for Claude Code's status line
   replay since                     what ran and what it cost since you last looked
   replay simulate --policy F <ledger>  which recorded requests a cap would have refused (SIMULATED)
+  replay outcome <run-dir...>      score runs of the pinned task: PASS, FAIL or UNAVAILABLE
   replay prefix --before F --after F  does this change void the cached prefix (exit 1 if so)
   replay budget <ledger-dir>       what this setup costs on every request, as a committable file
   replay redact <transcript>       strip content, keep structure and usage (for bug reports)

@@ -153,6 +153,16 @@ the published figures included them.
 
 **What would wire it:** nothing should.
 
+**Linked 2026-10-22, the answer rule only.** `replay outcome` imports
+`internal/outcome`, whose `Score` reads a reply with `Run.Answer`, so the
+scorer applies byte for byte the leading-integer rule the published tables
+were counted with. That puts this package in the binary's closure, and
+`TestNoNewlyUnwiredPackages` requires its entry gone. What reaches a user is
+`Run.Answer` alone, through `Score`, and `TestOutcomeScoresEveryVerdict`
+fails if a non-numeric reply stops being `answer_not_a_number`. The
+re-derivation harness, `bench/`, `n10/` and the table checks, is called by
+no command, and the line above still holds for it.
+
 ## 13. internal/dogfoodbaseline, what survives an unreproducible measurement
 
 Added 2026-09-26. Not reachable from `cmd/replay`, and it must stay that way.
@@ -352,9 +362,9 @@ separate, unwired entry below.
 
 ## 19. internal/outcome, the task-outcome signal before any command that uses it
 
-Added 2026-10-22. **OPEN**, deliberately: nothing in `cmd/replay` imports
-it, because the authorized slice is the scorer and its pinned manifest, not
-a command.
+Added 2026-10-22. **WIRED 2026-10-22** by `replay outcome`; see the end of
+this section. It was OPEN at first, deliberately: the first authorized slice
+was the scorer and its pinned manifest, not a command.
 
 ADR-0028 says the first unit of prompt and context optimisation is a
 task-outcome signal, captured locally, and that shipping an optimisation
@@ -377,4 +387,20 @@ machine and ten runs.
 
 **What would wire it:** a `replay outcome` command, with its own end-to-end
 test under the wiring gate, and an authorized pilot of control runs to show
-the task is not at a ceiling. Neither is built here.
+the task is not at a ceiling.
+
+**WIRED 2026-10-22, the command half only.** `cmd/replay/outcome.go` imports
+it: `replay outcome <run-dir...> [--json]` scores each run directory with
+`Score` against the embedded manifest, which no flag or environment variable
+replaces, and prints PASS, FAIL or UNAVAILABLE with every reason. It reads
+and never writes, runs no agent and calls no provider. A truth is printed
+only when `Score` derived one from a verified tree, and the summary keeps
+UNAVAILABLE apart from FAIL. `TestE2E_Outcome` reaches it through
+`dispatch()`; M155 (truth taken from the manifest) and M156 (UNAVAILABLE
+counted as FAIL) are frozen against it. Wiring it exposed that `Score`
+followed a symlinked `tree/` or `run.json` to bytes outside the run
+directory; both are now refused as UNAVAILABLE (M157, M158), by one check
+by path that does not guard against a concurrent change. `Compare` is still called by
+nothing in the binary: the command scores runs and does not compare arms.
+The pilot is not run, so whether the task has headroom is still not
+established.
