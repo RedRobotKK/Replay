@@ -946,6 +946,57 @@ identity by path: two directories holding copies of one run are two directories.
 
 Reads the run directories. Writes nothing, runs no agent and reaches no network.
 
+### `replay outcome-compare --control <arm> --treatment <arm> [--json] <run-dir...>`
+
+Compares two arms of run directories by PASS count. Every directory is scored as
+`replay outcome` scores it, listed, and placed in the control arm, the treatment arm, or
+excluded with a reason: `arm_not_compared` for a run of another arm, `arm_unknown` when its
+record could not be read. The arm of a run is the `arm` field of its `run.json`, which whoever
+produced the run supplied.
+
+```sh
+replay outcome-compare --control control --treatment terse runs/*
+```
+
+```text
+replay outcome-compare: task count-b-tests-v1, manifest sha256 9e16facfe421
+terse against control; at least 5 eligible runs an arm, predeclared, not a significance threshold
+
+  control  3 of 5 PASS, 1 UNAVAILABLE not counted
+  terse  4 of 5 PASS
+
+COMPARABLE: counts only; no effect is estimated
+A description of the runs supplied, by count. It is not a statistical test, ...
+cost: NOT MEASURED
+time: NOT MEASURED
+tokens: NOT MEASURED
+```
+
+| Flag | What it does |
+|---|---|
+| `--control` | The arm label of the baseline runs. Required |
+| `--treatment` | The arm label compared with it. Required, and different from `--control` |
+| `--json` | The minimum, both labels, the status and its note, the claim, what is not measured, each arm's PASS, eligible and UNAVAILABLE counts, and every run with its verdict, reasons, role and exclusion |
+
+**What it counts.** The metric is fixed before any run is seen: PASS over eligible runs, an
+eligible run being one the scorer judged PASS or FAIL. An UNAVAILABLE run is evidence that
+could not be judged, so it is counted apart and never in n.
+
+**When it compares.** Each arm needs at least **5** eligible runs. That minimum was set in
+advance as an operational floor; it is not a significance threshold, and five runs an arm
+cannot show that a difference would hold elsewhere. Below it the status is `INSUFFICIENT`. A
+control arm at 0 of n or n of n PASS is `REFUSED_CEILING`: a ceiling cannot show an effect in
+either direction, and is not evidence of no effect. Otherwise the status is `COMPARABLE`, which
+means the counts may be read side by side, and nothing more. No effect is estimated and
+neither arm is called better.
+
+**What it does not measure.** Cost, time and tokens are `NOT MEASURED`. `run.json` carries usage
+figures, but they are attested by whoever produced the run and are not compared.
+
+The same run directory named twice is refused, as with `replay outcome`. It exits 0 whenever
+every directory was scored, whatever the status. Reads the run directories. Writes nothing,
+runs no agent and reaches no network.
+
 ### `replay outcome-record --task <id> --reply-file <file> --exit-code <n> ...`
 
 Writes a run directory `replay outcome` can score, from values you supply. It is for a run

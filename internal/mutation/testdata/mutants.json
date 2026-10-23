@@ -2182,6 +2182,34 @@
         "TestE2E_Outcome"
       ],
       "note": "A run directory named twice, directly, through a trailing separator, a relative path or a symbolic link, is scored twice and counted twice, so one run's evidence reports as two PASS and inflates n for anything that counts runs."
+    },
+    {
+      "id": "M166",
+      "name": "outcome-compare-minimum-removed",
+      "class": "claim-outruns-evidence",
+      "discovered": "2026-10-23",
+      "file": "internal/outcome/outcome.go",
+      "anchor": "case c.Control.N < MinEligiblePerArm || c.Treatment.N < MinEligiblePerArm:",
+      "replacement": "case false && (c.Control.N < MinEligiblePerArm || c.Treatment.N < MinEligiblePerArm):",
+      "killedBy": [
+        "TestCompareNeedsFiveEligibleRunsPerArm",
+        "TestE2E_OutcomeCompare",
+        "TestOutcomeCompareUnavailableNeverMakesUpTheMinimum"
+      ],
+      "note": "Arms with fewer than the predeclared five eligible runs are compared, so one or two runs an arm are reported COMPARABLE, a sample the owner declared too small to describe."
+    },
+    {
+      "id": "M167",
+      "name": "outcome-compare-other-arm-counted-as-control",
+      "class": "attribution-misplacement",
+      "discovered": "2026-10-23",
+      "file": "cmd/replay/outcome_compare.go",
+      "anchor": "\t\t\trow.Role, row.Exclusion = \"excluded\", \"arm_not_compared\"",
+      "replacement": "\t\t\trow.Role, ctl = \"control\", append(ctl, r)",
+      "killedBy": [
+        "TestE2E_OutcomeCompare"
+      ],
+      "note": "A run whose arm is neither of the two compared is counted in the control arm, so runs from a third arm change the baseline's counts and the comparison describes runs it was not asked about."
     }
   ],
   "knownSurvivors": [
