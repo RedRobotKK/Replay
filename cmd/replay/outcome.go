@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/RedRobotKK/Replay/internal/analysis"
@@ -81,6 +82,14 @@ func runOutcome(args []string, stdout, stderr io.Writer) error {
 	if fs.NArg() == 0 {
 		return fmt.Errorf("at least one run directory is required: %w", errUsage)
 	}
+	seen := map[string]string{}
+	for _, dir := range fs.Args() {
+		key := outcomeRunKey(dir)
+		if first, ok := seen[key]; ok {
+			return fmt.Errorf("%s and %s name the same run directory, which would be scored and counted twice: %w", first, dir, errUsage)
+		}
+		seen[key] = dir
+	}
 	m, raw, err := outcomeManifest()
 	if err != nil {
 		return fmt.Errorf("the embedded outcome manifest is invalid: %w", err)
@@ -139,4 +148,20 @@ func outcomeDetail(r outcomeRun) string {
 		parts = append(parts, "no truth derived")
 	}
 	return strings.Join(parts, ": ")
+}
+
+// outcomeRunKey is where dir points: its absolute path with symbolic links
+// resolved, or its cleaned path where it cannot be made absolute, and its
+// absolute path where it does not exist. Two arguments with one key are one
+// run directory. Two directories holding copies of one run have two keys;
+// this is identity by path, not by content.
+func outcomeRunKey(dir string) string {
+	key := filepath.Clean(dir)
+	if abs, err := filepath.Abs(key); err == nil {
+		key = abs
+		if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+			key = resolved
+		}
+	}
+	return key
 }

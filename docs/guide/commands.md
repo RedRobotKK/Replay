@@ -939,6 +939,11 @@ The manifest is embedded in the binary and nothing replaces it. The exit status 
 whenever every directory was scored, whatever the verdicts, so read the verdicts from the
 output. It does not compare arms or estimate any effect.
 
+**Each run directory is scored once.** Naming the same directory twice, directly, with a
+trailing separator, by a relative and an absolute path, or through a symbolic link, is refused
+before anything is scored (exit 1), because it would count one run's evidence twice. This is
+identity by path: two directories holding copies of one run are two directories.
+
 Reads the run directories. Writes nothing, runs no agent and reaches no network.
 
 ### `replay outcome-record --task <id> --reply-file <file> --exit-code <n> ...`

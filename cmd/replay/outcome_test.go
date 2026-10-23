@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -264,6 +266,12 @@ func TestE2E_Outcome(t *testing.T) {
 	if strings.Contains(human, "truth 60") {
 		t.Errorf("human report states a truth that was never derived:\n%s", human)
 	}
+
+	// The same run named twice is refused before anything is scored.
+	var dup, duperr bytes.Buffer
+	if err := dispatch([]string{"outcome", tampered, tampered}, &dup, &duperr); !errors.Is(err, errUsage) || dup.Len() != 0 {
+		t.Errorf("a run directory named twice: %v, stdout %q; want a usage refusal and nothing scored", err, dup.String())
+	}
 }
 
 // Every verdict, through dispatch, on a substrate small enough to build here.
@@ -512,4 +520,55 @@ func show(p *int) string {
 		return "none"
 	}
 	return fmt.Sprint(*p)
+}
+
+// One run named twice would be scored twice and counted twice: two PASS for
+// one piece of evidence, and an inflated n for anything that later counts
+// runs. The invocation is refused before anything is scored. Two directories
+// that hold copies of one run are not detected; this is identity by path.
+func TestOutcomeRefusesARunDirectoryNamedTwice(t *testing.T) {
+	_, _, sub := withSyntheticManifest(t)
+	parent := t.TempDir()
+	runA := filepath.Join(parent, "a")
+	copyOutcomeTree(t, sub, filepath.Join(runA, "tree"))
+	link := filepath.Join(parent, "link-to-a")
+	if err := os.Symlink(runA, link); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(parent, "absent")
+	t.Chdir(parent)
+	cases := map[string][]string{
+		"the same path":           {runA, runA},
+		"a trailing separator":    {runA, runA + string(filepath.Separator)},
+		"relative and dot":        {"a", "./a"},
+		"relative and absolute":   {"a", runA},
+		"through a symbolic link": {runA, link},
+		"a missing path twice":    {missing, missing},
+		"with --json":             {"--json", runA, runA},
+		"apart from another run":  {runA, missing, "a"},
+	}
+	for name, args := range cases {
+		t.Run(name, func(t *testing.T) {
+			var out, errb bytes.Buffer
+			err := dispatch(append([]string{"outcome"}, args...), &out, &errb)
+			if !errors.Is(err, errUsage) {
+				t.Fatalf("outcome %v: %v, want a usage refusal", args, err)
+			}
+			if !strings.Contains(err.Error(), "same run directory") {
+				t.Errorf("the refusal does not say why: %v", err)
+			}
+			if out.Len() != 0 {
+				t.Errorf("something was scored before the refusal:\n%s", out.String())
+			}
+		})
+	}
+	t.Run("distinct directories are scored", func(t *testing.T) {
+		var out, errb bytes.Buffer
+		if err := dispatch([]string{"outcome", "--json", runA, missing, link + "-other"}, &out, &errb); err != nil {
+			t.Fatalf("distinct directories refused: %v", err)
+		}
+		if r := decodeOutcome(t, out.String()); len(r.Runs) != 3 {
+			t.Fatalf("%d runs scored, want 3", len(r.Runs))
+		}
+	})
 }

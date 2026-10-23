@@ -623,6 +623,7 @@ var specs = map[string]spec{
 					return nil
 				}},
 				{Label: "human report keeps UNAVAILABLE apart", Args: []string{"outcome", missing, run}, Exit: 0, Stdout: []string{"count-b-tests-v1", "run_record_missing", "result_tree_modified", "0 PASS, 1 FAIL, 1 UNAVAILABLE"}, Forbid: []string{"truth 60"}},
+				{Label: "a run named twice is refused, not counted twice", Args: []string{"outcome", run, run}, Exit: 1, Stderr: []string{"same run directory"}, Forbid: []string{"FAIL  "}},
 			}
 		},
 		Invalid: func(string) check {
