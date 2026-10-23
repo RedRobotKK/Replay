@@ -418,9 +418,7 @@ func TestBrowserOriginAndTokenChecks(t *testing.T) {
 }
 
 func TestUpstreamDownYieldsBadGateway(t *testing.T) {
-	dead := httptest.NewServer(http.NotFoundHandler())
-	target, _ := url.Parse(dead.URL)
-	dead.Close()
+	target := unreachableUpstream()
 	store, err := ledger.Open(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -962,6 +960,17 @@ func (f *flakyUpstream) requests() int {
 	return f.seen
 }
 
+// unreachableUpstream is an upstream nothing can listen on: no process can
+// bind port 0, so every dial to it fails at dial time, which is the one
+// failure the proxy resends. A server closed by the test does not do that
+// reliably. Its port is free again, any process can bind it before the proxy
+// dials, and one that accepts and never answers holds the request until
+// ResponseHeaderTimeout. That hung TestRetriesResendWhenTheProviderCannotBeReached
+// for 9m48s on ubuntu in run 40018924423, attempt 1.
+func unreachableUpstream() *url.URL {
+	return &url.URL{Scheme: "http", Host: "127.0.0.1:0"}
+}
+
 func fastRetries(attempts int) RetrySettings {
 	return RetrySettings{Attempts: attempts, BaseDelay: time.Millisecond, MaxDelay: 50 * time.Millisecond}
 }
@@ -1146,12 +1155,7 @@ func getSessionErrorTokens(t *testing.T, base, id string) (int, int) {
 // A failure to connect cannot have billed anything and is resent; the
 // count of attempts shows in the log.
 func TestRetriesResendWhenTheProviderCannotBeReached(t *testing.T) {
-	closed := httptest.NewServer(http.NotFoundHandler())
-	target, err := url.Parse(closed.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	closed.Close()
+	target := unreachableUpstream()
 	logs := &syncBuffer{}
 	srv, err := New(Config{Listen: "127.0.0.1:0", Upstream: target, Store: mustStore(t), Logger: log.New(logs, "", 0), Retries: fastRetries(2)})
 	if err != nil {
