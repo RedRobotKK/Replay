@@ -44,7 +44,8 @@ killer each surface is held to.
 | `serve` | yes | `dispatch main.go:236 → runServe` | `cmd/replay/serve.go @ "case ceiling < 0:"` | `TestE2E_Serve` | `TestE2E_Serve` | `M110` | `TestE2E_Serve` | PASS |
 | `upgrade` | yes | `dispatch main.go:238 → runUpgrade` | `cmd/replay/upgrade.go @ "bin, sig, err := client.Fetch(ctx, target, runtime.GOOS, …"` | `TestE2E_Upgrade` | `TestE2E_Upgrade` | `M111` | `TestE2E_Upgrade` | PASS |
 | `outcome` | yes | `dispatch main.go:240 → runOutcome` | `cmd/replay/outcome.go @ "Arm: r.Arm, Answer: r.Answer, Truth: r.Truth, TreeID: r.T…"; cmd/replay/outcome.go @ "default: …"` | `TestE2E_Outcome` | `TestE2E_Outcome` | `M155, M156` | `TestE2E_Outcome` | PASS |
+| `outcome-record` | yes | `dispatch main.go:242 → runOutcomeRecord` | `cmd/replay/outcome_record.go @ "if before != m.SubstrateTree && !*allowModified {"; cmd/replay/outcome_record.go @ "exitCode := fs.String(\"exit-code\", \"\","` | `TestE2E_OutcomeRecord` | `TestE2E_OutcomeRecord, TestOutcomeRecordModifiedTreeNeedsTheFlag, TestOutcomeRecordRequiresEveryFlag` | `M159, M160` | `TestE2E_OutcomeRecord` | PASS |
 
-**35 surfaces discovered: 35 PASS, 0 FAIL.**
+**36 surfaces discovered: 36 PASS, 0 FAIL.**
 
 PRODUCTION SURFACE GATE: PASS

@@ -33,7 +33,7 @@ COMMANDS = [
     "route", "trim", "codex", "grok", "burn", "agents", "mcp", "corpus", "learn",
     "probe", "doctor", "rules", "statusline", "redact", "version", "prefix", "since", "budget",
     "jev",
-    "upgrade", "purge", "privacy", "pool", "simulate", "outcome",
+    "upgrade", "purge", "privacy", "pool", "simulate", "outcome", "outcome-record",
 ]
 
 # What each command is for, and the two facts an agent needs before running one
@@ -89,6 +89,7 @@ META = {
     "budget":     ("What this configuration costs on every request, before any work", "none", "none"),
     "simulate":   ("Which recorded requests a spend cap would have refused, replayed through the proxy's own guard; SIMULATED, never a forecast", "none", "none"),
     "outcome":    ("Score run directories against the task pinned in this binary: PASS, FAIL or UNAVAILABLE, the truth derived only from a verified tree", "none", "none"),
+    "outcome-record": ("Write a run directory `replay outcome` can score from operator-supplied values, every one labelled as attested; a PASS from it does not prove an agent produced the answer", "none", "writes only the new --out directory"),
 }
 
 SCREENS = [

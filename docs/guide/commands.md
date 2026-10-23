@@ -941,6 +941,55 @@ output. It does not compare arms or estimate any effect.
 
 Reads the run directories. Writes nothing, runs no agent and reaches no network.
 
+### `replay outcome-record --task <id> --reply-file <file> --exit-code <n> ...`
+
+Writes a run directory `replay outcome` can score, from values you supply. It is for a run
+you made yourself: you checked out the substrate, ran your agent on the pinned prompt, and
+kept its reply, its exit status and its token counts.
+
+```sh
+replay outcome-record --task count-b-tests-v1 --reply-file reply.txt --exit-code 0 \
+  --usage-in 1200 --usage-out 4 --arm control --tree substrate --out run-01
+replay outcome run-01
+```
+
+```text
+recorded run-01
+  run.json, provenance.json, tree/ (tree 188abd59a95d, the substrate)
+Every value was supplied by the operator. A PASS from supplied inputs means only that ...
+Score it: replay outcome run-01
+```
+
+**A PASS from supplied inputs means only that the supplied answer is correct under the
+scorer's comparison conditions.** It does not prove that an agent executed the task, that the
+supplied answer came from that execution, or that the captured post-run tree was the tree the
+execution ran in. The recorder reads no transcript and cannot tell.
+
+| Flag | What it does |
+|---|---|
+| `--task` | The task id of the manifest embedded in this binary, `count-b-tests-v1`. Any other is refused |
+| `--reply-file` | The agent's reply, verbatim. A regular file of at most 1 MiB of UTF-8; a link is refused |
+| `--exit-code` | The run's exit status, 0 to 255. Required: an exit status is never assumed. A nonzero status is recorded as given, and the scorer then reports the run `UNAVAILABLE` (`execution_failed`), not `FAIL`: a failed execution is evidence it cannot judge, not a wrong answer |
+| `--usage-in`, `--usage-out` | The input and output tokens the run reported |
+| `--arm` | A label for the run's arm, 1 to 64 of `A-Z a-z 0-9 . _ -` |
+| `--tree` | The working copy the run left. Copied into `tree/`; links are copied as links and never followed, and a top-level `.git` is left out |
+| `--out` | The run directory to create. It must not exist, and it may not be inside `--tree` |
+| `--allow-modified-tree` | Record a tree that is not the pinned substrate. Without it such a tree is refused, so an `.env` or build output in a working copy is not copied by accident. The scorer then FAILs the run (`result_tree_modified`); that says the tree changed, not who changed it or why |
+
+Every flag but `--allow-modified-tree` is required and none has a default. A refusal prints
+`outcome-record refused: <code>`, exits 1, and removes anything it created; `run.json` is
+written last, so a recording that stops part way leaves nothing the scorer can admit. The
+codes are listed in [the recorder's contract](../design/outcome-record.md#refusals).
+
+`provenance.json` labels every field: the reply, exit code, usage and arm as
+`operator_attested`, the task, manifest digest and commit as `reconstructed_from_manifest`,
+and the tree as a `post_run_copy` whose `execution_tree` is `not_established`. It records the
+source tree's id before and after the copy and the copy's own id; a recording whose three ids
+differ is refused. That comparison detects a change that lands between the hashes; it is not
+isolation. The sidecar holds no path, host name or user name, and the scorer never reads it.
+
+Reads the reply file and the tree. Writes only `--out`, runs no agent and reaches no network.
+
 ### `replay privacy [--json]`
 
 Everything Replay has written to this machine, and what each store holds.
