@@ -2168,6 +2168,20 @@
         "TestOutcomeRecordCleansUpAfterAWriteFailure"
       ],
       "note": "A refusal after the output directory exists leaves it behind with a partial tree/ and possibly provenance.json, a directory that looks like a recording and is not one."
+    },
+    {
+      "id": "M165",
+      "name": "outcome-run-directory-counted-twice",
+      "class": "evidence",
+      "discovered": "2026-10-23",
+      "file": "cmd/replay/outcome.go",
+      "anchor": "if first, ok := seen[key]; ok {",
+      "replacement": "if first, ok := seen[key]; false && ok {",
+      "killedBy": [
+        "TestOutcomeRefusesARunDirectoryNamedTwice",
+        "TestE2E_Outcome"
+      ],
+      "note": "A run directory named twice, directly, through a trailing separator, a relative path or a symbolic link, is scored twice and counted twice, so one run's evidence reports as two PASS and inflates n for anything that counts runs."
     }
   ],
   "knownSurvivors": [

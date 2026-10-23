@@ -581,17 +581,18 @@ The project's governing rule is [ADR-0014](docs/adr/0014-checks-must-be-able-to-
 is not evidence until it has been observed to fail.** Roughly twenty defects in a single day shared
 one shape — a verification that could not fail — so the rule is now mechanical.
 
-`internal/mutation` keeps **163 frozen, re-runnable mutants**: 144 real past defects (numbered M1 to
-M145; M71 was retired) and 19 seeded on 2026-10-22, 9 when the offline outcome scorer was written
+`internal/mutation` keeps **164 frozen, re-runnable mutants**: 144 real past defects (numbered M1 to
+M145; M71 was retired), 19 seeded on 2026-10-22, 9 when the offline outcome scorer was written
 (M146 to M154), 4 when `replay outcome` wired it (M155 to M158) and 6 with `replay outcome-record`
-(M159 to M164, so the highest id is 164), each
+(M159 to M164), and 1 on 2026-10-23 when `replay outcome` stopped counting a run named twice (M165,
+so the highest id is 165), each
 with the named test that must catch it. Thirty-nine of them, one per
 dispatched subcommand, were added by the Release 1.0 production surface gate on 2026-10-02.
 `go test -tags mutation ./internal/mutation/` re-applies them all.
 It has already caught a false kill (a mutant the compiler rejected, scored as caught), a test that
 hung instead of failing, and a catalogue entry naming a test that was not actually load-bearing.
 
-This is error seeding, not mutation analysis: the denominator is the 163 chosen edits themselves,
+This is error seeding, not mutation analysis: the denominator is the 164 chosen edits themselves,
 not a generated operator population, and a first run is a kill by construction. The value is
 temporal, asking whether each guard still exists and still discriminates on a tree that has moved.
 
