@@ -17,7 +17,7 @@ reach the network, and does it write. Both are answered per command below, and
 summarised here.
 
 **Opens no socket and writes nothing** — safe to run at will:
-`ceiling`, `diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `grok`, `mcp`, `statusline`, `redact`, `version`, `prefix`, `budget`, `jev`, `pool`, `simulate`.
+`ceiling`, `diff`, `context`, `blame`, `replay`, `route`, `trim`, `codex`, `grok`, `mcp`, `statusline`, `redact`, `version`, `prefix`, `budget`, `jev`, `pool`, `simulate`, `outcome`.
 
 **Leaves the machine:** `serve` proxies every request to the provider.
 `probe --execute` sends billable requests, and without `--execute` it prints a
@@ -73,6 +73,7 @@ to test whether `~/.replay` is writable.
 | [`privacy`](#privacy) | Everything Replay has written to this machine, and what each store holds | none | nothing: it reports and never removes |
 | [`pool`](#pool) | Aggregate corpus submissions into one figure, with its roster | none | none |
 | [`simulate`](#simulate) | Which recorded requests a spend cap would have refused, replayed through the proxy's own guard; SIMULATED, never a forecast | none | none |
+| [`outcome`](#outcome) | Score run directories against the task pinned in this binary: PASS, FAIL or UNAVAILABLE, the truth derived only from a verified tree | none | none |
 
 ### cost
 
@@ -409,6 +410,14 @@ Which recorded requests a spend cap would have refused, replayed through the pro
 
 Takes no flags.
 
+### outcome
+
+Score run directories against the task pinned in this binary: PASS, FAIL or UNAVAILABLE, the truth derived only from a verified tree.
+
+| Flag | Type | What it does |
+|---|---|---|
+| `-json` | bool | print the report as JSON |
+
 ## The TUI covers the same ground
 
 `replay tui` opens the same answers as movable screens. `--screen <name>` opens
@@ -449,4 +458,4 @@ replay tui --color never           # NO_COLOR always wins regardless
 
 ---
 
-33 commands, 112 flags, read from the binary.
+34 commands, 113 flags, read from the binary.

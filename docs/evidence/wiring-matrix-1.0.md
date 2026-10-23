@@ -43,7 +43,8 @@ killer each surface is held to.
 | `privacy` | yes | `dispatch main.go:234 → runPrivacy` | `cmd/replay/stores.go @ "Name: \"advice.json\", Purgeable: true,"` | `TestE2E_Privacy` | `TestE2E_Privacy` | `M109` | `TestE2E_Privacy` | PASS |
 | `serve` | yes | `dispatch main.go:236 → runServe` | `cmd/replay/serve.go @ "case ceiling < 0:"` | `TestE2E_Serve` | `TestE2E_Serve` | `M110` | `TestE2E_Serve` | PASS |
 | `upgrade` | yes | `dispatch main.go:238 → runUpgrade` | `cmd/replay/upgrade.go @ "bin, sig, err := client.Fetch(ctx, target, runtime.GOOS, …"` | `TestE2E_Upgrade` | `TestE2E_Upgrade` | `M111` | `TestE2E_Upgrade` | PASS |
+| `outcome` | yes | `dispatch main.go:240 → runOutcome` | `cmd/replay/outcome.go @ "Arm: r.Arm, Answer: r.Answer, Truth: r.Truth, TreeID: r.T…"; cmd/replay/outcome.go @ "default: …"` | `TestE2E_Outcome` | `TestE2E_Outcome` | `M155, M156` | `TestE2E_Outcome` | PASS |
 
-**34 surfaces discovered: 34 PASS, 0 FAIL.**
+**35 surfaces discovered: 35 PASS, 0 FAIL.**
 
 PRODUCTION SURFACE GATE: PASS

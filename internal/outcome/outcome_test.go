@@ -250,6 +250,62 @@ func TestMissingOrInsufficientEvidenceIsUnavailable(t *testing.T) {
 	}
 }
 
+// The evidence is the run directory's own run.json and tree/. A symlink in
+// either place points the scorer at bytes the run did not leave, here a
+// pristine copy of the substrate and another run's valid record, so neither is
+// followed to establish trust: the run is UNAVAILABLE, never scored from the
+// external bytes. A symlink inside tree/ is content, hashed as git hashes a
+// link, so replacing a directory with a link to a clean copy is a modified tree.
+// These checks are made once, by path; they do not make the run directory
+// immune to a change between the check and the read.
+func TestSymlinkedEvidenceIsNotFollowed(t *testing.T) {
+	f := newFixture(t)
+	clean := filepath.Join(t.TempDir(), "clean")
+	copyTree(t, f.tree, clean)
+
+	linkedTree := f.run(t, nil)
+	if err := os.RemoveAll(filepath.Join(linkedTree, "tree")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(clean, filepath.Join(linkedTree, "tree")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	r := Score(f.m, f.raw, linkedTree)
+	if r.Verdict != Unavailable || len(r.Reasons) != 1 || r.Reasons[0] != "result_tree_symlink" || r.Truth != nil || r.TreeID != "" {
+		t.Errorf("tree/ linked to a clean copy: %+v, want UNAVAILABLE [result_tree_symlink] with no truth or tree id", r)
+	}
+
+	other := f.run(t, nil)
+	linkedRecord := f.run(t, nil)
+	if err := os.Remove(filepath.Join(linkedRecord, "run.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(other, "run.json"), filepath.Join(linkedRecord, "run.json")); err != nil {
+		t.Fatal(err)
+	}
+	r = Score(f.m, f.raw, linkedRecord)
+	if r.Verdict != Unavailable || len(r.Reasons) != 1 || r.Reasons[0] != "run_record_symlink" || r.Truth != nil {
+		t.Errorf("run.json linked to another run's record: %+v, want UNAVAILABLE [run_record_symlink]", r)
+	}
+
+	nested := f.run(t, nil)
+	sub := filepath.Join(nested, "tree", "cmd")
+	if err := os.RemoveAll(sub); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(clean, "cmd"), sub); err != nil {
+		t.Fatal(err)
+	}
+	r = Score(f.m, f.raw, nested)
+	if r.Verdict != Fail || len(r.Reasons) != 1 || r.Reasons[0] != "result_tree_modified" || r.Truth != nil {
+		t.Errorf("tree/cmd linked to a clean copy: %+v, want FAIL [result_tree_modified]", r)
+	}
+
+	if r := Score(f.m, f.raw, f.run(t, nil)); r.Verdict != Pass {
+		t.Errorf("the control run with no links: %+v, want PASS", r)
+	}
+}
+
 // A run record cannot carry the truth or the verdict: the scorer derives both.
 func TestTheProducerCannotSupplyTruthOrVerdict(t *testing.T) {
 	f := newFixture(t)

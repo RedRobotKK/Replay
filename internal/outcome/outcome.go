@@ -310,7 +310,15 @@ func Score(m Manifest, manifestRaw []byte, runDir string) Result {
 		r.Verdict, r.Reasons = Unavailable, append(r.Reasons, codes...)
 		return r
 	}
-	raw, err := os.ReadFile(filepath.Join(runDir, "run.json"))
+	// The evidence is the run directory's own run.json and tree/. A symlink
+	// in either place would have the scorer judge bytes from somewhere else,
+	// so it is refused by Lstat and never followed. This is one check by
+	// path, not isolation: it does not stop a change made after it.
+	record := filepath.Join(runDir, "run.json")
+	if info, err := os.Lstat(record); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return unavailable("run_record_symlink")
+	}
+	raw, err := os.ReadFile(record)
 	if err != nil {
 		return unavailable("run_record_missing")
 	}
@@ -348,7 +356,9 @@ func Score(m Manifest, manifestRaw []byte, runDir string) Result {
 		reasons = append(reasons, "answer_missing")
 	}
 	tree := filepath.Join(runDir, "tree")
-	if info, err := os.Stat(tree); err != nil || !info.IsDir() {
+	if info, err := os.Lstat(tree); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		reasons = append(reasons, "result_tree_symlink")
+	} else if err != nil || !info.IsDir() {
 		reasons = append(reasons, "result_tree_missing")
 	}
 	if len(reasons) > 0 {
