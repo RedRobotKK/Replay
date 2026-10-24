@@ -22,10 +22,24 @@ import (
 // for loop detection. It stays in the signature so the two summarisers are
 // interchangeable at the call site rather than the caller having to know which
 // provider it is talking to.
-func SummarizeOpenAIRequest(body []byte, _ *Labeler) (RequestSummary, error) {
+func SummarizeOpenAIRequest(body []byte, l *Labeler) (RequestSummary, error) {
+	sum, _, err := SummarizeOpenAIRequestWithCalls(body, l)
+	return sum, err
+}
+
+// SummarizeOpenAIRequestWithCalls is SummarizeOpenAIRequest plus every tool
+// call the body carries, in order, for the live loop guard.
+//
+// The calls are returned beside the summary, not inside it. The summary is
+// what the ledger writes and what the analysis reads, and it keys only the
+// first call of a message; putting every call into it would change the
+// persisted shape, the message identities analysis keys on, and the error
+// accounting learn's guard compares. The proxy hands the calls straight to
+// the guard and drops them.
+func SummarizeOpenAIRequestWithCalls(body []byte, _ *Labeler) (RequestSummary, []transcript.OpenAIToolCall, error) {
 	req, err := transcript.ParseOpenAIRequest(body)
 	if err != nil {
-		return RequestSummary{}, err
+		return RequestSummary{}, nil, err
 	}
 	sum := RequestSummary{Model: req.Model, Stream: req.Stream}
 
@@ -70,7 +84,7 @@ func SummarizeOpenAIRequest(body []byte, _ *Labeler) (RequestSummary, error) {
 			sum.SessionHash = hashOf("session-", blockIdentity(req.Blocks[0]))
 		}
 	}
-	return sum, nil
+	return sum, req.Calls, nil
 }
 
 // blockIdentity renders a block's structure, never its text, as the bytes a
