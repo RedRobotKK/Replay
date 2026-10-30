@@ -396,6 +396,33 @@ not precede one. `docs/design/forensics-week-qualification.md` already describes
 how to find out quickly that a week is not worth selling, which is the part most
 people skip.
 
+**Corrected 2026-10-30, not deleted.** Two statements in Door C are no longer
+true. First, SP-5, SP-6 and SP-8 are not "specified and unbuilt": they are
+implemented, with SP-7 and SP-9, and each row in
+[`requirements.md` 8.12](requirements.md#812-spend-and-loop-guards) names its
+tests. The tenant dimension is in the code:
+`SpendGuard.session`, `.retired` and `.dayUsed` are keyed by
+`tenancy.TenantID` ([`internal/proxy/guards.go`](../internal/proxy/guards.go),
+lines 101-111), `stats.sessions` is too
+([`internal/proxy/state.go`](../internal/proxy/state.go), line 202), and
+`handle` resolves the tenant before any guard
+([`internal/proxy/passthrough.go`](../internal/proxy/passthrough.go), line 111).
+Tests: `TestSP5_HTTPRequestWithAnUnresolvableTenantIsRefused` and
+`TestSP6_DayCapDoesNotCrossTenants`
+([`spend_tenancy_test.go`](../internal/proxy/spend_tenancy_test.go)),
+`TestSP8_EvictedSessionIsNotGrantedAFreshSessionBudgetOnReturn`
+([`spend_durability_test.go`](../internal/proxy/spend_durability_test.go)),
+and the `TestSP9_*` tests
+([`session_tenancy_test.go`](../internal/proxy/session_tenancy_test.go)). They
+were built ahead of a paying user because
+[ADR-0028](adr/0028-replay-is-a-product-with-a-hosted-service.md) amended
+ADR-0015 to make the tenant dimension "the first engineering unit of that
+service, not a reason to defer it". Second, the forensics week is not a door:
+ADR-0028 says the fixed-fee forensic engagement "is not offered and is not to
+be proposed again", and the pricing in [`MONEY-PATH.md`](MONEY-PATH.md) is
+withdrawn. Door C as written above is a record of what was planned before
+2026-10-05.
+
 **How a buyer is recognised is already decided, and it is not an account.**
 [ADR-0023](adr/0023-entitlement-is-a-signed-document-not-an-account.md): a signed
 document installed from a local file, verified offline against a key compiled
@@ -407,6 +434,15 @@ data this tool has ever held, and the binary sits in a credential path where a
 network dependency is a new failure mode. The two MCP servers already split along
 the line that matters, the hosted one answering questions about the world and the
 local one about this machine, and only the first can ever be sold.
+
+**Corrected 2026-10-30, not deleted.** The paragraph above is no longer the
+decision. ADR-0023 is marked "Superseded by 0028", and
+[ADR-0028](adr/0028-replay-is-a-product-with-a-hosted-service.md) amendment 2
+permits accounts and a hosted entitlement check for the hosted service. What
+survives is narrower: the local binary keeps working with no account and no
+network call, and the hosted service is a separate, opt-in surface. How a
+buyer of the hosted service is recognised, and what the unit of sale is
+(ADR-0028 amendment 6), are not decided in this file.
 
 ### What would justify a 2.0
 
@@ -426,6 +462,17 @@ outright by ADR-0001, which is the rule that the tool measures and does not act.
 Vector store, agent to agent messaging, virtual filesystem, a Rust sidecar and a
 web dashboard remain deferred until a user asks, and "a user asked" means a user
 asked rather than a maintainer imagining one.
+
+**Corrected 2026-10-30, not deleted.** "Any server component" is no longer a
+not goal as written.
+[ADR-0028](adr/0028-replay-is-a-product-with-a-hosted-service.md) approves a
+hosted service that holds accounts, settings, aggregates and verdicts. What
+still holds is the part about the binary: the local binary has no server
+component it depends on, keeps working with no account and no network call,
+and the hosted service is a separate, opt-in surface (ADR-0028 amendment 2).
+Transcript bodies stay on the machine by default (amendment 3). The hosted
+service has not shipped; ADR-0028 lists the public statements that change on
+the day it does.
 
 ### What would end it
 
