@@ -142,3 +142,39 @@ func TestCommandWritesAResultAndRendersIt(t *testing.T) {
 		t.Errorf("bad flag exit = %d, want %d", code, exitUsage)
 	}
 }
+
+func TestEveryRepeatStartsOnAFreshProxy(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts real servers")
+	}
+	// The first baseline ran each latency suite on one proxy for all ten
+	// repeats. Without a session header the proxy keys a request by its
+	// SessionHash (internal/proxy/passthrough.go:218-220), so identical
+	// requests form ONE session, and rescore walks all of it on every request.
+	// The overhead rose with every repeat: 1.1ms to 16.0ms at 45KB. A repeat
+	// that inherits the previous repeat's session is not a repeat, so every
+	// proxied suite must start each repeat on a proxy that has served nothing.
+	res, err := Execute(SmokeConfig(), "test-sha", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked := 0
+	for _, s := range res.Scenarios {
+		prior, ok := s.PerRepeat["proxied_prior_requests"]
+		if !ok {
+			if strings.HasPrefix(s.Name, "latency/") || strings.HasPrefix(s.Name, "sse/") || strings.HasPrefix(s.Name, "concurrency/") {
+				t.Errorf("%s does not record how many requests its proxy served before each repeat", s.Name)
+			}
+			continue
+		}
+		checked++
+		for r, v := range prior {
+			if v != 0 {
+				t.Errorf("%s repeat %d started on a proxy that had already served %v requests", s.Name, r, v)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Error("no scenario recorded proxied_prior_requests; the check asserted nothing")
+	}
+}

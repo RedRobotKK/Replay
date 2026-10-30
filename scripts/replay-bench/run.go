@@ -301,45 +301,70 @@ func batch(n int, send func() (timing, error)) ([]timing, RuntimeDelta, error) {
 
 type latencySuite struct {
 	collector
-	size SizeSpec
-	px   *proxyInstance
-	body []byte
-	send map[string]func() (timing, error)
+	size     SizeSpec
+	mask     bool
+	upstream string
+	client   *http.Client
+	body     []byte
 }
 
+// sessionNote is the caveat every proxied suite carries. Without a session
+// header the proxy keys a request by its SessionHash
+// (internal/proxy/passthrough.go:218-220), so the identical requests a suite
+// sends form one session that grows by one per request, and end-of-request
+// rescore walks all of it. Each repeat therefore starts a fresh proxy, so
+// every repeat sees the same growth from zero; the session suite measures
+// the growth itself.
+const sessionNote = " No session header, but the proxy derives one from the body (passthrough.go:218-220), so within a repeat the requests form one session growing from 0; each repeat starts a fresh proxy."
+
 func newLatencySuite(size SizeSpec, mask bool, upstream string) (suite, error) {
-	cl := newClient()
-	px, err := startProxy(upstream, mask)
-	if err != nil {
-		return nil, err
-	}
 	body := requestBody(size.MinBytes, false)
 	m := "mask-off"
 	if mask {
 		m = "mask-on"
 	}
-	s := &latencySuite{
+	return &latencySuite{
 		collector: newCollector(fmt.Sprintf("latency/%s/%s", size.Name, m),
-			map[string]int64{"body_bytes": int64(len(body)), "pairs": int64(size.Pairs), "batch": int64(size.Batch)},
-			"Non-streaming JSON, no session header, so no per-session bookkeeping (see the session suite). Instant mock upstream."),
-		size: size, px: px, body: body,
-	}
-	s.send = map[string]func() (timing, error){
-		ArmDirect:  func() (timing, error) { return do(cl, upstream, body, 0, "") },
-		ArmProxied: func() (timing, error) { return do(cl, px.base, body, 0, "") },
-	}
-	return s, nil
+			map[string]int64{"body_bytes": int64(len(body)), "pairs": int64(size.Pairs), "batch": int64(size.Batch), "warmup": int64(size.Warmup)},
+			"Non-streaming JSON against an instant mock upstream."+sessionNote),
+		size: size, mask: mask, upstream: upstream, client: newClient(), body: body,
+	}, nil
 }
 
-func (s *latencySuite) repeat(r int) error {
+// arms builds the send functions for one repeat's proxy.
+func arms(client *http.Client, upstream string, px *proxyInstance, body []byte, sseEvents int, session string) map[string]func() (timing, error) {
+	return map[string]func() (timing, error){
+		ArmDirect:  func() (timing, error) { return do(client, upstream, body, sseEvents, session) },
+		ArmProxied: func() (timing, error) { return px.send(client, body, sseEvents, session) },
+	}
+}
+
+// freshProxy starts this repeat's proxy and records that it had served
+// nothing, which is what makes repeats comparable.
+func freshProxy(c *collector, upstream string, mask bool) (*proxyInstance, error) {
+	px, err := startProxy(upstream, mask)
+	if err != nil {
+		return nil, err
+	}
+	c.put("proxied_prior_requests", float64(px.served.Load()))
+	return px, nil
+}
+
+func (s *latencySuite) repeat(r int) (err error) {
+	px, err := freshProxy(&s.collector, s.upstream, s.mask)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, px.Close()) }()
+	send := arms(s.client, s.upstream, px, s.body, 0, "")
 	for range s.size.Warmup {
 		for _, arm := range []string{ArmDirect, ArmProxied} {
-			if _, err := s.send[arm](); err != nil {
+			if _, err := send[arm](); err != nil {
 				return err
 			}
 		}
 	}
-	pairs, err := pairedRun(s.size.Pairs, s.send)
+	pairs, err := pairedRun(s.size.Pairs, send)
 	if err != nil {
 		return err
 	}
@@ -352,7 +377,7 @@ func (s *latencySuite) repeat(r int) error {
 	}
 	rt := map[string]RuntimeDelta{}
 	for _, arm := range Order(r+1, []string{ArmDirect, ArmProxied})[r] {
-		ts, delta, err := batch(s.size.Batch, s.send[arm])
+		ts, delta, err := batch(s.size.Batch, send[arm])
 		if err != nil {
 			return err
 		}
@@ -371,44 +396,41 @@ func (s *latencySuite) repeat(r int) error {
 	return nil
 }
 
-func (s *latencySuite) close() error { return s.px.Close() }
+func (s *latencySuite) close() error { s.client.CloseIdleConnections(); return nil }
 
 // ---- SSE streaming -----------------------------------------------------
 
 type sseSuite struct {
 	collector
-	cfg  Config
-	px   *proxyInstance
-	send map[string]func() (timing, error)
+	cfg      Config
+	upstream string
+	client   *http.Client
+	body     []byte
 }
 
 func newSSESuite(cfg Config, upstream string) (suite, error) {
-	cl := newClient()
-	px, err := startProxy(upstream, false)
-	if err != nil {
-		return nil, err
-	}
 	body := requestBody(size45KB, true)
-	s := &sseSuite{
+	return &sseSuite{
 		collector: newCollector(fmt.Sprintf("sse/45KB/events-%d", cfg.SSEEvents),
 			map[string]int64{"body_bytes": int64(len(body)), "events": int64(cfg.SSEEvents), "pairs": int64(cfg.SSEPairs)},
-			"Streaming. ttfb = first body byte; tail = read completing message_stop to EOF. No session header."),
-		cfg: cfg, px: px,
-	}
-	s.send = map[string]func() (timing, error){
-		ArmDirect:  func() (timing, error) { return do(cl, upstream, body, cfg.SSEEvents, "") },
-		ArmProxied: func() (timing, error) { return do(cl, px.base, body, cfg.SSEEvents, "") },
-	}
-	return s, nil
+			"Streaming. ttfb = first body byte; tail = the read completing message_stop to EOF, which includes the proxy's end-of-request bookkeeping."+sessionNote),
+		cfg: cfg, upstream: upstream, client: newClient(), body: body,
+	}, nil
 }
 
-func (s *sseSuite) repeat(r int) error {
+func (s *sseSuite) repeat(r int) (err error) {
+	px, err := freshProxy(&s.collector, s.upstream, false)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, px.Close()) }()
+	send := arms(s.client, s.upstream, px, s.body, s.cfg.SSEEvents, "")
 	for _, arm := range []string{ArmDirect, ArmProxied} {
-		if _, err := s.send[arm](); err != nil {
+		if _, err := send[arm](); err != nil {
 			return err
 		}
 	}
-	pairs, err := pairedRun(s.cfg.SSEPairs, s.send)
+	pairs, err := pairedRun(s.cfg.SSEPairs, send)
 	if err != nil {
 		return err
 	}
@@ -432,35 +454,27 @@ func recordStream(c *collector, r int, pairs map[string][]timing) error {
 	return nil
 }
 
-func (s *sseSuite) close() error { return s.px.Close() }
+func (s *sseSuite) close() error { s.client.CloseIdleConnections(); return nil }
 
 // ---- throughput at concurrency c ---------------------------------------
 
 type concurrencySuite struct {
 	collector
 	c, perWorker int
-	px           *proxyInstance
+	upstream     string
+	client       *http.Client
+	body         []byte
 	send         map[string]func() (timing, error)
 }
 
 func newConcurrencySuite(cfg Config, c int, upstream string) (suite, error) {
-	cl := newClient()
-	px, err := startProxy(upstream, false)
-	if err != nil {
-		return nil, err
-	}
 	body := requestBody(size45KB, false)
-	s := &concurrencySuite{
+	return &concurrencySuite{
 		collector: newCollector(fmt.Sprintf("concurrency/c%d", c),
 			map[string]int64{"workers": int64(c), "requests_per_arm": int64(c * cfg.PerWorker), "body_bytes": int64(len(body))},
-			"Closed loop: c workers each send per_worker requests back to back. Arms alternate order by repeat (ABBA). rps = requests / wall time."),
-		c: c, perWorker: cfg.PerWorker, px: px,
-	}
-	s.send = map[string]func() (timing, error){
-		ArmDirect:  func() (timing, error) { return do(cl, upstream, body, 0, "") },
-		ArmProxied: func() (timing, error) { return do(cl, px.base, body, 0, "") },
-	}
-	return s, nil
+			"Closed loop: c workers each send per_worker requests back to back. Arms alternate order by repeat (ABBA). rps = requests / wall time."+sessionNote),
+		c: c, perWorker: cfg.PerWorker, upstream: upstream, client: newClient(), body: body,
+	}, nil
 }
 
 func (s *concurrencySuite) runArm(arm string) ([]int64, time.Duration, RuntimeDelta, error) {
@@ -515,7 +529,13 @@ func (s *concurrencySuite) runArm(arm string) ([]int64, time.Duration, RuntimeDe
 	return samples, wall, d, firstErr
 }
 
-func (s *concurrencySuite) repeat(r int) error {
+func (s *concurrencySuite) repeat(r int) (err error) {
+	px, err := freshProxy(&s.collector, s.upstream, false)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, px.Close()) }()
+	s.send = arms(s.client, s.upstream, px, s.body, 0, "")
 	// One unrecorded round per arm warms both connection pools to c.
 	for _, arm := range []string{ArmDirect, ArmProxied} {
 		if _, _, _, err := s.runArm(arm); err != nil {
@@ -550,7 +570,7 @@ func (s *concurrencySuite) repeat(r int) error {
 	return nil
 }
 
-func (s *concurrencySuite) close() error { return s.px.Close() }
+func (s *concurrencySuite) close() error { s.client.CloseIdleConnections(); return nil }
 
 // ---- session length: end-of-stream bookkeeping --------------------------
 
@@ -582,17 +602,14 @@ func (s *sessionSuite) repeat(r int) error {
 	sseBody := requestBody(size45KB, true)
 	buildStart := time.Now()
 	for range s.n - 1 {
-		if _, err := do(s.client, px.base, jsonBody, 0, session); err != nil {
+		if _, err := px.send(s.client, jsonBody, 0, session); err != nil {
 			return err
 		}
 	}
 	if s.n > 1 {
 		s.put("build_mean_request_us", float64(time.Since(buildStart).Nanoseconds())/float64(s.n-1)/usPerNS)
 	}
-	send := map[string]func() (timing, error){
-		ArmDirect:  func() (timing, error) { return do(s.client, s.upstream, sseBody, s.cfg.SSEEvents, session) },
-		ArmProxied: func() (timing, error) { return do(s.client, px.base, sseBody, s.cfg.SSEEvents, session) },
-	}
+	send := arms(s.client, s.upstream, px, sseBody, s.cfg.SSEEvents, session)
 	pairs, err := pairedRun(s.cfg.SessionPairs, send)
 	if err != nil {
 		return err
