@@ -55,10 +55,13 @@ All notable changes to this project are documented here. The format follows [Kee
   throughput at concurrency 1, 8 and 32, session length from 10 to 1,000,
   cold start, and the runtime's own allocation, GC and goroutine counters.
   Every result records its machine, toolchain and load, flags noisy repeats,
-  and is written to a timestamped file that is never overwritten. The first
-  baseline was taken on a machine running other workloads and is labelled
-  noisy:
-  [harness-baseline-2026-10-30](docs/evidence/harness-baseline-2026-10-30.md).
+  and is written to a timestamped file that is never overwritten. Its first
+  runs are SCOUT only, taken on a machine running other workloads; they are
+  not a baseline:
+  [harness-scout-2026-10-30](docs/evidence/harness-scout-2026-10-30.md). They
+  also found that a request without a session header still pays end-of-request
+  rescore over a session the proxy derives from the body, so the overhead a
+  client sees grows with the number of requests the proxy has served.
   Developer tool only; not part of the `replay` binary.
 
 - **Every release tag is rebuilt from source and compared, byte for byte, on

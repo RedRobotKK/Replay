@@ -63,7 +63,7 @@ func TestResultRoundTripsThroughJSON(t *testing.T) {
 	}
 }
 
-func TestRenderFlagsANoisyBaselineInItsFirstLines(t *testing.T) {
+func TestRenderFlagsANoisyResultInItsFirstLines(t *testing.T) {
 	r := Result{
 		Schema:      ResultSchema,
 		Noisy:       true,

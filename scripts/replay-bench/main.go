@@ -3,7 +3,7 @@
 // an environment record. It is a developer tool, not part of the binary.
 // ADR-0029 records why it measures the way it does.
 //
-//	scripts/replay-bench/run.sh                 # baseline: 10 repeats
+//	scripts/replay-bench/run.sh                 # full run: 10 repeats
 //	go run ./scripts/replay-bench -render FILE  # summarize an earlier result
 package main
 
@@ -49,7 +49,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		cfg.Repeats = *repeats
 	}
 	cfg.NoisyLabel = *noisy
-	res, err := Execute(cfg, *gitSHA, args)
+	res, err := Execute(cfg, *gitSHA, recordedArgs(args, *sidecar))
 	if err != nil {
 		say(stderr, "replay-bench: %v\n", err)
 		return exitError
@@ -96,3 +96,22 @@ func renderFile(path string, stdout, stderr io.Writer) int {
 // say writes one line of output. A failed write to the terminal has nowhere
 // else to be reported, so its error is dropped here, once, for that reason.
 func say(w io.Writer, format string, args ...any) { _, _ = fmt.Fprintf(w, format, args...) }
+
+// sidecarPlaceholder stands in for the -sidecar path in the recorded args:
+// run.sh passes a mktemp path, which is local and means nothing elsewhere.
+const sidecarPlaceholder = "<sidecar>"
+
+func recordedArgs(args []string, sidecar string) []string {
+	out := make([]string, len(args))
+	for i, a := range args {
+		switch {
+		case sidecar != "" && a == sidecar:
+			out[i] = sidecarPlaceholder
+		case sidecar != "" && a == "-sidecar="+sidecar:
+			out[i] = "-sidecar=" + sidecarPlaceholder
+		default:
+			out[i] = a
+		}
+	}
+	return out
+}
