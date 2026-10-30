@@ -439,8 +439,11 @@ local one about this machine, and only the first can ever be sold.
 decision. ADR-0023 is marked "Superseded by 0028", and
 [ADR-0028](adr/0028-replay-is-a-product-with-a-hosted-service.md) amendment 2
 permits accounts and a hosted entitlement check for the hosted service. What
-survives is narrower: the local binary keeps working with no account and no
-network call, and the hosted service is a separate, opt-in surface. How a
+survives is narrower: the local binary keeps working with no account and
+originates no request the user did not type, and the hosted service is a
+separate, opt-in surface. (ADR-0028 says "no network call"; the README retired
+that wording as false on 2026-09-13, so the README's narrower claim is the one
+quoted here.) How a
 buyer of the hosted service is recognised, and what the unit of sale is
 (ADR-0028 amendment 6), are not decided in this file.
 
@@ -468,8 +471,9 @@ not goal as written.
 [ADR-0028](adr/0028-replay-is-a-product-with-a-hosted-service.md) approves a
 hosted service that holds accounts, settings, aggregates and verdicts. What
 still holds is the part about the binary: the local binary has no server
-component it depends on, keeps working with no account and no network call,
-and the hosted service is a separate, opt-in surface (ADR-0028 amendment 2).
+component it depends on, keeps working with no account, originates no request
+the user did not type (the README's wording, not ADR-0028's retired "no network
+call"), and the hosted service is a separate, opt-in surface (ADR-0028 amendment 2).
 Transcript bodies stay on the machine by default (amendment 3). The hosted
 service has not shipped; ADR-0028 lists the public statements that change on
 the day it does.
