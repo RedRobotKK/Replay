@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/RedRobotKK/Replay/internal/ledger"
@@ -160,6 +161,16 @@ type proxyInstance struct {
 
 	closeOnce sync.Once
 	closeErr  error
+
+	// served counts requests sent to this instance through send, so a
+	// suite can show that a repeat started on a proxy that had served none.
+	served atomic.Int64
+}
+
+// send is do against this proxy, counted.
+func (p *proxyInstance) send(client *http.Client, body []byte, sseEvents int, session string) (timing, error) {
+	p.served.Add(1)
+	return do(client, p.base, body, sseEvents, session)
 }
 
 func startProxy(upstream string, mask bool) (*proxyInstance, error) {
