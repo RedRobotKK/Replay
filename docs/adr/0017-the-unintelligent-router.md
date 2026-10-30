@@ -200,6 +200,15 @@ should use a semantic router; this is not one and must never be marketed as one.
 reconstructs the prefix. That is the entire wedge, and it exists because the
 measurement came first.
 
+> **Corrected 2026-10-30, not deleted.** The paragraph above is false and was
+> found false on the day it was written. This record is Rejected, and
+> [Why this was rejected](#why-this-was-rejected) at the top of this file says
+> why: LiteLLM's `PromptCachingDeploymentCheck`, OpenRouter's provider sticky
+> routing and prefix- and KV-aware routing at the serving layer all route on
+> cache state. There is no wedge. The sentence is kept because this record is
+> historical; this note is here so a reader who skips to this section is not
+> misled.
+
 **The risk that would kill it.** If providers converge on a single cacheable-prefix
 floor, or drop the floor entirely, row two of the table disappears and the
 structural signal loses most of its value. That is a provider decision, outside this
