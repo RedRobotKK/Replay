@@ -33,6 +33,7 @@ Files are named `NNNN-short-title.md`. Copy [`template.md`](template.md) to star
 | [0026](0026-a-surviving-guard-is-permitted-only-with-evidence.md) | A surviving guard is permitted only with evidence, addressed one guard at a time | Proposed |
 | [0027](0027-a-reader-decision-is-persisted-apart-from-the-computed-status.md) | A reader decision is persisted apart from the computed status | Proposed |
 | [0028](0028-replay-is-a-product-with-a-hosted-service.md) | Replay is a product with a hosted service, and three closed capabilities are reopened | Accepted |
+| [0029](0029-proxy-overhead-is-measured-paired-and-interleaved.md) | Proxy overhead is measured paired and interleaved, with its spread and its machine | Proposed |
 
 ---
 

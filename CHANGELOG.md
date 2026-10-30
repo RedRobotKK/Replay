@@ -47,6 +47,20 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- **`scripts/replay-bench`, a measurement harness for what the proxy adds to a
+  request** ([ADR-0029](docs/adr/0029-proxy-overhead-is-measured-paired-and-interleaved.md)).
+  It runs the real proxy against an in-process mock upstream and sends paired,
+  interleaved direct and proxied requests at 45KB, 1MB and 16MB with masking
+  off and on. It also measures SSE first byte and end-of-stream tail,
+  throughput at concurrency 1, 8 and 32, session length from 10 to 1,000,
+  cold start, and the runtime's own allocation, GC and goroutine counters.
+  Every result records its machine, toolchain and load, flags noisy repeats,
+  and is written to a timestamped file that is never overwritten. The first
+  baseline was taken on a machine running other workloads and is labelled
+  noisy:
+  [harness-baseline-2026-10-30](docs/evidence/harness-baseline-2026-10-30.md).
+  Developer tool only; not part of the `replay` binary.
+
 - **Every release tag is rebuilt from source and compared, byte for byte, on
   all four platforms.** `release.yml`'s `reproduce` job runs
   `scripts/reproduce-release.sh` after publication, takes every build input

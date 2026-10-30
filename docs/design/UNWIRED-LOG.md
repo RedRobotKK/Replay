@@ -419,3 +419,16 @@ UNAVAILABLE apart, excludes runs of any other arm with a reason, refuses a
 control at a ceiling, and estimates no effect (M166, M167). The pilot is still
 not run: a comparison can now be described, and whether the pinned task has
 headroom is still not established.
+
+## 20. scripts/replay-bench, the measurement harness
+
+Added 2026-10-30 with [ADR-0029](../adr/0029-proxy-overhead-is-measured-paired-and-interleaved.md).
+It runs the real `proxy.Server` against an in-process mock upstream and
+measures what the proxy adds: paired, interleaved latency at three body
+sizes with masking off and on, SSE first byte and end-of-stream tail,
+throughput at three concurrencies, session-length scaling, cold start, and
+the runtime's own allocation and GC counters. Its first result is
+`docs/evidence/harness-baseline-2026-10-30.md`.
+
+**What would wire it:** nothing should. It is an instrument pointed at the
+binary, and its network use is loopback to servers it started itself.

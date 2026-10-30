@@ -64,6 +64,11 @@ func TestOutboundSurfacesAreAllDocumented(t *testing.T) {
 		// whose job is to be complete, and the test guarding that inventory
 		// reported success.
 		"internal/feed": "the signed rules feed: fetches a bundle and its signature, verifies, never signs",
+		// scripts/replay-bench sends requests, but only to listeners it
+		// started itself on 127.0.0.1 inside its own process: an httptest
+		// mock provider and a proxy.Server pointed at it. It is a developer
+		// tool, never part of the binary (UNWIRED-LOG.md #20).
+		"scripts/replay-bench": "the measurement harness: loopback only, to an in-process mock upstream and proxy it started itself",
 	}
 
 	// Packages that may import the network stack at all. This is the check
@@ -96,7 +101,8 @@ func TestOutboundSurfacesAreAllDocumented(t *testing.T) {
 		"internal/feed":       "the signed rules feed",
 		// A build-tagged fixture, excluded from every build of the module: it
 		// is the mock x402 seller the end-to-end harness runs against.
-		"scripts/x402-e2e": "a mock seller for the x402 end-to-end harness; not part of any build of the binary",
+		"scripts/x402-e2e":     "a mock seller for the x402 end-to-end harness; not part of any build of the binary",
+		"scripts/replay-bench": "the measurement harness (ADR-0029); loopback only, to servers it starts in its own process; not part of any build of the binary",
 	}
 	netImports := map[string]bool{"net": true, "net/http": true, "net/url": true}
 
