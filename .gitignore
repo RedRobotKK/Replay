@@ -57,3 +57,7 @@ docs/demo/.replay-demo-bin
 __pycache__/
 *.pyc
 docs/demo/.home
+
+# replay-bench default output (scripts/replay-bench/run.sh). A result meant to
+# be kept is written under docs/evidence/ with OUT= and committed there.
+/bench-results/
