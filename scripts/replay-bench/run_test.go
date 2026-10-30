@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -147,7 +149,7 @@ func TestEveryRepeatStartsOnAFreshProxy(t *testing.T) {
 	if testing.Short() {
 		t.Skip("starts real servers")
 	}
-	// The first baseline ran each latency suite on one proxy for all ten
+	// The first SCOUT run ran each latency suite on one proxy for all ten
 	// repeats. Without a session header the proxy keys a request by its
 	// SessionHash (internal/proxy/passthrough.go:218-220), so identical
 	// requests form ONE session, and rescore walks all of it on every request.
@@ -176,5 +178,35 @@ func TestEveryRepeatStartsOnAFreshProxy(t *testing.T) {
 	}
 	if checked == 0 {
 		t.Error("no scenario recorded proxied_prior_requests; the check asserted nothing")
+	}
+}
+
+func TestRecordedArgsCarryNoLocalSidecarPath(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts real servers")
+	}
+	// run.sh passes a mktemp path for -sidecar. The first SCOUT results
+	// recorded it verbatim (/var/folders/...), a local path in a committed
+	// file. The path is replaced by a placeholder; the sidecar's content is
+	// what is kept.
+	dir := t.TempDir()
+	side := filepath.Join(dir, "sidecar.txt")
+	if err := os.WriteFile(side, []byte("uptime: test\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errb strings.Builder
+	if code := run([]string{"-quick", "-out", dir, "-sidecar", side}, &out, &errb); code != exitOK {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	line, _, _ := strings.Cut(out.String(), "\n")
+	b, err := os.ReadFile(strings.TrimPrefix(line, "result: "))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), side) {
+		t.Errorf("result records the local sidecar path %s", side)
+	}
+	if !strings.Contains(string(b), "uptime: test") {
+		t.Error("result lost the sidecar's content")
 	}
 }

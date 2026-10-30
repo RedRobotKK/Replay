@@ -427,8 +427,8 @@ It runs the real `proxy.Server` against an in-process mock upstream and
 measures what the proxy adds: paired, interleaved latency at three body
 sizes with masking off and on, SSE first byte and end-of-stream tail,
 throughput at three concurrencies, session-length scaling, cold start, and
-the runtime's own allocation and GC counters. Its first result is
-`docs/evidence/harness-baseline-2026-10-30.md`.
+the runtime's own allocation and GC counters. Its first runs are SCOUT
+only, not a baseline: `docs/evidence/harness-scout-2026-10-30.md`.
 
 **What would wire it:** nothing should. It is an instrument pointed at the
 binary, and its network use is loopback to servers it started itself.

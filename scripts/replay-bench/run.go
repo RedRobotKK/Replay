@@ -60,7 +60,7 @@ type Config struct {
 	NoisyLabel     string     `json:"noisy_label,omitempty"`
 }
 
-// DefaultConfig is the baseline configuration: ten interleaved repeats.
+// DefaultConfig is the full configuration: ten interleaved repeats.
 func DefaultConfig() Config {
 	return Config{
 		Repeats: 10,

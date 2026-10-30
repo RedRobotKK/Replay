@@ -3,7 +3,7 @@
 # trust or discount its figures: the machine's load and busiest processes
 # before and after, the exact command, and its exit status.
 #
-#   scripts/replay-bench/run.sh                          # baseline, 10 repeats
+#   scripts/replay-bench/run.sh                          # full run, 10 repeats
 #   scripts/replay-bench/run.sh -noisy-label "reason"    # label a known-noisy run
 #   OUT=docs/evidence/data scripts/replay-bench/run.sh   # choose the results dir
 #
