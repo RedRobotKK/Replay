@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -124,8 +125,9 @@ func TestFO7_VerbatimPathPrefixesDrivePathsOnly(t *testing.T) {
 
 func TestFO8_WriteFileAndRenameReplaceAFile(t *testing.T) {
 	dir := t.TempDir()
-	if err := WriteFile(filepath.Join(dir, "missing", "x"), nil, 0o600); err == nil {
-		t.Error("a write into a missing directory succeeded")
+	// The open's own error, not one from writing to a file that never opened.
+	if err := WriteFile(filepath.Join(dir, "missing", "x"), nil, 0o600); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("a write into a missing directory: want the open's not-exist error, got %v", err)
 	}
 	to := filepath.Join(dir, "a.jsonl")
 	if err := WriteFile(to, []byte("old\n"), 0o600); err != nil {

@@ -81,11 +81,30 @@ error and the record is not written, where it was written before. `Store`'s
 mutex serialises one `Store` only. It is not the cross-process lock and does
 not stand in for it.
 
-Purge's rename over a file other handles hold open has not been verified on
-Windows. Go opens files there without `FILE_SHARE_DELETE`, so the rename may
-fail while an appender waits on the lock. The binary still refuses to run on
-Windows, so no Windows user can reach that path, but it has to be settled
-before the refusal is lifted.
+Purge's rename over a file that other handles hold open needs two more things
+on Windows. Both apply only there; unix keeps `os.OpenFile` and `os.Rename`.
+
+- Every ledger handle is opened through `CreateFile` with
+  `FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE`, wrapped with
+  `os.NewFile`. That covers `OpenLocked` (`Append`'s handle and the rewrite's
+  locked handle), the replacement written by `ledger.WriteFile`, and the
+  `ReadRecords` and `IsLedgerFile` readers. `os.OpenFile` omits
+  `FILE_SHARE_DELETE`, and without it the rename failed with "Access is
+  denied", measured on windows-latest.
+- The replacement is renamed in with
+  `SetFileInformationByHandle(FileRenameInfoEx)`, using
+  `FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS`. The
+  old file is unlinked while its open handles stay valid, as on unix, and a
+  waiting appender's identity check then sends it to the new file. Where POSIX
+  rename is unsupported, it falls back to `os.Rename`, which refuses rather
+  than losing anything.
+
+The lock is still held across the rename. It is never released before the
+rename: doing so would let an appender write into the file about to be
+replaced, which is the original defect. `TestRW8` and `TestXL10` fail if the
+order changes. A reader that opens a ledger without the shared mode, for
+example through a plain `os.Open` elsewhere in the tree, makes a purge fail
+with an error while it holds the file, but loses no record.
 
 Append now pays one lock call (and on Windows one unlock) and two `stat` calls per record beside the open,
 write and close it already did. This is a cost of the fix, not a performance
