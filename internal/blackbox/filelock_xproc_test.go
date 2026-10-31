@@ -155,19 +155,34 @@ func TestLockHelperProcess(t *testing.T) {
 			os.Exit(1)
 		}
 		// With xlPauseEnv set, the rewrite stops inside its critical section
-		// (lock held, file re-read, replacement not yet written), says so,
-		// and waits for stdin to close: a purge caught mid-rewrite.
-		writeFile := os.WriteFile
-		if os.Getenv(xlPauseEnv) != "" {
+		// (lock held, file re-read), says so, and waits for stdin to close:
+		// a purge caught mid-rewrite. Where it stops:
+		//   write   before the replacement is written
+		//   partial with half the replacement written to the sibling
+		//   rename  with the replacement written, before the rename
+		writeFile, rename := xlWriteFile, xlRename
+		switch os.Getenv(xlPauseEnv) {
+		case "":
+		case "partial":
 			writeFile = func(name string, data []byte, perm os.FileMode) error {
-				fmt.Println(xlLockedBanner)
-				if _, err := io.Copy(io.Discard, os.Stdin); err != nil {
-					fmt.Fprintln(os.Stderr, "stdin:", err)
+				if err := os.WriteFile(name, data[:len(data)/2], perm); err != nil {
+					return err
 				}
-				return os.WriteFile(name, data, perm)
+				pauseHere()
+				return xlWriteFile(name, data, perm)
+			}
+		case "rename":
+			rename = func(from, to string) error {
+				pauseHere()
+				return xlRename(from, to)
+			}
+		default:
+			writeFile = func(name string, data []byte, perm os.FileMode) error {
+				pauseHere()
+				return xlWriteFile(name, data, perm)
 			}
 		}
-		if err := ledger.RewriteLocked(path, read, keptLines(read, os.Getenv(xlSessionEnv)), writeFile, os.Rename); err != nil {
+		if err := ledger.RewriteLocked(path, read, keptLines(read, os.Getenv(xlSessionEnv)), writeFile, rename); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -175,6 +190,22 @@ func TestLockHelperProcess(t *testing.T) {
 	default:
 		fmt.Fprintln(os.Stderr, "unknown helper mode", mode)
 		os.Exit(2)
+	}
+}
+
+// xlWriteFile and xlRename are what the purge helper writes and renames
+// with: purge's own defaults.
+var (
+	xlWriteFile = os.WriteFile
+	xlRename    = os.Rename
+)
+
+// pauseHere tells the parent the helper is at its pause point, holding the
+// lock, and waits until the parent closes stdin.
+func pauseHere() {
+	fmt.Println(xlLockedBanner)
+	if _, err := io.Copy(io.Discard, os.Stdin); err != nil {
+		fmt.Fprintln(os.Stderr, "stdin:", err)
 	}
 }
 
@@ -428,21 +459,24 @@ type purger struct {
 	start func(t *testing.T, dir, path string) <-chan result
 }
 
+// rewritePurger is a helper process running purge's locked rewrite.
+var rewritePurger = purger{name: "rewrite-process", start: func(t *testing.T, _, path string) <-chan result {
+	c := startHelper(t, nil, xlHelperEnv+"=purge", xlPathEnv+"="+path, xlSessionEnv+"="+xlGone)
+	ch := make(chan result, 1)
+	go func() {
+		err := <-c.done
+		code := 0
+		if err != nil {
+			code = 1
+		}
+		ch <- result{Exit: code, Stderr: c.stderr.String()}
+	}()
+	return ch
+}}
+
 func purgers(t *testing.T) []purger {
 	t.Helper()
-	ps := []purger{{name: "rewrite-process", start: func(t *testing.T, _, path string) <-chan result {
-		c := startHelper(t, nil, xlHelperEnv+"=purge", xlPathEnv+"="+path, xlSessionEnv+"="+xlGone)
-		ch := make(chan result, 1)
-		go func() {
-			err := <-c.done
-			code := 0
-			if err != nil {
-				code = 1
-			}
-			ch <- result{Exit: code, Stderr: c.stderr.String()}
-		}()
-		return ch
-	}}}
+	ps := []purger{rewritePurger}
 	// The binary refuses on Windows (cmd/replay/platformguard.go), so there
 	// the rewrite process above is the purge, and it is the same code.
 	if runtime.GOOS != "windows" {
@@ -670,4 +704,161 @@ func TestXL6_AProcessKilledHoldingTheLockDoesNotLeaveItLocked(t *testing.T) {
 	}
 	a.wait(t, "appender after the holder was killed")
 	wantEachOnce(t, countIDs(t, xlLines(t, path), nil)[xlSession], "waiter", 1)
+}
+
+// xlRepeatRounds is how many times XL7 repeats a full append/purge race. On
+// windows-latest this is the bounded repeat the Windows purge is held to.
+const (
+	xlRepeatRounds    = 20
+	xlRepeatPerWriter = 50
+)
+
+// XL7: repeated concurrent append and purge lose nothing.
+//
+// xlRepeatRounds rounds, each a purge process and xlAppenders appending
+// processes started together on a fresh ledger.
+//
+// PASS: every round, the erased session is gone after a follow-up purge and
+// every kept and appended record is there exactly once.
+// FAIL: any round losing, duplicating or splitting a record, or a purge that
+// fails for any reason but a read of an in-flight record.
+func TestXL7_RepeatedAppendAndPurgeRacesLoseNothing(t *testing.T) {
+	for r := 0; r < xlRepeatRounds; r++ {
+		seed := append(seedLines(t, xlSession, "kept", xlPerWriter), seedLines(t, xlGone, "gone", xlSeedGone)...)
+		dir, path := xlLedger(t, seed)
+		done := rewritePurger.start(t, dir, path)
+		var cs []*child
+		for a := 0; a < xlAppenders; a++ {
+			cs = append(cs, startAppender(t, dir, fmt.Sprintf("r%dp%d", r, a), xlRepeatPerWriter))
+		}
+		for a, c := range cs {
+			c.wait(t, fmt.Sprintf("round %d appender %d", r, a))
+		}
+		select {
+		case res := <-done:
+			purgeOK(t, res)
+		case <-time.After(xlTimeout):
+			t.Fatalf("round %d: the purge did not finish", r)
+		}
+		want := idsOf("kept", xlPerWriter, map[string]int{})
+		for a := 0; a < xlAppenders; a++ {
+			idsOf(fmt.Sprintf("r%dp%d", r, a), xlRepeatPerWriter, want)
+		}
+		finishPurge(t, rewritePurger, dir, path, want)
+	}
+}
+
+// XL8: a purge killed mid-rewrite loses nothing and does not leave the
+// ledger locked.
+//
+// The purge process is killed holding the lock, with half its replacement
+// written to the sibling and nothing renamed. An appender waiting on the
+// lock must then get it.
+//
+// PASS: the appender waits while the purge lives and completes after the
+// kill; the ledger is the original plus the appended record (nothing erased,
+// nothing lost, nothing twice); a fresh purge then completes and leaves no
+// sibling behind.
+// FAIL: the lock outlives the process, or the half-written replacement
+// reached the ledger, or a record is lost or duplicated.
+func TestXL8_APurgeKilledMidRewriteLosesNothingAndReleasesTheLock(t *testing.T) {
+	seed := append(seedLines(t, xlSession, "kept", xlPerWriter), seedLines(t, xlGone, "gone", xlSeedGone)...)
+	dir, path := xlLedger(t, seed)
+	purge, _ := startHolder(t, path, xlHelperEnv+"=purge", xlSessionEnv+"="+xlGone, xlPauseEnv+"=partial")
+	a := startAppender(t, dir, "during", 1)
+	select {
+	case err := <-a.done:
+		t.Fatalf("the appender wrote while the purge held the lock (err=%v)", err)
+	case <-time.After(xlBlockWindow):
+	}
+	if err := purge.cmd.Process.Kill(); err != nil {
+		t.Fatalf("kill purge: %v", err)
+	}
+	select {
+	case <-purge.done: // killed: a non-nil error is expected
+	case <-time.After(xlTimeout):
+		t.Fatal("the killed purge did not exit")
+	}
+	a.wait(t, "appender after the purge was killed")
+
+	got := countIDs(t, xlLines(t, path), nil)
+	wantEachOnce(t, got[xlGone], "gone", xlSeedGone)
+	if len(got[xlGone]) != xlSeedGone {
+		t.Errorf("%d erased-session records, want all %d: an interrupted purge removed some", len(got[xlGone]), xlSeedGone)
+	}
+	finishPurge(t, rewritePurger, dir, path, idsOf("kept", xlPerWriter, map[string]int{"during-0": 1}))
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Errorf("the sibling is still there after a completed purge (err=%v)", err)
+	}
+}
+
+// XL9: a leftover sibling from an interrupted replacement does not corrupt
+// the ledger, and the next append and purge proceed.
+//
+// PASS: with a half-written a.jsonl.tmp beside it, the ledger reads with no
+// skipped or incomplete record; an append lands; a purge completes and
+// replaces the leftover.
+// FAIL: the leftover is read as part of the ledger, or blocks the append or
+// the purge.
+func TestXL9_ALeftoverReplacementDoesNotCorruptTheLedger(t *testing.T) {
+	for _, p := range purgers(t) {
+		t.Run(p.name, func(t *testing.T) {
+			seed := append(seedLines(t, xlSession, "kept", xlPerWriter), seedLines(t, xlGone, "gone", xlSeedGone)...)
+			dir, path := xlLedger(t, seed)
+			if err := os.WriteFile(path+".tmp", seed[:len(seed)/3], 0o600); err != nil {
+				t.Fatal(err)
+			}
+			recs, skipped, mismatch, incomplete, err := ledger.ReadRecords(path)
+			if err != nil || skipped != 0 || mismatch != 0 || incomplete || len(recs) != xlPerWriter+xlSeedGone {
+				t.Fatalf("the ledger did not read cleanly beside a leftover: %d records, skipped %d, mismatch %d, incomplete %v, err %v",
+					len(recs), skipped, mismatch, incomplete, err)
+			}
+			startAppender(t, dir, "after", 1).wait(t, "appender beside a leftover")
+			finishPurge(t, p, dir, path, idsOf("kept", xlPerWriter, map[string]int{"after-0": 1}))
+			if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+				t.Errorf("the leftover sibling survived a completed purge (err=%v)", err)
+			}
+		})
+	}
+}
+
+// XL10: the rename happens while the lock is held.
+//
+// The purge process stops with its replacement written and the rename not
+// yet made. Releasing the lock any earlier (before the rename) would let a
+// waiting appender write into the file about to be renamed over, and its
+// record would be lost: S-3. This is the regression guard for that order.
+//
+// PASS: the appender is still waiting at that point and the ledger is
+// unchanged; afterwards the erased session is gone and the appended record
+// is there once.
+// FAIL: the appender got in before the rename, or its record was lost.
+func TestXL10_TheRenameHappensUnderTheLock(t *testing.T) {
+	seed := append(seedLines(t, xlSession, "kept", xlPerWriter), seedLines(t, xlGone, "gone", xlSeedGone)...)
+	dir, path := xlLedger(t, seed)
+	purge, release := startHolder(t, path, xlHelperEnv+"=purge", xlSessionEnv+"="+xlGone, xlPauseEnv+"=rename")
+	a := startAppender(t, dir, "during", 1)
+	select {
+	case err := <-a.done:
+		t.Fatalf("an appender got the lock before the purge renamed: the lock was released too early (err=%v)", err)
+	case <-time.After(xlBlockWindow):
+	}
+	if b, err := os.ReadFile(path); err != nil || !bytes.Equal(b, seed) {
+		t.Fatalf("the ledger changed before the rename (err=%v)", err)
+	}
+	if err := release.Close(); err != nil {
+		t.Fatal(err)
+	}
+	purge.wait(t, "purge")
+	a.wait(t, "appender")
+	got := countIDs(t, xlLines(t, path), nil)
+	if n := len(got[xlGone]); n != 0 {
+		t.Errorf("%d records of the erased session survived", n)
+	}
+	want := idsOf("kept", xlPerWriter, map[string]int{"during-0": 1})
+	for id, n := range want {
+		if got[xlSession][id] != n {
+			t.Errorf("record %s appears %d times, want %d", id, got[xlSession][id], n)
+		}
+	}
 }

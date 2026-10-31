@@ -229,3 +229,57 @@ func readRequestIDs(t *testing.T, path string) map[string]int {
 	}
 	return seen
 }
+
+// RW8: RewriteLocked renames while it holds the lock.
+//
+// The rename is wrapped so that, at the moment it runs, a second handle asks
+// for the lock. It must still be waiting when the rename is made. A rewrite
+// that released the lock first would let an appender write into the file
+// about to be replaced (S-3). Runs on Windows too, where the rename is over a
+// file the rewrite's own locked handle holds open.
+//
+// PASS: the second handle waits through the rename, then gets the replaced
+// file; the rewrite succeeds.
+// FAIL: the second handle got the lock before the rename, or the rename failed.
+func TestRW8_TheRenameIsMadeWhileTheLockIsHeld(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a.jsonl")
+	if err := os.WriteFile(path, []byte("gone\nkept\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	waiter := make(chan error, 1)
+	rename := func(from, to string) error {
+		go func() {
+			f, err := OpenLocked(to, os.O_RDWR, 0)
+			if err == nil {
+				err = f.Close()
+			}
+			waiter <- err
+		}()
+		select {
+		case err := <-waiter:
+			t.Errorf("another handle took the lock before the rename (err=%v): the lock was released too early", err)
+		case <-time.After(flBlockWindow):
+		}
+		return rwRename(from, to)
+	}
+	if err := RewriteLocked(path, []byte("gone\nkept\n"), []string{"kept"}, rwWriteFile, rename); err != nil {
+		t.Fatalf("the rewrite failed: %v", err)
+	}
+	select {
+	case err := <-waiter:
+		if err != nil {
+			t.Fatalf("the waiter failed after the rewrite: %v", err)
+		}
+	case <-time.After(flReleaseTimeout):
+		t.Fatal("the rewrite did not release the lock")
+	}
+	if b, _ := os.ReadFile(path); string(b) != "kept\n" {
+		t.Fatalf("got %q", b)
+	}
+}
+
+// rwWriteFile and rwRename are what purge rewrites with in production.
+var (
+	rwWriteFile = os.WriteFile
+	rwRename    = os.Rename
+)
