@@ -29,6 +29,16 @@ const goroutineSampleEvery = time.Millisecond
 // usPerNS converts nanoseconds to the microseconds metrics are reported in.
 const usPerNS = 1e3
 
+// currentLoad reads the load average a repeat starts under. It is a variable
+// so a test can start a repeat on a busy or a quiet machine at will; the real
+// one reports whatever the test runner happens to be doing.
+var currentLoad = loadAverage
+
+// removeAll is os.RemoveAll for the component suites' scratch directories, a
+// variable so a test can make a suite's close fail, which is the only way
+// Execute's own closing error can be entered.
+var removeAll = os.RemoveAll
+
 // SizeSpec is one request-body size and how many samples it gets.
 type SizeSpec struct {
 	Name     string `json:"name"`
@@ -164,28 +174,23 @@ func Execute(cfg Config, gitSHA string, args []string) (Result, error) {
 	}
 	// Cold start runs first in every repeat, so repeat 0 also captures the
 	// process's own first request through the proxy.
-	if err := add(newColdSuite(cfg, up.URL), nil); err != nil {
-		return res, err
-	}
+	//
+	// The suites that only build a request body cannot fail to construct, so
+	// they are appended rather than checked: a check on an error that is nil
+	// by construction is a branch no test can enter. Only the component
+	// suites, which create directories, go through add.
+	suites = append(suites, newColdSuite(cfg, up.URL))
 	for _, size := range cfg.Sizes {
 		for _, mask := range []bool{false, true} {
-			if err := add(newLatencySuite(size, mask, up.URL)); err != nil {
-				return res, errors.Join(err, closeAll())
-			}
+			suites = append(suites, newLatencySuite(size, mask, up.URL))
 		}
 	}
-	if err := add(newSSESuite(cfg, up.URL)); err != nil {
-		return res, errors.Join(err, closeAll())
-	}
+	suites = append(suites, newSSESuite(cfg, up.URL))
 	for _, c := range cfg.Concurrency {
-		if err := add(newConcurrencySuite(cfg, c, up.URL)); err != nil {
-			return res, errors.Join(err, closeAll())
-		}
+		suites = append(suites, newConcurrencySuite(cfg, c, up.URL))
 	}
 	for _, n := range cfg.SessionLengths {
-		if err := add(newSessionSuite(cfg, n, up.URL), nil); err != nil {
-			return res, errors.Join(err, closeAll())
-		}
+		suites = append(suites, newSessionSuite(cfg, n, up.URL))
 	}
 	for _, size := range cfg.Sizes {
 		if err := add(newMaskComponentSuite(size)); err != nil {
@@ -198,7 +203,7 @@ func Execute(cfg Config, gitSHA string, args []string) (Result, error) {
 
 	noisyRepeats := 0
 	for r := range cfg.Repeats {
-		load := loadAverage()
+		load := currentLoad()
 		meta := RepeatMeta{Index: r, StartedAt: time.Now().UTC().Format(time.RFC3339), Load: load, Noisy: Noisy(load, runtime.NumCPU())}
 		if meta.Noisy {
 			noisyRepeats++
@@ -216,7 +221,7 @@ func Execute(cfg Config, gitSHA string, args []string) (Result, error) {
 	if err := closeAll(); err != nil {
 		return res, err
 	}
-	res.Environment.LoadAfter = loadAverage()
+	res.Environment.LoadAfter = currentLoad()
 	res.Environment.MaxRSSBytes = maxRSS()
 	if noisyRepeats > 0 {
 		res.Noisy = true
@@ -317,7 +322,7 @@ type latencySuite struct {
 // the growth itself.
 const sessionNote = " No session header, but the proxy derives one from the body (passthrough.go:218-220), so within a repeat the requests form one session growing from 0; each repeat starts a fresh proxy."
 
-func newLatencySuite(size SizeSpec, mask bool, upstream string) (suite, error) {
+func newLatencySuite(size SizeSpec, mask bool, upstream string) suite {
 	body := requestBody(size.MinBytes, false)
 	m := "mask-off"
 	if mask {
@@ -328,7 +333,7 @@ func newLatencySuite(size SizeSpec, mask bool, upstream string) (suite, error) {
 			map[string]int64{"body_bytes": int64(len(body)), "pairs": int64(size.Pairs), "batch": int64(size.Batch), "warmup": int64(size.Warmup)},
 			"Non-streaming JSON against an instant mock upstream."+sessionNote),
 		size: size, mask: mask, upstream: upstream, client: newClient(), body: body,
-	}, nil
+	}
 }
 
 // arms builds the send functions for one repeat's proxy.
@@ -372,9 +377,6 @@ func (s *latencySuite) repeat(r int) (err error) {
 	s.s.Runs = append(s.s.Runs,
 		Run{Repeat: r, Arm: ArmDirect, Phase: "paired", SamplesNS: d, Latency: Summarize(durs(d))},
 		Run{Repeat: r, Arm: ArmProxied, Phase: "paired", SamplesNS: p, Latency: Summarize(durs(p))})
-	if err := putOverhead(&s.collector, "", d, p); err != nil {
-		return err
-	}
 	rt := map[string]RuntimeDelta{}
 	for _, arm := range Order(r+1, []string{ArmDirect, ArmProxied})[r] {
 		ts, delta, err := batch(s.size.Batch, send[arm])
@@ -393,7 +395,12 @@ func (s *latencySuite) repeat(r int) (err error) {
 	}
 	s.put("overhead_allocs_per_op", rt[ArmProxied].AllocsPerOp-rt[ArmDirect].AllocsPerOp)
 	s.put("overhead_bytes_per_op", rt[ArmProxied].BytesPerOp-rt[ArmDirect].BytesPerOp)
-	return nil
+	// The paired overhead is computed last, from samples already taken, so
+	// its error is returned rather than branched on. It can only fail on arms
+	// of unequal length, and pairedRun returns equal arms by construction, so
+	// a check here was a branch no test could enter. Moving it measures
+	// nothing differently: it reads d and p and sends no request.
+	return putOverhead(&s.collector, "", d, p)
 }
 
 func (s *latencySuite) close() error { s.client.CloseIdleConnections(); return nil }
@@ -408,14 +415,14 @@ type sseSuite struct {
 	body     []byte
 }
 
-func newSSESuite(cfg Config, upstream string) (suite, error) {
+func newSSESuite(cfg Config, upstream string) suite {
 	body := requestBody(size45KB, true)
 	return &sseSuite{
 		collector: newCollector(fmt.Sprintf("sse/45KB/events-%d", cfg.SSEEvents),
 			map[string]int64{"body_bytes": int64(len(body)), "events": int64(cfg.SSEEvents), "pairs": int64(cfg.SSEPairs)},
 			"Streaming. ttfb = first body byte; tail = the read completing message_stop to EOF, which includes the proxy's end-of-request bookkeeping."+sessionNote),
 		cfg: cfg, upstream: upstream, client: newClient(), body: body,
-	}, nil
+	}
 }
 
 func (s *sseSuite) repeat(r int) (err error) {
@@ -467,14 +474,14 @@ type concurrencySuite struct {
 	send         map[string]func() (timing, error)
 }
 
-func newConcurrencySuite(cfg Config, c int, upstream string) (suite, error) {
+func newConcurrencySuite(cfg Config, c int, upstream string) suite {
 	body := requestBody(size45KB, false)
 	return &concurrencySuite{
 		collector: newCollector(fmt.Sprintf("concurrency/c%d", c),
 			map[string]int64{"workers": int64(c), "requests_per_arm": int64(c * cfg.PerWorker), "body_bytes": int64(len(body))},
 			"Closed loop: c workers each send per_worker requests back to back. Arms alternate order by repeat (ABBA). rps = requests / wall time."+sessionNote),
 		c: c, perWorker: cfg.PerWorker, upstream: upstream, client: newClient(), body: body,
-	}, nil
+	}
 }
 
 func (s *concurrencySuite) runArm(arm string) ([]int64, time.Duration, RuntimeDelta, error) {
@@ -614,10 +621,10 @@ func (s *sessionSuite) repeat(r int) error {
 	if err != nil {
 		return err
 	}
-	if err := recordStream(&s.collector, r, pairs); err != nil {
-		return err
-	}
-	return px.Close()
+	// recordStream can only fail on arms of unequal length, which pairedRun
+	// never returns, so its error is joined with the close rather than given
+	// a branch no test could enter.
+	return errors.Join(recordStream(&s.collector, r, pairs), px.Close())
 }
 
 func (s *sessionSuite) close() error { s.client.CloseIdleConnections(); return nil }
@@ -697,8 +704,14 @@ type maskComponentSuite struct {
 	collector
 	size SizeSpec
 	body []byte
-	mask *masking.Masker
+	mask masker
 	dir  string
+}
+
+// masker is the one method of *masking.Masker the component suite calls, so a
+// test can hand it a masker that fails.
+type masker interface {
+	Mask(body []byte) ([]byte, masking.Report, error)
 }
 
 func newMaskComponentSuite(size SizeSpec) (suite, error) {
@@ -706,7 +719,7 @@ func newMaskComponentSuite(size SizeSpec) (suite, error) {
 	if err != nil {
 		return nil, err
 	}
-	vault, err := masking.OpenVault(dir)
+	vault, err := openVault(dir)
 	if err != nil {
 		return nil, errors.Join(err, os.RemoveAll(dir))
 	}
@@ -735,7 +748,7 @@ func (s *maskComponentSuite) repeat(int) error {
 	return nil
 }
 
-func (s *maskComponentSuite) close() error { return os.RemoveAll(s.dir) }
+func (s *maskComponentSuite) close() error { return removeAll(s.dir) }
 
 type ledgerComponentSuite struct {
 	collector
@@ -750,7 +763,7 @@ func newLedgerComponentSuite(cfg Config) (suite, error) {
 	if err != nil {
 		return nil, err
 	}
-	store, err := ledger.Open(filepath.Join(dir, "ledger"))
+	store, err := openLedger(filepath.Join(dir, "ledger"))
 	if err != nil {
 		return nil, errors.Join(err, os.RemoveAll(dir))
 	}
@@ -786,4 +799,4 @@ func (s *ledgerComponentSuite) repeat(int) error {
 	return nil
 }
 
-func (s *ledgerComponentSuite) close() error { return os.RemoveAll(s.dir) }
+func (s *ledgerComponentSuite) close() error { return removeAll(s.dir) }

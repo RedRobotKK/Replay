@@ -109,9 +109,9 @@ func SpreadOf(xs []float64) Spread {
 		median = (s[n/2-1] + s[n/2]) / 2
 	}
 	out := Spread{N: n, Median: median, Min: s[0], Max: s[n-1], CV: math.NaN()}
-	if n < 2 {
-		return out
-	}
+	// One value needs no branch of its own: its deviation is 0 and n-1 is 0,
+	// so the variance below is 0/0, which is NaN, the "undefined" a CV of one
+	// value is. TestSpreadMedianAndCoefficientOfVariation pins it.
 	var sum float64
 	for _, x := range s {
 		sum += x

@@ -31,6 +31,13 @@ const resultFilePerm = 0o644
 // maxResultSuffix bounds the search for a free file name within one second.
 const maxResultSuffix = 1000
 
+// createExclusive creates a result file that must not already exist. It is a
+// variable so a test can hand WriteResult a file whose write or close fails,
+// which a real file on a working disk does not do on demand.
+var createExclusive = func(path string) (io.WriteCloser, error) {
+	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, resultFilePerm)
+}
+
 // Run is one arm of one scenario in one repeat. SamplesNS holds every raw
 // per-request duration so any statistic can be recomputed later.
 type Run struct {
@@ -96,7 +103,7 @@ func WriteResult(dir string, now time.Time, r Result) (string, error) {
 			name += fmt.Sprintf("-%d", i)
 		}
 		jsonPath := filepath.Join(dir, name+".json")
-		f, err := os.OpenFile(jsonPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, resultFilePerm)
+		f, err := createExclusive(jsonPath)
 		if errors.Is(err, fs.ErrExist) {
 			continue
 		}

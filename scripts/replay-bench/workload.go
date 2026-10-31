@@ -149,6 +149,15 @@ func newClient() *http.Client {
 	}
 }
 
+// The constructors the harness builds a proxy from, as variables so a test
+// can make each one fail. On a working machine none of them fails on demand,
+// and an error path nothing can enter is an error path nobody has read.
+var (
+	openLedger     = ledger.Open
+	openVault      = masking.OpenVault
+	newProxyServer = proxy.New
+)
+
 // proxyInstance is one real proxy.Server on a loopback port with its own
 // ledger directory, configured as `replay serve` would be.
 type proxyInstance struct {
@@ -182,7 +191,7 @@ func startProxy(upstream string, mask bool) (*proxyInstance, error) {
 	if err != nil {
 		return nil, err
 	}
-	store, err := ledger.Open(filepath.Join(dir, "ledger"))
+	store, err := openLedger(filepath.Join(dir, "ledger"))
 	if err != nil {
 		return nil, errors.Join(err, os.RemoveAll(dir))
 	}
@@ -193,14 +202,14 @@ func startProxy(upstream string, mask bool) (*proxyInstance, error) {
 		Logger:   log.New(io.Discard, "", 0),
 	}
 	if mask {
-		vault, verr := masking.OpenVault(filepath.Join(dir, "vault"))
+		vault, verr := openVault(filepath.Join(dir, "vault"))
 		if verr != nil {
 			return nil, errors.Join(verr, os.RemoveAll(dir))
 		}
 		cfg.Masker = masking.New(vault, nil)
 	}
 	start := time.Now()
-	srv, err := proxy.New(cfg)
+	srv, err := newProxyServer(cfg)
 	if err != nil {
 		return nil, errors.Join(err, os.RemoveAll(dir))
 	}

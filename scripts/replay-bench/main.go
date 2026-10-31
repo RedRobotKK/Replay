@@ -25,6 +25,10 @@ const (
 
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
+// execute is Execute, a variable so the command's own handling of flags,
+// failures and output can be tested without running the measurement.
+var execute = Execute
+
 func run(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("replay-bench", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -49,7 +53,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		cfg.Repeats = *repeats
 	}
 	cfg.NoisyLabel = *noisy
-	res, err := Execute(cfg, *gitSHA, recordedArgs(args, *sidecar))
+	res, err := execute(cfg, *gitSHA, recordedArgs(args, *sidecar))
 	if err != nil {
 		say(stderr, "replay-bench: %v\n", err)
 		return exitError

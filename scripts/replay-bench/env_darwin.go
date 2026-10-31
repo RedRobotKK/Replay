@@ -2,30 +2,19 @@ package main
 
 import "syscall"
 
-func cpuModel() string {
-	if s, err := syscall.Sysctl("machdep.cpu.brand_string"); err == nil && s != "" {
-		return s
-	}
-	return "unknown (sysctl machdep.cpu.brand_string unreadable)"
-}
+// darwinRUsageUnit is the unit of Darwin ru_maxrss: bytes.
+const darwinRUsageUnit = 1
 
-func loadAverage() LoadAvg {
-	s, err := syscall.Sysctl("vm.loadavg")
-	if err != nil {
-		return LoadAvg{}
-	}
-	l, err := parseDarwinLoadavg([]byte(s))
-	if err != nil {
-		return LoadAvg{}
-	}
-	return l
-}
+// As in env_linux.go, the branches live in env.go's helpers, so they are
+// built and tested on every platform rather than only on this one.
 
-// maxRSS is the peak resident set. Darwin's ru_maxrss is in bytes.
+func cpuModel() string { return cpuModelFromSysctl(syscall.Sysctl("machdep.cpu.brand_string")) }
+
+func loadAverage() LoadAvg { return loadFromSysctl(syscall.Sysctl("vm.loadavg")) }
+
+// maxRSS is the peak resident set.
 func maxRSS() int64 {
 	var ru syscall.Rusage
-	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &ru); err != nil {
-		return -1
-	}
-	return ru.Maxrss
+	err := syscall.Getrusage(syscall.RUSAGE_SELF, &ru)
+	return rssBytes(ru.Maxrss, err, darwinRUsageUnit)
 }

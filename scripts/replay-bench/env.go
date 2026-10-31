@@ -77,8 +77,13 @@ func CaptureEnvironment(now func() time.Time, gitSHA string, args []string) Envi
 	}
 }
 
+// readBuildInfo is debug.ReadBuildInfo, a variable so a test can hand
+// buildRevision a binary that was, or was not, stamped with VCS information:
+// `go test` never stamps it, so the real one cannot reach either branch.
+var readBuildInfo = debug.ReadBuildInfo
+
 func buildRevision() string {
-	if bi, ok := debug.ReadBuildInfo(); ok {
+	if bi, ok := readBuildInfo(); ok {
 		for _, s := range bi.Settings {
 			if s.Key == "vcs.revision" {
 				return s.Value
@@ -134,6 +139,64 @@ func parseDarwinLoadavg(b []byte) (LoadAvg, error) {
 	}
 	f := float64(scale)
 	return LoadAvg{One: float64(u32(0)) / f, Five: float64(u32(4)) / f, Fifteen: float64(u32(8)) / f, OK: true}, nil
+}
+
+// cpuModelFromProc reads the model name out of /proc/cpuinfo as os.ReadFile
+// returned it.
+func cpuModelFromProc(b []byte, err error) string {
+	if err == nil {
+		for _, line := range strings.Split(string(b), "\n") {
+			k, v, ok := strings.Cut(line, ":")
+			if ok && strings.TrimSpace(k) == "model name" {
+				return strings.TrimSpace(v)
+			}
+		}
+	}
+	return "unknown (/proc/cpuinfo has no model name)"
+}
+
+// loadFromProc decodes /proc/loadavg as os.ReadFile returned it. A read that
+// failed is unreadable even if it returned bytes: os.ReadFile hands back what
+// it read before the error.
+//
+// The parse error needs no branch of its own. Every error return of
+// parseProcLoadavg is the zero LoadAvg, OK false, which is exactly how this
+// reports "unreadable"; TestParseProcLoadavg pins that, so the error is
+// dropped here for that reason and no other.
+func loadFromProc(b []byte, err error) LoadAvg {
+	if err != nil {
+		return LoadAvg{}
+	}
+	l, _ := parseProcLoadavg(string(b)) // zero LoadAvg (OK false) on error; see above
+	return l
+}
+
+// cpuModelFromSysctl is Darwin's machdep.cpu.brand_string, or says it is
+// unknown.
+func cpuModelFromSysctl(s string, err error) string {
+	if err == nil && s != "" {
+		return s
+	}
+	return "unknown (sysctl machdep.cpu.brand_string unreadable)"
+}
+
+// loadFromSysctl decodes Darwin's vm.loadavg as syscall.Sysctl returned it.
+// As in loadFromProc, a parse error is already the zero LoadAvg.
+func loadFromSysctl(s string, err error) LoadAvg {
+	if err != nil {
+		return LoadAvg{}
+	}
+	l, _ := parseDarwinLoadavg([]byte(s)) // zero LoadAvg (OK false) on error; TestParseDarwinLoadavg pins it
+	return l
+}
+
+// rssBytes converts ru_maxrss to bytes, or -1 when getrusage failed: a peak
+// that could not be read is not a peak of zero.
+func rssBytes(maxrss int64, err error, unit int64) int64 {
+	if err != nil {
+		return -1
+	}
+	return maxrss * unit
 }
 
 // readSidecar reads the shell wrapper's environment notes and replaces the
