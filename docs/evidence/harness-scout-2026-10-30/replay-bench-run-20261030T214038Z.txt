@@ -1,0 +1,512 @@
+command: go build -o replay-bench ./scripts/replay-bench && replay-bench -out docs/evidence/harness-scout-2026-10-30 -git-sha f98f27a7f9f97a1548a946b6ef03a756336f8081 -sidecar <before> -noisy-label noisy — concurrent workloads present (another agent running Go race tests on this machine)
+exit status: 0
+go: go version go1.27.3 darwin/arm64
+
+== before 2026-10-30T21:40:40Z
+uptime: 14:40  up 1 day, 18:11, 4 users, load averages: 6.62 9.57 7.57
+sum of %CPU over all processes (100% = one core): 191.9%
+top 10 by %CPU:
+ 117.1%  mediaanalysisd
+  20.2%  codex
+   8.0%  Terminal
+   7.6%  Music
+   7.5%  coreaudiod
+   7.1%  claude
+   6.0%  WindowServer
+   3.1%  ChatGPT
+   3.1%  Codex (Renderer)
+   1.8%  Brave Browser Helper (Renderer)
+
+== after 2026-10-30T22:01:45Z
+uptime: 15:01  up 1 day, 18:33, 4 users, load averages: 1.81 2.30 3.55
+sum of %CPU over all processes (100% = one core): 48.4%
+top 10 by %CPU:
+  10.6%  coreaudiod
+   7.0%  Music
+   6.7%  syspolicyd
+   4.4%  locationd
+   3.8%  Terminal
+   3.3%  trustd
+   1.7%  Brave Browser Helper (Renderer)
+   1.5%  Brave Browser Helper (Renderer)
+   1.0%  grok
+   0.9%  Codex (Service)
+
+== stdout
+result: docs/evidence/harness-scout-2026-10-30/replay-bench-20261030T220145Z.json
+
+# replay-bench summary
+
+**NOISY: noisy — concurrent workloads present (another agent running Go race tests on this machine); 9 of 10 repeats started with 1-minute load above 0.25 per CPU.** Do not quote these figures as a clean measurement.
+
+2026-10-30T21:40:40Z, go1.27.3 darwin/arm64, Apple M1 Pro, 10 CPUs, GOMAXPROCS 10, git f98f27a7f9f97a1548a946b6ef03a756336f8081
+
+## coldstart/45KB
+
+Each repeat: a fresh client transport and, for the proxied arm, a freshly started proxy. first = the first request (new TCP connections on every hop); first_n = the first first_n; steady = after warm unrecorded requests. Repeat 0 also includes this process's first request through the proxy code.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| direct_cold_minus_steady_us | 10 | 333 | 230 | 876 | 0.537 |
+| direct_first_n_p50_us | 10 | 139 | 120 | 215 | 0.238 |
+| direct_first_us | 10 | 459 | 344 | 1000 | 0.437 |
+| direct_steady_p50_us | 10 | 119 | 110 | 156 | 0.139 |
+| proxied_cold_minus_steady_us | 10 | 384 | 146 | 4520 | 1.698 |
+| proxied_first_n_p50_us | 10 | 854 | 746 | 1438 | 0.218 |
+| proxied_first_us | 10 | 1238 | 1027 | 5379 | 0.784 |
+| proxied_startup_us | 10 | 104 | 62.08 | 133 | 0.246 |
+| proxied_steady_p50_us | 10 | 866 | 850 | 1198 | 0.118 |
+
+## latency/45KB/mask-off
+
+Non-streaming JSON, no session header, so no per-session bookkeeping (see the session suite). Instant mock upstream.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| direct_allocs_per_op | 10 | 109 | 100 | 155 | 0.162 |
+| direct_bytes_per_op | 10 | 76995 | 74472 | 101778 | 0.104 |
+| direct_gc_cycles | 10 | 0.00 | 0.00 | 1.00 | 3.162 |
+| direct_gc_pause_est_us | 10 | 0.00 | 0.00 | 30.72 | 3.162 |
+| direct_p50_us | 10 | 146 | 122 | 162 | 0.088 |
+| overhead_allocs_per_op | 10 | 2495 | 1111 | 3853 | 0.372 |
+| overhead_bytes_per_op | 10 | 1007630 | 474447 | 1506581 | 0.373 |
+| overhead_p50_diff_us | 10 | 8757 | 1109 | 15964 | 0.593 |
+| overhead_p99_diff_us | 10 | 10158 | 1978 | 19226 | 0.581 |
+| overhead_paired_p50_us | 10 | 8758 | 1109 | 15979 | 0.594 |
+| overhead_paired_p95_us | 10 | 9846 | 1603 | 16725 | 0.566 |
+| overhead_paired_p99_us | 10 | 10257 | 2022 | 19362 | 0.578 |
+| proxied_allocs_per_op | 10 | 2602 | 1216 | 3989 | 0.358 |
+| proxied_bytes_per_op | 10 | 1086124 | 548918 | 1592076 | 0.347 |
+| proxied_gc_cycles | 10 | 1.00 | 0.00 | 1.00 | 0.351 |
+| proxied_gc_pause_est_us | 10 | 74.75 | 53.25 | 201 | 0.497 |
+| proxied_p50_us | 10 | 8907 | 1236 | 16117 | 0.585 |
+| proxied_p99_us | 10 | 10424 | 2188 | 19493 | 0.572 |
+
+## latency/45KB/mask-on
+
+Non-streaming JSON, no session header, so no per-session bookkeeping (see the session suite). Instant mock upstream.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| direct_allocs_per_op | 10 | 119 | 98.14 | 197 | 0.216 |
+| direct_bytes_per_op | 10 | 77218 | 74319 | 108418 | 0.125 |
+| direct_gc_cycles | 10 | 0.00 | 0.00 | 1.00 | 3.162 |
+| direct_gc_pause_est_us | 10 | 0.00 | 0.00 | 88.06 | 3.162 |
+| direct_p50_us | 10 | 154 | 132 | 160 | 0.053 |
+| overhead_allocs_per_op | 10 | 3757 | 2393 | 5254 | 0.250 |
+| overhead_bytes_per_op | 10 | 1150527 | 633730 | 1698276 | 0.325 |
+| overhead_p50_diff_us | 10 | 20712 | 13282 | 28356 | 0.244 |
+| overhead_p99_diff_us | 10 | 22929 | 15529 | 32448 | 0.237 |
+| overhead_paired_p50_us | 10 | 20720 | 13279 | 28352 | 0.243 |
+| overhead_paired_p95_us | 10 | 21680 | 13838 | 31848 | 0.259 |
+| overhead_paired_p99_us | 10 | 22990 | 15641 | 32486 | 0.236 |
+| proxied_allocs_per_op | 10 | 3915 | 2496 | 5372 | 0.244 |
+| proxied_bytes_per_op | 10 | 1242822 | 708050 | 1782527 | 0.307 |
+| proxied_gc_cycles | 10 | 1.00 | 1.00 | 2.00 | 0.351 |
+| proxied_gc_pause_est_us | 10 | 70.14 | 56.32 | 128 | 0.316 |
+| proxied_p50_us | 10 | 20867 | 13414 | 28516 | 0.242 |
+| proxied_p99_us | 10 | 23163 | 15780 | 32688 | 0.234 |
+
+## latency/1MB/mask-off
+
+Non-streaming JSON, no session header, so no per-session bookkeeping (see the session suite). Instant mock upstream.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| direct_allocs_per_op | 10 | 236 | 115 | 369 | 0.293 |
+| direct_bytes_per_op | 10 | 132541 | 111881 | 147711 | 0.087 |
+| direct_gc_cycles | 10 | 0.00 | 0.00 | 0.00 | undefined |
+| direct_gc_pause_est_us | 10 | 0.00 | 0.00 | 0.00 | undefined |
+| direct_p50_us | 10 | 883 | 621 | 898 | 0.111 |
+| overhead_allocs_per_op | 10 | 13723 | 13413 | 13860 | 0.009 |
+| overhead_bytes_per_op | 10 | 7808502 | 7725416 | 7896774 | 0.008 |
+| overhead_p50_diff_us | 10 | 41861 | 11415 | 71269 | 0.492 |
+| overhead_p99_diff_us | 10 | 45465 | 13807 | 78300 | 0.488 |
+| overhead_paired_p50_us | 10 | 41947 | 11444 | 71243 | 0.492 |
+| overhead_paired_p95_us | 10 | 44522 | 13578 | 74566 | 0.468 |
+| overhead_paired_p99_us | 10 | 45572 | 13960 | 78416 | 0.481 |
+| proxied_allocs_per_op | 10 | 13983 | 13652 | 14089 | 0.010 |
+| proxied_bytes_per_op | 10 | 7944696 | 7848122 | 8029382 | 0.008 |
+| proxied_gc_cycles | 10 | 1.00 | 1.00 | 2.00 | 0.369 |
+| proxied_gc_pause_est_us | 10 | 86.02 | 56.32 | 179 | 0.428 |
+| proxied_p50_us | 10 | 42748 | 12036 | 72158 | 0.484 |
+| proxied_p99_us | 10 | 46774 | 14641 | 79340 | 0.473 |
+
+## latency/1MB/mask-on
+
+Non-streaming JSON, no session header, so no per-session bookkeeping (see the session suite). Instant mock upstream.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| direct_allocs_per_op | 10 | 285 | 103 | 351 | 0.294 |
+| direct_bytes_per_op | 10 | 137788 | 110103 | 167031 | 0.128 |
+| direct_gc_cycles | 10 | 0.00 | 0.00 | 0.00 | undefined |
+| direct_gc_pause_est_us | 10 | 0.00 | 0.00 | 0.00 | undefined |
+| direct_p50_us | 10 | 943 | 674 | 984 | 0.111 |
+| overhead_allocs_per_op | 10 | 38171 | 37854 | 38726 | 0.007 |
+| overhead_bytes_per_op | 10 | 11008317 | 10807317 | 11279871 | 0.013 |
+| overhead_p50_diff_us | 10 | 328187 | 299036 | 358594 | 0.062 |
+| overhead_p99_diff_us | 10 | 334704 | 308593 | 366671 | 0.061 |
+| overhead_paired_p50_us | 10 | 328239 | 299024 | 358482 | 0.062 |
+| overhead_paired_p95_us | 10 | 331844 | 301645 | 363708 | 0.062 |
+| overhead_paired_p99_us | 10 | 335003 | 308911 | 367354 | 0.061 |
+| proxied_allocs_per_op | 10 | 38484 | 38058 | 39019 | 0.007 |
+| proxied_bytes_per_op | 10 | 11152194 | 10940784 | 11426892 | 0.013 |
+| proxied_gc_cycles | 10 | 1.50 | 1.00 | 2.00 | 0.351 |
+| proxied_gc_pause_est_us | 10 | 115 | 63.49 | 184 | 0.408 |
+| proxied_p50_us | 10 | 329128 | 299807 | 359578 | 0.062 |
+| proxied_p99_us | 10 | 335924 | 310238 | 368020 | 0.060 |
+
+## latency/16MB/mask-off
+
+Non-streaming JSON, no session header, so no per-session bookkeeping (see the session suite). Instant mock upstream.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| direct_allocs_per_op | 10 | 19408 | 12938 | 19982 | 0.145 |
+| direct_bytes_per_op | 10 | 4673936 | 1200467 | 8417885 | 0.377 |
+| direct_gc_cycles | 10 | 0.00 | 0.00 | 1.00 | 3.162 |
+| direct_gc_pause_est_us | 10 | 0.00 | 0.00 | 111 | 1.849 |
+| direct_p50_us | 10 | 8587 | 8093 | 8955 | 0.037 |
+| overhead_allocs_per_op | 10 | 188282 | 177916 | 197270 | 0.039 |
+| overhead_bytes_per_op | 10 | 125861475 | 117482920 | 129357472 | 0.028 |
+| overhead_p50_diff_us | 10 | 249460 | 167152 | 341394 | 0.245 |
+| overhead_p99_diff_us | 10 | 261212 | 175776 | 425842 | 0.285 |
+| overhead_paired_p50_us | 10 | 249178 | 166306 | 342365 | 0.249 |
+| overhead_paired_p95_us | 10 | 261769 | 177078 | 425842 | 0.282 |
+| overhead_paired_p99_us | 10 | 261769 | 177078 | 425842 | 0.282 |
+| proxied_allocs_per_op | 10 | 204806 | 197154 | 216661 | 0.044 |
+| proxied_bytes_per_op | 10 | 130270533 | 124157101 | 133861917 | 0.023 |
+| proxied_gc_cycles | 10 | 3.00 | 2.00 | 4.00 | 0.272 |
+| proxied_gc_pause_est_us | 10 | 232 | 107 | 298 | 0.268 |
+| proxied_p50_us | 10 | 258172 | 175770 | 350341 | 0.238 |
+| proxied_p99_us | 10 | 270552 | 185240 | 435123 | 0.275 |
+
+## latency/16MB/mask-on
+
+Non-streaming JSON, no session header, so no per-session bookkeeping (see the session suite). Instant mock upstream.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| direct_allocs_per_op | 10 | 18818 | 15084 | 19583 | 0.087 |
+| direct_bytes_per_op | 10 | 4492905 | 1147712 | 8794256 | 0.603 |
+| direct_gc_cycles | 10 | 0.00 | 0.00 | 0.00 | undefined |
+| direct_gc_pause_est_us | 10 | 0.00 | 0.00 | 0.00 | undefined |
+| direct_p50_us | 10 | 8639 | 7197 | 8902 | 0.059 |
+| overhead_allocs_per_op | 10 | 574568 | 567812 | 586677 | 0.013 |
+| overhead_bytes_per_op | 10 | 180213655 | 170270608 | 182640368 | 0.022 |
+| overhead_p50_diff_us | 10 | 4843866 | 4741776 | 4914420 | 0.012 |
+| overhead_p99_diff_us | 10 | 4874149 | 4762762 | 4928702 | 0.012 |
+| overhead_paired_p50_us | 10 | 4843703 | 4741720 | 4913433 | 0.012 |
+| overhead_paired_p95_us | 10 | 4874267 | 4763294 | 4929906 | 0.012 |
+| overhead_paired_p99_us | 10 | 4874267 | 4763294 | 4929906 | 0.012 |
+| proxied_allocs_per_op | 10 | 591986 | 586097 | 606028 | 0.015 |
+| proxied_bytes_per_op | 10 | 184286563 | 177690952 | 185146747 | 0.015 |
+| proxied_gc_cycles | 10 | 4.00 | 3.00 | 7.00 | 0.240 |
+| proxied_gc_pause_est_us | 10 | 329 | 259 | 506 | 0.209 |
+| proxied_p50_us | 10 | 4852764 | 4750329 | 4921617 | 0.012 |
+| proxied_p99_us | 10 | 4883880 | 4771645 | 4937103 | 0.012 |
+
+## sse/45KB/events-300
+
+Streaming. ttfb = first body byte; tail = read completing message_stop to EOF. No session header.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| direct_tail_p50_us | 10 | 1.56 | 0.46 | 7.96 | 0.984 |
+| direct_total_p50_us | 10 | 2272 | 1150 | 2349 | 0.232 |
+| direct_ttfb_p50_us | 10 | 156 | 71.33 | 190 | 0.310 |
+| overhead_tail_p50_diff_us | 10 | 2027 | 414 | 4418 | 0.578 |
+| overhead_tail_p99_diff_us | 10 | 4005 | 967 | 5873 | 0.519 |
+| overhead_tail_paired_p50_us | 10 | 2021 | 412 | 4402 | 0.577 |
+| overhead_tail_paired_p95_us | 10 | 2805 | 851 | 5145 | 0.496 |
+| overhead_tail_paired_p99_us | 10 | 4032 | 990 | 5884 | 0.517 |
+| overhead_total_p50_diff_us | 10 | 3732 | 1210 | 6222 | 0.481 |
+| overhead_total_p99_diff_us | 10 | 5032 | 1644 | 7218 | 0.443 |
+| overhead_total_paired_p50_us | 10 | 3780 | 1165 | 6217 | 0.468 |
+| overhead_total_paired_p95_us | 10 | 4492 | 2282 | 6727 | 0.362 |
+| overhead_total_paired_p99_us | 10 | 5198 | 2407 | 8162 | 0.366 |
+| overhead_ttfb_p50_diff_us | 10 | 698 | 496 | 748 | 0.152 |
+| overhead_ttfb_p99_diff_us | 10 | 740 | 393 | 1242 | 0.276 |
+| overhead_ttfb_paired_p50_us | 10 | 647 | 494 | 675 | 0.120 |
+| overhead_ttfb_paired_p95_us | 10 | 781 | 699 | 1064 | 0.126 |
+| overhead_ttfb_paired_p99_us | 10 | 863 | 818 | 1441 | 0.202 |
+| proxied_tail_p50_us | 10 | 2027 | 422 | 4419 | 0.576 |
+| proxied_tail_p99_us | 10 | 4033 | 997 | 5900 | 0.515 |
+| proxied_total_p50_us | 10 | 6021 | 2360 | 8493 | 0.378 |
+| proxied_total_p99_us | 10 | 7542 | 4342 | 11111 | 0.313 |
+| proxied_ttfb_p50_us | 10 | 854 | 567 | 918 | 0.179 |
+| proxied_ttfb_p99_us | 10 | 1149 | 1057 | 1696 | 0.159 |
+
+## concurrency/c1
+
+Closed loop: c workers each send per_worker requests back to back. Arms alternate order by repeat (ABBA). rps = requests / wall time.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| direct_allocs_per_op | 10 | 132 | 69.31 | 184 | 0.329 |
+| direct_bytes_per_op | 10 | 79737 | 74551 | 86006 | 0.054 |
+| direct_gc_cycles | 10 | 0.00 | 0.00 | 0.00 | undefined |
+| direct_goroutines_peak | 10 | 100 | 99.00 | 228 | 0.350 |
+| direct_p50_us | 10 | 117 | 111 | 134 | 0.055 |
+| direct_p99_us | 10 | 133 | 126 | 204 | 0.165 |
+| direct_rps | 10 | 8431 | 7144 | 8555 | 0.050 |
+| overhead_p50_diff_us | 10 | 1433 | 810 | 2170 | 0.314 |
+| overhead_p99_diff_us | 10 | 1667 | 865 | 2281 | 0.280 |
+| proxied_allocs_per_op | 10 | 1039 | 797 | 1146 | 0.123 |
+| proxied_bytes_per_op | 10 | 497276 | 448054 | 566779 | 0.078 |
+| proxied_gc_cycles | 10 | 0.00 | 0.00 | 0.00 | undefined |
+| proxied_goroutines_peak | 10 | 100 | 100 | 229 | 0.351 |
+| proxied_p50_us | 10 | 1548 | 929 | 2284 | 0.289 |
+| proxied_p99_us | 10 | 1802 | 991 | 2412 | 0.252 |
+| proxied_rps | 10 | 658 | 434 | 1060 | 0.288 |
+| rps_ratio_proxied_over_direct | 10 | 0.08 | 0.05 | 0.13 | 0.311 |
+
+## concurrency/c8
+
+Closed loop: c workers each send per_worker requests back to back. Arms alternate order by repeat (ABBA). rps = requests / wall time.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| direct_allocs_per_op | 10 | 101 | 79.48 | 113 | 0.125 |
+| direct_bytes_per_op | 10 | 76912 | 74922 | 79821 | 0.026 |
+| direct_gc_cycles | 10 | 0.00 | 0.00 | 0.00 | undefined |
+| direct_goroutines_peak | 10 | 168 | 166 | 298 | 0.222 |
+| direct_p50_us | 10 | 674 | 185 | 788 | 0.275 |
+| direct_p99_us | 10 | 900 | 371 | 1253 | 0.244 |
+| direct_rps | 10 | 11738 | 10429 | 38143 | 0.583 |
+| overhead_p50_diff_us | 10 | 57055 | 7972 | 106503 | 0.572 |
+| overhead_p99_diff_us | 10 | 59953 | 11581 | 113097 | 0.560 |
+| proxied_allocs_per_op | 10 | 2271 | 1166 | 3429 | 0.337 |
+| proxied_bytes_per_op | 10 | 949231 | 526855 | 1522160 | 0.329 |
+| proxied_gc_cycles | 10 | 1.00 | 1.00 | 2.00 | 0.287 |
+| proxied_goroutines_peak | 10 | 162 | 162 | 291 | 0.224 |
+| proxied_p50_us | 10 | 57769 | 8156 | 107223 | 0.567 |
+| proxied_p99_us | 10 | 60900 | 11952 | 113988 | 0.553 |
+| proxied_rps | 10 | 141 | 74.41 | 986 | 1.125 |
+| rps_ratio_proxied_over_direct | 10 | 0.01 | 0.01 | 0.04 | 0.687 |
+
+## concurrency/c32
+
+Closed loop: c workers each send per_worker requests back to back. Arms alternate order by repeat (ABBA). rps = requests / wall time.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| direct_allocs_per_op | 10 | 109 | 99.56 | 120 | 0.072 |
+| direct_bytes_per_op | 10 | 78530 | 74747 | 81669 | 0.032 |
+| direct_gc_cycles | 10 | 0.50 | 0.00 | 1.00 | 1.054 |
+| direct_goroutines_peak | 10 | 411 | 368 | 430 | 0.047 |
+| direct_p50_us | 10 | 1718 | 1665 | 1933 | 0.052 |
+| direct_p99_us | 10 | 3221 | 2714 | 9167 | 0.504 |
+| direct_rps | 10 | 16808 | 13582 | 20490 | 0.124 |
+| overhead_p50_diff_us | 10 | 939514 | 120200 | 1803182 | 0.595 |
+| overhead_p99_diff_us | 10 | 1071396 | 161754 | 1901637 | 0.562 |
+| proxied_allocs_per_op | 10 | 6283 | 1669 | 10904 | 0.494 |
+| proxied_bytes_per_op | 10 | 2891926 | 706674 | 5307372 | 0.532 |
+| proxied_gc_cycles | 10 | 12.00 | 5.00 | 17.00 | 0.352 |
+| proxied_goroutines_peak | 10 | 390 | 368 | 410 | 0.032 |
+| proxied_p50_us | 10 | 941350 | 121885 | 1804963 | 0.594 |
+| proxied_p99_us | 10 | 1075879 | 164941 | 1904603 | 0.560 |
+| proxied_rps | 10 | 33.92 | 17.72 | 260 | 1.173 |
+| rps_ratio_proxied_over_direct | 10 | 0.00 | 0.00 | 0.01 | 1.032 |
+
+## session/n10
+
+A fresh proxy per repeat; n-1 JSON turns build one session (x-claude-code-session-id), then SSE pairs are measured at length n..n+pairs-1. tail = message_stop read to EOF; the proxy's ledger append and rescore run before the stream's final chunk.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| build_mean_request_us | 10 | 838 | 794 | 1091 | 0.107 |
+| direct_tail_p50_us | 10 | 5.38 | 0.29 | 12.46 | 0.889 |
+| direct_total_p50_us | 10 | 2304 | 996 | 2405 | 0.280 |
+| direct_ttfb_p50_us | 10 | 252 | 73.75 | 327 | 0.407 |
+| overhead_tail_p50_diff_us | 10 | 174 | 65.46 | 354 | 0.626 |
+| overhead_tail_p99_diff_us | 10 | 287 | 64.79 | 902 | 0.883 |
+| overhead_tail_paired_p50_us | 10 | 174 | 65.46 | 338 | 0.608 |
+| overhead_tail_paired_p95_us | 10 | 298 | 84.96 | 908 | 0.827 |
+| overhead_tail_paired_p99_us | 10 | 298 | 84.96 | 908 | 0.827 |
+| overhead_total_p50_diff_us | 10 | 1311 | 638 | 2284 | 0.430 |
+| overhead_total_p99_diff_us | 10 | 1706 | 61.50 | 2690 | 0.661 |
+| overhead_total_paired_p50_us | 10 | 1641 | 455 | 2284 | 0.404 |
+| overhead_total_paired_p95_us | 10 | 1954 | 896 | 3560 | 0.385 |
+| overhead_total_paired_p99_us | 10 | 1954 | 896 | 3560 | 0.385 |
+| overhead_ttfb_p50_diff_us | 10 | 629 | 405 | 993 | 0.265 |
+| overhead_ttfb_p99_diff_us | 10 | 873 | 319 | 1408 | 0.483 |
+| overhead_ttfb_paired_p50_us | 10 | 630 | 459 | 1117 | 0.292 |
+| overhead_ttfb_paired_p95_us | 10 | 873 | 510 | 1408 | 0.397 |
+| overhead_ttfb_paired_p99_us | 10 | 873 | 510 | 1408 | 0.397 |
+| proxied_tail_p50_us | 10 | 182 | 66.04 | 354 | 0.620 |
+| proxied_tail_p99_us | 10 | 310 | 89.04 | 912 | 0.815 |
+| proxied_total_p50_us | 10 | 3607 | 1861 | 4547 | 0.307 |
+| proxied_total_p99_us | 10 | 4681 | 2498 | 6142 | 0.304 |
+| proxied_ttfb_p50_us | 10 | 893 | 559 | 1294 | 0.284 |
+| proxied_ttfb_p99_us | 10 | 1317 | 596 | 1765 | 0.379 |
+
+## session/n100
+
+A fresh proxy per repeat; n-1 JSON turns build one session (x-claude-code-session-id), then SSE pairs are measured at length n..n+pairs-1. tail = message_stop read to EOF; the proxy's ledger append and rescore run before the stream's final chunk.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| build_mean_request_us | 10 | 1020 | 975 | 1259 | 0.086 |
+| direct_tail_p50_us | 10 | 1.04 | 0.42 | 19.17 | 1.622 |
+| direct_total_p50_us | 10 | 2371 | 2315 | 2421 | 0.014 |
+| direct_ttfb_p50_us | 10 | 326 | 306 | 354 | 0.049 |
+| overhead_tail_p50_diff_us | 10 | 220 | 185 | 244 | 0.071 |
+| overhead_tail_p99_diff_us | 10 | 218 | 180 | 273 | 0.132 |
+| overhead_tail_paired_p50_us | 10 | 213 | 183 | 220 | 0.056 |
+| overhead_tail_paired_p95_us | 10 | 242 | 206 | 310 | 0.120 |
+| overhead_tail_paired_p99_us | 10 | 242 | 206 | 310 | 0.120 |
+| overhead_total_p50_diff_us | 10 | 1959 | 1804 | 2264 | 0.065 |
+| overhead_total_p99_diff_us | 10 | 1985 | 1252 | 2302 | 0.173 |
+| overhead_total_paired_p50_us | 10 | 2013 | 1797 | 2202 | 0.068 |
+| overhead_total_paired_p95_us | 10 | 2278 | 1910 | 2401 | 0.065 |
+| overhead_total_paired_p99_us | 10 | 2278 | 1910 | 2401 | 0.065 |
+| overhead_ttfb_p50_diff_us | 10 | 667 | 607 | 741 | 0.055 |
+| overhead_ttfb_p99_diff_us | 10 | 702 | 630 | 1231 | 0.281 |
+| overhead_ttfb_paired_p50_us | 10 | 662 | 649 | 743 | 0.053 |
+| overhead_ttfb_paired_p95_us | 10 | 764 | 679 | 1231 | 0.244 |
+| overhead_ttfb_paired_p99_us | 10 | 764 | 679 | 1231 | 0.244 |
+| proxied_tail_p50_us | 10 | 224 | 186 | 246 | 0.077 |
+| proxied_tail_p99_us | 10 | 243 | 210 | 311 | 0.128 |
+| proxied_total_p50_us | 10 | 4334 | 4136 | 4626 | 0.030 |
+| proxied_total_p99_us | 10 | 4688 | 4188 | 5777 | 0.111 |
+| proxied_ttfb_p50_us | 10 | 987 | 945 | 1084 | 0.041 |
+| proxied_ttfb_p99_us | 10 | 1105 | 1011 | 1609 | 0.195 |
+
+## session/n250
+
+A fresh proxy per repeat; n-1 JSON turns build one session (x-claude-code-session-id), then SSE pairs are measured at length n..n+pairs-1. tail = message_stop read to EOF; the proxy's ledger append and rescore run before the stream's final chunk.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| build_mean_request_us | 10 | 1430 | 1359 | 1600 | 0.042 |
+| direct_tail_p50_us | 10 | 5.40 | 0.88 | 26.00 | 1.160 |
+| direct_total_p50_us | 10 | 2384 | 2288 | 2542 | 0.029 |
+| direct_ttfb_p50_us | 10 | 345 | 318 | 386 | 0.064 |
+| overhead_tail_p50_diff_us | 10 | 657 | 575 | 944 | 0.156 |
+| overhead_tail_p99_diff_us | 10 | 1143 | 621 | 1428 | 0.254 |
+| overhead_tail_paired_p50_us | 10 | 658 | 568 | 944 | 0.159 |
+| overhead_tail_paired_p95_us | 10 | 1163 | 638 | 1448 | 0.253 |
+| overhead_tail_paired_p99_us | 10 | 1163 | 638 | 1448 | 0.253 |
+| overhead_total_p50_diff_us | 10 | 2531 | 2198 | 3226 | 0.115 |
+| overhead_total_p99_diff_us | 10 | 2405 | 2012 | 3688 | 0.190 |
+| overhead_total_paired_p50_us | 10 | 2489 | 2319 | 2727 | 0.055 |
+| overhead_total_paired_p95_us | 10 | 3056 | 2509 | 3688 | 0.130 |
+| overhead_total_paired_p99_us | 10 | 3056 | 2509 | 3688 | 0.130 |
+| overhead_ttfb_p50_diff_us | 10 | 660 | 594 | 718 | 0.055 |
+| overhead_ttfb_p99_diff_us | 10 | 989 | 637 | 1198 | 0.211 |
+| overhead_ttfb_paired_p50_us | 10 | 676 | 625 | 718 | 0.049 |
+| overhead_ttfb_paired_p95_us | 10 | 989 | 688 | 1198 | 0.194 |
+| overhead_ttfb_paired_p99_us | 10 | 989 | 688 | 1198 | 0.194 |
+| proxied_tail_p50_us | 10 | 662 | 578 | 945 | 0.154 |
+| proxied_tail_p99_us | 10 | 1163 | 639 | 1473 | 0.255 |
+| proxied_total_p50_us | 10 | 5001 | 4566 | 5624 | 0.061 |
+| proxied_total_p99_us | 10 | 5862 | 4902 | 6402 | 0.092 |
+| proxied_ttfb_p50_us | 10 | 1012 | 939 | 1049 | 0.033 |
+| proxied_ttfb_p99_us | 10 | 1499 | 1048 | 1683 | 0.165 |
+
+## session/n500
+
+A fresh proxy per repeat; n-1 JSON turns build one session (x-claude-code-session-id), then SSE pairs are measured at length n..n+pairs-1. tail = message_stop read to EOF; the proxy's ledger append and rescore run before the stream's final chunk.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| build_mean_request_us | 10 | 2102 | 2020 | 2388 | 0.047 |
+| direct_tail_p50_us | 10 | 1.00 | 0.50 | 24.08 | 1.631 |
+| direct_total_p50_us | 10 | 2356 | 2314 | 2436 | 0.018 |
+| direct_ttfb_p50_us | 10 | 331 | 320 | 364 | 0.042 |
+| overhead_tail_p50_diff_us | 10 | 1892 | 1772 | 2269 | 0.085 |
+| overhead_tail_p99_diff_us | 10 | 1991 | 1837 | 2646 | 0.120 |
+| overhead_tail_paired_p50_us | 10 | 1892 | 1766 | 2276 | 0.086 |
+| overhead_tail_paired_p95_us | 10 | 1993 | 1905 | 2670 | 0.118 |
+| overhead_tail_paired_p99_us | 10 | 1993 | 1905 | 2670 | 0.118 |
+| overhead_total_p50_diff_us | 10 | 3732 | 3551 | 4453 | 0.065 |
+| overhead_total_p99_diff_us | 10 | 3742 | 3003 | 4717 | 0.140 |
+| overhead_total_paired_p50_us | 10 | 3723 | 3584 | 4453 | 0.064 |
+| overhead_total_paired_p95_us | 10 | 3924 | 3792 | 4890 | 0.095 |
+| overhead_total_paired_p99_us | 10 | 3924 | 3792 | 4890 | 0.095 |
+| overhead_ttfb_p50_diff_us | 10 | 654 | 622 | 729 | 0.052 |
+| overhead_ttfb_p99_diff_us | 10 | 989 | 802 | 1118 | 0.122 |
+| overhead_ttfb_paired_p50_us | 10 | 676 | 622 | 747 | 0.062 |
+| overhead_ttfb_paired_p95_us | 10 | 989 | 802 | 1118 | 0.122 |
+| overhead_ttfb_paired_p99_us | 10 | 989 | 802 | 1118 | 0.122 |
+| proxied_tail_p50_us | 10 | 1893 | 1773 | 2278 | 0.085 |
+| proxied_tail_p99_us | 10 | 2021 | 1912 | 2672 | 0.117 |
+| proxied_total_p50_us | 10 | 6077 | 5941 | 6802 | 0.040 |
+| proxied_total_p99_us | 10 | 7004 | 6504 | 7906 | 0.057 |
+| proxied_ttfb_p50_us | 10 | 988 | 961 | 1056 | 0.032 |
+| proxied_ttfb_p99_us | 10 | 1438 | 1295 | 1588 | 0.078 |
+
+## session/n1000
+
+A fresh proxy per repeat; n-1 JSON turns build one session (x-claude-code-session-id), then SSE pairs are measured at length n..n+pairs-1. tail = message_stop read to EOF; the proxy's ledger append and rescore run before the stream's final chunk.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| build_mean_request_us | 10 | 3389 | 3357 | 3551 | 0.021 |
+| direct_tail_p50_us | 10 | 0.90 | 0.42 | 13.54 | 1.365 |
+| direct_total_p50_us | 10 | 2340 | 2223 | 2386 | 0.019 |
+| direct_ttfb_p50_us | 10 | 354 | 326 | 373 | 0.051 |
+| overhead_tail_p50_diff_us | 10 | 4509 | 4389 | 5031 | 0.039 |
+| overhead_tail_p99_diff_us | 10 | 4803 | 4428 | 7613 | 0.196 |
+| overhead_tail_paired_p50_us | 10 | 4510 | 4389 | 5021 | 0.038 |
+| overhead_tail_paired_p95_us | 10 | 4807 | 4534 | 7613 | 0.194 |
+| overhead_tail_paired_p99_us | 10 | 4807 | 4534 | 7613 | 0.194 |
+| overhead_total_p50_diff_us | 10 | 6477 | 6112 | 6638 | 0.028 |
+| overhead_total_p99_diff_us | 10 | 7256 | 6824 | 8920 | 0.097 |
+| overhead_total_paired_p50_us | 10 | 6473 | 6115 | 6703 | 0.026 |
+| overhead_total_paired_p95_us | 10 | 7466 | 6824 | 8920 | 0.093 |
+| overhead_total_paired_p99_us | 10 | 7466 | 6824 | 8920 | 0.093 |
+| overhead_ttfb_p50_diff_us | 10 | 629 | 551 | 742 | 0.085 |
+| overhead_ttfb_p99_diff_us | 10 | 2214 | 2077 | 3629 | 0.198 |
+| overhead_ttfb_paired_p50_us | 10 | 649 | 589 | 718 | 0.051 |
+| overhead_ttfb_paired_p95_us | 10 | 2214 | 2077 | 3629 | 0.198 |
+| overhead_ttfb_paired_p99_us | 10 | 2214 | 2077 | 3629 | 0.198 |
+| proxied_tail_p50_us | 10 | 4514 | 4390 | 5031 | 0.038 |
+| proxied_tail_p99_us | 10 | 4825 | 4534 | 7650 | 0.195 |
+| proxied_total_p50_us | 10 | 8812 | 8498 | 8989 | 0.020 |
+| proxied_total_p99_us | 10 | 10710 | 10350 | 12107 | 0.051 |
+| proxied_ttfb_p50_us | 10 | 978 | 912 | 1071 | 0.047 |
+| proxied_ttfb_p99_us | 10 | 2730 | 2585 | 4089 | 0.159 |
+
+## component/mask/45KB
+
+masking.Masker.Mask on the request body, called directly: the scan the proxy runs when masking is on. The body holds no secret, so this is the no-match cost.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| allocs_per_op | 10 | 1312 | 1307 | 1356 | 0.015 |
+| bytes_per_op | 10 | 156920 | 155672 | 170272 | 0.033 |
+| ns_per_op | 10 | 12087387 | 12067338 | 12150707 | 0.002 |
+
+## component/mask/1MB
+
+masking.Masker.Mask on the request body, called directly: the scan the proxy runs when masking is on. The body holds no secret, so this is the no-match cost.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| allocs_per_op | 10 | 24570 | 24500 | 24913 | 0.007 |
+| bytes_per_op | 10 | 3193412 | 3169960 | 3318297 | 0.018 |
+| ns_per_op | 10 | 286629270 | 285821588 | 298190142 | 0.013 |
+
+## component/mask/16MB
+
+masking.Masker.Mask on the request body, called directly: the scan the proxy runs when masking is on. The body holds no secret, so this is the no-match cost.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| allocs_per_op | 10 | 389657 | 388840 | 391701 | 0.003 |
+| bytes_per_op | 10 | 51346701 | 51165288 | 51961088 | 0.006 |
+| ns_per_op | 10 | 4579214583 | 4575718319 | 4598449597 | 0.002 |
+
+## component/ledger-append
+
+ledger.Store.Append of one minimal record, called directly: the local write the handler makes per request that carries a session id. Includes the filesystem.
+
+| metric | n | median | min | max | CV |
+|---|---|---|---|---|---|
+| allocs_per_op | 10 | 9.49 | 7.82 | 10.85 | 0.113 |
+| bytes_per_op | 10 | 1950 | 1906 | 2130 | 0.033 |
+| ns_per_op | 10 | 50335 | 40278 | 57215 | 0.121 |
+

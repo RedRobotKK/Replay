@@ -496,6 +496,13 @@ var allowedImports = map[string]bool{
 	// is a real constraint check and not a substring match.
 	"go/build/constraint": true,
 
+	// runtime/metrics: scripts/replay-bench reads the runtime's own
+	// allocation, GC-cycle, GC-pause and goroutine counters around each batch
+	// of measured requests (ADR-0029). It is read-only introspection of this
+	// process, with no I/O and no crypto, and the harness is not part of the
+	// binary.
+	"runtime/metrics": true,
+
 	// Raster images, for the social card `replay cost --share --png` writes.
 	// internal/card decodes embedded glyph atlases and composes pixels into a
 	// PNG. embed reads files compiled into the binary at build time; the other
