@@ -136,11 +136,12 @@ type SpendGuard struct {
 	// concurrent saves cannot rename an older snapshot over a newer one, nor
 	// share the one temporary file name. Never held while waiting for mu's
 	// holder to need it: SaveState takes saveMu, then mu, and nothing takes
-	// them in the other order. Defensive: TestDC2 does not kill its removal
-	// (300 runs measured), because the fixed temporary name happens to mask
-	// the stale-rename interleaving; the one it does not mask, two writers
-	// truncating and writing the same temporary file at once, leaves a file
-	// LoadState discards and is too narrow to hit on demand.
+	// them in the other order. TestDC2 does not kill its removal (300 runs
+	// measured); TestDC3 does, by parking one save between snapshot and write
+	// (saveStateAfterSnapshot) while a later save renames first, so the
+	// older snapshot would land last. Still unproven by any test: two writers
+	// truncating and writing the same temporary file at once, which leaves a
+	// file LoadState discards.
 	saveMu sync.Mutex
 }
 
@@ -827,6 +828,13 @@ func (g *SpendGuard) LoadState(dir string) {
 	}
 }
 
+// saveStateAfterSnapshot runs in SaveState between releasing mu (the
+// snapshot is taken) and writing the temporary file: the window saveMu
+// exists to close. A no-op outside tests, and nothing but TestDC3 assigns
+// it; it lets that test park one save there and so prove saveMu, which no
+// free-running test could (TestDC2 survives its removal).
+var saveStateAfterSnapshot = func(*SpendGuard) {}
+
 // SaveState persists today's running total, per tenant. A write failure is
 // ignored on purpose: bookkeeping must never be the reason a request fails.
 func (g *SpendGuard) SaveState(dir string) {
@@ -849,6 +857,7 @@ func (g *SpendGuard) SaveState(dir string) {
 		}
 	}
 	g.mu.Unlock()
+	saveStateAfterSnapshot(g)
 	body, err := json.Marshal(st)
 	if err != nil {
 		return
