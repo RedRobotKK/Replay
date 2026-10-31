@@ -67,7 +67,7 @@ func lockUnsupported(*os.File) error {
 // nothing else.
 func openLocked(path string, flag int, perm os.FileMode, lock, unlock func(*os.File) error) (*LockedFile, error) {
 	for attempt := 0; attempt < maxLockedOpenAttempts; attempt++ {
-		f, err := os.OpenFile(path, flag, perm)
+		f, err := openFile(path, flag, perm)
 		if err != nil {
 			return nil, err
 		}

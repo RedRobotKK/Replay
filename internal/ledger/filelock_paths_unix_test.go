@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -240,5 +241,26 @@ func TestRW7_AFileThatCannotBeReReadIsReported(t *testing.T) {
 	err := RewriteLocked(t.TempDir(), nil, nil, os.WriteFile, os.Rename)
 	if err == nil || !strings.Contains(err.Error(), "re-reading") {
 		t.Fatalf("got %v", err)
+	}
+}
+
+// FO9: openShared wraps the handle create returns, here a real descriptor.
+func TestFO9_OpenSharedWrapsTheHandle(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a.jsonl")
+	f, err := openShared(path, os.O_RDWR|os.O_CREATE, 0o600, func(name string, _, _, _ uint32) (uintptr, error) {
+		fd, err := syscall.Open(name, syscall.O_RDWR|syscall.O_CREAT, 0o600)
+		return uintptr(fd), err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("x\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(path); string(b) != "x\n" {
+		t.Fatalf("got %q", b)
 	}
 }

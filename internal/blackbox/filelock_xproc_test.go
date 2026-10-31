@@ -196,8 +196,8 @@ func TestLockHelperProcess(t *testing.T) {
 // xlWriteFile and xlRename are what the purge helper writes and renames
 // with: purge's own defaults.
 var (
-	xlWriteFile = os.WriteFile
-	xlRename    = os.Rename
+	xlWriteFile = ledger.WriteFile
+	xlRename    = ledger.Rename
 )
 
 // pauseHere tells the parent the helper is at its pause point, holding the

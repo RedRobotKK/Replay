@@ -171,7 +171,7 @@ func sessionFileName(id string) string {
 // IsLedgerFile reports whether a file starts with a ledger record. It reads
 // only the first few kilobytes.
 func IsLedgerFile(path string) bool {
-	f, err := os.Open(path)
+	f, err := openFile(path, os.O_RDONLY, 0)
 	if err != nil {
 		return false
 	}
@@ -212,7 +212,7 @@ func IsLedgerFile(path string) bool {
 // there; the record arrives a moment later. Reporting it as skipped is the
 // difference between "your data is fine" and "your data is gone".
 func ReadRecords(path string) (records []Record, skipped, schemaMismatch int, incomplete bool, err error) {
-	f, err := os.Open(path)
+	f, err := openFile(path, os.O_RDONLY, 0)
 	if err != nil {
 		return nil, 0, 0, false, fmt.Errorf("open ledger: %w", err)
 	}

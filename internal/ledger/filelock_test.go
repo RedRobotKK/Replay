@@ -280,6 +280,6 @@ func TestRW8_TheRenameIsMadeWhileTheLockIsHeld(t *testing.T) {
 
 // rwWriteFile and rwRename are what purge rewrites with in production.
 var (
-	rwWriteFile = os.WriteFile
-	rwRename    = os.Rename
+	rwWriteFile = WriteFile
+	rwRename    = Rename
 )

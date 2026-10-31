@@ -228,8 +228,8 @@ func formatBytes(n int64) string {
 // keep — guard-reachability reported both as UNREACHED the moment the AST
 // neutraliser made them checkable at all.
 var (
-	purgeWriteFile = os.WriteFile
-	purgeRename    = os.Rename
+	purgeWriteFile = ledger.WriteFile
+	purgeRename    = ledger.Rename
 )
 
 func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {

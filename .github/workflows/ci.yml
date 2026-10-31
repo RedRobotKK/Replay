@@ -91,8 +91,10 @@ jobs:
       # the binary's own rewrite), so they run here for real even though the
       # production binary refuses on Windows. Only XL2's second variant, which
       # races the production binary itself, is left out on Windows.
+      # Runs even when the step above failed, so a red unit test does not
+      # also hide the cross-process outcome on Windows.
       - name: Ledger lock across processes
-        if: matrix.os == 'windows-latest'
+        if: ${{ !cancelled() && matrix.os == 'windows-latest' }}
         run: go test -tags mutation -timeout 10m -count=1 -run '^(TestXL|TestLockHelperProcess)' -v ./internal/blackbox/
       # And the refusal itself, against the built artifact.
       #
