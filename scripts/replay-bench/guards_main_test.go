@@ -19,7 +19,7 @@ func (failingWriter) Write([]byte) (int, error) { return 0, errInjected }
 func fakeExecute(t *testing.T, err error) *Config {
 	t.Helper()
 	var got Config
-	swap(t, &execute, func(cfg Config, gitSHA string, args []string) (Result, error) {
+	swap(t, &execute, func(cfg Config, _ string, _ []string) (Result, error) {
 		got = cfg
 		return Result{Schema: ResultSchema, Config: cfg}, err
 	})

@@ -40,7 +40,22 @@ Linux CI did not score `env_darwin.go:6, 14, 18, 27`. It listed them as "not bui
 
 ## Verification
 
-LOCALRESULT
+All commands were run in this clone on darwin/arm64 with go1.27.3:
+
+| Command | Exit | Result |
+|---|---|---|
+| `go vet ./...` | 0 | |
+| `go test -race -count=1 ./scripts/replay-bench/` | 0 | ok |
+| `make test` | 0 | 90.1% of statements covered |
+| `make lint` with golangci-lint v2.14.0, the version CI pins | 0 | 0 issues |
+| `go run scripts/guard-reachability/main.go origin/main` | 0 | 132 guards, 0 survived, 0 unexplained, 0 unchecked, 0 not built here |
+
+The local run is close to what CI does, but not identical:
+
+- It scored darwin, while CI scores linux/amd64. Neither platform file now holds a conditional, so both hosts score the same set of guards.
+- CI is the authority. A branch that fires only on Linux would show up there and not here.
+
+A neutralised `os.MkdirTemp` guard in `startProxy` makes that mutant write a `ledger/` directory into the package directory. That is an artefact of the run, and it is not committed.
 
 ## Per-guard table
 
