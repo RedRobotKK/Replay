@@ -1,6 +1,9 @@
 package proxy
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -87,6 +90,18 @@ wait:
 	<-aDone
 	<-bDone
 	// Crash: no shutdown save.
+
+	// The bytes on disk must be valid JSON before LoadState reads them.
+	// LoadState discards a torn file as a fresh zero day, so without this
+	// check a torn write (0) and an older snapshot winning (3) would be
+	// indistinguishable failures of the total below.
+	raw, err := os.ReadFile(filepath.Join(dir, spendStateFile))
+	if err != nil {
+		t.Fatalf("read %s after both saves: %v", spendStateFile, err)
+	}
+	if !json.Valid(raw) {
+		t.Fatalf("%s after both saves is not valid JSON (%d bytes): a torn write, not a stale rename", spendStateFile, len(raw))
+	}
 
 	after := NewSpendGuard(SpendLimits{DayTokens: 1000})
 	after.now = fixedClock(day)
