@@ -132,6 +132,16 @@ standing in front of a business that has sold nothing, and the honest reading of
 that the ask has not been made to a single person face to face. A hosted product
 with no customer is the expensive way to find that out.
 
+**Corrected 2026-10-30, not deleted:** the condition above can no longer be
+met. [ADR-0028](../adr/0028-replay-is-a-product-with-a-hosted-service.md)
+(2026-10-05) withdrew the fixed-fee forensic engagement: it "is not offered and
+is not to be proposed again", so no forensics week will be sold. On 2026-10-30
+the owner also declared all prior commercial documents void, which includes the
+commercial premise of the build-order decision quoted above. The paragraph is
+kept as the 2026-09-12 record. What gates the endpoint and the emitter now is
+not stated here; no document has replaced the condition, and until one does,
+neither is scheduled. The two sentences below still describe the code.
+
 Until then `replay` sends nothing, the plugin sends nothing, and the SessionEnd
 hook prints one line and stops.
 
