@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -206,9 +207,14 @@ func TestStartProxyReportsEachConstructorFailure(t *testing.T) {
 	up := newUpstream()
 	defer up.Close()
 
-	if px, err := startProxy("://no-scheme", false); err == nil {
-		_ = px.Close() // the assertion has already failed; this only tidies up
-		t.Error("an unparseable upstream started a proxy")
+	// The refusal is the URL parser's, not a later one from building a proxy
+	// with no upstream.
+	var ue *url.Error
+	if px, err := startProxy("://no-scheme", false); !errors.As(err, &ue) {
+		if px != nil {
+			_ = px.Close() // the assertion has already failed; this only tidies up
+		}
+		t.Errorf("an unparseable upstream: err = %v, want the URL parse error", err)
 	}
 	t.Run("tempdir", func(t *testing.T) {
 		missingTempDir(t)

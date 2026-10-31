@@ -73,7 +73,7 @@ LOCALRESULT
 | 25 | `scripts/replay-bench/workload.go:107` | `if _, err := io.Copy(io.Discard, r.Body); err != nil {` | UNREACHED | protection | T | `TestUpstreamAnswersJSONOrAFlushedStreamAndRefusesABrokenBody`: broken body must get 400. |
 | 26 | `scripts/replay-bench/workload.go:113` | `if n <= 0 {` | INERT | incidental | A | Same test: no stream header must give `application/json` with a content-length. |
 | 27 | `scripts/replay-bench/workload.go:123` | `if fl != nil {` | INERT | incidental | A | Same test: `rec.Flushed` must be true; without the flush TTFB would measure nothing. |
-| 28 | `scripts/replay-bench/workload.go:178` | `if err != nil {` | UNREACHED | protection | T | `TestStartProxyReportsEachConstructorFailure`: an unparseable upstream must not start a proxy. |
+| 28 | `scripts/replay-bench/workload.go:178` | `if err != nil {` | UNREACHED | protection | T | `TestStartProxyReportsEachConstructorFailure`: an unparseable upstream must fail with a `*url.Error`; neutralised, the error is proxy.New's "upstream URL is required". |
 | 29 | `scripts/replay-bench/workload.go:182` | `if err != nil {` | UNREACHED | protection | T | Same test, `tempdir`: error must be MkdirTemp's own (`isMkdirTemp`); neutralised, the ledger is opened in the working directory. |
 | 30 | `scripts/replay-bench/workload.go:186` | `if err != nil {` | UNREACHED | protection | T | Same test, `ledger` (seam `openLedger`): `errors.Is(err, errInjected)` and no directory left behind. |
 | 31 | `scripts/replay-bench/workload.go:195` | `if mask {` | INERT | incidental | A | `TestMaskOnProxyOpensAVaultAndMaskOffDoesNot`: `opened != 1` fails (neutralised, 0). |
