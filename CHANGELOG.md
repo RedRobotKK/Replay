@@ -37,6 +37,22 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **`replay purge --session` no longer deletes records `replay serve`
+  appends while it runs.** The erasure read each ledger file, then renamed a
+  filtered copy over it; a record appended in between was in neither the
+  export nor the report, and the rename removed it. Two erasures of one file
+  could also overwrite each other's result. Appends and the rewrite now take
+  the same file lock, the rewrite carries over anything appended since its
+  read, and a file changed any other way is refused with nothing removed
+  (ADR-0030). Records of the erased session that arrive after the read are
+  kept, so erasing a live session needs a second run once it stops.
+- **A ledger record written after a cut-short write is readable.** When a
+  write to a ledger file stopped part-way (a full disk, a file size limit, a
+  power loss), the file ended in half a record, and the next record was
+  appended straight onto it: that write reported success and its record was
+  one unreadable line with the fragment. The next record now starts on its own
+  line, so only the fragment is lost. The check is made under the same file
+  lock, so a record another writer has in flight is never split.
 - **`replay cost`'s p90 is the nearest rank.** It took index `int(p*(n-1))`,
   one rank low whenever n mod 10 was 2 to 9, so over the costs [1, 100] the
   p90 was 1, below a median of 50.5, on the report and the share card. The

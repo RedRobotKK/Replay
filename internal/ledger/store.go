@@ -117,11 +117,35 @@ func (s *Store) Append(rec Record) error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, filePerm)
+	// Locked, so `replay purge --session` cannot rename a rewritten copy over
+	// this file between this write and its own read of it (ADR-0030). Read and
+	// write, not write-only, so the tail can be asked about below.
+	f, err := OpenLocked(path, os.O_CREATE|os.O_APPEND|os.O_RDWR, filePerm)
 	if err != nil {
 		return fmt.Errorf("open ledger file: %w", err)
 	}
-	if _, err := f.Write(append(line, '\n')); err != nil {
+	out := append(line, '\n')
+	// A file that does not end on a newline holds half of a record whose
+	// write was cut short: the disk filled, a size limit was reached, the
+	// machine lost power with part of a page on disk. That Append returned
+	// its error; this one must not write its own record onto the fragment,
+	// or a call that returns nil leaves a record no reader can read
+	// (TestAT1). The fragment is ended where it stands, so it reads as the
+	// one unreadable line it already was.
+	//
+	// The check is made under the lock, and only there. Every writer of a
+	// ledger file takes this lock before writing (Append here, purge's
+	// rewriteLocked), so a missing newline seen while holding it cannot be
+	// another writer's record still in flight: that writer would hold the
+	// lock. It is a write that ended short, or one from a binary that
+	// predates the lock (ADR-0030's advisory-lock caveat). Checked without
+	// the lock, an in-flight short write is indistinguishable from a torn
+	// one, and the newline would split a live record in two. A tail whose
+	// shape cannot be read is appended to exactly as before this check.
+	if clean, known := endsWithNewline(f); known && !clean {
+		out = append([]byte{'\n'}, out...)
+	}
+	if _, err := f.Write(out); err != nil {
 		_ = f.Close() // the write error is the one worth reporting
 		return fmt.Errorf("write ledger record: %w", err)
 	}
