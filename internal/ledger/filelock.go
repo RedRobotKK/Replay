@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // maxLockedOpenAttempts bounds how often OpenLocked reopens a path whose file
@@ -26,29 +27,66 @@ const maxLockedOpenAttempts = 16
 // will read again, and anything written to it would be lost; the replacement
 // is opened and locked instead. Closing the returned file releases the lock.
 //
-// On a platform with no advisory lock (Windows, where the binary refuses to
-// run) the lock is not taken and only the replaced-file check remains.
-func OpenLocked(path string, flag int, perm os.FileMode) (*os.File, error) {
+// The lock is flock on unix (filelock_unix.go) and LockFileEx on Windows
+// (filelock_windows.go). On any other platform lockFile fails, so OpenLocked
+// fails and no ledger writer proceeds unlocked (filelock_other.go).
+func OpenLocked(path string, flag int, perm os.FileMode) (*LockedFile, error) {
+	return openLocked(path, flag, perm, lockFile, unlockFile)
+}
+
+// LockedFile is a ledger file held under the writers' lock. Close releases
+// the lock and closes the file.
+type LockedFile struct {
+	*os.File
+	unlock func(*os.File) error
+}
+
+// Close releases the lock explicitly, then closes the file. Closing alone
+// would release it on every supported platform; on Windows the release on
+// close is documented as happening when the system gets to it, so UnlockFileEx
+// comes first. Both errors are reported.
+func (l *LockedFile) Close() error {
+	uerr := l.unlock(l.File)
+	cerr := l.File.Close()
+	return errors.Join(uerr, cerr)
+}
+
+// errLockUnsupported is what lockFile returns on a platform with no file lock
+// this package implements. It is an error rather than a no-op so that Append
+// and purge refuse there instead of writing unlocked.
+var errLockUnsupported = errors.New("no exclusive file lock is implemented for this platform, so the ledger will not be written")
+
+// lockUnsupported is lockFile on a platform without one (filelock_other.go).
+// Defined here, untagged, so FL3 drives the same refusal on every platform.
+func lockUnsupported(*os.File) error {
+	return fmt.Errorf("%w (GOOS=%s)", errLockUnsupported, runtime.GOOS)
+}
+
+// openLocked is OpenLocked with the lock and unlock as parameters, so a test
+// can supply ones that fail. Production passes lockFile and unlockFile and
+// nothing else.
+func openLocked(path string, flag int, perm os.FileMode, lock, unlock func(*os.File) error) (*LockedFile, error) {
 	for attempt := 0; attempt < maxLockedOpenAttempts; attempt++ {
 		f, err := os.OpenFile(path, flag, perm)
 		if err != nil {
 			return nil, err
 		}
-		if err := lockFile(f); err != nil {
+		if err := lock(f); err != nil {
 			_ = f.Close() // the lock error is the one worth reporting
 			return nil, fmt.Errorf("lock %s: %w", filepath.Base(path), err)
 		}
+		held := &LockedFile{File: f, unlock: unlock}
 		same, err := stillAt(f, path)
 		if err != nil {
-			_ = f.Close() // the stat error is the one worth reporting
+			_ = held.Close() // the stat error is the one worth reporting
 			return nil, err
 		}
 		if same {
-			return f, nil
+			return held, nil
 		}
 		// Replaced or removed while this waited: release the stale lock and
 		// take the file that is there now.
-		if err := f.Close(); err != nil {
+		if err := held.Close(); err != nil {
 			return nil, fmt.Errorf("release %s: %w", filepath.Base(path), err)
 		}
 	}

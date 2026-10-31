@@ -20,3 +20,8 @@ func lockFile(f *os.File) error {
 		}
 	}
 }
+
+// unlockFile does nothing on unix: closing the descriptor releases the flock,
+// which is how the lock has always been released here, so LockedFile.Close
+// behaves exactly as the bare close it replaced.
+func unlockFile(*os.File) error { return nil }

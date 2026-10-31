@@ -49,15 +49,45 @@ first's result. Records for the erased session that arrive after the walk are
 kept, because they were not exported or counted; erasing a session that is
 still live needs a second run once it stops.
 
-The lock is advisory. A writer that does not use `OpenLocked` (an older
-`replay` binary, an editor, a sync client) is not excluded, and neither is
-`replay purge --older-than`, which removes whole files and is unchanged. The
-lock is `flock`, which local filesystems on macOS and Linux provide; on a
-network filesystem that does not, `Append` returns the lock error and the
-record is not written, where it was written before. On Windows, where the
-binary refuses to run, no lock is taken.
+The lock works differently on each platform:
 
-Append now pays one `flock` and two `stat` calls per record beside the open,
+- **Unix** (macOS, Linux, the BSDs): `flock(LOCK_EX)`, blocking, retried on
+  `EINTR`. It is advisory, and released when the descriptor closes or the
+  process dies. `flock` rather than `fcntl`, because an `fcntl` lock is
+  dropped when any descriptor the process holds on the file closes.
+- **Windows**: `LockFileEx` with `LOCKFILE_EXCLUSIVE_LOCK` and without
+  `LOCKFILE_FAIL_IMMEDIATELY`, so it blocks as `flock` does. It is called
+  through `syscall.NewLazyDLL("kernel32.dll")`, since the module takes no
+  dependencies, and `kernel32.dll` is a KnownDLL so it cannot be preloaded
+  from the working directory. `LockedFile.Close` calls `UnlockFileEx` before
+  it closes the handle. The OS also releases the lock on close and when the
+  process dies. A `LockFileEx` range is mandatory: a handle that did not take
+  the lock cannot read or write inside it. So the lock covers one byte at
+  offset 2^62, far past the end of any ledger, rather than the data.
+  Unlocked readers (`ReadRecords`, the purge walk) are therefore unaffected,
+  and writers still exclude each other. `ERROR_IO_PENDING` from an
+  asynchronous handle is waited out through `GetOverlappedResult`.
+- **Any other platform** (js, wasip1, plan9, ...): `lockFile` returns an
+  error, so `Append` and the purge rewrite refuse instead of writing
+  unlocked. It used to return nil.
+
+The lock is advisory on unix. On Windows it is mandatory only for that one
+byte, which nothing else touches. A writer that does not use `OpenLocked` is
+not excluded: an older `replay` binary (including any Windows build from
+before this change, which took no lock), an editor, or a sync client. Neither
+is `replay purge --older-than`, which removes whole files and is unchanged. On
+a network filesystem that does not provide the lock, `Append` returns the lock
+error and the record is not written, where it was written before. `Store`'s
+mutex serialises one `Store` only. It is not the cross-process lock and does
+not stand in for it.
+
+Purge's rename over a file other handles hold open has not been verified on
+Windows. Go opens files there without `FILE_SHARE_DELETE`, so the rename may
+fail while an appender waits on the lock. The binary still refuses to run on
+Windows, so no Windows user can reach that path, but it has to be settled
+before the refusal is lifted.
+
+Append now pays one lock call (and on Windows one unlock) and two `stat` calls per record beside the open,
 write and close it already did. This is a cost of the fix, not a performance
 change, and nothing here was measured as one.
 

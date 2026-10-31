@@ -70,8 +70,12 @@ func ciCommands(t *testing.T) []string {
 // mutationRunLine finds the executable line that runs the catalogue.
 func mutationRunLine(t *testing.T) (string, bool) {
 	t.Helper()
+	// The catalogue's own run, not any run with the tag: the Windows leg also
+	// runs internal/blackbox's lock tests under it (ADR-0030), and a first-match
+	// here would hold that step to the catalogue's budget and stop checking
+	// the catalogue at all.
 	for _, line := range ciCommands(t) {
-		if strings.Contains(line, "-tags mutation") {
+		if strings.Contains(line, "-tags mutation") && strings.Contains(line, "./internal/mutation/") {
 			return line, true
 		}
 	}

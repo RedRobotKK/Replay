@@ -124,7 +124,8 @@ func (s *Store) Append(rec Record) error {
 	if err != nil {
 		return fmt.Errorf("open ledger file: %w", err)
 	}
-	out := append(line, '\n')
+	line = append(line, '\n')
+	out := line
 	// A file that does not end on a newline holds half of a record whose
 	// write was cut short: the disk filled, a size limit was reached, the
 	// machine lost power with part of a page on disk. That Append returned
@@ -142,7 +143,7 @@ func (s *Store) Append(rec Record) error {
 	// the lock, an in-flight short write is indistinguishable from a torn
 	// one, and the newline would split a live record in two. A tail whose
 	// shape cannot be read is appended to exactly as before this check.
-	if clean, known := endsWithNewline(f); known && !clean {
+	if clean, known := endsWithNewline(f.File); known && !clean {
 		out = append([]byte{'\n'}, out...)
 	}
 	if _, err := f.Write(out); err != nil {

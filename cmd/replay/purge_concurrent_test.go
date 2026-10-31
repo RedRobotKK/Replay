@@ -40,7 +40,7 @@ const appendSettle = 300 * time.Millisecond
 // FAIL: the appended record is gone.
 func TestPG25_ARecordAppendedDuringAnErasureSurvivesIt(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("the ledger's file lock is a no-op on Windows, where the binary refuses to run")
+		t.Skip("not run on Windows: the binary refuses there, and purge's rename over a file other handles hold open is unverified on Windows (ADR-0030)")
 	}
 	dir := ledgerSessions(t, map[string][]string{"a.jsonl": {"wanted", "kept"}})
 	store, err := ledger.Open(dir)
@@ -106,7 +106,7 @@ func TestPG25_ARecordAppendedDuringAnErasureSurvivesIt(t *testing.T) {
 // actually removed its session.
 func TestPG26_ConcurrentErasuresOfOneFileLoseNothingKept(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("the ledger's file lock is a no-op on Windows, where the binary refuses to run")
+		t.Skip("not run on Windows: the binary refuses there, and purge's rename over a file other handles hold open is unverified on Windows (ADR-0030)")
 	}
 	const keepers = 50
 	dir := t.TempDir()
@@ -165,7 +165,7 @@ func TestPG26_ConcurrentErasuresOfOneFileLoseNothingKept(t *testing.T) {
 // the window is between the walk and the rewrite and no seam sits in it.
 func TestPG27_AnErasureThatReadAHalfWrittenRecordRefusesTheFile(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("the ledger's file lock is a no-op on Windows, where the binary refuses to run")
+		t.Skip("not run on Windows: the binary refuses there, and purge's rename over a file other handles hold open is unverified on Windows (ADR-0030)")
 	}
 	path := filepath.Join(t.TempDir(), "a.jsonl")
 	const head = `{"session_id":"wanted"}` + "\n" + `{"session_id":"kept"}` + "\n" + `{"session_id":"kept","request_id":"half`

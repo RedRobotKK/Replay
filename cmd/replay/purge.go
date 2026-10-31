@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -368,41 +367,9 @@ func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 // Anything else means the file was rewritten or cut under us, and nothing is
 // removed from it.
 func rewriteLocked(path string, read []byte, kept []string) error {
-	f, err := ledger.OpenLocked(path, os.O_RDONLY, 0)
-	if err != nil {
-		return fmt.Errorf("locking %s: %w", path, err)
-	}
-	defer f.Close() //nolint:errcheck // read-only handle; closing it only releases the lock
-	now, err := io.ReadAll(f)
-	if err != nil {
-		return fmt.Errorf("re-reading %s: %w", path, err)
-	}
-	if !bytes.HasPrefix(now, read) {
-		return fmt.Errorf("%s changed other than by an append after it was read, so nothing was removed from it; run the erasure again", path)
-	}
-	appended := now[len(read):]
-	if len(appended) > 0 && len(read) > 0 && read[len(read)-1] != '\n' {
-		// The walk read half of a record still being written. Its rest is
-		// in appended, and the kept lines end with a newline the record
-		// would be split across.
-		return fmt.Errorf("%s was being written when it was read, so nothing was removed from it; run the erasure again", path)
-	}
-	out := strings.Join(kept, "\n")
-	if out != "" {
-		out += "\n"
-	}
-	out += string(appended)
-	// Through a sibling and renamed: a half-written ledger read on the next
-	// keystroke would lose every session in the file, not just this one. The
-	// fixed name is safe only because the lock is held while it exists.
-	tmp := path + ".tmp"
-	if werr := purgeWriteFile(tmp, []byte(out), 0o600); werr != nil {
-		return fmt.Errorf("rewriting %s: %w", path, werr)
-	}
-	if rerr := purgeRename(tmp, path); rerr != nil {
-		return fmt.Errorf("replacing %s: %w", path, rerr)
-	}
-	return nil
+	// The locked read-check-write-rename is ledger.RewriteLocked, so a test
+	// process can run the same rewrite where this binary refuses to (Windows).
+	return ledger.RewriteLocked(path, read, kept, purgeWriteFile, purgeRename)
 }
 
 // warnUnreadable says what the erasure could not look inside.
