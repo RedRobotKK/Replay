@@ -4,7 +4,6 @@ package ledger
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"syscall"
 	"unsafe"
@@ -76,73 +75,42 @@ func lockRange() *syscall.Overlapped {
 // process dies the system closes its handles, so a killed holder does not
 // leave the file locked (TestXL6).
 func lockFile(f *os.File) error {
-	if err := procLockFileEx.Find(); err != nil {
-		return fmt.Errorf("LockFileEx unavailable: %w", err)
-	}
 	h := syscall.Handle(f.Fd())
 	ol := lockRange()
-	r1, _, e1 := procLockFileEx.Call(
-		uintptr(h),
-		uintptr(lockfileExclusiveLock),
-		0, // reserved, must be zero
-		uintptr(lockRangeLength),
-		0, // high word of the length
-		uintptr(unsafe.Pointer(ol)),
-	)
-	if r1 != 0 {
-		return nil
-	}
-	err := callError("LockFileEx", e1)
-	if errors.Is(err, syscall.ERROR_IO_PENDING) {
-		return waitOverlapped(h, ol)
-	}
-	return err
-}
-
-// waitOverlapped blocks until the pending request on ol completes, and
-// reports how it ended.
-func waitOverlapped(h syscall.Handle, ol *syscall.Overlapped) error {
-	if err := procGetOverlappedResult.Find(); err != nil {
-		return fmt.Errorf("GetOverlappedResult unavailable: %w", err)
-	}
+	lock := procCall{name: "LockFileEx", find: procLockFileEx.Find, call: func() (uintptr, error) {
+		r1, _, e1 := procLockFileEx.Call(
+			uintptr(h),
+			uintptr(lockfileExclusiveLock),
+			0, // reserved, must be zero
+			uintptr(lockRangeLength),
+			0, // high word of the length
+			uintptr(unsafe.Pointer(ol)),
+		)
+		return r1, e1
+	}}
 	var transferred uint32
-	r1, _, e1 := procGetOverlappedResult.Call(
-		uintptr(h),
-		uintptr(unsafe.Pointer(ol)),
-		uintptr(unsafe.Pointer(&transferred)),
-		waitTrue,
-	)
-	if r1 != 0 {
-		return nil
-	}
-	return fmt.Errorf("LockFileEx: waiting for the lock: %w", callError("GetOverlappedResult", e1))
+	wait := procCall{name: "GetOverlappedResult", find: procGetOverlappedResult.Find, call: func() (uintptr, error) {
+		r1, _, e1 := procGetOverlappedResult.Call(
+			uintptr(h),
+			uintptr(unsafe.Pointer(ol)),
+			uintptr(unsafe.Pointer(&transferred)),
+			waitTrue,
+		)
+		return r1, e1
+	}}
+	return lockOrWait(lock, wait, func(err error) bool { return errors.Is(err, syscall.ERROR_IO_PENDING) })
 }
 
 // unlockFile releases the lock lockFile took on f, over the same range.
 func unlockFile(f *os.File) error {
-	if err := procUnlockFileEx.Find(); err != nil {
-		return fmt.Errorf("UnlockFileEx unavailable: %w", err)
-	}
-	r1, _, e1 := procUnlockFileEx.Call(
-		f.Fd(),
-		0, // reserved, must be zero
-		uintptr(lockRangeLength),
-		0, // high word of the length
-		uintptr(unsafe.Pointer(lockRange())),
-	)
-	if r1 != 0 {
-		return nil
-	}
-	return callError("UnlockFileEx", e1)
-}
-
-// callError turns a failed LazyProc.Call's error into one worth returning.
-// Call always returns a non-nil error, an Errno of zero when GetLastError
-// had nothing to say; a failure must still read as one.
-func callError(name string, e error) error {
-	var errno syscall.Errno
-	if errors.As(e, &errno) && errno == 0 {
-		return fmt.Errorf("%s failed without an error code", name)
-	}
-	return fmt.Errorf("%s: %w", name, e)
+	return procCall{name: "UnlockFileEx", find: procUnlockFileEx.Find, call: func() (uintptr, error) {
+		r1, _, e1 := procUnlockFileEx.Call(
+			f.Fd(),
+			0, // reserved, must be zero
+			uintptr(lockRangeLength),
+			0, // high word of the length
+			uintptr(unsafe.Pointer(lockRange())),
+		)
+		return r1, e1
+	}}.do()
 }
