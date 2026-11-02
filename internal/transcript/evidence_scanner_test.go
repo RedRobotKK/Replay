@@ -71,7 +71,7 @@ func TestReadStringInvalidEscape(t *testing.T) {
 }
 
 // skipValue at end of input returns without panicking (evidence.go:258).
-func TestSkipValueAtEOF(t *testing.T) {
+func TestSkipValueAtEOF(_ *testing.T) {
 	s := &flagScanner{b: []byte{}}
 	s.skipValue() // must not panic
 }

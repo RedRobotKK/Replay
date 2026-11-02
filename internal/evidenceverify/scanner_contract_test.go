@@ -364,3 +364,51 @@ func TestLocateValueBounds(t *testing.T) {
 
 // Ensure the sha256 import is retained for the locator helpers used above.
 var _ = sha256.Sum256
+
+// --- Phase A round-2: the four guards left unexplained by the first pass ---
+
+// TestScanArrayUnterminatedAtEOF covers the contract that a truncated array
+// ('[' with no closing ']') is refused as UNVERIFIED/MALFORMED_JSON, never
+// panicking and never reaching REFUTED. The refusal is produced by the
+// scanner's end-of-input handling regardless of which specific guard fires.
+func TestScanArrayUnterminatedAtEOF(t *testing.T) {
+	doc := `[`
+	r := Verify([]byte(doc), mkLoc(doc, 0, 1), Predicate{Key: "k", Expect: BoolLiteral(true)})
+	wantVerdict(t, r, Unverified)
+	wantReason(t, r, ReasonMalformedJSON)
+}
+
+// TestScanNumberBareMinusAtEOF pins scanNumber's bare-minus guard (verify.go:849).
+// '-' at end of input is a truncated number. It must be UNVERIFIED/MALFORMED_JSON
+// with no panic: the bare-minus check is what keeps the switch below it from
+// indexing past the buffer.
+func TestScanNumberBareMinusAtEOF(t *testing.T) {
+	doc := `{"n":-`
+	off := strings.Index(doc, "-")
+	r := Verify([]byte(doc), mkLoc(doc, off, 1), Predicate{Key: "n", Expect: NumberLiteral("-")})
+	wantVerdict(t, r, Unverified)
+	wantReason(t, r, ReasonMalformedJSON)
+}
+
+// TestMixedKindDuplicateDivergence pins value.equal's kind guard (verify.go:367).
+// false (bool) and null (null) are different recorded literals of different
+// kinds; their zero-valued fields coincide, so a neutralised kind check would
+// read them as equal and flip AMBIGUOUS into REFUTED. This test asserts the
+// kind check is load-bearing.
+func TestMixedKindDuplicateDivergence(t *testing.T) {
+	doc := `{"is_error":false,"is_error":null}`
+	r := pinToken(doc, "false", "is_error", BoolLiteral(true))
+	wantVerdict(t, r, Ambiguous)
+	wantReason(t, r, ReasonDuplicateConflict)
+}
+
+// TestUppercaseHexEscape pins readHex4's 'A'..'F' case (verify.go:829). An
+// uppercase hex digit in a \u escape must decode exactly like its lowercase
+// form; neutralising that case makes the escape malformed and flips CONFIRMED
+// into UNVERIFIED.
+func TestUppercaseHexEscape(t *testing.T) {
+	// "is\u005Ferror" decodes to "is_error"; 0x5F is '_', with 'F' uppercase.
+	doc := `{"is\u005Ferror":true}`
+	r := pinToken(doc, "true", "is_error", BoolLiteral(true))
+	wantVerdict(t, r, Confirmed)
+}

@@ -700,9 +700,6 @@ func (s *scanner) scanArray() (int, error) {
 	}
 	for {
 		s.skipSpace()
-		if s.pos >= len(s.b) {
-			return 0, s.errf(ReasonMalformedJSON, "unterminated array")
-		}
 		if _, _, err := s.scanValue(); err != nil {
 			return 0, err
 		}
@@ -849,9 +846,6 @@ func (s *scanner) scanNumber() error {
 		if s.pos >= len(s.b) {
 			return s.errf(ReasonMalformedJSON, "number: bare '-'")
 		}
-	}
-	if s.pos >= len(s.b) {
-		return s.errf(ReasonMalformedJSON, "number: truncated")
 	}
 	switch c := s.b[s.pos]; {
 	case c == '0':
