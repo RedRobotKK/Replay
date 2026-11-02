@@ -313,5 +313,41 @@
     "category": "structurally-unreachable",
     "justification": "Score reaches this only after TreeID has read every file and directory in the same tree without error and matched the pinned id. DeriveAnswer reads a subset of those bytes, so it fails only if the tree changes between the two reads, a race outside a single-threaded test. Its own read failures are covered directly by TestUnreadableEntriesAreRefused.",
     "evidence": "guard-reachability on 2026-10-22, run against fee2e89 over this change in a throwaway local clone: neutralised as false, the suite stayed green, verdict UNREACHED."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "(*scanner).scanValue",
+    "cond": "err != nil",
+    "producer": "err := s.expectKeyword(\"true\")",
+    "category": "dominated",
+    "justification": "The 'true' keyword check in scanValue rejects a malformed boolean literal. When the guard is neutralised the error is ignored and the value is mis-scanned as a bool, but the scanner position is not advanced (expectKeyword returns before advancing), so the enclosing scanObject's structural check ('expected ',' or '}'' / 'unexpected end of input') still yields ReasonMalformedJSON. Verdict and Reason are therefore identical with or without the guard; only Result.Detail differs, and Detail is declared non-semantic by this package.",
+    "evidence": "Conceptual (code-path) analysis, not an executed corpus neutralisation: for every input where expectKeyword(\"true\") errors (truncated or mismatched literal after 't'), the fall-through structural check in scanObject produces the same ReasonMalformedJSON. No input changes Verdict or Reason."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "(*scanner).scanValue",
+    "cond": "err != nil",
+    "producer": "err := s.expectKeyword(\"false\")",
+    "category": "dominated",
+    "justification": "Same shape as the 'true' literal check: a malformed 'false' literal is still rejected as ReasonMalformedJSON by the enclosing structural check after neutralisation, because expectKeyword does not advance position on error. Verdict and Reason are unchanged; only Detail differs.",
+    "evidence": "Conceptual (code-path) analysis: neutralising this guard leaves Verdict=Unverified and Reason=MalformedJSON for every input that exercises the error path; the diagnostic string is the only observable change."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "(*scanner).scanValue",
+    "cond": "err != nil",
+    "producer": "err := s.expectKeyword(\"null\")",
+    "category": "dominated",
+    "justification": "Same shape as the boolean literal checks: a malformed 'null' literal is still rejected as ReasonMalformedJSON by the structural check after neutralisation. Verdict and Reason are unchanged; only Detail differs.",
+    "evidence": "Conceptual (code-path) analysis: neutralising this guard leaves Verdict=Unverified and Reason=MalformedJSON for every input that exercises the error path."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "(*scanner).expectKeyword",
+    "cond": "s.pos+len(word) > len(s.b) || string(s.b[s.pos:s.pos+len(word)]) != word",
+    "producer": "",
+    "category": "dominated",
+    "justification": "expectKeyword's own bounds/equality check rejects an invalid or truncated keyword. Neutralising it (always advancing position) causes the enclosing scanObject's structural check to produce the same ReasonMalformedJSON ('expected ',' or '}'' or 'unexpected end of input'). For a valid keyword the condition is already false, so neutralisation changes nothing. Verdict and Reason are unchanged for all inputs; only Detail differs.",
+    "evidence": "Conceptual (code-path) analysis: the three call sites (true/false/null) and the shared check all resolve to ReasonMalformedJSON whether the guard fires or the fall-through structural check fires. No input changes Verdict or Reason."
   }
 ]
