@@ -36,7 +36,11 @@ type ArmCost struct {
 	// Without them a policy that cut spend a fifth while doubling failed
 	// edits graduated, and the report said so approvingly. Cheaper is not
 	// better if the work got worse.
-	ErrorShare      float64
+	ErrorShare float64
+	// ErrorUnresolved and ErrorLegacy carry the same evidence limitation as
+	// SessionScore: a nonzero count means ErrorShare is not fully verified.
+	ErrorUnresolved int
+	ErrorLegacy     int
 	ReadsAfterClear int
 }
 
@@ -51,6 +55,7 @@ func armCostsOf(scores []SessionScore) []ArmCost {
 		out = append(out, ArmCost{
 			SessionID: s.SessionID, Arm: s.Arm, CostPerNewToken: s.CostPerNewToken,
 			ErrorShare: s.ErrorShare, ReadsAfterClear: s.ReadsAfterClear,
+			ErrorUnresolved: s.ErrorUnresolved, ErrorLegacy: s.ErrorLegacy,
 		})
 	}
 	return out

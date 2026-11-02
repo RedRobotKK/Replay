@@ -60,6 +60,10 @@ type Tally struct {
 	WriteUSD    float64
 	ReadUSD     float64
 	OutputUSD   float64
+	// WriteAssumed counts priced requests whose cache-write leg was priced on
+	// the assumed short-TTL default (no provider breakdown), so a reader can
+	// tell a fully measured write figure from one resting on an assumption.
+	WriteAssumed int
 	// Misses counts requests that read nothing from cache after the first.
 	Misses int
 }
@@ -87,6 +91,9 @@ func (t *Tally) AddAt(u transcript.Usage, model string, at time.Time) {
 		t.CostUSD += legs.Total()
 		t.UncachedUSD += legs.Uncached
 		t.WriteUSD += legs.Write
+		if cachemodel.WriteBasisAssumed(u) {
+			t.WriteAssumed++
+		}
 		t.ReadUSD += legs.Read
 		t.OutputUSD += legs.Output
 	} else {

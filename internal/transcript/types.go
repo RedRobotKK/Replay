@@ -75,6 +75,10 @@ type Block struct {
 	CallKey string `json:"call_key,omitempty"`
 	// IsError is set on tool_result blocks the client flagged as errors.
 	IsError bool `json:"is_error,omitempty"`
+	// Evidence carries the evidence-backed is_error flag captured from raw
+	// bytes before the duplicate-key collapse, nil when the producing adapter
+	// could not supply raw evidence (the legacy decoded path). Never persisted.
+	Evidence *ErrorFlag `json:"-"`
 }
 
 // Message is one turn of context as sent to the provider.
@@ -110,6 +114,14 @@ type Usage struct {
 	// Both are zero when the client did not report the breakdown.
 	Create5m int `json:"ephemeral_5m_input_tokens,omitempty"`
 	Create1h int `json:"ephemeral_1h_input_tokens,omitempty"`
+	// CreateSplitPresent reports whether the provider supplied a TTL breakdown
+	// (the cache_creation object) at all. False means the breakdown was absent,
+	// so a cache-write price that falls back to the short-TTL default is an
+	// ASSUMPTION, not a measurement. True means Create5m/Create1h are real
+	// provider figures — including an explicit 0/0 split, which is a distinct
+	// state from an absent breakdown. Sourced directly from CacheBreak != nil
+	// at decode time; never inferred from Create5m/Create1h.
+	CreateSplitPresent bool `json:"cache_creation_split_present,omitempty"`
 }
 
 // PromptTotal is the size of the whole prompt the provider processed.

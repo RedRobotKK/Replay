@@ -313,5 +313,185 @@
     "category": "structurally-unreachable",
     "justification": "Score reaches this only after TreeID has read every file and directory in the same tree without error and matched the pinned id. DeriveAnswer reads a subset of those bytes, so it fails only if the tree changes between the two reads, a race outside a single-threaded test. Its own read failures are covered directly by TestUnreadableEntriesAreRefused.",
     "evidence": "guard-reachability on 2026-10-22, run against fee2e89 over this change in a throwaway local clone: neutralised as false, the suite stayed green, verdict UNREACHED."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "(*scanner).scanValue",
+    "cond": "err != nil",
+    "producer": "err := s.expectKeyword(\"true\")",
+    "category": "dominated",
+    "justification": "The 'true' keyword check in scanValue rejects a malformed boolean literal. When the guard is neutralised the error is ignored and the value is mis-scanned as a bool, but the scanner position is not advanced (expectKeyword returns before advancing), so the enclosing scanObject's structural check ('expected ',' or '}'' / 'unexpected end of input') still yields ReasonMalformedJSON. Verdict and Reason are therefore identical with or without the guard; only Result.Detail differs, and Detail is declared non-semantic by this package.",
+    "evidence": "Conceptual (code-path) analysis, not an executed corpus neutralisation: for every input where expectKeyword(\"true\") errors (truncated or mismatched literal after 't'), the fall-through structural check in scanObject produces the same ReasonMalformedJSON. No input changes Verdict or Reason."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "(*scanner).scanValue",
+    "cond": "err != nil",
+    "producer": "err := s.expectKeyword(\"false\")",
+    "category": "dominated",
+    "justification": "Same shape as the 'true' literal check: a malformed 'false' literal is still rejected as ReasonMalformedJSON by the enclosing structural check after neutralisation, because expectKeyword does not advance position on error. Verdict and Reason are unchanged; only Detail differs.",
+    "evidence": "Conceptual (code-path) analysis: neutralising this guard leaves Verdict=Unverified and Reason=MalformedJSON for every input that exercises the error path; the diagnostic string is the only observable change."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "(*scanner).scanValue",
+    "cond": "err != nil",
+    "producer": "err := s.expectKeyword(\"null\")",
+    "category": "dominated",
+    "justification": "Same shape as the boolean literal checks: a malformed 'null' literal is still rejected as ReasonMalformedJSON by the structural check after neutralisation. Verdict and Reason are unchanged; only Detail differs.",
+    "evidence": "Conceptual (code-path) analysis: neutralising this guard leaves Verdict=Unverified and Reason=MalformedJSON for every input that exercises the error path."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "(*scanner).expectKeyword",
+    "cond": "s.pos+len(word) > len(s.b) || string(s.b[s.pos:s.pos+len(word)]) != word",
+    "producer": "",
+    "category": "dominated",
+    "justification": "expectKeyword's own bounds/equality check rejects an invalid or truncated keyword. Neutralising it (always advancing position) causes the enclosing scanObject's structural check to produce the same ReasonMalformedJSON ('expected ',' or '}'' or 'unexpected end of input'). For a valid keyword the condition is already false, so neutralisation changes nothing. Verdict and Reason are unchanged for all inputs; only Detail differs.",
+    "evidence": "Conceptual (code-path) analysis: the three call sites (true/false/null) and the shared check all resolve to ReasonMalformedJSON whether the guard fires or the fall-through structural check fires. No input changes Verdict or Reason."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "LocateValue",
+    "cond": "valueOffset < 0 || valueOffset >= int64(len(transcript))",
+    "producer": "",
+    "category": "dominated",
+    "justification": "A bounds fast-path. Neutralising it does not change the observable: scanWhole scans for a value token starting at the (negative or >= len) offset, finds none, returns occ==nil, and the `err != nil || occ == nil` guard (LocateValue line 19) returns ok=false identically. No value token can start at a negative or past-the-end offset, so the downstream check is a strict superset for the observable.",
+    "evidence": "SOURCE-PROVEN control-flow domination: TestLocateValueBounds already pins ok=false for -1 and len(transcript) offsets; with this guard neutralised the same inputs still resolve through occ==nil to ok=false. Verdict/Reason contract unchanged; only the short-circuit path is elided."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "scanWhole",
+    "cond": "s.pos >= len(s.b)",
+    "producer": "s.skipSpace()",
+    "category": "dominated",
+    "justification": "Empty-input refusal. Neutralising it falls through to scanValue, whose own `s.pos >= len(s.b)` guard (line 553, 'unexpected end of input') returns the same ReasonMalformedJSON. The Verdict (Unverified) and Reason (MALFORMED_JSON) are identical; only Result.Detail (declared non-semantic by the package) differs.",
+    "evidence": "SOURCE-PROVEN control-flow domination: TestScanWholeRejectsEmptyInput asserts Unverified/MALFORMED_JSON; neutralising this guard still yields MALFORMED_JSON via scanValue's EOF guard. No input changes Verdict or Reason."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "scanScope",
+    "cond": "s.pos >= len(s.b) || s.b[s.pos] != '{'",
+    "producer": "count := 0",
+    "category": "dominated",
+    "justification": "Defensive scope-shape check. scanScope is only ever called by Verify after scanWhole has already established the document and located an occurrence, so its first byte is '{' on every reachable call. When the guard is neutralised and the input is not an object, the member-key check (line 510, 'object member key expected') produces the same ReasonMalformedJSON.",
+    "evidence": "SOURCE-PROVEN control-flow domination: TestScanScopeStructural/not_an_object asserts Unverified/MALFORMED_JSON; neutralising this guard still yields MALFORMED_JSON via line 510. Verdict/Reason unchanged."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "scanScope",
+    "cond": "s.pos >= len(s.b) || s.b[s.pos] != '\"'",
+    "producer": "s.skipSpace()",
+    "category": "dominated",
+    "justification": "Member-key-must-be-string check. Neutralising it calls scanString at a non-quote byte; scanString then runs to end-of-input and returns 'unterminated string' (ReasonMalformedJSON), so the observable Verdict/Reason are unchanged.",
+    "evidence": "SOURCE-PROVEN control-flow domination: TestScanScopeStructural/member_key_not_string asserts Unverified/MALFORMED_JSON; neutralising this guard still yields MALFORMED_JSON via scanString's unterminated-string path. Verdict/Reason unchanged."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "scanScope",
+    "cond": "err != nil",
+    "producer": "key, keyEnd, err := s.scanString()",
+    "category": "dominated",
+    "justification": "scanString error propagation in the scope pass. On error scanString returns without advancing s.pos (keyEnd == start), so neutralising this guard leaves the cursor at the malformed key; the colon check (line 519, 'expected ':' after key') then rejects with the same ReasonMalformedJSON.",
+    "evidence": "SOURCE-PROVEN control-flow domination: TestScanScopeStructural/unterminated_key asserts Unverified/MALFORMED_JSON; neutralising this guard still yields MALFORMED_JSON via line 519. Verdict/Reason unchanged."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "scanScope",
+    "cond": "s.pos >= len(s.b) || s.b[s.pos] != ':'",
+    "producer": "s.skipSpace()",
+    "category": "dominated",
+    "justification": "Colon-after-key check in the scope pass. Neutralising it consumes the non-colon byte and calls scanValue at the remainder, whose default branch ('unexpected byte 0x%02x') rejects with ReasonMalformedJSON. Verdict/Reason unchanged; only the non-semantic Detail differs.",
+    "evidence": "SOURCE-PROVEN control-flow domination: TestScanScopeStructural/missing_colon asserts Unverified/MALFORMED_JSON; neutralising this guard still yields MALFORMED_JSON via scanValue's default branch. Verdict/Reason unchanged."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "(*scanner).scanObject",
+    "cond": "s.pos >= len(s.b) || s.b[s.pos] != '\"'",
+    "producer": "keyStart := s.pos",
+    "category": "dominated",
+    "justification": "Object-key-must-be-string check in the primary pass. Neutralising it calls scanString at a non-quote byte; scanString runs to end-of-input and returns 'unterminated string' (ReasonMalformedJSON). The primary pass and the scope re-pass both reject; Verdict/Reason unchanged.",
+    "evidence": "SOURCE-PROVEN control-flow domination: TestScanObjectMalformedMember/non_string_key asserts Unverified/MALFORMED_JSON; neutralising this guard still yields MALFORMED_JSON via scanString's unterminated-string path. Verdict/Reason unchanged."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "(*scanner).scanObject",
+    "cond": "s.pos >= len(s.b) || s.b[s.pos] != ':'",
+    "producer": "s.skipSpace()",
+    "category": "dominated",
+    "justification": "Colon-after-key check in the primary pass. Neutralising it consumes the non-colon byte and calls scanValue at the remainder, whose default branch rejects with ReasonMalformedJSON; and even if a value were mis-pinned, the scope re-pass (scanScope line 519) rejects the same document. Verdict/Reason unchanged.",
+    "evidence": "SOURCE-PROVEN control-flow domination: TestScanObjectMalformedMember/missing_colon asserts Unverified/MALFORMED_JSON; neutralising this guard still yields MALFORMED_JSON via scanValue's default branch. Verdict/Reason unchanged."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "(*scanner).scanString",
+    "cond": "err != nil",
+    "producer": "r2, next2, err := s.readHex4(s.pos + 2)",
+    "category": "dominated",
+    "justification": "Truncated low-surrogate half. readHex4 returns (0, i, err) on error; neutralising this guard leaves r2=0, and utf16.DecodeRune(high, 0) yields RuneError, so the 'invalid surrogate pair' check rejects with the same ReasonMalformedJSON.",
+    "evidence": "SOURCE-PROVEN control-flow domination: TestUnicodeEscapeStructural/truncated_surrogate_pair asserts Unverified/MALFORMED_JSON; neutralising this guard still yields MALFORMED_JSON via the invalid-surrogate-pair check. Verdict/Reason unchanged."
+  },
+  {
+    "pkg": "./internal/evidenceverify",
+    "func": "(*scanner).scanNumber",
+    "cond": "s.pos < len(s.b) && s.b[s.pos] >= '0' && s.b[s.pos] <= '9'",
+    "producer": "s.pos++",
+    "category": "dominated",
+    "justification": "Leading-zero rejection. Neutralising it parses '01' as the number '0' and leaves the trailing '1' at the member/array delimiter position, where 'expected ',' or '}'' (or trailing-bytes-at-root) rejects with the same ReasonMalformedJSON. No malformed number can reach CONFIRMED.",
+    "evidence": "SOURCE-PROVEN control-flow domination: TestNumberGrammarStructural/leading_zero asserts Unverified/MALFORMED_JSON; neutralising this guard still yields MALFORMED_JSON via the enclosing structural delimiter check. Verdict/Reason unchanged."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "attachEvidence",
+    "cond": "len(raw) == 0",
+    "producer": "",
+    "category": "dominated",
+    "justification": "Empty-raw fast-path. Neutralising it calls errorFlags on empty bytes, whose `!s.expect('[')` guard returns an all-nil flag slice, so no Evidence is attached. Observable (Block.Evidence stays nil) unchanged.",
+    "evidence": "SOURCE-PROVEN control-flow domination: TestAttachEvidenceEmptyRaw asserts Evidence==nil; neutralising this guard still yields nil via errorFlags' expect('[') short-circuit. Outcome unchanged."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "errorFlags",
+    "cond": "s.peek() == ']'",
+    "producer": "",
+    "category": "dominated",
+    "justification": "Empty-array short-circuit. Neutralising it, the phantom block is handed to scanToolResult, whose `!s.expect('{')` returns nil (a ']' is not '{'), so out[i] stays nil. Observable unchanged.",
+    "evidence": "SOURCE-PROVEN control-flow domination: TestErrorFlagsEmptyArray asserts one nil flag; neutralising this guard still yields nil via scanToolResult's expect('{'). Outcome unchanged."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "(*flagScanner).scanToolResult",
+    "cond": "!ok",
+    "producer": "key, ok := s.readString()",
+    "category": "dominated",
+    "justification": "Malformed-key refusal. On readString failure the cursor does not advance (peek != '\"' returns immediately), so neutralising this guard leaves key empty and the colon check (line 149) rejects with a nil return. Observable (nil flag) unchanged.",
+    "evidence": "SOURCE-PROVEN control-flow domination: TestScanToolResultNonStringKey asserts nil; neutralising this guard still yields nil via the expect(':') refusal. Outcome unchanged."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "(*flagScanner).scanToolResult",
+    "cond": "!ok",
+    "producer": "b, ok := s.readBool()",
+    "category": "dominated",
+    "justification": "Malformed-boolean refusal. On readBool failure the cursor does not advance, so neutralising this guard records a spurious sawBool=true but then hits the trailing 'not comma/brace' default (line 183) which returns nil. Observable (nil flag) unchanged.",
+    "evidence": "SOURCE-PROVEN control-flow domination: TestScanToolResultTruncatedBool asserts nil; neutralising this guard still yields nil via the default-return at the member tail. Outcome unchanged."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "(*flagScanner).readString",
+    "cond": "s.peek() != '\"'",
+    "producer": "",
+    "category": "dominated",
+    "justification": "Non-string-token refusal. Neutralising it treats the byte as the opening quote and scans to end-of-input, returning ('', false) 'unterminated string'. Observable (ok=false) unchanged.",
+    "evidence": "SOURCE-PROVEN control-flow domination: TestReadStringNotAtQuote asserts ok=false; neutralising this guard still yields ok=false via the unterminated-string return. Outcome unchanged."
+  },
+  {
+    "pkg": "./internal/transcript",
+    "func": "(*flagScanner).skipArray",
+    "cond": "s.expect(']')",
+    "producer": "s.skipWS()",
+    "category": "dominated",
+    "justification": "Empty-array short-circuit. Neutralising it enters the loop; skipValue on ']' treats it as a delimiter and does not advance, then the loop's own expect(']') (line 314) consumes it. Cursor position observable unchanged.",
+    "evidence": "SOURCE-PROVEN control-flow domination: TestSkipArrayEmpty asserts pos==2 after skipping '[]'; neutralising this guard still yields pos==2 via the loop's expect(']'). Outcome unchanged."
   }
 ]

@@ -472,6 +472,51 @@ func writeEquivalent(u transcript.Usage) float64 {
 	return float64(u.Create5m)*WriteMultiplierShort + float64(u.Create1h)*WriteMultiplierLong
 }
 
+// WriteTTLBasis is the provenance of the cache-write TTL multiplier: whether
+// the write leg was priced from a provider-reported TTL breakdown, from the
+// assumed short default, or from an inconsistent breakdown.
+type WriteTTLBasis string
+
+const (
+	// WriteBasisMeasured means the provider supplied a breakdown that
+	// established the write TTL (5m and/or 1h), or there were no writes to
+	// price.
+	WriteBasisMeasured WriteTTLBasis = "measured"
+	// WriteBasisAssumedShort means no breakdown was supplied, so the whole
+	// write leg was priced at the assumed short (5m) multiplier.
+	WriteBasisAssumedShort WriteTTLBasis = "assumed_short"
+	// WriteBasisInconsistent means a breakdown was supplied but says 0/0 while
+	// the aggregate cache-write count is positive. The split cannot be trusted,
+	// so the write TTL is not established.
+	WriteBasisInconsistent WriteTTLBasis = "inconsistent"
+)
+
+// WriteTTLBasisOf classifies how a request's cache-write TTL was determined.
+//
+// REPLAY-VERIFY: an explicit 0/0 breakdown with a positive aggregate write is
+// an internal inconsistency the provider contract does not explain from
+// anything currently in the repository. It is reported as inconsistent and
+// treated as not-measured rather than guessed; resolving the meaning needs
+// provider-contract evidence that does not exist here.
+func WriteTTLBasisOf(u transcript.Usage) WriteTTLBasis {
+	if u.CreateSplitPresent {
+		if u.Create5m > 0 || u.Create1h > 0 {
+			return WriteBasisMeasured
+		}
+		if u.CacheCreation > 0 {
+			return WriteBasisInconsistent
+		}
+		return WriteBasisMeasured // no writes to price; basis moot
+	}
+	return WriteBasisAssumedShort
+}
+
+// WriteBasisAssumed reports whether the cache-write price rests on an
+// assumption rather than a measured TTL split (absent or inconsistent).
+func WriteBasisAssumed(u transcript.Usage) bool {
+	return WriteTTLBasisOf(u) != WriteBasisMeasured
+}
+
 // EffectiveTokens prices a request's prompt in base-input-token equivalents:
 // uncached input at 1x, writes at their TTL multiplier, reads at the
 // model's read multiplier. It is a relative measure for comparing layouts,

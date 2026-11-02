@@ -29,6 +29,23 @@ type ErrorCost struct {
 	PromptTokens Figure
 }
 
+// ErrorEvidence summarizes how a lane's error classification was established.
+//
+// It exists so the evidence-aware path can distinguish a verified clean block
+// from an occurrence whose is_error evidence conflicted (the duplicate-key
+// trap), and from a block classified only from the collapsed decoded bool.
+// A consumer that sums ErrorCost.Count alone would silently drop the
+// distinction, so this travels beside the costs.
+type ErrorEvidence struct {
+	// Unresolved counts tool_result occurrences whose is_error evidence was
+	// ambiguous and were counted as neither error nor clean.
+	Unresolved int
+	// Legacy counts tool_result occurrences classified from the decoded
+	// Block.IsError because no raw evidence was available. They are
+	// observations, not forensically verified occurrences.
+	Legacy int
+}
+
 // Substrings the client uses in edit failures. They are matched on the
 // tool result text, case-insensitively.
 var editAnchorMarkers = []string{"string to replace not found", "not found in file", "old_string", "no match found"}
@@ -48,10 +65,10 @@ type blockKey struct {
 // ErrorCosts classifies error content across a lane and prices it with the
 // fit. Repeated identical tool calls are counted from the second occurrence,
 // keyed by the call's content-free identity so ledger data works too.
-func ErrorCosts(cal *Calibration, fit TokenFit) []ErrorCost {
+func ErrorCosts(cal *Calibration, fit TokenFit) ([]ErrorCost, ErrorEvidence) {
 	requests := cal.Lane.Requests
 	if len(requests) == 0 {
-		return nil
+		return nil, ErrorEvidence{}
 	}
 	counts := map[ErrorClass]*labelAcc{}
 	get := func(c ErrorClass) *labelAcc {
@@ -71,6 +88,7 @@ func ErrorCosts(cal *Calibration, fit TokenFit) []ErrorCost {
 	seenBlocks := map[blockKey]bool{}
 	seenCalls := map[string]bool{}
 	callBytes := map[string]int{}
+	var ev ErrorEvidence
 	for _, req := range requests {
 		for _, m := range req.Context {
 			for bi, b := range m.Blocks {
@@ -88,10 +106,29 @@ func ErrorCosts(cal *Calibration, fit TokenFit) []ErrorCost {
 					}
 					seenCalls[b.CallKey] = true
 				case transcript.KindToolResult:
-					class, ok := classifyResult(b)
-					if ok {
-						size := Estimated(fit.EstimateTokens(b.Bytes + callBytes[b.ToolUseID]))
-						get(class).add(size, carried, true)
+					isError, isErrorKnown := evidenceErrorState(b)
+					switch {
+					case isErrorKnown && isError:
+						class, ok := classifyResult(b, true)
+						if ok {
+							size := Estimated(fit.EstimateTokens(b.Bytes + callBytes[b.ToolUseID]))
+							get(class).add(size, carried, true)
+						}
+					case isErrorKnown:
+						// Verified not-error, ambiguous conflict, or present
+						// non-boolean. All are neither error nor clean: count
+						// them as unresolved, never classify them.
+						if b.Evidence != nil && (*b.Evidence == transcript.ErrorFlagConflict || *b.Evidence == transcript.ErrorFlagNonBoolean) {
+							ev.Unresolved++
+						}
+					default:
+						// Legacy: no raw evidence, use the decoded bool.
+						ev.Legacy++
+						class, ok := classifyResult(b, b.IsError)
+						if ok {
+							size := Estimated(fit.EstimateTokens(b.Bytes + callBytes[b.ToolUseID]))
+							get(class).add(size, carried, true)
+						}
 					}
 				}
 			}
@@ -106,21 +143,43 @@ func ErrorCosts(cal *Calibration, fit TokenFit) []ErrorCost {
 		}
 		out = append(out, ErrorCost{Class: c, Count: a.occurrences, Tokens: fit.Figure(a.once), PromptTokens: fit.Figure(a.prompt)})
 	}
-	return out
+	return out, ev
 }
 
-// classifyResult decides which error class a tool result belongs to. Text
-// is only lower-cased when a class could match, so large results are not
-// copied for nothing.
-func classifyResult(b transcript.Block) (ErrorClass, bool) {
-	if !b.IsError && len(b.Text) >= overflowMarkerMaxBytes {
+// evidenceErrorState reports the evidence-backed error state of a tool_result
+// block. The second return is false when no raw evidence was available (the
+// legacy decoded path), in which case the first is meaningless.
+func evidenceErrorState(b transcript.Block) (isError, known bool) {
+	if b.Evidence == nil {
+		return false, false
+	}
+	switch *b.Evidence {
+	case transcript.ErrorFlagTrue:
+		return true, true
+	case transcript.ErrorFlagFalse, transcript.ErrorFlagAbsent:
+		return false, true
+	case transcript.ErrorFlagConflict, transcript.ErrorFlagNonBoolean:
+		// Ambiguous or present-non-boolean: not clean, not error. Reported
+		// as Unresolved by ErrorCosts.
+		return false, true
+	default:
+		return false, false
+	}
+}
+
+// classifyResult decides which error class a tool result belongs to. Text is
+// only lower-cased when a class could match, so large results are not copied
+// for nothing. isError is the evidence-aware error flag supplied by the caller
+// (verified or legacy), so a conflicting duplicate is never read as clean.
+func classifyResult(b transcript.Block, isError bool) (ErrorClass, bool) {
+	if !isError && len(b.Text) >= overflowMarkerMaxBytes {
 		return "", false
 	}
 	lower := strings.ToLower(b.Text)
 	switch {
-	case b.IsError && containsAny(lower, editAnchorMarkers):
+	case isError && containsAny(lower, editAnchorMarkers):
 		return ErrorEditAnchor, true
-	case b.IsError:
+	case isError:
 		return ErrorToolFailed, true
 	case containsAny(lower, overflowMarkers):
 		return ErrorContextOverflow, true

@@ -142,6 +142,7 @@ func (u *WireUsage) Usage() Usage {
 	if u.CacheBreak != nil {
 		out.Create5m = u.CacheBreak.Short
 		out.Create1h = u.CacheBreak.Long
+		out.CreateSplitPresent = true
 	}
 	return out
 }

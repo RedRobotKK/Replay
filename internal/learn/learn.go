@@ -92,7 +92,15 @@ type SessionScore struct {
 	// ErrorShare and ReadsAfterClear are the OUTCOME this session had, and
 	// they travel with the cost so a trial can tell a saving from a
 	// degradation. Both were already computed and joined to nothing.
-	ErrorShare      float64
+	ErrorShare float64
+	// ErrorUnresolved and ErrorLegacy count tool_result occurrences whose
+	// is_error evidence could not be forensically verified (ambiguous
+	// conflict or present non-boolean) or was classified only from the
+	// decoded bool (legacy). A nonzero count means ErrorShare is not a fully
+	// verified measurement and a graduation that reads ErrorShare alone is
+	// overstating certainty.
+	ErrorUnresolved int
+	ErrorLegacy     int
 	ReadsAfterClear int
 	AsRun           analysis.Tally
 	Saving          map[string]float64
@@ -131,7 +139,10 @@ func Score(s *transcript.Session, candidates []Candidate) (SessionScore, bool) {
 	// had been cleared - an agent re-reading what it was given is direct
 	// evidence it did not use it.
 	var errTokens float64
-	for _, e := range analysis.ErrorCosts(rep.Calibration, rep.Fit) {
+	errCosts, errEv := analysis.ErrorCosts(rep.Calibration, rep.Fit)
+	out.ErrorUnresolved = errEv.Unresolved
+	out.ErrorLegacy = errEv.Legacy
+	for _, e := range errCosts {
 		errTokens += float64(e.PromptTokens.Value)
 	}
 	if asRun.PromptTokens > 0 {
