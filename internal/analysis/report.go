@@ -22,7 +22,11 @@ type LaneReport struct {
 	Breaks      []Break
 	Blame       []BlameEntry
 	Errors      []ErrorCost
-	ReReads     ReReads
+	// ErrorEvidence records how the Errors classification was established:
+	// how many tool_result occurrences were unresolved (ambiguous evidence)
+	// and how many were classified only from the decoded bool (legacy).
+	ErrorEvidence ErrorEvidence
+	ReReads       ReReads
 	// Dollars adds a list-price column to the policy table when the
 	// session's model is in the price table.
 	Dollars bool
@@ -68,15 +72,17 @@ func errorBar(f Figure) string {
 func AnalyzeLane(s *transcript.Session, lane *transcript.Lane) *LaneReport {
 	cal := Calibrate(lane)
 	fit := Fit(cal, s.Source.PrefixVisible())
+	errs, errEv := ErrorCosts(cal, fit)
 	return &LaneReport{
-		Session:     s,
-		Lane:        lane,
-		Calibration: cal,
-		Fit:         fit,
-		Breaks:      FindBreaks(cal, fit),
-		Blame:       Blame(cal, fit),
-		Errors:      ErrorCosts(cal, fit),
-		ReReads:     CountReReads(cal, fit),
+		Session:       s,
+		Lane:          lane,
+		Calibration:   cal,
+		Fit:           fit,
+		Breaks:        FindBreaks(cal, fit),
+		Blame:         Blame(cal, fit),
+		Errors:        errs,
+		ErrorEvidence: errEv,
+		ReReads:       CountReReads(cal, fit),
 	}
 }
 

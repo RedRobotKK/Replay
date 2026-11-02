@@ -438,9 +438,9 @@ regenerate it, or it will drift from the code it describes.**
 - **Establishes:**
   - where the provider supplies a TTL split, the distinction survives and prices correctly
 - **Does NOT establish:**
-  - the claim where the provider supplies NO split. (*WireUsage).Usage() drops the presence bit the wire type carries, so an absent breakdown and a reported 0/0 arrive identically, and writeEquivalent then prices the whole write leg at the SHORT multiplier
+  - the claim where the provider supplies a breakdown whose two buckets are both zero while the aggregate write count is positive. That inconsistency is classified and reported as not-measured rather than resolved, because nothing in the repository establishes what the provider meant (REPLAY-VERIFY in cachemodel.WriteTTLBasisOf)
   - ASSUMPTION, not established: that an absent breakdown means a 5-minute TTL. It is the documented provider default and Replay never verifies it. The same 10,000 cache-creation tokens price at $0.037500 on that assumption and $0.060000 if the writes were in fact 1h, a 60% difference
-  - that the assumption is disclosed. It is declared in two code comments and in no output
+  - that the disclosure reaches the --contribute corpus. The human and JSON cost report carry it (cacheWriteTtlBasis / 'TTL basis not measured'), but the opt-in observation.Corpus does not yet carry the basis
 - **Assumptions Replay does not verify:**
   - ASSUMPTION: an absent TTL breakdown means the provider's 5-minute default. RESPONSIBILITY: the provider. REPLAY VERIFIES: nothing. ON VIOLATION: the cache-write leg is understated by 60%, undisclosed
 - **Known gaps:**
@@ -454,7 +454,7 @@ regenerate it, or it will drift from the code it describes.**
   - TestEC3_TheAssumedDefaultIsDocumentedAtTheSite
   - TestEC4_TheTTLDistinctionSurvivesWhereTheProviderSuppliesIt
 
-**Why this result:** Bounded rather than refuted, and the distinction matters. The collapse is declared at both sites, so this is not a silent defect; the TTL distinction is honoured wherever the provider reports it. What is undisclosed is that a figure computed on an absent breakdown rests on an assumed default, and the reader is given the dollars without the assumption.
+**Why this result:** Bounded rather than refuted, and the distinction matters. The presence bit now survives normalization (Usage.CreateSplitPresent), an absent breakdown is distinguishable from an explicit 0/0, and the cost report discloses when a write leg rests on the assumed 5-minute default rather than a provider breakdown. It stays bounded because the assumption itself is still an assumption, Replay does not know the true TTL, and the disclosure does not yet reach the --contribute corpus.
 
 ---
 

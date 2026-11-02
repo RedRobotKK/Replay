@@ -40,6 +40,7 @@ ADR and the built thing goes to the architecture.
 | [**Vacuous tests: what would still pass if it broke**](vacuous-test-audit.md) | The adjacent question to the unwired audits: not what is unreachable, but what is checked and unfalsifiable | **20 vacuous tests; 144 of 239 refusal sites never execute.** Five escaping mutations verified by running them |
 | [**Replay Watch**](replay-watch.md) | One record per session per repository, carried to whoever owns the invoice, so that "spend on this repository went up and nobody can say which week" has an answer | **Step 1 of 3 built 2026-09-13: the record and its opt-in.** Counts only, enforced on the wire form; consent is a third grant rather than a flag on the corpus one, and unset is refused as declined is. Nothing in a release emits one |
 | [Benefit gap analysis](benefit-gap-analysis.md) | Everything here tests whether the code does what it says; this maps what is untested: whether the tool helps | **The verified status was circular** — the drop was both the evidence and the measurement. `EstimateTokens` has no tests and 49% median error |
+| [Transcript evidence-integrity contract](transcript-evidence-integrity.md) | The smallest contract a transcript adapter must satisfy before occurrence-pinned verification can be fed from its output, and each adapter's forensic coverage class | **Established 2026-11-02: a decoded value is not evidence; the ordinary decode path resolves duplicate keys last-wins, collapses absent booleans to false, and repairs invalid UTF-8.** |
 
 ---
 

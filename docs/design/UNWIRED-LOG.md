@@ -419,3 +419,70 @@ UNAVAILABLE apart, excludes runs of any other arm with a reason, refuses a
 control at a ceiling, and estimates no effect (M166, M167). The pilot is still
 not run: a comparison can now be described, and whether the pinned task has
 headroom is still not established.
+
+## 21. internal/evidenceverify, occurrence-pinned verification before its consumer
+
+Added 2026-11-02. OPEN, and correctly absent. The occurrence-pinned
+verifier: given immutable transcript bytes, a digest-bound physical
+occurrence, and a literal predicate, it answers with one of four outcomes —
+UNVERIFIED, REFUTED, AMBIGUOUS, CONFIRMED — using a strict RFC 8259 byte
+scanner that preserves duplicate keys instead of flattening them.
+
+The collapse it exists to prevent is real in the shipped reader:
+internal/transcript decodes `is_error` into a plain bool, so an absent field
+and an explicit `false` are indistinguishable, and a standard decoder resolves
+duplicate keys last-wins. A decoded object is therefore not a verification
+oracle. REFUTED is only reachable after the evidence basis (transcript digest,
+fragment digest, structure, key identity) is established; a failure to inspect
+evidence is UNVERIFIED, and a conflicting duplicate key is AMBIGUOUS.
+
+It ships no behaviour to a user of the binary because its consumer is the
+evidence/verification fabric of a later coordination pass (the Pass 5
+vertical slice internal/coordination names as not built yet).
+
+**What would wire it:** a caller that constructs a Locator and Predicate from
+a real transcript/ledger ingestion path and surfaces the four outcomes where a
+reader would otherwise read a flattened bool. Until then the package is
+reachable only from its own tests, and TestNoNewlyUnwiredPackages records that
+as intentional.
+
+**WIRED 2026-11-02.** `internal/transcript` imports `internal/evidenceverify`
+and exposes `VerifyIsErrorOccurrence`, so occurrence-pinned verification is
+reachable from the binary through the package that owns the raw line bytes.
+The wiring is a narrow adapter plus a locator-builder (`evidenceverify.LocateValue`);
+it does not run on the per-line parse path and does not change ordinary
+`Block.IsError` consumption. End-to-end synthetic proof covers CONFIRMED,
+REFUTED, AMBIGUOUS and UNVERIFIED on the same raw line bytes that the ordinary
+decoder collapses, so a consumer that needs occurrence-level evidence no
+longer has only the collapsed bool to fall back to.
+
+## 22. internal/evidenceclaim, the evidence-to-claim mapping before its consumer
+
+Added 2026-11-02. OPEN, and correctly absent. The narrow claim-evaluation
+layer that feeds occurrence-pinned evidence (internal/evidenceverify, frozen
+Candidate B) into the State Ledger vocabulary (internal/stateledger.Standing /
+Outcome). It proves exactly one claim — "this transcript records this exact
+tool-result occurrence as flagged as an error (is_error: true)" — and maps the
+four occurrence outcomes into the existing vocabulary without a second claim
+system, a second verifier, or any fallback to decoded state
+(transcript.Block.IsError).
+
+The mapping is a bijection at the Outcome level (Supports/Contradicts/
+Inconclusive/NotRun) and a coarse three-way at the Standing level; the
+fine-grained Verdict and Reason are retained beside the coarse map because
+statelyger vocabulary alone cannot distinguish an ambiguous conflict from an
+unavailable basis. Coverage (FULL/PARTIAL/NONE/UNSUPPORTED) gates whether
+verification runs at all; NONE and UNSUPPORTED return UNRESOLVED/NOT-RUN and
+never manufacture a claim.
+
+It ships no behaviour to a user of the binary because its consumer is the same
+reader internal/stateledger names as the next decision (UNWIRED-LOG.md #15):
+a path that constructs a claim from a transcript and surfaces the result. It
+does not wire into cmd/replay, does not touch the analysis.ErrorCosts path
+(which reads the collapsed Block.IsError), and does not build realtime raw-byte
+capture.
+
+**What would wire it:** a consumer that holds raw transcript bytes, builds a
+Locator and Predicate, calls evidenceclaim.Evaluate, and renders the Result.
+Until then the package is reachable only from its own tests, and
+TestNoNewlyUnwiredPackages records that as intentional.

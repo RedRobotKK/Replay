@@ -131,9 +131,21 @@ type costUnit struct {
 	MixedEpochs bool `json:"mixedEpochs,omitempty"`
 	// Repeated and Errored are the waste distribution ADR-0009 asks the corpus
 	// to carry: content-free counts, additive across lanes like Breaks.
-	Repeated int       `json:"repeated,omitempty"`
-	Errored  int       `json:"errored,omitempty"`
-	At       time.Time `json:"at"`
+	Repeated int `json:"repeated,omitempty"`
+	Errored  int `json:"errored,omitempty"`
+	// ErroredUnresolved and ErroredLegacy carry the evidence limitation beside
+	// Errored: tool_result occurrences whose is_error could not be forensically
+	// verified (ambiguous conflict or present non-boolean) or was classified
+	// only from the decoded bool. A nonzero count means Errored is not a fully
+	// verified measurement.
+	ErroredUnresolved int `json:"erroredUnresolved,omitempty"`
+	ErroredLegacy     int `json:"erroredLegacy,omitempty"`
+	// CacheWriteTTLBasis is "measured" when every priced cache write came from
+	// a provider TTL breakdown, or "assumed_short" when at least one write was
+	// priced on the assumed 5-minute default (no breakdown supplied). Empty
+	// when there were no cache writes to price.
+	CacheWriteTTLBasis string    `json:"cacheWriteTtlBasis,omitempty"`
+	At                 time.Time `json:"at"`
 	// path is the transcript this unit was priced from.
 	//
 	// Unexported, so it stays out of the JSON contract: it exists to make one
@@ -226,6 +238,32 @@ const unitMain = "main"
 // values. It is a function rather than three lines at the call site because a
 // decision inlined into a caller cannot be tested at the boundary where it is
 // wrong — ADR-0014.
+// writeTTLBasisString reduces a cache-write provenance to the stable wire
+// value: "assumed_short" when any priced write rested on the assumed short
+// default, "measured" when all writes carried a provider breakdown, or empty
+// when there were no writes to price.
+func writeTTLBasisString(writeUSD float64, writeAssumed int) string {
+	if writeUSD <= 0 {
+		return ""
+	}
+	if writeAssumed > 0 {
+		return "assumed_short"
+	}
+	return "measured"
+}
+
+// foldTTLBasis merges two per-unit basis strings. "assumed_short" dominates:
+// if any folded unit assumed a TTL, the aggregate is not fully measured.
+func foldTTLBasis(a, b string) string {
+	if a == "assumed_short" || b == "assumed_short" {
+		return "assumed_short"
+	}
+	if a == "measured" || b == "measured" {
+		return "measured"
+	}
+	return ""
+}
+
 func errorShare(errored, requests int) *float64 {
 	if requests <= 0 {
 		return nil
@@ -285,6 +323,9 @@ func foldSessions(units []costUnit) []costUnit {
 		s.Breaks += u.Breaks
 		s.Repeated += u.Repeated
 		s.Errored += u.Errored
+		s.ErroredUnresolved += u.ErroredUnresolved
+		s.ErroredLegacy += u.ErroredLegacy
+		s.CacheWriteTTLBasis = foldTTLBasis(s.CacheWriteTTLBasis, u.CacheWriteTTLBasis)
 		// Earliest, not first-seen: files arrive in directory order, which is
 		// not time order.
 		if !u.At.IsZero() && (s.At.IsZero() || u.At.Before(s.At)) {
@@ -339,16 +380,19 @@ type costSummary struct {
 	// priced lane, so it equals Tasks. A session nothing prices adds none.
 	// On a session-unit report it is the larger number and printing both is
 	// what stops either being mistaken for the other.
-	Lanes         int     `json:"lanes"`
-	TotalUSD      float64 `json:"totalUsd"`
-	UncachedUSD   float64 `json:"uncachedUsd,omitempty"`
-	WriteUSD      float64 `json:"cacheWriteUsd,omitempty"`
-	ReadUSD       float64 `json:"cacheReadUsd,omitempty"`
-	OutputUSD     float64 `json:"outputUsd,omitempty"`
-	MedianUSD     float64 `json:"medianUsd"`
-	P90USD        float64 `json:"p90Usd"`
-	RebilledUSD   float64 `json:"rebilledUsd"`
-	RebilledShare float64 `json:"rebilledShare"`
+	Lanes       int     `json:"lanes"`
+	TotalUSD    float64 `json:"totalUsd"`
+	UncachedUSD float64 `json:"uncachedUsd,omitempty"`
+	WriteUSD    float64 `json:"cacheWriteUsd,omitempty"`
+	ReadUSD     float64 `json:"cacheReadUsd,omitempty"`
+	OutputUSD   float64 `json:"outputUsd,omitempty"`
+	// CacheWriteTTLBasis mirrors the per-unit field of the same name across
+	// the whole report: "measured" or "assumed_short".
+	CacheWriteTTLBasis string  `json:"cacheWriteTtlBasis,omitempty"`
+	MedianUSD          float64 `json:"medianUsd"`
+	P90USD             float64 `json:"p90Usd"`
+	RebilledUSD        float64 `json:"rebilledUsd"`
+	RebilledShare      float64 `json:"rebilledShare"`
 	// PricedRequests and UnpricedRequests say what share of the observed
 	// requests TotalUSD actually covers. Without them a partial total is
 	// presented as a complete one, which is the defect this pair closes.
@@ -476,6 +520,7 @@ func summarise(units []costUnit) costSummary {
 		s.TotalUSD += u.CostUSD
 		s.UncachedUSD += u.UncachedUSD
 		s.WriteUSD += u.WriteUSD
+		s.CacheWriteTTLBasis = foldTTLBasis(s.CacheWriteTTLBasis, u.CacheWriteTTLBasis)
 		s.ReadUSD += u.ReadUSD
 		s.OutputUSD += u.OutputUSD
 		s.RebilledUSD += u.RebilledUSD
@@ -556,6 +601,17 @@ func renderCost(s costSummary, unpriced, unreadable int, out io.Writer, stateDir
 	// its date and the note under the block all say so.
 	fx := money.Detect(os.LookupEnv, time.Now())
 	fmt.Fprintf(&b, "  cache write    %s\n", fxCol(fx, s.WriteUSD))
+	if s.CacheWriteTTLBasis == "assumed_short" {
+		// REPLAY-VERIFY (disclosure): a cache-write dollar figure resting on the
+		// assumed 5-minute TTL default is not a measurement. The provider
+		// reported no TTL breakdown for at least some writes, so their true
+		// TTL — and therefore their 1.25x vs 2.0x multiplier — is not known.
+		//
+		// Wording deliberately avoids "priced" / "price table" / "unpriceable":
+		// the C037 break-coverage detector is paragraph-scoped and would read
+		// such a word in this block as a break-coverage disclosure.
+		fmt.Fprintf(&b, "                 (TTL basis not measured: some cache writes assume the 5-minute rate)\n")
+	}
 	fmt.Fprintf(&b, "  cache read     %s\n", fxCol(fx, s.ReadUSD))
 	fmt.Fprintf(&b, "  uncached       %s\n", fxCol(fx, s.UncachedUSD))
 	fmt.Fprintf(&b, "  output         %s\n", fxCol(fx, s.OutputUSD))
@@ -898,6 +954,8 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		for _, lr := range analysis.AnalyzeEveryLane(session) {
 			u.Breaks += len(lr.Breaks)
 			u.Repeated += lr.ReReads.Repeated
+			u.ErroredUnresolved += lr.ErrorEvidence.Unresolved
+			u.ErroredLegacy += lr.ErrorEvidence.Legacy
 			for _, e := range lr.Errors {
 				u.Errored += e.Count
 			}
@@ -932,6 +990,7 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 		u.UnpricedRebilledTokens = unpricedDeficit
 		u.UncachedUSD = asRun.UncachedUSD
 		u.WriteUSD = asRun.WriteUSD
+		u.CacheWriteTTLBasis = writeTTLBasisString(asRun.WriteUSD, asRun.WriteAssumed)
 		u.ReadUSD = asRun.ReadUSD
 		u.OutputUSD = asRun.OutputUSD
 		u.path = path
@@ -1041,6 +1100,13 @@ func runCost(args []string, stdout, stderr io.Writer) error {
 			ReReads:       &repeated,
 		}
 		f.ErrorShare = errorShare(errored, requests)
+		// REPLAY-VERIFY: RED-2 partial. ErroredUnresolved and ErroredLegacy are
+		// carried on costUnit but are NOT yet propagated into the contributed
+		// corpus (observation.Corpus), whose wire schema is version-pinned. A
+		// contribution therefore publishes ErrorShare without its evidence
+		// limitation. Propagating it requires an observation.Corpus schema
+		// decision (new optional fields or a version bump) and is out of scope
+		// for this bounded remediation.
 		p, old, err := contributeCorpus(*contributeTo, *contributeDir, f, time.Now())
 		if err != nil {
 			return err

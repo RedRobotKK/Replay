@@ -463,6 +463,7 @@ func (d *decoder) userMessage(l *rawLine) (*Message, error) {
 			return msg, nil
 		}
 		msg.Blocks = DecodeBlocks(blocks, RoleUser, d.toolNames, ToolLabel)
+		attachEvidence(msg.Blocks, l.Message.Content, blocks)
 		return msg, nil
 	})
 }
@@ -490,7 +491,9 @@ func decodeAssistantRun(run []*rawLine, toolNames map[string]string) (*Message, 
 		if err != nil {
 			return nil, fmt.Errorf("decode assistant content: %w", err)
 		}
-		msg.Blocks = append(msg.Blocks, DecodeBlocks(blocks, RoleAssistant, toolNames, ToolLabel)...)
+		decoded := DecodeBlocks(blocks, RoleAssistant, toolNames, ToolLabel)
+		attachEvidence(decoded, l.Message.Content, blocks)
+		msg.Blocks = append(msg.Blocks, decoded...)
 	}
 	return msg, nil
 }
