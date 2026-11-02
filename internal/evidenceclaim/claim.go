@@ -47,17 +47,17 @@ import (
 type Coverage string
 
 const (
-	// CoverageFull: raw immutable bytes plus a trustworthy whole-artifact
+	// CoverageFull means raw immutable bytes plus a trustworthy whole-artifact
 	// binding (the locator's transcript digest) are available.
 	CoverageFull Coverage = "FULL"
-	// CoveragePartial: raw bytes exist but some identity dimension (source
+	// CoveragePartial means raw bytes exist but some identity dimension (source
 	// identity, or whole-artifact digest trust) is incomplete. Occurrence
 	// verification still runs; the result records the partial basis.
 	CoveragePartial Coverage = "PARTIAL"
-	// CoverageNone: only decoded/normalized state remains. Occurrence-level
+	// CoverageNone means only decoded/normalized state remains. Occurrence-level
 	// evidence cannot be established and is never guessed.
 	CoverageNone Coverage = "NONE"
-	// CoverageUnsupported: the surface cannot provide the evidence class at
+	// CoverageUnsupported means the surface cannot provide the evidence class at
 	// all (e.g. a plain-text log with no JSON occurrence).
 	CoverageUnsupported Coverage = "UNSUPPORTED"
 )

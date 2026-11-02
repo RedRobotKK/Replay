@@ -312,7 +312,7 @@ func TestProperties(t *testing.T) {
 		}
 	})
 	// P5: an unknown coverage code cannot panic.
-	t.Run("P5", func(t *testing.T) {
+	t.Run("P5", func(_ *testing.T) {
 		func() {
 			defer func() { _ = recover() }()
 			_ = Evaluate(ClaimProposition, "s", raw, mkLoc(raw, off), pred, Coverage("????"))

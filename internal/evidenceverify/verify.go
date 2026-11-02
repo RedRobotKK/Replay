@@ -53,6 +53,8 @@ func (v Verdict) String() string {
 // parsed as semantics.
 type Reason string
 
+// Reason values enumerate the stable machine-readable reason codes emitted by
+// the occurrence verifier.
 const (
 	// Unverified reasons. None of these may ever coexist with Refuted.
 	ReasonTranscriptHashMismatch Reason = "TRANSCRIPT_HASH_MISMATCH"
@@ -125,6 +127,7 @@ type Locator struct {
 // Kind is the literal class of a predicate value.
 type Kind uint8
 
+// Kind values enumerate the literal classes of a predicate value.
 const (
 	KindInvalid Kind = iota
 	KindBool
@@ -421,8 +424,6 @@ type scanError struct {
 }
 
 func (e *scanError) Error() string { return string(e.reason) + ": " + e.detail }
-
-func scanErr(reason Reason, detail string) error { return &scanError{reason: reason, detail: detail} }
 
 // occurrence is the pinned member, captured before any decoding could destroy
 // its physical identity.

@@ -234,15 +234,15 @@ func (s *flagScanner) readString() (string, bool) {
 	s.pos++
 	for s.pos < len(s.b) {
 		c := s.b[s.pos]
-		switch {
-		case c == '"':
+		switch c {
+		case '"':
 			s.pos++
 			var v string
 			if err := json.Unmarshal(s.b[start:s.pos], &v); err != nil {
 				return "", false
 			}
 			return v, true
-		case c == '\\':
+		case '\\':
 			s.pos += 2
 		default:
 			s.pos++

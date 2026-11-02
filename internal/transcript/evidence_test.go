@@ -72,7 +72,7 @@ func FuzzErrorFlagScannerNeverPanics(f *testing.F) {
 	f.Add([]byte(`[{"type":"tool_result"`))
 	f.Add([]byte(`{`))
 	f.Add([]byte(``))
-	f.Fuzz(func(t *testing.T, data []byte) {
+	f.Fuzz(func(_ *testing.T, data []byte) {
 		// Feed the scanner directly; it must never panic regardless of bytes.
 		s := &flagScanner{b: data}
 		s.skipWS()
