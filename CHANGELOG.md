@@ -56,6 +56,22 @@ All notable changes to this project are documented here. The format follows [Kee
   not reproduce; it does not prevent one, and it has not yet run on a tag.
   (#340)
 
+### Changed
+
+- **Four documents no longer contradict ADR-0028.** `docs/MONEY-PATH.md`
+  opens with a dated note that it is superseded and kept as a record only:
+  every price and offer in it is withdrawn, the $25,000 forensics week
+  included, and a replacement commercial document is being written.
+  `docs/ROADMAP.md` carries dated corrections where it said SP-5, SP-6 and
+  SP-8 were unbuilt (they are implemented and tested), where it cited ADR-0023
+  as deciding how a buyer is recognised (superseded for the hosted service),
+  and where it listed "any server component" as a not goal (the hosted service
+  is approved; the local binary still depends on none). ADR-0017's
+  Consequences section now points at its own rejection, so a reader who skips
+  there is not told the wedge exists. `docs/requirements.md` LG-3 now says its
+  acceptance criterion is not met: raw mode is unbuilt and no key comes from
+  the OS keychain. That needs an owner decision and is not resolved here.
+
 ## [0.9.0] - 2026-10-10
 
 ### Security

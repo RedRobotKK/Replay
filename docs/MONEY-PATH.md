@@ -1,5 +1,22 @@
 # The money path
 
+> **Superseded 2026-10-30, retained as a historical record only. Not edited
+> below this note.** [ADR-0028](adr/0028-replay-is-a-product-with-a-hosted-service.md)
+> (2026-10-05) replaced the commercial direction this document argues for:
+> Replay becomes a software product with a hosted service, and "the fixed-fee
+> forensic engagement is not offered and is not to be proposed again".
+> **Every price, tier and offer below is withdrawn**, including the $25 per
+> repository per month subscription in the summary, the $199 list figure, the
+> design-partner price, the organisation agreements and self-serve pipeline
+> lines, and the **$25,000 forensics week** in section 0.5. None of them is
+> offered, quoted or to be proposed. The owner has declared all prior
+> commercial documents void; a replacement commercial document is being
+> written and is not yet in the tree. Until it lands, ADR-0028 is the only
+> current statement of the commercial model, and it leaves the unit of sale
+> open (amendment 6). The arithmetic below is kept because ADR-0028 cites it
+> (per-seat was closed on it, and that stands) and because this repository
+> corrects a record by adding to it, never by rewriting it.
+
 **2026-09-06.** What someone would pay for monthly, why they would keep paying, and what has to
 exist before anyone can be charged. Written against the measurements in [`evidence/`](evidence/)
 rather than against a pricing template, because the measurements are unusually unkind to the
