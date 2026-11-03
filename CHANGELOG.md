@@ -44,6 +44,13 @@ All notable changes to this project are documented here. The format follows [Kee
 - **`summary.lanes` counts the lanes behind priced rows.** A session on a
   model no table prices added a lane anyway, so one priced session beside an
   unpriced one printed "1 sessions (2 agent lanes)". (#341)
+- **`docs/SURFACES.md` corrects two `~/.replay` rows.** The
+  `contributor-secret` row said `replay privacy` did not disclose it and that
+  the gap was "still open". It has been registered as sensitive and kept out of
+  retention windows since 2026-09-10 (#144). The `quota.json` row said "read
+  and write", but the shipped binary only reads it: its writer has no
+  production caller (UNWIRED-LOG #6). Both rows keep their original text
+  beside a dated note.
 
 ### Added
 
