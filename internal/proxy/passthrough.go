@@ -13,6 +13,7 @@ import (
 	"github.com/RedRobotKK/Replay/internal/cachemodel"
 	"github.com/RedRobotKK/Replay/internal/ledger"
 	"github.com/RedRobotKK/Replay/internal/tenancy"
+	"github.com/RedRobotKK/Replay/internal/transcript"
 )
 
 // The request path: one request in, one response out, one ledger record.
@@ -204,10 +205,21 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	summarized := false
+	// calls is every tool call an OpenAI chat body made, for the loop guard
+	// only. It is nil on any other path, for an OpenAI body with no tool
+	// calls, and for an OpenAI body that did not parse; in all three the
+	// guard reads the prompt, as it did before calls existed.
+	var calls []transcript.OpenAIToolCall
 	if readable && len(body) > 0 {
 		summarize := ledger.SummarizeRequest
 		if openai {
-			summarize = ledger.SummarizeOpenAIRequest
+			// The loop guard is handed every tool call; the record keeps the
+			// summary's shape, which keys only each message's first call.
+			summarize = func(b []byte, l *ledger.Labeler) (ledger.RequestSummary, error) {
+				sum, c, err := ledger.SummarizeOpenAIRequestWithCalls(b, l)
+				calls = c
+				return sum, err
+			}
 		}
 		if responses {
 			summarize = ledger.SummarizeResponsesRequest
@@ -219,7 +231,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		if rec.SessionID == "" {
 			rec.SessionID = rec.SessionHash
 		}
-		if !s.guard(w, r, &rec, tenant) {
+		if !s.guardCalls(w, r, &rec, calls, tenant) {
 			return
 		}
 		if messages {
@@ -394,6 +406,12 @@ func setBody(r *http.Request, body []byte) {
 // guard applies the spend cap and loop detector to a summarized request.
 // It reports false when the request was answered locally.
 func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Record, tenant tenancy.TenantID) bool {
+	return s.guardCalls(w, r, rec, nil, tenant)
+}
+
+// guardCalls is guard with the request's tool calls for the loop check, when
+// the summariser listed them; nil reads the prompt, as guard always did.
+func (s *Server) guardCalls(w http.ResponseWriter, r *http.Request, rec *ledger.Record, calls []transcript.OpenAIToolCall, tenant tenancy.TenantID) bool {
 	override := r.Header.Get(HeaderOverride)
 	if reason := s.cfg.Spend.Check(tenant, rec.SessionID); reason != "" {
 		if override == "" {
@@ -409,7 +427,7 @@ func (s *Server) guard(w http.ResponseWriter, r *http.Request, rec *ledger.Recor
 		}
 		s.cfg.Logger.Printf("error budget overridden for session=%s: %s", short(rec.SessionID), override)
 	}
-	v := DetectLoop(rec.Prompt, s.cfg.Loops)
+	v := loopVerdict(rec.Prompt, calls, s.cfg.Loops)
 	switch {
 	case v.Block && override == "":
 		s.refuseSession(w, tenant, rec.SessionID, rec.Model, refusalLoop, fmt.Sprintf("the same %s call was just made %d times in a row; Replay stopped the loop. Send %s with a reason to proceed once.", v.Label, v.Repeats, HeaderOverride), 0)

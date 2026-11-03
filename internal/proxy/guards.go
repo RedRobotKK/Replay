@@ -551,26 +551,53 @@ type LoopVerdict struct {
 // session cannot block it forever. Identity is the block's content-free
 // call key, so the body is not parsed a second time.
 func DetectLoop(prompt ledger.Prompt, limits LoopLimits) LoopVerdict {
-	if limits.Warn <= 0 && limits.Block <= 0 {
-		return LoopVerdict{}
-	}
-	var v LoopVerdict
-	lastKey := ""
+	var calls []transcript.OpenAIToolCall
 	for _, m := range prompt.Messages {
 		if m.Role != transcript.RoleAssistant {
 			continue
 		}
 		for _, b := range m.Blocks {
-			if b.Kind != transcript.KindToolUse || b.CallKey == "" {
-				continue
+			if b.Kind == transcript.KindToolUse {
+				calls = append(calls, transcript.OpenAIToolCall{Name: b.ToolName, CallKey: b.CallKey})
 			}
-			if b.CallKey == lastKey {
-				v.Repeats++
-			} else {
-				lastKey = b.CallKey
-				v.Repeats = 1
-				v.Label = b.ToolName
-			}
+		}
+	}
+	return detectLoopCalls(calls, limits)
+}
+
+// loopVerdict is the guard's loop check. calls is every tool call the request
+// made, in order, when the summariser could list them: the OpenAI chat path,
+// whose summary keys only the first call of each message. A nil calls means
+// one of three things, which are not told apart: a path other than OpenAI
+// chat, an OpenAI body with no tool calls, or an OpenAI body that did not
+// parse. In each it reads the prompt, exactly as before, and the verdict is
+// the same as it was: the prompt then holds no OpenAI tool call to count, or,
+// on another path, holds what that path's summariser keyed.
+func loopVerdict(prompt ledger.Prompt, calls []transcript.OpenAIToolCall, limits LoopLimits) LoopVerdict {
+	if calls != nil {
+		return detectLoopCalls(calls, limits)
+	}
+	return DetectLoop(prompt, limits)
+}
+
+// detectLoopCalls measures the run of identical calls at the tail of an
+// ordered call list. A call with no key is skipped, as an unkeyed block is.
+func detectLoopCalls(calls []transcript.OpenAIToolCall, limits LoopLimits) LoopVerdict {
+	if limits.Warn <= 0 && limits.Block <= 0 {
+		return LoopVerdict{}
+	}
+	var v LoopVerdict
+	lastKey := ""
+	for _, c := range calls {
+		if c.CallKey == "" {
+			continue
+		}
+		if c.CallKey == lastKey {
+			v.Repeats++
+		} else {
+			lastKey = c.CallKey
+			v.Repeats = 1
+			v.Label = c.Name
 		}
 	}
 	v.Warn = limits.Warn > 0 && v.Repeats >= limits.Warn
