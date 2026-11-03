@@ -128,6 +128,21 @@ type SpendGuard struct {
 	// equal, and the victim becomes whichever key Go's randomised map
 	// iteration yields first. A counter has no resolution to run out of.
 	order uint64
+	// stateDir is where LoadState restored from, and where every Record now
+	// persists the day totals to. Empty means persistence is off. Guarded by
+	// mu.
+	stateDir string
+	// saveMu serialises SaveState from snapshot to rename, so that two
+	// concurrent saves cannot rename an older snapshot over a newer one, nor
+	// share the one temporary file name. Never held while waiting for mu's
+	// holder to need it: SaveState takes saveMu, then mu, and nothing takes
+	// them in the other order. TestDC2 does not kill its removal (300 runs
+	// measured); TestDC3 does, by parking one save between snapshot and write
+	// (saveStateAfterSnapshot) while a later save renames first, so the
+	// older snapshot would land last. Still unproven by any test: two writers
+	// truncating and writing the same temporary file at once, which leaves a
+	// file LoadState discards.
+	saveMu sync.Mutex
 }
 
 // NewSpendGuard builds a guard; a zero limits value disables it.
@@ -190,6 +205,25 @@ func (g *SpendGuard) Record(tenant tenancy.TenantID, sessionID string, tokens in
 	if tenant == tenancy.TenantUnknown || tenant == "" {
 		return
 	}
+	g.record(tenant, sessionID, tokens, usd, upperBound)
+	// Persisted on every Record, not only on the way out. runServe's deferred
+	// SaveState is skipped by exactly the exits the day cap exists to survive
+	// (a SIGKILL, an OOM kill, a panic on a handler goroutine), and a cap
+	// that resets on restart is worse than none (spendStateFile). Record runs
+	// after the response has been relayed, beside the ledger's own per-record
+	// file write, so this costs the client nothing it was waiting for.
+	g.SaveState(g.persistDir())
+}
+
+// persistDir reports where Record persists to; empty when it does not.
+func (g *SpendGuard) persistDir() string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.stateDir
+}
+
+// record is Record's accounting, under the lock.
+func (g *SpendGuard) record(tenant tenancy.TenantID, sessionID string, tokens int, usd float64, upperBound bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	// Armed where the substitution happened, not where the cost came out zero.
@@ -736,10 +770,18 @@ func persistedTenantKey(raw string) (tenancy.TenantID, bool) {
 // same-day file, one tenant entry that fails to validate is skipped on its
 // own (see persistedTenantKey) rather than discarding every other tenant's
 // legitimate entry alongside it.
+//
+// It also names dir as where every later Record persists to. The two are one
+// call on purpose: a guard restored from a directory and then kept only in
+// memory is the crash-reset defect (TestDC1), and a second call a caller
+// could forget would leave that defect one omission away.
 func (g *SpendGuard) LoadState(dir string) {
 	if g == nil || dir == "" {
 		return
 	}
+	g.mu.Lock()
+	g.stateDir = dir
+	g.mu.Unlock()
 	body, err := os.ReadFile(filepath.Join(dir, spendStateFile))
 	if err != nil {
 		return
@@ -786,12 +828,21 @@ func (g *SpendGuard) LoadState(dir string) {
 	}
 }
 
+// saveStateAfterSnapshot runs in SaveState between releasing mu (the
+// snapshot is taken) and writing the temporary file: the window saveMu
+// exists to close. A no-op outside tests, and nothing but TestDC3 assigns
+// it; it lets that test park one save there and so prove saveMu, which no
+// free-running test could (TestDC2 survives its removal).
+var saveStateAfterSnapshot = func(*SpendGuard) {}
+
 // SaveState persists today's running total, per tenant. A write failure is
 // ignored on purpose: bookkeeping must never be the reason a request fails.
 func (g *SpendGuard) SaveState(dir string) {
 	if g == nil || dir == "" {
 		return
 	}
+	g.saveMu.Lock()
+	defer g.saveMu.Unlock()
 	g.mu.Lock()
 	// An idle proxy has no day recorded yet. Stamp today rather than skip the
 	// write: a restart that loses the marker is how a cap silently starts over.
@@ -806,6 +857,7 @@ func (g *SpendGuard) SaveState(dir string) {
 		}
 	}
 	g.mu.Unlock()
+	saveStateAfterSnapshot(g)
 	body, err := json.Marshal(st)
 	if err != nil {
 		return

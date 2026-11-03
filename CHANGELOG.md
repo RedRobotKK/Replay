@@ -37,6 +37,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **A day spend cap survives a crash of `replay serve`, not only a clean
+  stop.** `spend-day.json` was written only by a deferred call on the way
+  out, which a SIGKILL, an OOM kill or a panic never reaches, so the
+  restarted proxy handed back a fresh day budget. The day totals are now
+  persisted after every recorded request, through the same temporary file and
+  rename, with concurrent saves serialised so an older total cannot replace a
+  newer one.
 - **`replay cost`'s p90 is the nearest rank.** It took index `int(p*(n-1))`,
   one rank low whenever n mod 10 was 2 to 9, so over the costs [1, 100] the
   p90 was 1, below a median of 50.5, on the report and the share card. The
