@@ -385,10 +385,13 @@ var allowedImports = map[string]bool{
 	// test is about.
 	"unicode/utf16": true,
 
-	// unsafe, for exactly one thing: handing a termios struct to
-	// syscall.Syscall so `replay tui` can read one keypress at a time.
-	// internal/tui/term_unix.go is its only use, and the ioctl numbers are
-	// per-platform constants beside it.
+	// unsafe, for two things. Handing a termios struct to syscall.Syscall
+	// so `replay tui` can read one keypress at a time (internal/tui/term_unix.go,
+	// with the ioctl numbers as per-platform constants beside it). And handing
+	// an OVERLAPPED to kernel32's LockFileEx and UnlockFileEx, the Windows
+	// ledger lock (internal/ledger/filelock_windows.go, ADR-0030), which
+	// package syscall does not wrap. The same argument holds for both: the
+	// alternative is golang.org/x/sys, the module's first require.
 	//
 	// Weighed against the two alternatives, which each spend something real. A
 	// dependency on golang.org/x/term ends a go.mod with no requires at all,

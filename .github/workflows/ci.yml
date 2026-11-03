@@ -81,6 +81,21 @@ jobs:
       - name: Test the packages that do not refuse
         if: matrix.os == 'windows-latest'
         run: go test -race -count=1 ./internal/...
+      # The ledger lock between real processes, on the one runner where the lock
+      # is LockFileEx rather than flock (ADR-0030). The step above already
+      # runs internal/ledger's lock tests, but they use two handles in one
+      # process. These start child processes, so they sit behind the mutation
+      # tag like the rest of internal/blackbox, and the mutation job is
+      # ubuntu-only. Only the TestXL tests run. Their children are the test
+      # binary re-run as an appender, holder or purge (ledger.RewriteLocked,
+      # the binary's own rewrite), so they run here for real even though the
+      # production binary refuses on Windows. Only XL2's second variant, which
+      # races the production binary itself, is left out on Windows.
+      # Runs even when the step above failed, so a red unit test does not
+      # also hide the cross-process outcome on Windows.
+      - name: Ledger lock across processes
+        if: ${{ !cancelled() && matrix.os == 'windows-latest' }}
+        run: go test -tags mutation -timeout 10m -count=1 -run '^(TestXL|TestLockHelperProcess)' -v ./internal/blackbox/
       # And the refusal itself, against the built artifact.
       #
       # This is the only end-to-end evidence anywhere that the refusal reaches a

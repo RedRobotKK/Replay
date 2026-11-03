@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/RedRobotKK/Replay/internal/ledger"
 )
 
 // `replay purge` removes ledger records past a retention window.
@@ -226,8 +228,8 @@ func formatBytes(n int64) string {
 // keep — guard-reachability reported both as UNREACHED the moment the AST
 // neutraliser made them checkable at all.
 var (
-	purgeWriteFile = os.WriteFile
-	purgeRename    = os.Rename
+	purgeWriteFile = ledger.WriteFile
+	purgeRename    = ledger.Rename
 )
 
 func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
@@ -241,6 +243,9 @@ func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 	// safely on disk, so a failure there costs nothing.
 	type rewrite struct {
 		path string
+		// read is the file exactly as the walk matched it. The rewrite
+		// requires it to still be the file's prefix, under the lock.
+		read []byte
 		kept []string
 	}
 	var pending []rewrite
@@ -302,7 +307,7 @@ func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 		// exists to prevent. Reproduced 2026-09-10: a two-record ledger came
 		// back holding one, the export never existed, and the command exited 1
 		// having already destroyed what it promised to save first.
-		pending = append(pending, rewrite{path: path, kept: kept})
+		pending = append(pending, rewrite{path: path, read: body, kept: kept})
 		return nil
 	})
 	if err != nil {
@@ -330,18 +335,8 @@ func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 
 	// Only now, with the export written or not requested, is anything removed.
 	for _, r := range pending {
-		out := strings.Join(r.kept, "\n")
-		if out != "" {
-			out += "\n"
-		}
-		// Through a sibling and renamed: a half-written ledger read on the next
-		// keystroke would lose every session in the file, not just this one.
-		tmp := r.path + ".tmp"
-		if werr := purgeWriteFile(tmp, []byte(out), 0o600); werr != nil {
-			return fmt.Errorf("rewriting %s: %w", r.path, werr)
-		}
-		if rerr := purgeRename(tmp, r.path); rerr != nil {
-			return fmt.Errorf("replacing %s: %w", r.path, rerr)
+		if err := rewriteLocked(r.path, r.read, r.kept); err != nil {
+			return err
 		}
 	}
 
@@ -357,6 +352,24 @@ func purgeSession(dir, id, export string, yes bool, stdout io.Writer) error {
 	}
 	warnUnreadable(stdout, unreadable)
 	return nil
+}
+
+// rewriteLocked replaces path with kept, plus whatever was appended to it
+// after read was taken, holding the ledger's file lock throughout (ADR-0030).
+//
+// `replay serve` appends to the same file from another process. Without the
+// lock, a record appended between the walk's read and the rename was in the
+// original and not in the replacement, and the rename deleted it unmatched,
+// unexported and unreported (TestPG25); two erasures of one file also shared
+// one temporary name (TestPG26). Under the lock nothing else writes the file,
+// so what is there now is read once more: read must be its unchanged prefix,
+// and everything after it was appended since and is carried over untouched.
+// Anything else means the file was rewritten or cut under us, and nothing is
+// removed from it.
+func rewriteLocked(path string, read []byte, kept []string) error {
+	// The locked read-check-write-rename is ledger.RewriteLocked, so a test
+	// process can run the same rewrite where this binary refuses to (Windows).
+	return ledger.RewriteLocked(path, read, kept, purgeWriteFile, purgeRename)
 }
 
 // warnUnreadable says what the erasure could not look inside.

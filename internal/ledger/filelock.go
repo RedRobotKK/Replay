@@ -1,0 +1,111 @@
+package ledger
+
+import (
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"runtime"
+)
+
+// maxLockedOpenAttempts bounds how often OpenLocked reopens a path whose file
+// was replaced while it waited for the lock. Each retry means a rewrite ran to
+// completion in between, so reaching the bound means something is rewriting
+// this one file continuously, which is a fault to report rather than a queue
+// to wait in.
+const maxLockedOpenAttempts = 16
+
+// OpenLocked opens a ledger file and returns it holding the exclusive advisory
+// lock that every writer of a ledger file takes (ADR-0030): Store.Append, and
+// `replay purge --session`, which rewrites a file by renaming a replacement
+// over it.
+//
+// The lock is on the open file, not on the name, so after it is granted the
+// file is checked to still be the one at path. A rewrite that renamed a
+// replacement into place while this waited has left the lock on a file nobody
+// will read again, and anything written to it would be lost; the replacement
+// is opened and locked instead. Closing the returned file releases the lock.
+//
+// The lock is flock on unix (filelock_unix.go) and LockFileEx on Windows
+// (filelock_windows.go). On any other platform lockFile fails, so OpenLocked
+// fails and no ledger writer proceeds unlocked (filelock_other.go).
+func OpenLocked(path string, flag int, perm os.FileMode) (*LockedFile, error) {
+	return openLocked(path, flag, perm, lockFile, unlockFile)
+}
+
+// LockedFile is a ledger file held under the writers' lock. Close releases
+// the lock and closes the file.
+type LockedFile struct {
+	*os.File
+	unlock func(*os.File) error
+}
+
+// Close releases the lock explicitly, then closes the file. Closing alone
+// would release it on every supported platform; on Windows the release on
+// close is documented as happening when the system gets to it, so UnlockFileEx
+// comes first. Both errors are reported.
+func (l *LockedFile) Close() error {
+	uerr := l.unlock(l.File)
+	cerr := l.File.Close()
+	return errors.Join(uerr, cerr)
+}
+
+// errLockUnsupported is what lockFile returns on a platform with no file lock
+// this package implements. It is an error rather than a no-op so that Append
+// and purge refuse there instead of writing unlocked.
+var errLockUnsupported = errors.New("no exclusive file lock is implemented for this platform, so the ledger will not be written")
+
+// lockUnsupported is lockFile on a platform without one (filelock_other.go).
+// Defined here, untagged, so FL3 drives the same refusal on every platform.
+func lockUnsupported(*os.File) error {
+	return fmt.Errorf("%w (GOOS=%s)", errLockUnsupported, runtime.GOOS)
+}
+
+// openLocked is OpenLocked with the lock and unlock as parameters, so a test
+// can supply ones that fail. Production passes lockFile and unlockFile and
+// nothing else.
+func openLocked(path string, flag int, perm os.FileMode, lock, unlock func(*os.File) error) (*LockedFile, error) {
+	for attempt := 0; attempt < maxLockedOpenAttempts; attempt++ {
+		f, err := openFile(path, flag, perm)
+		if err != nil {
+			return nil, err
+		}
+		if err := lock(f); err != nil {
+			_ = f.Close() // the lock error is the one worth reporting
+			return nil, fmt.Errorf("lock %s: %w", filepath.Base(path), err)
+		}
+		held := &LockedFile{File: f, unlock: unlock}
+		same, err := stillAt(f, path)
+		if err != nil {
+			_ = held.Close() // the stat error is the one worth reporting
+			return nil, err
+		}
+		if same {
+			return held, nil
+		}
+		// Replaced or removed while this waited: release the stale lock and
+		// take the file that is there now.
+		if err := held.Close(); err != nil {
+			return nil, fmt.Errorf("release %s: %w", filepath.Base(path), err)
+		}
+	}
+	return nil, fmt.Errorf("%s was replaced %d times while waiting to lock it", filepath.Base(path), maxLockedOpenAttempts)
+}
+
+// stillAt reports whether f is the file at path now. A path that no longer
+// exists is not f, and is not an error: the caller opens it again.
+func stillAt(f *os.File, path string) (bool, error) {
+	held, err := f.Stat()
+	if err != nil {
+		return false, fmt.Errorf("stat locked %s: %w", filepath.Base(path), err)
+	}
+	now, err := os.Stat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("stat %s: %w", filepath.Base(path), err)
+	}
+	return os.SameFile(held, now), nil
+}
