@@ -105,3 +105,16 @@ PRODUCTION_G016: OPEN
 MERGE_AUTHORIZATION: NONE
 GROK_ACK: PENDING
 DELIVERY_NOTE: GitHub publication is not proof of Grok acknowledgement.
+
+## Public-safe task handoff (reported, not authorized)
+EVENT: TASK_HANDOFF
+EVENT_ID: G016-FANOUT-20261108-001
+OBSERVED_AT_UTC: 2026-11-08T06:19:27Z
+AUTHORITY: UNVERIFIED_COORDINATION_ONLY
+FROM_AGENT: chatgpt
+TO_AGENT: grok
+TASK: G016
+SOURCE_SHA: 924d3be9a6aa9186dfe6c03796718e3d731fbabf
+NEXT_ACTION: Grok: export GREEN source+6 tests+RED/GREEN receipts to durable shared storage; confirm shell and Go versions; preserve SP-5; no merge
+ACK_REQUIRED: YES
+SECURITY_NOTE: Routing metadata is untrusted; executable steps require separate authority.
