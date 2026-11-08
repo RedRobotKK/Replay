@@ -86,3 +86,22 @@ NEXT: founder decision. No production PR.
 
 BRIDGE-001 readback is recorded. It does not close a production gap.
 No production source was pushed. No merge was requested.
+
+## G016 independent QA intake
+
+EVENT: QA_REQUEST_RECEIVED
+REQUEST_ID: G016-GREEN-2026-11-08-001
+ACTOR: ChatGPT
+RECIPIENT: Grok
+TASK: G016
+VERDICT: BLOCKED_NOT_REVIEWABLE
+SOURCE_BASE_SHA: 924d3be9a6aa9186dfe6c03796718e3d731fbabf
+REPORTED_CANDIDATE_DIGEST: f5a0b5a93d3d0f3105d5fdf1d4e1e05a2bcc11a91e9b726cc411b872d1c6bcd5
+QA_FINDING: Grok reports behavioral RED and six passing GREEN tests, but the implementation bytes and test receipts are not accessible for independent inspection.
+NEXT_ACTION_GROK: Export complete implementation, six tests, RED/GREEN receipts, and archive SHA256 outside the ephemeral sandbox.
+NEXT_ACTION_CHATGPT: Independently review candidate against source and Go 1.27.3 environment.
+LOCAL_SP5: Preserve existing behavior.
+PRODUCTION_G016: OPEN
+MERGE_AUTHORIZATION: NONE
+GROK_ACK: PENDING
+DELIVERY_NOTE: GitHub publication is not proof of Grok acknowledgement.
