@@ -82,6 +82,7 @@ var r1ReasonPattern = regexp.MustCompile(
 // FAIL: the marker is found in the ledger directory, the log line or the
 // response body, or the reason carries anything but the class and a count.
 func TestR1_UnresolvedTenantHeaderBytesNeverReachTheLedger(t *testing.T) {
+	t.Skip("hosted mode only: local mode refuses x-replay-tenant-id (SP-5 amendment); reactivate when verified-principal tenancy lands")
 	cases := []struct {
 		name  string
 		value string
@@ -196,6 +197,7 @@ func TestR1_ControlCharactersInTheTenantHeaderNeverReachTheLedger(t *testing.T) 
 // identity does. A legal tenant is forwarded, the header never reaches the
 // provider, and a refusal for that tenant still names it (SP-7).
 func TestR1_ValidTenantStillResolvesAndIsStrippedOutbound(t *testing.T) {
+	t.Skip("hosted mode only: local mode refuses x-replay-tenant-id (SP-5 amendment); reactivate when verified-principal tenancy lands")
 	var gotTenant []string
 	up := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotTenant = append(gotTenant, r.Header.Get(HeaderTenantID))

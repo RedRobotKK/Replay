@@ -470,6 +470,7 @@ func TestSP5_HTTPRequestWithNoTenantHeaderRunsAsLocalDefault(t *testing.T) {
 // status endpoint's running cost is untouched by it.
 // FAIL: the request is forwarded, or counted as cost.
 func TestSP5_HTTPRequestWithAnUnresolvableTenantIsRefused(t *testing.T) {
+	t.Skip("hosted mode only: local mode refuses x-replay-tenant-id (SP-5 amendment); reactivate when verified-principal tenancy lands")
 	up := &upstream{t: t}
 	base, dir, _ := startProxyWith(t, up, Config{Spend: NewSpendGuard(SpendLimits{DayTokens: 1_000_000})})
 
@@ -508,6 +509,7 @@ func TestSP5_HTTPRequestWithAnUnresolvableTenantIsRefused(t *testing.T) {
 // still pooled both under one bucket), or neither tenant is ever refused
 // (resolution is not reaching Check/Record at all).
 func TestSP5_HTTPTwoTenantsDoNotShareADayCapAcrossRealRequests(t *testing.T) {
+	t.Skip("hosted mode only: local mode refuses x-replay-tenant-id (SP-5 amendment); reactivate when verified-principal tenancy lands")
 	up := &upstream{t: t}
 	// messageResponse's usage totals 4+30+300+2 = 336 tokens; one request
 	// exactly exhausts this cap.

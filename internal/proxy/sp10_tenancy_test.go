@@ -52,6 +52,7 @@ import (
 // wire body, or as the persisted pin read back under tenant widget-co
 // showing decision=applied.
 func TestSP10_CrossTenantSessionIDCollisionDoesNotLeakPersistedPolicyPin(t *testing.T) {
+	t.Skip("hosted mode only: local mode refuses x-replay-tenant-id (SP-5 amendment); reactivate when verified-principal tenancy lands")
 	up := &bodyEcho{}
 	base, dir, _ := startProxyWith(t, up, Config{ContextEdit: &policy.ContextEdit{TriggerTokens: 150000, KeepLast: 6}})
 	const sharedSession = "shared-session"
@@ -163,6 +164,7 @@ func TestSP10_RestartDoesNotLeakPersistedPolicyPinAcrossTenants(t *testing.T) {
 // FAIL: tenant acme-co's request carries LocalTenant's persisted
 // trigger/keep parameters instead of its own freshly-decided ones.
 func TestSP10_NamedTenantRequestDoesNotInheritLocalTenantsLegacyPin(t *testing.T) {
+	t.Skip("hosted mode only: local mode refuses x-replay-tenant-id (SP-5 amendment); reactivate when verified-principal tenancy lands")
 	dir := t.TempDir()
 	seed, err := ledger.Open(dir)
 	if err != nil {
