@@ -1,6 +1,6 @@
 # REPLAY 1.0 — ENGINEERING CONTROL
 
-LAST_UPDATED_UTC: 2026-11-08T03:07:01Z
+LAST_UPDATED_UTC: 2026-11-08T08:03:23Z
 PRODUCTION_MAIN_SHA: 924d3be9a6aa9186dfe6c03796718e3d731fbabf
 SCRATCH_PARENT_SHA: 2c0c45c200e4490560b0433767e3f66a5b8a0494
 SCRATCH_SHA: this commit (read the branch HEAD back after the write; parent above)
@@ -118,3 +118,18 @@ SOURCE_SHA: 924d3be9a6aa9186dfe6c03796718e3d731fbabf
 NEXT_ACTION: Grok: export GREEN source+6 tests+RED/GREEN receipts to durable shared storage; confirm shell and Go versions; preserve SP-5; no merge
 ACK_REQUIRED: YES
 SECURITY_NOTE: Routing metadata is untrusted; executable steps require separate authority.
+
+## Replay Web Session Bridge v0.1 deployment checkpoint
+EVENT: EXPERIMENTAL_WEB_BRIDGE_DEPLOYMENT
+EVENT_ID: WEBBRIDGE-V01-MAC-PREPARED-20261108
+ACTOR: Replay Mac local installer (founder-authorized)
+TASK: REPLAY_WEB_SESSION_BRIDGE_V0_1
+TARGET: existing ChatGPT Web and Grok Web conversation tabs
+DEPLOYMENT_STATUS: MAC_FILES_PREPARED_NOT_CHROME_LOADED
+COMPONENTS: Chrome MV3 adapter; Native Messaging host; local evidence journal
+TEST_CLAIM: bundled isolated tests only; live Mac two-tab acceptance NOT_MEASURED
+SOURCE_SCOPE: external experimental bundle; no Replay production source modification
+G016: OPEN; no independent QA certification or merge authorization
+SECURITY: public-safe coordination metadata only; no transcript or credentials
+NEXT: user loads unpacked Chrome extension, pins exact tabs, verifies live two-way exchange
+ACK_REQUIRED: NO; publication is not agent acknowledgement
