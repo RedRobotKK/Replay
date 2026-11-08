@@ -50,6 +50,15 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// SP-5 amendment (local mode): a client-chosen tenant may not select a cap.
+	// Key presence, not Get: Get cannot tell an absent header from an empty one.
+	if _, present := r.Header[http.CanonicalHeaderKey(HeaderTenantID)]; present {
+		s.refuseSession(w, tenancy.LocalTenant, r.Header.Get(HeaderSessionID), "",
+			refusalTenantHeaderNotAllowed,
+			"replay: "+HeaderTenantID+" is not accepted in local mode; remove the header", 0)
+		return
+	}
+
 	start := time.Now()
 	messages := isMessages(r.URL.Path)
 	openai := isChatCompletions(r.URL.Path)

@@ -54,7 +54,8 @@ var (
 	// HeaderTenantID failed to resolve (tenancy.ResolveTenant) never reaches
 	// the spend guard, the breaker, the loop detector or the ledger's
 	// accumulators pooled under any identity at all.
-	refusalTenantUnresolved = refusal{http.StatusBadRequest, "replay_tenant_unresolved", "tenant_unresolved"}
+	refusalTenantUnresolved       = refusal{http.StatusBadRequest, "replay_tenant_unresolved", "tenant_unresolved"}
+	refusalTenantHeaderNotAllowed = refusal{http.StatusBadRequest, "replay_tenant_header_not_allowed", "tenant_header_not_allowed"}
 )
 
 // tenantUnresolvedMessage is everything a tenant refusal may say about the
