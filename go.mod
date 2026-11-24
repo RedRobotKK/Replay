@@ -37,5 +37,9 @@ go 1.24
 // Certificate.Verify, reached through every TLS connection the proxy makes
 // upstream. Its OSV record reads fixed 1.26.10 and fixed 1.27.3; 1.27.3 is the
 // one-patch step on the line already chosen above.
+//
+// Raised to 1.27.4 on 2026-11-23 for GO-2026-6859 (CVE-2026-97054),
+// the net/http MaxBytesReader HTTP/1 header race. The fixed release shipped
+// on 2026-11-10; CI's govulncheck reported a reachable path on 1.27.3.
 // internal/regression/toolchain_pin_test.go holds every workflow to this line.
-toolchain go1.27.3
+toolchain go1.27.4
