@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- **Quota exhaustion forecasts no longer combine utilization from different
+  binding windows.** Switching between the provider's five-hour and seven-day
+  limits now starts a fresh trend. Until the new window has enough readings,
+  REPLAY reports that the forecast is unavailable instead of presenting a
+  misleading time-to-limit.
+
+
 ### Security
 
 - **`install.sh` and `replay upgrade` accept a release signature only from
