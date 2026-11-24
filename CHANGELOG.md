@@ -4,15 +4,6 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-### Fixed
-
-- **Quota exhaustion forecasts no longer combine utilization from different
-  binding windows.** Switching between the provider's five-hour and seven-day
-  limits now starts a fresh trend. Until the new window has enough readings,
-  REPLAY reports that the forecast is unavailable instead of presenting a
-  misleading time-to-limit.
-
-
 ### Security
 
 - **`install.sh` and `replay upgrade` accept a release signature only from
@@ -46,6 +37,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **Quota exhaustion forecasts no longer combine utilization from different
+  binding windows.** Switching between the provider's five-hour and seven-day
+  limits now starts a fresh trend. Until the new window has enough readings,
+  REPLAY reports that the forecast is unavailable instead of presenting a
+  misleading time-to-limit.
 - **`replay cost`'s p90 is the nearest rank.** It took index `int(p*(n-1))`,
   one rank low whenever n mod 10 was 2 to 9, so over the costs [1, 100] the
   p90 was 1, below a median of 50.5, on the report and the share card. The
