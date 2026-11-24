@@ -31,8 +31,8 @@ func TestForecastBindingWindowChangeRequiresFreshTrend(t *testing.T) {
 // Only the newest uninterrupted segment of the binding window may be fitted.
 func TestForecastBindingWindowChangeUsesNewWindowOnly(t *testing.T) {
 	readings := []Reading{
-		r(0, 0.10),
-		r(60, 0.20),
+		r(0, 0.05),
+		r(60, 0.29),
 		r(120, 0.30),
 		r(180, 0.40),
 		r(240, 0.50),
