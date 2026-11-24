@@ -62,13 +62,12 @@ func Forecast(rs []Reading) Projection {
 	last := rs[len(rs)-1]
 	f.Window, f.Util = last.Window, last.Util
 
-	// A reading below its predecessor means the window rolled. Fitting across
-	// that boundary gives a negative rate and a forecast of never, on a seat
-	// that is filling normally - so only the readings since the last reset are
-	// used.
+	// A falling utilization indicates a reset, and a changed binding window
+	// measures a different limit. Neither boundary is comparable to the
+	// preceding readings. Fit only the latest contiguous window segment.
 	start := 0
 	for i := 1; i < len(rs); i++ {
-		if rs[i].Util < rs[i-1].Util {
+		if rs[i].Window != rs[i-1].Window || rs[i].Util < rs[i-1].Util {
 			start = i
 		}
 	}
