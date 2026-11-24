@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Security
 
+- **Builds now use Go 1.27.4 instead of 1.27.3.** The previous
+  toolchain's `net/http` implementation contains GO-2026-6859
+  (CVE-2026-97054), a reachable HTTP/1 header race. Go 1.27.4
+  includes the upstream correction. Workflow Go setup remains sourced
+  from `go.mod`; this does not update an already installed binary.
 - **`install.sh` and `replay upgrade` accept a release signature only from
   `release.yml` at the tag being installed.** Both passed cosign
   `--certificate-identity-regexp 'https://github.com/RedRobotKK/Replay/.*'`,
